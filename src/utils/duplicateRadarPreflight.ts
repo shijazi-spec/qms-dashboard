@@ -1877,6 +1877,47 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
     }
   }
 
+  // (3) Durable name indexing (Sarah 2026-06-24): a client is often known only by
+  // DOMAIN (its deal carries the domain) but NOT by name, so an inbound contact on
+  // a personal email — no domain — leaks (the Mawsool "Aramco on a Gmail" case).
+  // Pull the COMPANY NAME from EVERY CRM record (contact / lead / account / deal)
+  // sitting on a KNOWN-CLIENT domain and index it → byName, so the client resolves
+  // by name even with no inbound domain. Uses company_name / account_name only —
+  // NOT record_name, which on a contact/lead is the PERSON, not the company.
+  // Bounded by the client-domain set (a few hundred), filtered to that set in SQL,
+  // so it's a cheap indexed lookup; freemail domains are excluded defensively.
+  const clientDomains = Array.from(byDomain.keys()).filter(
+    (d) => d && d.includes(".") && !FREE_MAIL_DOMAINS.has(d),
+  );
+  if (clientDomains.length > 0) {
+    const nameRows =
+      (
+        await queryWithTimeout<any>(
+          `SELECT DISTINCT LOWER(domain) AS domain, company_name, account_name
+             FROM duplicate_records
+            WHERE LOWER(domain) = ANY($1::text[])
+              AND COALESCE(company_name, account_name) IS NOT NULL`,
+          [clientDomains],
+          undefined,
+          PREFLIGHT_DIR_TIMEOUT_MS,
+        )
+      )?.rows ?? [];
+    for (const nr of nameRows) {
+      const dom = (nr.domain || "").toString().trim().toLowerCase();
+      const status = byDomain.get(dom);
+      if (!status) continue;
+      for (const raw of [nr.company_name, nr.account_name]) {
+        const rawName = (raw || "").toString().trim();
+        if (!rawName || isPlaceholderName(rawName)) continue;
+        const nm = normalizeCompanyName(rawName);
+        if (nm && nm.length >= 3 && !byName.has(nm)) {
+          byName.set(nm, status);
+          indexName(nm);
+        }
+      }
+    }
+  }
+
   _csDirCache = { byName, byDomain, tokenIndex, builtAt: todayMs };
   return _csDirCache;
 }

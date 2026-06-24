@@ -1156,8 +1156,8 @@
                         <input type="file" id="preflightExcelInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" data-on-change="handlePreflightExcelChosen" data-testid="input-preflight-excel" />
                         <button data-on-click="loadPreflightSample" id="preflightSampleBtn" data-testid="button-preflight-sample" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Load sample</button>
                         <button data-on-click="clearPreflight" id="preflightClearBtn" data-testid="button-preflight-clear" class="px-3 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700">Clear</button>
-                        <button data-on-click="downloadPreflightFlaggedRows" id="preflightExportFlaggedBtn" data-testid="button-preflight-export-flagged" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700" title="Download ONLY the flagged rows (Block / Review / Warn / Duplicate) as a native Excel file — Company, Contact, Email, Phone, Verdict, Existing Owner, CS Phase, Churn Date, and the Recommended Action. This is the file to send the Head of Sales.">⚑ Download flagged rows (for Head of Sales)</button>
-                        <button data-on-click="downloadPreflightPassRowsXlsx" id="preflightExportPassXlsxBtn" data-testid="button-preflight-export-pass-xlsx" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-700 text-white hover:bg-emerald-800" title="Download the PASS (safe-to-import) rows as a native Excel file — same Summary + Findings design as the flagged export, with Company, Contact, Email, Phone columns.">📊 Download PASS rows (Excel)</button>
+                        <button data-on-click="downloadPreflightFlaggedRows" id="preflightExportFlaggedBtn" data-testid="button-preflight-export-flagged" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700" title="Download ONLY the flagged rows (Block / Review / Warn / Duplicate) as a native Excel file — Company, Contact, Email, Phone, Verdict, Existing Owner, CS Phase, Churn Date, and the Recommended Action. This is the file to send the Head of Sales.">⚑ Download Rejected Data</button>
+                        <button data-on-click="downloadPreflightPassRowsXlsx" id="preflightExportPassXlsxBtn" data-testid="button-preflight-export-pass-xlsx" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-700 text-white hover:bg-emerald-800" title="Download the PASS (safe-to-import) rows as a native Excel file — same Summary + Findings design as the flagged export, with Company, Contact, Email, Phone columns.">📊 Download PASS Data</button>
                         <!-- Executive toolbar — appears after a successful run. -->
                         <button data-on-click="copyPreflightEmailBody" id="preflightCopyEmailBtn" data-testid="button-preflight-copy-email" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-100 text-blue-900 hover:bg-blue-200" title="Copy a ready-to-paste email body with the run's headline numbers and top reasons.">📋 Copy email body</button>
                         <button data-on-click="openPushToZohoModal" id="preflightPushBtn" data-testid="button-preflight-push" class="hidden px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700" title="Push the PASS rows into Zoho CRM as new Leads on a Layout you pick. Defense in depth: dry-run by default, only PASS rows ever sent, every push audit-logged.">📤 Push PASS rows to Zoho</button>
@@ -10000,7 +10000,7 @@
                     const flaggedCount = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0);
                     if (flaggedCount > 0) {
                         flaggedBtn.classList.remove('hidden');
-                        flaggedBtn.textContent = '⚑ Download ' + flaggedCount + ' flagged row(s) — for Head of Sales';
+                        flaggedBtn.textContent = '⚑ Download ' + flaggedCount.toLocaleString() + ' Rejected Data';
                     } else {
                         flaggedBtn.classList.add('hidden');
                     }
@@ -10013,7 +10013,7 @@
                         ? data.summary.pass : 0;
                     if (passCount > 0) {
                         passXlsxBtn.classList.remove('hidden');
-                        passXlsxBtn.textContent = '📊 Download ' + passCount + ' PASS row(s) (Excel)';
+                        passXlsxBtn.textContent = '📊 Download ' + passCount.toLocaleString() + ' PASS Data';
                     } else {
                         passXlsxBtn.classList.add('hidden');
                     }
@@ -11494,7 +11494,17 @@
             // (mostly "—" on a vendor list since ARR only fires on
             // BLOCK/cs-overlap rows). Still emitted in the Excel export +
             // executive headline card where it's load-bearing.
-            body.innerHTML = rows.map(r => {
+            // Performance: a big upload (1,600+ rows) rendered in full froze the
+            // page — each row is rich HTML (badges, links, escaping). Cap the
+            // ON-SCREEN table; the FULL result stays in _preflightLastResult so
+            // the Excel downloads + Push see every row. Actionable rows (block /
+            // review / warn / duplicate) sort to the top so the useful ones are
+            // always visible even when capped.
+            const MAX_VISIBLE_PREFLIGHT = 250;
+            const vOrder = { block: 0, review: 1, warn: 2, duplicate: 3, pass: 4 };
+            const sortedRows = rows.slice().sort((a, b) => (vOrder[a.verdict] != null ? vOrder[a.verdict] : 9) - (vOrder[b.verdict] != null ? vOrder[b.verdict] : 9));
+            const visibleRows = sortedRows.slice(0, MAX_VISIBLE_PREFLIGHT);
+            const rowsHtml = visibleRows.map(r => {
                 const ownerStr = Array.isArray(r.owners) && r.owners.length > 0
                     ? r.owners.slice(0, 2).map(o => escapeHtml(o)).join(', ') + (r.owners.length > 2 ? ' <span class="text-gray-400">+' + (r.owners.length - 2) + '</span>' : '')
                     : '<span class="text-gray-400">—</span>';
@@ -11512,6 +11522,10 @@
                     + '<td class="px-3 py-2 whitespace-nowrap">' + _preflightViewCell(r.cluster_id) + '</td>'
                     + '</tr>';
             }).join('');
+            const moreNote = rows.length > MAX_VISIBLE_PREFLIGHT
+                ? '<tr><td colspan="9" class="px-4 py-3 text-center text-xs text-gray-500 bg-gray-50">Showing the first ' + MAX_VISIBLE_PREFLIGHT + ' of ' + rows.length.toLocaleString() + ' rows (flagged first). Use the download buttons for the complete list — every row is included there.</td></tr>'
+                : '';
+            body.innerHTML = rowsHtml + moreNote;
         }
 
         // (exportPreflightExcel removed 2026-06-17 — the all-rows Excel report
