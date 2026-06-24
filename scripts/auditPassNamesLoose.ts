@@ -7,10 +7,11 @@
  *
  *   npx tsx scripts/auditPassNamesLoose.ts
  *
- * Bands:
- *   would_block    — strict matcher SHOULD have caught this (investigate now)
- *   strong_review  — shares >=2 brand tokens with a client (likely the same org)
- *   weak_review    — single shared brand token + notable similarity (maybe)
+ * Only ACTIVE or in-cool-off clients are reported (churned-past-cool-off
+ * correctly PASS and are dropped as noise). Bands:
+ *   leak_strict     — strict matcher SHOULD have caught it (real miss / drift)
+ *   short_name_skip — exact client name but inbound <4 chars (≥4 floor skipped it)
+ *   near_miss       — resembles a live client; human eyeball (often different org)
  */
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -29,17 +30,17 @@ async function main() {
   const hits = await auditPassNamesLoose(names);
   const byBand = (b: string) => hits.filter((h) => h.band === b);
 
-  for (const band of ["would_block", "strong_review", "weak_review"] as const) {
+  for (const band of ["leak_strict", "short_name_skip", "near_miss"] as const) {
     const rows = byBand(band);
     console.log(`\n===== ${band.toUpperCase()} (${rows.length}) =====`);
     for (const h of rows) {
-      const status = h.active ? "ACTIVE client" : h.churnDays != null ? `churned ${h.churnDays}d` : "client";
+      const status = h.status === "active" ? "ACTIVE" : `in cool-off (churned ${h.churnDays}d, ${h.sector})`;
       console.log(`  "${h.name}"`);
       console.log(`      ~ ${h.clientLabel}  [${status}]  dice=${h.dice}  shared=[${h.sharedTokens.join(", ")}]`);
     }
   }
-  console.log(`\nTotal flagged for human review: ${hits.length} of ${names.length}.`);
-  console.log(`(would_block should be 0 — anything there is a real strict-matcher miss.)`);
+  console.log(`\nReported (active / in-cool-off only): ${hits.length} of ${names.length}.`);
+  console.log(`leak_strict should be ~0; short_name_skip = the ≥4-char floor gap; near_miss = human eyeball.`);
   process.exit(0);
 }
 main().catch((e) => { console.error("audit failed:", e); process.exit(2); });

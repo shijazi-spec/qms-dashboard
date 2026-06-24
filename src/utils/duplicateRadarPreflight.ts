@@ -2296,64 +2296,81 @@ export async function auditPassNamesLoose(
   Array<{
     name: string;
     clientLabel: string;
-    active: boolean;
+    sector: "private" | "government" | null;
+    status: "active" | "in_cooloff";
     churnDays: number | null;
     dice: number;
     sharedTokens: string[];
-    band: "would_block" | "strong_review" | "weak_review";
+    band: "leak_strict" | "short_name_skip" | "near_miss";
   }>
 > {
   const minDice = opts?.minDice ?? 0.62;
   const dir = await getCsClientDirectory(Date.now());
-  const out: Array<{
+  type Row = {
     name: string;
     clientLabel: string;
-    active: boolean;
+    sector: "private" | "government" | null;
+    status: "active" | "in_cooloff";
     churnDays: number | null;
     dice: number;
     sharedTokens: string[];
-    band: "would_block" | "strong_review" | "weak_review";
+    band: "leak_strict" | "short_name_skip" | "near_miss";
     _score: number;
-  }> = [];
+  };
+  const out: Row[] = [];
 
   for (const raw of names) {
     const nm = normalizeCompanyName(raw);
+    if (!nm || nm.length < 2) continue;
     const distinct = _csDistinctiveTokens(nm);
-    if (distinct.length === 0) continue;
     const distinctSet = new Set(distinct);
 
+    // Candidate client names: any sharing a distinctive token, PLUS an exact
+    // byName key (covers short acronyms like "aon"/"atc" the ≥4 floor skips).
     const cands = new Set<string>();
     for (const t of distinct) {
       const s = dir.tokenIndex.get(t);
       if (s) for (const n of s) cands.add(n);
     }
+    if (dir.byName.has(nm)) cands.add(nm);
 
-    let best:
-      | (typeof out)[number]
-      | null = null;
+    let best: Row | null = null;
     for (const cand of cands) {
+      const st = dir.byName.get(cand);
+      if (!st) continue;
+      // Apply the REAL verdict: active → block; churned within sector cool-off →
+      // review; churned PAST cool-off → pass (correct, skip — that's the noise).
+      const coolOff = st.sector === "government" ? 365 : 180;
+      const status: "active" | "in_cooloff" | "past" = st.active
+        ? "active"
+        : st.churnDays != null && st.churnDays <= coolOff
+          ? "in_cooloff"
+          : "past";
+      if (status === "past") continue;
+
       const candDistinct = _csDistinctiveTokens(cand);
       const shared = candDistinct.filter((t) => distinctSet.has(t));
-      if (shared.length === 0) continue;
+      const exact = cand === nm;
       const dice = _diceSim(nm, cand);
-      // Report band: a name the strict matcher WOULD block (sanity check — should
-      // be empty after a real preflight), or a borderline resemblance worth a
-      // human look (≥2 shared brand tokens, or a single shared brand token with
-      // meaningful overall similarity).
-      let band: "would_block" | "strong_review" | "weak_review" | null = null;
-      if (dice >= 0.82) band = "would_block";
-      else if (shared.length >= 2) band = "strong_review";
-      else if (dice >= minDice) band = "weak_review";
-      if (!band) continue;
+      if (!exact && shared.length < 2 && dice < minDice) continue;
 
-      const st = dir.byName.get(cand);
-      const score = dice + shared.length * 0.15;
+      // Would the STRICT matcher (≥4-char floor) have caught this?
+      const strictHit =
+        nm.length >= 4 &&
+        (exact || _csContainmentMatch(nm, dir) === cand || dice >= 0.82);
+      let band: Row["band"];
+      if (exact && nm.length < 4) band = "short_name_skip"; // Aon/ATC/STC class
+      else if (strictHit) band = "leak_strict"; // should NOT have passed — investigate
+      else band = "near_miss"; // resembles a live client — human eyeball
+
+      const score = (exact ? 1 : dice) + shared.length * 0.15 + (status === "active" ? 0.3 : 0);
       if (!best || score > best._score) {
         best = {
           name: raw,
-          clientLabel: st?.companyName ?? cand,
-          active: !!st?.active,
-          churnDays: st?.churnDays ?? null,
+          clientLabel: st.companyName ?? cand,
+          sector: st.sector,
+          status,
+          churnDays: st.churnDays,
           dice: Math.round(dice * 100) / 100,
           sharedTokens: shared,
           band,
