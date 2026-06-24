@@ -2024,6 +2024,106 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
 }
 
 /**
+ * COMPREHENSIVE COVERAGE AUDIT — proves the whole approach. Enumerates every
+ * ACTIVE client (the source of truth: a non-merchant deal with a CS phase or a
+ * customer Stage, NOT churned) and checks whether the directory can catch it by
+ * DOMAIN and/or by NAME (exact / containment / fuzzy, bilingual-aware). Surfaces:
+ *   - `uncovered`     — active clients catchable by NEITHER name nor domain →
+ *                       they ALWAYS leak (the worst class). Should be 0.
+ *   - `domainOnly`    — catchable only by domain → leak if an inbound row for
+ *                       them has no domain (the ALJ `#n` class). Lists samples.
+ *   - `nameOnly`      — clients with no domain anywhere; `nameOnlyUncovered` of
+ *                       them the name path still misses.
+ * Run once after any directory change to confirm there's no remaining leak class.
+ */
+export async function auditDirectoryCoverage(): Promise<{
+  stats: { names: number; domains: number };
+  activeClients: number;
+  coveredByDomain: number;
+  coveredByName: number;
+  domainOnly: number;
+  uncoveredCount: number;
+  uncovered: Array<{ name: string; domain: string; layout: string; phase: string; stage: string }>;
+  domainOnlySamples: Array<{ name: string; domain: string; phase: string; stage: string }>;
+  nameOnly: number;
+  nameOnlyUncovered: number;
+}> {
+  _csDirCache = null;
+  const dir = await getCsClientDirectory(Date.now());
+  const customerStages = new Set(Array.from(PF_CUSTOMER_STAGES));
+  const isMerchant = (l: string) =>
+    !!l && (l.includes("marketplace") || l === "walaone" || l === "partneraccounts");
+  const q = await queryWithTimeout<any>(
+    `SELECT account_name, company_name, LOWER(domain) AS domain,
+            LOWER(COALESCE(NULLIF(raw_data->>'Company_Domain',''),'')) AS cs_domain,
+            NULLIF(raw_data->>'Phase','') AS phase,
+            LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) AS stage,
+            NULLIF(raw_data->>'Churn_Date','') AS churn_date,
+            LOWER(REGEXP_REPLACE(COALESCE(layout_name, raw_data->'Layout'->>'name',''),'[^a-zA-Z0-9]','','g')) AS layout_norm
+       FROM duplicate_records
+      WHERE record_type='deal'
+      LIMIT 200000`,
+    [],
+    undefined,
+    PREFLIGHT_DIR_TIMEOUT_MS,
+  );
+  let activeClients = 0, coveredByDomain = 0, coveredByName = 0, domainOnly = 0, nameOnly = 0, nameOnlyUncovered = 0;
+  const uncovered: any[] = [];
+  const domainOnlySamples: any[] = [];
+  for (const d of (q?.rows ?? [])) {
+    if (isMerchant((d.layout_norm || "").trim())) continue;
+    const phase = (d.phase || "").toString().trim();
+    const stage = (d.stage || "").toString().trim();
+    if (!(phase !== "" || customerStages.has(stage))) continue;
+    if (!!d.churn_date || phase.toLowerCase().includes("terminat")) continue; // active only
+    activeClients++;
+    const domains = [d.domain, d.cs_domain]
+      .map((x: any) => (x || "").toString().trim().toLowerCase())
+      .filter(Boolean);
+    const hasDomain = domains.some((dm) => dir.byDomain.has(dm));
+    let hasName = false;
+    for (const raw of [d.account_name, d.company_name]) {
+      const rn = (raw || "").toString().trim();
+      if (!rn || isPlaceholderName(rn)) continue;
+      for (const seg of _nameSegments(rn)) {
+        const nm = normalizeCompanyName(seg);
+        if (nm && (dir.byName.has(nm) || _csContainmentMatch(nm, dir) || _csFuzzyMatch(nm, dir))) {
+          hasName = true;
+          break;
+        }
+      }
+      if (hasName) break;
+    }
+    if (hasDomain) coveredByDomain++;
+    if (hasName) coveredByName++;
+    if (hasDomain && !hasName) {
+      domainOnly++;
+      if (domainOnlySamples.length < 30)
+        domainOnlySamples.push({ name: String(d.account_name || d.company_name || "").slice(0, 44), domain: domains[0] || "-", phase: phase || "-", stage: stage || "-" });
+    }
+    if (domains.length === 0) {
+      nameOnly++;
+      if (!hasName) nameOnlyUncovered++;
+    }
+    if (!hasDomain && !hasName && uncovered.length < 60) {
+      uncovered.push({ name: String(d.account_name || d.company_name || "").slice(0, 44), domain: domains[0] || "-", layout: d.layout_norm || "-", phase: phase || "-", stage: stage || "-" });
+    }
+  }
+  return {
+    stats: { names: dir.byName.size, domains: dir.byDomain.size },
+    activeClients,
+    coveredByDomain,
+    coveredByName,
+    domainOnly,
+    uncoveredCount: uncovered.length,
+    uncovered,
+    domainOnlySamples,
+    nameOnly,
+    nameOnlyUncovered,
+  };
+}
+
+/**
  * Observability hook — returns the current size of the CS-client directory so
  * silent degradation (an empty/stale Deals sync collapsing the directory) is
  * VISIBLE without anyone re-running an export. `active` / `churned` count how
