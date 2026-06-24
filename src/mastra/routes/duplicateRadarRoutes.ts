@@ -8405,6 +8405,17 @@ export const duplicateRadarRoutes = [
             body?.contacts && typeof body.contacts === "object"
               ? body.contacts
               : null;
+          // FULL original columns from the uploaded file (per row_index) + the
+          // ordered header list — appended after the analysis columns so the
+          // exported sheet carries the operator's COMPLETE record, not just
+          // Company/Contact/Email/Phone.
+          const originals =
+            body?.originals && typeof body.originals === "object"
+              ? body.originals
+              : null;
+          const originalHeaders: string[] = Array.isArray(body?.original_headers)
+            ? body.original_headers.map((h: any) => String(h)).filter(Boolean)
+            : [];
           const rowsToEmit = (Array.isArray(result.rows) ? result.rows : []).filter(
             (r: any) => {
               if (flaggedOnly) return r && r.verdict && r.verdict !== "pass";
@@ -8505,6 +8516,14 @@ export const duplicateRadarRoutes = [
 
           // ── Findings sheet ───────────────────────────────────────────
           const findings = wb.addWorksheet("Findings");
+          // Every column from the operator's uploaded file, appended AFTER the
+          // analysis columns (unique keys orig_<n>, original header text kept
+          // verbatim) so the export carries the COMPLETE original record.
+          const origColumns = originalHeaders.map((h, idx) => ({
+            header: h,
+            key: `orig_${idx}`,
+            width: 22,
+          }));
           findings.columns = [
             { header: "#", key: "i", width: 6 },
             { header: "Verdict", key: "verdict", width: 12 },
@@ -8542,6 +8561,7 @@ export const duplicateRadarRoutes = [
             { header: "Existing Account",             key: "link_account",      width: 36 },
             { header: "Reason (engineer)", key: "reason", width: 32 },
             { header: "Matched via", key: "matched_via", width: 16 },
+            ...origColumns,
           ];
           const fHdr = findings.getRow(1);
           fHdr.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -8589,7 +8609,18 @@ export const duplicateRadarRoutes = [
             const ct = contacts
               ? contacts[r.row_index] || contacts[String(r.row_index)] || {}
               : {};
+            // Pull this row's full original record and map each header to its
+            // orig_<n> column key.
+            const origRow = originals
+              ? originals[r.row_index] || originals[String(r.row_index)] || {}
+              : {};
+            const origValues: Record<string, any> = {};
+            originalHeaders.forEach((h, idx) => {
+              const v = (origRow as any)[h];
+              origValues[`orig_${idx}`] = v == null ? "" : v;
+            });
             const row = findings.addRow({
+              ...origValues,
               i: (r.row_index ?? 0) + 1,
               verdict: r.verdict?.toUpperCase() || "PASS",
               sev: r.executive_severity?.toUpperCase() || "INFO",

@@ -9782,11 +9782,27 @@
                     };
                 });
             }
+            // FULL original columns for the export — every column from the
+            // uploaded file, keyed by row_index, so the operator gets their
+            // complete record back (First Name, Title, Industry, … all of it),
+            // not just Company/Contact/Email/Phone. original_headers preserves
+            // the column order; originals carries the per-row values.
+            const originals = {};
+            const originalHeaders = [];
+            if (preflightLastUpload && Array.isArray(preflightLastUpload.originalRows)) {
+                const seenHdr = new Set();
+                preflightLastUpload.originalRows.forEach((o, idx) => {
+                    if (!subsetIdx.has(idx)) return;
+                    o = o || {};
+                    originals[idx] = o;
+                    Object.keys(o).forEach(k => { if (k && !seenHdr.has(k)) { seenHdr.add(k); originalHeaders.push(k); } });
+                });
+            }
             const btn = document.getElementById(isPass ? 'preflightExportPassXlsxBtn' : 'preflightExportFlaggedBtn');
             const orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = 'Building…'; }
             try {
-                const body = { result: slimResult, contacts: contacts };
+                const body = { result: slimResult, contacts: contacts, originals: originals, original_headers: originalHeaders };
                 if (isPass) body.passOnly = true; else body.flaggedOnly = true;
                 const res = await fetch('/api/duplicates/preflight/export-xlsx', {
                     method: 'POST',
