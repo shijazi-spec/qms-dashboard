@@ -7832,6 +7832,14 @@ export const duplicateRadarRoutes = [
           // for cross-Zoho matching instead of falling back to domain-only.
           const mobileIdx = findCol("mobile_phone", "mobile phone", "mobile", "cell", "cell phone");
           const corporatePhoneIdx = findCol("corporate_phone", "corporate phone", "phone", "work phone", "office phone");
+          // Contact (person) name — used to REJECT a named contact that has no
+          // email AND no phone (can't be contacted, so don't import). Distinct
+          // from company_name so company-only screening rows aren't rejected.
+          const contactIdx = findCol(
+            "contact_name", "contact name", "full_name", "full name", "fullname", "contact",
+          );
+          const firstNameIdx = findCol("first_name", "first name", "firstname");
+          const lastNameIdx = findCol("last_name", "last name", "lastname");
 
           if (domainIdx < 0 && emailIdx < 0) {
             return c.json(
@@ -7853,6 +7861,7 @@ export const duplicateRadarRoutes = [
             email: string;
             phone: string;
             company_name: string;
+            contact_name: string;
             original_row: Record<string, any>;
             source_row_number: number;
           }
@@ -7905,7 +7914,25 @@ export const duplicateRadarRoutes = [
               // corporate as fallback.
               const phone = mobile || corporatePhone;
 
-              if (!domain) continue;
+              let contactName = "";
+              if (contactIdx >= 0) {
+                contactName = cellToString(rv[contactIdx + 1]).trim();
+              }
+              if (!contactName && (firstNameIdx >= 0 || lastNameIdx >= 0)) {
+                contactName = [
+                  firstNameIdx >= 0 ? cellToString(rv[firstNameIdx + 1]).trim() : "",
+                  lastNameIdx >= 0 ? cellToString(rv[lastNameIdx + 1]).trim() : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+                  .trim();
+              }
+
+              // Keep a row that has ANY signal — a domain, an email, a phone, OR a
+              // contact name. A NAMED contact with no email/phone used to be dropped
+              // here (no domain) and vanish; now it flows through so preflight can
+              // REJECT it (no way to contact them). Only a totally empty row drops.
+              if (!domain && !email && !phone && !contactName) continue;
 
               // Reconstruct the full original row keyed by header so the
               // export step can write the operator's original columns back
@@ -7923,6 +7950,7 @@ export const duplicateRadarRoutes = [
                 email,
                 phone,
                 company_name: companyName,
+                contact_name: contactName,
                 original_row: originalRow,
                 source_row_number: i,
               });
@@ -7983,12 +8011,12 @@ export const duplicateRadarRoutes = [
 
           // Build a CSV the operator can see / re-edit in the textarea.
           // Includes the dedup signals the engine can now use.
-          const csvLines = ["domain,company_name,email,phone"];
+          const csvLines = ["domain,company_name,contact_name,email,phone"];
           for (const r of rows) {
             const quote = (s: string) =>
               s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
             csvLines.push(
-              `${r.domain},${quote(r.company_name)},${quote(r.email)},${quote(r.phone)}`,
+              `${r.domain},${quote(r.company_name)},${quote(r.contact_name)},${quote(r.email)},${quote(r.phone)}`,
             );
           }
 
@@ -8005,6 +8033,7 @@ export const duplicateRadarRoutes = [
               email: r.email,
               phone: r.phone,
               company_name: r.company_name,
+              contact_name: r.contact_name,
             })),
             original_rows: rows.map((r) => r.original_row),
             source_row_numbers: rows.map((r) => r.source_row_number),
@@ -8428,6 +8457,10 @@ export const duplicateRadarRoutes = [
           add(
             "≡ DUPLICATE — already in CRM",
             result.summary?.duplicate || 0,
+          );
+          add(
+            "✗ REJECTED — no email & no phone",
+            (result.summary as any)?.no_contact || 0,
           );
           add("✓ PASS — safe to import", result.summary?.pass || 0);
           summary.addRow({});

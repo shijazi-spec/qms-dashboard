@@ -9506,7 +9506,7 @@
                 return out.map(s => s.trim());
             };
             const headers = splitCsv(lines[0]).map(h => h.toLowerCase());
-            const allowed = ['domain','email','company_name','phone','ref'];
+            const allowed = ['domain','email','company_name','contact_name','phone','ref'];
             const rows = [];
             for (let i = 1; i < lines.length; i++) {
                 const parts = splitCsv(lines[i]);
@@ -9524,8 +9524,9 @@
                 block:     { bg: 'bg-red-100',     fg: 'text-red-700',    label: 'BLOCK'     },
                 review:    { bg: 'bg-amber-100',   fg: 'text-amber-700',  label: 'REVIEW'    },
                 warn:      { bg: 'bg-yellow-100',  fg: 'text-yellow-700', label: 'WARN'      },
-                duplicate: { bg: 'bg-gray-200',    fg: 'text-gray-700',   label: 'DUPLICATE' },
-                pass:      { bg: 'bg-green-100',   fg: 'text-green-700',  label: 'PASS'      },
+                duplicate:  { bg: 'bg-gray-200',    fg: 'text-gray-700',   label: 'DUPLICATE' },
+                no_contact: { bg: 'bg-rose-100',    fg: 'text-rose-700',   label: 'REJECTED'  },
+                pass:       { bg: 'bg-green-100',   fg: 'text-green-700',  label: 'PASS'      },
             };
             const m = map[v] || { bg: 'bg-gray-100', fg: 'text-gray-600', label: (v || '—').toUpperCase() };
             // R9 (quick wins): hover tooltip explains the verdict in plain
@@ -9865,7 +9866,7 @@
         // collide. top_reasons + pct_actionable are recomputed because they
         // are derived from the merged totals, not summable.
         function _preflightMergeChunks(parts, totalRows) {
-            const summary = { block: 0, review: 0, warn: 0, duplicate: 0, pass: 0 };
+            const summary = { block: 0, review: 0, warn: 0, duplicate: 0, no_contact: 0, pass: 0 };
             const rowsOut = [];
             let examined = 0;
             let skipped = 0;
@@ -9878,6 +9879,7 @@
                     summary.review   += part.summary.review   || 0;
                     summary.warn     += part.summary.warn     || 0;
                     summary.duplicate += part.summary.duplicate || 0;
+                    summary.no_contact += part.summary.no_contact || 0;
                     summary.pass     += part.summary.pass     || 0;
                 }
                 examined += part.examined || 0;

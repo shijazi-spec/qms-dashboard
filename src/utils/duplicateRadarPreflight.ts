@@ -54,6 +54,7 @@ export type PreflightVerdict =
   | "review"
   | "warn"
   | "duplicate"
+  | "no_contact"
   | "pass";
 
 /**
@@ -95,6 +96,9 @@ export interface PreflightInputRow {
   email?: string | null;
   company_name?: string | null;
   phone?: string | null;
+  /** Person name — when present with NO email AND NO phone, the row is REJECTED
+   *  (verdict no_contact) since the contact can't be reached. */
+  contact_name?: string | null;
   /** Free-form row identifier echoed back in the response (defaults to array index). */
   ref?: string | null;
 }
@@ -200,6 +204,7 @@ export interface PreflightSummary {
   review: number;
   warn: number;
   duplicate: number;
+  no_contact: number;
   pass: number;
 }
 
@@ -410,6 +415,7 @@ const VERDICT_REASONS: Record<PreflightVerdict, string> = {
   review: "cs_termination_within_cooloff",
   warn: "cs_termination_past_cooloff",
   duplicate: "existing_record_no_cs_overlap",
+  no_contact: "no_email_or_phone",
   pass: "no_match",
 };
 
@@ -422,6 +428,8 @@ const SUGGESTED_ACTIONS: Record<PreflightVerdict, string> = {
     "Past cool-off — Sales may re-engage. Notify CS owner first.",
   duplicate:
     "Already present in Leads/Deals as a duplicate. Resolve in radar before importing.",
+  no_contact:
+    "No email and no phone — this contact cannot be reached. Do not import.",
   pass: "No overlap detected. Safe to import.",
 };
 
@@ -904,6 +912,7 @@ export function classifyPreflightRows(input: {
     review: 0,
     warn: 0,
     duplicate: 0,
+    no_contact: 0,
     pass: 0,
   };
   const out: PreflightResultRow[] = [];
@@ -2197,7 +2206,7 @@ async function runPreflightBasic(input: {
   };
 
   const out: PreflightResultRow[] = [];
-  const summary: PreflightSummary = { block: 0, review: 0, warn: 0, duplicate: 0, pass: 0 };
+  const summary: PreflightSummary = { block: 0, review: 0, warn: 0, duplicate: 0, no_contact: 0, pass: 0 };
   let skipped = 0;
   // Intra-batch client memory: normalized company name → the client status any
   // row in THIS upload resolved to. A bulk list often carries the same company
@@ -2210,6 +2219,40 @@ async function runPreflightBasic(input: {
     const email = emailByRow.get(i) ?? null;
     const phone = phoneByRow.get(i) ?? null;
     const domain = domainByRow.get(i) ?? null;
+
+    // REJECT a named contact with no way to reach them — has a person name but
+    // NO email AND NO phone (Sarah 2026-06-24). Such a row can't be contacted, so
+    // it must never land in the safe-to-import list. A company-only screening row
+    // (no contact_name) is unaffected. Takes precedence over the domain screen.
+    const contactName = (r.contact_name || "").toString().trim();
+    if (contactName && !email && !phone) {
+      summary.no_contact++;
+      out.push({
+        row_index: i,
+        ref: r.ref ?? null,
+        input: { domain, company_name: r.company_name ?? null },
+        verdict: "no_contact",
+        cluster_id: null,
+        lifecycle_state: null,
+        sector: null,
+        arr_exposure: null,
+        owners: [],
+        reason: "no_email_or_phone",
+        suggested_action:
+          "No email and no phone — this contact cannot be reached. Do not import.",
+        module_counts: null,
+        matched_via: null,
+        executive_action:
+          "REJECT — no email and no phone on this contact; they cannot be reached, do not import.",
+        executive_severity: "medium",
+        churn_date: null,
+        churn_days: null,
+        cs_owner: null,
+        cs_phase: null,
+        crm_links: null,
+      });
+      continue;
+    }
 
     // No resolvable identity at all → can't screen it.
     if (!email && !phone && !domain) {
@@ -2434,6 +2477,8 @@ async function runPreflightBasic(input: {
       );
     } else if (r.verdict === "warn") {
       bump("Past CS cool-off — Sales may re-engage with CS sign-off");
+    } else if (r.verdict === "no_contact") {
+      bump("No email or phone — contact cannot be reached, do not import");
     }
   }
   const topReasons: PreflightTopReason[] = Array.from(reasonBuckets.entries())
@@ -2445,7 +2490,7 @@ async function runPreflightBasic(input: {
       pct: examineCount > 0 ? Math.round((count / examineCount) * 1000) / 10 : 0,
     }));
 
-  const actionable = summary.block + summary.duplicate;
+  const actionable = summary.block + summary.duplicate + summary.no_contact;
   const pctActionable =
     examineCount > 0 ? Math.round((actionable / examineCount) * 1000) / 10 : 0;
 
