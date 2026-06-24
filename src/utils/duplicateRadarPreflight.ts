@@ -1831,9 +1831,12 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
   const indexName = (norm: string) => {
     for (const t of _csTokens(norm)) if (!CS_DIR_STOP.has(t)) addToken(t, norm);
   };
-  // Register a client under a normalized name and/or domain.
+  // Register a client under a normalized name and/or domain. A name with NO
+  // distinctive token (e.g. a deal anonymized as "Confidential") must never
+  // become a byName/token key — otherwise an inbound that shares only that
+  // generic word resolves to it. Its DOMAIN is still indexed (reliable signal).
   const addClient = (norm: string, dom: string | null, status: CsClientStatus) => {
-    if (norm && norm.length >= 3) {
+    if (norm && norm.length >= 3 && _csDistinctiveTokens(norm).length > 0) {
       byName.set(norm, _csMergeStatus(byName.get(norm), status));
       indexName(norm);
     }
