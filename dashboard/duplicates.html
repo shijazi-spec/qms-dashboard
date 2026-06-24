@@ -1204,7 +1204,6 @@
                     <div class="col-span-2 bg-white rounded-lg shadow p-3 border-s-4 border-green-500">
                         <div class="text-xs text-green-700 uppercase">Pass (safe to import)</div>
                         <div id="preflightSumPass" class="text-2xl font-bold text-green-700">—</div>
-                        <div class="text-xs text-gray-500 mt-1">ARR exposure if BLOCK rows were imported: <span id="preflightArrBlocked" class="font-medium">—</span></div>
                     </div>
                 </div>
             </div>
@@ -9885,7 +9884,6 @@
                 const el = document.getElementById('preflightSum' + k);
                 if (el) el.textContent = '—';
             });
-            document.getElementById('preflightArrBlocked').textContent = '—';
             // Reset both upload + result so the export button hides and a
             // subsequent paste-only run doesn't try to export stale data.
             preflightLastUpload = null;
@@ -11553,7 +11551,6 @@
             document.getElementById('preflightSumWarn').textContent   = s.warn   || 0;
             document.getElementById('preflightSumDup').textContent    = s.duplicate || 0;
             document.getElementById('preflightSumPass').textContent   = s.pass   || 0;
-            document.getElementById('preflightArrBlocked').textContent = formatCurrency(data.total_arr_exposure_blocked || 0);
 
             // Executive headline card — turns the engineer-summary numbers
             // into one sentence a Head of Sales reads in 3 seconds.
@@ -11564,10 +11561,8 @@
             const actionable = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0) + (s.no_contact || 0);
             const examined = data.examined || 0;
             const pctAct = data.pct_actionable != null ? data.pct_actionable : (examined > 0 ? Math.round(actionable / examined * 1000) / 10 : 0);
-            const arrBlocked = Math.round(data.total_arr_exposure_blocked || 0);
-            const arrStr = arrBlocked > 0 ? ' Pipeline exposure if BLOCK rows had been imported: SAR ' + arrBlocked.toLocaleString() + '.' : '';
             if (exec && headline) {
-                headline.textContent = 'Pre-import check on ' + examined.toLocaleString() + ' record(s) found ' + actionable.toLocaleString() + ' duplicate or already-known matches (' + pctAct + '% of the batch).' + arrStr;
+                headline.textContent = 'Pre-import check on ' + examined.toLocaleString() + ' record(s) found ' + actionable.toLocaleString() + ' duplicate or already-known matches (' + pctAct + '% of the batch).';
                 if (meta) meta.textContent = 'Generated ' + (data.generated_at ? data.generated_at.slice(0, 16).replace('T', ' ') + ' UTC' : new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC');
                 exec.classList.remove('hidden');
             }
@@ -11910,7 +11905,6 @@
             const pctAct = data.pct_actionable != null
                 ? data.pct_actionable
                 : (examined > 0 ? Math.round(actionable / examined * 1000) / 10 : 0);
-            const arrBlocked = Math.round(data.total_arr_exposure_blocked || 0);
             const reasons = (Array.isArray(data.top_reasons) ? data.top_reasons : []).slice(0, 5);
             const bullet = reasons.length === 0
                 ? '  (no actionable matches in this batch)'
@@ -11939,7 +11933,6 @@
                 '  • Actionable (would create a duplicate or hit an existing customer): ' + actionable.toLocaleString() + ' (' + pctAct + '% of the batch)',
                 '  • Of those: ' + (s.block || 0) + ' active customers (do not pursue), ' + (s.review || 0) + ' within CS cool-off, ' + (s.warn || 0) + ' past cool-off, ' + (s.duplicate || 0) + ' duplicates already in CRM',
                 '  • Safe to import: ' + (s.pass || 0).toLocaleString(),
-                (arrBlocked > 0 ? '  • Pipeline SAR exposure if BLOCK rows had been imported: SAR ' + arrBlocked.toLocaleString() : ''),
                 '',
                 'Top reasons:',
                 bullet,
