@@ -2032,7 +2032,7 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
     const status = byDomain.get(dom)!;
     for (const seg of _nameSegments(a.record_name || a.company_name || "")) {
       const norm = normalizeCompanyName(seg);
-      if (norm && norm.length >= 3 && !byName.has(norm)) {
+      if (norm && norm.length >= 3 && !byName.has(norm) && _csDistinctiveTokens(norm).length > 0) {
         byName.set(norm, status);
         indexName(norm);
       }
@@ -2074,7 +2074,7 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
         for (const seg of _nameSegments(rawName)) {
           if (isPlaceholderName(seg)) continue;
           const nm = normalizeCompanyName(seg);
-          if (nm && nm.length >= 3 && !byName.has(nm)) {
+          if (nm && nm.length >= 3 && !byName.has(nm) && _csDistinctiveTokens(nm).length > 0) {
             byName.set(nm, status);
             indexName(nm);
           }
