@@ -1,3 +1,908 @@
-# Paste the PASS file's "Company Name" column below (one name per line).
-# Lines starting with # and blank lines are ignored.
-# Then run:  npx tsx scripts/checkPassNames.ts
+# PASS company names (auto-extracted)
+Prince Mohammad Bin Fahd University
+Qassim Health Cluster | تجمع القصيم الصحي
+Qatar Islamic Bank (QIB)
+Flowmingo AI
+Abdullatif Al-Arfaj& Brothers Holding Co.
+Arabian Drilling
+Chemie-Tech
+AL-AYUNI Investment and Contracting Company
+Sfda
+Petro Rabigh
+Ministry of National Guard Health Affairs (MNGHA)
+Ministry of Tourism of Saudi Arabia
+Flow Progressive Logistics
+AL KAMAL IMPORT OFFICE COMPANY LTD
+Dafa
+Golden Engineering Contracting Co. (GTEL)
+Construction Material Chemical Industries (CMCI)
+Confidencial
+Gulf Payments Company
+Karage كراج
+BSF
+مجموعة طيبه العالية للتدريب والتوظيف و التعليم
+Gulf Chemical & Industrial Oils Co.
+King Faisal University
+Saudi Plastic Packaging Systems - PLASTICO
+Al-Ahsa Municipality | أمانة الأحساء
+National Infrastructure Fund (Infra)
+DallahHealth
+Syarah
+Riyadh Schools Group
+AlYemni Group - مجموعة اليمني
+ASMO
+Nesma United Industries
+Shaqra University
+TAWANTECH
+Al-Mutlaq & Bu-Nuhayah Consulting Engineers
+King Faisal Specialist Hospital International Holding Company (KFSHI)
+Tourism Development Fund صندوق التنمية السياحي
+PROCARE HOSPITAL
+Alosrah International Hospital
+NASCO - National Advanced Systems Co. Ltd.
+alrajhi bank
+United Yousef Naghi Co. Ltd.
+Technology Control Co.
+Syarah
+Technology Control Co.
+Al Ansari Holding Group
+Emirates Logistics L.L.C
+Amazon Developer
+Compassion
+TYPSA
+GEODIS
+SAS
+Alexandria Construction Company - TMG
+AMSYCO NDT ARABIA
+J-B | جيبي
+MS PHARMA
+Marn | مرن
+YANAL Finance Company (formerly Saudi ORIX)
+Abdullah Hashim Co
+TATCO
+Ersal Money Transfer Corp
+AlYemni Group - مجموعة اليمني
+Amec Foster Wheeler
+Authorized Policy Insurance Brokers (APPLUS)
+Oilfields Supply Company Saudi
+TETRA Technologies, Inc.
+HEISCO – SAUDI ARABIA BRANCH
+جامعة المجمعة | Majmaah University
+JAL International Co. Ltd.
+Albawani | البواني
+تجمع عسير الصحي | Aseer Health Cluster
+Moyasar
+Saudi Irrigation Organization | المؤسسة العامة للري
+MAB United For Trading & Contracting
+Dar Al Riyadh Group
+Resa Gulf Scaffolding Co Ltd.
+NCGR - National Center for Government Resources Sys.
+Rewaa
+Ctelecoms (Consolidated Telecoms)
+Essar Projects
+Golden Engineering Contracting Co. (GTEL)
+Advanced Electronics Support Services Company
+ISPOR—The Professional Society for Health Economics and Outcomes Research
+ahb.sa
+Marsh McLennan
+The National Commercial Bank - AlahliNCB
+Samba Financial Group
+Mohamed Yousuf Naghi Motors - BMW Group Importer KSA
+Tamam
+alrajhi bank
+JIGPC- Jazan Integrated Gasification and Power Company
+Sinopec Service Saudi Arabia
+Global Exchange Group
+Cherry Rent A Car
+ATOM
+4 Years
+Suzuki I Najeeb Auto |???? ????
+Dar Al-Fikr Schools
+Royal commission for Yanbu Medical Center
+QSS AI & ROBOTICS
+Expertise
+MediVisa for medical claims settlement.
+Arabia Insurance Cooperative Co
+ALJABR FINANCE
+Khatib & Alami
+Quality Education Company (QEC)
+Virginia Tech
+DSV - Global Transport and Logistics
+Kenaaz United Contracting Company
+Tenaris
+Banque Misr
+SAB Invest
+University of Jeddah
+AlSharif Group Holding (ASG) | مجموعة الشريف القابضة
+TAWANTECH
+Sabbagh Engineering Consultants & Associates
+SAUDI FINANCE
+Rosenbauer Group
+Shelf Drilling
+Wallan Trading Company
+SASO, Saudi Standards Metrology and Quality Organization
+ST Engineering
+Bank AlJazira | بنك الجزيرة
+Alnafitha IT
+Saudi Logistics Academy
+Advanced International Trade Company - AITCO
+Dar Al Fouad Hospital
+Wipro
+Power Tower Company
+Abdul Latif Jameel Machinery
+تبوك الرقمية
+Al Jazirah Development Company (JDCO)
+POWERLINE SOLUTIONS
+Saudi Electricity Regulatory Authority
+Al Jouf University
+Nahdi Care Clinics
+First Abu Dhabi Bank (FAB)
+Al Masaood Energy
+Sinopec Engineering Inc
+neoleap
+INGAZ
+United Motors Company
+J.P. Morgan
+Nesma
+شركة مقاولات
+Mace
+DAR Middle East Information Technology Co.
+D360 Bank
+solutions by stc
+Albadr Developed Medical Group
+Ministry of Industry and Mineral Resources
+UPS
+DataServe
+Saudi Commission For Health Specialties
+FirstFix.KSA
+Gulf Strategic Partners W.L.L. (GSP)
+Saggaf Eye Center السقاف لطب وجراحة العيون
+SANAD
+AlJomaih Automotive Company
+China Energy Engineering Group Co. Ltd.
+China Petroleum Pipeline Engineering Co.,Ltd.
+STC Bank
+Allianz Saudi Fransi
+geidea
+Holo
+Palestine Monetary Authority (PMA)
+Wared Logistics
+ALTAWKILAT
+شركة مقاولات
+AlMeer Saudi Technical Services Co.
+Borr Drilling
+LVMH
+Marsh Middle East and Africa
+King Khalid University
+MAGRABi Retail Group
+Abdullah A. Al-Barrak & Son Co.
+Saudi Commission For Health Specialties
+Jeraisy computers and communications services
+Bank
+Baraya Extended Care
+Tamer Healthcare
+Basserah
+Czech Rehabilitation Center
+AstraZeneca
+SK Engineering & Construction Co. Ltd
+NBTC Group
+انجاز | Enjaz
+The Arab Energy Fund (TAEF)
+Seadrill
+ALHAMRANI UNITED CO.
+King AbdulAziz University
+University of Jeddah
+Basamh Trading Co
+Middle East Investment Co.
+JGC Gulf International Co. Ltd.,
+Erne Fittings Middle East Factory Co. Ltd.
+Security Forces Hospital - Riyadh
+Saudi Constructioneers Ltd. (SAUDICO)
+Jollychic
+MBC
+ELSEWEDY ELECTRIC POWER SYSTEMS PROJECTS
+Biotech Cigalah
+JIGPC- Jazan Integrated Gasification and Power Company
+Rewaa
+Riyadh First Health Cluster
+Alfaisal University
+Oracle
+Ajialuna Educational Company
+Bandar Almashyat
+SASREF
+Confidencial
+Mohamed Yousuf Naghi Motors - BMW Group Importer KSA
+Ford Motor Company
+Nami | نامي
+Center for National Health Insurance (CNHI)
+Intalio
+PICSARABIA
+IFS
+Yunitco
+Ministry of Energy
+GULF GENERAL COOPERATIVE INSURANCE CO.
+Industrial and Commercial Bank of China
+National Debt Management Center - NDMC
+BlackRock
+wagely
+Nasco Saudi Arabia
+Systems Arabia
+Mermaid Subsea Services (Co) Ltd Saudi Arabia
+ALCON Group
+CLE
+Tamkeen Intelligent
+مصنع المحتوى
+High Capabilities Telecom Co. Ltd. / Farhan Commercial Co.
+SINOPEC
+Motaqademah Schools Company
+Citynet
+University of Business & Technology
+Prince Sultan University
+Al Yusr Leasing and Financing
+Tekfen Construction
+Foodics
+AstraZeneca
+GWC | Official
+Agility
+ARO Drilling
+Amana Cooperative Insurance
+Halliburton
+Wall Street English KSA
+Motors Gate Company | بوابة العربات
+وزارة الثقافة Ministry of Culture
+A. A. Bin Hindi B.S.C (c)
+Sinopec Engineering Group Saudi Co. Ltd.
+Ministry of Education, Saudi Arabia
+Al Yamamah University
+MASCO
+HALA
+stc Bahrain
+The Arab Investment Company
+Mobarak Merai Alsalomi
+GAS Arabian Services
+انجاز | Enjaz
+الجامعة العربية المفتوحة
+NATIONAL BASICS COMPANY LTD
+Al Bassam Group of Companies
+Al Etihad Cooperative Insurance Co
+HCLTech
+The Saudi National Bank - SNB
+Huawei
+SAB
+مدارس-البيارق-الاهلية
+alamal advanced medical
+Capital Market Authority
+King Saud University
+Alalamiya For Insurance | ???????? ???????
+Wataniya Insurance Company
+Samaa Technologies Co, Ltd
+SWAROVSKI
+Chalhoub Group
+Development Authorities Support Center (DASC) | مركز دعم هيئات التطوير
+وزارة الشؤون الإسلامية والدعوة والإرشاد Ministry Of Islamic Affairs, Dawah and Guidance
+Haji Husein Alireza & Co. Ltd.
+TAV Construction
+DETASAD
+Nokia
+Fluor Corporation
+Kingdom Hospital & Consulting Clinics
+Samaa Technologies Co, Ltd
+nybl
+SASO, Saudi Standards Metrology and Quality Organization
+Riyadh Pharma
+Mohamed Yousuf Naghi Motors
+Bank of Jordan
+JAL International Co. Ltd.
+Almajdouie Holding
+Salla E-Commerce Platform
+King Saud University
+ServiceNow
+إتقان كابيتال Itqan Capital
+Chedid Re
+Savage Saudi Arabia
+Symphony
+SILQFi
+Arabian axles, foundries & spare parts co. masabik
+Mohamed Yousuf Naghi Motors
+Sfda
+Medical Glamor Center  -   عيادات غلامور
+PetroApp | بتروآب
+Jeddah International College كلية جدة العالمية
+geidea
+Astek Middle East
+Gulf Chemical & Industrial Oils Co.
+Tarabut
+Quality Education Company (QEC)
+Saudi Icon Company
+Jeeny
+Elegancia Arabia
+Foreign, Commonwealth and Development Office
+Almandaryah Company
+Multinational School Dhahran
+Saudi Logistics Academy
+AP Pension
+Prince Mohammad Bin Fahd University
+Jamjoom Pharma
+Hayat Communications
+Prince Sultan University
+King Saud University
+Balsam United
+BYD
+ANELKSA
+Saudi Services For Electro Mechanic Works Co.
+برنامج خدمة ضيوف الرحمن | Pilgrims Experience Program (PEP)
+TAWAL
+TAMEAR | تعمير
+Tanmiah | Development
+Citi
+TAWAL
+Sinopec Engineering Group Saudi Co. Ltd.
+ZOMCO
+Tabuk Pharmaceuticals Manufacturing Company
+Shgardi
+CNTXT
+AYM Commerce
+Nesma Infrastructure & Technology
+falcom-co
+Sinopec Service Saudi Arabia
+Al Bawakir Group
+Thales
+الرائــــــدة | Alraedah
+Gama Hospital
+National Blue Company LTD
+EMKAN | إمكان
+Multinational Company
+Cladtek
+PREMCO PRECAST
+مركز الطب المتقدم / ADVANCED MEDICINE CENTER
+Aster DM Healthcare
+ATC
+Saudi Readymix Concrete Co
+KAMCO for General Contracting
+Building Roots
+Tiny
+Starlinks
+Rainbow Mechanical Solutions LLC.
+COSL
+Istituto Marangoni
+ozodcontracting
+Tas'Helat Marketing Co. (Fuel Stations Chain)
+Emirates NBD
+Saudi Bin Ladin Group
+SASREF
+Saudi Central Bank – SAMA
+National Information Center – Saudi Arabia
+RSG (Rock Solid Group)
+Almajdouie Motors
+CAF (Construcciones y Auxiliar de Ferrocarriles)
+Malath Insurance
+Enpro Industries Pvt Ltd
+360 Company Ltd.
+Abdul Samad Al Qurashi
+Sultan Bin Abdulaziz Humanitarian City (SBAHC)
+Tecnicas Reunidas Saudi Arabia
+Bechtel Oil, Gas, & Chemicals
+Katoen Natie Khonaini Co. Ltd.
+Saudi Engineering Group International
+Abeer Medical Group
+Abdul Samad Al Qurashi
+Dr.sulaiman Alhabib Hospital
+Al-Bilad Arabia Co. Ltd.
+King AbdulAziz University
+Dar Al-Hekma University
+National Industrial Development And Logistics Program
+Sinohydro
+FMQ SONS CO.
+FFAST- Fajer Fire and Safety Technologies
+AlRajhi United
+SINOPEC
+KAUST (King Abdullah University of Science and Technology)
+AlMeer Saudi Technical Services Co.
+Trio
+Ministry of Foreign Affairs, Saudi Arabia
+NABNY . LTD COMPANY
+FUTURETECH GROUP
+Mercedes-Benz KSA
+Jazan University
+Ministry Of Justice
+SAIP - Saudi Authority for Intellectual Property
+Concord Engineering & Contracting
+هيئة الفروسية - Saudi Equestrian Authority
+One Prepay
+BT Group
+The Olayan Group
+Haji Husein Alireza & Co. Ltd.
+SASREF
+Arabia Insurance Cooperative Co
+Gulf Union Al Ahlia
+RSA
+Unifonic
+Saudi Arabian Insurance Company B.S.C. (c)
+SABA Medical - سابا الطبية
+New Horizons Contracting and Maintenance Company
+Continental
+Quality Networks ICT | QNET
+Kent
+SGB BY BRANDSAFWAY (Middle East, India, Asia, and Australia)
+Ministry of Energy
+Fordeal
+Aljazira Takaful الجزيرة تكافل
+GSK
+LUSH Fresh Handmade Cosmetics - MENA
+Zaid Alhussain & Brothers Group
+Parsons Corporation
+NTG Clarity
+Rezayat Group
+Al-Futtaim Automotive - الفطيم للسيارات
+El Soadaa Group
+Dallah Hospital
+BEON-IT
+Safra
+NAB
+SASIB_SA
+Ministry of Finance, Saudi Arabia
+Mubarrad I مبرد
+Hoshan Group
+New Jeddah Clinic Hospital - مستشفى جدة الوطنى الجديد
+HALA
+Abunayyan Holding
+ExxonMobil
+Maximus KSA | ماكسيموس السعودية
+JD.COM
+Dimension Data
+Canon EMEA
+Petromin Corporation
+CMA CGM
+Jana Center
+KALPATARU PROJECTS INTERNATIONAL LIMITED
+Tanmiah | Development
+Jeddah International School
+TATCO
+machinestalk
+National Bank of Bahrain
+SME Bank
+FFAST- Fajer Fire and Safety Technologies
+الهيئة العامة لعقارات الدولة
+Compass Project Consulting
+University of Prince Mugrin
+Sanofi
+وزارة الثقافة Ministry of Culture
+KABi
+ALMAYAL Co. For Contracting
+مدينة الملك عبدالله للطاقة الذرية والمتجددة KACARE King Abdullah City for Atomic and Renewable Energ
+الهيئة العامة للطرق | Roads General Authority
+Wjeen International Co., Ltd.
+Tamara
+SCCC | Alibaba Cloud
+SOL
+American International School Riyadh
+Bechtel Corporation
+Arab Sea Information Systems
+Buruj Cooperative Insurance Company
+Jamjoom Pharma
+Tameeni | تأميني
+Mapa Group
+MOBCO Group
+Ministry of Commerce - Saudi Arabia
+Theeb Rent a Car
+Quara Finance
+Al Rajhi Capital
+alrajhi bank
+Chevron
+North
+GIG Saudi
+Saudi Geophysical
+Depa Group
+Saudi Construction Company
+United Cooperative Assurance / UCA
+SAB
+EMKAN | إمكان
+Saudi Binladen Group - PCMC
+Health Co.
+Leejam Sports Company
+Ministry Of Transport And Logistic Services
+SPIMACO
+Royal Cyber Inc.
+RCC
+NEFT Energies Co.
+Al Rajhi Building & Construction
+Red Sea Marine Services
+DIFC
+STC
+Gartner
+SAB
+DAR
+SAMMAN GROUP
+Axiom Telecom
+Raya Financing Company
+COSL
+Gulf International Bank
+SEWS-E
+Arabian Drilling
+Conquest Tech Solutions, Inc.
+Dr. Soliman Fakeeh Hospital Riyadh
+Ministry Of Justice
+tiqmo
+International Systems Engineering - ISE
+Mansour Al Mosaid Group
+Royal Commission for Jubail and Yanbu
+Waad Education Company
+Ministry of Economy and Planning - MEPsaudi
+sirar by stc
+Ctelecoms (Consolidated Telecoms)
+Bechtel Corporation
+Al Balad Development Company
+Alrayan Colleges
+Shabakkat KSA (Member of IPT PowerTech Group)
+MAHMOOD SAEED STEEL INDUSTRIES Co. Ltd.
+Petro Rabigh
+Albawani | البواني
+ABV Rock Group
+Nokia Al Saudia
+AtkinsRéalis
+DXC
+Magrabi Hospitals & Centers
+KBR, Inc.
+A.P. Moller - Maersk
+AtkinsRéalis
+LEVELS Contracting Co.
+General Authority For Statistics
+Ministry of Communications and Information Technology of Saudi Arabia
+ADVACON Contracting
+ToYou | تويو
+Alasala | الأصالة
+AliShar Contracting Company
+Mobarak Merai Alsalomi
+Prince Sultan Military Medical City
+شركة محمد وسليمان عساف العساف للتجارة والمقاولات المحدودة
+AlfaPeople
+Mobile Systems International (MSIUK)
+Wared Logistics
+مدينة الملك عبدالله للطاقة الذرية والمتجددة KACARE King Abdullah City for Atomic and Renewable Energ
+FUCHS KSA
+TMF Group
+Ali Zaid Al-Quraishi & Brothers
+JGC ARABIA LTD
+Bcare | بي كير للتأمين
+Alinma
+Tabuk Pharmaceuticals Manufacturing Company
+L'azurde
+Automotive Distribution & Marketing Company Ltd
+Alfaisal University
+Abunayyan Holding
+Sicim
+Saudi Central Bank – SAMA
+Arabio - Arab Company for Pharmaceutical Products
+Minah
+ARO Drilling
+EMKAN | إمكان
+Taajeer Group - مجموعة تأجير
+MyTM
+PIPECARE Group
+NEC Corporation
+SiFi - Simplified Financial Solutions Company
+Saudi Binladin Group (SBG)
+Daftra - دفترة
+Rafa Medical Center , Al Khobar
+King AbdulAziz University
+19011 Pharmacies
+IKK Group – Isam Khairi Kabbani Group
+Al Wefaq Saudi Holding | الوفاق السعودية القابضة
+Fakeeh Complementary
+Chubb Arabia Cooperative Insurance Company
+King Abdullah Humanitarian Foundation
+Board of Grievances ????? ???????
+T2
+University of Tabuk
+Unigaz Group
+Sendan International Company
+Attiq Ur Rehman Contracting Company
+Mission Consultant Engineering
+BSF Capital
+Tas'Helat Marketing Co. (Fuel Stations Chain)
+Expertise Contracting Co. Ltd.
+NielsenIQ
+شركة بن يعلا للصرافة | Bin Yaala for Exchange
+Engineering House Company
+New Horizons Contracting and Maintenance Company
+Bank AlJazira | بنك الجزيرة
+Shibh Al Jazira Contracting Company (SAJCO)
+stc
+Saudi Central Bank – SAMA
+Salini Impregilo S.P.A Saudi Branch
+FedEx
+Hyundai - Mohamed Yousuf Naghi Motors Co.
+Modern Technology Company Ltd (MOTECO)
+NTCo
+Hitachi
+Astek Middle East
+Nesma Infrastructure & Technology
+AlJazira Capital الجزيرة كابيتال
+Awaed
+Emirates NBD
+NACEC
+King Abdullah bin Abdulaziz University Hospital
+McDermott International, Ltd
+NIT
+ENERGIA
+Wison Engineering Ltd.
+Zaid Alhussain & Brothers Group
+Aon
+Riyadh Municipality
+Dr. Sulaiman AL Habib Medical Group
+Ministry of Interior - KSA
+Riyadh First Health Cluster
+Innovex
+Salla E-Commerce Platform
+Shelf Driling
+Prince Mohammed Bin Salman College of Business & Entrepreneurship - MBSC
+Nokia Al Saudia
+Skillmine Technology Consulting
+DP World
+Sanofi
+SAUDI POST
+Sarens Nass Middle East W.L.L
+Global Arabian For Modern Applications
+Watania Solutions Co.
+شركة بن يعلا للصرافة | Bin Yaala for Exchange
+Avvale
+WTW
+ALRajeh Modern  | شركة الراجح الحديثة للمقاولات
+King AbdulAziz University
+Ministry of Economy and Planning - MEPsaudi
+َQassim University Medical City (QUMC) - المدينة الطبية بجامعة القصيم
+Khazna
+Aljabr Rent a Car الجبر لتأجير السيارات
+King Khalid University
+MAGRABi Retail Group
+TMF Group
+Zamil Steel Holding Company Limited
+Integrated Technologies for Industrial Services Co. Ltd.
+Hertel
+Astellas Pharma Europe
+Binladin International Holding Group
+Saudi Oger Ltd.
+DXC
+ITC
+T & I CONTRUCTION COMPANY
+Naizak Global Engineering Systems
+Samsung C&T Corporation
+Ministry of Energy
+Sure Global Technology
+Other
+Strategic Office for Developing Albaha Region | المكتب الاستراتيجي لتطوير منطقة الباحة
+Maximus KSA | ماكسيموس السعودية
+Lalamove
+JGC Gulf International Co. Ltd.,
+ccc by stc
+DirectFN
+alrajhi bank
+Human Development Company
+KAUST (King Abdullah University of Science and Technology)
+Grifols Egypt for Plasma Derivatives (GEPD)
+Unifonic
+Communications Solutions Company
+Workday
+SAB
+V3 Middle East Engineering Consultants
+Alissa Automotive Co. Ltd.
+Benchmark Technology
+Arabian Business Innovation Services Co. Ltd (Innovation-SA)
+Archirodon Group N.V.
+Cloud Solutions
+SuLinda
+Bcare | بي كير للتأمين
+Muslim World League
+Rawafid Industrial
+Bakhashab Brothers Co Ltd
+Alinma
+Alinma
+Al Imam Muhammad Ibn Saud Islamic University
+King Saud University
+Al Kayan Group
+HUMAIN
+Healthcare Alliance KSA
+Salehiya Healthcare
+CMA CGM
+Sahm Capital
+American Express
+HSBC
+Jeddah International College كلية جدة العالمية
+AlMoosa College of Health Science
+BSF
+IBM
+HUMAIN
+King Faisal Specialist Hospital and Research Center
+ADDAR GROUP
+صندوق الشهداء والمصابين والأسرى والمفقودين
+Careem
+Q Saudi Trading Company
+Tenaris
+ewpartners
+AlJammaz Technologies الجماز للتكنولوجيا
+Marina Insurance Brokers
+Olayan Saudi Holding Company
+Global Technologies GT - التقنيات العالمية
+Start- Up
+برنامج الخدمات المشتركة | Shared Services Program
+Saipem
+Leader Investment Group - LIG
+Saudi German Health
+A.P. Moller - Maersk
+SLB
+Delta CJSC
+Trinidad Drilling
+neoleap
+Alissa Automotive Co. Ltd.
+Aljabr Trading Company
+Al Etihad Cooperative Insurance Co
+Hyundai Engineering Co. Ltd.
+The National Commercial Bank - AlahliNCB
+BSF
+Saudi Sicli
+DP World
+neoleap
+Saudi Center for Organ Transplantation (SCOT)
+Construction Products Holding Company ( CPC )
+Olayan Saudi Holding Company
+Topaz Energy and Marine
+Almana Hospitals
+Olayan Descon Industrial Company
+Darb Alwatan
+Mouwasat Medical Services
+Sadu Business Solutions Company
+International Programs School
+TVS Motor Company
+GS E&C
+Arrowad Group
+تجمع الرياض الصحي الثالث
+Maridive Offshore Projects
+Zeeco Middle East Ltd.
+SAAD ALI AL-ESSA GROUP FOR CONTRACTING
+Thamer International School
+SANID
+Gulf Advantage Automobiles LLC
+AJA Pharma
+ALKHALEEJ TRAINING & EDUCATION
+NESR
+Andalusia Health Egypt
+Innovative Solutions SA
+Lean Technologies
+STC
+Ministry of Health Saudi Arabia
+Prince Mohammed Bin Salman College of Business & Entrepreneurship - MBSC
+Bridgestone EMEA
+Human Rights Commission
+AL MAALI MEDICAL CO.
+Nesma & Partners
+Bina Holding
+Techno Q
+Modern Arab Construction
+SCT
+TotalEnergies
+EPAM Systems
+Riyadh Municipality
+D360 Bank
+Microsoft
+صندوق الشهداء والمصابين والأسرى والمفقودين
+Saudi Xerox
+DigiTrends
+Halliburton
+HSBC
+Boehringer Ingelheim
+NTS AMEGA GLOBAL
+Arab Loss Adjusters
+King Saud bin Abdulaziz University for Health Sciences
+Communications, Space & Technology Commission (CST)
+Plat4mation
+Esri Saudi Arabia
+Saudi Bell Group
+Ceer
+channels by stc
+AL SHALAWI LOGISTICS
+BNP Paribas
+NAQEL Express
+Ford Motor Company
+The Saudi National Bank - SNB
+NASCO - National Advanced Systems Co. Ltd.
+TALEMIA التعليمية
+الوطنية للتمويل | Wataniya Finance
+GSK
+Hassan Allam Holding
+L&T Technology Services
+ICEAT
+SANAD
+BNP Paribas
+Shipa
+Wipro
+مجمع طبيبي الطبي
+Abdul Latif Jameel
+University of Agriculture, Peshawar
+Oil & Gas Company
+Organon
+Taajeer Finance | تأجير للتمويل
+ALKHALEEJ TRAINING & EDUCATION
+NCGR - National Center for Government Resources Sys.
+STC Bank
+GSTC- General Secretariat of Zakat, Tax and Customs Committees
+Tourism Development Fund صندوق التنمية السياحي
+Saudi Patient Safety Center - المركز السعودي لسلامة المرضى
+SAIP - Saudi Authority for Intellectual Property
+Communications, Space & Technology Commission (CST)
+Advanced Construction for Contracting Co
+FEMCO  Faisal Electro-Mechanical Co. Ltd.
+Ersal Money Transfer Corp
+KABi
+Virtual Vision (V2)
+Visible Stars
+Gulf International Bank
+Tech Mahindra
+Ebttikar Technology Company
+Public Health Authority of Saudi Arabia
+MME Telecom L.L.C
+Petro Rabigh
+InnovationTeam
+UCC Holding
+ZOMCO
+solutions by stc
+TYPSA
+Bin Quraya
+Al- Othman Holding Company
+BEC Arabia
+EY
+iot squared
+RTCC-Al Rashid Trading & Contracting Company (Closed Joint Stock Company)
+Mosanada Logistics Services
+King Fahad National Library مكتبة الملك فهد الوطنية
+TECHNICAL HIGHER INSTITUTE FOR ENGINEERING AND PETROLEUM (THIEP)
+King Abdullah Humanitarian Foundation
+AL-Yamama Company
+MOBCO Group
+Rabiah & Nassar Group
+Webuild
+ECOVIS Saudi Arabia (ECOVIS AL SABTI)
+Vision Bank
+Alkobraish Investment & Construction Co.
+GAS Arabian Services
+IIS
+Colleges of Excellence
+Redington Middle East and Africa
+Abdulrehman Algosaibi G.T.C
+تجمع حائل الصحي| Hail Health Cluster
+???? - Snapchat
+Future Communications Company
+Saudi Global Ports
+Taibah University
+My Clinic Ksa
+CAC Bank
+TotalEnergies
+Advance International Co
+Advanced Lines Group
+SEPCOIII Electric Power Construction Co., Ltd.
+MADAF Trading and Contracting Co.
+برنامج خدمة ضيوف الرحمن | Pilgrims Experience Program (PEP)
+London Health Sciences Centre (LHSC)
+Meena Health
+Al-Hamra Kuwait Company W.L.L.
+Tamer Logistics
+Al- Othman Holding Company
+المركز الوطني للأرصاد National Center for Meteorology
+Helmerich & Payne
+First Abu Dhabi Bank (FAB)
+Alinma
+BSF Capital
+SGC
+Engineering & Technical Services Company (ETS)
+NEO
+RedBox SA
+California Greens
+Saint Joseph University of Beirut
+MANTECH
+Veeam Software
+NOV
+NOV
+Mace
+SHUAA Capital
+Khatib & Alami
+National Infrastructure Fund (Infra)
+SPIMACO
