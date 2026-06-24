@@ -3794,7 +3794,11 @@ export async function getClusterSummary(): Promise<{
   resolvedCount: number;
 }> {
   const result = await pool.query(`
-    SELECT 
+    WITH resolved_act AS (
+      SELECT DISTINCT cluster_id FROM duplicate_merge_actions
+       WHERE action_type IN ('resolve','module_resolved')
+    )
+    SELECT
       COUNT(*) as total_clusters,
       COALESCE(SUM(total_leads), 0) as total_leads,
       COALESCE(SUM(total_deals), 0) as total_deals,
@@ -3802,9 +3806,10 @@ export async function getClusterSummary(): Promise<{
       COUNT(*) FILTER (WHERE confidence_level = 'medium') as medium_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'low') as low_confidence,
       COALESCE(SUM(estimated_pipeline_value), 0) as pipeline_inflation,
-      COUNT(*) FILTER (WHERE status = 'active') as active_count,
-      COUNT(*) FILTER (WHERE status = 'resolved') as resolved_count
-    FROM duplicate_clusters
+      COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
+      COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count
+    FROM duplicate_clusters dc
+    LEFT JOIN resolved_act ra ON ra.cluster_id = dc.id
   `);
 
   const row = result.rows[0];
@@ -6817,7 +6822,11 @@ export async function getEnhancedSummary(): Promise<{
   lastSyncAt: string | null;
 }> {
   const result = await pool.query(`
-    SELECT 
+    WITH resolved_act AS (
+      SELECT DISTINCT cluster_id FROM duplicate_merge_actions
+       WHERE action_type IN ('resolve','module_resolved')
+    )
+    SELECT
       COUNT(*) as total_clusters,
       COUNT(*) FILTER (WHERE GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1) as true_dup_clusters,
       COUNT(*) FILTER (WHERE total_records <= 1) as singleton_count,
@@ -6830,10 +6839,11 @@ export async function getEnhancedSummary(): Promise<{
       COUNT(*) FILTER (WHERE confidence_level = 'medium' AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1) as medium_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'low' AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1) as low_confidence,
       COALESCE(SUM(estimated_pipeline_value), 0) as pipeline_inflation,
-      COUNT(*) FILTER (WHERE status = 'active') as active_count,
-      COUNT(*) FILTER (WHERE status = 'resolved') as resolved_count,
-      COUNT(*) FILTER (WHERE status = 'ignored') as ignored_count
-    FROM duplicate_clusters
+      COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
+      COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count,
+      COUNT(*) FILTER (WHERE dc.status = 'ignored' AND ra.cluster_id IS NULL) as ignored_count
+    FROM duplicate_clusters dc
+    LEFT JOIN resolved_act ra ON ra.cluster_id = dc.id
   `);
 
   const row = result.rows[0];
@@ -7040,12 +7050,21 @@ export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOvervie
     noun: string,
   ) =>
     _safeSnapshot(async () => {
+      // Same lifecycle as the tabs: a cluster is "handled/resolved" when its
+      // status is 'resolved' OR it carries a resolve/module_resolved action;
+      // "open" = active and NOT resolved. The resolved-action set is computed
+      // once (CTE) and hash-joined, so this stays cheap.
       const r = await pool.query(
-        `SELECT
-           COUNT(*) FILTER (WHERE status = 'active'   AND ${field} > 1)::int AS open_clusters,
-           COUNT(*) FILTER (WHERE status = 'resolved' AND ${field} > 1)::int AS handled,
-           COALESCE(SUM(${field}) FILTER (WHERE status = 'active' AND ${field} > 1), 0)::int AS dup_records
-         FROM duplicate_clusters`,
+        `WITH resolved_act AS (
+           SELECT DISTINCT cluster_id FROM duplicate_merge_actions
+            WHERE action_type IN ('resolve','module_resolved')
+         )
+         SELECT
+           COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL AND ${field} > 1)::int AS open_clusters,
+           COUNT(*) FILTER (WHERE (dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) AND ${field} > 1)::int AS handled,
+           COALESCE(SUM(${field}) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL AND ${field} > 1), 0)::int AS dup_records
+         FROM duplicate_clusters dc
+         LEFT JOIN resolved_act ra ON ra.cluster_id = dc.id`,
       );
       const row = r.rows[0] || {};
       const open = Number(row.open_clusters || 0);
@@ -7094,14 +7113,20 @@ export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOvervie
          CASE WHEN total_accounts > 0 THEN 1 ELSE 0 END +
          CASE WHEN total_deals    > 0 THEN 1 ELSE 0 END) >= 2
       )`;
+      // Same lifecycle as the tabs (resolve/module_resolved action = handled).
       const r = await pool.query(
-        `SELECT
-           COUNT(*) FILTER (WHERE status = 'active')::int   AS open_count,
-           COUNT(*) FILTER (WHERE status = 'resolved')::int AS handled_count,
-           COUNT(*) FILTER (WHERE status = 'ignored')::int  AS dismissed_count,
+        `WITH resolved_act AS (
+           SELECT DISTINCT cluster_id FROM duplicate_merge_actions
+            WHERE action_type IN ('resolve','module_resolved')
+         )
+         SELECT
+           COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL)::int   AS open_count,
+           COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL)::int AS handled_count,
+           COUNT(*) FILTER (WHERE dc.status = 'ignored' AND ra.cluster_id IS NULL)::int  AS dismissed_count,
            COALESCE(SUM(estimated_pipeline_value)
-             FILTER (WHERE status = 'active'), 0)::float    AS arr_sar
-         FROM duplicate_clusters
+             FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL), 0)::float    AS arr_sar
+         FROM duplicate_clusters dc
+         LEFT JOIN resolved_act ra ON ra.cluster_id = dc.id
          WHERE ${crossModuleFilter}`,
       );
       const row = r.rows[0] || {};
