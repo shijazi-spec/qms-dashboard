@@ -7374,27 +7374,39 @@ export async function getDuplicateRecordsByType(
   // one merge_action against it. 'resolved' = cluster status='resolved'.
   // 'all' = no filter.
   const aiStatus = ((options as any)?.ai_status as string) || "active";
+  // The four AI-status tabs are MUTUALLY EXCLUSIVE — every cluster lands in
+  // exactly one, by this lifecycle precedence (Sarah 2026-06-24):
+  //   Resolved    > AI-Applied(pending) > Dismissed > Untouched
+  // "The AI acted on this cluster" = it carries an auto-merge tag-pending or a
+  // ledger resolve action. This applies to ALL module tabs (shared function).
+  const HAS_AI_ACTION =
+    "EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending'))";
   let statusFilter = "AND dc.status = 'active'";
   let mergeActionFilter = "";
   if (aiStatus === "tagged_pending") {
-    statusFilter = "AND dc.status = 'active'";
-    mergeActionFilter =
-      " AND EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending'))";
+    // AI-APPLIED · pending Zoho admin delete — the AI tagged / updated records and
+    // the admin hasn't deleted them yet. Anything NOT yet resolved that carries an
+    // AI action belongs here — even a cluster that was ALSO dismissed (the AI work
+    // still stands in Zoho), which is why this is keyed on the action, not just
+    // status='active'. (Fixes AI-Applied clusters leaking into the Dismissed tab.)
+    statusFilter = "AND dc.status <> 'resolved'";
+    mergeActionFilter = " AND " + HAS_AI_ACTION;
   } else if (aiStatus === "resolved") {
+    // Resolved = the Zoho admin actually deleted the tagged duplicates (a sync
+    // reconcile flips status → 'resolved').
     statusFilter = "AND dc.status = 'resolved'";
   } else if (aiStatus === "dismissed") {
-    // Dismissed = the operator marked the cluster a false positive (e.g. a
-    // Corporate-Accounts and a Marketplace account that are intentionally two
-    // separate accounts). Stored as status='ignored'.
+    // Dismissed = the operator marked the cluster a false positive (status
+    // 'ignored') with NO AI change applied. A cluster the AI also acted on
+    // belongs in AI-Applied, not here — so exclude any with an AI action.
     statusFilter = "AND dc.status = 'ignored'";
+    mergeActionFilter = " AND NOT " + HAS_AI_ACTION;
   } else if (aiStatus === "all") {
     statusFilter = "";
   } else if (aiStatus === "active") {
-    // Untouched active — exclude clusters with prior merge actions (incl.
-    // auto-merge tagged-pending, which belongs in AI-Applied, not here).
+    // Untouched = active, nothing done by AI or operator.
     statusFilter = "AND dc.status = 'active'";
-    mergeActionFilter =
-      " AND NOT EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending'))";
+    mergeActionFilter = " AND NOT " + HAS_AI_ACTION;
   }
 
   // GENUINE-DUPLICATE gate for DEALS (Ahmad 2026-06-21). Deal clusters are
