@@ -821,7 +821,9 @@
                 <button data-on-click="bulkMergeExactContacts" id="bulkMergeExactBtn" data-testid="button-bulk-merge-exact-contacts" title="Bulk-merge contacts where Email AND Phone match 100% — these are the same person. Keeps the most complete record, tags the rest Duplicate-Delete. Shows a preview count first, then asks for the admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-200 text-emerald-900 hover:bg-emerald-300">✅ Auto-merge exact email+phone</button>
                 <button data-on-click="bulkMergeNamePhoneContacts" id="bulkMergeNamePhoneBtn" data-testid="button-bulk-merge-name-phone-contacts" title="Bulk-merge contacts that share the SAME NAME + SAME PHONE — the same person even when emails differ or one is missing. Keeps both emails on the survivor (primary + Secondary_Email); a lone email becomes the primary. Tags the rest Duplicate-Delete. Preview first, then admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-200 text-teal-900 hover:bg-teal-300">✅ Auto-merge same name+phone</button>
                 <button data-on-click="bulkLinkContactsToAccount" id="bulkLinkContactsBtn" data-testid="button-bulk-link-contacts" title="Bulk-LINK the remaining 'chained match' clusters — colleagues at the same company who are NOT duplicates — to their company Account (sets Account_Name). For clusters with one clear account and no genuine duplicates. No tagging, no deletion. Preview first, then admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-200 text-indigo-900 hover:bg-indigo-300">🔗 Bulk-link colleagues → Account</button>
+                <button data-on-click="applyAllSafeMerges" id="applyAllSafeBtn" data-testid="button-apply-all-safe" title="ONE click runs ALL the safe auto-merges in batches behind a single admin password: Accounts (same domain + name) first, then Contacts (exact email+phone, then same name+phone). Uses the same conservative, proven rules as the individual buttons — nothing is deleted by the platform. Stops automatically when there's nothing left to merge." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">⚡ Apply ALL safe merges (accounts + contacts)</button>
             </div>
+            <div id="applyAllSafePanel" class="text-xs mb-2"></div>
             <div id="bulkLinkContactsPanel" class="text-xs mb-2"></div>
             <div id="bulkSplitContactsPanel" class="text-xs mb-2"></div>
             <div id="bulkMergeExactPanel" class="text-xs mb-2"></div>
@@ -6081,6 +6083,50 @@
                     + '</td></tr>';
                 return headRow + detail;
             }).join('');
+        }
+
+        // ONE-CLICK "Apply all safe merges": loops /api/duplicates/apply-all-safe
+        // until there's nothing left to merge, behind a SINGLE admin password.
+        // Runs the same conservative rules as the individual buttons (accounts
+        // domain+name, contacts exact email+phone, contacts same name+phone).
+        async function applyAllSafeMerges() {
+            const panel = document.getElementById('applyAllSafePanel');
+            const btn = document.getElementById('applyAllSafeBtn');
+            if (!confirm('Apply ALL safe auto-merges now?\n\n• Accounts: same domain + same name\n• Contacts: exact email+phone, then same name+phone\n\nThese are the same conservative rules as the individual buttons — the survivor is kept, the rest are tagged "Duplicate-Delete" for the admin to delete. NOTHING is deleted by the platform.\n\nRuns in batches behind one admin password; you can stop by leaving the page.')) return;
+            if (btn) btn.disabled = true;
+            let adminKey = null;
+            const totals = { acctMerged: 0, acctTagged: 0, contactsTagged: 0, errors: 0, passes: 0 };
+            const render = (msg, tone) => { if (panel) panel.innerHTML = '<div class="' + (tone || 'text-emerald-700') + '">' + msg + '</div>'; };
+            render('Starting…');
+            try {
+                for (let pass = 0; pass < 500; pass++) {
+                    const headers = { 'Content-Type': 'application/json' };
+                    if (adminKey) headers['x-admin-key'] = adminKey;
+                    let res = await fetch('/api/duplicates/apply-all-safe', {
+                        method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify({ limit: 15 })
+                    });
+                    if (res.status === 401 || res.status === 403) {
+                        adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                        if (!adminKey) { render('Cancelled.', 'text-gray-500'); break; }
+                        continue; // retry this pass with the key
+                    }
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || !data.success) { render('Stopped on error: ' + escapeHtml(String((data && data.error) || ('HTTP ' + res.status))), 'text-red-600'); break; }
+                    totals.acctMerged += (data.accounts && data.accounts.merged) || 0;
+                    totals.acctTagged += (data.accounts && data.accounts.accountsTagged) || 0;
+                    totals.contactsTagged += ((data.exactContacts && data.exactContacts.taggedRecords) || 0) + ((data.namePhoneContacts && data.namePhoneContacts.taggedRecords) || 0);
+                    totals.errors += ((data.accounts && data.accounts.errors) || 0) + ((data.exactContacts && data.exactContacts.errors) || 0) + ((data.namePhoneContacts && data.namePhoneContacts.errors) || 0);
+                    totals.passes++;
+                    render('Working… batch ' + totals.passes + ' · ' + totals.acctMerged.toLocaleString() + ' account(s) merged · ' + totals.contactsTagged.toLocaleString() + ' contact duplicate(s) tagged' + (data.remaining ? ' · ~' + Number(data.remaining).toLocaleString() + ' remaining' : ''));
+                    if (!data.more) break;
+                }
+                const tone = totals.errors > 0 ? 'text-amber-700' : 'text-emerald-800';
+                render('✓ Done — ' + totals.acctMerged.toLocaleString() + ' account(s) merged, ' + totals.contactsTagged.toLocaleString() + ' contact duplicate(s) tagged across ' + totals.passes + ' batch(es)' + (totals.errors > 0 ? ' · ' + totals.errors + ' error(s) (re-run to retry)' : '') + '. Tagged records await the Zoho admin delete; nothing was deleted by the platform.', tone);
+            } catch (e) {
+                render('Stopped: ' + escapeHtml(String(e && e.message || e)), 'text-red-600');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         }
 
         async function bulkMergeExactContacts() {

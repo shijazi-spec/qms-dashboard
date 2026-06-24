@@ -1708,6 +1708,64 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // ONE-CLICK "Apply all safe auto-merges" (Sarah 2026-06-25). Runs ONE bounded
+    // batch of each PROVEN safe matcher in sequence — accounts (domain+name) first
+    // so contacts re-parent onto the merged survivor, then contacts (exact
+    // email+phone, then same name+phone). No new merge logic: it just orchestrates
+    // the existing, conservative apply functions behind ONE admin check. The
+    // frontend loops this until `more` is false. Each pass is small so the request
+    // never hits the proxy timeout; nothing is deleted by the platform.
+    path: "/api/duplicates/apply-all-safe",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          const body = await c.req.json().catch(() => ({}));
+          const n = parseInt(body?.limit, 10);
+          const limit = Number.isFinite(n) && n > 0 ? Math.min(n, 25) : 15;
+          const by = `${(sessionUser as any)?.email || "admin"} (apply-all-safe)`;
+          const {
+            applyAccountDomainNameMerge,
+            applyExactContactMatches,
+            applyNamePhoneContactMatches,
+          } = await import("../../utils/duplicateRadarDatabase");
+          const accounts = await applyAccountDomainNameMerge({
+            scope: "corporate",
+            dryRun: false,
+            limit,
+            performedBy: by,
+          });
+          const exactContacts = await applyExactContactMatches({ limit, performedBy: by });
+          const namePhoneContacts = await applyNamePhoneContactMatches({ limit, performedBy: by });
+          const didWork =
+            (accounts.merged || 0) +
+            (exactContacts.mergedGroups || 0) +
+            (namePhoneContacts.mergedGroups || 0);
+          const remaining =
+            (accounts.remaining || 0) +
+            (exactContacts.remaining || 0) +
+            (namePhoneContacts.remaining || 0);
+          // Loop only while this pass made progress — a progress-based guard that
+          // can't spin forever even if `remaining` is stuck (e.g. Zoho rate-limit).
+          return c.json({
+            success: true,
+            accounts,
+            exactContacts,
+            namePhoneContacts,
+            remaining,
+            more: didWork > 0,
+          });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Dismiss an account auto-merge group as "NOT duplicates" (Ahmad 2026-06-23).
     // Records the group's accounts as mutually separated (durable) so the group
     // is excluded from this AND future previews/merges — no Zoho write.
