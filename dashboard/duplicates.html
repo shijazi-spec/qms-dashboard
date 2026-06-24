@@ -7429,12 +7429,13 @@
             const n = (window._dupBulkSel && window._dupBulkSel.size) || 0;
             const cnt = document.getElementById('dupBulkCount');
             if (cnt) cnt.textContent = n;
-            // Keep the bar visible on the Dismissed / Resolved filters even with 0
-            // selected, so "Select all on page" + "Re-open selected" are reachable.
-            const vf = (window._aiStatusByTab && window._currentTab) ? window._aiStatusByTab[window._currentTab] : 'active';
-            const onRecoverable = (vf === 'dismissed' || vf === 'resolved');
+            // Show the bulk bar ONLY when at least one cluster is selected — so it
+            // never floats over the rows at "0 selected". To start a bulk action,
+            // tick any row's checkbox (always available); the bar then appears with
+            // "Select all on page" + Re-open / Dismiss. (Previously it was forced
+            // visible on the Dismissed/Resolved filters, which covered content.)
             if (bar) {
-                if (n > 0 || onRecoverable) { bar.classList.remove('hidden'); bar.classList.add('flex'); }
+                if (n > 0) { bar.classList.remove('hidden'); bar.classList.add('flex'); }
                 else { bar.classList.add('hidden'); bar.classList.remove('flex'); }
             }
         }
