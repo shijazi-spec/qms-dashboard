@@ -1825,6 +1825,7 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
     new Set(
       [
         "Marketplace",
+        "Doam Marketplace",
         "Partner Accounts",
         "WalaOne",
         ...((process.env.DUPLICATE_RADAR_CS_EXCLUDE_LAYOUTS || "").split(",")),
@@ -1859,6 +1860,7 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
         -- Space/punctuation-insensitive so name variants are caught; "WalaPlus"
         -- (corporate) is kept. A company that ALSO has a corporate deal still
         -- blocks via that corporate deal.
+        AND ${layoutNormExpr} NOT LIKE '%marketplace%'
         AND ${layoutNormExpr} NOT IN (${csExcludeSql})
         AND (
           COALESCE(${phaseCoalesce}) IS NOT NULL
