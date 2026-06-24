@@ -2105,6 +2105,11 @@ async function runPreflightBasic(input: {
   const out: PreflightResultRow[] = [];
   const summary: PreflightSummary = { block: 0, review: 0, warn: 0, duplicate: 0, pass: 0 };
   let skipped = 0;
+  // Intra-batch client memory: normalized company name → the client status any
+  // row in THIS upload resolved to. A bulk list often carries the same company
+  // twice — once on a work email (caught by domain) and once on a personal /
+  // blank email (would leak) — so a sibling row's match is propagated below.
+  const batchClientByName = new Map<string, CsClientStatus>();
 
   for (let i = 0; i < examineCount; i++) {
     const r = rows[i]!;
@@ -2226,6 +2231,19 @@ async function runPreflightBasic(input: {
       if (csStatus.lifecycleState) lifecycleOut = csStatus.lifecycleState;
     }
 
+    // Remember any client this row resolved to, keyed by its company name, so a
+    // sibling PASS row of the same company (personal/blank email) can inherit it.
+    if (csStatus) {
+      const rowNm = nameByRow.get(i);
+      if (rowNm) {
+        const prev = batchClientByName.get(rowNm);
+        // Prefer an ACTIVE (block) status over a churned one.
+        if (!prev || (csStatus.active && !prev.active)) {
+          batchClientByName.set(rowNm, csStatus);
+        }
+      }
+    }
+
     out.push({
       row_index: i,
       ref: r.ref ?? null,
@@ -2248,6 +2266,62 @@ async function runPreflightBasic(input: {
       cs_phase: csPhaseOut,
       crm_links: crmLinks,
     });
+  }
+
+  // ── Intra-batch propagation ──────────────────────────────────────────────
+  // A bulk upload routinely lists the SAME company many times — some contacts on
+  // a work email (caught by domain) and some on a personal / blank email that
+  // leaves only the company name. If ANY row resolved to a CS client, upgrade
+  // every PASS row with the SAME normalized company name to that client's verdict
+  // (block for active, review for churned-in-cool-off), so a known client can't
+  // slip into the import list just because one of its contacts used a Gmail. Only
+  // fires on substantial names (the nameByRow filter already drops placeholders
+  // like "Confidential …"), so generic labels never propagate.
+  if (batchClientByName.size > 0) {
+    for (let i = 0; i < out.length; i++) {
+      const row = out[i]!;
+      if (row.verdict !== "pass") continue;
+      const nm = nameByRow.get(row.row_index);
+      if (!nm) continue;
+      const st = batchClientByName.get(nm);
+      if (!st) continue;
+      const coolOff = st.sector === "government" ? 365 : 180;
+      const cs: "block" | "review" | "warn" = st.active
+        ? "block"
+        : st.churnDays != null && st.churnDays <= coolOff
+          ? "review"
+          : "warn";
+      if (cs === "warn") continue; // churned past cool-off → still importable
+      const vv = csClientPreflightVerdict({
+        cs,
+        matchVia: "strict_name",
+        churnDays: st.churnDays,
+        coolOff,
+        sector: st.sector,
+        csOwner: st.csOwner,
+        companyName: st.companyName,
+      });
+      summary[row.verdict]--;
+      summary[vv.verdict]++;
+      out[i] = {
+        ...row,
+        verdict: vv.verdict,
+        reason: vv.reason + "_same_company_in_upload",
+        suggested_action:
+          vv.suggested_action +
+          " (Another contact for this company in the same upload is an existing client.)",
+        executive_action: vv.executive_action,
+        executive_severity: vv.executive_severity,
+        matched_via: "company_name",
+        sector: st.sector,
+        cs_owner: st.csOwner,
+        owners: st.csOwner ? [st.csOwner] : row.owners,
+        churn_date: st.churnDate,
+        churn_days: st.churnDays,
+        cs_phase: st.phase,
+        lifecycle_state: st.lifecycleState ?? row.lifecycle_state,
+      };
+    }
   }
 
   const reasonBuckets = new Map<string, number>();
