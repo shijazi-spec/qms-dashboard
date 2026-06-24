@@ -1,0 +1,3 @@
+# Paste the PASS file's "Company Name" column below (one name per line).
+# Lines starting with # and blank lines are ignored.
+# Then run:  npx tsx scripts/checkPassNames.ts
