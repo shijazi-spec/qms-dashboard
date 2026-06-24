@@ -1787,24 +1787,43 @@ export function invalidateCsDirectoryCache(): void {
  * CRM names are routinely BILINGUAL — "Abdul Latif Jameel United Finance | عبد
  * اللطيف جميل للتمويل" — so the normalized blob holds BOTH languages and an
  * inbound that carries only the English (or only the Arabic) never matches.
- * Split on the bilingual separators (| / \ – —) and pull parenthetical
- * abbreviations out ("Saudi Kuwaiti Finance House (SKFH)" → the long name + the
- * short code), then index each part on its own. Returns the whole name too.
+ * Split on the bilingual separators (| / \ – —) and pull the de-parenthesized
+ * main name out, then index each part on its own. Returns the whole name too.
+ *
+ * IMPORTANT (Sarah 2026-06-25): a SHORT single-word fragment — a 3-4 letter
+ * abbreviation like "(ATC)", "(STC)", "| AON" — must NOT be indexed as a
+ * standalone alias. Those acronyms collide across unrelated companies (UTEC's
+ * "(ATC)" was matching every inbound "ATC"). A sub-segment is only indexable
+ * when it carries real identity: Arabic (a bilingual half), OR multi-word, OR a
+ * single word ≥5 chars. The WHOLE name and the de-parenthesized main name are
+ * always kept, so legitimate short brand names (e.g. a client literally named
+ * "UTEC") still resolve. Short-acronym clients are caught by DOMAIN, not name.
  */
+function _segmentIndexable(seg: string): boolean {
+  const s = (seg || "").trim();
+  if (s.length < 3) return false;
+  if (/[؀-ۿ]/.test(s)) return true; // Arabic half — keep
+  const toks = s.split(/\s+/).filter(Boolean);
+  if (toks.length >= 2) return true; // multi-word — distinctive enough
+  return s.replace(/[^a-zA-Z0-9]/g, "").length >= 5; // single word: need ≥5
+}
+
 function _nameSegments(raw: string): string[] {
   const whole = (raw || "").replace(/\s+/g, " ").trim();
   if (!whole) return [];
   const out = new Set<string>([whole]);
   for (const part of whole.split(/[|/\\–—]/)) {
     const p = part.trim();
-    if (p.length >= 3) out.add(p);
+    if (_segmentIndexable(p)) out.add(p);
   }
-  // Parenthetical abbreviation/alias: keep BOTH the inside and the outside.
+  // De-parenthesized main name is always kept (it's the real name, e.g. "UTEC"
+  // from "UTEC (ATC)"). The parenthetical abbreviation itself is only kept when
+  // it's substantial — a short acronym is dropped (collision-prone).
   const parens = whole.match(/\(([^)]+)\)/g);
   if (parens) {
     for (const m of parens) {
       const inner = m.replace(/[()]/g, "").trim();
-      if (inner.length >= 2) out.add(inner);
+      if (_segmentIndexable(inner)) out.add(inner);
     }
     const outside = whole.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
     if (outside.length >= 3) out.add(outside);
