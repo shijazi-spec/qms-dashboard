@@ -11624,6 +11624,17 @@
                     : '<span class="text-gray-400">—</span>';
                 const tint = sevTint[r.executive_severity] || '';
                 const execAction = r.executive_action || r.suggested_action || '';
+                // "↻ Re-check from CRM" — only on rows flagged because of a CRM
+                // match the operator may have just corrected in Zoho. (no_contact
+                // is about the uploaded contact itself, so re-fetching deals can't
+                // change it — no button there.)
+                const canRecheck = ['block', 'review', 'warn', 'duplicate'].indexOf(r.verdict) !== -1;
+                const recheckBtn = canRecheck
+                    ? ' <button class="pf-recheck-btn text-xs text-indigo-600 hover:text-indigo-800 underline ml-1"'
+                        + ' data-pf-domain="' + escAttr(r.input.domain || '') + '"'
+                        + ' data-pf-company="' + escAttr(r.input.company_name || '') + '"'
+                        + ' title="Re-fetch this company&#39;s deals from Zoho and re-check — use after you corrected it in the CRM">↻ Re-check</button>'
+                    : '';
                 return '<tr class="hover:bg-gray-50 ' + tint + '">'
                     + '<td class="px-3 py-2 text-xs text-gray-500">' + (r.row_index + 1) + '</td>'
                     + '<td class="px-3 py-2 whitespace-nowrap">' + preflightVerdictBadge(r.verdict, r.reason) + '</td>'
@@ -11633,13 +11644,104 @@
                     + '<td class="px-3 py-2">' + _preflightModulesCell(r.module_counts) + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.lifecycle_state)) + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-800" title="' + escAttr(r.reason || '') + '">' + escapeHtml(execAction) + '</td>'
-                    + '<td class="px-3 py-2 whitespace-nowrap">' + _preflightViewCell(r.cluster_id) + '</td>'
+                    + '<td class="px-3 py-2 whitespace-nowrap">' + _preflightViewCell(r.cluster_id) + recheckBtn + '</td>'
                     + '</tr>';
             }).join('');
             const moreNote = rows.length > MAX_VISIBLE_PREFLIGHT
                 ? '<tr><td colspan="9" class="px-4 py-3 text-center text-xs text-gray-500 bg-gray-50">Showing the first ' + MAX_VISIBLE_PREFLIGHT + ' of ' + rows.length.toLocaleString() + ' rows (flagged first). Use the download buttons for the complete list — every row is included there.</td></tr>'
                 : '';
             body.innerHTML = rowsHtml + moreNote;
+
+            // Bind the per-row "↻ Re-check from CRM" handler once (delegated, so
+            // it survives every renderPreflight re-render of the table body).
+            if (!body._pfRecheckBound) {
+                body._pfRecheckBound = true;
+                body.addEventListener('click', function (e) {
+                    const btn = e.target && e.target.closest ? e.target.closest('.pf-recheck-btn') : null;
+                    if (!btn) return;
+                    preflightRecheckCompany(btn.getAttribute('data-pf-domain'), btn.getAttribute('data-pf-company'), btn);
+                });
+            }
+        }
+
+        // Normalize a company name for grouping rows of the SAME company within
+        // one upload (Arabic-aware, punctuation-insensitive).
+        function _pfCompanyNorm(s) {
+            return (s || '').toString().toLowerCase().replace(/[^a-z0-9؀-ۿ]+/g, ' ').trim();
+        }
+
+        function _pfRecomputeSummary(rows) {
+            const s = { block: 0, review: 0, warn: 0, duplicate: 0, pass: 0, no_contact: 0 };
+            (rows || []).forEach(function (r) { if (s[r.verdict] != null) s[r.verdict]++; });
+            return s;
+        }
+
+        // Per-row "↻ Re-check from CRM": re-fetch just THIS company's deals from
+        // Zoho, bust the CS-client directory cache, and re-evaluate every row of
+        // the same company in place. Use after you corrected the record in Zoho —
+        // a stale BLOCK flips to PASS without re-uploading or a full scan.
+        async function preflightRecheckCompany(domain, companyName, btn) {
+            const data = window._preflightLastResult;
+            if (!data || !Array.isArray(data.rows)) return;
+            const dom = (domain || '').toLowerCase().trim();
+            const coNorm = _pfCompanyNorm(companyName);
+
+            // Gather ALL loaded rows of the same company (by domain, else name).
+            const affected = data.rows.filter(function (r) {
+                const rd = (r.input && r.input.domain ? r.input.domain : '').toLowerCase().trim();
+                if (dom && rd === dom) return true;
+                if (!dom && coNorm && _pfCompanyNorm(r.input && r.input.company_name) === coNorm) return true;
+                return false;
+            });
+            if (!affected.length) return;
+
+            const domains = Array.from(new Set(affected.map(function (r) { return (r.input.domain || '').toLowerCase().trim(); }).filter(Boolean)));
+            const names = Array.from(new Set(affected.map(function (r) { return (r.input.company_name || '').trim(); }).filter(Boolean)));
+
+            const origLabel = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Re-checking…'; }
+            try {
+                const resp = await fetch('/api/duplicates/preflight/recheck', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domains: domains, names: names, rows: affected.map(function (r) { return r.input; }) })
+                });
+                const j = await resp.json().catch(function () { return {}; });
+                if (!resp.ok || !j.success) {
+                    alert('Re-check failed: ' + (j.error || ('HTTP ' + resp.status)));
+                    return;
+                }
+                // Returned rows are in the SAME order as `affected` — map by
+                // position and mutate in place (affected[] are references into
+                // data.rows, so the master result updates too).
+                const newRows = Array.isArray(j.rows) ? j.rows : [];
+                let movedToPass = 0;
+                affected.forEach(function (r, k) {
+                    const nr = newRows[k];
+                    if (!nr) return;
+                    if (r.verdict !== 'pass' && nr.verdict === 'pass') movedToPass++;
+                    r.verdict = nr.verdict;
+                    r.reason = nr.reason;
+                    r.suggested_action = nr.suggested_action;
+                    r.executive_action = nr.executive_action;
+                    r.executive_severity = nr.executive_severity;
+                    r.lifecycle_state = nr.lifecycle_state;
+                    r.module_counts = nr.module_counts;
+                    r.owners = nr.owners;
+                    r.cluster_id = nr.cluster_id;
+                    if (nr.input) r.input = nr.input;
+                });
+                data.summary = _pfRecomputeSummary(data.rows);
+                renderPreflight(data);
+
+                const upd = (j.resync && j.resync.updated) || 0;
+                const co = names[0] || domains[0] || 'company';
+                alert('Re-checked ' + co + ':\n• ' + upd + ' deal(s) refreshed from Zoho\n• ' + movedToPass + ' row(s) now PASS');
+            } catch (err) {
+                alert('Re-check error: ' + (err && err.message ? err.message : err));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = origLabel || '↻ Re-check'; }
+            }
         }
 
         // (exportPreflightExcel removed 2026-06-17 — the all-rows Excel report

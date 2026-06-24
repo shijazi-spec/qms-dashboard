@@ -1722,6 +1722,17 @@ let _csDirCache: CsClientDirectory | null = null;
 const CS_DIR_TTL_MS = 60_000;
 
 /**
+ * Drop the cached CS-client directory so the very next preflight rebuilds it
+ * from fresh duplicate_records. Called after a targeted CRM re-sync (the
+ * per-row "↻ Re-check from CRM" button / resyncCorrectedDeals script) so a
+ * company the operator just corrected in Zoho stops blocking immediately
+ * instead of waiting out the 60s TTL.
+ */
+export function invalidateCsDirectoryCache(): void {
+  _csDirCache = null;
+}
+
+/**
  * Split a raw company name into the variants worth indexing separately. Saudi
  * CRM names are routinely BILINGUAL — "Abdul Latif Jameel United Finance | عبد
  * اللطيف جميل للتمويل" — so the normalized blob holds BOTH languages and an

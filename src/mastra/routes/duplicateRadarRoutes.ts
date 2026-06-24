@@ -8823,6 +8823,79 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Per-row "↻ Re-check from CRM" (Sarah 2026-06-25). After the operator
+    // corrects a mis-tagged client in Zoho, this re-fetches ONLY that company's
+    // deals from Zoho, busts the CS-client directory cache, and re-runs the
+    // preflight verdict for the affected rows — so a stale BLOCK flips to PASS
+    // in seconds without re-uploading or waiting for the full scan. Reuses the
+    // exact resync logic as scripts/resyncCorrectedDeals.ts.
+    path: "/api/duplicates/preflight/recheck",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          let body: any = {};
+          try {
+            body = (await c.req.json()) ?? {};
+          } catch {
+            return c.json(
+              { error: "Body must be JSON: { domains?: [], names?: [], rows: [...] }" },
+              400,
+            );
+          }
+          if (!Array.isArray(body.rows) || body.rows.length === 0) {
+            return c.json({ error: "rows must contain at least one entry" }, 400);
+          }
+          const domains: string[] = Array.isArray(body.domains)
+            ? body.domains.filter((d: any) => typeof d === "string" && d.trim())
+            : [];
+          const names: string[] = Array.isArray(body.names)
+            ? body.names.filter((n: any) => typeof n === "string" && n.trim())
+            : [];
+          if (!domains.length && !names.length) {
+            return c.json(
+              { error: "Provide at least one domain or company name to re-sync" },
+              400,
+            );
+          }
+
+          // 1) Re-fetch this company's deals from Zoho + bust the directory cache.
+          const { resyncCompanyDealsFromZoho } = await import(
+            "../../utils/duplicateRadarResync"
+          );
+          const resync = await resyncCompanyDealsFromZoho([{ domains, names }]);
+
+          // 2) Re-run preflight for the affected rows against the fresh data.
+          //    refresh_overlap=true so the CS verdict is recomputed, not cached.
+          const { runPreflight } = await import(
+            "../../utils/duplicateRadarPreflight"
+          );
+          const result = await runPreflight({
+            rows: body.rows,
+            refresh_overlap: true,
+          });
+
+          return c.json({
+            success: true,
+            resync: {
+              updated: resync.updated,
+              missing: resync.missing,
+              scanned: resync.scanned,
+            },
+            rows: result.rows,
+            summary: result.summary,
+          });
+        } catch (error: any) {
+          logger.error("Error in preflight recheck:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Sarah 2026-06-17 — Account merge candidates surface. Returns the
     // set of domains that have ≥2 clusters in active/resolved status,
     // grouped so the operator picks a master and merges the rest in.
