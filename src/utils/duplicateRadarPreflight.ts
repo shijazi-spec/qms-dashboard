@@ -1799,6 +1799,22 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
   ])
     .map((f) => `NULLIF(raw_data->>'${f}','')`)
     .join(", ");
+  // CS OWNER — the "CS Owner Name" field in the Deal's Customer Success section,
+  // NOT the deal owner (Sarah 2026-06-24). It's a user-lookup, so it can be an
+  // object {name,id} OR a plain string; try both per candidate key. Mirrors the
+  // CS Lifecycle extractor's key list so preflight and the CS tab agree.
+  const csOwnerCoalesce = _envFields("DUPLICATE_RADAR_FIELD_CS_OWNER", [
+    "CS_Owner_Name",
+    "cs_owner_name",
+    "CS Owner Name",
+    "CS_Owner1",
+    "CS_Owner",
+  ])
+    .flatMap((f) => [
+      `NULLIF(raw_data->'${f}'->>'name','')`,
+      `NULLIF(raw_data->>'${f}','')`,
+    ])
+    .join(", ");
   // Use the dedicated, indexed `stage` COLUMN for the stage filter (the giant
   // raw_data JSONB only needs parsing for the phase/domain/churn fields, and
   // only for the matched rows). ~2.3x faster than parsing raw_data->>'Stage'
@@ -1809,6 +1825,7 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
             COALESCE(${phaseCoalesce}) AS phase,
             LOWER(COALESCE(${domainCoalesce})) AS cs_domain,
             COALESCE(${churnCoalesce}) AS churn_date,
+            COALESCE(${csOwnerCoalesce}) AS cs_owner,
             raw_data->'Account_Name'->>'id' AS account_id,
             LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) AS stage
        FROM duplicate_records
@@ -1830,7 +1847,11 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
       phase: phase || null,
       churnDate: (d.churn_date || "").toString().trim() || null,
       govType: (d.gov_type || "").toString().trim() || null,
-      owner: (d.owner_name || "").toString().trim() || null,
+      // Prefer the CS Owner Name; fall back to the deal owner only if it's blank.
+      owner:
+        (d.cs_owner || "").toString().trim() ||
+        (d.owner_name || "").toString().trim() ||
+        null,
       companyName: (d.account_name || d.company_name || "").toString().trim(),
       todayMs,
     });
