@@ -1673,7 +1673,11 @@ const CS_DIR_STOP = new Set([
   // ── sector / industry words (EN) — generic, never identity-bearing alone
   "services", "service", "trading", "trade", "development", "developments",
   "pharmaceuticals", "pharmaceutical", "pharma", "energy", "power", "utilities",
-  "motors", "motor", "automotive", "cement", "construction", "constructions",
+  // NB: "motors" / "cement" / "automotive" are deliberately NOT stop words —
+  // they're distinctive parts of real names ("Lucid Motors", "Yanbu Cement").
+  // Stopping them collapsed "Alesayi Motors" → bare "alesayi", which then
+  // collided with an unrelated single-token client entry (Sarah 2026-06-24).
+  "construction", "constructions",
   "contracting", "contractors", "contractor", "industrial", "industries",
   "industry", "factory", "factories", "manufacturing", "technologies",
   "technology", "tech", "systems", "system", "solutions", "solution",
