@@ -8972,6 +8972,202 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+
+  // ── Empty / Orphaned Records cleanup tab (Sarah 2026-06-25) ──────────────
+  // Surfaces orphaned/empty/test records → admin tags them "Empty-Delete" (HITL,
+  // never auto-deletes; admin deletes in Zoho). Detection off local data; the
+  // only live Zoho call is the lazy per-account attachment check.
+  {
+    path: "/api/duplicates/empty-records/deals",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const { getEmptyDeals } = await import("../../utils/emptyRecordsDatabase");
+        return c.json({ success: true, rows: await getEmptyDeals() });
+      } catch (e: any) {
+        logger.error("empty-records/deals failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/duplicates/empty-records/accounts",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const { getEmptyAccounts } = await import("../../utils/emptyRecordsDatabase");
+        return c.json({ success: true, rows: await getEmptyAccounts() });
+      } catch (e: any) {
+        logger.error("empty-records/accounts failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/duplicates/empty-records/contacts",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const { getEmptyContacts } = await import("../../utils/emptyRecordsDatabase");
+        return c.json({ success: true, rows: await getEmptyContacts() });
+      } catch (e: any) {
+        logger.error("empty-records/contacts failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    // Lazy per-account attachment count — Delete stays disabled in the UI until
+    // this confirms 0 (so we never tag an account holding a signed contract).
+    path: "/api/duplicates/empty-records/accounts/:id/attachments",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const id = c.req.param("id");
+        if (!id) return c.json({ error: "account id required" }, 400);
+        let atts: any[] = [];
+        try {
+          atts = await fetchRecordAttachments("Accounts", id);
+        } catch (e: any) {
+          return c.json({ error: `Zoho attachments fetch failed: ${e?.message || e}` }, 502);
+        }
+        return c.json({ count: Array.isArray(atts) ? atts.length : 0 });
+      } catch (e: any) {
+        logger.error("empty-records attachment check failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    // Smart Account Inference suggestion for an orphaned deal (link, not delete).
+    path: "/api/duplicates/empty-records/deals/:id/account-suggestion",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const id = c.req.param("id");
+        if (!id) return c.json({ error: "deal id required" }, 400);
+        const { pool } = await import("../../utils/duplicateRadarDatabase");
+        const dr = await pool.query(
+          `SELECT zoho_record_id, raw_data FROM duplicate_records
+            WHERE record_type='deal' AND zoho_record_id=$1 LIMIT 1`,
+          [id],
+        );
+        if (!dr.rows.length) return c.json({ suggestion: null });
+        const { inferAccountForDeal } = await import("../../utils/accountInference");
+        const inf = await inferAccountForDeal(dr.rows[0] as any);
+        return c.json({
+          suggestion: inf
+            ? {
+                accountId: inf.account.zoho_record_id,
+                accountName: inf.account.account_name || inf.account.company_name || "",
+                confidence: inf.confidence,
+              }
+            : null,
+        });
+      } catch (e: any) {
+        logger.error("empty-records account-suggestion failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    // Admin-gated: append the Empty-Delete tag (batched by 100). Never deletes.
+    path: "/api/duplicates/empty-records/tag",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const module = String(body?.module || "");
+        const zohoIds: string[] = Array.isArray(body?.zohoIds)
+          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean)
+          : [];
+        if (!["Deals", "Accounts", "Contacts"].includes(module))
+          return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
+        if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
+        const tag = process.env.EMPTY_DELETE_TAG || "Empty-Delete";
+        const { addZohoTags } = await import("../../utils/zohoCRM");
+        let tagged = 0;
+        for (let i = 0; i < zohoIds.length; i += 100) {
+          const batch = zohoIds.slice(i, i + 100);
+          await addZohoTags(module, batch, [tag]);
+          tagged += batch.length;
+        }
+        return c.json({ success: true, tagged, tag });
+      } catch (e: any) {
+        logger.error("empty-records/tag failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    // Admin-gated undo: remove the Empty-Delete tag from the given records.
+    path: "/api/duplicates/empty-records/untag",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const module = String(body?.module || "");
+        const zohoIds: string[] = Array.isArray(body?.zohoIds)
+          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean)
+          : [];
+        if (!["Deals", "Accounts", "Contacts"].includes(module))
+          return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
+        if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
+        const tag = process.env.EMPTY_DELETE_TAG || "Empty-Delete";
+        let untagged = 0;
+        for (let i = 0; i < zohoIds.length; i += 100) {
+          const batch = zohoIds.slice(i, i + 100);
+          await removeZohoTags(module, batch, [tag]);
+          untagged += batch.length;
+        }
+        return c.json({ success: true, untagged });
+      } catch (e: any) {
+        logger.error("empty-records/untag failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    // Admin-gated: link an orphaned deal to an account (re-parent in Zoho).
+    path: "/api/duplicates/empty-records/link-deal",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const dealId = String(body?.dealId || "");
+        const accountId = String(body?.accountId || "");
+        if (!dealId || !accountId) return c.json({ error: "dealId and accountId required" }, 400);
+        const { updateZohoRecord } = await import("../../utils/zohoCRM");
+        await updateZohoRecord("Deals", dealId, { Account_Name: { id: accountId } });
+        return c.json({ success: true });
+      } catch (e: any) {
+        logger.error("empty-records/link-deal failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
 ];
 
 export default duplicateRadarRoutes;
