@@ -160,7 +160,7 @@
             </button>
             <button data-on-click="showTab" data-args="[&quot;empty-records&quot;]" id="tab-empty-records" data-testid="tab-empty-records" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Empty / Orphaned Records — orphaned deals (no account), empty accounts (no deals/contacts/attachments), name-only contacts, plus test/placeholder records. Tag 'Empty-Delete' for the Zoho admin to delete; the platform never deletes.">
                 <span class="inline-block w-2 h-2 rounded-full bg-rose-500"></span>
-                🧹 Empty / Orphaned
+                🧹 <span data-i18n="duplicates.er_tab">Empty / Orphaned</span>
             </button>
             <!-- Auto-CAPA KPIs tab retired 2026-05-30 per operator request.
                  CAPAs are now opened manually from each actionable row via
@@ -1482,28 +1482,28 @@
         <!-- ═══ EMPTY / ORPHANED RECORDS — CRM cleanup (tag Empty-Delete) ═══ -->
         <div id="content-empty-records" class="tab-content hidden">
           <div class="bg-rose-50 border border-rose-200 rounded-lg p-3 mb-4 text-sm text-rose-900">
-            <strong>Empty / Orphaned Records.</strong> Records with nothing useful inside — orphaned deals (no account), empty accounts (no deals / contacts / attachments), name-only contacts — plus <em>test / placeholder</em> records. Review, then tag <code>Empty-Delete</code> for the Zoho admin to delete. <strong>The platform never deletes.</strong> An orphaned-but-real deal is <em>linked</em> to an account instead. Reasons:
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">ORPHANED</span>
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-200 text-gray-700">EMPTY</span>
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">TEST</span>
+            <span data-i18n="duplicates.er_banner">Records with nothing useful inside — orphaned deals (no account), empty accounts (no deals / contacts / attachments), name-only contacts — plus test / placeholder records. Review, then tag Empty-Delete for the Zoho admin to delete. The platform never deletes. An orphaned-but-real deal is linked to an account instead.</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800" data-i18n="duplicates.er_badge_orphaned">ORPHANED</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-200 text-gray-700" data-i18n="duplicates.er_badge_empty">EMPTY</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700" data-i18n="duplicates.er_badge_test">TEST</span>
           </div>
 
           <div id="erBulkBar" class="hidden sticky top-0 z-10 bg-white border border-rose-300 rounded-lg shadow p-2 mb-3 flex items-center gap-3 flex-wrap">
             <span id="erBulkCount" class="text-sm font-medium text-gray-700">0 selected</span>
-            <button data-on-click="erTagSelected" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700">🏷 Tag selected Empty-Delete</button>
-            <button data-on-click="erUndoLast" id="erUndoBtn" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">↩ Undo last batch</button>
+            <button data-on-click="erTagSelected" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700">🏷 <span data-i18n="duplicates.er_tag_selected">Tag selected Empty-Delete</span></button>
+            <button data-on-click="erUndoLast" id="erUndoBtn" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">↩ <span data-i18n="duplicates.er_undo">Undo last batch</span></button>
             <span id="erBulkResult" class="text-xs text-gray-600"></span>
           </div>
 
           <div class="mb-6">
             <div class="flex items-center gap-2 mb-2">
-              <h3 class="text-base font-bold text-gray-900">Deals <span class="text-xs font-normal text-gray-500">— orphaned (link) / empty / test</span></h3>
+              <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_deals">Deals</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_deals_sub">orphaned (link) / empty / test</span></span></h3>
               <span id="erCount-deals" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
-              <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ Refresh</button>
+              <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="min-w-full text-sm">
-                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">✓</th><th class="px-3 py-2 text-start">Reason</th><th class="px-3 py-2 text-start">Deal</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Action</th></tr></thead>
+                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">✓</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_reason">Reason</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_deal">Deal</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_owner">Owner</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_action">Action</th></tr></thead>
                 <tbody id="erDealsBody"></tbody>
               </table>
             </div>
@@ -1511,13 +1511,13 @@
 
           <div class="mb-6">
             <div class="flex items-center gap-2 mb-2">
-              <h3 class="text-base font-bold text-gray-900">Accounts <span class="text-xs font-normal text-gray-500">— empty (check attachments first) / test</span></h3>
+              <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_accounts">Accounts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_accounts_sub">empty (check attachments first) / test</span></span></h3>
               <span id="erCount-accounts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
-              <button data-on-click="erReload" data-args="[&quot;accounts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ Refresh</button>
+              <button data-on-click="erReload" data-args="[&quot;accounts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="min-w-full text-sm">
-                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">✓</th><th class="px-3 py-2 text-start">Reason</th><th class="px-3 py-2 text-start">Account</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Action</th></tr></thead>
+                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">✓</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_reason">Reason</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_account">Account</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_owner">Owner</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_action">Action</th></tr></thead>
                 <tbody id="erAccountsBody"></tbody>
               </table>
             </div>
@@ -1525,13 +1525,13 @@
 
           <div class="mb-6">
             <div class="flex items-center gap-2 mb-2">
-              <h3 class="text-base font-bold text-gray-900">Contacts <span class="text-xs font-normal text-gray-500">— name-only / test</span></h3>
+              <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_contacts">Contacts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_contacts_sub">name-only / test</span></span></h3>
               <span id="erCount-contacts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
-              <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ Refresh</button>
+              <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="min-w-full text-sm">
-                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">✓</th><th class="px-3 py-2 text-start">Reason</th><th class="px-3 py-2 text-start">Contact</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Action</th></tr></thead>
+                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">✓</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_reason">Reason</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_contact">Contact</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_owner">Owner</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_action">Action</th></tr></thead>
                 <tbody id="erContactsBody"></tbody>
               </table>
             </div>
@@ -8815,7 +8815,7 @@
         async function erLoad(kind, bodyId) {
             const body = document.getElementById(bodyId);
             if (!body) return;
-            body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">Loading…</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_loading')) + '</td></tr>';
             let data;
             try {
                 const res = await fetch('/api/duplicates/empty-records/' + kind, { credentials: 'same-origin' });
@@ -8833,7 +8833,8 @@
         function erReasonBadge(reason) {
             const m = { orphaned: ['bg-amber-100', 'text-amber-800', 'ORPHANED'], empty: ['bg-gray-200', 'text-gray-700', 'EMPTY'], test: ['bg-rose-100', 'text-rose-700', 'TEST'] };
             const x = m[reason] || m.empty;
-            return '<span class="px-2 py-0.5 rounded text-[10px] font-bold ' + x[0] + ' ' + x[1] + '">' + x[2] + '</span>';
+            const lbl = WalaPlusI18n.t('duplicates.er_badge_' + (m[reason] ? reason : 'empty'));
+            return '<span class="px-2 py-0.5 rounded text-[10px] font-bold ' + x[0] + ' ' + x[1] + '">' + lbl + '</span>';
         }
         function erZohoUrl(kind, id) {
             const tab = kind === 'deals' ? 'Potentials' : kind === 'accounts' ? 'Accounts' : 'Contacts';
@@ -8843,7 +8844,7 @@
             const rows = window['_er_' + kind] || [];
             const body = document.getElementById(bodyId);
             if (!body) return;
-            if (!rows.length) { body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">None found.</td></tr>'; return; }
+            if (!rows.length) { body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_none')) + '</td></tr>'; return; }
             const moduleOf = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             body.innerHTML = rows.map(function (r) {
                 const cbId = 'er-cb-' + kind + '-' + r.zohoId;
@@ -8852,10 +8853,10 @@
                 let action;
                 if (kind === 'accounts') {
                     action = r.deleteEligible
-                        ? '<span class="text-xs text-rose-600">test — ready</span>'
-                        : '<span id="eratt-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erCheckAccountAttachments" data-args=\'' + args + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 Check attachments</button></span>';
+                        ? '<span class="text-xs text-rose-600">' + escapeHtml(WalaPlusI18n.t('duplicates.er_test_ready')) + '</span>'
+                        : '<span id="eratt-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erCheckAccountAttachments" data-args=\'' + args + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 ' + escapeHtml(WalaPlusI18n.t('duplicates.er_check_att')) + '</button></span>';
                 } else if (kind === 'deals') {
-                    action = '<span id="erlink-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erLinkDeal" data-args=\'' + args + '\' class="px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">🔗 Link to Account</button></span>';
+                    action = '<span id="erlink-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erLinkDeal" data-args=\'' + args + '\' class="px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">🔗 ' + escapeHtml(WalaPlusI18n.t('duplicates.er_link_account')) + '</button></span>';
                 } else {
                     action = '<span class="text-xs text-gray-400">—</span>';
                 }
@@ -8889,11 +8890,11 @@
             }
             const n = data.count || 0;
             if (n === 0) {
-                if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">0 attachments — deletable</span>';
+                if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">' + escapeHtml(WalaPlusI18n.t('duplicates.er_deletable')) + '</span>';
                 const cb = document.getElementById('er-cb-accounts-' + id);
                 if (cb) cb.disabled = false;
             } else {
-                if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">📎 ' + n + ' — keep</span>';
+                if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">📎 ' + n + ' — ' + escapeHtml(WalaPlusI18n.t('duplicates.er_keep')) + '</span>';
             }
         }
         async function erLinkDeal(id) {
@@ -8910,7 +8911,7 @@
                 html += '<button data-on-click="erDoLinkDeal" data-args=\'' + escapeHtml(JSON.stringify([String(id), String(sug.accountId)])) + '\' class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">Link to ' + escapeHtml(sug.accountName || sug.accountId) + ' (' + (sug.confidence || 0) + '%)</button> ';
             }
             html += '<input id="erlinkacc-' + escapeHtml(String(id)) + '" placeholder="Account Zoho ID" class="px-2 py-1 text-xs border border-gray-300 rounded w-36">'
-                + '<button data-on-click="erDoLinkDealManual" data-args=\'' + escapeHtml(JSON.stringify([String(id)])) + '\' class="ml-1 px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">Link</button>';
+                + '<button data-on-click="erDoLinkDealManual" data-args=\'' + escapeHtml(JSON.stringify([String(id)])) + '\' class="ml-1 px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">' + escapeHtml(WalaPlusI18n.t('duplicates.er_link')) + '</button>';
             if (cell) cell.innerHTML = html;
         }
         function erDoLinkDealManual(id) {
