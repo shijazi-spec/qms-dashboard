@@ -2,8 +2,12 @@ import { isPlaceholderName } from "./duplicateRadarDatabase";
 
 // Moderate test-record detection: a standalone whole-word keyword (EN+AR) OR an
 // exact placeholder. Env-extendable via EMPTY_DELETE_TEST_KEYWORDS (comma-sep).
+// NB: "demo" and "testing" are deliberately NOT here — they're business-legit
+// ("Request Demo | <client>" deals, "<X> Testing Laboratory" firms). A record
+// named EXACTLY "demo"/"testing" is still caught via isPlaceholderName. Re-add
+// any word through EMPTY_DELETE_TEST_KEYWORDS if your data needs it. (Sarah 2026-06-25)
 const BASE_TEST_KEYWORDS = [
-  "test", "testing", "tester", "demo", "dummy", "sample", "trial", "sandbox",
+  "test", "tester", "dummy", "sample", "trial", "sandbox",
   "asdf", "qwerty", "xxx", "zzz", "deleteme", "donotuse", "placeholder",
   "تجربة", "تجريبي", "اختبار", "تست",
 ];

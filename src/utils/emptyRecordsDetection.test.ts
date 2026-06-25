@@ -14,12 +14,17 @@ describe("isTestOrPlaceholderName", () => {
   it("flags standalone test keywords (whole word, EN+AR)", () => {
     expect(isTestOrPlaceholderName("Test Account")).toBe(true);
     expect(isTestOrPlaceholderName("Ahmed Test")).toBe(true);
-    expect(isTestOrPlaceholderName("demo deal")).toBe(true);
+    expect(isTestOrPlaceholderName("dummy account")).toBe(true);
+    expect(isTestOrPlaceholderName("Cool Robot (Sample Contact)")).toBe(true);
     expect(isTestOrPlaceholderName("شركة تجريبي")).toBe(true);
   });
   it("does NOT flag a keyword embedded in a real word", () => {
     expect(isTestOrPlaceholderName("Latest Holdings")).toBe(false);
     expect(isTestOrPlaceholderName("Testbed Robotics")).toBe(false);
+  });
+  it("does NOT flag business-legit 'demo'/'testing' names (Sarah 2026-06-25)", () => {
+    expect(isTestOrPlaceholderName("Request Demo | Kooheji Stores")).toBe(false);
+    expect(isTestOrPlaceholderName("GCC Electrical Testing Laboratory")).toBe(false);
   });
   it("does NOT flag a real company with no standalone keyword", () => {
     expect(isTestOrPlaceholderName("Saudi Aramco")).toBe(false);
@@ -40,9 +45,13 @@ describe("classifyDeal", () => {
     expect(r.linkEligible).toBe(true);
   });
   it("test name → delete-eligible even with an account and amount", () => {
-    const r = classifyDeal({ hasAccount: true, hasContact: true, amount: 5000, name: "demo deal" });
+    const r = classifyDeal({ hasAccount: true, hasContact: true, amount: 5000, name: "dummy deal" });
     expect(r.reason).toBe("test");
     expect(r.deleteEligible).toBe(true);
+  });
+  it("a 'Request Demo' deal is NOT a test record", () => {
+    const r = classifyDeal({ hasAccount: true, hasContact: true, amount: 5000, name: "Request Demo | Kooheji Stores" });
+    expect(r.reason).toBe(null);
   });
   it("a normal deal with an account is not flagged", () => {
     const r = classifyDeal({ hasAccount: true, hasContact: false, amount: 100, name: "Aramco Renewal" });
