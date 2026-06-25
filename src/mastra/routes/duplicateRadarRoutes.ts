@@ -9100,10 +9100,16 @@ export const duplicateRadarRoutes = [
         if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
         const tag = process.env.EMPTY_DELETE_TAG || "Empty-Delete";
         const { addZohoTags } = await import("../../utils/zohoCRM");
+        const { markEmptyDeleteTagged } = await import(
+          "../../utils/emptyRecordsDatabase"
+        );
         let tagged = 0;
         for (let i = 0; i < zohoIds.length; i += 100) {
           const batch = zohoIds.slice(i, i + 100);
           await addZohoTags(module, batch, [tag]);
+          // Record locally so the cleanup list drops them on the NEXT refresh,
+          // without waiting for the slow full sync to re-pull the Zoho tag.
+          await markEmptyDeleteTagged(module, batch, su?.email || null);
           tagged += batch.length;
         }
         return c.json({ success: true, tagged, tag });
@@ -9132,10 +9138,14 @@ export const duplicateRadarRoutes = [
           return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
         if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
         const tag = process.env.EMPTY_DELETE_TAG || "Empty-Delete";
+        const { unmarkEmptyDeleteTagged } = await import(
+          "../../utils/emptyRecordsDatabase"
+        );
         let untagged = 0;
         for (let i = 0; i < zohoIds.length; i += 100) {
           const batch = zohoIds.slice(i, i + 100);
           await removeZohoTags(module, batch, [tag]);
+          await unmarkEmptyDeleteTagged(batch);
           untagged += batch.length;
         }
         return c.json({ success: true, untagged });

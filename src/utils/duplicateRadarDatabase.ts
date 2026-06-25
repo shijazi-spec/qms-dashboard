@@ -1184,6 +1184,26 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_dup_sep_high ON duplicate_separation_ledger(zoho_id_high)`,
   );
 
+  // Empty/Orphaned cleanup: durable record of which records the operator has
+  // already tagged Empty-Delete. The cleanup tab reads the LOCAL mirror, which
+  // is stale until the next full sync — so without this a just-tagged record
+  // reappears on Refresh ("why does it come back?"). The empty-records queries
+  // exclude anything in this ledger, so a tagged record drops off immediately;
+  // Untag removes it; a genuine Zoho deletion drops it from the mirror anyway.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS empty_delete_ledger (
+      id SERIAL PRIMARY KEY,
+      zoho_record_id VARCHAR(255) NOT NULL,
+      module VARCHAR(16) NOT NULL,
+      tagged_by VARCHAR(255),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (zoho_record_id)
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_empty_delete_ledger_rec ON empty_delete_ledger(zoho_record_id)`,
+  );
+
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_domain ON duplicate_clusters(domain)`,
   );

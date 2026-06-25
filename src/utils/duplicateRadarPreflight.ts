@@ -672,7 +672,9 @@ const PROTECTED_ACCOUNTS: ReadonlyArray<ProtectedAccount> = [
   },
   {
     label: "Tree",
-    domains: ["treesaudi.com"],
+    // Confirmed active client (Deal "TREE", Adoption phase, ARR 42,535) — domain
+    // verified from the CRM record (NOT treesaudi.com).
+    domains: ["tree.com.sa"],
     nameKeywords: ["treesaudi"],
     nameExact: ["tree"],
   },

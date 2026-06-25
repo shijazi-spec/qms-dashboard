@@ -18,6 +18,44 @@ export interface EmptyRecordRow {
 
 const CAP = 500;
 const LIKES = testKeywordLikePatterns();
+const EMPTY_DELETE_TAG = process.env.EMPTY_DELETE_TAG || "Empty-Delete";
+
+// SQL fragment shared by all three queries: drop any record the operator has
+// already tagged Empty-Delete (via the in-platform ledger for immediate effect)
+// OR whose freshly-synced Zoho Tag array already carries the tag. Either way a
+// tagged record stops reappearing on Refresh.
+const NOT_ALREADY_TAGGED = `
+  AND %ALIAS%zoho_record_id NOT IN (SELECT zoho_record_id FROM empty_delete_ledger)
+  AND NOT COALESCE(%ALIAS%raw_data->'Tag' @> $2::jsonb, false)`;
+const TAG_JSONB = JSON.stringify([{ name: EMPTY_DELETE_TAG }]);
+const excl = (alias: string) => NOT_ALREADY_TAGGED.replace(/%ALIAS%/g, alias);
+
+/** Mark records as Empty-Delete-tagged locally so the cleanup list drops them
+ * immediately (before the slow full sync catches up). Idempotent. */
+export async function markEmptyDeleteTagged(
+  module: string,
+  zohoIds: string[],
+  by: string | null,
+): Promise<void> {
+  const ids = (zohoIds || []).map((s) => String(s)).filter(Boolean);
+  if (!ids.length) return;
+  await pool.query(
+    `INSERT INTO empty_delete_ledger (zoho_record_id, module, tagged_by)
+       SELECT UNNEST($1::text[]), $2, $3
+       ON CONFLICT (zoho_record_id) DO NOTHING`,
+    [ids, module, by],
+  );
+}
+
+/** Undo the local mark (operator removed the Empty-Delete tag). */
+export async function unmarkEmptyDeleteTagged(zohoIds: string[]): Promise<void> {
+  const ids = (zohoIds || []).map((s) => String(s)).filter(Boolean);
+  if (!ids.length) return;
+  await pool.query(
+    `DELETE FROM empty_delete_ledger WHERE zoho_record_id = ANY($1::text[])`,
+    [ids],
+  );
+}
 
 // Deals: orphaned (no Account) OR a coarse test-name match. JS classifier refines.
 export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
@@ -30,9 +68,10 @@ export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
       WHERE record_type='deal'
         AND ( COALESCE(NULLIF(raw_data->'Account_Name'->>'id',''), NULL) IS NULL
               OR record_name ILIKE ANY($1::text[]) )
+        ${excl("")}
       ORDER BY modified_date DESC NULLS LAST
       LIMIT 4000`,
-    [LIKES],
+    [LIKES, TAG_JSONB],
   );
   const out: EmptyRecordRow[] = [];
   for (const r of q.rows) {
@@ -74,9 +113,10 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
         AND ( a.zoho_record_id NOT IN (SELECT aid FROM linked)
               OR a.record_name ILIKE ANY($1::text[])
               OR a.account_name ILIKE ANY($1::text[]) )
+        ${excl("a.")}
       ORDER BY a.modified_date DESC NULLS LAST
       LIMIT 4000`,
-    [LIKES],
+    [LIKES, TAG_JSONB],
   );
   const out: EmptyRecordRow[] = [];
   for (const r of q.rows) {
@@ -126,9 +166,10 @@ export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
                 AND (c.raw_data->'Account_Name'->>'id' IS NULL OR c.raw_data->'Account_Name'->>'id'='')
                 AND c.zoho_record_id NOT IN (SELECT cid FROM deal_contacts) )
               OR c.record_name ILIKE ANY($1::text[]) )
+        ${excl("c.")}
       ORDER BY c.modified_date DESC NULLS LAST
       LIMIT 4000`,
-    [LIKES],
+    [LIKES, TAG_JSONB],
   );
   const out: EmptyRecordRow[] = [];
   for (const r of q.rows) {
