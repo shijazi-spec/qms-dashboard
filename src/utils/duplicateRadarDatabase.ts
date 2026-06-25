@@ -5687,6 +5687,15 @@ export async function findOrCreateClusterByCompany(
   // and fall through to the next branch (ultimately a fresh cluster). Empty for
   // virtually every record → `notSeparatedFrom` is a no-op, zero added queries.
   const separatedIds = await getSeparatedZohoIds(zohoRecordId);
+  // DIAGNOSTIC (Ahmad 2026-06-26): when an operator reports a dismissed/split
+  // cluster "coming back", this confirms whether the ledger guard is actually
+  // firing for the re-synced record. Only logs for the rare separated record,
+  // so it's quiet in normal operation. No behaviour change.
+  if (separatedIds.length > 0) {
+    logger.info(
+      `[DuplicateRadar][sep-guard] record ${zohoRecordId} (${recordType}, "${companyName}") is separated from ${separatedIds.length} id(s) — clusterer will refuse to re-fuse it`,
+    );
+  }
   const notSeparatedFrom = async (clu: any): Promise<boolean> =>
     separatedIds.length === 0
       ? true
