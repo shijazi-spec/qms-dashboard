@@ -3354,6 +3354,7 @@ export async function applyContactLinkToAccount(opts: {
   skippedHadDuplicates: number;
   remaining: number;
   errors: number;
+  errorSample: string | null;
 }> {
   const all = await getContactLinkCandidates();
   const limit = Math.max(1, Math.min(Math.floor(opts.limit || 50), 200));
@@ -3367,6 +3368,7 @@ export async function applyContactLinkToAccount(opts: {
     contactsLinked = 0,
     skippedHadDuplicates = 0,
     errors = 0;
+  let errorSample: string | null = null;
   for (const cand of batch) {
     try {
       const recs = await getRecordsByClusterId(cand.clusterId);
@@ -3393,8 +3395,12 @@ export async function applyContactLinkToAccount(opts: {
       linked++;
     } catch (e) {
       errors++;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!errorSample) errorSample = msg;
       logger.warn("[DuplicateRadar] bulk contact link group failed (non-fatal)", {
-        error: e instanceof Error ? e.message : String(e),
+        clusterId: cand.clusterId,
+        accountZohoId: cand.accountZohoId,
+        error: msg,
       });
     }
   }
@@ -3405,6 +3411,7 @@ export async function applyContactLinkToAccount(opts: {
     skippedHadDuplicates,
     remaining: Math.max(0, all.length - batch.length),
     errors,
+    errorSample,
   };
 }
 

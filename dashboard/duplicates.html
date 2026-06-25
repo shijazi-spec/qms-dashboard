@@ -6375,6 +6375,7 @@
                 + '<strong>Done.</strong> Linked ' + (live.linked || 0).toLocaleString() + ' cluster(s), ' + (live.contactsLinked || 0).toLocaleString() + ' contact(s) to their Account'
                 + (live.skippedHadDuplicates ? '; skipped ' + (live.skippedHadDuplicates).toLocaleString() + ' with genuine duplicates' : '')
                 + (live.errors > 0 ? ' (' + live.errors + ' error(s) — re-run to retry.)' : '.')
+                + (live.errors > 0 && live.errorSample ? '<div class="text-xs text-red-700 mt-1">First error: ' + escapeHtml(String(live.errorSample)) + '</div>' : '')
                 + '</div>';
             try {
                 if (typeof loadRecordTab === 'function') {
