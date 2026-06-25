@@ -1444,6 +1444,10 @@ async function processCluster(ctx: {
     records = await getRecordsByClusterId(clusterId);
   } catch (e) {
     summary.errors++;
+    logger.error("[dup-resolution-runner] load-records failed", {
+      clusterId,
+      error: e instanceof Error ? e.message : String(e),
+    });
     summary.items.push({
       clusterId,
       module: "Accounts",
@@ -1526,6 +1530,11 @@ async function processModule(ctx: {
     summary.plansBuilt++;
   } catch (e) {
     summary.errors++;
+    logger.error("[dup-resolution-runner] plan-build failed", {
+      clusterId,
+      module,
+      error: e instanceof Error ? e.message : String(e),
+    });
     summary.items.push({
       clusterId,
       module,
@@ -1718,6 +1727,11 @@ async function processModule(ctx: {
       item.action = "error";
       item.detail = e instanceof Error ? e.message : String(e);
       summary.errors++;
+      logger.error("[dup-resolution-runner] apply failed", {
+        clusterId,
+        module,
+        error: item.detail,
+      });
     }
     summary.items.push(item);
     return;
@@ -1794,6 +1808,11 @@ async function processModule(ctx: {
     item.action = "error";
     item.detail = e instanceof Error ? e.message : String(e);
     summary.errors++;
+    logger.error("[dup-resolution-runner] enqueue/dry-run failed", {
+      clusterId,
+      module,
+      error: item.detail,
+    });
   }
   summary.items.push(item);
 }
