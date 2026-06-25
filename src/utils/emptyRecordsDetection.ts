@@ -22,6 +22,18 @@ export const EMPTY_DELETE_TEST_KEYWORDS: string[] = Array.from(
 );
 const _TEST_KW_SET = new Set(EMPTY_DELETE_TEST_KEYWORDS);
 
+// Whole-name junk: the ENTIRE name is a generic placeholder — bulk-import
+// artifacts like 97 contacts literally named "name" (Sarah 2026-06-25). Matched
+// as the WHOLE name only (NOT a token), so real firms like "First Contact
+// Solutions" are never touched. Flagged regardless of account link.
+const WHOLE_NAME_JUNK = new Set([
+  "name", "names", "contact", "contacts", "اسم", "الاسم", "جهة اتصال",
+]);
+// Selective LIKE roots for the SQL prefilter (short tokens like "n" would match
+// everything, so only the substantial ones go to ILIKE; JS refines to an exact
+// whole-name match).
+const _WHOLE_NAME_LIKE_ROOTS = ["name", "contact", "اسم"];
+
 // Tokenize on anything that isn't a Latin/Arabic letter or digit.
 function _tokens(name: string): string[] {
   return (name || "")
@@ -34,6 +46,8 @@ function _tokens(name: string): string[] {
 export function isTestOrPlaceholderName(name: string | null | undefined): boolean {
   if (!name) return false;
   if (isPlaceholderName(name)) return true;
+  // Whole-name junk (exact match on the full normalized name only).
+  if (WHOLE_NAME_JUNK.has(name.trim().toLowerCase())) return true;
   for (const tok of _tokens(name)) {
     if (_TEST_KW_SET.has(tok)) return true;
   }
@@ -41,11 +55,15 @@ export function isTestOrPlaceholderName(name: string | null | undefined): boolea
 }
 
 /**
- * Coarse SQL ILIKE patterns to PREFILTER candidate rows; JS refines with the
- * whole-word check above (so "%test%" can over-match "latest", then JS drops it).
+ * Coarse SQL ILIKE patterns to PREFILTER candidate rows; JS refines (so
+ * "%test%" can over-match "latest" and "%contact%" can over-match "First
+ * Contact Solutions" — both dropped by the whole-word / whole-name checks).
  */
 export function testKeywordLikePatterns(): string[] {
-  return EMPTY_DELETE_TEST_KEYWORDS.map((k) => `%${k}%`);
+  return [
+    ...EMPTY_DELETE_TEST_KEYWORDS.map((k) => `%${k}%`),
+    ..._WHOLE_NAME_LIKE_ROOTS.map((k) => `%${k}%`),
+  ];
 }
 
 export function classifyDeal(input: {

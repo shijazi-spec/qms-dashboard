@@ -30,6 +30,11 @@ assert(isTestOrPlaceholderName("Latest Holdings") === false, "embedded 'test' in
 assert(isTestOrPlaceholderName("Testbed Robotics") === false, "embedded in 'Testbed' not flagged");
 assert(isTestOrPlaceholderName("Request Demo | Kooheji Stores") === false, "'demo' is business-legit (dropped)");
 assert(isTestOrPlaceholderName("GCC Electrical Testing Laboratory") === false, "'testing' is business-legit (dropped)");
+assert(isTestOrPlaceholderName("name") === true, "whole-name junk 'name' (2021 bulk import)");
+assert(isTestOrPlaceholderName("Contact") === true, "whole-name junk 'Contact'");
+assert(isTestOrPlaceholderName("اسم") === true, "whole-name junk Arabic 'اسم'");
+assert(isTestOrPlaceholderName("First Contact Solutions") === false, "real firm with 'Contact' as a word not flagged");
+assert(isTestOrPlaceholderName("Mohammed Name Ali") === false, "'name' as a middle word not flagged");
 assert(isTestOrPlaceholderName("Saudi Aramco") === false, "real company, no keyword");
 
 console.log("classifyDeal");
