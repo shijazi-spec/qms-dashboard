@@ -116,6 +116,26 @@ export interface MergePlanRecordSummary {
   hasZohoId: boolean;
 }
 
+/** Plain-language email/phone outcome for the Contacts merge preview panel.
+ *  Each slot says which value lands where and where it came from. (Sarah
+ *  2026-06-25 — make multi-email / multi-phone contact merges transparent.) */
+export interface ContactDataSlot {
+  value: string;
+  from: string; // "survivor" or the duplicate's record name
+}
+export interface ContactDataSummary {
+  emails: {
+    primary: ContactDataSlot | null;
+    secondary: ContactDataSlot | null;
+    extras: ContactDataSlot[];
+  };
+  phones: {
+    phone: ContactDataSlot | null;
+    mobile: ContactDataSlot | null;
+    extras: ContactDataSlot[];
+  };
+}
+
 export interface MergePlan {
   clusterId: number;
   module: CrmModule;
@@ -131,6 +151,8 @@ export interface MergePlan {
   duplicateDbIds: number[];
   fieldDecisions: MergeFieldDecision[];
   warnings: string[];
+  /** Contacts-only: the email/phone outcome, plainly, for the review panel. */
+  contactDataSummary?: ContactDataSummary;
   /** Deterministic, human-readable summary for the review panel. */
   rationale: string;
   records: MergePlanRecordSummary[];
@@ -765,6 +787,53 @@ export function buildMergePlan(
     }
   }
 
+  // Contacts-only: the plain-language email/phone outcome for the preview panel
+  // (Sarah 2026-06-25). Survivor's own value is slot 1 (kept); the next distinct
+  // value lands in Secondary_Email / Mobile; the rest are extras Zoho can't store.
+  // Mirrors the executor's gap-fill order (master wins; else freshest duplicate
+  // fills + Saudi-normalised phone de-dupe), so the panel matches exactly what
+  // Apply does.
+  let contactDataSummary: ContactDataSummary | undefined;
+  if (module === "Contacts") {
+    const emailOf = (r: DuplicateRecord): string =>
+      String((rawVal(r, "Email") ?? r.email ?? "") as unknown).trim();
+    const secEmailOf = (r: DuplicateRecord): string =>
+      String((rawVal(r, "Secondary_Email") ?? "") as unknown).trim();
+    const phoneOf = (r: DuplicateRecord, field: "Phone" | "Mobile"): string =>
+      String((rawVal(r, field) ?? (field === "Phone" ? r.phone : r.mobile) ?? "") as unknown).trim();
+    const normP = (s: string): string =>
+      String(s || "").replace(/\D/g, "").replace(/^966/, "").replace(/^0+/, "").slice(-9);
+    const ordered = [master, ...[...duplicates].sort((a, b) => modifiedMs(b) - modifiedMs(a))];
+
+    const emails: ContactDataSlot[] = [];
+    const seenE = new Set<string>();
+    for (const r of ordered) {
+      for (const e of [emailOf(r), secEmailOf(r)]) {
+        const k = e.toLowerCase();
+        if (e && !seenE.has(k)) {
+          seenE.add(k);
+          emails.push({ value: e, from: r === master ? "survivor" : recName(r) });
+        }
+      }
+    }
+    const phones: ContactDataSlot[] = [];
+    const seenP = new Set<string>();
+    for (const r of ordered) {
+      for (const field of ["Phone", "Mobile"] as const) {
+        const p = phoneOf(r, field);
+        const k = normP(p);
+        if (p && k && !seenP.has(k)) {
+          seenP.add(k);
+          phones.push({ value: p, from: r === master ? "survivor" : recName(r) });
+        }
+      }
+    }
+    contactDataSummary = {
+      emails: { primary: emails[0] ?? null, secondary: emails[1] ?? null, extras: emails.slice(2) },
+      phones: { phone: phones[0] ?? null, mobile: phones[1] ?? null, extras: phones.slice(2) },
+    };
+  }
+
   // Preserve alternate (EN/AR) names on an ACCOUNT merge (Ahmad 2026-06-22).
   // The Account Name field is bilingual — one record may hold the English name,
   // another the Arabic — so a straight merge keeps the survivor's name and the
@@ -905,6 +974,7 @@ export function buildMergePlan(
     duplicateDbIds,
     fieldDecisions,
     warnings,
+    contactDataSummary,
     rationale,
     records: records_summary,
     accountCandidates,
