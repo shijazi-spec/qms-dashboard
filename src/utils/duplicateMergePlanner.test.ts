@@ -319,5 +319,64 @@ assert(
   "Accounts plan has no account-link option",
 );
 
+// ── Contacts merge — "keep both" email/phone summary panel (Sarah 2026-06-25) ──
+// Three same-person contacts (share name + email ⇒ genuine duplicates) with THREE
+// distinct phones. Survivor keeps its Phone; the freshest duplicate's number lands
+// in Mobile; the third is an extra Zoho can't store. Master pinned for determinism.
+const cM = rec({
+  record_type: "contact",
+  id: 30, zoho_record_id: "CM", record_name: "Ahmed Ali",
+  email: "ahmed@acme.com", phone: "+966501112222", title: "Manager",
+  modified_date: new Date("2024-06-01"),
+  raw_data: { Last_Name: "Ahmed Ali", Email: "ahmed@acme.com", Phone: "+966501112222", Title: "Manager" },
+});
+const cD1 = rec({
+  record_type: "contact",
+  id: 31, zoho_record_id: "CD1", record_name: "Ahmed Ali",
+  email: "ahmed@acme.com", phone: "+966553334444",
+  modified_date: new Date("2024-05-01"),
+  raw_data: { Last_Name: "Ahmed Ali", Email: "ahmed@acme.com", Phone: "+966553334444" },
+});
+const cD2 = rec({
+  record_type: "contact",
+  id: 32, zoho_record_id: "CD2", record_name: "Ahmed Ali",
+  email: "ahmed@acme.com", phone: "+966509998888",
+  modified_date: new Date("2024-04-01"),
+  raw_data: { Last_Name: "Ahmed Ali", Email: "ahmed@acme.com", Phone: "+966509998888" },
+});
+const keepBothPlan = buildMergePlan("Contacts", 30, [cM, cD1, cD2], { masterZohoId: "CM" });
+const cds = keepBothPlan.contactDataSummary;
+assert(keepBothPlan.masterZohoId === "CM", "survivor pinned to CM");
+assert(!!cds, "Contacts plan includes contactDataSummary");
+assert(cds?.emails.primary?.value === "ahmed@acme.com", "email primary = the shared email");
+assert(cds?.emails.primary?.from === "survivor", "email primary tagged survivor (kept)");
+assert(cds?.emails.secondary === null, "no second distinct email ⇒ Secondary_Email empty");
+assert(cds?.phones.phone?.value === "+966501112222", "phone primary = survivor's phone");
+assert(cds?.phones.phone?.from === "survivor", "phone primary tagged survivor (kept)");
+assert(cds?.phones.mobile?.value === "+966553334444", "mobile = freshest duplicate's distinct phone");
+assert((cds?.phones.mobile?.from || "") !== "survivor", "mobile tagged from a duplicate");
+assert(cds?.phones.extras.length === 1, "third distinct phone is an extra (Zoho holds 2)");
+assert(cds?.phones.extras[0]?.value === "+966509998888", "extra phone preserved for manual capture");
+
+// Same-phone, different-emails ⇒ keep both emails (Email + Secondary_Email).
+const eM = rec({
+  record_type: "contact", id: 40, zoho_record_id: "EM", record_name: "Sara Q",
+  email: "sara@acme.com", phone: "+966500000001", title: "Lead",
+  modified_date: new Date("2024-06-01"),
+  raw_data: { Last_Name: "Sara Q", Email: "sara@acme.com", Phone: "+966500000001", Title: "Lead" },
+});
+const eD = rec({
+  record_type: "contact", id: 41, zoho_record_id: "ED", record_name: "Sara Q",
+  email: "sara.q@gmail.com", phone: "+966500000001",
+  modified_date: new Date("2024-05-01"),
+  raw_data: { Last_Name: "Sara Q", Email: "sara.q@gmail.com", Phone: "+966500000001" },
+});
+const emailPlan = buildMergePlan("Contacts", 40, [eM, eD], { masterZohoId: "EM" });
+const ecds = emailPlan.contactDataSummary;
+assert(ecds?.emails.primary?.value === "sara@acme.com", "email primary = survivor's email");
+assert(ecds?.emails.secondary?.value === "sara.q@gmail.com", "second distinct email → Secondary_Email");
+assert((ecds?.emails.secondary?.from || "") !== "survivor", "Secondary_Email tagged from a duplicate");
+assert(ecds?.phones.mobile === null, "same phone ⇒ no Mobile needed");
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
