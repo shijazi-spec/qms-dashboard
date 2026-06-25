@@ -82,6 +82,11 @@ export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
       name: r.record_name || "",
     });
     if (!c.reason) continue;
+    // Operator decision (Ahmad 2026-06-26): a deal that has REAL data but is just
+    // missing its Account ("orphaned"/linkEligible) belongs in Account Hints,
+    // which already infers the right account. Only TRULY empty (no account, no
+    // contact, no amount) and TEST deals stay on the cleanup tab.
+    if (c.reason === "orphaned") continue;
     out.push({
       zohoId: r.zoho_record_id,
       name: r.record_name || "",

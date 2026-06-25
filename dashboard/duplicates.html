@@ -1486,7 +1486,7 @@
         <!-- ═══ EMPTY / ORPHANED RECORDS — CRM cleanup (tag Empty-Delete) ═══ -->
         <div id="content-empty-records" class="tab-content hidden">
           <div class="bg-rose-50 border border-rose-200 rounded-lg p-3 mb-4 text-sm text-rose-900">
-            <span data-i18n="duplicates.er_banner">Records with nothing useful inside — orphaned deals (no account), empty accounts (no deals / contacts / attachments), name-only contacts — plus test / placeholder records. Review, then tag Empty-Delete for the Zoho admin to delete. The platform never deletes. An orphaned-but-real deal is linked to an account instead.</span>
+            <span data-i18n="duplicates.er_banner">Records with nothing useful inside — empty accounts (no deals / contacts / attachments), name-only contacts, empty / test deals — plus test / placeholder records. Review, then tag Empty-Delete for the Zoho admin to delete. The platform never deletes. A real deal that is only missing its account is handled in Account Hints (linked there), not here.</span>
             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800" data-i18n="duplicates.er_badge_orphaned">ORPHANED</span>
             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-200 text-gray-700" data-i18n="duplicates.er_badge_empty">EMPTY</span>
             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700" data-i18n="duplicates.er_badge_test">TEST</span>
@@ -1501,7 +1501,7 @@
 
           <div class="mb-6">
             <div class="flex items-center gap-2 mb-2">
-              <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_deals">Deals</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_deals_sub">orphaned (link) / empty / test</span></span></h3>
+              <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_deals">Deals</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_deals_sub">empty / test (missing-account deals → Account Hints)</span></span></h3>
               <span id="erCount-deals" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
               <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
