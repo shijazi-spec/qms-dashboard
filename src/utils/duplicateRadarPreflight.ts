@@ -2074,9 +2074,15 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
     const nameRows =
       (
         await queryWithTimeout<any>(
+          // Exclude LEADS (Sarah 2026-06-25): a lead's free-text Company field is
+          // the least reliable source — one prospect sitting on a client's domain
+          // with a mistyped company ("stc" on sasref.com.sa) minted a false
+          // byName key. The client's real name lives on its Account / Contact /
+          // Deal records, which we still index.
           `SELECT DISTINCT LOWER(domain) AS domain, company_name, account_name
              FROM duplicate_records
             WHERE LOWER(domain) = ANY($1::text[])
+              AND record_type <> 'lead'
               AND COALESCE(company_name, account_name) IS NOT NULL`,
           [clientDomains],
           undefined,
