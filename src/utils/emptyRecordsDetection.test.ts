@@ -1,4 +1,9 @@
-import { describe, it, expect } from "vitest";
+/**
+ * Unit tests for the pure empty/orphaned/test-record classifiers.
+ * Run: npx tsx src/utils/emptyRecordsDetection.test.ts
+ * (Co-located src/utils/*.test.ts run via the tsx harness in
+ *  tests/runIntegrationTests.ts — NOT vitest, which is scoped to tests/vitest/**.)
+ */
 import {
   isTestOrPlaceholderName,
   classifyDeal,
@@ -6,90 +11,76 @@ import {
   classifyContact,
 } from "./emptyRecordsDetection";
 
-describe("isTestOrPlaceholderName", () => {
-  it("flags exact placeholders", () => {
-    expect(isTestOrPlaceholderName("test")).toBe(true);
-    expect(isTestOrPlaceholderName("N/A")).toBe(true);
-  });
-  it("flags standalone test keywords (whole word, EN+AR)", () => {
-    expect(isTestOrPlaceholderName("Test Account")).toBe(true);
-    expect(isTestOrPlaceholderName("Ahmed Test")).toBe(true);
-    expect(isTestOrPlaceholderName("dummy account")).toBe(true);
-    expect(isTestOrPlaceholderName("Cool Robot (Sample Contact)")).toBe(true);
-    expect(isTestOrPlaceholderName("شركة تجريبي")).toBe(true);
-  });
-  it("does NOT flag a keyword embedded in a real word", () => {
-    expect(isTestOrPlaceholderName("Latest Holdings")).toBe(false);
-    expect(isTestOrPlaceholderName("Testbed Robotics")).toBe(false);
-  });
-  it("does NOT flag business-legit 'demo'/'testing' names (Sarah 2026-06-25)", () => {
-    expect(isTestOrPlaceholderName("Request Demo | Kooheji Stores")).toBe(false);
-    expect(isTestOrPlaceholderName("GCC Electrical Testing Laboratory")).toBe(false);
-  });
-  it("does NOT flag a real company with no standalone keyword", () => {
-    expect(isTestOrPlaceholderName("Saudi Aramco")).toBe(false);
-  });
-});
+let passed = 0;
+let failed = 0;
+function assert(cond: boolean, label: string): void {
+  if (cond) { console.log(`  ✓ ${label}`); passed++; }
+  else { console.error(`  ✗ ${label}`); failed++; }
+}
 
-describe("classifyDeal", () => {
-  it("empty when no account, no contact, no amount", () => {
-    const r = classifyDeal({ hasAccount: false, hasContact: false, amount: 0, name: "X" });
-    expect(r.reason).toBe("empty");
-    expect(r.deleteEligible).toBe(true);
-    expect(r.linkEligible).toBe(true);
-  });
-  it("orphaned (not empty) when no account but has a contact — link only", () => {
-    const r = classifyDeal({ hasAccount: false, hasContact: true, amount: 0, name: "X" });
-    expect(r.reason).toBe("orphaned");
-    expect(r.deleteEligible).toBe(false);
-    expect(r.linkEligible).toBe(true);
-  });
-  it("test name → delete-eligible even with an account and amount", () => {
-    const r = classifyDeal({ hasAccount: true, hasContact: true, amount: 5000, name: "dummy deal" });
-    expect(r.reason).toBe("test");
-    expect(r.deleteEligible).toBe(true);
-  });
-  it("a 'Request Demo' deal is NOT a test record", () => {
-    const r = classifyDeal({ hasAccount: true, hasContact: true, amount: 5000, name: "Request Demo | Kooheji Stores" });
-    expect(r.reason).toBe(null);
-  });
-  it("a normal deal with an account is not flagged", () => {
-    const r = classifyDeal({ hasAccount: true, hasContact: false, amount: 100, name: "Aramco Renewal" });
-    expect(r.reason).toBe(null);
-    expect(r.deleteEligible).toBe(false);
-    expect(r.linkEligible).toBe(false);
-  });
-});
+console.log("isTestOrPlaceholderName");
+assert(isTestOrPlaceholderName("test") === true, "exact placeholder 'test'");
+assert(isTestOrPlaceholderName("N/A") === true, "exact placeholder 'N/A'");
+assert(isTestOrPlaceholderName("Test Account") === true, "standalone 'Test'");
+assert(isTestOrPlaceholderName("Ahmed Test") === true, "trailing standalone 'Test'");
+assert(isTestOrPlaceholderName("dummy account") === true, "standalone 'dummy'");
+assert(isTestOrPlaceholderName("Cool Robot (Sample Contact)") === true, "Zoho 'Sample Contact'");
+assert(isTestOrPlaceholderName("شركة تجريبي") === true, "Arabic 'تجريبي'");
+assert(isTestOrPlaceholderName("Latest Holdings") === false, "embedded 'test' in 'Latest' not flagged");
+assert(isTestOrPlaceholderName("Testbed Robotics") === false, "embedded in 'Testbed' not flagged");
+assert(isTestOrPlaceholderName("Request Demo | Kooheji Stores") === false, "'demo' is business-legit (dropped)");
+assert(isTestOrPlaceholderName("GCC Electrical Testing Laboratory") === false, "'testing' is business-legit (dropped)");
+assert(isTestOrPlaceholderName("Saudi Aramco") === false, "real company, no keyword");
 
-describe("classifyAccount", () => {
-  it("structurally empty when no deals and no contacts", () => {
-    const r = classifyAccount({ hasDeals: false, hasContacts: false, name: "X" });
-    expect(r.reason).toBe("empty");
-    expect(r.structurallyEmpty).toBe(true);
-  });
-  it("test name flagged regardless of links", () => {
-    const r = classifyAccount({ hasDeals: true, hasContacts: true, name: "Test Co" });
-    expect(r.reason).toBe("test");
-  });
-  it("normal account with links not flagged", () => {
-    const r = classifyAccount({ hasDeals: true, hasContacts: false, name: "Riyad Bank" });
-    expect(r.reason).toBe(null);
-  });
-});
+console.log("classifyDeal");
+{
+  const r = classifyDeal({ hasAccount: false, hasContact: false, amount: 0, name: "X" });
+  assert(r.reason === "empty" && r.deleteEligible && r.linkEligible, "no account/contact/amount → empty, delete+link");
+}
+{
+  const r = classifyDeal({ hasAccount: false, hasContact: true, amount: 0, name: "X" });
+  assert(r.reason === "orphaned" && !r.deleteEligible && r.linkEligible, "no account but has contact → orphaned, link only");
+}
+{
+  const r = classifyDeal({ hasAccount: true, hasContact: true, amount: 5000, name: "dummy deal" });
+  assert(r.reason === "test" && r.deleteEligible, "test name → delete-eligible despite data");
+}
+{
+  const r = classifyDeal({ hasAccount: true, hasContact: true, amount: 5000, name: "Request Demo | Kooheji Stores" });
+  assert(r.reason === null, "'Request Demo' deal is NOT a test record");
+}
+{
+  const r = classifyDeal({ hasAccount: true, hasContact: false, amount: 100, name: "Aramco Renewal" });
+  assert(r.reason === null && !r.deleteEligible && !r.linkEligible, "normal deal with account → not flagged");
+}
 
-describe("classifyContact", () => {
-  it("name-only → delete eligible", () => {
-    const r = classifyContact({ hasEmail: false, hasPhone: false, hasAccount: false, hasDeals: false, name: "John" });
-    expect(r.reason).toBe("empty");
-    expect(r.deleteEligible).toBe(true);
-  });
-  it("has an email → not empty", () => {
-    const r = classifyContact({ hasEmail: true, hasPhone: false, hasAccount: false, hasDeals: false, name: "John" });
-    expect(r.reason).toBe(null);
-  });
-  it("test name → flagged", () => {
-    const r = classifyContact({ hasEmail: true, hasPhone: true, hasAccount: true, hasDeals: true, name: "test contact" });
-    expect(r.reason).toBe("test");
-    expect(r.deleteEligible).toBe(true);
-  });
-});
+console.log("classifyAccount");
+{
+  const r = classifyAccount({ hasDeals: false, hasContacts: false, name: "X" });
+  assert(r.reason === "empty" && r.structurallyEmpty, "no deals/contacts → empty");
+}
+{
+  const r = classifyAccount({ hasDeals: true, hasContacts: true, name: "Test Co" });
+  assert(r.reason === "test", "test name flagged regardless of links");
+}
+{
+  const r = classifyAccount({ hasDeals: true, hasContacts: false, name: "Riyad Bank" });
+  assert(r.reason === null, "normal account with a deal → not flagged");
+}
+
+console.log("classifyContact");
+{
+  const r = classifyContact({ hasEmail: false, hasPhone: false, hasAccount: false, hasDeals: false, name: "John" });
+  assert(r.reason === "empty" && r.deleteEligible, "name-only → empty, delete-eligible");
+}
+{
+  const r = classifyContact({ hasEmail: true, hasPhone: false, hasAccount: false, hasDeals: false, name: "John" });
+  assert(r.reason === null, "has email → not empty");
+}
+{
+  const r = classifyContact({ hasEmail: true, hasPhone: true, hasAccount: true, hasDeals: true, name: "test contact" });
+  assert(r.reason === "test" && r.deleteEligible, "test name → flagged despite full data");
+}
+
+console.log(`\n${passed} passed, ${failed} failed`);
+process.exit(failed > 0 ? 1 : 0);
