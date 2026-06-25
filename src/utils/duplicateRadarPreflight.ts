@@ -619,6 +619,119 @@ export function isStrategicDomain(domain: string | null | undefined): boolean {
   return STRATEGIC_TLD_SUFFIXES.some((s) => d.endsWith(s));
 }
 
+/**
+ * PROTECTED / do-not-contact named accounts. These ALWAYS reject (BLOCK) in
+ * Preflight — even with NO CRM match — so a strategic account can never leak
+ * into PASS just because a single contact had no website (#n) or a free-mail
+ * address. Match is by exact email DOMAIN (incl. sub-domains) OR by company
+ * NAME (distinctive substring keywords, plus whole-name exact for short/generic
+ * names like "Tree" that would over-match as a substring).
+ *
+ * 2026-06-26 (Ahmad): seeded from the Mawsool batch — the whole Aramco group
+ * (parent + JV/subsidiaries SAMREF / SATORP / SASREF / YASREF / Luberef / ARO
+ * Drilling / Aramco Gulf Operations / Aramco Digital / JHAH) plus Tree and
+ * Syarah were confirmed do-not-contact. Several subsidiaries do NOT contain the
+ * word "Aramco", so we list their tokens + domains explicitly.
+ *
+ * Extend without a code change via env PREFLIGHT_PROTECTED_DOMAINS /
+ * PREFLIGHT_PROTECTED_NAMES (comma-separated).
+ */
+interface ProtectedAccount {
+  label: string;
+  domains?: string[];
+  nameKeywords?: string[];
+  nameExact?: string[];
+}
+
+const PROTECTED_ACCOUNTS: ReadonlyArray<ProtectedAccount> = [
+  {
+    label: "Saudi Aramco (group)",
+    domains: [
+      "aramco.com",
+      "aramcodigital.com",
+      "agoc.com.sa",
+      "samref.com.sa",
+      "satorp.com",
+      "yasref.com",
+      "luberef.com",
+      "arodrilling.com",
+      "arodrilling.sa",
+      "sasref.com",
+      "jhah.com",
+    ],
+    nameKeywords: [
+      "aramco",
+      "sasref",
+      "satorp",
+      "yasref",
+      "samref",
+      "luberef",
+      "agoc",
+      "aro drilling",
+    ],
+  },
+  {
+    label: "Tree",
+    domains: ["treesaudi.com"],
+    nameKeywords: ["treesaudi"],
+    nameExact: ["tree"],
+  },
+  {
+    label: "Syarah",
+    domains: ["syarah.com"],
+    nameKeywords: ["syarah"],
+  },
+];
+
+function _envProtectedAccount(): ProtectedAccount | null {
+  const split = (v: string | undefined) =>
+    (v || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+  const domains = split(process.env.PREFLIGHT_PROTECTED_DOMAINS);
+  const nameKeywords = split(process.env.PREFLIGHT_PROTECTED_NAMES);
+  if (!domains.length && !nameKeywords.length) return null;
+  return { label: "Protected account (configured)", domains, nameKeywords };
+}
+const _ENV_PROTECTED = _envProtectedAccount();
+
+/** Lower-case a company name, stripping emoji / symbols / punctuation so
+ * "Tree 🌳" → "tree" and matching is robust. Keeps letters (any script),
+ * digits and single spaces. */
+function _normalizeCompanyName(name: string | null | undefined): string {
+  return String(name ?? "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Return the protected-account label iff the row's domain or company name
+ * matches a do-not-contact account, else null.
+ */
+export function matchProtectedAccount(
+  domain: string | null | undefined,
+  companyName: string | null | undefined,
+): { label: string } | null {
+  const dom = String(domain ?? "").trim().toLowerCase();
+  const nm = _normalizeCompanyName(companyName);
+  const list = _ENV_PROTECTED
+    ? [...PROTECTED_ACCOUNTS, _ENV_PROTECTED]
+    : PROTECTED_ACCOUNTS;
+  for (const p of list) {
+    if (dom && p.domains?.some((d) => dom === d || dom.endsWith("." + d))) {
+      return { label: p.label };
+    }
+    if (nm) {
+      if (p.nameExact?.some((x) => nm === x)) return { label: p.label };
+      if (p.nameKeywords?.some((k) => nm.includes(k))) return { label: p.label };
+    }
+  }
+  return null;
+}
+
 export interface PreflightClusterRow {
   id: number;
   domain: string;
@@ -922,6 +1035,39 @@ export function classifyPreflightRows(input: {
     const row = rows[i]!;
     const ref = row.ref ?? null;
     const domain = resolveDomain(row);
+
+    // HIGHEST PRIORITY — protected / do-not-contact named accounts (Aramco
+    // group, Tree, Syarah, …). These ALWAYS reject, even with no CRM match,
+    // so a strategic account can never leak into PASS because one contact had
+    // no website (#n) or a free-mail address. Runs before duplicate / client
+    // matching so the verdict + reason are consistent for every such row.
+    const protectedHit = matchProtectedAccount(domain, row.company_name ?? null);
+    if (protectedHit) {
+      const co = (row.company_name || "").trim() || protectedHit.label;
+      out.push({
+        row_index: i,
+        ref,
+        input: { domain, company_name: row.company_name ?? null },
+        verdict: "block",
+        cluster_id: null,
+        lifecycle_state: null,
+        sector: null,
+        arr_exposure: null,
+        owners: [],
+        reason: "protected_account",
+        suggested_action:
+          `"${co}" is a PROTECTED / do-not-contact account (${protectedHit.label}). ` +
+          "Never cold-contact or import — route to the named Account owner / Head of Sales.",
+        executive_action:
+          `REJECT — protected account (${protectedHit.label}): do not cold-contact or import. ` +
+          "Route to the named Account owner / Head of Sales.",
+        executive_severity: "critical",
+        module_counts: null,
+        matched_via: null,
+      });
+      summary.block++;
+      continue;
+    }
 
     // Pull the row's matched cluster + how it matched. Prefer the new
     // per-row map; fall back to the legacy domain map when only that
@@ -2948,7 +3094,11 @@ async function runPreflightBasic(input: {
     if (r.verdict === "duplicate") {
       bump("Duplicate contact (email / phone) already in CRM");
     } else if (r.verdict === "block") {
-      bump("Existing active client — do not cold-contact, route to owner");
+      bump(
+        r.reason === "protected_account"
+          ? "Protected / do-not-contact account (Aramco group, Tree, Syarah, …)"
+          : "Existing active client — do not cold-contact, route to owner",
+      );
     } else if (r.verdict === "review") {
       bump(
         r.reason === "possible_existing_client_fuzzy_name"

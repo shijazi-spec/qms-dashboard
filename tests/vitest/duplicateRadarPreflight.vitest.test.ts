@@ -17,6 +17,7 @@ import {
   shouldCreateForVerdict,
   buildClusterFromRecords,
   basicPreflightVerdict,
+  matchProtectedAccount,
   type PreflightClusterRow,
   type PreflightRowMatch,
   type PreflightRecordRow,
@@ -488,5 +489,61 @@ describe("basicPreflightVerdict — the two foundational rules (2026-06-18)", ()
     const v = basicPreflightVerdict({ contactVia: null, isCustomerDomain: false });
     expect(v.verdict).toBe("pass");
     expect(v.executive_action).toBe("Safe to import.");
+  });
+});
+
+describe("matchProtectedAccount — do-not-contact named accounts", () => {
+  test("blocks Saudi Aramco by domain", () => {
+    expect(matchProtectedAccount("aramco.com", null)?.label).toBe(
+      "Saudi Aramco (group)",
+    );
+    expect(matchProtectedAccount("mail.aramco.com", null)?.label).toBe(
+      "Saudi Aramco (group)",
+    );
+  });
+  test("blocks Aramco subsidiaries that do NOT contain 'Aramco' — by name + domain", () => {
+    // SASREF / ARO Drilling have no 'aramco' token, so name keywords matter
+    expect(matchProtectedAccount(null, "SASREF")?.label).toBe(
+      "Saudi Aramco (group)",
+    );
+    expect(matchProtectedAccount(null, "ARO Drilling")?.label).toBe(
+      "Saudi Aramco (group)",
+    );
+    expect(matchProtectedAccount("satorp.com", null)?.label).toBe(
+      "Saudi Aramco (group)",
+    );
+    expect(matchProtectedAccount("agoc.com.sa", null)?.label).toBe(
+      "Saudi Aramco (group)",
+    );
+  });
+  test("blocks Aramco JVs by their full company name", () => {
+    expect(
+      matchProtectedAccount(
+        "#n",
+        "Yanbu Aramco Sinopec Refining Company (YASREF) Ltd.",
+      )?.label,
+    ).toBe("Saudi Aramco (group)");
+    expect(
+      matchProtectedAccount(null, "Saudi Aramco Base Oil Company-Luberef")
+        ?.label,
+    ).toBe("Saudi Aramco (group)");
+  });
+  test("blocks Syarah", () => {
+    expect(matchProtectedAccount(null, "Syarah")?.label).toBe("Syarah");
+    expect(matchProtectedAccount("syarah.com", null)?.label).toBe("Syarah");
+  });
+  test("blocks Tree — exact whole-name even with decorative emoji", () => {
+    expect(matchProtectedAccount("#n", "Tree 🌳")?.label).toBe("Tree");
+    expect(matchProtectedAccount(null, "Tree")?.label).toBe("Tree");
+  });
+  test("does NOT over-block: 'tree' is whole-name only", () => {
+    // substring "tree" must not catch unrelated companies
+    expect(matchProtectedAccount(null, "Family Tree Trading")).toBeNull();
+    expect(matchProtectedAccount(null, "Palm Tree Resort")).toBeNull();
+  });
+  test("ignores ordinary companies", () => {
+    expect(matchProtectedAccount("totalenergies.com", "TotalEnergies")).toBeNull();
+    expect(matchProtectedAccount(null, "Arabio")).toBeNull();
+    expect(matchProtectedAccount("#n", "Trinidad Drilling")).toBeNull();
   });
 });
