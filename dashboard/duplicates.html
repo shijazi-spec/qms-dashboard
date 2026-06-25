@@ -158,6 +158,10 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Preflight Check
             </button>
+            <button data-on-click="showTab" data-args="[&quot;empty-records&quot;]" id="tab-empty-records" data-testid="tab-empty-records" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Empty / Orphaned Records — orphaned deals (no account), empty accounts (no deals/contacts/attachments), name-only contacts, plus test/placeholder records. Tag 'Empty-Delete' for the Zoho admin to delete; the platform never deletes.">
+                <span class="inline-block w-2 h-2 rounded-full bg-rose-500"></span>
+                🧹 Empty / Orphaned
+            </button>
             <!-- Auto-CAPA KPIs tab retired 2026-05-30 per operator request.
                  CAPAs are now opened manually from each actionable row via
                  the "Open CAPA" button and tracked in the QMS CAPA inbox
@@ -1473,6 +1477,65 @@
             </div>
             <div id="csLifecyclePagination" class="flex justify-center items-center gap-3 mt-4"></div>
           </div><!-- /lg:px-… inner padding wrapper -->
+        </div>
+
+        <!-- ═══ EMPTY / ORPHANED RECORDS — CRM cleanup (tag Empty-Delete) ═══ -->
+        <div id="content-empty-records" class="tab-content hidden">
+          <div class="bg-rose-50 border border-rose-200 rounded-lg p-3 mb-4 text-sm text-rose-900">
+            <strong>Empty / Orphaned Records.</strong> Records with nothing useful inside — orphaned deals (no account), empty accounts (no deals / contacts / attachments), name-only contacts — plus <em>test / placeholder</em> records. Review, then tag <code>Empty-Delete</code> for the Zoho admin to delete. <strong>The platform never deletes.</strong> An orphaned-but-real deal is <em>linked</em> to an account instead. Reasons:
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">ORPHANED</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-200 text-gray-700">EMPTY</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">TEST</span>
+          </div>
+
+          <div id="erBulkBar" class="hidden sticky top-0 z-10 bg-white border border-rose-300 rounded-lg shadow p-2 mb-3 flex items-center gap-3 flex-wrap">
+            <span id="erBulkCount" class="text-sm font-medium text-gray-700">0 selected</span>
+            <button data-on-click="erTagSelected" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700">🏷 Tag selected Empty-Delete</button>
+            <button data-on-click="erUndoLast" id="erUndoBtn" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">↩ Undo last batch</button>
+            <span id="erBulkResult" class="text-xs text-gray-600"></span>
+          </div>
+
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-base font-bold text-gray-900">Deals <span class="text-xs font-normal text-gray-500">— orphaned (link) / empty / test</span></h3>
+              <span id="erCount-deals" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
+              <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ Refresh</button>
+            </div>
+            <div class="overflow-x-auto border border-gray-200 rounded-lg">
+              <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">✓</th><th class="px-3 py-2 text-start">Reason</th><th class="px-3 py-2 text-start">Deal</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Action</th></tr></thead>
+                <tbody id="erDealsBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-base font-bold text-gray-900">Accounts <span class="text-xs font-normal text-gray-500">— empty (check attachments first) / test</span></h3>
+              <span id="erCount-accounts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
+              <button data-on-click="erReload" data-args="[&quot;accounts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ Refresh</button>
+            </div>
+            <div class="overflow-x-auto border border-gray-200 rounded-lg">
+              <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">✓</th><th class="px-3 py-2 text-start">Reason</th><th class="px-3 py-2 text-start">Account</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Action</th></tr></thead>
+                <tbody id="erAccountsBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-base font-bold text-gray-900">Contacts <span class="text-xs font-normal text-gray-500">— name-only / test</span></h3>
+              <span id="erCount-contacts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
+              <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ Refresh</button>
+            </div>
+            <div class="overflow-x-auto border border-gray-200 rounded-lg">
+              <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">✓</th><th class="px-3 py-2 text-start">Reason</th><th class="px-3 py-2 text-start">Contact</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Action</th></tr></thead>
+                <tbody id="erContactsBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- ═══ DEALS LIFECYCLE TAB — Sales SOP stage aging ═══ -->
@@ -8409,6 +8472,7 @@
             if (tab === 'account-hints') loadAccountHints();
             if (tab === 'logs') { loadAgentActivity(); loadManualActions(); }
             if (tab === 'deal-compliance' && !window._loadedTabs.has('deal-compliance')) loadDealCompliance();
+            if (tab === 'empty-records' && !window._loadedTabs.has('empty-records')) loadEmptyRecords();
             if (tab === 'merge-candidates' && !window._loadedTabs.has('merge-candidates')) { loadClusterMergeCandidates(); window._loadedTabs.add('merge-candidates'); }
             // The Domain Clusters + 4 record tabs are expensive list queries;
             // load each one ONLY on first visit per refresh cycle. This is
@@ -8731,6 +8795,206 @@
             _dcStorePut(id, rec);
             _dcUpdateCards();
             if (span) span.innerHTML = _dcDocCellHtml(id, rec, stage);
+        }
+
+        // ══ Empty / Orphaned Records cleanup tab ════════════════════════════
+        async function loadEmptyRecords() {
+            window._loadedTabs.add('empty-records');
+            if (!window._erCbBound) {
+                window._erCbBound = true;
+                document.addEventListener('change', function (e) {
+                    if (e.target && e.target.classList && e.target.classList.contains('er-cb')) erSelChanged();
+                });
+            }
+            await Promise.all([erLoad('deals', 'erDealsBody'), erLoad('accounts', 'erAccountsBody'), erLoad('contacts', 'erContactsBody')]);
+        }
+        function erReload(kind) {
+            const map = { deals: 'erDealsBody', accounts: 'erAccountsBody', contacts: 'erContactsBody' };
+            erLoad(kind, map[kind]);
+        }
+        async function erLoad(kind, bodyId) {
+            const body = document.getElementById(bodyId);
+            if (!body) return;
+            body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">Loading…</td></tr>';
+            let data;
+            try {
+                const res = await fetch('/api/duplicates/empty-records/' + kind, { credentials: 'same-origin' });
+                data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-amber-700">Error: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
+                return;
+            }
+            window['_er_' + kind] = data.rows || [];
+            erRender(kind, bodyId);
+            const chip = document.getElementById('erCount-' + kind);
+            if (chip) chip.textContent = (data.rows || []).length.toLocaleString();
+        }
+        function erReasonBadge(reason) {
+            const m = { orphaned: ['bg-amber-100', 'text-amber-800', 'ORPHANED'], empty: ['bg-gray-200', 'text-gray-700', 'EMPTY'], test: ['bg-rose-100', 'text-rose-700', 'TEST'] };
+            const x = m[reason] || m.empty;
+            return '<span class="px-2 py-0.5 rounded text-[10px] font-bold ' + x[0] + ' ' + x[1] + '">' + x[2] + '</span>';
+        }
+        function erZohoUrl(kind, id) {
+            const tab = kind === 'deals' ? 'Potentials' : kind === 'accounts' ? 'Accounts' : 'Contacts';
+            return 'https://crm.zoho.com/crm/org766568398/tab/' + tab + '/' + encodeURIComponent(id);
+        }
+        function erRender(kind, bodyId) {
+            const rows = window['_er_' + kind] || [];
+            const body = document.getElementById(bodyId);
+            if (!body) return;
+            if (!rows.length) { body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">None found.</td></tr>'; return; }
+            const moduleOf = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
+            body.innerHTML = rows.map(function (r) {
+                const cbId = 'er-cb-' + kind + '-' + r.zohoId;
+                const cb = '<input type="checkbox" class="er-cb" id="' + escapeHtml(cbId) + '" data-kind="' + moduleOf + '" data-zoho-id="' + escapeHtml(String(r.zohoId)) + '"' + (r.deleteEligible ? '' : ' disabled title="Not delete-eligible yet"') + '>';
+                const args = escapeHtml(JSON.stringify([String(r.zohoId)]));
+                let action;
+                if (kind === 'accounts') {
+                    action = r.deleteEligible
+                        ? '<span class="text-xs text-rose-600">test — ready</span>'
+                        : '<span id="eratt-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erCheckAccountAttachments" data-args=\'' + args + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 Check attachments</button></span>';
+                } else if (kind === 'deals') {
+                    action = '<span id="erlink-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erLinkDeal" data-args=\'' + args + '\' class="px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">🔗 Link to Account</button></span>';
+                } else {
+                    action = '<span class="text-xs text-gray-400">—</span>';
+                }
+                return '<tr class="border-t border-gray-100">'
+                    + '<td class="px-3 py-2">' + cb + '</td>'
+                    + '<td class="px-3 py-2">' + erReasonBadge(r.reason) + '</td>'
+                    + '<td class="px-3 py-2"><a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">' + escapeHtml(r.name || '(no name)') + '</a></td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.owner || '—') + '</td>'
+                    + '<td class="px-3 py-2">' + action + '</td>'
+                    + '</tr>';
+            }).join('');
+        }
+        function erSelChanged() {
+            const checked = Array.prototype.slice.call(document.querySelectorAll('.er-cb:checked'));
+            const bar = document.getElementById('erBulkBar');
+            const cnt = document.getElementById('erBulkCount');
+            if (cnt) cnt.textContent = checked.length + ' selected';
+            if (bar) { if (checked.length > 0) bar.classList.remove('hidden'); else bar.classList.add('hidden'); }
+        }
+        async function erCheckAccountAttachments(id) {
+            const cell = document.getElementById('eratt-' + id);
+            if (cell) cell.innerHTML = '<span class="text-xs text-gray-400">checking…</span>';
+            let data;
+            try {
+                const res = await fetch('/api/duplicates/empty-records/accounts/' + encodeURIComponent(id) + '/attachments', { credentials: 'same-origin' });
+                data = await res.json();
+                if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                if (cell) cell.innerHTML = '<span class="text-xs text-amber-700">err: ' + escapeHtml(String(e && e.message || e)) + '</span>';
+                return;
+            }
+            const n = data.count || 0;
+            if (n === 0) {
+                if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">0 attachments — deletable</span>';
+                const cb = document.getElementById('er-cb-accounts-' + id);
+                if (cb) cb.disabled = false;
+            } else {
+                if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">📎 ' + n + ' — keep</span>';
+            }
+        }
+        async function erLinkDeal(id) {
+            const cell = document.getElementById('erlink-' + id);
+            if (cell) cell.innerHTML = '<span class="text-xs text-gray-400">finding account…</span>';
+            let sug = null;
+            try {
+                const res = await fetch('/api/duplicates/empty-records/deals/' + encodeURIComponent(id) + '/account-suggestion', { credentials: 'same-origin' });
+                const data = await res.json();
+                sug = data && data.suggestion;
+            } catch (e) { /* manual still available */ }
+            let html = '';
+            if (sug && sug.accountId) {
+                html += '<button data-on-click="erDoLinkDeal" data-args=\'' + escapeHtml(JSON.stringify([String(id), String(sug.accountId)])) + '\' class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">Link to ' + escapeHtml(sug.accountName || sug.accountId) + ' (' + (sug.confidence || 0) + '%)</button> ';
+            }
+            html += '<input id="erlinkacc-' + escapeHtml(String(id)) + '" placeholder="Account Zoho ID" class="px-2 py-1 text-xs border border-gray-300 rounded w-36">'
+                + '<button data-on-click="erDoLinkDealManual" data-args=\'' + escapeHtml(JSON.stringify([String(id)])) + '\' class="ml-1 px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">Link</button>';
+            if (cell) cell.innerHTML = html;
+        }
+        function erDoLinkDealManual(id) {
+            const inp = document.getElementById('erlinkacc-' + id);
+            const accId = inp ? (inp.value || '').trim() : '';
+            if (!accId) { alert('Enter an Account Zoho ID.'); return; }
+            erDoLinkDeal(id, accId);
+        }
+        async function erDoLinkDeal(dealId, accountId) {
+            const cell = document.getElementById('erlink-' + dealId);
+            if (cell) cell.innerHTML = '<span class="text-xs text-gray-400">linking…</span>';
+            try {
+                const j = await erAdminPost('/api/duplicates/empty-records/link-deal', { dealId: dealId, accountId: accountId });
+                if (!j) { if (cell) cell.innerHTML = '<span class="text-xs text-gray-500">cancelled</span>'; return; }
+                if (!j.success) throw new Error(j.error || 'failed');
+                if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">✓ linked</span>';
+                window._er_deals = (window._er_deals || []).filter(function (r) { return String(r.zohoId) !== String(dealId); });
+            } catch (e) {
+                if (cell) cell.innerHTML = '<span class="text-xs text-red-600">err: ' + escapeHtml(String(e && e.message || e)) + '</span>';
+            }
+        }
+        // Admin-gated POST — on 401/403 prompt for the admin key and retry (mirrors applyAllSafeMerges).
+        async function erAdminPost(url, body) {
+            let adminKey = window._erAdminKey || null;
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const headers = { 'Content-Type': 'application/json' };
+                if (adminKey) headers['x-admin-key'] = adminKey;
+                const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify(body) });
+                if (res.status === 401 || res.status === 403) {
+                    adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    if (!adminKey) return null;
+                    window._erAdminKey = adminKey;
+                    continue;
+                }
+                return await res.json().catch(function () { return {}; });
+            }
+            return null;
+        }
+        async function erTagSelected() {
+            const checked = Array.prototype.slice.call(document.querySelectorAll('.er-cb:checked'));
+            if (!checked.length) return;
+            const byModule = {};
+            checked.forEach(function (cb) {
+                const m = cb.getAttribute('data-kind');
+                const id = cb.getAttribute('data-zoho-id');
+                if (!byModule[m]) byModule[m] = [];
+                byModule[m].push(id);
+            });
+            if (!confirm('Tag ' + checked.length + ' record(s) with "Empty-Delete"?\n\nThis adds the tag in Zoho for the admin to delete. The platform never deletes.')) return;
+            const result = document.getElementById('erBulkResult');
+            const undoPayload = { modules: [] };
+            let total = 0;
+            for (const m in byModule) {
+                if (result) result.textContent = 'Tagging ' + m + '…';
+                const j = await erAdminPost('/api/duplicates/empty-records/tag', { module: m, zohoIds: byModule[m] });
+                if (!j) { if (result) result.textContent = 'Cancelled.'; return; }
+                if (!j.success) { if (result) result.textContent = 'Error: ' + (j.error || 'failed'); return; }
+                total += j.tagged || 0;
+                undoPayload.modules.push({ module: m, zohoIds: byModule[m] });
+                const kind = m.toLowerCase();
+                window['_er_' + kind] = (window['_er_' + kind] || []).filter(function (r) { return byModule[m].indexOf(String(r.zohoId)) === -1; });
+                erRender(kind, 'er' + m + 'Body');
+                const chip = document.getElementById('erCount-' + kind);
+                if (chip) chip.textContent = (window['_er_' + kind] || []).length.toLocaleString();
+            }
+            window._erLastTagged = undoPayload;
+            if (result) result.textContent = '✓ Tagged ' + total + ' record(s) Empty-Delete. Admin deletes in Zoho.';
+            const undoBtn = document.getElementById('erUndoBtn');
+            if (undoBtn) undoBtn.classList.remove('hidden');
+            erSelChanged();
+        }
+        async function erUndoLast() {
+            const payload = window._erLastTagged;
+            if (!payload || !payload.modules || !payload.modules.length) return;
+            if (!confirm('Remove the Empty-Delete tag from the last batch?')) return;
+            const result = document.getElementById('erBulkResult');
+            for (const grp of payload.modules) {
+                const j = await erAdminPost('/api/duplicates/empty-records/untag', { module: grp.module, zohoIds: grp.zohoIds });
+                if (!j || !j.success) { if (result) result.textContent = 'Undo error.'; return; }
+            }
+            if (result) result.textContent = '↩ Removed Empty-Delete tag from last batch. Refresh a section to see them again.';
+            window._erLastTagged = null;
+            const undoBtn = document.getElementById('erUndoBtn');
+            if (undoBtn) undoBtn.classList.add('hidden');
         }
 
         // ── Persisted doc-compliance results (localStorage) ──────────────────
