@@ -185,5 +185,6 @@ export const ROUTE_MANIFEST = {
     '/js/ai-consultant-widget.js',
     '/js/csp-styles.js',
     '/js/streaming-download.js',
+    '/js/duplicates-app.js',
   ],
 } as const;

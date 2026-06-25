@@ -118,6 +118,18 @@ export const staticAssetRoutes = [
       serveStaticText("js/safe-actions.js", "application/javascript"),
   },
   {
+    // Duplicate Radar app script — extracted from duplicates.html so the
+    // ~700KB of JS is downloaded once and served from browser cache on every
+    // subsequent load / tab navigation (the page was 916KB; now ~197KB).
+    path: "/js/duplicates-app.js",
+    method: "GET" as const,
+    createHandler: async () =>
+      serveStaticText(
+        "js/duplicates-app.js",
+        "application/javascript; charset=utf-8",
+      ),
+  },
+  {
     path: "/js/table-sort.js",
     method: "GET" as const,
     createHandler: async () =>

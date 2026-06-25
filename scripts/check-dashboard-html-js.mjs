@@ -171,6 +171,58 @@ for (const file of listHtmlFiles(DASHBOARD_DIR)) {
   }
 }
 
+// Standalone dashboard JS files (dashboard/js/*.js). These are served verbatim
+// to the browser, so a syntax error breaks the page exactly like a bad inline
+// <script> block — and the 2026-06-26 perf refactor moved ~700KB of Duplicate
+// Radar JS out of duplicates.html into js/duplicates-app.js, so without this it
+// would lose all syntax coverage. Parse each whole file as a classic script.
+function listJsFiles(dir) {
+  const out = [];
+  let entries;
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return out; // js dir absent → nothing to scan
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry);
+    if (statSync(full).isFile() && entry.endsWith(".js")) out.push(full);
+  }
+  return out;
+}
+
+for (const file of listJsFiles(resolve(DASHBOARD_DIR, "js"))) {
+  filesScanned++;
+  scriptsScanned++;
+  let source;
+  try {
+    source = readFileSync(file, "utf8");
+  } catch (err) {
+    console.error(`✗ check-dashboard-html-js: cannot read ${file}: ${err.message}`);
+    exitCode = 2;
+    continue;
+  }
+  try {
+    parse(source, {
+      ecmaVersion: "latest",
+      sourceType: "script",
+      allowReturnOutsideFunction: true,
+      allowHashBang: true,
+      locations: true,
+    });
+  } catch (parseErr) {
+    const { line, col } = offsetToLineCol(source, parseErr.pos ?? 0);
+    const relFile = file.replace(ROOT + "\\", "").replace(ROOT + "/", "");
+    console.error(
+      `✗ ${relFile}:${line}:${col} — ${parseErr.message.replace(/\s*\(\d+:\d+\)\s*$/, "")}`,
+    );
+    const offending = source.split(/\r?\n/)[line - 1] ?? "";
+    console.error(`    > ${offending.trim().slice(0, 200)}`);
+    failures++;
+    exitCode = 1;
+  }
+}
+
 if (failures > 0) {
   console.error("");
   console.error(
