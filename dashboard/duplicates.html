@@ -1205,6 +1205,10 @@
                         <div class="text-xs text-gray-600 uppercase">Duplicate</div>
                         <div id="preflightSumDup" class="text-2xl font-bold text-gray-700">—</div>
                     </div>
+                    <div class="col-span-2 bg-white rounded-lg shadow p-3 border-s-4 border-rose-500" title="Contacts with a name but NO email AND NO phone — cannot be reached, rejected from the import.">
+                        <div class="text-xs text-rose-600 uppercase">No email / phone (rejected)</div>
+                        <div id="preflightSumNoContact" class="text-2xl font-bold text-rose-700">—</div>
+                    </div>
                     <div class="col-span-2 bg-white rounded-lg shadow p-3 border-s-4 border-green-500">
                         <div class="text-xs text-green-700 uppercase">Pass (safe to import)</div>
                         <div id="preflightSumPass" class="text-2xl font-bold text-green-700">—</div>
@@ -10175,7 +10179,7 @@
             document.getElementById('preflightParsedCount').textContent = '';
             const body = document.getElementById('preflightResultTable');
             body.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>';
-            ['Block','Review','Warn','Dup','Pass'].forEach(k => {
+            ['Block','Review','Warn','Dup','NoContact','Pass'].forEach(k => {
                 const el = document.getElementById('preflightSum' + k);
                 if (el) el.textContent = '—';
             });
@@ -11845,6 +11849,8 @@
             document.getElementById('preflightSumReview').textContent = s.review || 0;
             document.getElementById('preflightSumWarn').textContent   = s.warn   || 0;
             document.getElementById('preflightSumDup').textContent    = s.duplicate || 0;
+            var _ncEl = document.getElementById('preflightSumNoContact');
+            if (_ncEl) _ncEl.textContent = s.no_contact || 0;
             document.getElementById('preflightSumPass').textContent   = s.pass   || 0;
 
             // Executive headline card — turns the engineer-summary numbers
