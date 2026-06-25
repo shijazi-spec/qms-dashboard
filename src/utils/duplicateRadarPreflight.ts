@@ -1717,6 +1717,26 @@ const _isDistinctiveTok = (t: string): boolean => {
 const _csDistinctiveTokens = (norm: string): string[] =>
   _csTokens(norm).filter(_isDistinctiveTok);
 
+// Curated allowlist of CONFIRMED short-name (<4 char) clients that MAY be
+// matched by EXACT name despite the ≥4-char floor (Sarah 2026-06-25). By default
+// short acronyms are matched by DOMAIN only — that's what stops unrelated
+// 3-letter codes bridging companies (the atc→UTEC / aon→Bureau-of-Experts bug).
+// Add a name here ONLY after confirming it's a real client; matching stays
+// EXACT (never containment/fuzzy) so it can't collide. Env
+// `PREFLIGHT_SHORT_NAME_CLIENTS` (comma-separated) extends this list; entries are
+// normalized the same way inbound names are.
+const SHORT_NAME_CLIENT_ALLOWLIST: Set<string> = new Set(
+  (process.env.PREFLIGHT_SHORT_NAME_CLIENTS || "")
+    .split(",")
+    .map((s) => normalizeCompanyName(s.trim()))
+    .filter((s) => s && s.length >= 2),
+);
+
+/** Distinctive (brand) tokens of a raw company name — exported for audits/finders. */
+export function distinctiveTokensOf(name: string): string[] {
+  return _csDistinctiveTokens(normalizeCompanyName(name || ""));
+}
+
 /** Derive a client's CS standing from a deal's phase + churn date. */
 function _csStatusFromDeal(input: {
   phase: string | null;
@@ -2600,9 +2620,12 @@ async function runPreflightBasic(input: {
     // up entirely of generic / sector words ("Confidential Construction",
     // "National Trading Services") carries no identity and must never fuse onto
     // an unrelated client. The DOMAIN tier is unaffected.
+    // Short names (<4 chars) are normally skipped (acronym collisions), EXCEPT a
+    // confirmed short-name client on the allowlist — matched EXACT only below.
+    const allowShortClient = !!nm && nm.length < 4 && SHORT_NAME_CLIENT_ALLOWLIST.has(nm);
     if (
       nm &&
-      nm.length >= 4 &&
+      (nm.length >= 4 || allowShortClient) &&
       !isPlaceholderName(rawCompany) &&
       _csDistinctiveTokens(nm).length > 0
     ) {
@@ -2743,7 +2766,9 @@ async function runPreflightBasic(input: {
       } else if (nm && csDir.byName.has(nm)) {
         csStatus = csDir.byName.get(nm)!;
         csMatchVia = "strict_name";
-      } else if (nm) {
+      } else if (nm && nm.length >= 4) {
+        // Containment/fuzzy are for ≥4-char names only. A short allowlisted name
+        // gets EXACT matching (above) and nothing looser — so it can't collide.
         const contained = _csContainmentMatch(nm, csDir);
         if (contained) {
           csStatus = csDir.byName.get(contained)!;
