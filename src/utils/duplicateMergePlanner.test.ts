@@ -12,6 +12,7 @@
 import {
   buildAccountMergePlan,
   buildMergePlan,
+  isRoleMailbox,
 } from "./duplicateMergePlanner";
 import type { DuplicateRecord } from "./duplicateRadarDatabase";
 
@@ -379,6 +380,74 @@ assert(ecds?.emails.primary?.value === "sara@acme.com", "email primary = survivo
 assert(ecds?.emails.secondary?.value === "sara.q@gmail.com", "second distinct email → Secondary_Email");
 assert((ecds?.emails.secondary?.from || "") !== "survivor", "Secondary_Email tagged from a duplicate");
 assert(ecds?.phones.mobile === null, "same phone ⇒ no Mobile needed");
+
+// ── Relaxed contact-merge bridges (Ahmad 2026-06-26) ─────────────────────────
+console.log("contact merge — generic-mailbox + same-email bridges");
+
+assert(isRoleMailbox("info@x.com") === true, "info@ is a role mailbox");
+assert(isRoleMailbox("e-store@8ozcafe.com") === true, "e-store@ is a role mailbox");
+assert(isRoleMailbox("yamen@collectionneur.sa") === false, "personal email is not a role mailbox");
+assert(isRoleMailbox("infofahad@x.com") === false, "role detection is exact local-part, not a prefix");
+assert(isRoleMailbox("") === false, "empty email is not a role mailbox");
+
+// Bridge 2 — shared phone + a generic role mailbox on the DUPLICATE, DIFFERENT
+// names → absorb the role mailbox into the personal survivor; keep both emails.
+const rM = rec({
+  record_type: "contact", id: 50, zoho_record_id: "RM", record_name: "Yamen Albakour",
+  email: "yamen@collectionneur.sa", phone: "+966591700995", phone_normalized: "591700995",
+  modified_date: new Date("2024-06-01"),
+  raw_data: { Last_Name: "Yamen Albakour", Email: "yamen@collectionneur.sa", Phone: "+966591700995" },
+});
+const rD = rec({
+  record_type: "contact", id: 51, zoho_record_id: "RD", record_name: "Badr Alharbi",
+  email: "info@collectionneur.sa", phone: "+966591700995", phone_normalized: "591700995",
+  modified_date: new Date("2024-05-01"),
+  raw_data: { Last_Name: "Badr Alharbi", Email: "info@collectionneur.sa", Phone: "+966591700995" },
+});
+const rolePlan = buildMergePlan("Contacts", 50, [rM, rD], { masterZohoId: "RM" });
+assert(rolePlan.duplicateZohoIds.includes("RD"), "role-mailbox dup (info@) tagged as duplicate of the personal survivor");
+const rcds = rolePlan.contactDataSummary;
+assert(rcds?.emails.primary?.value === "yamen@collectionneur.sa", "primary = survivor personal email");
+assert(rcds?.emails.secondary?.value === "info@collectionneur.sa", "info@ kept as Secondary_Email");
+assert(rolePlan.warnings.some((w) => /relaxed rule|info@\/support@/i.test(w)), "bridge merge is flagged for review");
+
+// Directional guard — if the operator picks the info@ contact as survivor, the
+// real person is NOT tagged (never delete a real person for a role mailbox).
+const rolePlanRev = buildMergePlan("Contacts", 51, [rM, rD], { masterZohoId: "RD" });
+assert(!rolePlanRev.duplicateZohoIds.includes("RM"), "personal contact NOT tagged when the role mailbox is the survivor");
+
+// Bridge 1 — same exact PERSONAL email, different name AND different phone →
+// same person; merged, second phone preserved as Mobile.
+const pM = rec({
+  record_type: "contact", id: 60, zoho_record_id: "PM", record_name: "Omar A",
+  email: "omar@acme.com", phone: "+966500000010", phone_normalized: "500000010",
+  modified_date: new Date("2024-06-01"),
+  raw_data: { Last_Name: "Omar A", Email: "omar@acme.com", Phone: "+966500000010" },
+});
+const pD = rec({
+  record_type: "contact", id: 61, zoho_record_id: "PD", record_name: "Omar Alotaibi",
+  email: "omar@acme.com", phone: "+966500000099", phone_normalized: "500000099",
+  modified_date: new Date("2024-05-01"),
+  raw_data: { Last_Name: "Omar Alotaibi", Email: "omar@acme.com", Phone: "+966500000099" },
+});
+const sameEmailPlan = buildMergePlan("Contacts", 60, [pM, pD], { masterZohoId: "PM" });
+assert(sameEmailPlan.duplicateZohoIds.includes("PD"), "same personal email ⇒ merged even with different name + phone");
+assert(sameEmailPlan.contactDataSummary?.phones.mobile?.value != null, "second distinct phone preserved as Mobile");
+
+// Negative — two DIFFERENT personal emails sharing ONLY a phone (no role
+// mailbox, different names) must STAY soft-excluded (the safe ≥2 rule holds).
+const nM = rec({
+  record_type: "contact", id: 70, zoho_record_id: "NM", record_name: "Ali One",
+  email: "ali@acme.com", phone: "+966555000000", phone_normalized: "555000000",
+  raw_data: { Last_Name: "Ali One", Email: "ali@acme.com", Phone: "+966555000000" },
+});
+const nD = rec({
+  record_type: "contact", id: 71, zoho_record_id: "ND", record_name: "Khalid Two",
+  email: "khalid@acme.com", phone: "+966555000000", phone_normalized: "555000000",
+  raw_data: { Last_Name: "Khalid Two", Email: "khalid@acme.com", Phone: "+966555000000" },
+});
+const negPlan = buildMergePlan("Contacts", 70, [nM, nD], { masterZohoId: "NM" });
+assert(!negPlan.duplicateZohoIds.includes("ND"), "two different personal emails sharing only a phone are NOT merged");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

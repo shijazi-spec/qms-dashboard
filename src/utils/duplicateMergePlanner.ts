@@ -65,6 +65,37 @@ export function normalizePersonName(s: string | null | undefined): string {
     .toLowerCase();
 }
 
+/**
+ * Generic / role mailboxes (info@, support@, sales@, e-store@, …). These are a
+ * company's shared contact-point, NOT a person's identity — so two contacts that
+ * share a phone where one carries a role mailbox are the same contact-point, not
+ * two different people. Used by the Contacts merge gate's "shared phone + role
+ * mailbox" bridge (Ahmad 2026-06-26). Curated exact local-parts (not a prefix
+ * match) so "infofahad@…" or "salesman@…" are NOT treated as role mailboxes.
+ * Extend without a code change via env CONTACT_ROLE_MAILBOXES (comma-separated).
+ */
+const ROLE_MAILBOX_LOCALPARTS = new Set<string>([
+  "info", "information", "support", "help", "helpdesk", "contact", "contactus",
+  "contacts", "sales", "admin", "administrator", "office", "enquiry", "enquiries",
+  "inquiry", "inquiries", "service", "services", "customercare", "customerservice",
+  "care", "billing", "accounts", "accounting", "finance", "hr", "careers", "jobs",
+  "recruitment", "marketing", "team", "mail", "email", "e-store", "estore", "store",
+  "shop", "orders", "order", "reception", "general", "hello", "noreply", "no-reply",
+  "donotreply", "do-not-reply", "webmaster", "postmaster", "abuse",
+  ...String(process.env.CONTACT_ROLE_MAILBOXES || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+]);
+
+/** True iff the email's local-part is a generic/role mailbox (info@, support@…). */
+export function isRoleMailbox(email: string | null | undefined): boolean {
+  const e = String(email || "").trim().toLowerCase();
+  const at = e.indexOf("@");
+  if (at <= 0) return false;
+  return ROLE_MAILBOX_LOCALPARTS.has(e.slice(0, at));
+}
+
 // ── Output types ───────────────────────────────────────────────────────────
 
 export type MergeFieldAction = "fill" | "conflict";
@@ -508,22 +539,65 @@ export function buildMergePlan(
     // only by invisible bidi marks / NFC-vs-NFKC / tatweel / ة-vs-ه) compare
     // equal instead of silently dropping a real duplicate to cascade-only.
     const masterName = normalizePersonName(master.record_name);
-    const passesStrict = (r: DuplicateRecord): boolean => {
-      let matches = 0;
+    const masterEmailIsRole = isRoleMailbox(masterEmail);
+    // Returns WHY a contact qualifies as a duplicate of the survivor, or null.
+    //  - "strict": the original ≥2-of-{email,phone,name} rule.
+    //  - "same_personal_email": same exact PERSONAL email (a shared role mailbox
+    //    is not an identity, so it doesn't bridge here) → same person; keep both
+    //    phones (Ahmad 2026-06-26).
+    //  - "shared_phone_role_mailbox": same phone where the DUPLICATE carries a
+    //    generic info@/support@ mailbox and the survivor has a real personal
+    //    email → the role mailbox is the company contact-point, not a different
+    //    person; absorb it (keep both emails). DIRECTIONAL on purpose: we never
+    //    tag a real person as a duplicate of a role-mailbox survivor, so if the
+    //    operator picks the info@ contact as survivor it stays link-only.
+    const classifyDup = (
+      r: DuplicateRecord,
+    ): "strict" | "same_personal_email" | "shared_phone_role_mailbox" | null => {
       const rEmail = (r.email || "").trim().toLowerCase();
       const rPhone = (r.phone_normalized || "").trim();
       const rName = normalizePersonName(r.record_name);
-      if (masterEmail && rEmail && masterEmail === rEmail) matches++;
-      if (masterPhone && rPhone && masterPhone === rPhone) matches++;
-      if (masterName && rName && masterName === rName) matches++;
-      return matches >= 2;
+      const emailEq = !!(masterEmail && rEmail && masterEmail === rEmail);
+      const phoneEq = !!(masterPhone && rPhone && masterPhone === rPhone);
+      const nameEq = !!(masterName && rName && masterName === rName);
+      const matches = (emailEq ? 1 : 0) + (phoneEq ? 1 : 0) + (nameEq ? 1 : 0);
+      if (matches >= 2) return "strict";
+      if (emailEq && !masterEmailIsRole) return "same_personal_email";
+      if (phoneEq && !emailEq && isRoleMailbox(rEmail) && !masterEmailIsRole)
+        return "shared_phone_role_mailbox";
+      return null;
     };
     const keep: typeof duplicates = [];
+    const bridged: Array<{ r: DuplicateRecord; via: string }> = [];
     for (const r of duplicates) {
-      if (passesStrict(r)) keep.push(r);
-      else contactSoftExcluded.push(r);
+      const via = classifyDup(r);
+      if (via) {
+        keep.push(r);
+        if (via !== "strict") bridged.push({ r, via });
+      } else {
+        contactSoftExcluded.push(r);
+      }
     }
     duplicates = keep;
+    // Transparency: the two relaxed bridges can merge contacts with DIFFERENT
+    // names (operator-approved 2026-06-26), so call them out explicitly for
+    // review before Apply. Both emails/phones are preserved on the survivor.
+    if (bridged.length > 0) {
+      const list = bridged
+        .slice(0, 5)
+        .map(
+          (b) =>
+            `"${recName(b.r)}"` +
+            (b.via === "shared_phone_role_mailbox"
+              ? " (shared phone + a generic info@/support@ mailbox)"
+              : " (same email)"),
+        )
+        .join(", ");
+      const more = bridged.length > 5 ? ` (+${bridged.length - 5} more)` : "";
+      warnings.push(
+        `${bridged.length} contact(s) merged by a relaxed rule — same personal email, or a shared phone where the other carries a generic info@/support@ mailbox: ${list}${more}. Both emails and phone numbers are preserved on the survivor (primary + Secondary_Email / Mobile). Confirm they are the same contact-point before Apply. Tip: pick the contact with the PERSONAL email as the survivor so the info@/support@ mailbox is kept as Secondary_Email.`,
+      );
+    }
     if (contactSoftExcluded.length > 0) {
       const names = contactSoftExcluded
         .slice(0, 5)
