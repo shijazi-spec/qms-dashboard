@@ -359,15 +359,17 @@ assert(cds?.phones.extras.length === 1, "third distinct phone is an extra (Zoho 
 assert(cds?.phones.extras[0]?.value === "+966509998888", "extra phone preserved for manual capture");
 
 // Same-phone, different-emails ⇒ keep both emails (Email + Secondary_Email).
+// Shared phone_normalized so the ≥2-attribute rule counts name + phone (the
+// dedup gate compares the normalized column, not the raw value).
 const eM = rec({
   record_type: "contact", id: 40, zoho_record_id: "EM", record_name: "Sara Q",
-  email: "sara@acme.com", phone: "+966500000001", title: "Lead",
+  email: "sara@acme.com", phone: "+966500000001", phone_normalized: "500000001", title: "Lead",
   modified_date: new Date("2024-06-01"),
   raw_data: { Last_Name: "Sara Q", Email: "sara@acme.com", Phone: "+966500000001", Title: "Lead" },
 });
 const eD = rec({
   record_type: "contact", id: 41, zoho_record_id: "ED", record_name: "Sara Q",
-  email: "sara.q@gmail.com", phone: "+966500000001",
+  email: "sara.q@gmail.com", phone: "+966500000001", phone_normalized: "500000001",
   modified_date: new Date("2024-05-01"),
   raw_data: { Last_Name: "Sara Q", Email: "sara.q@gmail.com", Phone: "+966500000001" },
 });
