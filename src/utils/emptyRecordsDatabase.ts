@@ -349,6 +349,27 @@ export async function aiApplyEmptyDelete(
         skippedHasData++;
         continue;
       }
+      // Live DEAL check — a contact linked to ANY deal (including a partner /
+      // marketplace deal, or one linked via Contact Roles rather than the deal's
+      // Contact_Name) is NOT empty. The synced mirror only knows Contact_Name
+      // links, so this live related-list call is the only reliable gate (Ahmad
+      // 2026-06-27: a name-only contact with an active Partner deal was flagged).
+      try {
+        const cDeals = await fetchZohoRelatedRecords("Contacts", id, "Deals", { perPage: 1 });
+        if (Array.isArray(cDeals) && cDeals.length > 0) {
+          skippedHasData++;
+          continue;
+        }
+      } catch (e) {
+        if (isZohoGhostError(e)) {
+          await pruneGhostRecords([id]);
+          prunedGhosts++;
+          continue;
+        }
+        // Inconclusive → fail safe: do NOT tag.
+        logger.warn(`[aiApplyEmptyDelete] Contacts/${id}/Deals check failed, skipping`, e);
+        continue;
+      }
       toTag.push(id);
     } else {
       // Accounts / Deals: fetchRecordAttachments doubles as the existence check.
