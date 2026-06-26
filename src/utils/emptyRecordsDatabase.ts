@@ -20,14 +20,32 @@ const CAP = 500;
 const LIKES = testKeywordLikePatterns();
 const EMPTY_DELETE_TAG = process.env.EMPTY_DELETE_TAG || "Empty-Delete";
 
+// Delete tags that mean "this record is already queued for the Zoho admin to
+// delete" — showing them in the cleanup list is double work (Ahmad 2026-06-26).
+// EMPTY_DELETE_TAG (Empty-Delete) is set by this tab; Duplicate-Delete is set by
+// the duplicate-resolution flow. Extend without code via env EMPTY_DELETE_EXCLUDE_TAGS.
+const DELETE_TAGS = [
+  EMPTY_DELETE_TAG,
+  "Duplicate-Delete",
+  ...String(process.env.EMPTY_DELETE_EXCLUDE_TAGS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+];
+
 // SQL fragment shared by all three queries: drop any record the operator has
-// already tagged Empty-Delete (via the in-platform ledger for immediate effect)
-// OR whose freshly-synced Zoho Tag array already carries the tag. Either way a
-// tagged record stops reappearing on Refresh.
+// already tagged for deletion — via the in-platform ledger (immediate effect)
+// OR whose freshly-synced Zoho Tag array already carries a delete tag
+// (Empty-Delete / Duplicate-Delete). Either way a tagged record never shows.
 const NOT_ALREADY_TAGGED = `
   AND %ALIAS%zoho_record_id NOT IN (SELECT zoho_record_id FROM empty_delete_ledger)
-  AND NOT COALESCE(%ALIAS%raw_data->'Tag' @> $2::jsonb, false)`;
-const TAG_JSONB = JSON.stringify([{ name: EMPTY_DELETE_TAG }]);
+  AND NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(
+      CASE WHEN jsonb_typeof(%ALIAS%raw_data->'Tag') = 'array'
+           THEN %ALIAS%raw_data->'Tag' ELSE '[]'::jsonb END
+    ) AS _dt
+    WHERE _dt->>'name' = ANY($2::text[])
+  )`;
 const excl = (alias: string) => NOT_ALREADY_TAGGED.replace(/%ALIAS%/g, alias);
 
 /** Mark records as Empty-Delete-tagged locally so the cleanup list drops them
@@ -71,7 +89,7 @@ export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
         ${excl("")}
       ORDER BY modified_date DESC NULLS LAST
       LIMIT 4000`,
-    [LIKES, TAG_JSONB],
+    [LIKES, DELETE_TAGS],
   );
   const out: EmptyRecordRow[] = [];
   for (const r of q.rows) {
@@ -121,7 +139,7 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
         ${excl("a.")}
       ORDER BY a.modified_date DESC NULLS LAST
       LIMIT 4000`,
-    [LIKES, TAG_JSONB],
+    [LIKES, DELETE_TAGS],
   );
   const out: EmptyRecordRow[] = [];
   for (const r of q.rows) {
@@ -174,7 +192,7 @@ export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
         ${excl("c.")}
       ORDER BY c.modified_date DESC NULLS LAST
       LIMIT 4000`,
-    [LIKES, TAG_JSONB],
+    [LIKES, DELETE_TAGS],
   );
   const out: EmptyRecordRow[] = [];
   for (const r of q.rows) {
