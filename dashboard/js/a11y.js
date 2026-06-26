@@ -197,7 +197,23 @@
     document.querySelectorAll('.modal').forEach(function (modal) {
       observer.observe(modal, { attributes: true, attributeOldValue: true, attributeFilter: ['class'] });
     });
-    var bodyObserver = new MutationObserver(function () {
+    var bodyObserver = new MutationObserver(function (mutations) {
+      // PERF: only do the whole-document modal rescan when an ELEMENT node was
+      // actually added. The previous version ran querySelectorAll('.modal') +
+      // patchLegacyModals() (both O(DOM)) on EVERY mutation — including text-only
+      // changes such as updating a "5 selected" counter. On large list pages
+      // (e.g. the ~1,485-row Empty/Orphaned tab) that made every checkbox click
+      // jank the page. New modals always arrive as element nodes, so gating on
+      // an added element preserves the accessibility behaviour while skipping the
+      // expensive scan for innocuous text/attribute churn.
+      var addedElement = false;
+      for (var i = 0; i < mutations.length && !addedElement; i++) {
+        var added = mutations[i].addedNodes;
+        for (var j = 0; j < added.length; j++) {
+          if (added[j].nodeType === 1) { addedElement = true; break; }
+        }
+      }
+      if (!addedElement) return;
       document.querySelectorAll('.modal').forEach(function (modal) {
         if (!modal._a11yWatched) {
           modal._a11yWatched = true;
