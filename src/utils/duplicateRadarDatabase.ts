@@ -1196,12 +1196,31 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       zoho_record_id VARCHAR(255) NOT NULL,
       module VARCHAR(16) NOT NULL,
       tagged_by VARCHAR(255),
+      status VARCHAR(16) NOT NULL DEFAULT 'pending_delete',
+      deleted_at TIMESTAMP NULL,
+      last_checked_at TIMESTAMP NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (zoho_record_id)
     )
   `);
+  // Deletion-lifecycle columns (additive; reflected in the CREATE TABLE above so
+  // schema-parity stays STRICT). status: 'pending_delete' until the Zoho admin
+  // removes the record, then 'deleted' with deleted_at set; last_checked_at is
+  // stamped by the reconcile pass that verifies existence in Zoho.
+  await pool.query(
+    `ALTER TABLE empty_delete_ledger ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'pending_delete'`,
+  );
+  await pool.query(
+    `ALTER TABLE empty_delete_ledger ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL`,
+  );
+  await pool.query(
+    `ALTER TABLE empty_delete_ledger ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMP NULL`,
+  );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_empty_delete_ledger_rec ON empty_delete_ledger(zoho_record_id)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_empty_delete_ledger_status ON empty_delete_ledger(status)`,
   );
 
   // Empty/Orphaned cleanup: durable "reviewed — keep, NOT empty" decisions. The
