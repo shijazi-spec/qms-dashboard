@@ -104,6 +104,35 @@ export async function unmarkEmptyDeleteTagged(zohoIds: string[]): Promise<void> 
   );
 }
 
+/** Zoho signals a record is already gone via a not-found, an INVALID_DATA code,
+ * or the "related id given seems to be invalid" message on a by-id/attachments
+ * fetch. Any of those means the record was deleted in Zoho → it's a ghost in our
+ * mirror and should be pruned, not surfaced as a red error. */
+export function isZohoGhostError(x: unknown): boolean {
+  const s = (x instanceof Error ? x.message : String(x ?? "")).toLowerCase();
+  return (
+    s.includes("record not found") ||
+    s.includes("invalid_data") ||
+    s.includes("the related id given seems to be invalid")
+  );
+}
+
+/** Remove ghost records (deleted in Zoho) from the local mirror + the
+ * Empty-Delete ledger so they disappear from every Radar view. The platform
+ * never deletes in Zoho — this only cleans up our copy of already-gone records. */
+export async function pruneGhostRecords(zohoIds: string[]): Promise<void> {
+  const ids = (zohoIds || []).map(String).filter(Boolean);
+  if (!ids.length) return;
+  await pool.query(
+    `DELETE FROM duplicate_records WHERE zoho_record_id = ANY($1::text[])`,
+    [ids],
+  );
+  await pool.query(
+    `DELETE FROM empty_delete_ledger WHERE zoho_record_id = ANY($1::text[])`,
+    [ids],
+  );
+}
+
 // Deals: orphaned (no Account) OR a coarse test-name match. JS classifier refines.
 export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
   const q = await pool.query(
