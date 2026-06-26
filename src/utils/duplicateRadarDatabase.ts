@@ -8342,7 +8342,7 @@ export async function getCrossModuleOverlaps(opts: {
          CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'contact' AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
          CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'account' AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
          CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'deal'    AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END`
-          : `CASE WHEN total_leads > 0 THEN 1 ELSE 0 END +
+          : `(CASE WHEN total_leads > 0 THEN 1 ELSE 0 END +
          CASE WHEN total_contacts > 0 THEN 1 ELSE 0 END +
          CASE WHEN total_accounts > 0 THEN 1 ELSE 0 END +
          CASE WHEN total_deals > 0 THEN 1 ELSE 0 END`}
