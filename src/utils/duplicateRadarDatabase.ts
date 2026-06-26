@@ -7401,6 +7401,25 @@ export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOvervie
   };
 }
 
+/**
+ * SQL predicate (static, no params) — TRUE when the record at `alias` is QUEUED
+ * FOR DELETION: tagged Empty-Delete (via the in-platform ledger OR the synced
+ * Zoho Tag) or Duplicate-Delete (synced Zoho Tag). Such records must not appear
+ * in the Untouched view of ANY Duplicate Radar tab, nor be compared against
+ * other records — they're on their way out, awaiting the CRM admin's deletion
+ * (Ahmad 2026-06-26). They DO stay visible in the "AI-Applied · pending Zoho
+ * admin delete" bucket, so the exclusion is applied only to the active/Untouched
+ * view by the caller. COALESCE(...,false) so a record with a null/absent Tag is
+ * treated as NOT queued (it must still count as a real record).
+ */
+function queuedForDeletionSql(alias: string): string {
+  return `COALESCE(
+    ${alias}.zoho_record_id IN (SELECT zoho_record_id FROM empty_delete_ledger)
+    OR ${alias}.raw_data->'Tag' @> '[{"name":"Empty-Delete"}]'::jsonb
+    OR ${alias}.raw_data->'Tag' @> '[{"name":"Duplicate-Delete"}]'::jsonb
+  , false)`;
+}
+
 // B5: JOIN-based queries eliminating N+1 pattern
 export async function getDuplicateRecordsByType(
   recordType: string,
@@ -7594,20 +7613,23 @@ export async function getDuplicateRecordsByType(
   // unreachable and any cluster whose records straddled a page boundary was
   // split into partial groups. We instead select the page of cluster ids
   // first, then fetch ALL in-scope records for exactly those clusters.
-  // A record queued for deletion (tagged Empty-Delete in the Empty/Orphaned tab)
-  // must NOT keep showing as duplicate work in the module tabs — that's double
-  // work (Ahmad 2026-06-26). Require >=2 NON-tagged records of the type for the
-  // cluster to still count as a duplicate, so a pair where one side is already
-  // queued for deletion drops off. Keyed on the empty_delete_ledger so it takes
-  // effect the instant the operator tags — no waiting for the Zoho delete + sync.
-  const stillTwoUntagged = `
+  // A record queued for deletion (Empty-Delete or Duplicate-Delete) must NOT
+  // keep showing as duplicate work, nor be compared against other records — it's
+  // on its way out (Ahmad 2026-06-26). Require >=2 NON-queued records of the type
+  // for the cluster to still count as a duplicate, so a pair where one side is
+  // already tagged for deletion drops off. Applied to the UNTOUCHED (active) view
+  // ONLY — the pending-verify bucket must keep these records visible until the
+  // CRM admin confirms the deletion. Effective the instant the operator tags
+  // (ledger) and after sync (Zoho Tag).
+  const hideQueued = aiStatus === "active";
+  const stillTwoUntagged = hideQueued
+    ? `
       AND (
         SELECT COUNT(*) FROM duplicate_records dx
          WHERE dx.cluster_id = dc.id AND dx.record_type = $1
-           AND NOT EXISTS (
-             SELECT 1 FROM empty_delete_ledger edl WHERE edl.zoho_record_id = dx.zoho_record_id
-           )
-      ) >= 2`;
+           AND NOT ${queuedForDeletionSql("dx")}
+      ) >= 2`
+    : "";
   const clusterPage = await pool.query(
     `
     SELECT dc.id
@@ -7690,9 +7712,7 @@ export async function getDuplicateRecordsByType(
     FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
     WHERE dr.record_type = $1 AND dr.cluster_id = ANY($2::int[])${recDateFilter}
-      AND NOT EXISTS (
-        SELECT 1 FROM empty_delete_ledger edl WHERE edl.zoho_record_id = dr.zoho_record_id
-      )
+      ${hideQueued ? `AND NOT ${queuedForDeletionSql("dr")}` : ""}
     ORDER BY dc.confidence_score DESC, dc.id ASC, dr.is_primary DESC, dr.created_date ASC
   `,
     [recordType, clusterIds, ...recDateParams],
