@@ -681,7 +681,7 @@ export async function buildRadarTabStatus(): Promise<string> {
     const agg = await getClusterSummary();
     if (agg) {
       parts.push(
-        `›  *Overview:* ${n(agg.totalClusters)} clusters · ~SAR ${n(agg.estimatedPipelineInflation)} exposure · ${n(totalMerged)} merged · ${n(agg.activeCount)} open`,
+        `›  *Scanned (context — NOT all duplicates):* ${n(agg.totalClusters)} record groups incl. singletons · ~SAR ${n(agg.estimatedPipelineInflation)} exposure at risk · ${n(totalMerged)} merged so far`,
       );
     }
   } catch { /* skip */ }
@@ -697,13 +697,40 @@ export async function buildRadarTabStatus(): Promise<string> {
           : " — nothing merged in this window"),
     );
   } catch { /* skip */ }
+  // ACTIONABLE duplicate GROUPS per module — the SAME genuine count each tab
+  // footer shows (Untouched view, after the genuine-duplicate + queued-for-
+  // deletion filters). Reported up top so the digest matches what operators see
+  // on screen, instead of the raw record/cluster totals (which include singletons
+  // + non-duplicate group members and made the headline look 10x too big).
+  try {
+    const { getDuplicateRecordsByType } = await import("./duplicateRadarDatabase");
+    const mods: Array<[string, string]> = [
+      ["lead", "Leads"], ["deal", "Deals"], ["contact", "Contacts"], ["account", "Accounts"],
+    ];
+    const counts = await Promise.all(
+      mods.map(async ([rt, label]) => {
+        try {
+          const res = await getDuplicateRecordsByType(rt, { ai_status: "active", limit: 1, offset: 0 });
+          return { label, total: res?.total || 0 };
+        } catch {
+          return { label, total: 0 };
+        }
+      }),
+    );
+    const totalGroups = counts.reduce((a, c) => a + c.total, 0);
+    parts.push(
+      `›  *Duplicate groups to review (Untouched — matches the tab footers):* ` +
+        counts.map((c) => `${c.label} ${n(c.total)}`).join(" · ") +
+        ` — ${n(totalGroups)} total`,
+    );
+  } catch { /* skip */ }
   // Lead / Deal / Contact / Account Duplicates — remaining vs MERGED (durable).
   try {
     const ml = bd
       .filter((b) => b.total > 0)
       .map((b) => `${b.module} ${n(b.rest)} left/${n(b.applied)} merged`)
       .join(" · ");
-    if (ml) parts.push(`›  *Duplicates:* ${ml}`);
+    if (ml) parts.push(`›  *Records per module (raw count — incl. non-duplicates):* ${ml}`);
   } catch { /* skip */ }
   // Per-tab PROGRESS burndown (Sarah 2026-06-17) — total / solved / left per
   // module with the day-over-day change, from the daily snapshot table. This is
