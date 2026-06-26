@@ -1097,6 +1097,12 @@ async function scanZohoCRMForDuplicates(
       ),
     );
 
+    // Reconcile empty-delete ledger: flip pending_delete → deleted for any
+    // record the admin has actually removed from Zoho since the last sync.
+    await (await import("../../utils/emptyRecordsDatabase"))
+      .reconcileEmptyDeleteDeletions()
+      .catch(() => {});
+
     await restoreLedgerResolvedClusterStatus().catch((e) =>
       logger.warn(
         `[DuplicateRadar] post-scan ledger restore skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
@@ -9210,6 +9216,48 @@ export const duplicateRadarRoutes = [
         return c.json({ success: true });
       } catch (e: any) {
         logger.error("empty-records/link-deal failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    // Read-access: show every ledger row + counts for the "Tagged · pending delete"
+    // sub-section.  No Zoho call; purely our own ledger.
+    path: "/api/duplicates/empty-records/tagged-status",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const module = c.req.query("module") || undefined;
+        const { getTaggedStatus } = await import("../../utils/emptyRecordsDatabase");
+        const result = await getTaggedStatus(module);
+        return c.json({ success: true, ...result });
+      } catch (e: any) {
+        logger.error("empty-records/tagged-status failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    // Admin-gated: manually trigger the deletion-reconcile pass (also runs
+    // automatically on every post-sync).  Checks pending_delete rows against
+    // live Zoho; stamps ledger 'deleted' + prunes mirror when gone.
+    path: "/api/duplicates/empty-records/recheck-deletions",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const module = body?.module ? String(body.module) : undefined;
+        const { reconcileEmptyDeleteDeletions } = await import("../../utils/emptyRecordsDatabase");
+        const r = await reconcileEmptyDeleteDeletions(module);
+        return c.json({ success: true, ...r });
+      } catch (e: any) {
+        logger.error("empty-records/recheck-deletions failed", e);
         return c.json({ error: "An internal error occurred" }, 500);
       }
     },

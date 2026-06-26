@@ -443,6 +443,163 @@ export async function aiApplyEmptyDelete(
   };
 }
 
+/** Return every row in the empty_delete_ledger (optionally filtered by module)
+ * plus aggregate counts. Used by the "Tagged · pending delete" sub-section. */
+export async function getTaggedStatus(module?: string): Promise<{
+  rows: Array<{
+    zohoId: string;
+    module: string;
+    status: string;
+    taggedBy: string | null;
+    createdAt: string;
+    deletedAt: string | null;
+  }>;
+  counts: { tagged: number; deleted: number; pending: number };
+}> {
+  const mod = module || null;
+  const [rowsRes, countsRes] = await Promise.all([
+    pool.query<{
+      zoho_record_id: string;
+      module: string;
+      status: string;
+      tagged_by: string | null;
+      created_at: Date | null;
+      deleted_at: Date | null;
+    }>(
+      `SELECT zoho_record_id, module, status, tagged_by, created_at, deleted_at
+         FROM empty_delete_ledger
+        WHERE ($1::text IS NULL OR module = $1)
+        ORDER BY created_at DESC
+        LIMIT 1000`,
+      [mod],
+    ),
+    pool.query<{ total: string; deleted: string; pending: string }>(
+      `SELECT
+         COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE status = 'deleted') AS deleted,
+         COUNT(*) FILTER (WHERE status = 'pending_delete') AS pending
+       FROM empty_delete_ledger
+       WHERE ($1::text IS NULL OR module = $1)`,
+      [mod],
+    ),
+  ]);
+
+  const rows = rowsRes.rows.map((r) => ({
+    zohoId: r.zoho_record_id,
+    module: r.module,
+    status: r.status,
+    taggedBy: r.tagged_by ?? null,
+    createdAt: r.created_at ? r.created_at.toISOString() : "",
+    deletedAt: r.deleted_at ? r.deleted_at.toISOString() : null,
+  }));
+
+  const c = countsRes.rows[0];
+  const counts = {
+    tagged: Number(c?.total ?? 0),
+    deleted: Number(c?.deleted ?? 0),
+    pending: Number(c?.pending ?? 0),
+  };
+
+  return { rows, counts };
+}
+
+/** Check up to 300 pending_delete ledger rows against live Zoho.
+ * Records no longer found → stamp as 'deleted' in the ledger + prune from
+ * the local duplicate_records mirror.  Records still present → update
+ * last_checked_at.  Individual errors are swallowed (best-effort).
+ *
+ * NOTE: The ledger row is KEPT even when the record is gone (so the
+ * "Deleted ✓" badge stays visible in the UI).  Only the mirror row in
+ * duplicate_records is pruned.  We do NOT call pruneGhostRecords() here
+ * because that also deletes from empty_delete_ledger. */
+export async function reconcileEmptyDeleteDeletions(
+  module?: string,
+): Promise<{ checked: number; nowDeleted: number }> {
+  const { fetchZohoRecordById } = await import("./zohoCRM");
+  const mod = module || null;
+
+  const pending = await pool.query<{ zoho_record_id: string; module: string }>(
+    `SELECT zoho_record_id, module
+       FROM empty_delete_ledger
+      WHERE status = 'pending_delete'
+        AND ($1::text IS NULL OR module = $1)
+      ORDER BY last_checked_at ASC NULLS FIRST
+      LIMIT 300`,
+    [mod],
+  );
+
+  let checked = 0;
+  let nowDeleted = 0;
+
+  for (const row of pending.rows) {
+    const id = row.zoho_record_id;
+    const rowModule = row.module;
+    try {
+      let rec: Awaited<ReturnType<typeof fetchZohoRecordById>>;
+      try {
+        rec = await fetchZohoRecordById(rowModule, id);
+      } catch (e) {
+        if (isZohoGhostError(e)) {
+          // Ghost error → record is gone
+          await pool.query(
+            `UPDATE empty_delete_ledger
+                SET status = 'deleted', deleted_at = NOW(), last_checked_at = NOW()
+              WHERE zoho_record_id = $1`,
+            [id],
+          );
+          // Mirror-only delete — keep the ledger row (do NOT call pruneGhostRecords)
+          await pool.query(
+            `DELETE FROM duplicate_records WHERE zoho_record_id = ANY(ARRAY[$1::text])`,
+            [id],
+          );
+          nowDeleted++;
+          checked++;
+          continue;
+        }
+        // Non-ghost error: swallow, best-effort
+        logger.warn(
+          `[reconcileEmptyDeleteDeletions] fetch error for ${rowModule}/${id}, skipping`,
+          e,
+        );
+        checked++;
+        continue;
+      }
+
+      if (!rec) {
+        // null = 404/204 — record is gone from Zoho
+        await pool.query(
+          `UPDATE empty_delete_ledger
+              SET status = 'deleted', deleted_at = NOW(), last_checked_at = NOW()
+            WHERE zoho_record_id = $1`,
+          [id],
+        );
+        // Mirror-only delete — keep the ledger row (do NOT call pruneGhostRecords)
+        await pool.query(
+          `DELETE FROM duplicate_records WHERE zoho_record_id = ANY(ARRAY[$1::text])`,
+          [id],
+        );
+        nowDeleted++;
+      } else {
+        // Still present — just refresh last_checked_at
+        await pool.query(
+          `UPDATE empty_delete_ledger SET last_checked_at = NOW() WHERE zoho_record_id = $1`,
+          [id],
+        );
+      }
+      checked++;
+    } catch (e) {
+      // Outer safety net — swallow anything unexpected
+      logger.warn(
+        `[reconcileEmptyDeleteDeletions] unexpected error for ${rowModule}/${id}, skipping`,
+        e,
+      );
+      checked++;
+    }
+  }
+
+  return { checked, nowDeleted };
+}
+
 // Contacts: name-only (no email/phone/account/deal) OR test-name.
 export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
   const q = await pool.query(
