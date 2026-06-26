@@ -1504,7 +1504,8 @@
             <div class="flex items-center gap-2 mb-2">
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_deals">Deals</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_deals_sub">empty / test (missing-account deals → Account Hints)</span></span></h3>
               <span id="erCount-deals" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
-              <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
+              <button data-on-click="erAiApply" data-args="[&quot;deals&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="min-w-full text-sm">
@@ -1518,7 +1519,8 @@
             <div class="flex items-center gap-2 mb-2">
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_accounts">Accounts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_accounts_sub">empty (check attachments first) / test</span></span></h3>
               <span id="erCount-accounts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
-              <button data-on-click="erReload" data-args="[&quot;accounts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
+              <button data-on-click="erAiApply" data-args="[&quot;accounts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button data-on-click="erReload" data-args="[&quot;accounts&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="min-w-full text-sm">
@@ -1532,12 +1534,27 @@
             <div class="flex items-center gap-2 mb-2">
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_contacts">Contacts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_contacts_sub">name-only / test</span></span></h3>
               <span id="erCount-contacts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
-              <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
+              <button data-on-click="erAiApply" data-args="[&quot;contacts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="min-w-full text-sm">
                 <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">✓</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_reason">Reason</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_contact">Contact</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_owner">Owner</th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_action">Action</th></tr></thead>
                 <tbody id="erContactsBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-base font-bold text-gray-900" data-i18n="duplicates.er_tagged_pending">Tagged · pending delete</h3>
+              <span id="erTaggedProgress" class="text-xs text-gray-500"></span>
+              <button data-on-click="erRecheckDeletions" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">🔄 <span data-i18n="duplicates.er_recheck">Re-check CRM</span></button>
+            </div>
+            <div class="overflow-x-auto border border-gray-200 rounded-lg">
+              <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Module</th><th class="px-3 py-2 text-start">Status</th><th class="px-3 py-2 text-start">Tagged by</th><th class="px-3 py-2 text-start">Tagged at</th></tr></thead>
+                <tbody id="erTaggedBody"></tbody>
               </table>
             </div>
           </div>
@@ -1909,7 +1926,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=4"></script>
+    <script src="/js/duplicates-app.js?v=5"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

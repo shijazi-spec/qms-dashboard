@@ -2254,7 +2254,12 @@
     "er_none": "None found.",
     "er_deletable": "0 attachments — deletable",
     "er_keep": "keep",
-    "er_test_ready": "test — ready"
+    "er_test_ready": "test — ready",
+    "er_ai_apply": "AI-Apply empty → Empty-Delete",
+    "er_tagged_pending": "Tagged · pending delete",
+    "er_recheck": "Re-check CRM",
+    "er_status_pending": "Pending",
+    "er_status_deleted": "Deleted ✓"
   },
   "vendors": {
     "title": "Vendor Risk Management",

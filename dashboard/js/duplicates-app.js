@@ -6960,6 +6960,7 @@
                 });
             }
             await Promise.all([erLoad('deals', 'erDealsBody'), erLoad('accounts', 'erAccountsBody'), erLoad('contacts', 'erContactsBody')]);
+            erLoadTaggedStatus();
         }
         function erReload(kind) {
             const map = { deals: 'erDealsBody', accounts: 'erAccountsBody', contacts: 'erContactsBody' };
@@ -7075,6 +7076,23 @@
             if (cnt) cnt.textContent = n + ' selected';
             if (bar) { if (n > 0) bar.classList.remove('hidden'); else bar.classList.add('hidden'); }
         }
+        async function erAiApply(kind) {
+            const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
+            const n = (window['_er_' + kind] || []).length;
+            if (!n) return;
+            if (!confirm('AI-Apply: verify each of the ' + n + ' empty ' + module + ' against Zoho, prune any already deleted, and tag the genuinely-empty ones Empty-Delete (Adam, pending admin delete)?\n\nThe platform never deletes — the admin removes the tagged records.')) return;
+            const result = document.getElementById('erBulkResult');
+            if (result) result.textContent = 'AI-Applying ' + module + '… (verifying live records)';
+            const j = await erAdminPost('/api/duplicates/empty-records/ai-apply', { module: module });
+            if (!j) { if (result) result.textContent = 'Cancelled.'; return; }
+            if (!j.success) { if (result) result.textContent = 'Error: ' + (j.error || 'failed'); return; }
+            let msg = '✓ Tagged ' + (j.tagged || 0) + ' · pruned ' + (j.prunedGhosts || 0) + ' ghosts · skipped ' + (j.skippedWithDocs || 0) + ' with documents';
+            if ((j.skippedAlreadyTagged || 0) > 0) msg += ' · skipped ' + j.skippedAlreadyTagged + ' already-tagged/protected';
+            if ((j.remaining || 0) > 0) msg += ' · ' + j.remaining + ' remaining — click again';
+            if (result) result.textContent = msg;
+            erReload(kind);
+            erLoadTaggedStatus();
+        }
         async function erCheckAccountAttachments(id) {
             const cell = document.getElementById('eratt-' + id);
             if (cell) cell.innerHTML = '<span class="text-xs text-gray-400">checking…</span>';
@@ -7084,7 +7102,12 @@
                 data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
-                if (cell) cell.innerHTML = '<span class="text-xs text-amber-700">err: ' + escapeHtml(String(e && e.message || e)) + '</span>';
+                var msg = String(e && e.message || e);
+                if (/invalid_data|related id given seems to be invalid|record not found/i.test(msg)) {
+                    _erRemoveLocal('accounts', [String(id)]);
+                    return;
+                }
+                if (cell) cell.innerHTML = '<span class="text-xs text-amber-700">err: ' + escapeHtml(msg) + '</span>';
                 return;
             }
             const n = data.count || 0;
@@ -7151,6 +7174,57 @@
                 return await res.json().catch(function () { return {}; });
             }
             return null;
+        }
+        async function erLoadTaggedStatus() {
+            const body = document.getElementById('erTaggedBody');
+            const progress = document.getElementById('erTaggedProgress');
+            if (!body) return;
+            body.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_loading')) + '</td></tr>';
+            let data;
+            try {
+                const res = await fetch('/api/duplicates/empty-records/tagged-status', { credentials: 'same-origin' });
+                data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-amber-700">Error: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
+                return;
+            }
+            const rows = data.rows || [];
+            const counts = data.counts || {};
+            if (progress) progress.textContent = (counts.tagged || 0) + ' tagged · ' + (counts.deleted || 0) + ' deleted · ' + (counts.pending || 0) + ' pending';
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-gray-400">None yet.</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(function (r) {
+                const kindMap = { Deals: 'deals', Accounts: 'accounts', Contacts: 'contacts' };
+                const kind = kindMap[r.module] || 'accounts';
+                const link = '<a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline font-mono text-xs">' + escapeHtml(r.zohoId) + '</a>';
+                const statusChip = r.status === 'deleted'
+                    ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_deleted')) + '</span>'
+                    : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_pending')) + '</span>';
+                const taggedAt = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—';
+                return '<tr class="border-t border-gray-100">'
+                    + '<td class="px-3 py-2">' + link + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.module || '—') + '</td>'
+                    + '<td class="px-3 py-2">' + statusChip + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.taggedBy || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-500">' + escapeHtml(taggedAt) + '</td>'
+                    + '</tr>';
+            }).join('');
+        }
+        async function erRecheckDeletions() {
+            const progress = document.getElementById('erTaggedProgress');
+            if (progress) progress.textContent = 'Re-checking…';
+            const j = await erAdminPost('/api/duplicates/empty-records/recheck-deletions', {});
+            if (!j) { if (progress) progress.textContent = 'Cancelled.'; return; }
+            if (!j.success) { if (progress) progress.textContent = 'Error: ' + (j.error || 'failed'); return; }
+            await erLoadTaggedStatus();
+            const prog = document.getElementById('erTaggedProgress');
+            if (prog) {
+                const extra = ' · checked ' + (j.checked || 0) + ', ' + (j.nowDeleted || 0) + ' now deleted';
+                prog.textContent = prog.textContent + extra;
+            }
         }
         async function erTagSelected() {
             // Read from the persisted per-module selection set so records selected
