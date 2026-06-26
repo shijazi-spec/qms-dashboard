@@ -10425,47 +10425,39 @@
             const bullet = reasons.length === 0
                 ? '  (no actionable matches in this batch)'
                 : reasons.map(r => '  • ' + r.label + ' — ' + r.count + ' (' + r.pct + '%)').join('\n');
-            const author = await _resolvePreflightAuthorName();
-            const signature = author || '[Your name]';
-            // Subject + greeting placeholder live AT THE TOP so the operator
-            // can paste the subject into the subject line and the body
-            // below into the body of their mail client. The placeholder
-            // `[Head of Sales]` nudges them to personalise before sending.
             const stamp = data.generated_at
                 ? data.generated_at.slice(0, 10)
                 : new Date().toISOString().slice(0, 10);
-            const subject = 'Preflight check — '
-                + examined.toLocaleString() + ' records · '
-                + actionable.toLocaleString() + ' actionable ('
-                + pctAct + '%) — ' + stamp;
+            // The do-not-pursue (BLOCK) total splits into existing active clients
+            // vs protected / do-not-contact accounts — the summary lumps both into
+            // `block`, so the protected count is read from the top-reasons list.
+            const allReasons = Array.isArray(data.top_reasons) ? data.top_reasons : [];
+            const protectedCount = ((allReasons.find(function (r) { return /protected/i.test(r.label || ''); }) || {}).count) || 0;
+            const existingCount = Math.max(0, (s.block || 0) - protectedCount);
+            // Body matches the agreed launch format (Ahmad 2026-06-26): a title
+            // line, intro, headline numbers that tie out to the batch total, top
+            // reasons, next steps. Blank lines are KEPT (no filter) for readability.
             const lines = [
-                'Subject: ' + subject,
-                '',
-                'Hi [Head of Sales],',
-                '',
-                'Ran a pre-import duplicate check on a batch of ' + examined.toLocaleString() + ' record(s) via the WalaPlus QMS Duplicate Radar — sharing the numbers below before we hand the list to the Sales floor.',
+                'Preflight check — ' + examined.toLocaleString() + ' records · ' + actionable.toLocaleString() + ' flagged (' + pctAct + '%) — ' + stamp,
+                'I ran a pre-import duplicate check on a batch of ' + examined.toLocaleString() + ' records before handing the list to the Sales floor. Summary below.',
                 '',
                 'Headline numbers:',
-                '  • Actionable (would create a duplicate or hit an existing customer): ' + actionable.toLocaleString() + ' (' + pctAct + '% of the batch)',
-                '  • Of those: ' + (s.block || 0) + ' active customers (do not pursue), ' + (s.review || 0) + ' within CS cool-off, ' + (s.warn || 0) + ' past cool-off, ' + (s.duplicate || 0) + ' duplicates already in CRM',
-                '  • Safe to import: ' + (s.pass || 0).toLocaleString(),
+                '  • Rejected (would create a duplicate or hit an existing/protected account): ' + actionable.toLocaleString() + ' contacts (' + pctAct + '%)',
+                '  • Of those: ' + (s.block || 0) + ' do-not-pursue (' + existingCount + ' active clients + ' + protectedCount + ' protected) · ' + (s.review || 0) + ' to review (churn cool-off / name-match) · ' + (s.warn || 0) + ' past cool-off · ' + (s.duplicate || 0) + ' already-in-CRM duplicates · ' + (s.no_contact || 0) + ' unreachable',
+                '  • PASS (Safe to import): ' + (s.pass || 0).toLocaleString() + ' contacts',
                 '',
                 'Top reasons:',
                 bullet,
-                '',
-                'Full breakdown — domain, company, existing owner, modules touched, recommended action per row — attached as the Preflight Excel report.',
+                'Full per-row breakdown (domain, company, existing owner, recommended action) is in the attached Preflight Excel report.',
                 '',
                 'Recommended next steps:',
-                '  • Drop the BLOCK rows from the import — those are active customers, route the relationship through Customer Success.',
-                '  • Hold the REVIEW rows until CS confirms (within churn cool-off).',
+                '  • Drop the BLOCK rows; active or protected accounts; route the relationship through Customer Success.',
+                '  • Hold the REVIEW rows until CS confirms.',
                 '  • Re-assign the DUPLICATE rows to the existing owner instead of creating a new lead.',
-                '  • Push only the PASS rows (' + (s.pass || 0).toLocaleString() + ') — happy to load them directly into Zoho on the right Layout from the same tab.',
+                '  • Push only the PASS rows (' + (s.pass || 0).toLocaleString() + '); load them into Zoho on the right Layout from the same tab.',
                 '',
-                'Generated ' + (data.generated_at ? data.generated_at.slice(0, 16).replace('T', ' ') + ' UTC' : new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC') + ' from the Preflight Check tab in WalaPlus QMS.',
-                '',
-                'Best,',
-                signature,
-            ].filter(Boolean);
+                'Generated ' + stamp + ' from the Preflight Check tab in WalaPlus QMS.',
+            ];
             const body = lines.join('\n');
             const ok = (txt) => {
                 try {
