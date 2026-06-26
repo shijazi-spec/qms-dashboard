@@ -87,9 +87,9 @@ export async function markEmptyDeleteTagged(
   const ids = (zohoIds || []).map((s) => String(s)).filter(Boolean);
   if (!ids.length) return;
   await pool.query(
-    `INSERT INTO empty_delete_ledger (zoho_record_id, module, tagged_by)
-       SELECT UNNEST($1::text[]), $2, $3
-       ON CONFLICT (zoho_record_id) DO NOTHING`,
+    `INSERT INTO empty_delete_ledger (zoho_record_id, module, tagged_by, status)
+       SELECT UNNEST($1::text[]), $2, $3, 'pending_delete'
+       ON CONFLICT (zoho_record_id) DO UPDATE SET status='pending_delete', deleted_at=NULL`,
     [ids, module, by],
   );
 }
