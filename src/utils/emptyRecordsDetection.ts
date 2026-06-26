@@ -9,7 +9,12 @@ import { isPlaceholderName } from "./duplicateRadarDatabase";
 const BASE_TEST_KEYWORDS = [
   "test", "tester", "dummy", "sample", "trial", "sandbox",
   "asdf", "qwerty", "xxx", "zzz", "deleteme", "donotuse", "placeholder",
-  "تجربة", "تجريبي", "اختبار", "تست",
+  // NB: "تجربة" (= "experience / trial") is deliberately NOT here — it is
+  // business-legit Arabic ("تجربة العميل" = customer experience / CX, "تجربة
+  // المستخدم" = user experience). Flagging it as a token mis-tagged real
+  // accounts like "AlasilaCX | تجربة العميل" (Ahmad 2026-06-26). "تجريبي" (=
+  // "experimental") stays — it reads as a genuine test marker in a company name.
+  "تجريبي", "اختبار", "تست",
 ];
 export const EMPTY_DELETE_TEST_KEYWORDS: string[] = Array.from(
   new Set([
@@ -72,6 +77,14 @@ export function isProtectedDealStage(stage?: string | null): boolean {
   return DEAL_PROTECTED_STAGES.has(String(stage || "").trim().toLowerCase());
 }
 
+// SAFETY PRINCIPLE (Ahmad 2026-06-26): a record that has ANY real data — a deal,
+// a contact, an email, or an attachment — is NEVER a cleanup candidate, even if
+// its name looks like a test. A "test"-LOOKING name only matters when the record
+// is otherwise EMPTY. This reversed the earlier "flag test names regardless of
+// links" rule, which mis-tagged real accounts (e.g. "AlasilaCX | تجربة العميل",
+// a customer-experience account carrying a SAR-124k deal). Bulk tagging must only
+// ever pick records that are genuinely empty.
+
 export function classifyDeal(input: {
   hasAccount: boolean;
   hasContact: boolean;
@@ -80,16 +93,20 @@ export function classifyDeal(input: {
   hasAttachments?: boolean;
   stage?: string | null;
 }): { reason: "orphaned" | "empty" | "test" | null; deleteEligible: boolean; linkEligible: boolean } {
-  const isTest = isTestOrPlaceholderName(input.name);
-  const empty = !input.hasAccount && !input.hasContact && !input.hasAttachments && !isProtectedDealStage(input.stage);
-  const orphaned = !input.hasAccount;
+  // Existing-client stages (Agreement Signed / Paid) are never cleanup candidates.
+  if (isProtectedDealStage(input.stage)) {
+    return { reason: null, deleteEligible: false, linkEligible: false };
+  }
+  // Empty = no account AND no contact AND no documents. (No amount gate.)
+  const empty = !input.hasAccount && !input.hasContact && !input.hasAttachments;
+  const orphaned = !input.hasAccount; // has no account → link candidate
   let reason: "orphaned" | "empty" | "test" | null = null;
-  if (isTest) reason = "test";
-  else if (empty) reason = "empty";
-  else if (orphaned) reason = "orphaned";
+  if (empty) reason = isTestOrPlaceholderName(input.name) ? "test" : "empty";
+  else if (orphaned) reason = "orphaned"; // has data but no account → link, don't delete
+  // else: has an account (real linkage) → not flagged, even with a test-looking name.
   return {
     reason,
-    deleteEligible: isTest || empty,
+    deleteEligible: empty, // only genuinely-empty deals may be tagged
     linkEligible: orphaned,
   };
 }
@@ -101,12 +118,15 @@ export function classifyAccount(input: {
   hasEmail?: boolean;
   hasAttachments?: boolean;
 }): { reason: "empty" | "test" | null; structurallyEmpty: boolean } {
-  const isTest = isTestOrPlaceholderName(input.name);
-  const structurallyEmpty = !input.hasDeals && !input.hasContacts && !input.hasEmail && !input.hasAttachments;
-  let reason: "empty" | "test" | null = null;
-  if (isTest) reason = "test";
-  else if (structurallyEmpty) reason = "empty";
-  return { reason, structurallyEmpty };
+  const structurallyEmpty =
+    !input.hasDeals && !input.hasContacts && !input.hasEmail && !input.hasAttachments;
+  // Any real data (deal / contact / email / document) → never a candidate, even
+  // if the name looks like a test.
+  if (!structurallyEmpty) return { reason: null, structurallyEmpty: false };
+  return {
+    reason: isTestOrPlaceholderName(input.name) ? "test" : "empty",
+    structurallyEmpty: true,
+  };
 }
 
 export function classifyContact(input: {
@@ -116,10 +136,12 @@ export function classifyContact(input: {
   hasDeals: boolean;
   name: string;
 }): { reason: "empty" | "test" | null; deleteEligible: boolean } {
-  const isTest = isTestOrPlaceholderName(input.name);
   const nameOnly = !input.hasEmail && !input.hasPhone && !input.hasAccount && !input.hasDeals;
-  let reason: "empty" | "test" | null = null;
-  if (isTest) reason = "test";
-  else if (nameOnly) reason = "empty";
-  return { reason, deleteEligible: isTest || nameOnly };
+  // A contact with any email / phone / account / deal is never a candidate, even
+  // if the name looks like a test.
+  if (!nameOnly) return { reason: null, deleteEligible: false };
+  return {
+    reason: isTestOrPlaceholderName(input.name) ? "test" : "empty",
+    deleteEligible: true,
+  };
 }

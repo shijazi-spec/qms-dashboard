@@ -48,8 +48,9 @@ console.log("classifyDeal");
   assert(r.reason === "orphaned" && !r.deleteEligible && r.linkEligible, "no account but has contact → orphaned, link only");
 }
 {
+  // SAFETY: a test-LOOKING name must NOT make a record with real data eligible.
   const r = classifyDeal({ hasAccount: true, hasContact: true, amount: 5000, name: "dummy deal" });
-  assert(r.reason === "test" && r.deleteEligible, "test name → delete-eligible despite data");
+  assert(r.reason === null && !r.deleteEligible, "test name does NOT override real account+contact data");
 }
 {
   const r = classifyDeal({ hasAccount: true, hasContact: true, amount: 5000, name: "Request Demo | Kooheji Stores" });
@@ -66,8 +67,16 @@ console.log("classifyAccount");
   assert(r.reason === "empty" && r.structurallyEmpty, "no deals/contacts → empty");
 }
 {
+  // SAFETY: an account with real deals/contacts is never a candidate, even when
+  // the name looks like a test (mirrors the "AlasilaCX | تجربة العميل" case).
   const r = classifyAccount({ hasDeals: true, hasContacts: true, name: "Test Co" });
-  assert(r.reason === "test", "test name flagged regardless of links");
+  assert(r.reason === null && !r.structurallyEmpty, "test name does NOT override account with deals/contacts");
+}
+{
+  // "تجربة العميل" (= customer experience) on an empty-mirror account must NOT be
+  // auto-classified as a test record anymore.
+  const r = classifyAccount({ hasDeals: false, hasContacts: false, name: "AlasilaCX | تجربة العميل" });
+  assert(r.reason === "empty", "'تجربة العميل' is not a test keyword → empty, not test");
 }
 {
   const r = classifyAccount({ hasDeals: true, hasContacts: false, name: "Riyad Bank" });
@@ -84,8 +93,10 @@ console.log("classifyContact");
   assert(r.reason === null, "has email → not empty");
 }
 {
+  // SAFETY: a contact with email/phone/account/deal is never a candidate, even
+  // with a test-looking name.
   const r = classifyContact({ hasEmail: true, hasPhone: true, hasAccount: true, hasDeals: true, name: "test contact" });
-  assert(r.reason === "test" && r.deleteEligible, "test name → flagged despite full data");
+  assert(r.reason === null && !r.deleteEligible, "test name does NOT override a contact with full data");
 }
 
 console.log("isProtectedDealStage");

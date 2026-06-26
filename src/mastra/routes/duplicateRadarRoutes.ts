@@ -9045,7 +9045,25 @@ export const duplicateRadarRoutes = [
         } catch (e: any) {
           return c.json({ error: `Zoho attachments fetch failed: ${e?.message || e}` }, 502);
         }
-        return c.json({ count: Array.isArray(atts) ? atts.length : 0 });
+        // An account is only truly empty when it ALSO has no live deals/contacts —
+        // the local mirror can be stale, so confirm against Zoho here too (Ahmad
+        // 2026-06-26: real accounts with deals were wrongly shown as deletable).
+        let dealsCount = 0;
+        let contactsCount = 0;
+        try {
+          const deals = await fetchZohoRelatedRecords("Accounts", id, "Deals", { perPage: 1 });
+          dealsCount = Array.isArray(deals) ? deals.length : 0;
+          const contacts = await fetchZohoRelatedRecords("Accounts", id, "Contacts", { perPage: 1 });
+          contactsCount = Array.isArray(contacts) ? contacts.length : 0;
+        } catch (e: any) {
+          // Inconclusive → fail safe: report it as not-empty so it is NOT tagged.
+          return c.json({ error: `Zoho related-list fetch failed: ${e?.message || e}` }, 502);
+        }
+        return c.json({
+          count: Array.isArray(atts) ? atts.length : 0,
+          deals: dealsCount,
+          contacts: contactsCount,
+        });
       } catch (e: any) {
         logger.error("empty-records attachment check failed", e);
         return c.json({ error: "An internal error occurred" }, 500);

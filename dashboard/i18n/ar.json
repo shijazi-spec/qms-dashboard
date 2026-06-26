@@ -2255,6 +2255,7 @@
     "er_deletable": "لا مرفقات — قابلة للحذف",
     "er_keep": "إبقاء",
     "er_test_ready": "تجريبية — جاهزة",
+    "er_empty_ready": "فارغة — جاهزة",
     "er_ai_apply": "تطبيق الذكاء: وسم الفارغة Empty-Delete",
     "er_tagged_pending": "موسومة · بانتظار حذف المشرف",
     "er_recheck": "إعادة الفحص من CRM",

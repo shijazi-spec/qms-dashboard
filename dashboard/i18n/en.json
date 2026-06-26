@@ -2255,6 +2255,7 @@
     "er_deletable": "0 attachments — deletable",
     "er_keep": "keep",
     "er_test_ready": "test — ready",
+    "er_empty_ready": "empty — ready",
     "er_ai_apply": "AI-Apply empty → Empty-Delete",
     "er_tagged_pending": "Tagged · pending delete",
     "er_recheck": "Re-check CRM",

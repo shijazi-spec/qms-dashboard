@@ -246,14 +246,37 @@ export async function aiApplyEmptyDelete(
   tagged: number;
   prunedGhosts: number;
   skippedWithDocs: number;
+  skippedHasData: number;
   skippedAlreadyTagged: number;
   remaining: number;
 }> {
   const {
     fetchZohoRecordById,
     fetchRecordAttachments,
+    fetchZohoRelatedRecords,
     addZohoTags,
   } = await import("./zohoCRM");
+
+  // Live emptiness gate: an account is only truly empty if Zoho shows it has NO
+  // deals AND NO contacts right now (the local mirror can be stale / mid-sync, so
+  // we must ask Zoho directly before tagging — Ahmad 2026-06-26). Returns true if
+  // any related deal/contact exists. Errors are treated as "has data" (fail safe:
+  // never tag on an inconclusive check).
+  async function accountHasLiveLinks(accountId: string): Promise<boolean> {
+    for (const rel of ["Deals", "Contacts"]) {
+      try {
+        const rows = await fetchZohoRelatedRecords("Accounts", accountId, rel, {
+          perPage: 1,
+        });
+        if (Array.isArray(rows) && rows.length > 0) return true;
+      } catch (e) {
+        if (isZohoGhostError(e)) throw e; // let the caller prune the ghost
+        logger.warn(`[aiApplyEmptyDelete] Accounts/${accountId}/${rel} check failed — treating as has-data`, e);
+        return true;
+      }
+    }
+    return false;
+  }
 
   // 1. Pull candidates and keep only delete-eligible non-orphaned records.
   let allCandidates: EmptyRecordRow[];
@@ -270,6 +293,7 @@ export async function aiApplyEmptyDelete(
 
   let prunedGhosts = 0;
   let skippedWithDocs = 0;
+  let skippedHasData = 0;
   let skippedAlreadyTagged = 0;
   const toTag: string[] = [];
 
@@ -311,6 +335,20 @@ export async function aiApplyEmptyDelete(
         skippedAlreadyTagged++;
         continue; // merge-flow record — leave it alone
       }
+      // Live emptiness gate — the mirror may be stale; confirm the contact really
+      // has no email / phone / account against the LIVE record before tagging.
+      const cd: any = rec.data || {};
+      const contactHasData = !!(
+        cd.Email ||
+        cd.Secondary_Email ||
+        cd.Phone ||
+        cd.Mobile ||
+        (cd.Account_Name && cd.Account_Name.id)
+      );
+      if (contactHasData) {
+        skippedHasData++;
+        continue;
+      }
       toTag.push(id);
     } else {
       // Accounts / Deals: fetchRecordAttachments doubles as the existence check.
@@ -347,16 +385,46 @@ export async function aiApplyEmptyDelete(
         continue; // merge-flow record — leave it alone
       }
 
-      // For Deals: re-confirm the live Stage is not protected.
+      const ld: any = liveRec.data || {};
+
+      // Live emptiness gate — the mirror may be stale; confirm against Zoho NOW.
       if (module === "Deals") {
-        const liveStage: string | null = liveRec.data.Stage || null;
-        if (isProtectedDealStage(liveStage)) {
-          skippedAlreadyTagged++; // protected stage counts as "skip"
+        // Re-confirm the live Stage is not a protected existing-client stage.
+        if (isProtectedDealStage(ld.Stage || null)) {
+          skippedAlreadyTagged++;
+          continue;
+        }
+        // A deal that now has an account or a contact is NOT empty — skip it.
+        if ((ld.Account_Name && ld.Account_Name.id) || (ld.Contact_Name && ld.Contact_Name.id)) {
+          skippedHasData++;
+          continue;
+        }
+      } else {
+        // Accounts: an email field counts as real data.
+        if (ld.Email || ld.email) {
+          skippedHasData++;
+          continue;
+        }
+        // The decisive check: does Zoho show ANY live deal or contact on this
+        // account right now? This is what catches the "account has deals inside"
+        // false positive the mirror missed (Ahmad 2026-06-26).
+        try {
+          if (await accountHasLiveLinks(id)) {
+            skippedHasData++;
+            continue;
+          }
+        } catch (e) {
+          if (isZohoGhostError(e)) {
+            await pruneGhostRecords([id]);
+            prunedGhosts++;
+            continue;
+          }
+          logger.warn(`[aiApplyEmptyDelete] Accounts link check failed for ${id}, skipping`, e);
           continue;
         }
       }
 
-      // Attachment check — the actual live document gate.
+      // Attachment check — the live document gate (Accounts + Deals).
       let atts: Awaited<ReturnType<typeof fetchRecordAttachments>>;
       try {
         atts = await fetchRecordAttachments(module, id);
@@ -445,6 +513,7 @@ export async function aiApplyEmptyDelete(
     tagged: taggedOk.length,
     prunedGhosts,
     skippedWithDocs,
+    skippedHasData,
     skippedAlreadyTagged,
     remaining,
   };
