@@ -22,6 +22,27 @@
 
 ---
 
+### Task 0: Extend the "queued-for-deletion" exclusion to Cross-Module + Domain Clusters
+
+**Files:**
+- Modify: `src/utils/duplicateRadarDatabase.ts` — `getCrossModuleOverlaps` and `getAllClusters`
+
+**Interfaces:**
+- Consumes: existing `queuedForDeletionSql(alias)` helper (already defined; excludes Empty-Delete/Duplicate-Delete via ledger + Zoho Tag).
+
+- [ ] **Step 1:** In `getCrossModuleOverlaps`, the cluster qualifies as cross-module via precomputed `total_leads/contacts/accounts/deals > 0`. Add a guard so a module only "counts" if it still has a **non-queued** record of that type: replace each `total_X > 0` driver with a correlated `EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = dc.id AND dr.record_type='X' AND NOT ${queuedForDeletionSql("dr")})`. Apply only in the `active` status path (mirror the module-tab gating — keep resolved/all unchanged).
+
+- [ ] **Step 2:** In `getAllClusters` (Domain Clusters), add to the WHERE a `≥2 non-queued records` guard analogous to the module tabs: `AND (SELECT COUNT(*) FROM duplicate_records dx WHERE dx.cluster_id = duplicate_clusters.id AND NOT ${queuedForDeletionSql("dx")}) >= 2` — only when the active filter is in effect.
+
+- [ ] **Step 3: Gates + commit:**
+```
+node node_modules/typescript/bin/tsc --noEmit
+git add src/utils/duplicateRadarDatabase.ts
+git commit -m "feat(duplicates): exclude queued-for-deletion records from Cross-Module + Domain Clusters too"
+```
+
+---
+
 ### Task 1: Refine the empty classifiers
 
 **Files:**
@@ -211,9 +232,14 @@ git commit -m "feat(empty-records): ghost detection (INVALID_DATA/not-found) + p
 
 **Interfaces:**
 - Consumes: `getEmptyDeals/Accounts/Contacts`, `fetchRecordAttachments(module, id)`, `fetchZohoRecordById(module, id)`, `addZohoTags`, `markEmptyDeleteTagged`, `isZohoGhostError`, `pruneGhostRecords`, `isProtectedDealStage` — confirm exact signatures by reading `zohoCRM.ts` + `emptyRecordsDatabase.ts`.
-- Produces: `export async function aiApplyEmptyDelete(module: "Deals"|"Accounts"|"Contacts", opts: { limit?: number; by: string | null }): Promise<{ tagged: number; prunedGhosts: number; skippedWithDocs: number; remaining: number }>`.
+- Produces: `export async function aiApplyEmptyDelete(module: "Deals"|"Accounts"|"Contacts", opts: { limit?: number; by: string | null }): Promise<{ tagged: number; prunedGhosts: number; skippedWithDocs: number; skippedAlreadyTagged: number; remaining: number }>`.
 
 - [ ] **Step 1: Read** `fetchRecordAttachments` and `fetchZohoRecordById` in `src/utils/zohoCRM.ts` to confirm their exact signatures + how they signal "not found" (return value vs throw). Read `getEmptyAccounts/Deals/Contacts` to confirm the row shape (`zohoId`, `reason`, `extra`).
+
+- [ ] **Step 1b: Live-tag check (the stale-mirror gap).** In the verify-live step, after fetching the live record (`fetchZohoRecordById` for Contacts; the `fetchRecordAttachments` path already implies a live fetch for Accounts/Deals — additionally fetch the record to read its `Tag`), inspect the live `Tag` array:
+  - If it already contains `Empty-Delete` → it's already tagged; ensure it's in `empty_delete_ledger` (idempotent `markEmptyDeleteTagged`), do NOT re-tag, and exclude from the candidate set.
+  - If it already contains `Duplicate-Delete` → it's the **merge flow's** record (pending admin delete). Do NOT tag, do NOT prune from the mirror; just **exclude it from the empty cleansing list** for this run (it must not be processed as an empty). Count it separately as `skippedAlreadyTagged`.
+  This closes the case the operator found (Duplicate-Delete accounts still showing because the local Tag was stale).
 
 - [ ] **Step 2: Implement `aiApplyEmptyDelete`** in `emptyRecordsDatabase.ts`. Logic:
   - Pull the module's candidate list (`getEmpty{Module}()`), keep only `reason !== "orphaned"` and `reason !== "test"` is allowed (test is delete-eligible too) — i.e. candidates eligible to tag. Slice to `limit` (default `Number(process.env.EMPTY_AI_APPLY_BATCH) || 150`).
