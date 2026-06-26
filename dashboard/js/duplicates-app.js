@@ -6927,12 +6927,36 @@
         }
 
         // ══ Empty / Orphaned Records cleanup tab ════════════════════════════
+        // Client-side pagination keeps the DOM small (was rendering up to ~1,485
+        // rows at once, which made the whole tab heavy). Selections are held in a
+        // per-module set so they survive page changes and the bulk-tag still acts
+        // on every selected record across all pages.
+        var ER_PAGE_SIZE = 50;
+        function _erSelSet(module) {
+            window._erSel = window._erSel || {};
+            if (!window._erSel[module]) window._erSel[module] = {};
+            return window._erSel[module];
+        }
+        function erCbToggle(cb) {
+            var set = _erSelSet(cb.getAttribute('data-kind'));
+            var id = String(cb.getAttribute('data-zoho-id'));
+            if (cb.checked) set[id] = true; else delete set[id];
+            erSelChanged();
+        }
+        function erChangePage(kind, delta) {
+            var map = { deals: 'erDealsBody', accounts: 'erAccountsBody', contacts: 'erContactsBody' };
+            var rows = window['_er_' + kind] || [];
+            var pages = Math.max(1, Math.ceil(rows.length / ER_PAGE_SIZE));
+            var cur = (window['_erPage_' + kind] || 0) + delta;
+            window['_erPage_' + kind] = Math.min(pages - 1, Math.max(0, cur));
+            erRender(kind, map[kind]);
+        }
         async function loadEmptyRecords() {
             window._loadedTabs.add('empty-records');
             if (!window._erCbBound) {
                 window._erCbBound = true;
                 document.addEventListener('change', function (e) {
-                    if (e.target && e.target.classList && e.target.classList.contains('er-cb')) erSelChanged();
+                    if (e.target && e.target.classList && e.target.classList.contains('er-cb')) erCbToggle(e.target);
                 });
             }
             await Promise.all([erLoad('deals', 'erDealsBody'), erLoad('accounts', 'erAccountsBody'), erLoad('contacts', 'erContactsBody')]);
@@ -6955,7 +6979,11 @@
                 return;
             }
             window['_er_' + kind] = data.rows || [];
+            window['_erPage_' + kind] = 0; // fresh data → back to page 1
+            window._erSel = window._erSel || {};
+            window._erSel[kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts'] = {}; // clear stale selection
             erRender(kind, bodyId);
+            erSelChanged();
             const chip = document.getElementById('erCount-' + kind);
             if (chip) chip.textContent = (data.rows || []).length.toLocaleString();
         }
@@ -6975,9 +7003,17 @@
             if (!body) return;
             if (!rows.length) { body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_none')) + '</td></tr>'; return; }
             const moduleOf = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
-            body.innerHTML = rows.map(function (r) {
+            // Pagination: render only the current page so the DOM stays small.
+            const pages = Math.max(1, Math.ceil(rows.length / ER_PAGE_SIZE));
+            const cur = Math.min(pages - 1, Math.max(0, window['_erPage_' + kind] || 0));
+            window['_erPage_' + kind] = cur;
+            const start = cur * ER_PAGE_SIZE;
+            const pageRows = rows.slice(start, start + ER_PAGE_SIZE);
+            const selSet = _erSelSet(moduleOf);
+            const rowsHtml = pageRows.map(function (r) {
                 const cbId = 'er-cb-' + kind + '-' + r.zohoId;
-                const cb = '<input type="checkbox" class="er-cb" id="' + escapeHtml(cbId) + '" data-kind="' + moduleOf + '" data-zoho-id="' + escapeHtml(String(r.zohoId)) + '"' + (r.deleteEligible ? '' : ' disabled title="Not delete-eligible yet"') + '>';
+                const isSel = !!selSet[String(r.zohoId)];
+                const cb = '<input type="checkbox" class="er-cb" id="' + escapeHtml(cbId) + '" data-kind="' + moduleOf + '" data-zoho-id="' + escapeHtml(String(r.zohoId)) + '"' + (isSel ? ' checked' : '') + (r.deleteEligible ? '' : ' disabled title="Not delete-eligible yet"') + '>';
                 const args = escapeHtml(JSON.stringify([String(r.zohoId)]));
                 let action;
                 if (kind === 'accounts') {
@@ -6997,13 +7033,43 @@
                     + '<td class="px-3 py-2">' + action + '</td>'
                     + '</tr>';
             }).join('');
+            // Pagination footer (only when there's more than one page).
+            let footer = '';
+            if (rows.length > ER_PAGE_SIZE) {
+                const from = start + 1, to = start + pageRows.length;
+                const prevDis = cur === 0 ? ' opacity-40 pointer-events-none' : ' hover:bg-gray-100';
+                const nextDis = cur >= pages - 1 ? ' opacity-40 pointer-events-none' : ' hover:bg-gray-100';
+                footer = '<tr class="bg-gray-50"><td colspan="5" class="px-3 py-2">'
+                    + '<div class="flex items-center justify-between text-xs text-gray-600">'
+                    + '<span>Showing ' + from.toLocaleString() + '–' + to.toLocaleString() + ' of ' + rows.length.toLocaleString() + '</span>'
+                    + '<span class="flex items-center gap-2">'
+                    + '<button data-on-click="erChangePage" data-args=\'["' + kind + '",-1]\' class="px-2 py-1 rounded border border-gray-300' + prevDis + '">‹ Prev</button>'
+                    + '<span>Page ' + (cur + 1) + ' / ' + pages + '</span>'
+                    + '<button data-on-click="erChangePage" data-args=\'["' + kind + '",1]\' class="px-2 py-1 rounded border border-gray-300' + nextDis + '">Next ›</button>'
+                    + '</span></div></td></tr>';
+            }
+            body.innerHTML = rowsHtml;
+            // Render the pager into a <tfoot>, NOT the tbody — table-sort sorts
+            // every tbody row, which would otherwise shuffle the pager into the data.
+            const table = body.closest('table');
+            if (table) {
+                let tf = table.querySelector('tfoot.er-pager');
+                if (footer) {
+                    if (!tf) { tf = document.createElement('tfoot'); tf.className = 'er-pager'; table.appendChild(tf); }
+                    tf.innerHTML = footer;
+                } else if (tf) {
+                    tf.innerHTML = '';
+                }
+            }
         }
         function erSelChanged() {
-            const checked = Array.prototype.slice.call(document.querySelectorAll('.er-cb:checked'));
+            window._erSel = window._erSel || {};
+            let n = 0;
+            ['Deals', 'Accounts', 'Contacts'].forEach(function (m) { n += Object.keys(window._erSel[m] || {}).length; });
             const bar = document.getElementById('erBulkBar');
             const cnt = document.getElementById('erBulkCount');
-            if (cnt) cnt.textContent = checked.length + ' selected';
-            if (bar) { if (checked.length > 0) bar.classList.remove('hidden'); else bar.classList.add('hidden'); }
+            if (cnt) cnt.textContent = n + ' selected';
+            if (bar) { if (n > 0) bar.classList.remove('hidden'); else bar.classList.add('hidden'); }
         }
         async function erCheckAccountAttachments(id) {
             const cell = document.getElementById('eratt-' + id);
@@ -7022,6 +7088,9 @@
                 if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">' + escapeHtml(WalaPlusI18n.t('duplicates.er_deletable')) + '</span>';
                 const cb = document.getElementById('er-cb-accounts-' + id);
                 if (cb) cb.disabled = false;
+                // Persist so the checkbox stays enabled after a page change re-render.
+                const row = (window._er_accounts || []).find(function (r) { return String(r.zohoId) === String(id); });
+                if (row) row.deleteEligible = true;
             } else {
                 if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">📎 ' + n + ' — ' + escapeHtml(WalaPlusI18n.t('duplicates.er_keep')) + '</span>';
             }
@@ -7080,16 +7149,17 @@
             return null;
         }
         async function erTagSelected() {
-            const checked = Array.prototype.slice.call(document.querySelectorAll('.er-cb:checked'));
-            if (!checked.length) return;
+            // Read from the persisted per-module selection set so records selected
+            // on ANY page are tagged (not just the visible page's checkboxes).
+            window._erSel = window._erSel || {};
             const byModule = {};
-            checked.forEach(function (cb) {
-                const m = cb.getAttribute('data-kind');
-                const id = cb.getAttribute('data-zoho-id');
-                if (!byModule[m]) byModule[m] = [];
-                byModule[m].push(id);
+            let totalSel = 0;
+            ['Deals', 'Accounts', 'Contacts'].forEach(function (m) {
+                const ids = Object.keys(window._erSel[m] || {});
+                if (ids.length) { byModule[m] = ids; totalSel += ids.length; }
             });
-            if (!confirm('Tag ' + checked.length + ' record(s) with "Empty-Delete"?\n\nThis adds the tag in Zoho for the admin to delete. The platform never deletes.')) return;
+            if (!totalSel) return;
+            if (!confirm('Tag ' + totalSel + ' record(s) with "Empty-Delete"?\n\nThis adds the tag in Zoho for the admin to delete. The platform never deletes.')) return;
             const result = document.getElementById('erBulkResult');
             const undoPayload = { modules: [] };
             let total = 0;
@@ -7102,6 +7172,8 @@
                 undoPayload.modules.push({ module: m, zohoIds: byModule[m] });
                 const kind = m.toLowerCase();
                 window['_er_' + kind] = (window['_er_' + kind] || []).filter(function (r) { return byModule[m].indexOf(String(r.zohoId)) === -1; });
+                window._erSel[m] = {}; // tagged records are gone → drop their selection
+                window['_erPage_' + kind] = 0; // counts changed → back to page 1
                 erRender(kind, 'er' + m + 'Body');
                 const chip = document.getElementById('erCount-' + kind);
                 if (chip) chip.textContent = (window['_er_' + kind] || []).length.toLocaleString();
