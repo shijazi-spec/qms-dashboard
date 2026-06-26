@@ -1682,6 +1682,17 @@ export async function getAllClusters(filters?: {
        FROM duplicate_clusters
       WHERE 1=1` + clause;
 
+  // Exclude clusters where all remaining records are queued for deletion —
+  // applies only to the active/open view (status='active' or default/undefined).
+  // Resolved, ignored, and 'all' views are left exactly as they are.
+  const isNonActiveView =
+    filters?.status === "all" ||
+    filters?.status === "resolved" ||
+    filters?.status === "ignored";
+  if (!isNonActiveView) {
+    query += ` AND (SELECT COUNT(*) FROM duplicate_records dx WHERE dx.cluster_id = duplicate_clusters.id AND NOT ${queuedForDeletionSql("dx")}) >= 2`;
+  }
+
   const sortKey = filters?.sort && CLUSTER_SORT_COLUMNS[filters.sort]
     ? CLUSTER_SORT_COLUMNS[filters.sort]
     : "total_records";
@@ -8326,10 +8337,15 @@ export async function getCrossModuleOverlaps(opts: {
     FROM duplicate_clusters
     WHERE ${statusClause}
       AND (
-        (CASE WHEN total_leads > 0 THEN 1 ELSE 0 END +
+        ${statusOpt === "active"
+          ? `(CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'lead'    AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
+         CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'contact' AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
+         CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'account' AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
+         CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'deal'    AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END`
+          : `CASE WHEN total_leads > 0 THEN 1 ELSE 0 END +
          CASE WHEN total_contacts > 0 THEN 1 ELSE 0 END +
          CASE WHEN total_accounts > 0 THEN 1 ELSE 0 END +
-         CASE WHEN total_deals > 0 THEN 1 ELSE 0 END
+         CASE WHEN total_deals > 0 THEN 1 ELSE 0 END`}
         ) >= 2
       )
     ORDER BY total_records DESC, confidence_score DESC
