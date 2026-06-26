@@ -2846,6 +2846,45 @@ async function runPreflightBasic(input: {
     const phone = phoneByRow.get(i) ?? null;
     const domain = domainByRow.get(i) ?? null;
 
+    // HIGHEST PRIORITY — protected / do-not-contact named accounts (Aramco
+    // group, Tree, Syarah, …). These ALWAYS reject, even with no CRM match and
+    // even with no reachable contact, so a strategic account can never leak into
+    // PASS. This mirrors the full-mode classifier (classifyPreflightRows) so the
+    // protected verdict fires identically regardless of PREFLIGHT_RULE_MODE —
+    // production runs BASIC mode, where this guard previously never ran.
+    const protectedHit = matchProtectedAccount(domain, r.company_name ?? null);
+    if (protectedHit) {
+      const co = (r.company_name || "").trim() || protectedHit.label;
+      summary.block++;
+      out.push({
+        row_index: i,
+        ref: r.ref ?? null,
+        input: { domain, company_name: r.company_name ?? null },
+        verdict: "block",
+        cluster_id: null,
+        lifecycle_state: null,
+        sector: null,
+        arr_exposure: null,
+        owners: [],
+        reason: "protected_account",
+        suggested_action:
+          `"${co}" is a PROTECTED / do-not-contact account (${protectedHit.label}). ` +
+          "Never cold-contact or import — route to the named Account owner / Head of Sales.",
+        module_counts: null,
+        matched_via: null,
+        executive_action:
+          `REJECT — protected account (${protectedHit.label}): do not cold-contact or import. ` +
+          "Route to the named Account owner / Head of Sales.",
+        executive_severity: "critical",
+        churn_date: null,
+        churn_days: null,
+        cs_owner: null,
+        cs_phase: null,
+        crm_links: null,
+      });
+      continue;
+    }
+
     // REJECT a named contact with no way to reach them — has a person name but
     // NO email AND NO phone (Sarah 2026-06-24). Such a row can't be contacted, so
     // it must never land in the safe-to-import list. A company-only screening row
