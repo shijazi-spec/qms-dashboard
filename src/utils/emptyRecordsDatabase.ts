@@ -304,6 +304,7 @@ export async function aiApplyEmptyDelete(
       );
       if (liveTags.includes(EMPTY_DELETE_TAG)) {
         await markEmptyDeleteTagged("Contacts", [id], opts.by);
+        skippedAlreadyTagged++;
         continue; // already tagged — idempotent ledger update, don't re-tag
       }
       if (liveTags.includes("Duplicate-Delete")) {
@@ -338,6 +339,7 @@ export async function aiApplyEmptyDelete(
       );
       if (liveTags.includes(EMPTY_DELETE_TAG)) {
         await markEmptyDeleteTagged(module, [id], opts.by);
+        skippedAlreadyTagged++;
         continue; // already tagged — idempotent, don't re-tag
       }
       if (liveTags.includes("Duplicate-Delete")) {
@@ -406,10 +408,15 @@ export async function aiApplyEmptyDelete(
       if (code === "SUCCESS" || status === "success") {
         taggedOk.push(recId);
       } else if (
-        code === "INVALID_DATA" ||
-        isZohoGhostError(new Error(code + " " + (rec?.message || "")))
+        /record not found|the related id given seems to be invalid|id given seems to be invalid/i.test(
+          String(rec?.message || ""),
+        )
       ) {
-        // Ghost detected during tag — prune from local mirror.
+        // Ghost detected during tag — the record was deleted in Zoho between our
+        // live-verify and this tag call. Prune the local mirror. NOTE: we gate on
+        // the MESSAGE, not a bare INVALID_DATA code — Zoho returns INVALID_DATA for
+        // ordinary validation failures too, and pruning a just-verified-live record
+        // on a non-deletion error would wrongly drop its mirror row.
         await pruneGhostRecords([recId]);
         prunedGhosts++;
       } else {
