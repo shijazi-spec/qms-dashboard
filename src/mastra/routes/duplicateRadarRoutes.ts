@@ -9156,6 +9156,42 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Admin-gated: Dismiss flagged records as "reviewed — keep, NOT empty"
+    // (false positives, e.g. a deal that actually has data). They drop off the
+    // cleanup list durably and never reappear. No Zoho write.
+    path: "/api/duplicates/empty-records/dismiss",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const module = String(body?.module || "");
+        const undo = body?.undo === true;
+        const zohoIds: string[] = Array.isArray(body?.zohoIds)
+          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean)
+          : [];
+        if (!["Deals", "Accounts", "Contacts"].includes(module))
+          return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
+        if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
+        const { markEmptyRecordsDismissed, undismissEmptyRecords } = await import(
+          "../../utils/emptyRecordsDatabase"
+        );
+        if (undo) {
+          await undismissEmptyRecords(zohoIds);
+          return c.json({ success: true, undismissed: zohoIds.length });
+        }
+        await markEmptyRecordsDismissed(module, zohoIds, su?.email || null);
+        return c.json({ success: true, dismissed: zohoIds.length });
+      } catch (e: any) {
+        logger.error("empty-records/dismiss failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
     // Admin-gated: link an orphaned deal to an account (re-parent in Zoho).
     path: "/api/duplicates/empty-records/link-deal",
     method: "POST" as const,

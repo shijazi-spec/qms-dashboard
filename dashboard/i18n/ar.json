@@ -2236,6 +2236,8 @@
     "er_refresh": "تحديث",
     "er_tag_selected": "وسم المحدد بـ Empty-Delete",
     "er_undo": "تراجع عن آخر دفعة",
+    "er_dismiss": "تجاهل",
+    "er_dismiss_selected": "تجاهل المحدد (إبقاء)",
     "er_th_reason": "السبب",
     "er_th_owner": "المالك",
     "er_th_action": "إجراء",

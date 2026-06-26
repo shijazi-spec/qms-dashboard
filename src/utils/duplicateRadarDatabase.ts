@@ -1204,6 +1204,24 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_empty_delete_ledger_rec ON empty_delete_ledger(zoho_record_id)`,
   );
 
+  // Empty/Orphaned cleanup: durable "reviewed — keep, NOT empty" decisions. The
+  // operator can Dismiss a flagged record that is actually legitimate (e.g. a
+  // deal that has data); the empty-records queries exclude anything here so it
+  // never reappears as cleanup work. Un-dismiss removes the row.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS empty_records_dismissed (
+      id SERIAL PRIMARY KEY,
+      zoho_record_id VARCHAR(255) NOT NULL,
+      module VARCHAR(16) NOT NULL,
+      dismissed_by VARCHAR(255),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (zoho_record_id)
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_empty_records_dismissed_rec ON empty_records_dismissed(zoho_record_id)`,
+  );
+
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_domain ON duplicate_clusters(domain)`,
   );

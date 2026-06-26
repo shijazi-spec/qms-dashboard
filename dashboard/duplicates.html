@@ -1495,6 +1495,7 @@
           <div id="erBulkBar" class="hidden sticky top-0 z-10 bg-white border border-rose-300 rounded-lg shadow p-2 mb-3 flex items-center gap-3 flex-wrap">
             <span id="erBulkCount" class="text-sm font-medium text-gray-700">0 selected</span>
             <button data-on-click="erTagSelected" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700">🏷 <span data-i18n="duplicates.er_tag_selected">Tag selected Empty-Delete</span></button>
+            <button data-on-click="erDismissSelected" title="Not empty — keep these records and remove them from the cleanup list" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">✕ <span data-i18n="duplicates.er_dismiss_selected">Dismiss selected (keep)</span></button>
             <button data-on-click="erUndoLast" id="erUndoBtn" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">↩ <span data-i18n="duplicates.er_undo">Undo last batch</span></button>
             <span id="erBulkResult" class="text-xs text-gray-600"></span>
           </div>
@@ -1908,7 +1909,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=2"></script>
+    <script src="/js/duplicates-app.js?v=3"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

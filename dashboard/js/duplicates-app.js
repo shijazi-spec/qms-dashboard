@@ -7023,14 +7023,18 @@
                 } else if (kind === 'deals') {
                     action = '<span id="erlink-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erLinkDeal" data-args=\'' + args + '\' class="px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">🔗 ' + escapeHtml(WalaPlusI18n.t('duplicates.er_link_account')) + '</button></span>';
                 } else {
-                    action = '<span class="text-xs text-gray-400">—</span>';
+                    action = '';
                 }
+                // Per-row Dismiss — "this isn't empty, keep it" (false positive,
+                // e.g. a deal that actually has data). Removes it from the list
+                // durably without any Zoho write.
+                const dismissBtn = '<button data-on-click="erDismiss" data-args=\'' + escapeHtml(JSON.stringify([kind, String(r.zohoId)])) + '\' class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-100" title="Not empty — keep this record and remove it from the cleanup list">✕ ' + escapeHtml(WalaPlusI18n.t('duplicates.er_dismiss')) + '</button>';
                 return '<tr class="border-t border-gray-100">'
                     + '<td class="px-3 py-2">' + cb + '</td>'
                     + '<td class="px-3 py-2">' + erReasonBadge(r.reason) + '</td>'
                     + '<td class="px-3 py-2"><a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">' + escapeHtml(r.name || '(no name)') + '</a></td>'
                     + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.owner || '—') + '</td>'
-                    + '<td class="px-3 py-2">' + action + '</td>'
+                    + '<td class="px-3 py-2"><div class="flex items-center gap-2 flex-wrap">' + action + dismissBtn + '</div></td>'
                     + '</tr>';
             }).join('');
             // Pagination footer (only when there's more than one page).
@@ -7183,6 +7187,50 @@
             const undoBtn = document.getElementById('erUndoBtn');
             if (undoBtn) undoBtn.classList.remove('hidden');
             erSelChanged();
+        }
+        // Remove records from the local list + selection and re-render (shared by
+        // dismiss). erRender clamps the page if the last row of a page goes away.
+        function _erRemoveLocal(kind, ids) {
+            const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
+            const gone = {};
+            ids.forEach(function (x) { gone[String(x)] = true; });
+            window['_er_' + kind] = (window['_er_' + kind] || []).filter(function (r) { return !gone[String(r.zohoId)]; });
+            if (window._erSel && window._erSel[module]) ids.forEach(function (x) { delete window._erSel[module][String(x)]; });
+            erRender(kind, 'er' + module + 'Body');
+            const chip = document.getElementById('erCount-' + kind);
+            if (chip) chip.textContent = (window['_er_' + kind] || []).length.toLocaleString();
+            erSelChanged();
+        }
+        // Per-row Dismiss — "not empty, keep it". Durable; no Zoho write.
+        async function erDismiss(kind, id) {
+            const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
+            const j = await erAdminPost('/api/duplicates/empty-records/dismiss', { module: module, zohoIds: [String(id)] });
+            if (!j) return; // cancelled at admin-key prompt
+            if (!j.success) { alert('Could not dismiss: ' + (j.error || 'failed')); return; }
+            _erRemoveLocal(kind, [String(id)]);
+        }
+        // Bulk Dismiss for the current selection (across all pages).
+        async function erDismissSelected() {
+            window._erSel = window._erSel || {};
+            const byModule = {};
+            let total = 0;
+            ['Deals', 'Accounts', 'Contacts'].forEach(function (m) {
+                const ids = Object.keys(window._erSel[m] || {});
+                if (ids.length) { byModule[m] = ids; total += ids.length; }
+            });
+            if (!total) return;
+            if (!confirm('Dismiss ' + total + ' record(s) as "not empty — keep"?\n\nThey are removed from the cleanup list and will not reappear. No Zoho changes.')) return;
+            const result = document.getElementById('erBulkResult');
+            let done = 0;
+            for (const m in byModule) {
+                if (result) result.textContent = 'Dismissing ' + m + '…';
+                const j = await erAdminPost('/api/duplicates/empty-records/dismiss', { module: m, zohoIds: byModule[m] });
+                if (!j) { if (result) result.textContent = 'Cancelled.'; return; }
+                if (!j.success) { if (result) result.textContent = 'Error: ' + (j.error || 'failed'); return; }
+                done += byModule[m].length;
+                _erRemoveLocal(m.toLowerCase(), byModule[m]);
+            }
+            if (result) result.textContent = '✓ Dismissed ' + done + ' record(s) — kept, removed from cleanup.';
         }
         async function erUndoLast() {
             const payload = window._erLastTagged;

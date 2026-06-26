@@ -2236,6 +2236,8 @@
     "er_refresh": "Refresh",
     "er_tag_selected": "Tag selected Empty-Delete",
     "er_undo": "Undo last batch",
+    "er_dismiss": "Dismiss",
+    "er_dismiss_selected": "Dismiss selected (keep)",
     "er_th_reason": "Reason",
     "er_th_owner": "Owner",
     "er_th_action": "Action",

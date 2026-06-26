@@ -39,6 +39,7 @@ const DELETE_TAGS = [
 // (Empty-Delete / Duplicate-Delete). Either way a tagged record never shows.
 const NOT_ALREADY_TAGGED = `
   AND %ALIAS%zoho_record_id NOT IN (SELECT zoho_record_id FROM empty_delete_ledger)
+  AND %ALIAS%zoho_record_id NOT IN (SELECT zoho_record_id FROM empty_records_dismissed)
   AND NOT EXISTS (
     SELECT 1 FROM jsonb_array_elements(
       CASE WHEN jsonb_typeof(%ALIAS%raw_data->'Tag') = 'array'
@@ -47,6 +48,34 @@ const NOT_ALREADY_TAGGED = `
     WHERE _dt->>'name' = ANY($2::text[])
   )`;
 const excl = (alias: string) => NOT_ALREADY_TAGGED.replace(/%ALIAS%/g, alias);
+
+/** Dismiss flagged records as "reviewed — keep" (false positives, e.g. a deal
+ * that actually has data). They drop off the cleanup list and never reappear.
+ * Idempotent. */
+export async function markEmptyRecordsDismissed(
+  module: string,
+  zohoIds: string[],
+  by: string | null,
+): Promise<void> {
+  const ids = (zohoIds || []).map((s) => String(s)).filter(Boolean);
+  if (!ids.length) return;
+  await pool.query(
+    `INSERT INTO empty_records_dismissed (zoho_record_id, module, dismissed_by)
+       SELECT UNNEST($1::text[]), $2, $3
+       ON CONFLICT (zoho_record_id) DO NOTHING`,
+    [ids, module, by],
+  );
+}
+
+/** Undo a dismissal (the record returns to the cleanup list on next load). */
+export async function undismissEmptyRecords(zohoIds: string[]): Promise<void> {
+  const ids = (zohoIds || []).map((s) => String(s)).filter(Boolean);
+  if (!ids.length) return;
+  await pool.query(
+    `DELETE FROM empty_records_dismissed WHERE zoho_record_id = ANY($1::text[])`,
+    [ids],
+  );
+}
 
 /** Mark records as Empty-Delete-tagged locally so the cleanup list drops them
  * immediately (before the slow full sync catches up). Idempotent. */
