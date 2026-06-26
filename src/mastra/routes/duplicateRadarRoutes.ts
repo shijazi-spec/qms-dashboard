@@ -9214,6 +9214,40 @@ export const duplicateRadarRoutes = [
       }
     },
   },
+  {
+    // Admin-gated: AI-Apply batch — verify each empty candidate against Zoho
+    // (prune ghosts, skip docs/protected stages), then tag survivors Empty-Delete.
+    // Never deletes in Zoho; the admin removes tagged records.
+    path: "/api/duplicates/empty-records/ai-apply",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const module = String(body?.module || "");
+        if (!["Deals", "Accounts", "Contacts"].includes(module))
+          return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
+        const limit =
+          Number.isFinite(body?.limit) && body.limit > 0
+            ? Math.floor(body.limit)
+            : undefined;
+        const { aiApplyEmptyDelete } = await import("../../utils/emptyRecordsDatabase");
+        const AGENT =
+          "Adam — GRQ Assistant (on behalf of " + (su?.email || "operator") + ")";
+        const r = await aiApplyEmptyDelete(
+          module as "Deals" | "Accounts" | "Contacts",
+          { limit, by: AGENT },
+        );
+        return c.json({ success: true, ...r });
+      } catch (e: any) {
+        logger.error("empty-records/ai-apply failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
 ];
 
 export default duplicateRadarRoutes;

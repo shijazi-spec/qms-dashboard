@@ -1,9 +1,11 @@
 import { pool } from "./duplicateRadarDatabase";
+import { logger } from "./logger";
 import {
   classifyDeal,
   classifyAccount,
   classifyContact,
   testKeywordLikePatterns,
+  isProtectedDealStage,
 } from "./emptyRecordsDetection";
 
 export interface EmptyRecordRow {
@@ -227,6 +229,214 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
     if (out.length >= CAP) break;
   }
   return out;
+}
+
+/**
+ * AI-Apply: for each genuinely-empty candidate in the given module, verify it
+ * is still live in Zoho, prune any already-deleted ghosts from the local
+ * mirror, skip records holding attachments or in protected Deal stages, then
+ * bulk-tag survivors with the Empty-Delete tag and record them in the ledger.
+ *
+ * The platform NEVER deletes in Zoho — it only tags; the admin is the final gate.
+ */
+export async function aiApplyEmptyDelete(
+  module: "Deals" | "Accounts" | "Contacts",
+  opts: { limit?: number; by: string | null },
+): Promise<{
+  tagged: number;
+  prunedGhosts: number;
+  skippedWithDocs: number;
+  skippedAlreadyTagged: number;
+  remaining: number;
+}> {
+  const {
+    fetchZohoRecordById,
+    fetchRecordAttachments,
+    addZohoTags,
+  } = await import("./zohoCRM");
+
+  // 1. Pull candidates and keep only delete-eligible non-orphaned records.
+  let allCandidates: EmptyRecordRow[];
+  if (module === "Deals") allCandidates = await getEmptyDeals();
+  else if (module === "Accounts") allCandidates = await getEmptyAccounts();
+  else allCandidates = await getEmptyContacts();
+
+  // orphaned = belongs in Account Hints, not delete queue
+  const eligible = allCandidates.filter((r) => r.reason !== "orphaned");
+
+  const batchSize = opts.limit ?? (Number(process.env.EMPTY_AI_APPLY_BATCH) || 150);
+  const slice = eligible.slice(0, batchSize);
+  const remaining = Math.max(0, eligible.length - slice.length);
+
+  let prunedGhosts = 0;
+  let skippedWithDocs = 0;
+  let skippedAlreadyTagged = 0;
+  const toTag: string[] = [];
+
+  // 2. Per-candidate bounded sequential loop (live Zoho calls — pace them).
+  for (const candidate of slice) {
+    const id = candidate.zohoId;
+
+    if (module === "Contacts") {
+      // Light existence check — fetch the live record to confirm it still exists
+      // and read its live Tag array.
+      let rec: Awaited<ReturnType<typeof fetchZohoRecordById>>;
+      try {
+        rec = await fetchZohoRecordById("Contacts", id);
+      } catch (e) {
+        if (isZohoGhostError(e)) {
+          await pruneGhostRecords([id]);
+          prunedGhosts++;
+          continue;
+        }
+        logger.warn(`[aiApplyEmptyDelete] Contacts fetch error for ${id}, skipping`, e);
+        continue;
+      }
+      if (!rec) {
+        // null = 404/204 — ghost
+        await pruneGhostRecords([id]);
+        prunedGhosts++;
+        continue;
+      }
+      // Step 1b: live-tag check
+      const liveTags: string[] = ((rec.data.Tag as any[]) || []).map(
+        (t: any) => String(t?.name || ""),
+      );
+      if (liveTags.includes(EMPTY_DELETE_TAG)) {
+        await markEmptyDeleteTagged("Contacts", [id], opts.by);
+        continue; // already tagged — idempotent ledger update, don't re-tag
+      }
+      if (liveTags.includes("Duplicate-Delete")) {
+        skippedAlreadyTagged++;
+        continue; // merge-flow record — leave it alone
+      }
+      toTag.push(id);
+    } else {
+      // Accounts / Deals: fetchRecordAttachments doubles as the existence check.
+      // We additionally need the live record for its Tag array and (for Deals) Stage.
+      let liveRec: Awaited<ReturnType<typeof fetchZohoRecordById>> | null = null;
+      try {
+        liveRec = await fetchZohoRecordById(module, id);
+      } catch (e) {
+        if (isZohoGhostError(e)) {
+          await pruneGhostRecords([id]);
+          prunedGhosts++;
+          continue;
+        }
+        logger.warn(`[aiApplyEmptyDelete] ${module} record fetch error for ${id}, skipping`, e);
+        continue;
+      }
+      if (!liveRec) {
+        await pruneGhostRecords([id]);
+        prunedGhosts++;
+        continue;
+      }
+
+      // Step 1b: live-tag check
+      const liveTags: string[] = ((liveRec.data.Tag as any[]) || []).map(
+        (t: any) => String(t?.name || ""),
+      );
+      if (liveTags.includes(EMPTY_DELETE_TAG)) {
+        await markEmptyDeleteTagged(module, [id], opts.by);
+        continue; // already tagged — idempotent, don't re-tag
+      }
+      if (liveTags.includes("Duplicate-Delete")) {
+        skippedAlreadyTagged++;
+        continue; // merge-flow record — leave it alone
+      }
+
+      // For Deals: re-confirm the live Stage is not protected.
+      if (module === "Deals") {
+        const liveStage: string | null = liveRec.data.Stage || null;
+        if (isProtectedDealStage(liveStage)) {
+          skippedAlreadyTagged++; // protected stage counts as "skip"
+          continue;
+        }
+      }
+
+      // Attachment check — the actual live document gate.
+      let atts: Awaited<ReturnType<typeof fetchRecordAttachments>>;
+      try {
+        atts = await fetchRecordAttachments(module, id);
+      } catch (e) {
+        if (isZohoGhostError(e)) {
+          await pruneGhostRecords([id]);
+          prunedGhosts++;
+          continue;
+        }
+        logger.warn(`[aiApplyEmptyDelete] ${module} attachments fetch error for ${id}, skipping`, e);
+        continue;
+      }
+      if (atts.length > 0) {
+        skippedWithDocs++;
+        continue;
+      }
+
+      toTag.push(id);
+    }
+  }
+
+  // 3. Batch-tag survivors in chunks of ≤100.
+  const taggedOk: string[] = [];
+  const CHUNK = 100;
+  for (let i = 0; i < toTag.length; i += CHUNK) {
+    const chunk = toTag.slice(i, i + CHUNK);
+    let result: any;
+    try {
+      result = await addZohoTags(module, chunk, [EMPTY_DELETE_TAG]);
+    } catch (e) {
+      if (isZohoGhostError(e)) {
+        // Batch failed with a ghost-like error — prune the whole chunk conservatively.
+        await pruneGhostRecords(chunk);
+        prunedGhosts += chunk.length;
+        continue;
+      }
+      logger.error(`[aiApplyEmptyDelete] addZohoTags failed for ${module} chunk`, e);
+      continue;
+    }
+
+    // Zoho v2 add_tags returns HTTP 200 even when a record is REJECTED —
+    // the truth is in each element's code/status field.
+    const perRecord: any[] = Array.isArray(result) ? result : [];
+    for (const rec of perRecord) {
+      const recId: string = String(rec?.details?.id || rec?.id || "");
+      const code: string = String(rec?.code || "").toUpperCase();
+      const status: string = String(rec?.status || "").toLowerCase();
+      if (!recId) continue;
+      if (code === "SUCCESS" || status === "success") {
+        taggedOk.push(recId);
+      } else if (
+        code === "INVALID_DATA" ||
+        isZohoGhostError(new Error(code + " " + (rec?.message || "")))
+      ) {
+        // Ghost detected during tag — prune from local mirror.
+        await pruneGhostRecords([recId]);
+        prunedGhosts++;
+      } else {
+        logger.warn(`[aiApplyEmptyDelete] per-record tag rejected for ${recId}: code=${code}`, rec);
+      }
+    }
+
+    // Fallback: if Zoho returned an empty array but the call succeeded,
+    // treat all ids in this chunk as tagged (add_tags with valid ids
+    // sometimes returns an empty data array on 200).
+    if (perRecord.length === 0) {
+      for (const id of chunk) taggedOk.push(id);
+    }
+  }
+
+  // 4. Record tagged ids in the ledger (idempotent).
+  if (taggedOk.length > 0) {
+    await markEmptyDeleteTagged(module, taggedOk, opts.by);
+  }
+
+  return {
+    tagged: taggedOk.length,
+    prunedGhosts,
+    skippedWithDocs,
+    skippedAlreadyTagged,
+    remaining,
+  };
 }
 
 // Contacts: name-only (no email/phone/account/deal) OR test-name.
