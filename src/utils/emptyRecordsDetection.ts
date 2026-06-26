@@ -66,14 +66,22 @@ export function testKeywordLikePatterns(): string[] {
   ];
 }
 
+export const DEAL_PROTECTED_STAGES = new Set(["agreement signed", "paid"]);
+
+export function isProtectedDealStage(stage?: string | null): boolean {
+  return DEAL_PROTECTED_STAGES.has(String(stage || "").trim().toLowerCase());
+}
+
 export function classifyDeal(input: {
   hasAccount: boolean;
   hasContact: boolean;
   amount: number;
   name: string;
+  hasAttachments?: boolean;
+  stage?: string | null;
 }): { reason: "orphaned" | "empty" | "test" | null; deleteEligible: boolean; linkEligible: boolean } {
   const isTest = isTestOrPlaceholderName(input.name);
-  const empty = !input.hasAccount && !input.hasContact && !(input.amount > 0);
+  const empty = !input.hasAccount && !input.hasContact && !input.hasAttachments && !isProtectedDealStage(input.stage);
   const orphaned = !input.hasAccount;
   let reason: "orphaned" | "empty" | "test" | null = null;
   if (isTest) reason = "test";
@@ -90,9 +98,11 @@ export function classifyAccount(input: {
   hasDeals: boolean;
   hasContacts: boolean;
   name: string;
+  hasEmail?: boolean;
+  hasAttachments?: boolean;
 }): { reason: "empty" | "test" | null; structurallyEmpty: boolean } {
   const isTest = isTestOrPlaceholderName(input.name);
-  const structurallyEmpty = !input.hasDeals && !input.hasContacts;
+  const structurallyEmpty = !input.hasDeals && !input.hasContacts && !input.hasEmail && !input.hasAttachments;
   let reason: "empty" | "test" | null = null;
   if (isTest) reason = "test";
   else if (structurallyEmpty) reason = "empty";

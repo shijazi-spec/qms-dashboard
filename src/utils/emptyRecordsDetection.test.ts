@@ -9,6 +9,7 @@ import {
   classifyDeal,
   classifyAccount,
   classifyContact,
+  isProtectedDealStage,
 } from "./emptyRecordsDetection";
 
 let passed = 0;
@@ -86,6 +87,22 @@ console.log("classifyContact");
   const r = classifyContact({ hasEmail: true, hasPhone: true, hasAccount: true, hasDeals: true, name: "test contact" });
   assert(r.reason === "test" && r.deleteEligible, "test name → flagged despite full data");
 }
+
+console.log("isProtectedDealStage");
+assert(isProtectedDealStage("Agreement Signed") === true, "Agreement Signed protected");
+assert(isProtectedDealStage("paid") === true, "paid protected (case-insensitive)");
+assert(isProtectedDealStage("Proposal") === false, "Proposal not protected");
+assert(isProtectedDealStage(null) === false, "null stage not protected");
+
+console.log("classifyDeal — stage + attachment guards");
+assert(classifyDeal({ hasAccount: false, hasContact: false, amount: 0, name: "X", hasAttachments: false, stage: "Paid" }).reason !== "empty", "protected-stage deal never empty");
+assert(classifyDeal({ hasAccount: false, hasContact: false, amount: 0, name: "X", hasAttachments: false, stage: "Proposal" }).reason === "empty", "bare non-protected deal is empty");
+assert(classifyDeal({ hasAccount: false, hasContact: false, amount: 0, name: "X", hasAttachments: true, stage: "Proposal" }).reason !== "empty", "deal with documents not empty");
+
+console.log("classifyAccount — email + attachment guards");
+assert(classifyAccount({ hasDeals: false, hasContacts: false, hasEmail: true, name: "X", hasAttachments: false }).reason !== "empty", "account with email not empty");
+assert(classifyAccount({ hasDeals: false, hasContacts: false, hasEmail: false, name: "X", hasAttachments: true }).reason !== "empty", "account with documents not empty");
+assert(classifyAccount({ hasDeals: false, hasContacts: false, hasEmail: false, name: "X", hasAttachments: false }).reason === "empty", "bare account is empty");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

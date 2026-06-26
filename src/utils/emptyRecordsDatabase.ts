@@ -110,7 +110,8 @@ export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
     `SELECT zoho_record_id, record_name, owner_name,
             COALESCE(deal_value, 0) AS amount,
             raw_data->'Account_Name'->>'id' AS account_id,
-            raw_data->'Contact_Name'->>'id' AS contact_id
+            raw_data->'Contact_Name'->>'id' AS contact_id,
+            COALESCE(NULLIF(stage,''), raw_data->>'Stage') AS stage
        FROM duplicate_records
       WHERE record_type='deal'
         AND ( COALESCE(NULLIF(raw_data->'Account_Name'->>'id',''), NULL) IS NULL
@@ -127,6 +128,8 @@ export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
       hasContact: !!(r.contact_id && String(r.contact_id).trim()),
       amount: Number(r.amount) || 0,
       name: r.record_name || "",
+      hasAttachments: false,
+      stage: r.stage || null,
     });
     if (!c.reason) continue;
     // Operator decision (Ahmad 2026-06-26): a deal that has REAL data but is just
@@ -159,7 +162,8 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
            AND raw_data->'Account_Name'->>'id' <> ''
      )
      SELECT a.zoho_record_id, a.record_name, a.account_name, a.owner_name,
-            (a.zoho_record_id NOT IN (SELECT aid FROM linked)) AS structurally_empty
+            (a.zoho_record_id NOT IN (SELECT aid FROM linked)) AS structurally_empty,
+            COALESCE(NULLIF(a.email,''), a.raw_data->>'Email') AS email
        FROM duplicate_records a
       WHERE a.record_type='account'
         AND ( a.zoho_record_id NOT IN (SELECT aid FROM linked)
@@ -177,6 +181,8 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
       hasDeals: !r.structurally_empty, // structurally_empty=false → it HAS a link
       hasContacts: !r.structurally_empty,
       name,
+      hasEmail: !!(r.email && String(r.email).trim()),
+      hasAttachments: false,
     });
     if (!c.reason) continue;
     out.push({
