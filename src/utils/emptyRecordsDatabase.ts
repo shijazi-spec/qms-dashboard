@@ -417,11 +417,15 @@ export async function aiApplyEmptyDelete(
       }
     }
 
-    // Fallback: if Zoho returned an empty array but the call succeeded,
-    // treat all ids in this chunk as tagged (add_tags with valid ids
-    // sometimes returns an empty data array on 200).
+    // If Zoho returned no per-record array (empty/ambiguous response), do NOT
+    // optimistically assume success — that would write the ledger for records
+    // that may never have been tagged, dropping them off the list forever.
+    // Leave them on the list; this self-heals on the next AI-Apply run: if the
+    // tag DID apply, the live-tag check sees Empty-Delete and records it
+    // idempotently; if it didn't, they get re-tagged. (Zoho add_tags reliably
+    // returns one SUCCESS element per valid id, so empty is genuinely unusual.)
     if (perRecord.length === 0) {
-      for (const id of chunk) taggedOk.push(id);
+      logger.warn(`[aiApplyEmptyDelete] addZohoTags returned no per-record results for ${module} chunk of ${chunk.length}; leaving on list for next run`);
     }
   }
 
