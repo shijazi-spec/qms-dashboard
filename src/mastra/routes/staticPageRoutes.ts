@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { createHash } from "crypto";
 import { getSessionFromCookie } from "./authRoutes";
 import {
   isAdminKeyConfigured,
@@ -281,9 +282,23 @@ export const staticPageRoutes = [
           const body = isText
             ? readFileSync(assetPath, "utf-8")
             : readFileSync(assetPath);
+          // Content-hash ETag + revalidation so dashboard CSS/JS/assets never
+          // serve a stale cached copy across deploys. These were previously
+          // sent with max-age=3600 and no validator, so a browser could keep
+          // an old build's asset for up to an hour. With a strong ETag and
+          // `no-cache`, the browser revalidates each load: a cheap 304 when
+          // unchanged, the fresh asset the instant the content changes.
+          const etag = `"${createHash("sha1").update(body).digest("hex")}"`;
+          if (c.req.header("if-none-match") === etag) {
+            return c.body(null, 304, {
+              ETag: etag,
+              "Cache-Control": "no-cache",
+            });
+          }
           return c.body(body as any, 200, {
             "Content-Type": mime,
-            "Cache-Control": "public, max-age=3600",
+            ETag: etag,
+            "Cache-Control": "no-cache",
           });
         } catch (error) {
           logger.error("Error serving dashboard subpage:", error);

@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { createHash } from "crypto";
 
 import { logger } from "../../utils/logger";
 function resolveFile(relPaths: string[]): string | null {
@@ -21,7 +22,23 @@ function serveStaticText(filename: string, contentType: string) {
           "Content-Type": contentType,
         });
       const content = readFileSync(filePath, "utf-8");
-      return c.text(content, 200, { "Content-Type": contentType });
+      // Content-hash ETag + revalidation. These externalised assets are large
+      // (duplicates-app.js is ~700KB) and were previously served with no
+      // validators, so browsers heuristically cached them and kept serving a
+      // stale copy across deploys. With a strong ETag and `no-cache`, the
+      // browser revalidates on every load: a tiny 304 when unchanged, and the
+      // fresh file the instant the content changes.
+      const etag = `"${createHash("sha1").update(content).digest("hex")}"`;
+      if (c.req.header("if-none-match") === etag) {
+        c.header("ETag", etag);
+        c.header("Cache-Control", "no-cache");
+        return c.body(null, 304);
+      }
+      return c.text(content, 200, {
+        "Content-Type": contentType,
+        ETag: etag,
+        "Cache-Control": "no-cache",
+      });
     } catch (error) {
       logger.error(`Error serving ${filename}:`, error);
       return c.text(`/* Error loading ${filename} */`, 500, {
@@ -33,61 +50,10 @@ function serveStaticText(filename: string, contentType: string) {
 
 export const staticAssetRoutes = [
   {
-    path: "/dashboard/tailwind.css",
-    method: "GET",
-    createHandler: async () => {
-      return async (c: any) => {
-        try {
-          const candidates = [
-            join(process.cwd(), "dashboard", "tailwind.css"),
-            join(process.cwd(), "..", "dashboard", "tailwind.css"),
-            "/home/runner/workspace/dashboard/tailwind.css",
-          ];
-          const filePath = resolveFile(candidates);
-          if (!filePath)
-            return c.text("/* tailwind.css not found */", 404, {
-              "Content-Type": "text/css",
-            });
-          const css = readFileSync(filePath, "utf-8");
-          c.header("Content-Type", "text/css; charset=utf-8");
-          c.header("Cache-Control", "public, max-age=3600");
-          return c.body(css);
-        } catch (error) {
-          logger.error("Error serving tailwind.css:", error);
-          return c.text("/* Error loading tailwind.css */", 500, {
-            "Content-Type": "text/css",
-          });
-        }
-      };
-    },
-  },
-  {
     path: "/css/navigation.css",
-    method: "GET",
-    createHandler: async () => {
-      return async (c: any) => {
-        try {
-          const candidates = [
-            join(process.cwd(), "dashboard", "css", "navigation.css"),
-            join(process.cwd(), "..", "dashboard", "css", "navigation.css"),
-            "/home/runner/workspace/dashboard/css/navigation.css",
-          ];
-          const filePath = resolveFile(candidates);
-          if (!filePath)
-            return c.text("/* navigation.css not found */", 404, {
-              "Content-Type": "text/css",
-            });
-          return c.text(readFileSync(filePath, "utf-8"), 200, {
-            "Content-Type": "text/css",
-          });
-        } catch (error) {
-          logger.error("Error serving navigation.css:", error);
-          return c.text("/* Error loading navigation.css */", 500, {
-            "Content-Type": "text/css",
-          });
-        }
-      };
-    },
+    method: "GET" as const,
+    createHandler: async () =>
+      serveStaticText("css/navigation.css", "text/css; charset=utf-8"),
   },
   // Favicon — green-shield SVG matching the login-page badge in the
   // WalaPlus brand emerald. Serves both /favicon.svg (modern browsers,
