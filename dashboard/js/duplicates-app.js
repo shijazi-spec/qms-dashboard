@@ -7100,6 +7100,43 @@
             erReload(kind);
             erLoadTaggedStatus();
         }
+        // Live-verify ONLY the rows currently visible on this page against Zoho
+        // (bounded — the same gate AI-Apply uses). Confirmed-empty rows stay; rows
+        // that turn out to have deals/contacts are auto-Dismissed and removed;
+        // already-deleted rows are pruned. No tagging.
+        async function erVerifyPage(kind) {
+            const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
+            const rows = window['_er_' + kind] || [];
+            if (!rows.length) return;
+            const pages = Math.max(1, Math.ceil(rows.length / ER_PAGE_SIZE));
+            const cur = Math.min(pages - 1, Math.max(0, window['_erPage_' + kind] || 0));
+            const pageRows = rows.slice(cur * ER_PAGE_SIZE, cur * ER_PAGE_SIZE + ER_PAGE_SIZE);
+            const ids = pageRows.map(function (r) { return String(r.zohoId); });
+            if (!ids.length) return;
+            const result = document.getElementById('erBulkResult');
+            if (result) result.textContent = 'Verifying ' + ids.length + ' ' + module + ' against Zoho… (live deals/contacts check)';
+            const j = await erAdminPost('/api/duplicates/empty-records/verify-page', { module: module, zohoIds: ids });
+            if (!j) { if (result) result.textContent = 'Cancelled.'; return; }
+            if (!j.success) { if (result) result.textContent = 'Error: ' + (j.error || 'failed'); return; }
+            // Confirmed-empty accounts → enable their checkbox (delete-eligible).
+            if (kind === 'accounts') {
+                (j.empty || []).forEach(function (id) {
+                    const row = (window['_er_accounts'] || []).find(function (r) { return String(r.zohoId) === String(id); });
+                    if (row) row.deleteEligible = true;
+                });
+            }
+            // Drop the non-empty (dismissed), ghosts (pruned), and already-tagged.
+            const drop = []
+                .concat((j.keep || []).map(function (k) { return String(k.id); }))
+                .concat((j.ghosts || []).map(String))
+                .concat((j.tagged || []).map(String));
+            if (drop.length) _erRemoveLocal(kind, drop);
+            else erRender(kind, 'er' + module + 'Body'); // reflect deleteEligible
+            let msg = '✓ Verified ' + ids.length + ': ' + (j.empty || []).length + ' confirmed empty · ' + (j.keep || []).length + ' had deals/contacts (removed)';
+            if ((j.ghosts || []).length) msg += ' · ' + j.ghosts.length + ' already deleted (pruned)';
+            if ((j.tagged || []).length) msg += ' · ' + j.tagged.length + ' already tagged';
+            if (result) result.textContent = msg;
+        }
         async function erCheckAccountAttachments(id) {
             const cell = document.getElementById('eratt-' + id);
             if (cell) cell.innerHTML = '<span class="text-xs text-gray-400">checking…</span>';

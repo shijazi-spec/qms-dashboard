@@ -232,6 +232,62 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
 }
 
 /**
+ * SINGLE SOURCE OF TRUTH for "is this live Zoho record actually empty?". Returns
+ * a non-null reason when the record has REAL data (so it must NOT be tagged), or
+ * null when it is genuinely empty. Both `aiApplyEmptyDelete` (the bulk tagger) and
+ * `verifyEmptyCandidates` (the per-page CRM verifier) call this, so their safety
+ * gate can never drift. May THROW on a Zoho API error (incl. ghost) — callers
+ * decide whether to prune (ghost) or fail-safe-skip (other).
+ *
+ * `data` is the already-fetched live record body (`fetchZohoRecordById(...).data`).
+ * Reasons: "contact_info" | "deals" | "contacts" | "email" | "account" |
+ * "documents".  NOTE: a Deal's protected-stage check is intentionally NOT here —
+ * it is a "skip" but not a "has data" signal; callers handle it separately.
+ */
+async function liveDataReason(
+  module: "Deals" | "Accounts" | "Contacts",
+  id: string,
+  data: any,
+): Promise<string | null> {
+  const { fetchZohoRelatedRecords, fetchRecordAttachments } = await import("./zohoCRM");
+  const d: any = data || {};
+  if (module === "Contacts") {
+    if (
+      d.Email ||
+      d.Secondary_Email ||
+      d.Phone ||
+      d.Mobile ||
+      (d.Account_Name && d.Account_Name.id)
+    )
+      return "contact_info";
+    // A contact linked to ANY deal (including a partner/marketplace deal, or one
+    // linked via Contact Roles rather than the deal's Contact_Name) is NOT empty.
+    const cDeals = await fetchZohoRelatedRecords("Contacts", id, "Deals", { perPage: 1 });
+    if (Array.isArray(cDeals) && cDeals.length > 0) return "deals";
+    return null;
+  }
+  if (module === "Deals") {
+    if (d.Account_Name && d.Account_Name.id) return "account";
+    if (d.Contact_Name && d.Contact_Name.id) return "contacts";
+    const atts = await fetchRecordAttachments("Deals", id);
+    if (Array.isArray(atts) && atts.length > 0) return "documents";
+    return null;
+  }
+  // Accounts
+  if (d.Email || d.email) return "email";
+  // The decisive check: does Zoho show ANY live deal or contact on this account
+  // right now? Catches the "account has deals inside" false positive the synced
+  // mirror missed (Ahmad 2026-06-26/27).
+  const aDeals = await fetchZohoRelatedRecords("Accounts", id, "Deals", { perPage: 1 });
+  if (Array.isArray(aDeals) && aDeals.length > 0) return "deals";
+  const aContacts = await fetchZohoRelatedRecords("Accounts", id, "Contacts", { perPage: 1 });
+  if (Array.isArray(aContacts) && aContacts.length > 0) return "contacts";
+  const atts = await fetchRecordAttachments("Accounts", id);
+  if (Array.isArray(atts) && atts.length > 0) return "documents";
+  return null;
+}
+
+/**
  * AI-Apply: for each genuinely-empty candidate in the given module, verify it
  * is still live in Zoho, prune any already-deleted ghosts from the local
  * mirror, skip records holding attachments or in protected Deal stages, then
@@ -250,33 +306,7 @@ export async function aiApplyEmptyDelete(
   skippedAlreadyTagged: number;
   remaining: number;
 }> {
-  const {
-    fetchZohoRecordById,
-    fetchRecordAttachments,
-    fetchZohoRelatedRecords,
-    addZohoTags,
-  } = await import("./zohoCRM");
-
-  // Live emptiness gate: an account is only truly empty if Zoho shows it has NO
-  // deals AND NO contacts right now (the local mirror can be stale / mid-sync, so
-  // we must ask Zoho directly before tagging — Ahmad 2026-06-26). Returns true if
-  // any related deal/contact exists. Errors are treated as "has data" (fail safe:
-  // never tag on an inconclusive check).
-  async function accountHasLiveLinks(accountId: string): Promise<boolean> {
-    for (const rel of ["Deals", "Contacts"]) {
-      try {
-        const rows = await fetchZohoRelatedRecords("Accounts", accountId, rel, {
-          perPage: 1,
-        });
-        if (Array.isArray(rows) && rows.length > 0) return true;
-      } catch (e) {
-        if (isZohoGhostError(e)) throw e; // let the caller prune the ghost
-        logger.warn(`[aiApplyEmptyDelete] Accounts/${accountId}/${rel} check failed — treating as has-data`, e);
-        return true;
-      }
-    }
-    return false;
-  }
+  const { fetchZohoRecordById, addZohoTags } = await import("./zohoCRM");
 
   // 1. Pull candidates and keep only delete-eligible non-orphaned records.
   let allCandidates: EmptyRecordRow[];
@@ -301,170 +331,70 @@ export async function aiApplyEmptyDelete(
   for (const candidate of slice) {
     const id = candidate.zohoId;
 
-    if (module === "Contacts") {
-      // Light existence check — fetch the live record to confirm it still exists
-      // and read its live Tag array.
-      let rec: Awaited<ReturnType<typeof fetchZohoRecordById>>;
-      try {
-        rec = await fetchZohoRecordById("Contacts", id);
-      } catch (e) {
-        if (isZohoGhostError(e)) {
-          await pruneGhostRecords([id]);
-          prunedGhosts++;
-          continue;
-        }
-        logger.warn(`[aiApplyEmptyDelete] Contacts fetch error for ${id}, skipping`, e);
-        continue;
-      }
-      if (!rec) {
-        // null = 404/204 — ghost
+    // Verify the record still exists in Zoho + read its live Tag (and Stage).
+    let liveRec: Awaited<ReturnType<typeof fetchZohoRecordById>> | null = null;
+    try {
+      liveRec = await fetchZohoRecordById(module, id);
+    } catch (e) {
+      if (isZohoGhostError(e)) {
         await pruneGhostRecords([id]);
         prunedGhosts++;
         continue;
       }
-      // Step 1b: live-tag check
-      const liveTags: string[] = ((rec.data.Tag as any[]) || []).map(
-        (t: any) => String(t?.name || ""),
-      );
-      if (liveTags.includes(EMPTY_DELETE_TAG)) {
-        await markEmptyDeleteTagged("Contacts", [id], opts.by);
-        skippedAlreadyTagged++;
-        continue; // already tagged — idempotent ledger update, don't re-tag
-      }
-      if (liveTags.includes("Duplicate-Delete")) {
-        skippedAlreadyTagged++;
-        continue; // merge-flow record — leave it alone
-      }
-      // Live emptiness gate — the mirror may be stale; confirm the contact really
-      // has no email / phone / account against the LIVE record before tagging.
-      const cd: any = rec.data || {};
-      const contactHasData = !!(
-        cd.Email ||
-        cd.Secondary_Email ||
-        cd.Phone ||
-        cd.Mobile ||
-        (cd.Account_Name && cd.Account_Name.id)
-      );
-      if (contactHasData) {
-        skippedHasData++;
-        continue;
-      }
-      // Live DEAL check — a contact linked to ANY deal (including a partner /
-      // marketplace deal, or one linked via Contact Roles rather than the deal's
-      // Contact_Name) is NOT empty. The synced mirror only knows Contact_Name
-      // links, so this live related-list call is the only reliable gate (Ahmad
-      // 2026-06-27: a name-only contact with an active Partner deal was flagged).
-      try {
-        const cDeals = await fetchZohoRelatedRecords("Contacts", id, "Deals", { perPage: 1 });
-        if (Array.isArray(cDeals) && cDeals.length > 0) {
-          skippedHasData++;
-          continue;
-        }
-      } catch (e) {
-        if (isZohoGhostError(e)) {
-          await pruneGhostRecords([id]);
-          prunedGhosts++;
-          continue;
-        }
-        // Inconclusive → fail safe: do NOT tag.
-        logger.warn(`[aiApplyEmptyDelete] Contacts/${id}/Deals check failed, skipping`, e);
-        continue;
-      }
-      toTag.push(id);
-    } else {
-      // Accounts / Deals: fetchRecordAttachments doubles as the existence check.
-      // We additionally need the live record for its Tag array and (for Deals) Stage.
-      let liveRec: Awaited<ReturnType<typeof fetchZohoRecordById>> | null = null;
-      try {
-        liveRec = await fetchZohoRecordById(module, id);
-      } catch (e) {
-        if (isZohoGhostError(e)) {
-          await pruneGhostRecords([id]);
-          prunedGhosts++;
-          continue;
-        }
-        logger.warn(`[aiApplyEmptyDelete] ${module} record fetch error for ${id}, skipping`, e);
-        continue;
-      }
-      if (!liveRec) {
-        await pruneGhostRecords([id]);
-        prunedGhosts++;
-        continue;
-      }
-
-      // Step 1b: live-tag check
-      const liveTags: string[] = ((liveRec.data.Tag as any[]) || []).map(
-        (t: any) => String(t?.name || ""),
-      );
-      if (liveTags.includes(EMPTY_DELETE_TAG)) {
-        await markEmptyDeleteTagged(module, [id], opts.by);
-        skippedAlreadyTagged++;
-        continue; // already tagged — idempotent, don't re-tag
-      }
-      if (liveTags.includes("Duplicate-Delete")) {
-        skippedAlreadyTagged++;
-        continue; // merge-flow record — leave it alone
-      }
-
-      const ld: any = liveRec.data || {};
-
-      // Live emptiness gate — the mirror may be stale; confirm against Zoho NOW.
-      if (module === "Deals") {
-        // Re-confirm the live Stage is not a protected existing-client stage.
-        if (isProtectedDealStage(ld.Stage || null)) {
-          skippedAlreadyTagged++;
-          continue;
-        }
-        // A deal that now has an account or a contact is NOT empty — skip it.
-        if ((ld.Account_Name && ld.Account_Name.id) || (ld.Contact_Name && ld.Contact_Name.id)) {
-          skippedHasData++;
-          continue;
-        }
-      } else {
-        // Accounts: an email field counts as real data.
-        if (ld.Email || ld.email) {
-          skippedHasData++;
-          continue;
-        }
-        // The decisive check: does Zoho show ANY live deal or contact on this
-        // account right now? This is what catches the "account has deals inside"
-        // false positive the mirror missed (Ahmad 2026-06-26).
-        try {
-          if (await accountHasLiveLinks(id)) {
-            skippedHasData++;
-            continue;
-          }
-        } catch (e) {
-          if (isZohoGhostError(e)) {
-            await pruneGhostRecords([id]);
-            prunedGhosts++;
-            continue;
-          }
-          logger.warn(`[aiApplyEmptyDelete] Accounts link check failed for ${id}, skipping`, e);
-          continue;
-        }
-      }
-
-      // Attachment check — the live document gate (Accounts + Deals).
-      let atts: Awaited<ReturnType<typeof fetchRecordAttachments>>;
-      try {
-        atts = await fetchRecordAttachments(module, id);
-      } catch (e) {
-        if (isZohoGhostError(e)) {
-          await pruneGhostRecords([id]);
-          prunedGhosts++;
-          continue;
-        }
-        logger.warn(`[aiApplyEmptyDelete] ${module} attachments fetch error for ${id}, skipping`, e);
-        continue;
-      }
-      if (atts.length > 0) {
-        skippedWithDocs++;
-        continue;
-      }
-
-      toTag.push(id);
+      logger.warn(`[aiApplyEmptyDelete] ${module} fetch error for ${id}, skipping`, e);
+      continue;
     }
+    if (!liveRec) {
+      // null = 404/204 — ghost
+      await pruneGhostRecords([id]);
+      prunedGhosts++;
+      continue;
+    }
+
+    const ld: any = liveRec.data || {};
+    const liveTags: string[] = ((ld.Tag as any[]) || []).map(
+      (t: any) => String(t?.name || ""),
+    );
+    if (liveTags.includes(EMPTY_DELETE_TAG)) {
+      await markEmptyDeleteTagged(module, [id], opts.by);
+      skippedAlreadyTagged++;
+      continue; // already tagged — idempotent ledger update, don't re-tag
+    }
+    if (liveTags.includes("Duplicate-Delete")) {
+      skippedAlreadyTagged++;
+      continue; // merge-flow record — leave it alone
+    }
+
+    // Deals: a protected existing-client stage is a skip (not a has-data signal).
+    if (module === "Deals" && isProtectedDealStage(ld.Stage || null)) {
+      skippedAlreadyTagged++;
+      continue;
+    }
+
+    // Shared live-emptiness gate (the SAME gate verifyEmptyCandidates uses).
+    let reason: string | null;
+    try {
+      reason = await liveDataReason(module, id, ld);
+    } catch (e) {
+      if (isZohoGhostError(e)) {
+        await pruneGhostRecords([id]);
+        prunedGhosts++;
+        continue;
+      }
+      // Inconclusive → fail safe: do NOT tag.
+      logger.warn(`[aiApplyEmptyDelete] ${module} live-emptiness check failed for ${id}, skipping`, e);
+      continue;
+    }
+    if (reason === "documents") {
+      skippedWithDocs++;
+      continue;
+    }
+    if (reason) {
+      skippedHasData++;
+      continue;
+    }
+
+    toTag.push(id);
   }
 
   // 3. Batch-tag survivors in chunks of ≤100.
@@ -538,6 +468,87 @@ export async function aiApplyEmptyDelete(
     skippedAlreadyTagged,
     remaining,
   };
+}
+
+/**
+ * Live-verify a SET of candidate ids (the rows the operator currently sees on a
+ * page) against Zoho — WITHOUT tagging anything. For each id it asks Zoho the same
+ * question `aiApplyEmptyDelete` asks before tagging (via the shared `liveDataReason`
+ * gate) and sorts the id into one of:
+ *   - `empty`  — genuinely empty (confirmed: stays a delete candidate)
+ *   - `keep`   — has real data (deals/contacts/email/docs) → auto-Dismissed so it
+ *                drops off the cleanup list and never returns
+ *   - `ghost`  — already deleted in Zoho → pruned from the local mirror
+ *   - `tagged` — already carries Empty-Delete / Duplicate-Delete → dropped
+ * Bounded by the caller (one visible page, ≤ a few dozen ids). The platform never
+ * deletes in Zoho; "keep" only writes a local Dismiss, "ghost" only prunes our copy.
+ */
+export async function verifyEmptyCandidates(
+  module: "Deals" | "Accounts" | "Contacts",
+  zohoIds: string[],
+  by: string | null,
+): Promise<{
+  empty: string[];
+  keep: Array<{ id: string; reason: string }>;
+  ghosts: string[];
+  tagged: string[];
+}> {
+  const { fetchZohoRecordById } = await import("./zohoCRM");
+  const ids = (zohoIds || []).map(String).filter(Boolean);
+  const empty: string[] = [];
+  const keep: Array<{ id: string; reason: string }> = [];
+  const ghosts: string[] = [];
+  const tagged: string[] = [];
+
+  for (const id of ids) {
+    let liveRec: Awaited<ReturnType<typeof fetchZohoRecordById>> | null = null;
+    try {
+      liveRec = await fetchZohoRecordById(module, id);
+    } catch (e) {
+      if (isZohoGhostError(e)) {
+        ghosts.push(id);
+        continue;
+      }
+      logger.warn(`[verifyEmptyCandidates] ${module} fetch error for ${id}, leaving as-is`, e);
+      continue;
+    }
+    if (!liveRec) {
+      ghosts.push(id);
+      continue;
+    }
+    const ld: any = liveRec.data || {};
+    const liveTags: string[] = ((ld.Tag as any[]) || []).map((t: any) => String(t?.name || ""));
+    if (liveTags.includes(EMPTY_DELETE_TAG) || liveTags.includes("Duplicate-Delete")) {
+      tagged.push(id);
+      continue;
+    }
+    if (module === "Deals" && isProtectedDealStage(ld.Stage || null)) {
+      keep.push({ id, reason: "protected_stage" });
+      continue;
+    }
+    let reason: string | null;
+    try {
+      reason = await liveDataReason(module, id, ld);
+    } catch (e) {
+      if (isZohoGhostError(e)) {
+        ghosts.push(id);
+        continue;
+      }
+      logger.warn(`[verifyEmptyCandidates] ${module} live-emptiness check failed for ${id}, leaving as-is`, e);
+      continue;
+    }
+    if (reason) keep.push({ id, reason });
+    else empty.push(id);
+  }
+
+  // Persist the verdicts on our side (Zoho is never modified here):
+  //  - ghosts → prune from the mirror so they vanish everywhere
+  //  - keep   → Dismiss ("reviewed — not empty") so they don't reappear
+  if (ghosts.length) await pruneGhostRecords(ghosts);
+  if (keep.length) {
+    await markEmptyRecordsDismissed(module, keep.map((k) => k.id), by);
+  }
+  return { empty, keep, ghosts, tagged };
 }
 
 /** Return every row in the empty_delete_ledger (optionally filtered by module)

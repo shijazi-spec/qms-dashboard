@@ -9314,6 +9314,42 @@ export const duplicateRadarRoutes = [
       }
     },
   },
+  {
+    // Admin-gated: live-verify the ids the operator currently sees on a page
+    // against Zoho (the same gate AI-Apply uses) WITHOUT tagging — confirms which
+    // are genuinely empty, auto-Dismisses any that turn out to have deals/contacts,
+    // and prunes ghosts. Bounded by the caller to one visible page.
+    path: "/api/duplicates/empty-records/verify-page",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const module = String(body?.module || "");
+        if (!["Deals", "Accounts", "Contacts"].includes(module))
+          return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
+        const zohoIds = Array.isArray(body?.zohoIds)
+          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean).slice(0, 100)
+          : [];
+        if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
+        const { verifyEmptyCandidates } = await import("../../utils/emptyRecordsDatabase");
+        const AGENT =
+          "Adam — GRQ Assistant (on behalf of " + (su?.email || "operator") + ")";
+        const r = await verifyEmptyCandidates(
+          module as "Deals" | "Accounts" | "Contacts",
+          zohoIds,
+          AGENT,
+        );
+        return c.json({ success: true, ...r });
+      } catch (e: any) {
+        logger.error("empty-records/verify-page failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
 ];
 
 export default duplicateRadarRoutes;
