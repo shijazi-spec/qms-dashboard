@@ -176,6 +176,7 @@ describe("classifyPreflightRows verdict ladder", () => {
       review: 1,
       warn: 1,
       duplicate: 1,
+      no_contact: 0,
       pass: 1,
     });
     expect(res.total_arr_exposure_blocked).toBe(100);
