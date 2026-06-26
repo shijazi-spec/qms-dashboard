@@ -7594,6 +7594,20 @@ export async function getDuplicateRecordsByType(
   // unreachable and any cluster whose records straddled a page boundary was
   // split into partial groups. We instead select the page of cluster ids
   // first, then fetch ALL in-scope records for exactly those clusters.
+  // A record queued for deletion (tagged Empty-Delete in the Empty/Orphaned tab)
+  // must NOT keep showing as duplicate work in the module tabs — that's double
+  // work (Ahmad 2026-06-26). Require >=2 NON-tagged records of the type for the
+  // cluster to still count as a duplicate, so a pair where one side is already
+  // queued for deletion drops off. Keyed on the empty_delete_ledger so it takes
+  // effect the instant the operator tags — no waiting for the Zoho delete + sync.
+  const stillTwoUntagged = `
+      AND (
+        SELECT COUNT(*) FROM duplicate_records dx
+         WHERE dx.cluster_id = dc.id AND dx.record_type = $1
+           AND NOT EXISTS (
+             SELECT 1 FROM empty_delete_ledger edl WHERE edl.zoho_record_id = dx.zoho_record_id
+           )
+      ) >= 2`;
   const clusterPage = await pool.query(
     `
     SELECT dc.id
@@ -7602,7 +7616,7 @@ export async function getDuplicateRecordsByType(
       AND EXISTS (
         SELECT 1 FROM duplicate_records dr
         WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
-      )${genuineDupFilter}
+      )${genuineDupFilter}${stillTwoUntagged}
     ORDER BY dc.confidence_score DESC, dc.id ASC
     LIMIT $${dateParams.length + 2} OFFSET $${dateParams.length + 3}
   `,
@@ -7619,7 +7633,7 @@ export async function getDuplicateRecordsByType(
       AND EXISTS (
         SELECT 1 FROM duplicate_records dr
         WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
-      )${genuineDupFilter}
+      )${genuineDupFilter}${stillTwoUntagged}
   `,
     [recordType, ...dateParams],
   );
@@ -7676,6 +7690,9 @@ export async function getDuplicateRecordsByType(
     FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
     WHERE dr.record_type = $1 AND dr.cluster_id = ANY($2::int[])${recDateFilter}
+      AND NOT EXISTS (
+        SELECT 1 FROM empty_delete_ledger edl WHERE edl.zoho_record_id = dr.zoho_record_id
+      )
     ORDER BY dc.confidence_score DESC, dc.id ASC, dr.is_primary DESC, dr.created_date ASC
   `,
     [recordType, clusterIds, ...recDateParams],
