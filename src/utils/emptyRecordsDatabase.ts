@@ -301,6 +301,7 @@ export async function aiApplyEmptyDelete(
 ): Promise<{
   tagged: number;
   prunedGhosts: number;
+  dismissed: number;
   skippedWithDocs: number;
   skippedHasData: number;
   skippedAlreadyTagged: number;
@@ -326,6 +327,12 @@ export async function aiApplyEmptyDelete(
   let skippedHasData = 0;
   let skippedAlreadyTagged = 0;
   const toTag: string[] = [];
+  // Records confirmed (live) to be NOT empty — has data / documents / a protected
+  // stage / a merge-flow tag. We auto-Dismiss them so they drop off the cleanup
+  // list and don't get re-processed on the next batch (this is what lets the
+  // operator run AI-Apply batch-after-batch — or the one-click loop — to the end
+  // instead of the same not-empty rows clogging the front of the queue).
+  const toDismiss: string[] = [];
 
   // 2. Per-candidate bounded sequential loop (live Zoho calls — pace them).
   for (const candidate of slice) {
@@ -358,16 +365,18 @@ export async function aiApplyEmptyDelete(
     if (liveTags.includes(EMPTY_DELETE_TAG)) {
       await markEmptyDeleteTagged(module, [id], opts.by);
       skippedAlreadyTagged++;
-      continue; // already tagged — idempotent ledger update, don't re-tag
+      continue; // already tagged — ledger excludes it; no dismiss needed
     }
     if (liveTags.includes("Duplicate-Delete")) {
       skippedAlreadyTagged++;
-      continue; // merge-flow record — leave it alone
+      toDismiss.push(id); // merge-flow record — not an empty; drop it off this list
+      continue;
     }
 
     // Deals: a protected existing-client stage is a skip (not a has-data signal).
     if (module === "Deals" && isProtectedDealStage(ld.Stage || null)) {
       skippedAlreadyTagged++;
+      toDismiss.push(id); // existing-client deal — never empty; drop it off
       continue;
     }
 
@@ -381,21 +390,27 @@ export async function aiApplyEmptyDelete(
         prunedGhosts++;
         continue;
       }
-      // Inconclusive → fail safe: do NOT tag.
+      // Inconclusive → fail safe: do NOT tag (leave it for a later pass).
       logger.warn(`[aiApplyEmptyDelete] ${module} live-emptiness check failed for ${id}, skipping`, e);
       continue;
     }
     if (reason === "documents") {
       skippedWithDocs++;
+      toDismiss.push(id); // has documents → not empty
       continue;
     }
     if (reason) {
       skippedHasData++;
+      toDismiss.push(id); // has deals/contacts/email → not empty
       continue;
     }
 
     toTag.push(id);
   }
+
+  // Drop the confirmed-not-empty records off the cleanup list (durable Dismiss;
+  // Zoho is never modified — un-dismiss restores them).
+  if (toDismiss.length) await markEmptyRecordsDismissed(module, toDismiss, opts.by);
 
   // 3. Batch-tag survivors in chunks of ≤100.
   const taggedOk: string[] = [];
@@ -463,6 +478,7 @@ export async function aiApplyEmptyDelete(
   return {
     tagged: taggedOk.length,
     prunedGhosts,
+    dismissed: toDismiss.length,
     skippedWithDocs,
     skippedHasData,
     skippedAlreadyTagged,

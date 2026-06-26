@@ -7086,17 +7086,30 @@
             const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             const n = (window['_er_' + kind] || []).length;
             if (!n) return;
-            if (!confirm('AI-Apply: verify each of the ' + n + ' empty ' + module + ' against Zoho, prune any already deleted, and tag the genuinely-empty ones Empty-Delete (Adam, pending admin delete)?\n\nThe platform never deletes — the admin removes the tagged records.')) return;
+            if (!confirm('AI-Apply ALL ' + n + ' empty ' + module + '?\n\nFor each one it verifies live in Zoho, tags the genuinely-empty as Empty-Delete (Adam, pending admin delete), prunes any already deleted, and removes any that turn out to have data. It runs batch-after-batch until the whole list is done.\n\nThe platform never deletes — the admin removes the tagged records.')) return;
             const result = document.getElementById('erBulkResult');
-            if (result) result.textContent = 'AI-Applying ' + module + '… (verifying live records)';
-            const j = await erAdminPost('/api/duplicates/empty-records/ai-apply', { module: module });
-            if (!j) { if (result) result.textContent = 'Cancelled.'; return; }
-            if (!j.success) { if (result) result.textContent = 'Error: ' + (j.error || 'failed'); return; }
-            let msg = '✓ Tagged ' + (j.tagged || 0) + ' · pruned ' + (j.prunedGhosts || 0) + ' ghosts · skipped ' + (j.skippedWithDocs || 0) + ' with documents';
-            if ((j.skippedHasData || 0) > 0) msg += ' · skipped ' + j.skippedHasData + ' with deals/contacts';
-            if ((j.skippedAlreadyTagged || 0) > 0) msg += ' · skipped ' + j.skippedAlreadyTagged + ' already-tagged/protected';
-            if ((j.remaining || 0) > 0) msg += ' · ' + j.remaining + ' remaining — click again';
-            if (result) result.textContent = msg;
+            let tagged = 0, pruned = 0, dismissed = 0, docs = 0, iter = 0;
+            // Loop the batched endpoint until nothing is left (or no progress).
+            while (true) {
+                iter++;
+                if (result) result.textContent = 'AI-Applying ' + module + '… batch ' + iter + ' (tagged ' + tagged + ' so far, verifying live records)';
+                const j = await erAdminPost('/api/duplicates/empty-records/ai-apply', { module: module });
+                if (!j) { if (result) result.textContent = 'Cancelled after ' + tagged + ' tagged.'; break; }
+                if (!j.success) { if (result) result.textContent = 'Stopped: ' + (j.error || 'failed') + ' (after ' + tagged + ' tagged)'; break; }
+                tagged += (j.tagged || 0);
+                pruned += (j.prunedGhosts || 0);
+                dismissed += (j.dismissed || 0);
+                docs += (j.skippedWithDocs || 0);
+                // Progress = anything that removed a record from the list this batch.
+                const progressed = (j.tagged || 0) + (j.prunedGhosts || 0) + (j.dismissed || 0) + (j.skippedAlreadyTagged || 0);
+                if ((j.remaining || 0) <= 0 || progressed === 0 || iter >= 60) {
+                    let msg = '✓ Done (' + iter + ' batch' + (iter === 1 ? '' : 'es') + '): tagged ' + tagged + ' Empty-Delete · pruned ' + pruned + ' ghosts';
+                    if (dismissed > 0) msg += ' · removed ' + dismissed + ' that had data';
+                    if ((j.remaining || 0) > 0 && progressed === 0) msg += ' · ' + j.remaining + ' left need manual review';
+                    if (result) result.textContent = msg;
+                    break;
+                }
+            }
             erReload(kind);
             erLoadTaggedStatus();
         }
