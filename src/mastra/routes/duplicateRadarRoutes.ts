@@ -9071,6 +9071,30 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Per-row "Check documents" — read-only live emptiness check for a single
+    // Accounts/Deals/Contacts record (same shared gate AI-Apply uses). Returns
+    // { empty, reason, ghost, tagged }; makes NO change.
+    path: "/api/duplicates/empty-records/:module/:id/check-empty",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const module = String(c.req.param("module") || "");
+        const id = c.req.param("id");
+        if (!["Deals", "Accounts", "Contacts"].includes(module))
+          return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
+        if (!id) return c.json({ error: "record id required" }, 400);
+        const { checkRecordEmptiness } = await import("../../utils/emptyRecordsDatabase");
+        const r = await checkRecordEmptiness(module as "Deals" | "Accounts" | "Contacts", id);
+        return c.json(r);
+      } catch (e: any) {
+        logger.error("empty-records check-empty failed", e);
+        return c.json({ error: `check failed: ${e?.message || e}` }, 502);
+      }
+    },
+  },
+  {
     // Smart Account Inference suggestion for an orphaned deal (link, not delete).
     path: "/api/duplicates/empty-records/deals/:id/account-suggestion",
     method: "GET" as const,

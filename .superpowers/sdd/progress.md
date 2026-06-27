@@ -1,0 +1,10 @@
+Task 0: complete (commits ffb0a4ba..39d0f5c3, review caught + fixed paren bug)
+Task 1: complete (commit c8c46ce9, classifier rules + list wiring, 38 assertions green, review clean)
+Task 2: complete (status/deleted_at/last_checked_at columns + ALTERs + status index, tsc + schema-parity strict green)
+Task 2: complete (commit f1e3bbd0+2d418c82, ledger lifecycle cols + markEmptyDeleteTagged status, parity strict green)
+Task 3: complete (ghost detection isZohoGhostError + pruneGhostRecords, unit test green via NODE_PATH)
+Task 4: complete (commit 20852f57 + fix; aiApplyEmptyDelete verify-live->tag-check->ghost-prune->attachment->tag + endpoint; review caught optimistic empty-response fallback, made conservative)
+Task 5: complete (commit f09655b0; getTaggedStatus + reconcileEmptyDeleteDeletions [mirror-only delete keeps ledger row] + 2 endpoints + post-sync hook, parity strict green)
+Task 6+7: complete (commit 60c1a1da; AI-Apply buttons per module + ghost auto-prune on 📎 + Tagged-pending-delete sub-section + i18n en/ar + ?v=5; check-dashboard-html-js green 159 blocks)
+Task 8: complete (Adam note #40 updated, no backticks; full gate run green — tsc x2 + schema-parity strict + dashboard-html-js + node --check)
+Final review: MERGE WITH FIXES (no Critical). Fixed Important #1 (message-gated prune) + count nits. Important #2 (deal amount gate dropped) = plan-mandated/user criteria, surfaced to user. Minors logged.

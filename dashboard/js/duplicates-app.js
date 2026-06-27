@@ -7002,7 +7002,15 @@
             const rows = window['_er_' + kind] || [];
             const body = document.getElementById(bodyId);
             if (!body) return;
-            if (!rows.length) { body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_none')) + '</td></tr>'; return; }
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_none')) + '</td></tr>';
+                // Clear any stale pager left from a previous (non-empty) render —
+                // otherwise "Showing 1–50 of 215 · Page 1/5" lingers under "None found".
+                const _t = body.closest('table');
+                const _tf = _t && _t.querySelector('tfoot.er-pager');
+                if (_tf) _tf.innerHTML = '';
+                return;
+            }
             const moduleOf = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             // Pagination: render only the current page so the DOM stays small.
             const pages = Math.max(1, Math.ceil(rows.length / ER_PAGE_SIZE));
@@ -7017,7 +7025,7 @@
                 const cb = '<input type="checkbox" class="er-cb" id="' + escapeHtml(cbId) + '" data-kind="' + moduleOf + '" data-zoho-id="' + escapeHtml(String(r.zohoId)) + '"' + (isSel ? ' checked' : '') + (r.deleteEligible ? '' : ' disabled title="Not delete-eligible yet"') + '>';
                 const args = escapeHtml(JSON.stringify([String(r.zohoId)]));
                 let action;
-                if (kind === 'accounts') {
+                if (kind === 'accounts' || kind === 'deals') {
                     if (r.deleteEligible) {
                         // Label by reason: genuine test data → "test — ready" (red);
                         // a merely-empty record → "empty — ready" (neutral).
@@ -7025,10 +7033,12 @@
                         var _lbl = WalaPlusI18n.t(_isTest ? 'duplicates.er_test_ready' : 'duplicates.er_empty_ready');
                         action = '<span class="text-xs ' + (_isTest ? 'text-rose-600' : 'text-emerald-700') + '">' + escapeHtml(_lbl) + '</span>';
                     } else {
-                        action = '<span id="eratt-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erCheckAccountAttachments" data-args=\'' + args + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 ' + escapeHtml(WalaPlusI18n.t('duplicates.er_check_att')) + '</button></span>';
+                        // "Check documents" — live-verify this one record (no account/
+                        // contact/docs) before it becomes delete-eligible. Same gate for
+                        // Accounts and Deals.
+                        var _kargs = escapeHtml(JSON.stringify([kind, String(r.zohoId)]));
+                        action = '<span id="eratt-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erCheckDocuments" data-args=\'' + _kargs + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 ' + escapeHtml(WalaPlusI18n.t('duplicates.er_check_att')) + '</button></span>';
                     }
-                } else if (kind === 'deals') {
-                    action = '<span id="erlink-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erLinkDeal" data-args=\'' + args + '\' class="px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">🔗 ' + escapeHtml(WalaPlusI18n.t('duplicates.er_link_account')) + '</button></span>';
                 } else {
                     action = '';
                 }
@@ -7150,45 +7160,44 @@
             if ((j.tagged || []).length) msg += ' · ' + j.tagged.length + ' already tagged';
             if (result) result.textContent = msg;
         }
-        async function erCheckAccountAttachments(id) {
+        // Per-row "Check documents" for an Account OR a Deal — live-verify it has
+        // no account/contact/email/documents in Zoho (the shared empty gate). On
+        // confirmed-empty it becomes delete-eligible; if it has data we show why
+        // and keep it; if it was deleted in Zoho the row is pruned on the spot.
+        async function erCheckDocuments(kind, id) {
+            const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             const cell = document.getElementById('eratt-' + id);
             if (cell) cell.innerHTML = '<span class="text-xs text-gray-400">checking…</span>';
             let data;
             try {
-                const res = await fetch('/api/duplicates/empty-records/accounts/' + encodeURIComponent(id) + '/attachments', { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/empty-records/' + module + '/' + encodeURIComponent(id) + '/check-empty', { credentials: 'same-origin' });
                 data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
                 var msg = String(e && e.message || e);
                 if (/invalid_data|related id given seems to be invalid|record not found/i.test(msg)) {
-                    _erRemoveLocal('accounts', [String(id)]);
+                    _erRemoveLocal(kind, [String(id)]);
                     return;
                 }
                 if (cell) cell.innerHTML = '<span class="text-xs text-amber-700">err: ' + escapeHtml(msg) + '</span>';
                 return;
             }
-            const n = data.count || 0;
-            const dealsN = data.deals || 0;
-            const contactsN = data.contacts || 0;
-            // Truly empty only when NO attachments AND no live deals AND no live
-            // contacts. If Zoho shows a deal/contact, this account is NOT empty —
-            // keep it (never let it become delete-eligible).
-            if (n === 0 && dealsN === 0 && contactsN === 0) {
+            if (data.ghost) { _erRemoveLocal(kind, [String(id)]); return; } // deleted in Zoho
+            const row = (window['_er_' + kind] || []).find(function (r) { return String(r.zohoId) === String(id); });
+            if (data.empty) {
                 if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">' + escapeHtml(WalaPlusI18n.t('duplicates.er_empty_ready')) + '</span>';
-                const cb = document.getElementById('er-cb-accounts-' + id);
+                const cb = document.getElementById('er-cb-' + kind + '-' + id);
                 if (cb) cb.disabled = false;
-                // Persist so the checkbox stays enabled after a page change re-render.
-                const row = (window._er_accounts || []).find(function (r) { return String(r.zohoId) === String(id); });
-                if (row) row.deleteEligible = true;
+                if (row) row.deleteEligible = true; // persists across page re-render
             } else {
-                // Show WHY it is kept (docs and/or live deals/contacts).
-                var parts = [];
-                if (n > 0) parts.push('📎 ' + n);
-                if (dealsN > 0) parts.push(dealsN + ' ' + WalaPlusI18n.t('duplicates.er_deals'));
-                if (contactsN > 0) parts.push(contactsN + ' ' + WalaPlusI18n.t('duplicates.er_contacts'));
-                if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">' + escapeHtml(parts.join(' · ') + ' — ' + WalaPlusI18n.t('duplicates.er_keep')) + '</span>';
-                // Make sure a previously-eligible row is demoted if data appeared.
-                const row = (window._er_accounts || []).find(function (r) { return String(r.zohoId) === String(id); });
+                // Not empty — explain why and keep it (never let it become eligible).
+                var reasonMap = {
+                    tagged: 'already tagged', protected_stage: 'active stage',
+                    deals: WalaPlusI18n.t('duplicates.er_deals'), contacts: WalaPlusI18n.t('duplicates.er_contacts'),
+                    documents: '📎 docs', email: 'email', account: 'account', contact_info: 'has contact info'
+                };
+                var why = reasonMap[data.reason] || (data.reason || 'has data');
+                if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">' + escapeHtml(why + ' — ' + WalaPlusI18n.t('duplicates.er_keep')) + '</span>';
                 if (row) row.deleteEligible = false;
             }
         }
@@ -7273,7 +7282,7 @@
                 const statusChip = r.status === 'deleted'
                     ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_deleted')) + '</span>'
                     : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_pending')) + '</span>';
-                const taggedAt = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—';
+                const taggedAt = r.createdAt ? new Date(r.createdAt).toLocaleString() : '—';
                 return '<tr class="border-t border-gray-100">'
                     + '<td class="px-3 py-2">' + link + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.module || '—') + '</td>'

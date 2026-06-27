@@ -186,7 +186,10 @@ export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
       name: r.record_name || "",
       owner: r.owner_name || null,
       reason: c.reason,
-      deleteEligible: c.deleteEligible,
+      // Like Accounts: a test-named deal is delete-ready immediately; a merely
+      // "empty" deal must pass the per-row "Check documents" live verification
+      // (no account/contact/docs) before its checkbox enables.
+      deleteEligible: c.reason === "test",
       linkEligible: c.linkEligible,
       extra: { amount: Number(r.amount) || 0, hasContact: !!r.contact_id },
     });
@@ -578,6 +581,47 @@ export async function verifyEmptyCandidates(
     await markEmptyRecordsDismissed(module, keep.map((k) => k.id), by);
   }
   return { empty, keep, ghosts, tagged };
+}
+
+/**
+ * Read-only single-record live emptiness check, used by the per-row
+ * "Check documents" button (Accounts + Deals) — the same gate AI-Apply uses,
+ * via the shared `liveDataReason`. Makes NO changes (no tag, no dismiss, no
+ * prune); the caller decides what to do with the verdict.
+ *   - ghost  → the record is deleted in Zoho (caller prunes the row)
+ *   - tagged → already carries Empty-Delete / Duplicate-Delete
+ *   - empty:true  → genuinely empty (caller marks it delete-eligible)
+ *   - empty:false + reason → has data / documents / a protected stage
+ */
+export async function checkRecordEmptiness(
+  module: "Deals" | "Accounts" | "Contacts",
+  id: string,
+): Promise<{ empty: boolean; reason: string | null; ghost: boolean; tagged: boolean }> {
+  const { fetchZohoRecordById } = await import("./zohoCRM");
+  let liveRec: Awaited<ReturnType<typeof fetchZohoRecordById>> | null = null;
+  try {
+    liveRec = await fetchZohoRecordById(module, id);
+  } catch (e) {
+    if (isZohoGhostError(e)) return { empty: false, reason: null, ghost: true, tagged: false };
+    throw e;
+  }
+  if (!liveRec) return { empty: false, reason: null, ghost: true, tagged: false };
+  const ld: any = liveRec.data || {};
+  const liveTags: string[] = ((ld.Tag as any[]) || []).map((t: any) => String(t?.name || ""));
+  if (liveTags.includes(EMPTY_DELETE_TAG) || liveTags.includes("Duplicate-Delete")) {
+    return { empty: false, reason: "tagged", ghost: false, tagged: true };
+  }
+  if (module === "Deals" && isProtectedDealStage(ld.Stage || null)) {
+    return { empty: false, reason: "protected_stage", ghost: false, tagged: false };
+  }
+  let reason: string | null;
+  try {
+    reason = await liveDataReason(module, id, ld);
+  } catch (e) {
+    if (isZohoGhostError(e)) return { empty: false, reason: null, ghost: true, tagged: false };
+    throw e;
+  }
+  return { empty: !reason, reason: reason || null, ghost: false, tagged: false };
 }
 
 /** Return every row in the empty_delete_ledger (optionally filtered by module)
