@@ -7041,7 +7041,7 @@
                     + '<td class="px-3 py-2">' + erReasonBadge(r.reason) + '</td>'
                     + '<td class="px-3 py-2"><a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">' + escapeHtml(r.name || '(no name)') + '</a></td>'
                     + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.owner || '—') + '</td>'
-                    + '<td class="px-3 py-2"><div class="flex items-center gap-2 flex-wrap">' + action + dismissBtn + '</div></td>'
+                    + '<td class="px-3 py-2"><div class="flex items-center gap-2 whitespace-nowrap">' + action + dismissBtn + '</div></td>'
                     + '</tr>';
             }).join('');
             // Pagination footer (only when there's more than one page).

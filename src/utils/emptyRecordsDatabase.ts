@@ -39,9 +39,22 @@ const DELETE_TAGS = [
 // already tagged for deletion — via the in-platform ledger (immediate effect)
 // OR whose freshly-synced Zoho Tag array already carries a delete tag
 // (Empty-Delete / Duplicate-Delete). Either way a tagged record never shows.
+//
+// The last clause closes the STALE-MIRROR gap (Ahmad 2026-06-27): a record just
+// tagged Duplicate-Delete by the merge/resolution flow won't have its synced Tag
+// updated until the next full sync, so the Tag check above can't see it. But the
+// merge flow writes the duplicate's Zoho id to duplicate_resolution_ledger at
+// apply time (sync-independent), so we also exclude anything listed there. This
+// removes Duplicate-Delete accounts/deals/contacts from the cleansing list the
+// moment they're merged, not a sync later.
 const NOT_ALREADY_TAGGED = `
   AND %ALIAS%zoho_record_id NOT IN (SELECT zoho_record_id FROM empty_delete_ledger)
   AND %ALIAS%zoho_record_id NOT IN (SELECT zoho_record_id FROM empty_records_dismissed)
+  AND %ALIAS%zoho_record_id NOT IN (
+    SELECT dz FROM duplicate_resolution_ledger drl
+    CROSS JOIN LATERAL jsonb_array_elements_text(drl.duplicate_zoho_ids) AS dz
+    WHERE dz IS NOT NULL
+  )
   AND NOT EXISTS (
     SELECT 1 FROM jsonb_array_elements(
       CASE WHEN jsonb_typeof(%ALIAS%raw_data->'Tag') = 'array'
