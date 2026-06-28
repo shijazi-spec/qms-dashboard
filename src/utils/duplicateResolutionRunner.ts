@@ -205,7 +205,10 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
                ON lg.master_zoho_id = dr.zoho_record_id
             WHERE dr.zoho_record_id IS NOT NULL
             GROUP BY dr.cluster_id
-         ) lg ON lg.cluster_id = dc.id`,
+         ) lg ON lg.cluster_id = dc.id
+         -- Only REAL duplicate clusters (≥2 records); exclude 1-record singletons
+         -- so per-module totals match the tabs (Ahmad 2026-06-28).
+         WHERE (COALESCE(dc.total_leads,0)+COALESCE(dc.total_deals,0)+COALESCE(dc.total_contacts,0)+COALESCE(dc.total_accounts,0)) >= 2`,
     );
     const row = r.rows[0] || {};
     order.forEach((o, i) => {
@@ -485,6 +488,14 @@ export async function buildExecutiveBriefText(
   const agg = await getClusterSummary().catch(() => null);
   const breakdown = await getModuleResolutionBreakdown().catch(() => [] as any[]);
   const kpi = await getKPIMetrics().catch(() => null);
+  // The Empty/Orphaned cleanup is a SEPARATE workflow from duplicate-cluster
+  // merges (it tags empty/test records Empty-Delete, not duplicates). Surface it
+  // so leadership sees the full cleanup picture, not just merges (Ahmad 2026-06-28).
+  const emptyStatus = await (await import("./emptyRecordsDatabase"))
+    .getTaggedStatus()
+    .catch(() => null);
+  const emptyTagged = emptyStatus?.counts?.tagged || 0;
+  const emptyDeleted = emptyStatus?.counts?.deleted || 0;
   const grades = await getGradeHistory(undefined, 4 * 8).catch(() => []);
   const latestByModule: Record<string, any> = {};
   for (const g of grades) if (!latestByModule[g.module]) latestByModule[g.module] = g;
@@ -538,10 +549,13 @@ export async function buildExecutiveBriefText(
     `\n` +
     (dupRate != null ? `• *Duplicate rate:* ~${dupRate}% vs the 2% target — our biggest data-quality gap.\n` : "") +
     `• *Financial exposure:* ${sar(exposure)} of estimated inflated pipeline in duplicates.\n` +
-    `• *Progress:* ${resolved.toLocaleString()} clusters resolved · ${open.toLocaleString()} still open.\n` +
+    `• *Progress (merges):* ${resolved.toLocaleString()} duplicate clusters resolved · ${open.toLocaleString()} still open.\n` +
+    (emptyTagged > 0
+      ? `• *Progress (empty/test cleanup):* ${emptyTagged.toLocaleString()} empty/test records tagged Empty-Delete${emptyDeleted > 0 ? ` · ${emptyDeleted.toLocaleString()} deleted by admin` : " · pending admin delete"}.\n`
+      : "") +
     `• *Clean-up AI:* ${modePlain}.\n` +
     `• *AI maturity by module:* ${maturity}.\n\n` +
-    `*By module:*\n${moduleLines}\n\n` +
+    `*By module* (a cross-module cluster appears under each module it touches — do not add these up):\n${moduleLines}\n\n` +
     `*Recommendation:* ${cfg.mode === "shadow"
       ? "validate the AI's judgement in observe-only mode; once agreement holds, approve moving the strongest module to assisted (auto-clear safe cases, human-review the rest)."
       : "continue assisted clean-up; review the override rate weekly and tighten thresholds as agreement improves."}`;

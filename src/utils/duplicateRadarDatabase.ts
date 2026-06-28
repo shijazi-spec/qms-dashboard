@@ -3889,6 +3889,12 @@ export async function getClusterSummary(): Promise<{
   activeCount: number;
   resolvedCount: number;
 }> {
+  // A REAL duplicate cluster has ≥2 records (a 1-record "cluster" is a lone
+  // company, NOT a duplicate). The module tabs already gate on ≥2; this brief
+  // historically did COUNT(*) over ALL clusters incl. singletons, which massively
+  // overstated the headline count + duplicate rate (Ahmad 2026-06-28). Gate on the
+  // cluster's record count so the executive figure matches what the tabs show.
+  const MULTI = `(COALESCE(dc.total_leads,0)+COALESCE(dc.total_deals,0)+COALESCE(dc.total_contacts,0)+COALESCE(dc.total_accounts,0)) >= 2`;
   const result = await pool.query(`
     WITH resolved_act AS (
       SELECT DISTINCT cluster_id FROM duplicate_merge_actions
@@ -3906,6 +3912,7 @@ export async function getClusterSummary(): Promise<{
       COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count
     FROM duplicate_clusters dc
     LEFT JOIN resolved_act ra ON ra.cluster_id = dc.id
+    WHERE ${MULTI}
   `);
 
   const row = result.rows[0];
