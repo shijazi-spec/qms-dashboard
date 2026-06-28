@@ -1264,6 +1264,18 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_records_phone_norm ON duplicate_records(phone_normalized) WHERE phone_normalized IS NOT NULL`,
   );
+  // PERF (Ahmad 2026-06-28): the per-contact cluster match in
+  // findContactClusterByStrictMatch filters `LOWER(record_name) = $3` inside an
+  // OR alongside email/phone. Email + phone are indexed above, but record_name
+  // was NOT — and an OR where one arm is unindexed forces Postgres to SEQ-SCAN
+  // all of duplicate_records. That query runs once PER fetched contact (≈59k on a
+  // full pull), so the missing index turned the contact sync into hours of
+  // O(N²) scanning that never finished (so the Contacts baseline never saved, so
+  // every run re-pulled in full). This functional index lets the planner Bitmap-
+  // OR all three identity arms. Mirrors idx_duplicate_records_email.
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_name_lower ON duplicate_records(LOWER(record_name)) WHERE record_name IS NOT NULL`,
+  );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_records_domain ON duplicate_records(domain) WHERE domain IS NOT NULL`,
   );
@@ -1313,6 +1325,15 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       "⚠️ [DuplicateRadar] pg_trgm not available, falling back to Levenshtein matching",
     );
   }
+  // PERF (Ahmad 2026-06-28): findOrCreateClusterByCompany does an EXACT-equality
+  // lookup `WHERE company_name_normalized = $1` once per account/deal during the
+  // sync. The GIN trigram index above only serves LIKE/similarity, NOT `=`, so
+  // that exact match would seq-scan duplicate_clusters per record. This B-tree
+  // index serves the equality lookup (prevents the account phase repeating the
+  // contact-phase O(N²) stall).
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_clusters_company_name_eq ON duplicate_clusters(company_name_normalized) WHERE company_name_normalized IS NOT NULL`,
+  );
 
   // Account inference hints — see src/utils/accountInference.ts. Stored
   // suggestions for sales: "this deal looks like it belongs to Account X
