@@ -6335,8 +6335,14 @@ export async function resolveCluster(
   );
 
   const newStatus = action === "resolve" ? "resolved" : "ignored";
+  // Clear the cached cs_overlap_verdict here too: it's only re-populated by the
+  // next CS-overlap scan, and a resolved/ignored cluster must stop counting
+  // toward CS-overlap totals/ARR immediately, not just be hidden by the list
+  // query's `status = 'active'` filter. This UPDATE is reached only via the
+  // resolve/ignore path (bulkResolve's "reopen" branch calls updateClusterStatus
+  // instead), so reopen→active never runs through here and never gets nulled.
   await pool.query(
-    "UPDATE duplicate_clusters SET status = $1, resolved_by = $2, resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+    "UPDATE duplicate_clusters SET status = $1, resolved_by = $2, resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, cs_overlap_verdict = NULL WHERE id = $3",
     [newStatus, performedBy, clusterId],
   );
 
@@ -9944,7 +9950,9 @@ export async function scanCsLifecycleViolations(opts: {
     `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,
             r.domain, r.modified_date, r.raw_data, r.gov_type
        FROM duplicate_records r
+       LEFT JOIN duplicate_clusters dc ON dc.id = r.cluster_id
       WHERE r.zoho_module = 'Deals'
+        AND (dc.status IS NULL OR dc.status = 'active')
       ORDER BY r.modified_date DESC NULLS LAST
       LIMIT $1`,
     [limit],
@@ -10103,7 +10111,9 @@ export async function scanDealStageAgingViolations(
     `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,
             r.modified_date, r.raw_data
        FROM duplicate_records r
+       LEFT JOIN duplicate_clusters dc ON dc.id = r.cluster_id
       WHERE r.zoho_module = 'Deals'
+        AND (dc.status IS NULL OR dc.status = 'active')
       ORDER BY r.modified_date DESC NULLS LAST
       LIMIT $1`,
     [limit],

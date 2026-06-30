@@ -6544,7 +6544,10 @@ export const duplicateRadarRoutes = [
           );
 
           const { pool } = await import("../../utils/duplicateRadarDatabase");
-          const conds: string[] = ["cs_overlap_verdict IS NOT NULL"];
+          const conds: string[] = [
+            "cs_overlap_verdict IS NOT NULL",
+            "status = 'active'",
+          ];
           const params: any[] = [];
           if (verdict && ["block", "review", "warn"].includes(verdict)) {
             params.push(verdict);
@@ -6580,6 +6583,7 @@ export const duplicateRadarRoutes = [
                     COALESCE(SUM(arr_exposure),0)::float AS arr
                FROM duplicate_clusters
               WHERE cs_overlap_verdict IS NOT NULL
+                AND status = 'active'
               GROUP BY cs_overlap_verdict`,
           );
           const summary: Record<string, { count: number; arr: number }> = {};
