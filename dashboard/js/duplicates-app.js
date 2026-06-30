@@ -79,6 +79,39 @@
                 const logsData = await logsRes.json();
                 const ownerAccData = await ownerAccRes.json();
 
+                // Marketplace / Corporate segment overlay — when the operator
+                // has picked a non-default segment, fetch the segment-aware
+                // tiles from filtered-summary and overlay them onto the
+                // all-up summary so the Executive headline cards reflect the
+                // selected slice. KPI rate cards and resolution-rate stay
+                // all-up (they're whole-population denominators).
+                try {
+                    const seg = document.getElementById('filterSegment')?.value || 'all';
+                    if (seg !== 'all' && summary) {
+                        const fsRes = await fetch('/api/duplicates/filtered-summary?segment=' + encodeURIComponent(seg));
+                        if (fsRes.ok) {
+                            const fs = await fsRes.json();
+                            // Only overlay the fields filtered-summary actually
+                            // computes under the filter — leave the deeper KPIs
+                            // (rates / resolution / overall) at their all-up
+                            // values rather than fabricate segment-aware ones.
+                            if (fs && typeof fs === 'object') {
+                                if (fs.totalClusters != null) summary.trueDuplicateClusters = fs.totalClusters;
+                                if (fs.totalClusters != null) summary.totalClusters = fs.totalClusters;
+                                if (fs.highConfidence != null) summary.highConfidence = fs.highConfidence;
+                                if (fs.mediumConfidence != null) summary.mediumConfidence = fs.mediumConfidence;
+                                if (fs.lowConfidence != null) summary.lowConfidence = fs.lowConfidence;
+                                if (fs.estimatedPipelineInflation != null) summary.estimatedPipelineInflation = fs.estimatedPipelineInflation;
+                                if (fs.totalDuplicateLeads != null) summary.totalDuplicateLeads = fs.totalDuplicateLeads;
+                                if (fs.totalDuplicateDeals != null) summary.totalDuplicateDeals = fs.totalDuplicateDeals;
+                                if (fs.totalDuplicateContacts != null) summary.totalDuplicateContacts = fs.totalDuplicateContacts;
+                                if (fs.totalDuplicateAccounts != null) summary.totalDuplicateAccounts = fs.totalDuplicateAccounts;
+                                summary._segmentApplied = seg;
+                            }
+                        }
+                    }
+                } catch (e) { /* segment overlay is best-effort */ }
+
                 updateSummary(summary);
                 renderLogs(logsData.logs || []);
                 renderOwners(ownerAccData.owners || []);
@@ -5942,6 +5975,17 @@
             // (Export Center tab removed — its size-hint listener used to
             // live here. Per-tab "⬇ Export CSV" buttons stream directly
             // via exportTab() without a pre-flight estimate.)
+
+            // Wire the Advanced-Filters Segment dropdown so changing it via
+            // the dropdown updates the chip and re-runs the active tab —
+            // matches the behaviour of clicking the chips at the top.
+            const segDD = document.getElementById('filterSegment');
+            if (segDD && typeof setSegment === 'function') {
+                segDD.addEventListener('change', (e) => {
+                    const v = (e.target && e.target.value) || 'all';
+                    setSegment(v);
+                });
+            }
         });
 
         // D1: Scan with progress bar
@@ -11237,6 +11281,21 @@
             if (s.layouts && s.layouts.length > 0) {
                 const vals = _advFilterRowValues(row, mapping.layoutField, 'layout');
                 if (!_advFilterMatchMulti(s.layouts, vals)) return false;
+            }
+            // Marketplace / Corporate segment — uses the same layout-field
+            // signal as the multi-select Layout above, but binary: rows
+            // are "marketplace" when their layout matches the merchant
+            // layouts (Marketplace / Partner Accounts), "corporate" for
+            // everything else INCLUDING rows with no layout (legacy data
+            // shouldn't get hidden by the binary). Mirrors the server-side
+            // buildSegmentPredicate exactly.
+            if (s.segment && s.segment !== 'all') {
+                const vals = _advFilterRowValues(row, mapping.layoutField, 'layout');
+                const isMarketplace = vals.some(v =>
+                    v === 'marketplace' || v === 'partner accounts'
+                );
+                if (s.segment === 'marketplace' && !isMarketplace) return false;
+                if (s.segment === 'corporate' && isMarketplace) return false;
             }
             // Pipeline — multi-select.
             if (s.pipelines && s.pipelines.length > 0) {

@@ -131,6 +131,57 @@ export interface DuplicateFilters {
   end_date?: string;
   status?: string;
   confidence_level?: string;
+  /**
+   * Marketplace / Corporate segmentation. UI exposes this as a 3-way chip
+   * + matching dropdown in Advanced Filters. Server maps it to layout_name:
+   *   "marketplace" → LOWER(layout_name) IN ('marketplace','partner accounts')
+   *   "corporate"   → NOT IN that set (incl. NULL/empty = treat as corporate)
+   *   "all" / undef → no constraint (current behavior)
+   * Both segments stay actionable inside the radar — this is for comparison,
+   * not for hiding records.
+   */
+  segment?: "all" | "marketplace" | "corporate";
+}
+
+/**
+ * Returns the SQL predicate (no leading AND), the parameter values, and
+ * whether the predicate references the `duplicate_records r` alias (so
+ * callers know they need to add the record-table JOIN). `paramOffset` is
+ * the next $N number to use — caller advances its own paramIdx by the
+ * length of the returned params array.
+ *
+ * "marketplace" matches Zoho layouts the team treats as merchant /
+ *   marketplace (currently "Marketplace" and "Partner Accounts" —
+ *   matches the existing exclusion logic in cross-module / preflight).
+ * "corporate" is the complement, defaulting NULL/empty to corporate so
+ *   legacy records without an explicit layout aren't lost to the filter.
+ */
+export function buildSegmentPredicate(
+  segment: DuplicateFilters["segment"],
+  paramOffset: number,
+): { condition: string | null; params: string[]; needsRecordJoin: boolean } {
+  if (!segment || segment === "all") {
+    return { condition: null, params: [], needsRecordJoin: false };
+  }
+  const markers = ["marketplace", "partner accounts"];
+  if (segment === "marketplace") {
+    const placeholders = markers
+      .map((_, i) => `$${paramOffset + i}`)
+      .join(",");
+    return {
+      condition: `LOWER(COALESCE(r.layout_name,'')) IN (${placeholders})`,
+      params: markers,
+      needsRecordJoin: true,
+    };
+  }
+  const placeholders = markers
+    .map((_, i) => `$${paramOffset + i}`)
+    .join(",");
+  return {
+    condition: `LOWER(COALESCE(r.layout_name,'')) NOT IN (${placeholders})`,
+    params: markers,
+    needsRecordJoin: true,
+  };
 }
 
 export interface MergeAction {
@@ -9111,6 +9162,14 @@ export async function getFilteredClusters(
     params.push(`%${filters.domain}%`);
   }
 
+  const segmentClause = buildSegmentPredicate(filters.segment, paramIdx);
+  if (segmentClause.condition) {
+    joinNeeded = joinNeeded || segmentClause.needsRecordJoin;
+    recordConditions.push(segmentClause.condition);
+    params.push(...segmentClause.params);
+    paramIdx += segmentClause.params.length;
+  }
+
   const joinClause = joinNeeded
     ? "INNER JOIN duplicate_records r ON r.cluster_id = c.id"
     : "";
@@ -9171,6 +9230,14 @@ export async function getFilteredSummary(
     params.push(`%${filters.domain}%`);
   }
 
+  const segmentClause = buildSegmentPredicate(filters.segment, paramIdx);
+  if (segmentClause.condition) {
+    joinNeeded = joinNeeded || segmentClause.needsRecordJoin;
+    recordConditions.push(segmentClause.condition);
+    params.push(...segmentClause.params);
+    paramIdx += segmentClause.params.length;
+  }
+
   const joinClause = joinNeeded
     ? "INNER JOIN duplicate_records r ON r.cluster_id = c.id"
     : "";
@@ -9178,7 +9245,7 @@ export async function getFilteredSummary(
     recordConditions.length > 0 ? "AND " + recordConditions.join(" AND ") : "";
 
   const query = `
-    SELECT 
+    SELECT
       COUNT(DISTINCT c.id) as total_clusters,
       COUNT(DISTINCT CASE WHEN c.confidence_level = 'high' THEN c.id END) as high_confidence,
       COUNT(DISTINCT CASE WHEN c.confidence_level = 'medium' THEN c.id END) as medium_confidence,
@@ -9191,12 +9258,39 @@ export async function getFilteredSummary(
   const result = await pool.query(query, params);
   const row = result.rows[0];
 
+  // Actionable per-module duplicate counts under the SAME filter — matches
+  // the act_leads/act_deals/act_contacts/act_accounts logic in
+  // getEnhancedSummary so the Executive Summary tiles can rescope by segment
+  // (or any other filter) without lying. r.is_primary = false EXCLUDES the
+  // survivor in each cluster — these are the records the team actually has
+  // to act on. Reuses the SAME r alias that recordConditions/segmentClause
+  // were written against, so the filter applies cleanly and we count out of
+  // exactly one join.
+  const actionableQuery = `
+    SELECT
+      COUNT(*) FILTER (WHERE r.record_type = 'lead'    AND c.total_leads    > 1 AND r.is_primary = false) AS act_leads,
+      COUNT(*) FILTER (WHERE r.record_type = 'deal'    AND c.total_deals    > 1 AND r.is_primary = false) AS act_deals,
+      COUNT(*) FILTER (WHERE r.record_type = 'contact' AND c.total_contacts > 1 AND r.is_primary = false) AS act_contacts,
+      COUNT(*) FILTER (WHERE r.record_type = 'account' AND c.total_accounts > 1 AND r.is_primary = false) AS act_accounts
+    FROM duplicate_clusters c
+    INNER JOIN duplicate_records r ON r.cluster_id = c.id
+    WHERE ${whereConditions.join(" AND ")} ${recordWhere}
+  `;
+  const actionable = await pool.query(actionableQuery, params).then(
+    (r) => r.rows[0],
+    () => null,
+  );
+
   return {
     totalClusters: parseInt(row.total_clusters),
     highConfidence: parseInt(row.high_confidence),
     mediumConfidence: parseInt(row.medium_confidence),
     lowConfidence: parseInt(row.low_confidence),
     estimatedPipelineInflation: parseFloat(row.pipeline_inflation),
+    totalDuplicateLeads: actionable ? parseInt(actionable.act_leads) || 0 : 0,
+    totalDuplicateDeals: actionable ? parseInt(actionable.act_deals) || 0 : 0,
+    totalDuplicateContacts: actionable ? parseInt(actionable.act_contacts) || 0 : 0,
+    totalDuplicateAccounts: actionable ? parseInt(actionable.act_accounts) || 0 : 0,
   };
 }
 
