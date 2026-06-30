@@ -33,6 +33,7 @@ function parseRecordTabFilters(url: URL): {
   confidence_level?: string;
   domain?: string;
   ai_status?: string;
+  segment?: "all" | "marketplace" | "corporate";
 } {
   const csv = (key: string): string[] | undefined => {
     const raw = url.searchParams.get(key);
@@ -51,6 +52,13 @@ function parseRecordTabFilters(url: URL): {
   )
     ? rawAi
     : undefined;
+  // Corporate/Marketplace segment chip — same whitelist contract as
+  // ai_status above, mirrors DuplicateFilters["segment"] (database.ts:143).
+  // Anything else (including absent/"all") means no constraint.
+  const rawSegment = (url.searchParams.get("segment") || "").trim();
+  const segment = ["marketplace", "corporate"].includes(rawSegment)
+    ? (rawSegment as "marketplace" | "corporate")
+    : undefined;
   return {
     start_date: url.searchParams.get("start_date") || undefined,
     end_date: url.searchParams.get("end_date") || undefined,
@@ -61,6 +69,7 @@ function parseRecordTabFilters(url: URL): {
     confidence_level: url.searchParams.get("confidence_level") || undefined,
     domain: url.searchParams.get("domain") || undefined,
     ai_status,
+    segment,
   };
 }
 

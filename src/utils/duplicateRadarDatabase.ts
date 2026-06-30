@@ -7656,6 +7656,7 @@ export async function getDuplicateRecordsByType(
     confidence_level?: string;
     domain?: string;
     ai_status?: string;
+    segment?: "all" | "marketplace" | "corporate";
   },
 ): Promise<{ groups: any[]; total: number }> {
   const countField =
@@ -7705,6 +7706,21 @@ export async function getDuplicateRecordsByType(
   if (options?.domain) {
     dateFilter += ` AND dr.domain ILIKE $${dateParams.length + 2}`;
     dateParams.push(`%${options.domain}%`);
+  }
+  // Corporate/Marketplace segment chip (Bug #2 fix). buildSegmentPredicate
+  // emits its condition against a `r.` alias — dr IS that duplicate_records
+  // alias here (the EXISTS sub-query that dateFilter is appended to is
+  // `SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = dc.id ...`),
+  // so swap the `r.` the helper returns for `dr.` to match this function's
+  // actual alias before appending. Offset = dateParams.length + 2, same
+  // running-offset convention as every other clause above ($1=recordType).
+  const segmentClause = buildSegmentPredicate(
+    options?.segment,
+    dateParams.length + 2,
+  );
+  if (segmentClause.condition) {
+    dateFilter += ` AND ${segmentClause.condition.replace(/\br\./g, "dr.")}`;
+    dateParams.push(...segmentClause.params);
   }
 
   const limit = options?.limit || 50;
@@ -7922,6 +7938,19 @@ export async function getDuplicateRecordsByType(
   if (options?.domain) {
     recDateFilter += ` AND dr.domain ILIKE $${recDateParams.length + 3}`;
     recDateParams.push(`%${options.domain}%`);
+  }
+  // Mirror the same segment constraint on the records-fetch query so the
+  // rows returned for the in-scope clusters are themselves segment-scoped
+  // (the clusterIds list above already excludes out-of-segment clusters,
+  // but a mixed cluster could otherwise still surface off-segment rows).
+  // $1=recordType, $2=clusterIds, so offset starts at recDateParams.length+3.
+  const recSegmentClause = buildSegmentPredicate(
+    options?.segment,
+    recDateParams.length + 3,
+  );
+  if (recSegmentClause.condition) {
+    recDateFilter += ` AND ${recSegmentClause.condition.replace(/\br\./g, "dr.")}`;
+    recDateParams.push(...recSegmentClause.params);
   }
 
   const result = await pool.query(
