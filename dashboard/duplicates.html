@@ -1323,6 +1323,74 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Structured push to Zoho — four dedup-safe, dry-run-first actions.
+                 Sits directly under the Preflight push controls. Counts refresh
+                 after each Preflight run; rows 3 & 4 share the single-contact-new
+                 pool ("PASS remaining") so the split between them is explicit. -->
+            <div id="structuredPushPanel" class="hidden bg-white rounded-lg shadow p-4 mt-3" data-testid="panel-structured-push">
+                <div class="flex items-start justify-between mb-2">
+                    <h3 class="text-sm font-bold text-gray-900" data-i18n="pf_sp_title">Structured push to Zoho</h3>
+                    <span class="text-[11px] text-gray-500">Dry-run by default · admin-gated · create-only</span>
+                </div>
+                <div class="divide-y divide-gray-100">
+                    <!-- A1 — re-engage churned under existing account -->
+                    <div class="flex flex-wrap items-center gap-2 py-2">
+                        <div class="flex-1 min-w-[12rem]">
+                            <span class="text-xs font-medium text-gray-800" data-i18n="pf_sp_a1">Re-engage churned (under existing account)</span>
+                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-800">(<span id="spCount-1">0</span>)</span>
+                        </div>
+                        <label class="flex items-center gap-1 text-xs text-gray-700">
+                            <input type="checkbox" id="spDry-1" checked data-testid="checkbox-sp-dry-1" />
+                            <span data-i18n="pf_sp_dry">Dry-run</span>
+                        </label>
+                        <button data-on-click="erStructuredPush" data-args="[1]" id="spBtn-1" data-testid="button-sp-1" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700"><span data-i18n="pf_sp_push">Push</span></button>
+                        <div id="spResult-1" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
+                    </div>
+                    <!-- A2 — multi-contact new companies -->
+                    <div class="flex flex-wrap items-center gap-2 py-2">
+                        <div class="flex-1 min-w-[12rem]">
+                            <span class="text-xs font-medium text-gray-800" data-i18n="pf_sp_a2">Deal + contacts: multi-contact companies</span>
+                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-800">(<span id="spCount-2">0</span>)</span>
+                        </div>
+                        <label class="flex items-center gap-1 text-xs text-gray-700">
+                            <input type="checkbox" id="spDry-2" checked data-testid="checkbox-sp-dry-2" />
+                            <span data-i18n="pf_sp_dry">Dry-run</span>
+                        </label>
+                        <button data-on-click="erStructuredPush" data-args="[2]" id="spBtn-2" data-testid="button-sp-2" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700"><span data-i18n="pf_sp_push">Push</span></button>
+                        <div id="spResult-2" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
+                    </div>
+                    <!-- A3 — first N single-contact new companies → full structure -->
+                    <div class="flex flex-wrap items-center gap-2 py-2">
+                        <div class="flex-1 min-w-[12rem]">
+                            <span class="text-xs font-medium text-gray-800" data-i18n="pf_sp_a3">New Account + Deal + Contact (first N)</span>
+                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">PASS remaining: <span id="spCount-3">0</span></span>
+                        </div>
+                        <input type="number" id="spNum-3" min="0" value="0" class="w-20 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-num-3" aria-label="First N companies for full structure" />
+                        <label class="flex items-center gap-1 text-xs text-gray-700">
+                            <input type="checkbox" id="spDry-3" checked data-testid="checkbox-sp-dry-3" />
+                            <span data-i18n="pf_sp_dry">Dry-run</span>
+                        </label>
+                        <button data-on-click="erStructuredPush" data-args="[3]" id="spBtn-3" data-testid="button-sp-3" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700"><span data-i18n="pf_sp_push">Push</span></button>
+                        <div id="spResult-3" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
+                    </div>
+                    <!-- A4 — next M single-contact new companies → Leads (starts after A3's slice) -->
+                    <div class="flex flex-wrap items-center gap-2 py-2">
+                        <div class="flex-1 min-w-[12rem]">
+                            <span class="text-xs font-medium text-gray-800" data-i18n="pf_sp_a4">Push as Leads (next M)</span>
+                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">PASS remaining: <span id="spCount-4">0</span></span>
+                        </div>
+                        <input type="number" id="spNum-4" min="0" value="0" class="w-20 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-num-4" aria-label="Next M companies as Leads (after the first N)" />
+                        <label class="flex items-center gap-1 text-xs text-gray-700">
+                            <input type="checkbox" id="spDry-4" checked data-testid="checkbox-sp-dry-4" />
+                            <span data-i18n="pf_sp_dry">Dry-run</span>
+                        </label>
+                        <button data-on-click="erStructuredPush" data-args="[4]" id="spBtn-4" data-testid="button-sp-4" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700"><span data-i18n="pf_sp_push">Push</span></button>
+                        <div id="spResult-4" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
+                    </div>
+                </div>
+                <p class="text-[11px] text-gray-500 mt-2">Rows 3 &amp; 4 draw from the SAME single-contact PASS pool — action 3 takes the first <em>N</em>, action 4 the next <em>M</em> after that slice. Leave a number at 0 to skip.</p>
+            </div>
         </div>
 
         <!-- ═══ ACCOUNT HINTS TAB ═══ -->
@@ -1937,7 +2005,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=20"></script>
+    <script src="/js/duplicates-app.js?v=21"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

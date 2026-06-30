@@ -10508,6 +10508,10 @@
                 else pushBtn.classList.add('hidden');
             }
 
+            // Structured-push panel — reveal it + refresh the four live counts
+            // (client-side mirror of the planner's pool rules).
+            _pfRefreshStructuredPushCounts(data.rows || []);
+
             const body = document.getElementById('preflightResultTable');
             const rows = data.rows || [];
             if (rows.length === 0) {
@@ -10779,6 +10783,171 @@
                             + '<div>Failed: ' + (data.failed || 0) + '</div>'
                             + '<div>Dropped: ' + (data.dropped_count || 0) + ' (non-PASS or no identifier).</div>'
                             + '<div class="mt-1 text-gray-500">Audit-logged. Source: ' + escapeHtml(data.source || '') + '.</div>';
+                    }
+                }
+            } catch (e) {
+                if (resultBox) {
+                    resultBox.classList.remove('hidden');
+                    resultBox.innerHTML = '<div class="font-semibold text-red-700">✗ Push failed</div><div>' + escapeHtml(e.message || String(e)) + '</div>';
+                }
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // Structured push to Zoho — four dedup-safe, dry-run-first actions.
+        // Reads the full classified result rows straight off
+        // window._preflightLastResult.rows (the master array). The four
+        // actions mirror the server planner's pools:
+        //   A1 churned-past-cool-off matched → Deal under existing Account
+        //   A2 multi-contact new companies   → 1 Deal + contacts + Account
+        //   A3 first N single-contact new    → Account + Deal + Contact
+        //   A4 next M single-contact new     → Leads (starts after A3's slice)
+        // ─────────────────────────────────────────────────────────────────
+
+        // Map a raw preflight result row to the SPRow shape the endpoint wants.
+        // verdict / cluster_id / lifecycle_state are TOP-LEVEL on each row;
+        // company / domain / contact_name fall back through r.input.
+        function _pfToSPRow(r, idx) {
+            return {
+                row_index: (r.row_index != null ? r.row_index : idx),
+                company: (r.input && r.input.company_name) || r.company_name || '',
+                domain:  (r.input && r.input.domain) || r.domain || '',
+                email:   r.email || '',
+                phone:   r.phone || '',
+                contact_name: r.contact_name || (r.input && r.input.contact_name) || '',
+                verdict: r.verdict || '',
+                cluster_id: (r.cluster_id != null ? r.cluster_id : null),
+                lifecycle_state: (r.lifecycle_state != null ? r.lifecycle_state : null),
+            };
+        }
+
+        // Client-side mirror of the planner's pool rules so the panel can show
+        // live counts without a round-trip. Group by normalized company key.
+        function _pfNormCompanyKey(company, domain) {
+            return String(company || domain || '').trim().toLowerCase();
+        }
+        function _pfRowHasContact(r) {
+            return !!(String(r.email || '').trim() || String(r.phone || '').trim() || String(r.contact_name || '').trim());
+        }
+        function _pfGroupByCompany(spRows) {
+            var map = new Map();
+            for (var i = 0; i < spRows.length; i++) {
+                var r = spRows[i];
+                var key = _pfNormCompanyKey(r.company, r.domain);
+                if (!key) continue;
+                var g = map.get(key);
+                if (!g) { g = { key: key, rows: [] }; map.set(key, g); }
+                g.rows.push(r);
+            }
+            return Array.from(map.values());
+        }
+        // Returns { a1, a2, singleNew } — singleNew is the SHARED A3/A4 pool size.
+        function _pfCountActions(spRows) {
+            var groups = _pfGroupByCompany(spRows);
+            var isChurnedMatched = function (g) {
+                return g.rows.some(function (r) { return r.lifecycle_state === 'termination_old' && r.cluster_id != null; });
+            };
+            var isNewPass = function (g) {
+                return g.rows.every(function (r) { return r.cluster_id == null; }) &&
+                       g.rows.every(function (r) { return r.verdict === 'pass'; });
+            };
+            var contactCount = function (g) {
+                return g.rows.filter(_pfRowHasContact).length;
+            };
+            var a1 = 0, a2 = 0, singleNew = 0;
+            for (var i = 0; i < groups.length; i++) {
+                var g = groups[i];
+                if (isChurnedMatched(g)) { a1++; continue; }
+                if (isNewPass(g)) {
+                    var cc = contactCount(g);
+                    if (cc >= 2) a2++;
+                    else if (cc === 1) singleNew++;
+                }
+            }
+            return { a1: a1, a2: a2, singleNew: singleNew };
+        }
+
+        // Refresh the four count badges + reveal the panel after a Preflight run.
+        function _pfRefreshStructuredPushCounts(rawRows) {
+            var panel = document.getElementById('structuredPushPanel');
+            if (panel) panel.classList.remove('hidden');
+            var spRows = (rawRows || []).map(_pfToSPRow);
+            var c = _pfCountActions(spRows);
+            var set = function (id, n) { var el = document.getElementById(id); if (el) el.textContent = String(n); };
+            set('spCount-1', c.a1);
+            set('spCount-2', c.a2);
+            set('spCount-3', c.singleNew); // shared single-contact PASS pool
+            set('spCount-4', c.singleNew);
+        }
+
+        // Action handler — wired via data-on-click="erStructuredPush" data-args="[N]".
+        async function erStructuredPush(action) {
+            action = Number(action);
+            var data = window._preflightLastResult;
+            if (!data || !Array.isArray(data.rows)) { alert('Run a Preflight check first.'); return; }
+            var rows = data.rows.map(_pfToSPRow);
+
+            // A3 takes the first N; A4 takes the next M starting after A3's slice.
+            var num3 = parseInt((document.getElementById('spNum-3') || {}).value || '0', 10) || 0;
+            var num4 = parseInt((document.getElementById('spNum-4') || {}).value || '0', 10) || 0;
+            var count = 0, offset = 0;
+            if (action === 3) { count = num3; offset = 0; }
+            else if (action === 4) { count = num4; offset = num3; }
+
+            var dryRun = !!(document.getElementById('spDry-' + action) || {}).checked;
+            var source = 'Preflight Structured Push — ' + new Date().toISOString().slice(0, 10);
+
+            var btn = document.getElementById('spBtn-' + action);
+            var orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = (dryRun ? 'Dry-running…' : 'Pushing…'); }
+            var resultBox = document.getElementById('spResult-' + action);
+
+            try {
+                var res = await fetch('/api/duplicates/preflight/structured-push', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: action,
+                        rows: rows,
+                        count: count,
+                        offset: offset,
+                        dry_run: dryRun,
+                        owner_mode: 'self',
+                        source: source,
+                    }),
+                });
+                var resp = await res.json();
+                if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
+                if (resultBox) {
+                    resultBox.classList.remove('hidden');
+                    if (resp.dry_run) {
+                        var w = resp.would || {};
+                        var line = (action === 4)
+                            ? ('Would create: ' + (w.leads || 0) + ' leads')
+                            : ('Would create: ' + (w.accounts || 0) + ' accounts / ' + (w.contacts || 0) + ' contacts / ' + (w.deals || 0) + ' deals');
+                        resultBox.innerHTML = ''
+                            + '<div class="font-semibold text-purple-800 mb-1">✓ Dry-run complete</div>'
+                            + '<div>' + line + '</div>'
+                            + '<div>Skipped: ' + (resp.skipped_count || 0) + '</div>'
+                            + (resp.sample_payload ? '<div class="mt-2 font-mono text-[10px] bg-white border rounded p-2 overflow-x-auto">Sample payload:<br>' + escapeHtml(JSON.stringify(resp.sample_payload, null, 2)) + '</div>' : '')
+                            + '<div class="mt-2 text-amber-700">Uncheck the Dry-run box and Push again to actually create the records.</div>';
+                    } else {
+                        var cr = resp.created || {};
+                        var fl = resp.failed || {};
+                        var crLine = (action === 4)
+                            ? ('Created: ' + (cr.leads || 0) + ' leads')
+                            : ('Created: ' + (cr.accounts || 0) + ' accounts / ' + (cr.contacts || 0) + ' contacts / ' + (cr.deals || 0) + ' deals');
+                        var flLine = (action === 4)
+                            ? ('Failed: ' + (fl.leads || 0))
+                            : ('Failed: ' + ((fl.accounts || 0) + (fl.contacts || 0) + (fl.deals || 0)));
+                        resultBox.innerHTML = ''
+                            + '<div class="font-semibold text-emerald-800 mb-1">✓ Push complete</div>'
+                            + '<div>' + crLine + '</div>'
+                            + '<div>' + flLine + '</div>'
+                            + '<div>Skipped: ' + (resp.skipped_count || 0) + '</div>'
+                            + '<div class="mt-1 text-gray-500">Audit-logged. Source: ' + escapeHtml(source) + '.</div>';
                     }
                 }
             } catch (e) {
