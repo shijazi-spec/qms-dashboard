@@ -7271,11 +7271,37 @@
             const rows = data.rows || [];
             const counts = data.counts || {};
             if (progress) progress.textContent = (counts.tagged || 0) + ' tagged · ' + (counts.deleted || 0) + ' deleted · ' + (counts.pending || 0) + ' pending';
+            // PERF (Ahmad 2026-06-30): this can be 1000+ rows. Rendering them all
+            // bloated the DOM so badly that every reflow (e.g. the sticky bulk-bar
+            // appearing on a checkbox tick) froze the tab for ~a minute. Paginate
+            // like the other tables — keep the rows in memory, render one page.
+            window._erTagged = rows;
+            window._erTaggedPage = 0;
+            _erRenderTaggedPage();
+        }
+        function erTaggedChangePage(delta) {
+            const rows = window._erTagged || [];
+            const pages = Math.max(1, Math.ceil(rows.length / ER_PAGE_SIZE));
+            window._erTaggedPage = Math.min(pages - 1, Math.max(0, (window._erTaggedPage || 0) + delta));
+            _erRenderTaggedPage();
+        }
+        function _erRenderTaggedPage() {
+            const body = document.getElementById('erTaggedBody');
+            if (!body) return;
+            const rows = window._erTagged || [];
+            const table = body.closest('table');
+            const clearPager = function () { const tf = table && table.querySelector('tfoot.er-pager'); if (tf) tf.innerHTML = ''; };
             if (!rows.length) {
                 body.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-gray-400">None yet.</td></tr>';
+                clearPager();
                 return;
             }
-            body.innerHTML = rows.map(function (r) {
+            const pages = Math.max(1, Math.ceil(rows.length / ER_PAGE_SIZE));
+            const cur = Math.min(pages - 1, Math.max(0, window._erTaggedPage || 0));
+            window._erTaggedPage = cur;
+            const start = cur * ER_PAGE_SIZE;
+            const pageRows = rows.slice(start, start + ER_PAGE_SIZE);
+            body.innerHTML = pageRows.map(function (r) {
                 const kindMap = { Deals: 'deals', Accounts: 'accounts', Contacts: 'contacts' };
                 const kind = kindMap[r.module] || 'accounts';
                 const link = '<a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline font-mono text-xs">' + escapeHtml(r.zohoId) + '</a>';
@@ -7291,6 +7317,23 @@
                     + '<td class="px-3 py-2 text-xs text-gray-500">' + escapeHtml(taggedAt) + '</td>'
                     + '</tr>';
             }).join('');
+            if (table) {
+                let tf = table.querySelector('tfoot.er-pager');
+                if (rows.length > ER_PAGE_SIZE) {
+                    if (!tf) { tf = document.createElement('tfoot'); tf.className = 'er-pager'; table.appendChild(tf); }
+                    const from = start + 1, to = start + pageRows.length;
+                    const prevDis = cur === 0 ? ' opacity-40 pointer-events-none' : ' hover:bg-gray-100';
+                    const nextDis = cur >= pages - 1 ? ' opacity-40 pointer-events-none' : ' hover:bg-gray-100';
+                    tf.innerHTML = '<tr class="bg-gray-50"><td colspan="5" class="px-3 py-2">'
+                        + '<div class="flex items-center justify-between text-xs text-gray-600">'
+                        + '<span>Showing ' + from.toLocaleString() + '–' + to.toLocaleString() + ' of ' + rows.length.toLocaleString() + '</span>'
+                        + '<span class="flex items-center gap-2">'
+                        + '<button data-on-click="erTaggedChangePage" data-args="[-1]" class="px-2 py-1 rounded border border-gray-300' + prevDis + '">‹ Prev</button>'
+                        + '<span>Page ' + (cur + 1) + ' / ' + pages + '</span>'
+                        + '<button data-on-click="erTaggedChangePage" data-args="[1]" class="px-2 py-1 rounded border border-gray-300' + nextDis + '">Next ›</button>'
+                        + '</span></div></td></tr>';
+                } else if (tf) { tf.innerHTML = ''; }
+            }
         }
         async function erRecheckDeletions() {
             const progress = document.getElementById('erTaggedProgress');
