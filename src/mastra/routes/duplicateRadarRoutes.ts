@@ -9153,6 +9153,33 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Read-only BATCH emptiness check — verifies a whole page of ids in ONE request
+    // (auto-check on fetch, without firing 50 separate calls that trip the rate
+    // limit). Makes NO change. Body: { module, zohoIds[] }.
+    path: "/api/duplicates/empty-records/check-batch",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const body = await c.req.json().catch(() => ({}));
+        const module = String(body?.module || "");
+        if (!["Deals", "Accounts", "Contacts"].includes(module))
+          return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
+        const zohoIds = Array.isArray(body?.zohoIds)
+          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean)
+          : [];
+        if (!zohoIds.length) return c.json({ success: true, results: [] });
+        const { getEmptinessBatch } = await import("../../utils/emptyRecordsDatabase");
+        const results = await getEmptinessBatch(module as "Deals" | "Accounts" | "Contacts", zohoIds);
+        return c.json({ success: true, results });
+      } catch (e: any) {
+        logger.error("empty-records check-batch failed", e);
+        return c.json({ error: `batch check failed: ${e?.message || e}` }, 502);
+      }
+    },
+  },
+  {
     // Smart Account Inference suggestion for an orphaned deal (link, not delete).
     path: "/api/duplicates/empty-records/deals/:id/account-suggestion",
     method: "GET" as const,

@@ -650,6 +650,39 @@ export async function checkRecordEmptiness(
   return { empty: !reason, reason: reason || null, ghost: false, tagged: false };
 }
 
+/**
+ * READ-ONLY batch emptiness check — used to auto-verify a whole page of empty
+ * records in ONE request (so the operator doesn't click "Check documents" per row,
+ * and we don't trip the per-request rate limit by firing 50 separate calls).
+ * Runs checkRecordEmptiness for each id with small concurrency. Makes NO changes
+ * (no tag, dismiss, prune) — the caller updates the UI; tagging still live-verifies.
+ */
+export async function getEmptinessBatch(
+  module: "Deals" | "Accounts" | "Contacts",
+  zohoIds: string[],
+): Promise<Array<{ id: string; empty: boolean; reason: string | null; ghost: boolean; tagged: boolean }>> {
+  const ids = (zohoIds || []).map(String).filter(Boolean).slice(0, 60);
+  const out: Array<{ id: string; empty: boolean; reason: string | null; ghost: boolean; tagged: boolean }> = [];
+  const CONCURRENCY = 4;
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    const chunk = ids.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map(async (id) => {
+        try {
+          const r = await checkRecordEmptiness(module, id);
+          return { id, ...r };
+        } catch (e) {
+          // Inconclusive → report as not-empty so it's never auto-marked deletable.
+          logger.warn(`[getEmptinessBatch] ${module} ${id} failed`, e);
+          return { id, empty: false, reason: "error", ghost: false, tagged: false };
+        }
+      }),
+    );
+    out.push(...results);
+  }
+  return out;
+}
+
 /** Return every row in the empty_delete_ledger (optionally filtered by module)
  * plus aggregate counts. Used by the "Tagged · pending delete" sub-section. */
 export async function getTaggedStatus(module?: string): Promise<{

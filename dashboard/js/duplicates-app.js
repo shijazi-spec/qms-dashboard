@@ -7164,6 +7164,67 @@
                     tf.innerHTML = '';
                 }
             }
+            // Auto-check documents for the visible Deals on fetch/render, so the
+            // operator doesn't click "Check documents" per row (Ahmad 2026-06-30).
+            // One batched request — no per-row rate-limit; read-only (tagging still
+            // live-verifies). Deduped so a record is checked once.
+            if (kind === 'deals') { try { _erAutoCheckPage(kind, bodyId); } catch (_) { } }
+        }
+        async function _erAutoCheckPage(kind, bodyId) {
+            window._erAutoChecked = window._erAutoChecked || {};
+            window._erAutoChecked[kind] = window._erAutoChecked[kind] || {};
+            window._erAutoBusy = window._erAutoBusy || {};
+            if (window._erAutoBusy[kind]) return; // one auto-check at a time per tab
+            const body = document.getElementById(bodyId);
+            if (!body) return;
+            // Visible rows still showing the "Check documents" button (not yet
+            // delete-ready) that we haven't auto-checked yet.
+            const ids = [];
+            body.querySelectorAll('span[id^="eratt-"]').forEach(function (span) {
+                const id = span.id.slice('eratt-'.length);
+                if (id && !window._erAutoChecked[kind][id]) ids.push(id);
+            });
+            if (!ids.length) return;
+            window._erAutoBusy[kind] = true;
+            const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
+            const prog = document.getElementById('erAiProgress-' + kind);
+            if (prog) prog.textContent = '⏳ Auto-checking ' + ids.length + ' for documents…';
+            let j = null;
+            try {
+                const res = await fetch('/api/duplicates/empty-records/check-batch', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ module: module, zohoIds: ids }),
+                });
+                j = await res.json();
+                if (!res.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                if (prog) prog.textContent = 'Auto-check paused — verify manually. (' + String(e && e.message || e) + ')';
+                window._erAutoBusy[kind] = false;
+                return;
+            }
+            let ready = 0, kept = 0; const ghosts = [];
+            (j.results || []).forEach(function (r) {
+                window._erAutoChecked[kind][r.id] = true;
+                if (r.ghost) { ghosts.push(String(r.id)); return; }
+                const row = (window['_er_' + kind] || []).find(function (x) { return String(x.zohoId) === String(r.id); });
+                const cell = document.getElementById('eratt-' + r.id);
+                if (r.tagged) { kept++; return; } // handled by the tagged-move flow on demand
+                if (r.empty) {
+                    if (row) row.deleteEligible = true;
+                    const cbx = document.getElementById('er-cb-' + kind + '-' + r.id);
+                    if (cbx) cbx.disabled = false;
+                    if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">' + escapeHtml(WalaPlusI18n.t('duplicates.er_empty_ready')) + '</span>';
+                    ready++;
+                } else {
+                    if (row) row.deleteEligible = false;
+                    if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">' + escapeHtml((r.reason || 'has data') + ' — ' + WalaPlusI18n.t('duplicates.er_keep')) + '</span>';
+                    kept++;
+                }
+            });
+            window._erAutoBusy[kind] = false;
+            if (ghosts.length) _erRemoveLocal(kind, ghosts); // re-renders; remaining auto-check next pass
+            if (prog) prog.textContent = '✓ Auto-checked: ' + ready + ' ready · ' + kept + ' have data' + (ghosts.length ? ' · ' + ghosts.length + ' already deleted' : '');
         }
         function erSelChanged() {
             window._erSel = window._erSel || {};
