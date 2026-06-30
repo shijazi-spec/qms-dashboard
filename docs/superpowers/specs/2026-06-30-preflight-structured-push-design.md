@@ -33,6 +33,18 @@ constants (`PREFLIGHT_DEAL_LAYOUT_ID`, `PREFLIGHT_DEAL_PIPELINE`, `PREFLIGHT_DEA
 defaulting to the values above. Pipeline is resolved/sent by name unless a pipeline id
 is configured.
 
+## Lead target (action 4)
+
+Leads created by action 4 are written into:
+
+- **Layout:** `WalaPlus` (`layout_id = 5146753000000091055`)
+- **Lead Status:** `New Lead`
+
+Env-overridable (`PREFLIGHT_LEAD_LAYOUT_ID`, `PREFLIGHT_LEAD_STATUS`) defaulting to the
+above. The Lead carries Company + contact name (`Last_Name`/`First_Name`) + email +
+phone + website + the source label + owner, same as today's push but on the WalaPlus
+layout with status `New Lead`.
+
 ## Clean structure (shared by all deal actions)
 
 To avoid duplicate accounts/deals, every deal-creating action builds the same shape,
@@ -56,7 +68,7 @@ bulk-create Contacts (with `Account_Name`) → map; bulk-create Deals (with `Acc
 | **1** | Re-engage churned (N) | Rows matched to a **churned** client **past** the sector cool-off (180d private / 365d gov). Resolve the existing Account's Zoho id from the matched `cluster_id`. | Deal under the **existing** Account + Contact. **If the matched cluster has no Account record**, the row is skipped and reported (we don't fabricate an account for action 1). |
 | **2** | Deal + contacts: multi-contact cos (N) | Companies appearing with **2+ contacts** in the pasted batch (grouped by normalized company). | One Deal per company + all its contacts. Account = matched existing if any, else create. |
 | **3** | New Account+Deal+Contact (first N) | The **first N** PASS rows (N from a number cell), grouped by company. | Full clean structure: Account → Deal → Contact(s). Company-deduped so two PASS rows for one company make ONE account+deal. |
-| **4** | Push as Leads (next M) | The **next M** PASS rows after action 3's slice (M from a number cell), top-down, no overlap. | A Lead per row with company + contact name/email/phone (today's lead push, capped). |
+| **4** | Push as Leads (next M) | The **next M** PASS rows after action 3's slice (M from a number cell), top-down, no overlap. | A Lead per row on the **WalaPlus** leads layout, **Lead Status = New Lead**, with company + contact name/email/phone (today's lead push, capped). |
 
 **Top-down split (actions 3 & 4):** the PASS pool is ordered; action 3 consumes the
 first N, action 4 the next M. A PASS row is pushed by at most one action. The UI shows
