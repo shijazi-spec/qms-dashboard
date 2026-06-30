@@ -225,6 +225,10 @@ interface ScanState {
   status: "idle" | "scanning" | "completed" | "failed";
   progress: string;
   startedAt: number | null;
+  /** Heartbeat: last time the scan emitted forward progress. Staleness is judged
+   * from THIS, not startedAt — a long-but-progressing sync (e.g. a 68k-contact
+   * full pull) is healthy and must NOT be reset just for running > 20 min. */
+  lastProgressAt: number | null;
   completedAt: number | null;
   result: any | null;
   error: string | null;
@@ -237,6 +241,7 @@ const scanState: ScanState = {
   status: "idle",
   progress: "",
   startedAt: null,
+  lastProgressAt: null,
   completedAt: null,
   result: null,
   error: null,
@@ -265,13 +270,22 @@ const STALE_SCAN_MS = (() => {
  */
 function blockOrClearScan(force: boolean): { error: string; ageMinutes: number } | null {
   if (scanState.status !== "scanning") return null;
+  // Staleness is measured from the LAST PROGRESS heartbeat, not the scan's start.
+  // A sync that's still emitting progress is healthy no matter how long it has
+  // run (a full 68k-contact pull legitimately takes far longer than 20 min); only
+  // one that has made NO progress for STALE_SCAN_MS is treated as hung. This stops
+  // the restart loop where every cron/fallback trigger killed an in-flight long
+  // sync, so Contacts never finished and its baseline never saved.
+  const heartbeat = scanState.lastProgressAt || scanState.startedAt;
+  const idleMs = heartbeat ? Date.now() - heartbeat : Infinity;
   const ageMs = scanState.startedAt ? Date.now() - scanState.startedAt : Infinity;
   const ageMinutes = Number.isFinite(ageMs) ? Math.round(ageMs / 60000) : 0;
-  if (!force && ageMs < STALE_SCAN_MS) {
+  const idleMinutes = Number.isFinite(idleMs) ? Math.round(idleMs / 60000) : 0;
+  if (!force && idleMs < STALE_SCAN_MS) {
     return { error: "A scan is already in progress", ageMinutes };
   }
   logger.warn(
-    `🧹 [DuplicateRadar] Releasing ${force ? "force-reset" : "stale"} scan lock (age ${ageMinutes}m) — starting fresh`,
+    `🧹 [DuplicateRadar] Releasing ${force ? "force-reset" : "stale"} scan lock (running ${ageMinutes}m, idle ${idleMinutes}m, no progress) — starting fresh`,
   );
   scanState.status = "failed";
   scanState.error = force
@@ -287,6 +301,14 @@ let sseClients: Array<{
 }> = [];
 
 function broadcastSSE(event: string, data: any) {
+  // Heartbeat: a "progress" emit (fetch %/scoring) OR a "module" emit (fired
+  // every 200 records during the per-record write loop) means the scan is alive
+  // and moving forward. blockOrClearScan reads lastProgressAt so a long-but-
+  // progressing sync is never mistaken for a stalled one and reset — the bug that
+  // made the 68k-Contacts pull restart forever and never complete (Ahmad 2026-06-30).
+  if (scanState.status === "scanning" && (event === "progress" || event === "module")) {
+    scanState.lastProgressAt = Date.now();
+  }
   const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   sseClients = sseClients.filter((client) => {
     try {
@@ -667,6 +689,35 @@ async function scanZohoCRMForDuplicates(
   error?: string;
 }> {
   const startTime = Date.now();
+
+  // SINGLE-FLIGHT GUARD (Ahmad 2026-06-30): the scheduled crons + the in-process
+  // fallback call this function DIRECTLY (not via the /scan endpoint), so they
+  // previously bypassed blockOrClearScan and could start a SECOND scan on top of
+  // a healthy long-running one — abandoning the in-flight 68k-Contacts pass
+  // (its terminal write gets fenced) so it never finished. Centralise the guard
+  // here: if a scan is already running AND still making progress (heartbeat fresh),
+  // skip this trigger instead of clobbering it. A genuinely stalled run (no
+  // progress for STALE_SCAN_MS) is released and we take over. The /scan + /rebuild
+  // endpoints still call blockOrClearScan first for their force-reset semantics.
+  const blocked = blockOrClearScan(false);
+  if (blocked) {
+    logger.info(
+      `⏭️ [DuplicateRadar] Skipping ${detectionType} scan — a healthy scan is already in progress (running ${blocked.ageMinutes}m, still making progress).`,
+    );
+    return {
+      success: true,
+      totalRecordsScanned: 0,
+      totalClustersFound: 0,
+      duplicatesDetected: 0,
+      highConfidence: 0,
+      mediumConfidence: 0,
+      moduleBreakdown: [],
+      pipelineInflation: 0,
+      durationMs: 0,
+      error: "skipped — a healthy scan is already in progress",
+    };
+  }
+
   // Claim this generation; terminal writes below are gated on it still being
   // current, so a stale concurrent run can't overwrite a newer run's state.
   const myGeneration = ++scanGeneration;
@@ -676,6 +727,7 @@ async function scanZohoCRMForDuplicates(
 
   scanState.status = "scanning";
   scanState.startedAt = startTime;
+  scanState.lastProgressAt = startTime; // heartbeat starts now
   scanState.progress = "Initializing scan...";
   scanState.result = null;
   scanState.error = null;
