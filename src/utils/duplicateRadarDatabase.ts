@@ -7657,6 +7657,32 @@ function queuedForDeletionSql(alias: string): string {
   , false)`;
 }
 
+// Whitelisted sort columns for the per-type record tabs (Leads/Deals/
+// Contacts/Accounts). Mirrors CLUSTER_SORT_COLUMNS above — only values
+// mapped here may be interpolated into the ORDER BY, which guards against
+// SQL injection from the query string. Keys are the UI sort keys the
+// frontend sends.
+//
+// IMPORTANT: this view paginates by CLUSTER (see the "Paginate by CLUSTER"
+// comment below) — the cluster-page query selects only `dc.id` and has no
+// `dr` alias in its outer scope, so a per-record column (name/email/owner/
+// created/modified) can't be referenced directly in that query's ORDER BY.
+// Instead each entry is a full, self-contained correlated-subquery
+// expression (referencing dc.id and the outer $1 = recordType param) that
+// picks one representative value per cluster — MIN() so the result is
+// deterministic regardless of row order, and so NULLs (no matching value)
+// naturally sort last via NULLS LAST below. `confidence` is the one
+// cluster-level field (dc.confidence_score) and needs no subquery — it's
+// also the existing default sort.
+const RECORD_SORT_COLUMNS: Record<string, string> = {
+  name: `(SELECT MIN(dr_s.record_name) FROM duplicate_records dr_s WHERE dr_s.cluster_id = dc.id AND dr_s.record_type = $1)`,
+  email: `(SELECT MIN(dr_s.email) FROM duplicate_records dr_s WHERE dr_s.cluster_id = dc.id AND dr_s.record_type = $1)`,
+  owner: `(SELECT MIN(dr_s.owner_name) FROM duplicate_records dr_s WHERE dr_s.cluster_id = dc.id AND dr_s.record_type = $1)`,
+  created: `(SELECT MIN(dr_s.created_date) FROM duplicate_records dr_s WHERE dr_s.cluster_id = dc.id AND dr_s.record_type = $1)`,
+  modified: `(SELECT MIN(dr_s.modified_date) FROM duplicate_records dr_s WHERE dr_s.cluster_id = dc.id AND dr_s.record_type = $1)`,
+  confidence: "dc.confidence_score",
+};
+
 // B5: JOIN-based queries eliminating N+1 pattern
 export async function getDuplicateRecordsByType(
   recordType: string,
@@ -7673,6 +7699,8 @@ export async function getDuplicateRecordsByType(
     domain?: string;
     ai_status?: string;
     segment?: "all" | "marketplace" | "corporate";
+    sort?: string;
+    dir?: string;
   },
 ): Promise<{ groups: any[]; total: number }> {
   const countField =
@@ -7883,6 +7911,22 @@ export async function getDuplicateRecordsByType(
            AND NOT ${queuedForDeletionSql("dx")}
       ) >= 2`
     : "";
+
+  // Sort: only a whitelisted key may be interpolated (RECORD_SORT_COLUMNS),
+  // and dir is validated to exactly ASC/DESC — never a raw user string.
+  // Falls back to the original default (confidence DESC) when sort is
+  // absent/unrecognized, so existing behavior is unchanged unless a sort is
+  // explicitly selected. dc.id ASC is a stable tiebreaker so pagination
+  // stays deterministic across pages even when many clusters share a value.
+  const recordSortKey =
+    options?.sort && RECORD_SORT_COLUMNS[options.sort]
+      ? RECORD_SORT_COLUMNS[options.sort]
+      : null;
+  const recordSortDir = options?.dir === "asc" ? "ASC" : "DESC";
+  const clusterOrderBy = recordSortKey
+    ? `ORDER BY ${recordSortKey} ${recordSortDir} NULLS LAST, dc.id ASC`
+    : `ORDER BY dc.confidence_score DESC, dc.id ASC`;
+
   const clusterPage = await pool.query(
     `
     SELECT dc.id
@@ -7892,7 +7936,7 @@ export async function getDuplicateRecordsByType(
         SELECT 1 FROM duplicate_records dr
         WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
       )${genuineDupFilter}${stillTwoUntagged}
-    ORDER BY dc.confidence_score DESC, dc.id ASC
+    ${clusterOrderBy}
     LIMIT $${dateParams.length + 2} OFFSET $${dateParams.length + 3}
   `,
     [recordType, ...dateParams, limit, offset],

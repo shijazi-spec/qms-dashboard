@@ -1471,6 +1471,52 @@
 
         // C4: Paginated record tabs (20/page)
         let recordPages = { leads: 0, deals: 0, contacts: 0, accounts: 0 };
+
+        // Full-dataset, server-side column sort for the Lead/Deal/Contact/
+        // Account Duplicates tabs (mirrors the Domain Clusters sort/dir
+        // pattern at loadClusters() above — same query-param contract,
+        // clickable <th> headers instead of a dropdown). Independent
+        // per-tab state so sorting Leads doesn't affect Deals/Contacts/
+        // Accounts. { key: <sort key or null>, dir: 'asc'|'desc' }. key=null
+        // means "no sort selected" → server falls back to its default
+        // (confidence DESC, id ASC).
+        window._recordSort = window._recordSort || {
+            leads: { key: null, dir: 'desc' },
+            deals: { key: null, dir: 'desc' },
+            contacts: { key: null, dir: 'desc' },
+            accounts: { key: null, dir: 'desc' },
+        };
+
+        // Click handler for the sortable <th> headers on the four record
+        // tabs. Same toggle convention as erSortBy(): clicking the active
+        // column flips its direction; clicking a new column selects it
+        // descending first (matches clusterSort's "biggest first" default).
+        // Always resets to page 0 — a sort change reorders the WHOLE
+        // dataset server-side, so the previous page offset is meaningless.
+        function recordSortBy(tab, key) {
+            const st = window._recordSort[tab] || (window._recordSort[tab] = { key: null, dir: 'desc' });
+            if (st.key === key) {
+                st.dir = st.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                st.key = key;
+                st.dir = 'desc';
+            }
+            _updateRecordSortCarets(tab);
+            loadRecordTab(tab, 0);
+        }
+
+        // Paint a caret (↑/↓) on the active sort column's header for `tab`,
+        // clearing any caret left over from a previously-active column.
+        // Headers carry data-sort-key="<tab>:<key>" and a child
+        // .record-sort-caret span — see dashboard/duplicates.html.
+        function _updateRecordSortCarets(tab) {
+            const st = window._recordSort[tab];
+            document.querySelectorAll('th[data-sort-key^="' + tab + ':"] .record-sort-caret').forEach(function (el) {
+                const th = el.closest('th');
+                const k = (th.getAttribute('data-sort-key') || '').split(':')[1];
+                el.textContent = (st && st.key === k) ? (st.dir === 'asc' ? ' ↑' : ' ↓') : '';
+            });
+        }
         // Generic "Refresh from Zoho (live)" engine — scrapes the visible
         // Zoho ids out of a tbody (via the data-testid="link-zoho-<id>"
         // anchors emitted by zohoLink()), infers each row's Zoho module
@@ -1890,6 +1936,14 @@
             const params = buildFilterParams();
             params.set('limit', String(RADAR_PAGE_SIZE));
             params.set('offset', String(page * RADAR_PAGE_SIZE));
+            // Full-dataset server-side column sort (clickable <th> headers).
+            // Omitted entirely when no column is selected so the server uses
+            // its default order (confidence DESC, id ASC) unchanged.
+            const sortState = (window._recordSort && window._recordSort[type]) || null;
+            if (sortState && sortState.key) {
+                params.set('sort', sortState.key);
+                params.set('dir', sortState.dir);
+            }
             const url = `/api/duplicates/${type}?` + params.toString();
 
             // Cancel any older in-flight load for this tab so a quick double

@@ -34,6 +34,8 @@ function parseRecordTabFilters(url: URL): {
   domain?: string;
   ai_status?: string;
   segment?: "all" | "marketplace" | "corporate";
+  sort?: string;
+  dir?: "asc" | "desc";
 } {
   const csv = (key: string): string[] | undefined => {
     const raw = url.searchParams.get(key);
@@ -59,6 +61,14 @@ function parseRecordTabFilters(url: URL): {
   const segment = ["marketplace", "corporate"].includes(rawSegment)
     ? (rawSegment as "marketplace" | "corporate")
     : undefined;
+  // Column sort — same contract as /api/duplicates/clusters (sort/dir read
+  // here, validated against RECORD_SORT_COLUMNS down in
+  // getDuplicateRecordsByType; an unrecognized `sort` falls back to the
+  // existing default there, so no whitelist duplication is needed at this
+  // route layer). dir is normalized to lowercase; the DB layer validates it
+  // to exactly ASC/DESC before it ever reaches SQL.
+  const rawDir = (url.searchParams.get("dir") || "").trim().toLowerCase();
+  const dir = rawDir === "asc" || rawDir === "desc" ? (rawDir as "asc" | "desc") : undefined;
   return {
     start_date: url.searchParams.get("start_date") || undefined,
     end_date: url.searchParams.get("end_date") || undefined,
@@ -70,6 +80,8 @@ function parseRecordTabFilters(url: URL): {
     domain: url.searchParams.get("domain") || undefined,
     ai_status,
     segment,
+    sort: url.searchParams.get("sort") || undefined,
+    dir,
   };
 }
 

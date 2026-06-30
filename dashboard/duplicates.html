@@ -783,14 +783,14 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Lead</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="leads:name" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;name&quot;]" title="Sort the FULL list by lead name (server-side)">Lead<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this lead was flagged. OR rule — any one of these is enough to mark it as a duplicate: 👤 same name · 📧 same email · 📞 same phone · 🆔 same Zoho CRM ID">Dup signal</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="leads:email" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;email&quot;]" title="Sort the FULL list by email (server-side)">Email<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Zoho layout this lead belongs to (Standard, Corporate Accounts, Marketplace, ...)">Layout</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="leads:owner" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="leads:created" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
                         </tr>
                     </thead>
                     <tbody id="leadsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -823,13 +823,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Deal</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="deals:name" data-on-click="recordSortBy" data-args="[&quot;deals&quot;,&quot;name&quot;]" title="Sort the FULL list by deal name (server-side)">Deal<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this deal was flagged. OR rule: 👤 same deal name on the same account · 🆔 same Zoho CRM ID">Dup signal</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Stage</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Value</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Layout</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="deals:owner" data-on-click="recordSortBy" data-args="[&quot;deals&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="deals:created" data-on-click="recordSortBy" data-args="[&quot;deals&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
                         </tr>
                     </thead>
                     <tbody id="dealsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -872,13 +872,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Contact</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="contacts:name" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;name&quot;]" title="Sort the FULL list by contact name (server-side)">Contact<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this contact was flagged. OR rule: 👤 same name · 📧 same email · 📞 same phone · 🆔 same Zoho CRM ID">Dup signal</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="contacts:email" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;email&quot;]" title="Sort the FULL list by email (server-side)">Email<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Sourced from the Zoho Contacts → Contact Type field (Customer / Prospect / Vendor / Partner / …) — the Layout column on this tab provided almost no signal because most contacts share the Standard layout.">Contact Type</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="contacts:owner" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="contacts:created" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
                         </tr>
                     </thead>
                     <tbody id="contactsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -919,14 +919,14 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Account</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="accounts:name" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;name&quot;]" title="Sort the FULL list by account name (server-side)">Account<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this account was flagged. OR rule: 👤 same name · 📧 same email · 📞 same phone · 🌐 same website · 🆔 same Zoho CRM ID">Dup signal</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="accounts:email" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;email&quot;]" title="Sort the FULL list by email (server-side)">Email<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Website</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Layout</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="accounts:owner" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="accounts:created" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
                         </tr>
                     </thead>
                     <tbody id="accountsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -2031,7 +2031,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=25"></script>
+    <script src="/js/duplicates-app.js?v=26"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
