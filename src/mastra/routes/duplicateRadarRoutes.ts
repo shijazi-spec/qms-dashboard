@@ -8472,6 +8472,400 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Structured push to Zoho — four actions (re-engage, multi-contact,
+    // new-company Account→Contact→Deal, Leads). Dry-run by default.
+    // Action 1: Push a Deal under an existing Account (churned-past-cool-off).
+    // Action 2: Create Account + all contacts + one Deal (multi-contact new).
+    // Action 3: Create Account + contact + Deal (single-contact new, first N).
+    // Action 4: Create Leads for the remaining rows (after action 3's slice).
+    // Body: { action:1|2|3|4, rows:SPRow[], count?, offset?, dry_run?,
+    //         owner_mode?, owner_id?, round_robin_user_ids?, source? }
+    path: "/api/duplicates/preflight/structured-push",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const body = await c.req.json().catch(() => ({}));
+
+          const action = Number(body?.action) as 1 | 2 | 3 | 4;
+          if (![1, 2, 3, 4].includes(action)) {
+            return c.json({ error: "action must be 1, 2, 3, or 4" }, 400);
+          }
+          const rows: any[] = Array.isArray(body?.rows) ? body.rows : [];
+          if (rows.length === 0) {
+            return c.json({ error: "rows array required" }, 400);
+          }
+
+          const count =
+            typeof body?.count === "number" && body.count >= 0
+              ? Math.floor(body.count)
+              : 0;
+          const offset =
+            typeof body?.offset === "number" && body.offset >= 0
+              ? Math.floor(body.offset)
+              : 0;
+          const dryRun = body?.dry_run !== false;
+
+          const ownerMode = String(body?.owner_mode || "self").trim();
+          const ownerId = body?.owner_id ? String(body.owner_id).trim() : null;
+          const roundRobinIds: string[] = Array.isArray(body?.round_robin_user_ids)
+            ? body.round_robin_user_ids.map((x: any) => String(x).trim()).filter(Boolean)
+            : [];
+          if (ownerMode === "custom" && !ownerId) {
+            return c.json(
+              { error: "owner_id required when owner_mode='custom'" },
+              400,
+            );
+          }
+          if (ownerMode === "round_robin" && roundRobinIds.length === 0) {
+            return c.json(
+              { error: "round_robin_user_ids required when owner_mode='round_robin'" },
+              400,
+            );
+          }
+          const source = (
+            body?.source ||
+            `Preflight Structured Push — ${new Date().toISOString().slice(0, 10)}`
+          ).toString().trim();
+
+          // Map raw body rows to SPRow shape.
+          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET } =
+            await import("../../utils/preflightStructuredPush");
+
+          const spRows = rows.map((r: any, idx: number) => ({
+            row_index: typeof r.row_index === "number" ? r.row_index : idx,
+            company: String(r.company ?? r.input?.company_name ?? r.company_name ?? ""),
+            domain: String(r.domain ?? r.input?.domain ?? ""),
+            email: String(r.email ?? ""),
+            phone: String(r.phone ?? ""),
+            contact_name: String(r.contact_name ?? r.input?.contact_name ?? ""),
+            verdict: String(r.verdict ?? ""),
+            cluster_id: r.cluster_id != null ? Number(r.cluster_id) : null,
+            lifecycle_state: r.lifecycle_state != null ? String(r.lifecycle_state) : null,
+          }));
+
+          const plan = buildStructuredPushPlan(action, spRows, { count, offset });
+          const DEAL = PREFLIGHT_DEAL_TARGET;
+          const LEAD = PREFLIGHT_LEAD_TARGET;
+
+          // Helper: resolve owner field for a given row index.
+          function ownerForIndex(i: number): string | null {
+            if (ownerMode === "self") return sessionUser?.email || null;
+            if (ownerMode === "round_robin") return roundRobinIds[i % roundRobinIds.length];
+            return ownerId;
+          }
+
+          // ----------------------------------------------------------------
+          // DRY-RUN — no Zoho calls.
+          // ----------------------------------------------------------------
+          if (dryRun) {
+            const dealTag = action === 1 ? "Re-engagement" : "Preflight import";
+
+            // Build sample payloads per action type.
+            let samplePayload: Record<string, any> | null = null;
+            let wouldAccounts = 0;
+            let wouldContacts = 0;
+            let wouldDeals = 0;
+            let wouldLeads = 0;
+
+            if (action === 4) {
+              wouldLeads = plan.leads.length;
+              const r = plan.leads[0];
+              if (r) {
+                const dom = r.domain || null;
+                samplePayload = {
+                  Last_Name: r.contact_name || r.company || r.domain || "(unknown)",
+                  Company: r.company || r.domain || "(unknown)",
+                  Lead_Source: source,
+                  Layout: { id: LEAD.layoutId },
+                  Lead_Status: LEAD.status,
+                  ...(r.email ? { Email: r.email } : {}),
+                  ...(r.phone ? { Phone: r.phone } : {}),
+                  ...(dom ? { Website: dom.startsWith("http") ? dom : `https://${dom}` } : {}),
+                };
+              }
+            } else {
+              wouldAccounts = action === 1 ? 0 : plan.companies.length;
+              wouldContacts = plan.contact_count;
+              wouldDeals = plan.companies.length;
+              const co = plan.companies[0];
+              if (co) {
+                const dom = co.domain || null;
+                const accountId = action === 1 ? "(existing-resolved-at-run-time)" : "(would-be-created)";
+                const contactId = "(would-be-created)";
+                samplePayload = {
+                  account: action !== 1 ? {
+                    Account_Name: co.companyName,
+                    Layout: { id: DEAL.layoutId },
+                    ...(dom ? { Website: dom.startsWith("http") ? dom : `https://${dom}` } : {}),
+                  } : null,
+                  contact: co.contacts[0] ? {
+                    Last_Name: co.contacts[0].contact_name || co.companyName,
+                    ...(co.contacts[0].email ? { Email: co.contacts[0].email } : {}),
+                    ...(co.contacts[0].phone ? { Phone: co.contacts[0].phone } : {}),
+                    Account_Name: { id: accountId },
+                  } : null,
+                  deal: {
+                    Deal_Name: `${co.companyName} — ${dealTag}`,
+                    Stage: DEAL.stage,
+                    Pipeline: DEAL.pipeline,
+                    Layout: { id: DEAL.layoutId },
+                    Account_Name: { id: accountId },
+                    Contact_Name: { id: contactId },
+                  },
+                };
+              }
+            }
+
+            return c.json({
+              success: true,
+              dry_run: true,
+              action,
+              eligible_count: plan.eligible_count,
+              contact_count: plan.contact_count,
+              would: {
+                accounts: wouldAccounts,
+                contacts: wouldContacts,
+                deals: wouldDeals,
+                leads: wouldLeads,
+              },
+              sample_payload: samplePayload,
+              skipped_count: plan.skipped.length,
+              skipped_sample: plan.skipped.slice(0, 10),
+            });
+          }
+
+          // ----------------------------------------------------------------
+          // REAL RUN — ordered batched creates with id-mapping.
+          // ----------------------------------------------------------------
+          const { createZohoRecordsBulk } = await import("../../utils/zohoCRM");
+          const { getAccountZohoIdByCluster } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+
+          const dealTag = action === 1 ? "Re-engagement" : "Preflight import";
+
+          // Track counts
+          const created = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
+          const failed = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
+          let outcomesSample: any[] = [];
+
+          if (action === 4) {
+            // --- ACTION 4: create Leads only ---
+            const leadPayloads = plan.leads.map((r, i) => {
+              const dom = r.domain || null;
+              const p: Record<string, any> = {
+                Last_Name: r.contact_name || r.company || r.domain || "(unknown)",
+                Company: r.company || r.domain || "(unknown)",
+                Lead_Source: source,
+                Layout: { id: LEAD.layoutId },
+                Lead_Status: LEAD.status,
+                Description: `Imported via QMS Preflight Structured Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
+              };
+              if (r.email) p.Email = r.email;
+              if (r.phone) p.Phone = r.phone;
+              if (dom) p.Website = dom.startsWith("http") ? dom : `https://${dom}`;
+              const ownerVal = ownerForIndex(i);
+              if (ownerVal && ownerMode !== "self") {
+                p.Owner = { id: ownerVal };
+              }
+              return p;
+            });
+
+            const leadOut = leadPayloads.length > 0
+              ? await createZohoRecordsBulk("Leads", leadPayloads)
+              : [];
+            created.leads = leadOut.filter(o => o.status === "success").length;
+            failed.leads = leadOut.filter(o => o.status === "error").length;
+            outcomesSample = leadOut.slice(0, 20);
+          } else {
+            // --- ACTIONS 1/2/3: Account → Contact → Deal ---
+
+            // Step 1: For A1 resolve existing account ids; for A2/A3 create accounts.
+            // companyKey → accountId (string)
+            const accountIdMap = new Map<string, string>();
+            const companiesWithAccount: typeof plan.companies = [];
+            const companiesSkippedNoAccount: typeof plan.companies = [];
+
+            if (action === 1) {
+              // A1: resolve existing account id per company.
+              for (const co of plan.companies) {
+                const existingId = co.clusterId != null
+                  ? await getAccountZohoIdByCluster(co.clusterId)
+                  : null;
+                if (!existingId) {
+                  // Cannot push without a matched account — skip this company.
+                  companiesSkippedNoAccount.push(co);
+                } else {
+                  accountIdMap.set(co.companyKey, existingId);
+                  companiesWithAccount.push(co);
+                }
+              }
+            } else {
+              // A2/A3: create all accounts first.
+              const accountPayloads = plan.companies.map((co) => {
+                const dom = co.domain || null;
+                const p: Record<string, any> = {
+                  Account_Name: co.companyName,
+                  Layout: { id: DEAL.layoutId },
+                };
+                if (dom) p.Website = dom.startsWith("http") ? dom : `https://${dom}`;
+                return p;
+              });
+
+              const accOut = accountPayloads.length > 0
+                ? await createZohoRecordsBulk("Accounts", accountPayloads)
+                : [];
+              created.accounts = accOut.filter(o => o.status === "success").length;
+              failed.accounts = accOut.filter(o => o.status === "error").length;
+
+              // Map companyKey → created account id.
+              for (let i = 0; i < plan.companies.length; i++) {
+                const co = plan.companies[i];
+                const out = accOut[i];
+                if (out?.status === "success" && out.id) {
+                  accountIdMap.set(co.companyKey, out.id);
+                  companiesWithAccount.push(co);
+                } else {
+                  // Account creation failed — skip this company's contacts + deal.
+                  companiesSkippedNoAccount.push(co);
+                }
+              }
+            }
+
+            // Step 2: Create contacts for companies that have an account id.
+            // Map companyKey → firstContactId (for deal linkage)
+            const firstContactIdMap = new Map<string, string>();
+
+            if (companiesWithAccount.length > 0) {
+              // Build contact payloads (one per contact row, all companies interleaved).
+              interface ContactMeta { companyKey: string; rowIndex: number }
+              const contactMeta: ContactMeta[] = [];
+              const contactPayloads: Record<string, any>[] = [];
+
+              for (const co of companiesWithAccount) {
+                const accountId = accountIdMap.get(co.companyKey)!;
+                for (const row of co.contacts) {
+                  const p: Record<string, any> = {
+                    Last_Name: row.contact_name || co.companyName,
+                    Account_Name: { id: accountId },
+                  };
+                  if (row.email) p.Email = row.email;
+                  if (row.phone) p.Phone = row.phone;
+                  contactPayloads.push(p);
+                  contactMeta.push({ companyKey: co.companyKey, rowIndex: row.row_index });
+                }
+              }
+
+              const conOut = contactPayloads.length > 0
+                ? await createZohoRecordsBulk("Contacts", contactPayloads)
+                : [];
+              created.contacts = conOut.filter(o => o.status === "success").length;
+              failed.contacts = conOut.filter(o => o.status === "error").length;
+
+              // First successful contact per company → firstContactId for Deal.
+              for (let i = 0; i < conOut.length; i++) {
+                const out = conOut[i];
+                if (out?.status === "success" && out.id) {
+                  const meta = contactMeta[i];
+                  if (!firstContactIdMap.has(meta.companyKey)) {
+                    firstContactIdMap.set(meta.companyKey, out.id);
+                  }
+                }
+              }
+            }
+
+            // Step 3: Create deals.
+            if (companiesWithAccount.length > 0) {
+              const dealPayloads: Record<string, any>[] = [];
+              const dealCompanyKeys: string[] = [];
+
+              for (const co of companiesWithAccount) {
+                const accountId = accountIdMap.get(co.companyKey);
+                const firstContactId = firstContactIdMap.get(co.companyKey);
+                // Only create deal if we have at least an account id.
+                if (!accountId) continue;
+                const p: Record<string, any> = {
+                  Deal_Name: `${co.companyName} — ${dealTag}`,
+                  Stage: DEAL.stage,
+                  Pipeline: DEAL.pipeline,
+                  Layout: { id: DEAL.layoutId },
+                  Account_Name: { id: accountId },
+                };
+                if (firstContactId) {
+                  p.Contact_Name = { id: firstContactId };
+                }
+                dealPayloads.push(p);
+                dealCompanyKeys.push(co.companyKey);
+              }
+
+              const dealOut = dealPayloads.length > 0
+                ? await createZohoRecordsBulk("Deals", dealPayloads)
+                : [];
+              created.deals = dealOut.filter(o => o.status === "success").length;
+              failed.deals = dealOut.filter(o => o.status === "error").length;
+              outcomesSample = dealOut.slice(0, 20);
+            }
+
+            // Add skipped-no-account to the plan's skipped count.
+            plan.skipped.push(
+              ...companiesSkippedNoAccount.flatMap(co =>
+                co.contacts.map(r => ({ row_index: r.row_index, reason: "no_matched_account" }))
+              )
+            );
+          }
+
+          // Audit log.
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            const totalFailed = failed.accounts + failed.contacts + failed.deals + failed.leads;
+            const desc =
+              action === 4
+                ? `Preflight structured push (action 4): created ${created.leads} Leads (${failed.leads} failed). Source: "${source}".`
+                : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals (${totalFailed} failed). Source: "${source}".`;
+            await logEvent({
+              userId: sessionUser?.userId ?? 0,
+              userEmail: sessionUser?.email ?? "system",
+              userRole: sessionUser?.role,
+              actionType: "PUSH_TO_ZOHO",
+              entityType: action === 4 ? "Leads" : "Deals",
+              entityId: action === 4 ? LEAD.layoutId : DEAL.layoutId,
+              entityName: source,
+              description: desc,
+              aiInvolved: false,
+              severity: (failed.accounts + failed.contacts + failed.deals + failed.leads) > 0 ? "WARNING" : "INFO",
+              module: "duplicate-radar",
+            });
+          } catch {
+            /* non-fatal */
+          }
+
+          return c.json({
+            success: true,
+            dry_run: false,
+            action,
+            created,
+            failed,
+            skipped_count: plan.skipped.length,
+            outcomes_sample: outcomesSample,
+          });
+        } catch (error: any) {
+          logger.error("Error in preflight structured-push:", error);
+          return c.json(
+            { error: "Structured push to Zoho failed — " + (error?.message || "unknown") },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     // Formatted Excel export for the Preflight Check tab. Takes either a
     // PreflightResponse the client already rendered (preferred — no
     // re-run) or `rows` to re-run server-side. Returns an .xlsx with:
