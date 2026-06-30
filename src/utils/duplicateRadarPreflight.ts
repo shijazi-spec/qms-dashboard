@@ -110,6 +110,16 @@ export interface PreflightResultRow {
     domain: string | null;
     company_name?: string | null;
   };
+  /**
+   * Echoed contact identity from the uploaded row (normalized). The result
+   * row used to carry only domain + company_name, which left the Structured
+   * Push unable to count contact-bearing rows OR create Contacts/Leads with a
+   * real email/phone — every action came back 0. Now echoed so a PASS row can
+   * be pushed as a Contact/Lead. Null on company-only screening rows.
+   */
+  email?: string | null;
+  phone?: string | null;
+  contact_name?: string | null;
   verdict: PreflightVerdict;
   cluster_id: number | null;
   lifecycle_state:
@@ -3052,6 +3062,9 @@ async function runPreflightBasic(input: {
       row_index: i,
       ref: r.ref ?? null,
       input: { domain, company_name: r.company_name ?? null },
+      email: email ?? null,
+      phone: phone ?? null,
+      contact_name: contactName || null,
       verdict: v.verdict,
       cluster_id: clusterIdOut,
       lifecycle_state: lifecycleOut,

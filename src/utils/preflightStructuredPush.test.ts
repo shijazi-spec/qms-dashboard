@@ -75,4 +75,40 @@ assertEq(normalizeCompanyKey("", "Acme.com") === "acme.com", "falls back to doma
 }
 console.log("buildStructuredPushPlan ok");
 
+// ---------------------------------------------------------------------------
+// Regression (2026-07-01): the preflight result row MUST echo the contact
+// identity (email/phone/contact_name). It used to carry only input.domain +
+// input.company_name, so the row->SPRow mapping produced empty email/phone,
+// every group's contact-count was 0, and ALL four Structured Push actions
+// returned 0 / "PASS remaining: 0". This pins the field names the builder has
+// to emit, by running a builder-shaped row through the same mapping the
+// endpoint + frontend use, then through the real planner.
+// ---------------------------------------------------------------------------
+function preflightRowToSPRow(r: any, idx: number): any {
+  return {
+    row_index: r.row_index != null ? r.row_index : idx,
+    company: (r.input && r.input.company_name) || r.company_name || "",
+    domain: (r.input && r.input.domain) || r.domain || "",
+    email: r.email || "",
+    phone: r.phone || "",
+    contact_name: r.contact_name || (r.input && r.input.contact_name) || "",
+    verdict: r.verdict || "",
+    cluster_id: r.cluster_id != null ? r.cluster_id : null,
+    lifecycle_state: r.lifecycle_state != null ? r.lifecycle_state : null,
+  };
+}
+// OLD (broken) shape — input only domain+company_name, no echoed contact.
+{
+  const oldRow = { row_index: 1, input: { domain: "acme.co", company_name: "Acme" }, verdict: "pass", cluster_id: null };
+  const plan = buildStructuredPushPlan(3, [preflightRowToSPRow(oldRow, 0)], { count: 5 });
+  assertEq(plan.companies.length === 0, "regression: PASS row with NO echoed contact -> A3 pool empty (the bug)");
+}
+// FIXED shape — email echoed top-level (what runPreflightBasic now emits).
+{
+  const newRow = { row_index: 1, input: { domain: "acme.co", company_name: "Acme" }, email: "ceo@acme.co", phone: null, contact_name: null, verdict: "pass", cluster_id: null };
+  const plan = buildStructuredPushPlan(3, [preflightRowToSPRow(newRow, 0)], { count: 5 });
+  assertEq(plan.companies.length === 1 && plan.companies[0].contacts.length === 1, "regression: PASS row WITH echoed email -> A3 picks it up (the fix)");
+}
+console.log("preflight row-shape regression ok");
+
 if (failed > 0) { console.error(`\n${failed} test(s) FAILED`); process.exit(1); }
