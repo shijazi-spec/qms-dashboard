@@ -2049,7 +2049,11 @@
                 }
             }
             const primary = recs.find(r => r.is_primary) || recs[0];
-            return { sharedKeys, primary, count: recs.length };
+            // The exact Zoho ids of THIS sub-group's members — passed to the AI
+            // plan so it scopes to what the tab shows, not the whole cluster
+            // (fixes "tab shows 2 contacts, plan opens the 21-record cluster").
+            const zohoIds = recs.map(r => String((r && (r.zoho_record_id || r.zohoId)) || '')).filter(Boolean);
+            return { sharedKeys, primary, count: recs.length, zohoIds };
         }
 
         // Yellow collapsible group-header row.
@@ -2082,8 +2086,13 @@
             const aiBtnLabel = aiState === 'tagged_pending_delete'
                 ? '🔁 Re-open AI Plan'
                 : '🔍 Open AI Plan';
+            // Pass the exact ids of THIS sub-group so the plan scopes to what the
+            // operator sees here, not every record in a (possibly synthetic /
+            // multi-company) cluster. JSON of numeric ids — safe inside the
+            // single-quoted data-args attribute.
+            const _aiIds = JSON.stringify((summary.zohoIds || []).map(String));
             const aiBtn = _aiCid
-                ? `<button data-on-click="resolveGroupWithAI" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-resolve-ai-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700" title="Open the AI merge-plan modal. You still need to click Apply in Zoho inside the modal to actually tag duplicates.">${aiBtnLabel}</button>`
+                ? `<button data-on-click="resolveGroupWithAI" data-args='["${_aiMod}",${_aiCid},${_aiIds}]' data-testid="btn-resolve-ai-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700" title="Open the AI merge-plan modal scoped to these records. You still need to click Apply in Zoho inside the modal to actually tag duplicates.">${aiBtnLabel}</button>`
                 : '';
             // Dismiss — mark as a false positive (e.g. intentionally separate
             // accounts: a Corporate-Accounts account vs a Marketplace account).
@@ -2266,7 +2275,8 @@
                 if (phoneVals.size === 1) sharedKeys.push({ k: '📞', label: 'phone', color: 'bg-orange-100 text-orange-800', value: [...phoneVals][0] });
                 if (idVals.size === 1 && recs.length > 1) sharedKeys.push({ k: '🆔', label: 'CRM ID', color: 'bg-rose-200 text-rose-900', value: [...idVals][0] });
                 const primary = recs.find(r => r.is_primary) || recs[0];
-                return { sharedKeys, primary, count: recs.length };
+                const zohoIds = recs.map(r => String((r && (r.zoho_record_id || r.zohoId)) || '')).filter(Boolean);
+                return { sharedKeys, primary, count: recs.length, zohoIds };
             }
 
             let rows = '';
@@ -3924,7 +3934,7 @@
         // group's cluster modal and auto-preview that module's Agentic plan.
         // The cluster may hold more records than the on-page group — use the
         // plan's checkboxes to pick exactly which to merge.
-        async function resolveGroupWithAI(module, clusterId) {
+        async function resolveGroupWithAI(module, clusterId, groupZohoIds) {
             if (!clusterId) {
                 alert('This group has no cluster id yet — run a scan first, then try again.');
                 return;
@@ -3932,10 +3942,10 @@
             try { await showClusterDetails(clusterId); } catch (_) { /* modal still opens */ }
             // Modal now has an "Agentic Resolution — <module>" section
             // (#mergePlanPanel-<module>) when the cluster has >=2 of that module.
-            try { await previewMergePlan(module, clusterId); } catch (_) { /* user can click Preview */ }
+            try { await previewMergePlan(module, clusterId, groupZohoIds); } catch (_) { /* user can click Preview */ }
         }
 
-        async function previewMergePlan(module, clusterId) {
+        async function previewMergePlan(module, clusterId, seedZohoIds) {
             const panel = document.getElementById('mergePlanPanel-' + module);
             if (!panel) return;
             // Reset all module selections when previewing a different cluster.
@@ -3944,6 +3954,13 @@
                 window.__planClusterId = clusterId;
             }
             const st = _planSt(module);
+            // First open from a tab group: scope the plan to exactly that sub-group's
+            // records (seedZohoIds) instead of the whole cluster. Only on a fresh
+            // open (st.selected not set yet) so re-previews after the operator
+            // ticks/unticks keep their own selection.
+            if (Array.isArray(seedZohoIds) && seedZohoIds.length >= 2 && !Array.isArray(st.selected)) {
+                st.selected = seedZohoIds.map(String);
+            }
             panel.innerHTML = '<div class="py-4 text-gray-400">Building plan…</div>';
             const reqBody = { module: module };
             if (Array.isArray(st.selected)) reqBody.record_zoho_ids = st.selected;
