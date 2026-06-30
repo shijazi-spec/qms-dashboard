@@ -1047,7 +1047,13 @@
       "badge_records": "{n} سجل",
       "badge_inflation": "{value} تضخم",
       "badge_primary": "الأساسي: {type}",
-      "record_n_header": "السجل {n}"
+      "record_n_header": "السجل {n}",
+      "mj_title": "مهمة الدمج",
+      "mj_running": "جارٍ التطبيق في Zoho",
+      "mj_done": "تم",
+      "mj_partial": "جزئي — توجد بعض الأخطاء",
+      "mj_failed": "فشل",
+      "mj_stalled": "متوقفة — أعد التطبيق للمتابعة"
     },
     "calls": {
       "no_calls": "لا توجد سجلات مكالمات",

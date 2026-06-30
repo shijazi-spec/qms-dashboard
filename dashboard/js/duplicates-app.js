@@ -3466,6 +3466,7 @@
             try {
                 __renderClusterDetailBody({ cluster, records, recommendations: recommendations || [], primary_type, is_cross_module, record_types, mixed_signal: window.__currentMixedSignal, recMap, id });
                 loadClusterDetailAttachmentChips(id, records);
+                _resumeMergeJobIfRunning(id);
             } catch (err) {
                 console.error('[clusterDetails] render failed', err);
                 document.getElementById('modalContent').innerHTML =
@@ -5246,6 +5247,19 @@
                 return;
             }
             try { data = await res.json(); } catch (_) { data = null; }
+            // Real apply (confirm:true) now launches a background job instead
+            // of returning a final report — the endpoint responds 202 with
+            // { job_id, status, total }. Dry-run is untouched: it still
+            // returns { report } synchronously and renders the full preview.
+            if (isApply && data && data.job_id) {
+                panel.innerHTML = '<div class="py-3 text-gray-500 text-sm">Apply queued — job #' + escapeHtml(String(data.job_id)) + ' started…</div>';
+                const jobPanel = document.getElementById('mergeJobPanel');
+                if (jobPanel) {
+                    jobPanel.classList.remove('hidden');
+                    _pollMergeJob(clusterId, module, jobPanel);
+                }
+                return;
+            }
             if (!res.ok || !data || !data.report) {
                 const msg = (data && data.error) ? data.error : ('Server returned ' + (res ? res.status : '—'));
                 panel.innerHTML = '<div class="py-3 text-amber-700 text-sm">' + escapeHtml(msg) + '</div>';
@@ -5272,6 +5286,69 @@
                     }
                 } catch (_) { /* non-fatal — operator can paginate manually */ }
             }
+        }
+
+        // ── Background merge-apply job — progress panel + polling ─────────────
+        // The real apply (confirm:true) now runs as an in-process background
+        // job so 200+-record merges never hit a gateway timeout. This polls
+        // GET …/merge-job?module=<M> every ~3s and renders live progress until
+        // the job reaches a terminal state (done/partial/failed) or goes stale
+        // (heartbeat cold while still "running" — server-computed `stale` flag).
+        async function _pollMergeJob(clusterId, module, panelEl) {
+            for (;;) {
+                let j = null;
+                try {
+                    const r = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/merge-job?module=' + encodeURIComponent(module), { credentials: 'same-origin' });
+                    const body = await r.json().catch(() => ({}));
+                    j = body && body.job;
+                } catch (_) { /* transient network hiccup — keep polling */ }
+                if (!j) {
+                    panelEl.textContent = WalaPlusI18n.t('dyn.duplicates.mj_title') + ': ' + 'no job found.';
+                    return;
+                }
+                const total = j.total || 0;
+                const tagged = j.tagged || 0;
+                const reparented = j.reparented || 0;
+                const remaining = Math.max(0, total - tagged);
+                let line;
+                if (j.status === 'running' && j.stale) {
+                    line = '⚠ ' + WalaPlusI18n.t('dyn.duplicates.mj_stalled');
+                } else if (j.status === 'running') {
+                    line = '⏳ ' + WalaPlusI18n.t('dyn.duplicates.mj_running') + ' — ' + tagged + ' / ' + total + ' · reparented ' + reparented + ' · ' + remaining + ' remaining…';
+                } else if (j.status === 'done') {
+                    line = '✓ ' + WalaPlusI18n.t('dyn.duplicates.mj_done') + ' — ' + tagged + ' / ' + total;
+                } else if (j.status === 'partial') {
+                    line = '⚠ ' + WalaPlusI18n.t('dyn.duplicates.mj_partial') + ' — ' + (j.errors || 0) + ' error(s)';
+                } else {
+                    line = '✗ ' + WalaPlusI18n.t('dyn.duplicates.mj_failed');
+                }
+                panelEl.innerHTML = '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.mj_title')) + '</div><div class="font-semibold">' + line + '</div>';
+                if (j.status !== 'running' || j.stale) return;
+                await new Promise(function (resolve) { setTimeout(resolve, 3000); });
+            }
+        }
+
+        // On cluster modal open, resume the progress panel if a job from an
+        // earlier apply is still running — guards against navigating away
+        // mid-merge and losing visibility into a job that's still ticking.
+        async function _resumeMergeJobIfRunning(clusterId) {
+            const jobPanel = document.getElementById('mergeJobPanel');
+            if (!jobPanel) return;
+            jobPanel.classList.add('hidden');
+            jobPanel.innerHTML = '';
+            try {
+                const modules = ['Accounts', 'Contacts', 'Deals', 'Leads'];
+                for (const module of modules) {
+                    const r = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/merge-job?module=' + encodeURIComponent(module), { credentials: 'same-origin' });
+                    const body = await r.json().catch(() => ({}));
+                    const j = body && body.job;
+                    if (j && j.status === 'running' && !j.stale) {
+                        jobPanel.classList.remove('hidden');
+                        _pollMergeJob(clusterId, module, jobPanel);
+                        return;
+                    }
+                }
+            } catch (_) { /* non-fatal — panel just stays hidden */ }
         }
         function __renderExecReport(rep) {
             const esc = (v) => escapeHtml(v === null || v === undefined || v === '' ? '—' : String(v));

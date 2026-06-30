@@ -1047,7 +1047,13 @@
       "badge_records": "{n} records",
       "badge_inflation": "{value} inflation",
       "badge_primary": "Primary: {type}",
-      "record_n_header": "Record {n}"
+      "record_n_header": "Record {n}",
+      "mj_title": "Merge job",
+      "mj_running": "Applying in Zoho",
+      "mj_done": "Done",
+      "mj_partial": "Partial — some errors",
+      "mj_failed": "Failed",
+      "mj_stalled": "Stalled — re-apply to continue"
     },
     "calls": {
       "no_calls": "No call records found",
