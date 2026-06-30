@@ -9253,9 +9253,27 @@
 
             const body = document.getElementById('dealLifecycleTable');
             if (!body) return;
-            const rows = data.violations || [];
-            if (rows.length === 0) {
+            const allRows = data.violations || [];
+            if (allRows.length === 0) {
                 body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No stage-aging violations 🎉</td></tr>';
+                return;
+            }
+
+            // Advanced Filter — applied client-side here exactly like CS
+            // Lifecycle's renderCsLifecycle (rowMatchesAdvancedFilter), since
+            // /api/duplicates/deal-stage-aging doesn't accept owner/layout/
+            // pipeline/stage/domain params. Each violation row already
+            // carries layout / pipeline / stage / owner_name at the top
+            // level (see scanDealStageAgingViolations), so the mapping
+            // mirrors CS Lifecycle's deal-row mapping field-for-field.
+            const rows = allRows.filter(r => rowMatchesAdvancedFilter(r, {
+                ownerField:    'owner_name',
+                layoutField:   'layout',
+                pipelineField: 'pipeline',
+                stageField:    'stage',
+            }));
+            if (rows.length === 0) {
+                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No deals match the active filters. Adjust Advanced Filters or click <em>Clear All Filters</em>.</td></tr>';
                 return;
             }
             body.innerHTML = rows.map(r => {
@@ -11486,7 +11504,7 @@
         const _filterStateByTab = {};
         const _filterAwareTabs = new Set([
             'summary', 'clusters', 'leads', 'deals', 'contacts', 'accounts',
-            'cross-module', 'cs-overlap', 'cs-lifecycle', 'preflight',
+            'cross-module', 'cs-overlap', 'cs-lifecycle', 'deal-lifecycle', 'preflight',
             'owners', 'logs', 'search', 'account-hints',
         ]);
 
@@ -11626,6 +11644,11 @@
             if (activeTab === 'cs-lifecycle') {
                 if (window._csLifecycleData) renderCsLifecycle(window._csLifecycleData);
                 else await loadCsLifecycle(window._csLifecycleFilter || 'all');
+                return;
+            }
+            if (activeTab === 'deal-lifecycle') {
+                if (window._dealLifecycleData) renderDealLifecycle(window._dealLifecycleData);
+                else await loadDealLifecycle();
                 return;
             }
             if (activeTab === 'deal-compliance') {
