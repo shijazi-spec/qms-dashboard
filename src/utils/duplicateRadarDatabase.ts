@@ -5311,6 +5311,22 @@ export function isPlaceholderName(
   return false;
 }
 
+/** The Zoho id of the (primary) Account record inside a matched cluster — used to
+ * put a re-engagement Deal under the company we already have. Null if the cluster
+ * has no account record. */
+export async function getAccountZohoIdByCluster(clusterId: number): Promise<string | null> {
+  if (!Number.isFinite(clusterId)) return null;
+  const r = await pool.query(
+    `SELECT zoho_record_id FROM duplicate_records
+       WHERE cluster_id = $1 AND record_type = 'account'
+         AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+       ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST
+       LIMIT 1`,
+    [clusterId],
+  );
+  return r.rows[0]?.zoho_record_id ? String(r.rows[0].zoho_record_id) : null;
+}
+
 /**
  * Returns true if `clusterId` already has at least one record whose
  * corporate domain differs from `candidateDomain`. Used as a guard so
