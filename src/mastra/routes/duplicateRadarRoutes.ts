@@ -3766,23 +3766,41 @@ export const duplicateRadarRoutes = [
           // job id immediately. The worker rebuilds the plan from live
           // records, runs executeMergePlan + learning capture, and pings
           // Slack on completion — see src/utils/mergeJobRunner.ts.
-          const { getActiveOrLatestMergeJob, createMergeJob } = await import(
-            "../../utils/mergeJobsDatabase"
-          );
+          const {
+            getActiveOrLatestMergeJob,
+            createMergeJob,
+            isMergeJobStale,
+            finishMergeJob,
+          } = await import("../../utils/mergeJobsDatabase");
           const existingJob = await getActiveOrLatestMergeJob(id, module);
-          if (
+          const existingInFlight =
             existingJob &&
-            (existingJob.status === "queued" || existingJob.status === "running")
-          ) {
+            (existingJob.status === "queued" || existingJob.status === "running");
+          // A genuinely-running job → single-flight: hand the operator back the
+          // same job to keep polling. But a STALE running job (worker died on a
+          // restart) must NOT block — supersede it so "re-apply to continue"
+          // starts a fresh worker instead of returning a dead job forever.
+          if (existingInFlight && !isMergeJobStale(existingJob!, Date.now())) {
             return c.json(
               {
-                job_id: existingJob.id,
-                status: existingJob.status,
-                total: existingJob.total,
+                job_id: existingJob!.id,
+                status: existingJob!.status,
+                total: existingJob!.total,
                 resumed: true,
               },
               202,
             );
+          }
+          if (existingInFlight) {
+            try {
+              await finishMergeJob(existingJob!.id, {
+                status: "failed",
+                errorMessage:
+                  "Superseded — previous job stalled (worker restart).",
+              });
+            } catch {
+              /* non-fatal */
+            }
           }
 
           const total = plan.duplicateZohoIds?.length ?? moduleCount - 1;
