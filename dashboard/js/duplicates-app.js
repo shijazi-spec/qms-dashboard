@@ -7049,6 +7049,7 @@
             if (field === 'reason') return String(r.reason || '');
             if (field === 'owner') return String(r.owner || '').toLowerCase();
             if (field === 'stage') return String((r.extra && r.extra.stage) || '').toLowerCase();
+            if (field === 'created') return String((r.extra && r.extra.created) || ''); // ISO → lexical sort = chronological
             return String(r.name || '').toLowerCase(); // 'name'
         }
         function erRender(kind, bodyId) {
@@ -7068,8 +7069,8 @@
             }
             const body = document.getElementById(bodyId);
             if (!body) return;
-            // Deals have an extra Stage column (6); accounts/contacts have 5.
-            const COLS = kind === 'deals' ? 6 : 5;
+            // Deals have extra Stage + Created columns (7); accounts/contacts have 5.
+            const COLS = kind === 'deals' ? 7 : 5;
             if (!rows.length) {
                 body.innerHTML = '<tr><td colspan="' + COLS + '" class="px-4 py-6 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_none')) + '</td></tr>';
                 // Clear any stale pager left from a previous (non-empty) render —
@@ -7117,17 +7118,20 @@
                 // Stage column — Deals only. Protected stages (Agreement Signed /
                 // Paid) are highlighted so the operator sees at a glance a deal that
                 // should NEVER be tagged.
-                var stageCell = '';
+                var stageCell = '', createdCell = '';
                 if (kind === 'deals') {
                     var _stg = (r.extra && r.extra.stage) ? String(r.extra.stage) : '';
                     var _prot = /^(agreement signed|paid)$/i.test(_stg.trim());
                     stageCell = '<td class="px-3 py-2 text-xs ' + (_prot ? 'text-emerald-700 font-semibold' : 'text-gray-600') + '">' + escapeHtml(_stg || '—') + (_prot ? ' 🔒' : '') + '</td>';
+                    var _cr = (r.extra && r.extra.created) ? new Date(r.extra.created) : null;
+                    createdCell = '<td class="px-3 py-2 text-xs text-gray-500">' + escapeHtml(_cr && !isNaN(_cr) ? _cr.toLocaleDateString() : '—') + '</td>';
                 }
                 return '<tr class="border-t border-gray-100">'
                     + '<td class="px-3 py-2">' + cb + '</td>'
                     + '<td class="px-3 py-2">' + erReasonBadge(r.reason) + '</td>'
                     + '<td class="px-3 py-2"><a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">' + escapeHtml(r.name || '(no name)') + '</a></td>'
                     + stageCell
+                    + createdCell
                     + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.owner || '—') + '</td>'
                     + '<td class="px-3 py-2"><div class="flex items-center gap-2 whitespace-nowrap">' + action + dismissBtn + '</div></td>'
                     + '</tr>';
