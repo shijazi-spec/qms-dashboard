@@ -3713,56 +3713,133 @@ export const duplicateRadarRoutes = [
           const isCrossModule = records.some(
             (r) => r.record_type && r.record_type !== recordType,
           );
-          const report = await executeMergePlan(plan, {
-            performedBy:
-              (sessionUser as any)?.email ||
-              (sessionUser as any)?.role ||
-              "admin",
-            dryRun,
-            closeCluster: !isCrossModule,
-          });
 
-          // Learning loop — record what the agent proposed vs. what the
-          // operator chose + the outcome, so the agent learns the org's real
-          // preferences over time. Proposed survivor = the planner's unbiased
-          // default (rebuilt without the override). Best-effort, never blocks.
-          try {
-            const proposedMasterZohoId = masterZohoId
-              ? buildMergePlan(module, id, records, {
-                  tagName: "Duplicate-Delete",
-                  includeZohoIds,
-                }).masterZohoId
-              : plan.masterZohoId;
-            await recordResolutionEvent({
-              clusterId: id,
-              eventType: dryRun ? "dry_run" : "applied",
-              proposedMasterZohoId,
-              chosenMasterZohoId: plan.masterZohoId,
-              fieldsMigrated: report.fieldsMigrated.length,
-              duplicatesTagged: report.taggedRecordIds.length,
-              reparented:
-                report.reparented.deals +
-                report.reparented.contacts +
-                report.reparented.notes,
-              errors: report.errors.length,
-              plan,
-              report,
-              performedBy: (sessionUser as any)?.email || "admin",
+          if (dryRun) {
+            // Dry-run stays fully synchronous — no writes, no job row, just
+            // the preview report (unchanged behavior).
+            const report = await executeMergePlan(plan, {
+              performedBy:
+                (sessionUser as any)?.email ||
+                (sessionUser as any)?.role ||
+                "admin",
+              dryRun: true,
+              closeCluster: !isCrossModule,
             });
-          } catch {
-            /* learning capture is non-fatal */
+
+            // Learning loop — record what the agent proposed vs. what the
+            // operator chose + the outcome, so the agent learns the org's
+            // real preferences over time. Best-effort, never blocks.
+            try {
+              const proposedMasterZohoId = masterZohoId
+                ? buildMergePlan(module, id, records, {
+                    tagName: "Duplicate-Delete",
+                    includeZohoIds,
+                  }).masterZohoId
+                : plan.masterZohoId;
+              await recordResolutionEvent({
+                clusterId: id,
+                eventType: "dry_run",
+                proposedMasterZohoId,
+                chosenMasterZohoId: plan.masterZohoId,
+                fieldsMigrated: report.fieldsMigrated.length,
+                duplicatesTagged: report.taggedRecordIds.length,
+                reparented:
+                  report.reparented.deals +
+                  report.reparented.contacts +
+                  report.reparented.notes,
+                errors: report.errors.length,
+                plan,
+                report,
+                performedBy: (sessionUser as any)?.email || "admin",
+              });
+            } catch {
+              /* learning capture is non-fatal */
+            }
+
+            return c.json({ success: true, dryRun, plan, report });
           }
 
-          // (Apply notifications are batched into the twice-daily Slack digest
-          // at 09:00 / 17:00 KSA — see resolution-digest cron.)
+          // Real run (confirm === true) — move execution off the request
+          // path: a 200+-record merge used to 504 here. Single-flight via
+          // the merge_jobs row (queued/running for this cluster+module wins),
+          // launch the in-process worker WITHOUT awaiting, and return the
+          // job id immediately. The worker rebuilds the plan from live
+          // records, runs executeMergePlan + learning capture, and pings
+          // Slack on completion — see src/utils/mergeJobRunner.ts.
+          const { getActiveOrLatestMergeJob, createMergeJob } = await import(
+            "../../utils/mergeJobsDatabase"
+          );
+          const existingJob = await getActiveOrLatestMergeJob(id, module);
+          if (
+            existingJob &&
+            (existingJob.status === "queued" || existingJob.status === "running")
+          ) {
+            return c.json(
+              {
+                job_id: existingJob.id,
+                status: existingJob.status,
+                total: existingJob.total,
+                resumed: true,
+              },
+              202,
+            );
+          }
 
-          return c.json({ success: true, dryRun, plan, report });
+          const total = plan.duplicateZohoIds?.length ?? moduleCount - 1;
+          const job = await createMergeJob({
+            clusterId: id,
+            module,
+            total,
+            masterZohoId: plan.masterZohoId,
+            createdBy:
+              (sessionUser as any)?.email || (sessionUser as any)?.role || "admin",
+          });
+
+          void import("../../utils/mergeJobRunner")
+            .then((m) => m.runMergeJob(job.id))
+            .catch(() => {});
+
+          return c.json({ job_id: job.id, status: "running", total }, 202);
         } catch (error: any) {
           logger.error("Error executing merge plan:", error);
           return c.json(
             { success: false, error: error?.message || "An internal error occurred" },
             500,
           );
+        }
+      };
+    },
+  },
+  {
+    // Agentic Resolution — poll the background merge job started by the real
+    // (non-dry-run) `/execute` above. Returns the latest job for this
+    // cluster+module (queued/running takes priority over a finished one so a
+    // resumed poll always sees in-flight work first), plus a `stale` flag if
+    // a "running" job's heartbeat has gone cold (worker crashed mid-merge).
+    path: "/api/duplicates/clusters/:id/merge-job",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          const module = parseAgenticModule({ module: c.req.query("module") });
+          const { getActiveOrLatestMergeJob, isMergeJobStale } = await import(
+            "../../utils/mergeJobsDatabase"
+          );
+          const job = await getActiveOrLatestMergeJob(id, module);
+          if (!job) return c.json({ job: null });
+          const stale = isMergeJobStale(job, Date.now());
+          return c.json({ job: { ...job, stale } });
+        } catch (error: any) {
+          logger.error("Error fetching merge job status:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
         }
       };
     },
