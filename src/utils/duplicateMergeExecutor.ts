@@ -97,6 +97,26 @@ export interface ExecuteOptions {
    * module's duplicates as merged/tagged in Zoho.
    */
   closeCluster?: boolean;
+  /**
+   * Optional progress heartbeat for a background-job caller. Throttled to
+   * roughly every 10 processed duplicates (see makeProgressThrottle) plus a
+   * final unconditional flush after the per-duplicate loops. Omitted by all
+   * existing callers (dry-run preview, sync Apply, tests) — behavior is
+   * byte-identical to before when undefined.
+   */
+  onProgress?: (p: { processed: number; tagged: number; reparented: number; errors: number }) => void;
+}
+
+/**
+ * Pure progress throttle — emits at most once per `everyN` count, on exact
+ * multiples (so a caller advancing a monotonic counter by 1 each call gets a
+ * heartbeat every Nth tick instead of on every single record). The final,
+ * unconditional flush after the loops is the caller's responsibility — this
+ * helper only suppresses the in-between noise.
+ */
+export function makeProgressThrottle(everyN: number, emit: (n: number) => void): (n: number) => void {
+  let last = 0;
+  return (n: number) => { if (n - last >= everyN) { last = n; emit(n); } };
 }
 
 const ACTIVITY_LISTS = ["Tasks", "Calls", "Events"];
@@ -177,6 +197,21 @@ export async function executeMergePlan(
     }
   };
 
+  // Progress heartbeat (no-op when opts.onProgress is undefined). `processed`
+  // counts per-duplicate iterations across BOTH loops below (link-account +
+  // reparent loop, and the dedicated reparent/notes loop) so a long real run
+  // reports a single monotonically-increasing counter to the background-job
+  // status row.
+  let processed = 0;
+  const fire = makeProgressThrottle(10, () =>
+    opts.onProgress?.({
+      processed,
+      tagged: report.taggedRecordIds.length,
+      reparented: report.reparented.deals + report.reparented.contacts + report.reparented.notes,
+      errors: report.errors.length,
+    }),
+  );
+
   const fail = (step: string, e: unknown, recordId?: string) => {
     if (recordId && isGhostRecordError(e)) {
       markGhost(recordId);
@@ -248,6 +283,7 @@ export async function executeMergePlan(
         } catch (e) {
           fail("link-account-duplicate", e, dupId);
         }
+        fire(++processed);
       }
       // Cascade-only: NOT tagged, just re-pointed under the surviving Account.
       for (const cascadeId of plan.cascadeOnlyZohoIds || []) {
@@ -324,6 +360,7 @@ export async function executeMergePlan(
     } catch {
       /* ignore */
     }
+    fire(++processed);
   }
 
   if (report.leftOnDuplicate.activities > 0 || report.leftOnDuplicate.attachments > 0) {
@@ -491,6 +528,16 @@ export async function executeMergePlan(
       `${report.fieldsMigrated.length} field(s), reparented ${report.reparented.deals}D/${report.reparented.contacts}C/${report.reparented.notes}N, ` +
       `tagged ${report.taggedRecordIds.length}, errors ${report.errors.length}, stale-dropped ${report.staleDropped.length}`,
   );
+
+  // Final, unconditional progress flush so a background-job caller always
+  // sees the run's true end state even if the last throttled tick landed
+  // short of a multiple of 10 (or there were fewer than 10 duplicates total).
+  opts.onProgress?.({
+    processed,
+    tagged: report.taggedRecordIds.length,
+    reparented: report.reparented.deals + report.reparented.contacts + report.reparented.notes,
+    errors: report.errors.length,
+  });
 
   return report;
 }
