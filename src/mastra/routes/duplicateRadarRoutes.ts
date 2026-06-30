@@ -4420,9 +4420,9 @@ export const duplicateRadarRoutes = [
               : null;
 
           const statusRaw = (url.searchParams.get("status") || "active").toLowerCase();
-          const status = (["active", "resolved", "ignored", "all"].includes(statusRaw)
+          const status = (["active", "resolved", "ignored", "handled", "all"].includes(statusRaw)
             ? statusRaw
-            : "active") as "active" | "resolved" | "ignored" | "all";
+            : "active") as "active" | "resolved" | "ignored" | "handled" | "all";
 
           const { getCrossModuleOverlaps } = await import(
             "../../utils/duplicateRadarDatabase"
@@ -5790,6 +5790,17 @@ export const duplicateRadarRoutes = [
             const cluster = await getClusterById(id);
             if (!cluster) return c.json({ error: "Cluster not found" }, 404);
             await updateClusterStatus(id, "active");
+            // A full reopen also un-handles the cross-module overlap (bug
+            // #4 follow-on): otherwise a fully reopened cluster would stay
+            // invisible to the Cross-Module open queue while being visible
+            // everywhere else.
+            const { pool: drPool } = await import(
+              "../../utils/duplicateRadarDatabase"
+            );
+            await drPool.query(
+              `UPDATE duplicate_clusters SET cross_module_handled_at = NULL WHERE id = $1`,
+              [id],
+            );
             logger.info(
               `🔓 [DuplicateRadar] Cluster #${id} re-opened (was '${cluster.status}') by ${sessionUser.email || "admin"}`,
             );
@@ -5806,6 +5817,120 @@ export const duplicateRadarRoutes = [
           return c.json({ success: true, merge_action: result });
         } catch (error: any) {
           logger.error("Error resolving cluster:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Bug #4 fix — Cross-Module "Handled" must be MODULE-SCOPED: it should
+    // only acknowledge the cross-module relationship (e.g. Lead<->Account)
+    // and remove the cluster from the Cross-Module open queue, NOT resolve
+    // the whole cluster — a cluster can simultaneously hold a legitimate
+    // same-module duplicate (e.g. 2 Leads + 1 Account) that must stay
+    // visible in Domain Clusters / the per-module tabs. So this endpoint
+    // sets cross_module_handled_at and explicitly does NOT touch `status`.
+    // Reversible via /cross-module-unhandle below.
+    path: "/api/duplicates/clusters/:id/cross-module-handled",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          const { pool } = await import("../../utils/duplicateRadarDatabase");
+          const upd = await pool.query(
+            `UPDATE duplicate_clusters
+                SET cross_module_handled_at = NOW()
+              WHERE id = $1
+            RETURNING id`,
+            [id],
+          );
+          if (upd.rowCount === 0) {
+            return c.json({ error: "Cluster not found" }, 404);
+          }
+
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          await logEvent({
+            userId: (sessionUser as any)?.userId ?? undefined,
+            userEmail: (sessionUser as any)?.email ?? undefined,
+            userRole: (sessionUser as any)?.role ?? undefined,
+            actionType: "CROSS_MODULE_HANDLED",
+            entityType: "DUPLICATE_CLUSTER",
+            entityId: String(id),
+            entityName: `Cluster #${id}`,
+            description: `Cross-module overlap marked handled for cluster #${id} (cluster stays active; same-module duplicates remain visible)`,
+            aiInvolved: false,
+            severity: "INFO",
+            module: "duplicate-radar",
+          }).catch(() => {});
+
+          logger.info(
+            `[DuplicateRadar] Cluster #${id} cross-module overlap marked handled by ${sessionUser.email || "admin"}`,
+          );
+          return c.json({ success: true });
+        } catch (error: any) {
+          logger.error("Error marking cross-module overlap handled:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Reverse of cross-module-handled — puts the cluster back into the
+    // Cross-Module open queue. Does not touch `status` either.
+    path: "/api/duplicates/clusters/:id/cross-module-unhandle",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          const { pool } = await import("../../utils/duplicateRadarDatabase");
+          const upd = await pool.query(
+            `UPDATE duplicate_clusters
+                SET cross_module_handled_at = NULL
+              WHERE id = $1
+            RETURNING id`,
+            [id],
+          );
+          if (upd.rowCount === 0) {
+            return c.json({ error: "Cluster not found" }, 404);
+          }
+
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          await logEvent({
+            userId: (sessionUser as any)?.userId ?? undefined,
+            userEmail: (sessionUser as any)?.email ?? undefined,
+            userRole: (sessionUser as any)?.role ?? undefined,
+            actionType: "CROSS_MODULE_UNHANDLED",
+            entityType: "DUPLICATE_CLUSTER",
+            entityId: String(id),
+            entityName: `Cluster #${id}`,
+            description: `Cross-module overlap un-handled for cluster #${id} (back in the open queue)`,
+            aiInvolved: false,
+            severity: "INFO",
+            module: "duplicate-radar",
+          }).catch(() => {});
+
+          logger.info(
+            `[DuplicateRadar] Cluster #${id} cross-module overlap un-handled by ${sessionUser.email || "admin"}`,
+          );
+          return c.json({ success: true });
+        } catch (error: any) {
+          logger.error("Error un-handling cross-module overlap:", error);
           return c.json({ error: "An internal error occurred" }, 500);
         }
       };

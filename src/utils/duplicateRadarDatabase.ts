@@ -863,6 +863,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       verification_state VARCHAR(16),
       verification_at TIMESTAMP,
       verification_notes TEXT,
+      cross_module_handled_at TIMESTAMPTZ,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -902,6 +903,13 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_cs_overlap ON duplicate_clusters(cs_overlap_verdict) WHERE cs_overlap_verdict IS NOT NULL`,
+  );
+  // Cross-Module "Handled" — module-scoped acknowledgement of a cross-module
+  // overlap (e.g. Lead<->Account) that must NOT resolve the whole cluster
+  // (same-module duplicates, e.g. 2 Leads, must stay visible elsewhere).
+  // NULL = still open in the Cross-Module queue; set = handled (reversible).
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS cross_module_handled_at TIMESTAMPTZ`,
   );
   // R3 (quick-wins): post-merge verification state. When an operator clicks
   // "Mark Resolved + Verify" we check that the cluster's non-primary records
@@ -8559,8 +8567,10 @@ export async function getCrossModuleOverlaps(opts: {
   limit?: number;
   pairing?: CrossModulePairing | null;
   /** Which lifecycle status to return: 'active' (default, the open queue),
-   *  'resolved' (handled), 'ignored' (dismissed), or 'all'. */
-  status?: "active" | "resolved" | "ignored" | "all";
+   *  'resolved' (whole cluster resolved), 'ignored' (dismissed), 'handled'
+   *  (module-scoped: cross_module_handled_at IS NOT NULL, cluster itself
+   *  still 'active' — see markCrossModuleHandled), or 'all'. */
+  status?: "active" | "resolved" | "ignored" | "handled" | "all";
 } = {}): Promise<CrossModuleOverlapsResponse> {
   const CROSS_MODULE_MAX = 100000;
   const limit = Math.min(
@@ -8569,9 +8579,20 @@ export async function getCrossModuleOverlaps(opts: {
   );
   const statusOpt = opts.status ?? "active";
   // Parameterised status clause; 'all' drops the filter entirely.
+  // 'handled' is NOT a cluster.status value — it's the module-scoped
+  // cross_module_handled_at column on an otherwise-'active' cluster, so it
+  // filters on status='active' (same base population as the open queue)
+  // and flips the handled-column condition below.
   const statusClause =
-    statusOpt === "all" ? "TRUE" : "status = $2";
-  const params: any[] = statusOpt === "all" ? [limit] : [limit, statusOpt];
+    statusOpt === "all"
+      ? "TRUE"
+      : statusOpt === "handled"
+        ? "duplicate_clusters.status = 'active'"
+        : "duplicate_clusters.status = $2";
+  const params: any[] =
+    statusOpt === "all" || statusOpt === "handled"
+      ? [limit]
+      : [limit, statusOpt];
   const r = await pool.query<CrossModuleClusterRow>(
     `
     SELECT
@@ -8583,6 +8604,13 @@ export async function getCrossModuleOverlaps(opts: {
       status, created_at, updated_at
     FROM duplicate_clusters
     WHERE ${statusClause}
+      AND (
+        ${statusOpt === "handled"
+          ? "duplicate_clusters.cross_module_handled_at IS NOT NULL"
+          : statusOpt === "active"
+            ? "duplicate_clusters.cross_module_handled_at IS NULL"
+            : "TRUE"}
+      )
       AND (
         ${statusOpt === "active"
           ? `(CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'lead'    AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +

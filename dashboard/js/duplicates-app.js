@@ -310,12 +310,13 @@
         window._crossModuleStatusFilter = window._crossModuleStatusFilter || 'active';
         function setCrossModuleStatus(status) {
             window._crossModuleStatusFilter = status || 'active';
-            ['active', 'resolved', 'ignored', 'all'].forEach(k => {
+            ['active', 'handled', 'resolved', 'ignored', 'all'].forEach(k => {
                 const el = document.getElementById('cmoStatus-' + k);
                 if (!el) return;
                 const active = k === window._crossModuleStatusFilter;
                 const palette = {
                     active:   active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    handled:  active ? 'bg-teal-700 text-white' : 'bg-teal-100 text-teal-700 hover:bg-teal-200',
                     resolved: active ? 'bg-green-700 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200',
                     ignored:  active ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
                     all:      active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
@@ -326,21 +327,25 @@
             loadCrossModule();
         }
 
-        // Mark a cross-module overlap as HANDLED (status='resolved') — the
-        // operator converted / linked / closed it in Zoho. No Zoho write here;
-        // it just drops the row from the open queue and is reversible via Re-open.
+        // Mark a cross-module overlap as HANDLED. This is MODULE-SCOPED (bug
+        // #4 fix): it only acknowledges the cross-module relationship (e.g.
+        // Lead<->Account) — it does NOT resolve the whole cluster, so a
+        // same-module duplicate also living in this cluster (e.g. 2 Leads)
+        // stays visible in Domain Clusters / the per-module tabs. No Zoho
+        // write here; it just drops the row from the Cross-Module open queue
+        // (still reviewable under "Handled" and reversible via Un-handle).
         async function markCrossModuleHandled(clusterId) {
-            if (!confirm('Mark this cross-module overlap as handled?\n\nUse this once you have CONVERTED / LINKED / CLOSED the records in Zoho. It leaves the open queue (still reviewable under "Resolved" and reversible). No Zoho changes are made here.')) return;
-            const payload = JSON.stringify({ action: 'resolve', notes: 'Cross-module overlap handled in Zoho (convert / link / close) — marked from the Cross-Module tab.' });
+            if (!confirm('Mark this cross-module overlap as handled?\n\nUse this once you have CONVERTED / LINKED / CLOSED the records in Zoho. This only marks the cross-module overlap handled — the cluster itself stays active, so any same-module duplicate (e.g. 2 Leads) keeps showing up where it belongs. Reviewable under "Handled" and reversible (Un-handle). No Zoho changes are made here.')) return;
+            const payload = JSON.stringify({ notes: 'Cross-module overlap handled in Zoho (convert / link / close) — marked from the Cross-Module tab.' });
             try {
-                let res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
+                let res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-handled', {
                     method: 'POST', credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
                     const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
-                    res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
+                    res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-handled', {
                         method: 'POST', credentials: 'same-origin',
                         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
                     });
@@ -350,6 +355,31 @@
                 loadCrossModule();
             } catch (e) {
                 alert('Could not mark handled: ' + (e && e.message || e));
+            }
+        }
+
+        // Reverse of markCrossModuleHandled — clears cross_module_handled_at so
+        // the cluster reappears in the Cross-Module open queue. No Zoho changes.
+        async function unhandleCrossModule(clusterId) {
+            if (!confirm('Move this cross-module overlap back to the open queue?\n\nNo Zoho changes.')) return;
+            try {
+                let res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-unhandle', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (res.status === 401 || res.status === 403) {
+                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    if (!adminKey) return;
+                    res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-unhandle', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }
+                    });
+                }
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                loadCrossModule();
+            } catch (e) {
+                alert('Could not un-handle: ' + (e && e.message || e));
             }
         }
 
@@ -517,9 +547,19 @@
         function _crossModuleTrackCell(c) {
             const st = window._crossModuleStatusFilter || 'active';
             const isOpen = (c.status || 'active') === 'active';
+            if (st === 'handled') {
+                // Handled view: module-scoped acknowledgement only — the cluster
+                // itself is still 'active' (same-module dups stay visible
+                // elsewhere). Un-handle clears cross_module_handled_at, putting
+                // it back in the Cross-Module open queue. No Zoho changes.
+                return '<td class="px-4 py-2 text-xs text-center whitespace-nowrap">'
+                    + '<span class="text-[10px] text-teal-600 me-1">Handled</span>'
+                    + '<button data-on-click="unhandleCrossModule" data-args="[' + c.id + ']" title="Un-handle — return this overlap to the open queue. No Zoho changes." class="px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200">🔓</button>'
+                    + '</td>';
+            }
             if (st === 'active' || isOpen) {
                 return '<td class="px-4 py-2 text-xs text-center whitespace-nowrap">'
-                    + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark handled — I converted / linked / closed this in Zoho. Removes it from the open queue (auditable, reversible)." class="px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 me-1">✓ Handled</button>'
+                    + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark handled — I converted / linked / closed this in Zoho. Module-scoped: removes it from the Cross-Module open queue only — the cluster stays active and any same-module duplicate stays visible elsewhere. Reversible." class="px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 me-1">✓ Handled</button>'
                     + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No Zoho changes." class="px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">🚫</button>'
                     + '</td>';
             }
