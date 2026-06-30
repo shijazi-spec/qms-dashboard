@@ -6233,6 +6233,12 @@ export const duplicateRadarRoutes = [
             : Math.min(Math.max(rawLimit, 1), 100);
           const offset = isNaN(rawOffset) ? 0 : Math.max(rawOffset, 0);
 
+          const rawSegment = url.searchParams.get("segment");
+          const segment: DuplicateFilters["segment"] =
+            rawSegment === "marketplace" || rawSegment === "corporate"
+              ? rawSegment
+              : undefined;
+
           const filters: DuplicateFilters = {
             modules: url.searchParams.get("modules")
               ? url.searchParams.get("modules")!.split(",")
@@ -6255,6 +6261,7 @@ export const duplicateRadarRoutes = [
             status: url.searchParams.get("status") || "active",
             confidence_level:
               url.searchParams.get("confidence_level") || undefined,
+            segment,
           };
 
           const { clusters, total } = await getFilteredClusters(
@@ -6286,6 +6293,12 @@ export const duplicateRadarRoutes = [
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
+          const rawSegment = url.searchParams.get("segment");
+          const segment: DuplicateFilters["segment"] =
+            rawSegment === "marketplace" || rawSegment === "corporate"
+              ? rawSegment
+              : undefined;
+
           const filters: DuplicateFilters = {
             modules: url.searchParams.get("modules")
               ? url.searchParams.get("modules")!.split(",")
@@ -6297,6 +6310,7 @@ export const duplicateRadarRoutes = [
               ? url.searchParams.get("stages")!.split(",")
               : undefined,
             domain: url.searchParams.get("domain") || undefined,
+            segment,
           };
           const summary = await getFilteredSummary(filters);
           return c.json(summary);
@@ -8573,6 +8587,7 @@ export const duplicateRadarRoutes = [
             let wouldContacts = 0;
             let wouldDeals = 0;
             let wouldLeads = 0;
+            let a1SkippedNoAccount = 0;
 
             if (action === 4) {
               wouldLeads = plan.leads.length;
@@ -8590,21 +8605,67 @@ export const duplicateRadarRoutes = [
                   ...(dom ? { Website: dom.startsWith("http") ? dom : `https://${dom}` } : {}),
                 };
               }
+            } else if (action === 1) {
+              // A1 re-engages under an EXISTING Account. Resolve the matched
+              // account NOW so the preview is honest: a churned company whose
+              // matched cluster has no Account record is skipped at run time
+              // (reason no_matched_account), not turned into a deal. Without
+              // this, the dry-run over-promises deals it won't actually create.
+              const { getAccountZohoIdByCluster: resolveAccForPreview } =
+                await import("../../utils/duplicateRadarDatabase");
+              let sampleCo: (typeof plan.companies)[number] | null = null;
+              let sampleAccId: string | null = null;
+              for (const co of plan.companies) {
+                const accId =
+                  co.clusterId != null
+                    ? await resolveAccForPreview(co.clusterId)
+                    : null;
+                if (accId) {
+                  wouldDeals += 1;
+                  wouldContacts += co.contacts.length;
+                  if (!sampleCo) {
+                    sampleCo = co;
+                    sampleAccId = accId;
+                  }
+                } else {
+                  a1SkippedNoAccount += 1;
+                }
+              }
+              wouldAccounts = 0; // A1 never creates an account.
+              if (sampleCo) {
+                samplePayload = {
+                  account: null,
+                  contact: sampleCo.contacts[0] ? {
+                    Last_Name: sampleCo.contacts[0].contact_name || sampleCo.companyName,
+                    ...(sampleCo.contacts[0].email ? { Email: sampleCo.contacts[0].email } : {}),
+                    ...(sampleCo.contacts[0].phone ? { Phone: sampleCo.contacts[0].phone } : {}),
+                    Account_Name: { id: sampleAccId },
+                  } : null,
+                  deal: {
+                    Deal_Name: `${sampleCo.companyName} — ${dealTag}`,
+                    Stage: DEAL.stage,
+                    Pipeline: DEAL.pipeline,
+                    Layout: { id: DEAL.layoutId },
+                    Account_Name: { id: sampleAccId },
+                    Contact_Name: { id: "(would-be-created)" },
+                  },
+                };
+              }
             } else {
-              wouldAccounts = action === 1 ? 0 : plan.companies.length;
+              wouldAccounts = plan.companies.length;
               wouldContacts = plan.contact_count;
               wouldDeals = plan.companies.length;
               const co = plan.companies[0];
               if (co) {
                 const dom = co.domain || null;
-                const accountId = action === 1 ? "(existing-resolved-at-run-time)" : "(would-be-created)";
+                const accountId = "(would-be-created)";
                 const contactId = "(would-be-created)";
                 samplePayload = {
-                  account: action !== 1 ? {
+                  account: {
                     Account_Name: co.companyName,
                     Layout: { id: DEAL.layoutId },
                     ...(dom ? { Website: dom.startsWith("http") ? dom : `https://${dom}` } : {}),
-                  } : null,
+                  },
                   contact: co.contacts[0] ? {
                     Last_Name: co.contacts[0].contact_name || co.companyName,
                     ...(co.contacts[0].email ? { Email: co.contacts[0].email } : {}),
@@ -8636,7 +8697,8 @@ export const duplicateRadarRoutes = [
                 leads: wouldLeads,
               },
               sample_payload: samplePayload,
-              skipped_count: plan.skipped.length,
+              skipped_count: plan.skipped.length + a1SkippedNoAccount,
+              no_matched_account_count: a1SkippedNoAccount,
               skipped_sample: plan.skipped.slice(0, 10),
             });
           }

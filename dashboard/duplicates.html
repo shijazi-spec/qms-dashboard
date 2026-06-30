@@ -208,6 +208,20 @@
             </button>
         </div>
 
+        <!-- Marketplace / Corporate segment toggle — always visible (one source of
+             truth across every cluster tab). Per-tab state: switching tabs restores
+             whatever segment that tab was last on. Mirrors the Segment dropdown in
+             Advanced Filters below; clicking either one updates the other. -->
+        <div id="segmentToggleBar" class="bg-white rounded-lg shadow px-4 py-2 mb-3 flex items-center gap-3" data-testid="segment-toggle-bar">
+            <span class="text-xs font-medium text-gray-600 shrink-0" title="Filter every cluster tab + Executive Summary tiles by whether records carry a Marketplace / Partner layout.">Segment:</span>
+            <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden text-sm">
+                <button type="button" data-on-click="setSegment" data-args="[&quot;all&quot;]" data-testid="segment-chip-all" id="segmentChipAll" class="segment-chip px-3 py-1 bg-blue-600 text-white font-medium" title="No filter — show every cluster regardless of layout. Default.">All</button>
+                <button type="button" data-on-click="setSegment" data-args="[&quot;marketplace&quot;]" data-testid="segment-chip-marketplace" id="segmentChipMarketplace" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="Only records on the Marketplace / Partner Accounts layouts (merchant / vendor B2B2C records).">Marketplace</button>
+                <button type="button" data-on-click="setSegment" data-args="[&quot;corporate&quot;]" data-testid="segment-chip-corporate" id="segmentChipCorporate" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="Everything that is NOT marketplace — corporate / direct B2B records (records with no layout default here so legacy data isn't lost).">Corporate</button>
+            </div>
+            <span class="text-[10px] font-normal text-gray-400 ms-1" title="Each tab remembers its segment selection — switching tabs restores that tab's segment.">· per tab</span>
+        </div>
+
         <!-- Advanced Filters Panel -->
         <div id="filterPanel" class="bg-white rounded-lg shadow px-4 py-3 mb-4">
             <div class="flex items-center justify-between mb-2">
@@ -224,6 +238,14 @@
             </div>
             <div id="filterPanelBody" class="hidden">
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Segment <span class="text-gray-400 font-normal" title="Mirrors the Marketplace / Corporate chip at the top of the page.">(mirrors chip)</span></label>
+                        <select id="filterSegment" aria-label="Filter by segment (marketplace / corporate)" data-testid="select-filter-segment" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                            <option value="all">All</option>
+                            <option value="marketplace">Marketplace only</option>
+                            <option value="corporate">Corporate only</option>
+                        </select>
+                    </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Module</label>
                         <select id="filterModule" aria-label="Filter by module" data-testid="select-filter-module" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4">
@@ -2005,7 +2027,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=21"></script>
+    <script src="/js/duplicates-app.js?v=22"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
