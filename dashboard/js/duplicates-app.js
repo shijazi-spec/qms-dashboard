@@ -7045,8 +7045,27 @@
             const tab = kind === 'deals' ? 'Potentials' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             return 'https://crm.zoho.com/crm/org766568398/tab/' + tab + '/' + encodeURIComponent(id);
         }
+        function _erSortVal(r, field) {
+            if (field === 'reason') return String(r.reason || '');
+            if (field === 'owner') return String(r.owner || '').toLowerCase();
+            if (field === 'stage') return String((r.extra && r.extra.stage) || '').toLowerCase();
+            return String(r.name || '').toLowerCase(); // 'name'
+        }
         function erRender(kind, bodyId) {
-            const rows = window['_er_' + kind] || [];
+            // Sort the WHOLE list (all records, not just the visible page) by the
+            // active column, then paginate the sorted result — so ascending/
+            // descending spans the full 500, as expected (Ahmad 2026-06-30).
+            let rows = (window['_er_' + kind] || []).slice();
+            const _ss = (window._erSort || {})[kind];
+            if (_ss && _ss.field) {
+                const _dir = _ss.dir === 'desc' ? -1 : 1;
+                rows.sort(function (a, b) {
+                    const va = _erSortVal(a, _ss.field), vb = _erSortVal(b, _ss.field);
+                    if (va < vb) return -_dir;
+                    if (va > vb) return _dir;
+                    return 0;
+                });
+            }
             const body = document.getElementById(bodyId);
             if (!body) return;
             // Deals have an extra Stage column (6); accounts/contacts have 5.
@@ -7150,6 +7169,44 @@
             const cnt = document.getElementById('erBulkCount');
             if (cnt) cnt.textContent = n + ' selected';
             if (bar) { if (n > 0) bar.classList.remove('hidden'); else bar.classList.add('hidden'); }
+        }
+        // Header checkbox: select / clear ALL delete-ready rows on the current page,
+        // so the bulk "Tag selected" / "Dismiss selected (keep)" acts on up to 50 at
+        // once in ONE request (avoids the per-row "Too many requests" rate limit).
+        function erSelectAllPage(e) {
+            const cb = e && e.target; if (!cb) return;
+            const table = cb.closest('table'); if (!table) return;
+            const body = table.querySelector('tbody'); if (!body) return;
+            const kind = body.id === 'erDealsBody' ? 'deals' : body.id === 'erAccountsBody' ? 'accounts' : body.id === 'erContactsBody' ? 'contacts' : null;
+            if (!kind) return;
+            const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
+            const on = !!cb.checked;
+            const set = _erSelSet(module);
+            // Only ENABLED (delete-ready) rows — disabled ones aren't taggable yet.
+            body.querySelectorAll('input.er-cb:not([disabled])').forEach(function (rowCb) {
+                rowCb.checked = on;
+                const id = String(rowCb.getAttribute('data-zoho-id'));
+                if (on) set[id] = true; else delete set[id];
+            });
+            erSelChanged();
+        }
+        // Sort the FULL list by a column (toggle asc/desc), reset to page 1, re-render.
+        function erSortBy(kind, field) {
+            window._erSort = window._erSort || {};
+            const cur = window._erSort[kind];
+            const dir = (cur && cur.field === field && cur.dir === 'asc') ? 'desc' : 'asc';
+            window._erSort[kind] = { field: field, dir: dir };
+            window['_erPage_' + kind] = 0;
+            const bodyId = kind === 'deals' ? 'erDealsBody' : kind === 'accounts' ? 'erAccountsBody' : 'erContactsBody';
+            erRender(kind, bodyId);
+            _erUpdateSortCarets(kind);
+        }
+        function _erUpdateSortCarets(kind) {
+            const st = (window._erSort || {})[kind];
+            document.querySelectorAll('.er-sort-caret[data-sk^="' + kind + ':"]').forEach(function (el) {
+                const f = (el.getAttribute('data-sk') || '').split(':')[1];
+                el.textContent = (st && st.field === f) ? (st.dir === 'desc' ? ' ↓' : ' ↑') : '';
+            });
         }
         async function erAiApply(kind) {
             const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';

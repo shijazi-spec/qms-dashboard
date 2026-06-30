@@ -64,6 +64,13 @@ const NOT_ALREADY_TAGGED = `
   )`;
 const excl = (alias: string) => NOT_ALREADY_TAGGED.replace(/%ALIAS%/g, alias);
 
+// Marketplace / merchant records are OUT of Duplicate Radar scope — it's a
+// corporate/B2B hygiene tool (Sarah 2026-06-17). Exclude them from the empty
+// cleanup by Zoho layout, mirroring MERCHANT_LAYOUT_NAMES in the preflight.
+// `alias` is the table alias incl. trailing dot (e.g. "a.") or "" for none.
+const NOT_MARKETPLACE = (alias: string) =>
+  ` AND LOWER(COALESCE(${alias}layout_name, '')) NOT IN ('marketplace', 'partner accounts')`;
+
 /** Dismiss flagged records as "reviewed — keep" (false positives, e.g. a deal
  * that actually has data). They drop off the cleanup list and never reappear.
  * Idempotent. */
@@ -161,6 +168,11 @@ export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
         AND ( COALESCE(NULLIF(raw_data->'Account_Name'->>'id',''), NULL) IS NULL
               OR record_name ILIKE ANY($1::text[]) )
         ${excl("")}
+        ${NOT_MARKETPLACE("")}
+        -- Marketplace/partner deals are OUT of Duplicate Radar scope (corporate/
+        -- B2B only). The "Partner Active" stage is the partner-pipeline signal —
+        -- drop those too in case the Marketplace layout wasn't stamped (Ahmad 2026-06-30).
+        AND LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage', '')) NOT LIKE '%partner%'
       ORDER BY modified_date DESC NULLS LAST
       LIMIT 4000`,
     [LIKES, DELETE_TAGS],
@@ -221,6 +233,7 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
               OR a.record_name ILIKE ANY($1::text[])
               OR a.account_name ILIKE ANY($1::text[]) )
         ${excl("a.")}
+        ${NOT_MARKETPLACE("a.")}
       ORDER BY a.modified_date DESC NULLS LAST
       LIMIT 4000`,
     [LIKES, DELETE_TAGS],
@@ -825,6 +838,7 @@ export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
                 AND c.zoho_record_id NOT IN (SELECT cid FROM deal_contacts) )
               OR c.record_name ILIKE ANY($1::text[]) )
         ${excl("c.")}
+        ${NOT_MARKETPLACE("c.")}
       ORDER BY c.modified_date DESC NULLS LAST
       LIMIT 4000`,
     [LIKES, DELETE_TAGS],
