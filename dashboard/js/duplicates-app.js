@@ -7192,8 +7192,11 @@
             else erRender(kind, 'er' + module + 'Body'); // reflect deleteEligible
             let msg = '✓ Verified ' + ids.length + ': ' + (j.empty || []).length + ' confirmed empty · ' + (j.keep || []).length + ' had deals/contacts (removed)';
             if ((j.ghosts || []).length) msg += ' · ' + j.ghosts.length + ' already deleted (pruned)';
-            if ((j.tagged || []).length) msg += ' · ' + j.tagged.length + ' already tagged';
+            if ((j.tagged || []).length) msg += ' · ' + j.tagged.length + ' already tagged → moved to "Tagged · pending delete"';
             if (result) result.textContent = msg;
+            // Already-tagged records were recorded in the ledger server-side; refresh
+            // the Tagged · pending delete section so they show up there now.
+            if ((j.tagged || []).length) erLoadTaggedStatus();
         }
         // Per-row "Check documents" for an Account OR a Deal — live-verify it has
         // no account/contact/email/documents in Zoho (the shared empty gate). On
@@ -7218,6 +7221,17 @@
                 return;
             }
             if (data.ghost) { _erRemoveLocal(kind, [String(id)]); return; } // deleted in Zoho
+            if (data.tagged) {
+                // Already tagged in Zoho (mirror was stale). Don't leave it sitting
+                // here as "keep" — record it properly (Empty-Delete → ledger so it
+                // moves to "Tagged · pending delete"; Duplicate-Delete → dismissed)
+                // and drop it off this active cleanup list.
+                if (cell) cell.innerHTML = '<span class="text-xs text-gray-400">moving to tagged…</span>';
+                await erAdminPost('/api/duplicates/empty-records/verify-page', { module: module, zohoIds: [String(id)] });
+                _erRemoveLocal(kind, [String(id)]);
+                erLoadTaggedStatus();
+                return;
+            }
             const row = (window['_er_' + kind] || []).find(function (r) { return String(r.zohoId) === String(id); });
             if (data.empty) {
                 if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">' + escapeHtml(WalaPlusI18n.t('duplicates.er_empty_ready')) + '</span>';

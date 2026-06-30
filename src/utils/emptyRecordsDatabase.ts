@@ -531,6 +531,8 @@ export async function verifyEmptyCandidates(
   const keep: Array<{ id: string; reason: string }> = [];
   const ghosts: string[] = [];
   const tagged: string[] = [];
+  const emptyAlreadyTagged: string[] = []; // live Empty-Delete → move to ledger/tagged-pending
+  const dupAlreadyTagged: string[] = []; // live Duplicate-Delete → merge flow owns it → dismiss
 
   for (const id of ids) {
     let liveRec: Awaited<ReturnType<typeof fetchZohoRecordById>> | null = null;
@@ -550,7 +552,13 @@ export async function verifyEmptyCandidates(
     }
     const ld: any = liveRec.data || {};
     const liveTags: string[] = ((ld.Tag as any[]) || []).map((t: any) => String(t?.name || ""));
-    if (liveTags.includes(EMPTY_DELETE_TAG) || liveTags.includes("Duplicate-Delete")) {
+    if (liveTags.includes(EMPTY_DELETE_TAG)) {
+      emptyAlreadyTagged.push(id);
+      tagged.push(id);
+      continue;
+    }
+    if (liveTags.includes("Duplicate-Delete")) {
+      dupAlreadyTagged.push(id);
       tagged.push(id);
       continue;
     }
@@ -580,6 +588,13 @@ export async function verifyEmptyCandidates(
   if (keep.length) {
     await markEmptyRecordsDismissed(module, keep.map((k) => k.id), by);
   }
+  // Records already carrying Empty-Delete in LIVE Zoho (the synced mirror was
+  // stale, so they slipped into the active list): record them in the ledger so
+  // they MOVE to "Tagged · pending delete" and drop off this cleanup list —
+  // instead of lingering here as "already tagged — keep" (Ahmad 2026-06-30).
+  if (emptyAlreadyTagged.length) await markEmptyDeleteTagged(module, emptyAlreadyTagged, by);
+  // Already Duplicate-Delete = the merge flow owns them → just dismiss off this list.
+  if (dupAlreadyTagged.length) await markEmptyRecordsDismissed(module, dupAlreadyTagged, by);
   return { empty, keep, ghosts, tagged };
 }
 
