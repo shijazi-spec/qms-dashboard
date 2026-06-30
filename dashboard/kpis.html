@@ -1089,6 +1089,7 @@
             _buCoverageKpiId = null;
             loadKPIs();
         }
+        const _expandedBUs = new Set();
         async function loadBuCoverage() {
             if (_buCoverageKpiId == null) return;
             try {
@@ -1098,15 +1099,47 @@
                 const _inScope = rows.filter(r => r.status !== 'not_started');
                 document.getElementById('buCoverageAvg').innerHTML =
                     `Average coverage: <span class="text-gray-900 font-semibold">${data.average != null ? data.average : 0}%</span> across ${_inScope.length} in-scope BUs &middot; <span class="text-green-700">${rows.filter(r=>(r.completion_pct||0)>=100).length} done</span> &middot; <span class="text-gray-400">${rows.length} total</span>` +
-                    `<div class="text-xs text-gray-500 mt-1">Headline = average of BUs in this period's plan (status not "Not started"). Each BU's % is driven by its 9-phase Framework checklist — tick phases there to change a BU's coverage; status &amp; due date stay editable here.</div>`;
-                document.getElementById('buCoverageRows').innerHTML = rows.map(r => `
+                    `<div class="text-xs text-gray-500 mt-1">Click a Business Unit to open its 9-phase Framework checklist and tick the completed phases — each BU's % (and the headline) updates automatically. Status &amp; due date stay editable here.</div>`;
+                document.getElementById('buCoverageRows').innerHTML = rows.map(r => {
+                    const slug = _slug(r.bu_name);
+                    const phases = r.phases || [];
+                    const pdone = phases.filter(p => p.is_done).length;
+                    const phaseList = phases.map(p => `
+                        <label class="flex items-center gap-2 py-1 text-sm">
+                            <input type="checkbox" ${p.is_done ? 'checked' : ''} data-on-change="toggleBuPhase" data-args="[${p.id}, ${!p.is_done}]" class="w-4 h-4" />
+                            <span class="${p.is_done ? 'line-through text-gray-400' : 'text-gray-700'}">${_esc(p.item_text)}</span>
+                        </label>`).join('');
+                    return `
                     <tr class="border-b">
-                        <td class="py-2 text-gray-800">${_esc(r.bu_name)}</td>
-                        <td class="py-2"><span class="font-semibold text-gray-800">${r.completion_pct || 0}%</span> <span class="text-xs text-gray-400" title="Derived from this BU's Framework checklist">from checklist</span></td>
+                        <td class="py-2">
+                            <button data-on-click="toggleBuPhases" data-args="[&quot;${slug}&quot;]" class="flex items-center gap-1 text-gray-800 hover:text-indigo-700 font-medium">
+                                <span id="caret-${slug}" class="text-xs text-gray-400">${_expandedBUs.has(slug) ? '▾' : '▸'}</span> ${_esc(r.bu_name)}
+                            </button>
+                        </td>
+                        <td class="py-2"><span class="font-semibold text-gray-800">${r.completion_pct || 0}%</span> <span class="text-xs text-gray-400">${pdone}/${phases.length} phases</span></td>
                         <td class="py-2"><input type="date" value="${r.due_date ? String(r.due_date).slice(0,10) : ''}" data-on-change="saveBuCoverage" data-args="[${r.id}, &quot;due_date&quot;, &quot;@this.value&quot;]" class="border rounded px-2 py-1 text-sm" /></td>
                         <td class="py-2"><select data-on-change="saveBuCoverage" data-args="[${r.id}, &quot;status&quot;, &quot;@this.value&quot;]" class="border rounded px-2 py-1 text-sm">${_BU_STATUS.map(([v, l]) => `<option value="${v}" ${r.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
-                    </tr>`).join('');
+                    </tr>
+                    <tr id="phases-${slug}" class="${_expandedBUs.has(slug) ? '' : 'hidden'} bg-gray-50"><td colspan="4" class="px-6 py-2">${phaseList || '<span class="text-xs text-gray-400">No checklist phases for this BU.</span>'}</td></tr>`;
+                }).join('');
             } catch (e) { console.error('Load BU coverage error:', e); }
+        }
+        function toggleBuPhases(slug) {
+            const el = document.getElementById('phases-' + slug);
+            const caret = document.getElementById('caret-' + slug);
+            if (!el) return;
+            const nowHidden = el.classList.toggle('hidden');
+            if (nowHidden) _expandedBUs.delete(slug); else _expandedBUs.add(slug);
+            if (caret) caret.textContent = nowHidden ? '▸' : '▾';
+        }
+        async function toggleBuPhase(itemId, isDone) {
+            try {
+                const res = await fetch(`/api/kpis/checklist/${itemId}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_done: isDone })
+                });
+                if (res.ok) { await loadBuCoverage(); } else { alert('Failed to update phase.'); }
+            } catch (e) { console.error('Toggle BU phase error:', e); }
         }
         async function saveBuCoverage(rowId, field, value) {
             try {

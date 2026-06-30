@@ -811,7 +811,35 @@ export const kpiRoutes = [
             return forbiddenResponse(c, "Insufficient permissions for BU coverage");
           const kpiId = parseInt(c.req.param("id"));
           const rows = await getBuCoverage(kpiId);
-          return c.json({ rows, average: buCoverageAverage(rows) });
+          // Attach each BU's 9-phase Framework checklist (from QM-KPI-015, now the
+          // hidden checklist store behind BU Coverage) so the modal can tick phases
+          // per BU directly.
+          let rowsOut: any[] = rows;
+          try {
+            const fw = await getKPIByCode("QM-KPI-015");
+            if (fw?.id) {
+              const { getChecklistItems } = await import(
+                "../../utils/kpiChecklistDatabase"
+              );
+              const items = await getChecklistItems(fw.id);
+              const byBU: Record<string, any[]> = {};
+              for (const it of items) {
+                const sec = (it.section || "").trim();
+                (byBU[sec] ??= []).push({
+                  id: it.id,
+                  item_text: it.item_text,
+                  is_done: it.is_done,
+                });
+              }
+              rowsOut = rows.map((r: any) => ({
+                ...r,
+                phases: byBU[r.bu_name] || [],
+              }));
+            }
+          } catch (e) {
+            safeLogger.error("[KpiRoutes] attach BU phases failed", e);
+          }
+          return c.json({ rows: rowsOut, average: buCoverageAverage(rows) });
         } catch (error) {
           safeLogger.error("Error fetching BU coverage:", error);
           return c.json({ error: "Failed to fetch BU coverage" }, 500);

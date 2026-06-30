@@ -152,7 +152,18 @@ export async function seedFinalGrqKpis(): Promise<void> {
         AND is_active = true`,
     [FINAL_CODES],
   );
+  // QM-KPI-015 (Process & Framework Completion) is MERGED into BU Coverage Rate
+  // (QM-KPI-008): the per-BU 9-phase checklist is now opened from inside the BU
+  // Coverage modal. The QM-KPI-015 row is kept ONLY as the checklist data store
+  // (getKPIByCode finds it regardless of is_active), but hidden from the KPI list
+  // so there aren't two near-identical framework KPIs. Runs after the upsert
+  // (which re-activates it each boot), so it stays hidden.
+  await pool.query(
+    `UPDATE kpi_definitions SET is_active = false, updated_at = NOW()
+      WHERE kpi_code = 'QM-KPI-015' AND is_active = true`,
+  );
+
   logger.info(
-    `📋 [KPIDB] Seeded ${FINAL_KPIS.length} final GRQ KPIs (Quality/GRC/Specialist/Legal/Shared); deactivated ${res.rowCount ?? 0} superseded.`,
+    `📋 [KPIDB] Seeded ${FINAL_KPIS.length} final GRQ KPIs (Quality/GRC/Specialist/Legal/Shared); deactivated ${res.rowCount ?? 0} superseded + QM-KPI-015 (merged into BU Coverage).`,
   );
 }
