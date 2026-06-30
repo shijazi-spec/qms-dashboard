@@ -4154,6 +4154,7 @@ export async function findSameDomainClusterDuplicates(opts: {
         AND domain IS NOT NULL
         AND domain <> ''
         AND domain <> '${PLACEHOLDER_CLUSTER_DOMAIN}'
+        AND NOT (total_deals = total_records AND total_records > 0)
       GROUP BY domain
      HAVING COUNT(*) > 1
       ORDER BY SUM(total_records) DESC, domain ASC
@@ -4187,6 +4188,7 @@ export async function findSameDomainClusterDuplicates(opts: {
        FROM duplicate_clusters
       WHERE domain = ANY($1::text[])
         AND status = 'active'
+        AND NOT (total_deals = total_records AND total_records > 0)
       ORDER BY domain ASC, total_records DESC, id ASC`,
     [domains],
   );
