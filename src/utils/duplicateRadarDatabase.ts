@@ -1103,6 +1103,29 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS merge_jobs (
+      id SERIAL PRIMARY KEY,
+      cluster_id INTEGER NOT NULL,
+      module VARCHAR(20) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'queued',
+      total INTEGER NOT NULL DEFAULT 0,
+      processed INTEGER NOT NULL DEFAULT 0,
+      tagged INTEGER NOT NULL DEFAULT 0,
+      reparented INTEGER NOT NULL DEFAULT 0,
+      errors INTEGER NOT NULL DEFAULT 0,
+      error_message TEXT,
+      master_zoho_id VARCHAR(64),
+      created_by VARCHAR(255),
+      started_at TIMESTAMPTZ,
+      last_progress_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_merge_jobs_cluster ON merge_jobs(cluster_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_merge_jobs_cluster_module_status ON merge_jobs(cluster_id, module, status)`);
+
   // Durable resolution ledger — keyed by STABLE Zoho identity (module +
   // master_zoho_id), NOT by cluster_id. This table is intentionally NOT part of
   // truncateAllDuplicateData()'s TRUNCATE: "Rebuild Clusters" wipes
