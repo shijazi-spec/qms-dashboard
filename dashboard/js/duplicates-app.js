@@ -1865,11 +1865,18 @@
                     const groups = data.groups || [];
                     const pages  = data.pages  || 1;
                     const total  = data.total_duplicate_groups;
-                    if (type === 'leads')        renderLeadRows(groups);
-                    else if (type === 'deals')   renderDealRows(groups);
-                    else if (type === 'contacts') renderContactRows(groups);
-                    else if (type === 'accounts') renderAccountRows(groups);
-                    renderPagination(type + 'Pagination', page, pages, (p) => loadRecordTab(type, p), total, 'duplicate groups');
+                    let shown;
+                    if (type === 'leads')        shown = renderLeadRows(groups);
+                    else if (type === 'deals')   shown = renderDealRows(groups);
+                    else if (type === 'contacts') shown = renderContactRows(groups);
+                    else if (type === 'accounts') shown = renderAccountRows(groups);
+                    // On a single page, trust the COUNT THE TABLE ACTUALLY RENDERED
+                    // over the server's raw cluster count — the client drops
+                    // colleague/chained-match clusters, so the server total can read
+                    // "5 duplicate groups" while the table shows none. Multi-page
+                    // tabs keep the server total (other pages still have groups).
+                    const footerTotal = (typeof shown === 'number' && pages <= 1) ? shown : total;
+                    renderPagination(type + 'Pagination', page, pages, (p) => loadRecordTab(type, p), footerTotal, 'duplicate groups');
                     window._loadedTabs.add(type);
                     return;
                 } catch (e) {
@@ -2520,6 +2527,11 @@
                 });
             });
             tbody.innerHTML = rows || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No duplicate contacts detected on this page — every contact has a unique name, email, phone, and CRM ID.</td></tr>`;
+            // How many groups actually rendered (client re-groups by a DIRECT
+            // name/email/phone signal and drops colleague/chained-match clusters).
+            // The caller uses this so the footer count can't disagree with the
+            // table (e.g. "5 duplicate groups" under "No duplicates detected").
+            return groupList.length;
         }
 
         // ─── ACCOUNTS ───
