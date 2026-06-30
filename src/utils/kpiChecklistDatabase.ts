@@ -277,7 +277,16 @@ export async function frameworkInScopeProgress(): Promise<{
       WHERE kpi_id = $1
         AND section IN (
           SELECT bu_name FROM kpi_bu_coverage
-           WHERE kpi_id = $2 AND status IN ('in_progress','postponed')
+           WHERE kpi_id = $2
+             AND (
+               status IN ('in_progress','postponed')
+               -- a BU COMPLETED this quarter still counts (don't let finishing it
+               -- drop the BU out of the denominator); BUs done in a prior period
+               -- (no current-quarter due date, e.g. Sales/SDR 2025) stay excluded.
+               OR (status = 'done'
+                   AND due_date >= date_trunc('quarter', NOW())::date
+                   AND due_date <  (date_trunc('quarter', NOW()) + interval '3 months')::date)
+             )
         )`,
     [fw.id, bu.id],
   );
