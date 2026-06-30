@@ -2211,7 +2211,7 @@
     "dup_contacts": "Dup Contacts",
     "dup_accounts": "Dup Accounts",
     "pipeline_inflation": "Pipeline Inflation",
-    "resolution_rate": "Resolution Rate",
+    "resolution_rate": "Duplicate Resolution Rate",
     "sec_by_source": "Duplicates by Source",
     "sec_similarity": "Similarity Score Distribution",
     "sec_top_signals": "Top Match Signal Sources",

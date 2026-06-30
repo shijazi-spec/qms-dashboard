@@ -3929,6 +3929,73 @@ export async function getClusterSummary(): Promise<{
   };
 }
 
+/**
+ * "Total cleanup actions across ALL tabs" for the Executive Summary (Ahmad
+ * 2026-06-30). The headline Resolution Rate only counts duplicate-cluster merges,
+ * which made it look like barely anything was done when the team had also tagged
+ * thousands of empty records and linked deals to accounts. This rolls up every
+ * ACTION workstream so leadership sees the real total. Checks/monitoring tabs
+ * (Deal Compliance, CS Lifecycle, Preflight) are NOT actions and are excluded.
+ *
+ * `total` is additive and NON-overlapping: duplicate resolved + dismissed +
+ * Empty-Delete tagged + Account-Hints linked. `crossModuleHandled` is reported
+ * separately (informational) — a cross-module overlap IS a duplicate cluster, so
+ * its resolution is already inside `duplicatesResolved`; adding it would double-count.
+ */
+export async function getCleanupActionsSummary(): Promise<{
+  duplicatesResolved: number;
+  duplicatesDismissed: number;
+  emptyDeleteTagged: number;
+  accountHintsLinked: number;
+  crossModuleHandled: number;
+  total: number;
+}> {
+  // A real duplicate cluster has ≥2 records (mirror the headline gate).
+  const MULTI = `(COALESCE(dc.total_leads,0)+COALESCE(dc.total_deals,0)+COALESCE(dc.total_contacts,0)+COALESCE(dc.total_accounts,0)) >= 2`;
+  // ≥2 DISTINCT module types in the cluster = a cross-module overlap.
+  const CROSS = `(( (dc.total_leads>0)::int + (dc.total_deals>0)::int + (dc.total_contacts>0)::int + (dc.total_accounts>0)::int ) >= 2)`;
+  let duplicatesResolved = 0, duplicatesDismissed = 0, crossModuleHandled = 0;
+  try {
+    const r = await pool.query(`
+      WITH resolved_act AS (
+        SELECT DISTINCT cluster_id FROM duplicate_merge_actions
+         WHERE action_type IN ('resolve','module_resolved')
+      )
+      SELECT
+        COUNT(*) FILTER (WHERE (dc.status='resolved' OR ra.cluster_id IS NOT NULL)) AS resolved,
+        COUNT(*) FILTER (WHERE dc.status='dismissed') AS dismissed,
+        COUNT(*) FILTER (WHERE (dc.status='resolved' OR ra.cluster_id IS NOT NULL) AND ${CROSS}) AS cross_handled
+      FROM duplicate_clusters dc
+      LEFT JOIN resolved_act ra ON ra.cluster_id = dc.id
+      WHERE ${MULTI}
+    `);
+    duplicatesResolved = parseInt(r.rows[0]?.resolved) || 0;
+    duplicatesDismissed = parseInt(r.rows[0]?.dismissed) || 0;
+    crossModuleHandled = parseInt(r.rows[0]?.cross_handled) || 0;
+  } catch (e) {
+    logger.warn("[getCleanupActionsSummary] duplicate counts failed (non-fatal)", e);
+  }
+  let emptyDeleteTagged = 0;
+  try {
+    const r = await pool.query(`SELECT COUNT(*)::int AS c FROM empty_delete_ledger`);
+    emptyDeleteTagged = parseInt(r.rows[0]?.c) || 0;
+  } catch (e) { /* table may not exist yet */ }
+  let accountHintsLinked = 0;
+  try {
+    const r = await pool.query(`SELECT COUNT(*)::int AS c FROM account_inference_hints WHERE status='applied'`);
+    accountHintsLinked = parseInt(r.rows[0]?.c) || 0;
+  } catch (e) { /* table may not exist yet */ }
+  const total = duplicatesResolved + duplicatesDismissed + emptyDeleteTagged + accountHintsLinked;
+  return {
+    duplicatesResolved,
+    duplicatesDismissed,
+    emptyDeleteTagged,
+    accountHintsLinked,
+    crossModuleHandled,
+    total,
+  };
+}
+
 // ─── Same-domain cluster duplicates (Sarah 2026-06-17) ────────────────
 //
 // Root cause: `duplicate_clusters.domain` is NOT covered by a UNIQUE

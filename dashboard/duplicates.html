@@ -321,10 +321,15 @@
                 </div>
             </div>
 
-            <!-- D4: Resolution Rate + KPI Gauge + Last Scan -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div class="bg-white rounded-lg shadow p-4" title="Share of duplicate-cluster work that is closed. Numerator = resolved + dismissed. Denominator = true duplicate clusters (active) + resolved + dismissed — i.e. the universe of duplicate clusters we ever saw. Singleton (non-duplicate) clusters are excluded so the rate isn't diluted to 0%.">
-                    <div class="text-sm font-medium text-gray-500 mb-2" data-i18n="duplicates.resolution_rate">Resolution Rate</div>
+            <!-- D4: Total cleanup actions + Resolution Rate + KPI Gauge + Last Scan -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white rounded-lg shadow p-4" title="Every ACTION taken across the Duplicate Radar action tabs — duplicate merges + dismissals, Empty-Delete tags (Empty/Orphaned), and Account-Hints links. Monitoring tabs (Deal Compliance, CS Lifecycle, Preflight) are checks, not actions, so they're excluded. Cross-module overlaps ARE duplicate clusters, so their resolutions are already counted under merges (shown separately below to avoid double-counting).">
+                    <div class="text-sm font-medium text-gray-500 mb-2">Total cleanup actions <span class="text-[10px] text-gray-400">· all tabs</span></div>
+                    <div id="cleanupTotal" data-testid="text-cleanup-total" class="text-3xl font-bold text-indigo-600">-</div>
+                    <div class="text-xs text-gray-400 mt-1" id="cleanupBreakdown">—</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4" title="Share of DUPLICATE-cluster work that is closed (this metric is duplicates only — the Total cleanup actions card to the left covers every tab). Numerator = resolved + dismissed. Denominator = true duplicate clusters (active) + resolved + dismissed. Singleton (non-duplicate) clusters are excluded so the rate isn't diluted to 0%.">
+                    <div class="text-sm font-medium text-gray-500 mb-2" data-i18n="duplicates.resolution_rate">Duplicate Resolution Rate</div>
                     <div id="resolutionRate" data-testid="text-resolution-rate" class="text-3xl font-bold text-green-600">-</div>
                     <div class="text-xs text-gray-400 mt-1"><span id="resolvedCount">0</span> resolved + <span id="ignoredCount">0</span> dismissed</div>
                 </div>
@@ -1929,7 +1934,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=12"></script>
+    <script src="/js/duplicates-app.js?v=13"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

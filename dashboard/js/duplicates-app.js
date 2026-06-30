@@ -992,10 +992,28 @@
             // duplicates). Same source as the True Duplicates headline card.
             document.getElementById('kpiActive').textContent = _fn(data.trueDuplicateClusters || 0);
 
-            // D4: Resolution rate
+            // D4: Resolution rate (duplicate clusters only)
             document.getElementById('resolutionRate').textContent = _fn(data.resolutionRate || 0) + '%';
             document.getElementById('resolvedCount').textContent = _fn(data.resolvedCount || 0);
             document.getElementById('ignoredCount').textContent = _fn(data.ignoredCount || 0);
+
+            // Total cleanup actions across ALL action tabs (not just merges).
+            const ca = data.cleanupActions || null;
+            const ctEl = document.getElementById('cleanupTotal');
+            const cbEl = document.getElementById('cleanupBreakdown');
+            if (ctEl && ca) {
+                ctEl.textContent = _fn(ca.total || 0);
+                const parts = [];
+                const merges = (ca.duplicatesResolved || 0) + (ca.duplicatesDismissed || 0);
+                if (merges) parts.push(_fn(merges) + ' duplicate' + (ca.duplicatesDismissed ? ' (incl. ' + _fn(ca.duplicatesDismissed) + ' dismissed)' : ''));
+                if (ca.emptyDeleteTagged) parts.push(_fn(ca.emptyDeleteTagged) + ' Empty-Delete');
+                if (ca.accountHintsLinked) parts.push(_fn(ca.accountHintsLinked) + ' account links');
+                let txt = parts.join(' · ') || 'no actions yet';
+                if (ca.crossModuleHandled) txt += '  ·  (' + _fn(ca.crossModuleHandled) + ' cross-module, already counted in duplicates)';
+                if (cbEl) cbEl.textContent = txt;
+            } else if (ctEl) {
+                ctEl.textContent = '—';
+            }
 
             // D4: KPI Gauge — WHOLE-SYSTEM duplicate rate (all modules), not
             // just Leads. Falls back to the lead rate only if the backend

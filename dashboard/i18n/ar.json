@@ -2211,7 +2211,7 @@
     "dup_contacts": "جهات اتصال مكررة",
     "dup_accounts": "حسابات مكررة",
     "pipeline_inflation": "تضخم الأنبوب",
-    "resolution_rate": "معدل الحل",
+    "resolution_rate": "معدل حل التكرارات",
     "sec_by_source": "التكرارات حسب المصدر",
     "sec_similarity": "توزيع درجة التشابه",
     "sec_top_signals": "أبرز مصادر إشارات التطابق",

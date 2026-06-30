@@ -3306,7 +3306,13 @@ export const duplicateRadarRoutes = [
           const summary = await getEnhancedSummary();
           const kpis = await getKPIMetrics();
           const lastScan = await getLastScanDate();
-          return c.json({ ...summary, kpis, lastScanDate: lastScan });
+          // Total cleanup actions across ALL action tabs (not just merges) — so
+          // the Executive Summary reflects everything the team has actioned.
+          const { getCleanupActionsSummary } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const cleanupActions = await getCleanupActionsSummary().catch(() => null);
+          return c.json({ ...summary, kpis, cleanupActions, lastScanDate: lastScan });
         } catch (error: any) {
           logger.error("Error fetching summary:", error);
           return c.json({ error: "An internal error occurred" }, 500);
