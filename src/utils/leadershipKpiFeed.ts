@@ -22,6 +22,7 @@
 
 import { pool } from "./kpiDatabase";
 import { logger } from "./logger";
+import { frameworkInScopeProgress } from "./kpiChecklistDatabase";
 import {
   calcCertMilestoneDelivery,
   calcEvidenceSlaCompliance,
@@ -336,29 +337,24 @@ async function calcProcessQualityFramework() {
 
 /**
  * QM-KPI-015 — Process & Framework Completion = the BU Framework checklist
- * completion %, the SAME basis the internal /kpis page shows (calc_mode
- * 'checklist'), so the leadership push matches exactly what Sarah tracks/ticks.
- * value = phases done ÷ total phases across all BUs. (Replaced the older
+ * completion for the BUs IN SCOPE THIS QUARTER (in_progress/postponed), the SAME
+ * basis the internal /kpis page records (via frameworkInScopeProgress), so the
+ * leadership push matches exactly what Sarah tracks/ticks. (Replaced the older
  * policies-based calcProcessQualityFramework, which diverged from /kpis.)
  */
 async function calcFrameworkChecklistCompletion() {
-  const r = await pool.query(`
-    SELECT
-      COUNT(*)::int AS total,
-      COUNT(*) FILTER (WHERE is_done)::int AS done
-    FROM kpi_checklist_items
-    WHERE kpi_id = (SELECT id FROM kpi_definitions WHERE kpi_code = 'QM-KPI-015' LIMIT 1)
-  `);
-  const total = r.rows[0]?.total ?? 0;
-  const done = r.rows[0]?.done ?? 0;
-  if (total <= 0) {
-    // No framework checklist seeded yet — not a real 0%.
-    return { value: 0, dataAvailable: false, reason: "no_framework_checklist_yet" };
+  // In-scope this quarter only (BUs marked in_progress/postponed — e.g. Q2 =
+  // Marketplace + CS), NOT all 13 BUs. Uses the SAME shared helper as the /kpis
+  // recorder so the internal page and the leadership feed always match.
+  const ip = await frameworkInScopeProgress();
+  if (!ip) {
+    // No BU in scope this quarter (or no checklist) — unavailable, not a 0%.
+    return { value: 0, dataAvailable: false, reason: "no_bu_in_scope_this_quarter" };
   }
   return {
-    value: Math.round((done / total) * 1000) / 10,
+    value: ip.pct,
     dataAvailable: true,
-    details: { total_phases: total, completed_phases: done },
+    details: { in_scope_phases: ip.total, completed_phases: ip.done },
   };
 }
 
@@ -850,18 +846,18 @@ const DEFAULT_ROUNDING =
 const KPI_DETAILS: Record<string, KpiDetail> = {
   "QM-KPI-015": {
     description:
-      "Percentage of the governance/process framework built across the 13 business units, measured by the BU Framework checklist (the 9-phase build plan per BU).",
+      "Quarterly framework-build progress for the BUs in scope THIS quarter (e.g. Q2 = Marketplace + Customer Success), measured by the BU Framework checklist (9-phase build plan per BU).",
     methodology:
-      "Framework checklist phases marked done ÷ total phases across all BUs (source: kpi_checklist_items for QM-KPI-015). This is the SAME value shown on the internal /kpis page, so the leadership number matches exactly.",
+      "Framework checklist phases done ÷ total phases, counted ONLY for BUs in scope this quarter (status in_progress/postponed in the BU Coverage tracker) — NOT all 13 BUs (source: kpi_checklist_items for QM-KPI-015 joined to kpi_bu_coverage). Same value as the internal /kpis page.",
     rationale:
-      "Shows how far each BU's governance framework is actually built (process mapping → drafting → review → release → training → trial audit), the foundation all other quality work rests on.",
+      "Shows how far this quarter's targeted BUs' governance frameworks are built (process drafting → review → release → training → trial audit), without being diluted by BUs not yet started.",
     plan_ref:
       "Quality Plan → Governance Framework build (9-phase methodology); North Star 'Framework Completion' (Q1 40% → Q4 100%).",
     numerator:
-      "kpi_checklist_items WHERE is_done = true (for QM-KPI-015) — see details.completed_phases.",
-    denominator: "all kpi_checklist_items for QM-KPI-015 (13 BUs × 9 phases) — see details.total_phases.",
+      "in-scope kpi_checklist_items WHERE is_done = true (for QM-KPI-015) — see details.completed_phases.",
+    denominator: "in-scope kpi_checklist_items for QM-KPI-015 (this quarter's BUs × 9 phases) — see details.in_scope_phases.",
     scope:
-      "All BU framework phases. If no checklist is seeded yet the KPI is reported in unavailable[] (reason no_framework_checklist_yet), not value:0.",
+      "Only BUs in this quarter's plan (BU Coverage status in_progress/postponed). If no BU is in scope the KPI is reported in unavailable[] (reason no_bu_in_scope_this_quarter), not value:0. Scope is controlled via the Manage BU Coverage statuses.",
     rounding: DEFAULT_ROUNDING,
   },
   "QM-KPI-002": {

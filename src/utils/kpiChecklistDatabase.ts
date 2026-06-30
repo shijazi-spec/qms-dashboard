@@ -254,14 +254,55 @@ export async function deleteChecklistItem(itemId: number): Promise<boolean> {
  * kpi_values for the current period. No-op if the KPI has no checklist items
  * yet (so it stays "--" rather than showing a fake 0%). Returns the % or null.
  */
+/**
+ * Framework completion for the BUs IN SCOPE THIS QUARTER only — i.e. BUs marked
+ * 'in_progress' or 'postponed' in the BU Coverage tracker (e.g. Q2 = Marketplace
+ * + Customer Success). value = phases done ÷ total phases across just those BUs,
+ * NOT all 13 (which would be dragged to ~22% by the not-started BUs). Returns null
+ * if no BU is in scope, so the KPI reads unavailable rather than a misleading 0.
+ * Scope is controlled by editing BU statuses in the Manage BU Coverage modal.
+ */
+export async function frameworkInScopeProgress(): Promise<{
+  done: number;
+  total: number;
+  pct: number;
+} | null> {
+  const fw = await getKPIByCode("QM-KPI-015");
+  const bu = await getKPIByCode("QM-KPI-008");
+  if (!fw?.id || !bu?.id) return null;
+  const res = await pool.query(
+    `SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE is_done)::int AS done
+       FROM kpi_checklist_items
+      WHERE kpi_id = $1
+        AND section IN (
+          SELECT bu_name FROM kpi_bu_coverage
+           WHERE kpi_id = $2 AND status IN ('in_progress','postponed')
+        )`,
+    [fw.id, bu.id],
+  );
+  const total = Number(res.rows[0]?.total || 0);
+  const done = Number(res.rows[0]?.done || 0);
+  if (total <= 0) return null;
+  return { done, total, pct: Math.round((done / total) * 1000) / 10 };
+}
+
 export async function recordChecklistKPIValue(
   kpiId: number,
 ): Promise<number | null> {
-  const items = await getChecklistItems(kpiId);
-  if (items.length === 0) return null;
-  const { pct } = checklistProgress(items);
   const kpi = await getKPIById(kpiId);
   if (!kpi) return null;
+  let pct: number | null;
+  if (kpi.kpi_code === "QM-KPI-015") {
+    // Framework Completion counts only the BUs in scope THIS quarter.
+    const ip = await frameworkInScopeProgress();
+    pct = ip ? ip.pct : null;
+  } else {
+    const items = await getChecklistItems(kpiId);
+    if (items.length === 0) return null;
+    pct = checklistProgress(items).pct;
+  }
+  if (pct === null) return null;
   const now = new Date();
   const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
