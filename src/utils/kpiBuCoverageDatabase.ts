@@ -180,13 +180,18 @@ export async function updateBuCoverage(
   return res.rows[0] || null;
 }
 
-/** Record the KPI value (avg coverage %) into kpi_values. Null if no BUs seeded. */
+/**
+ * Record the BU Coverage KPI value = BUs PUBLISHED *and* AUDITED ÷ commercial 8
+ * (binary, matches the Leadership Platform — stricter than Framework Completion).
+ * The per-BU completion_pct in the tracker still reflects checklist progress (for
+ * the modal), but the headline KPI is the milestone-based governed rate.
+ */
 export async function recordBuCoverageValue(
   kpiId: number,
 ): Promise<number | null> {
-  const rows = await getBuCoverage(kpiId);
-  const avg = buCoverageAverage(rows);
-  if (avg === null) return null;
+  const { buGovernedRate } = await import("./kpiChecklistDatabase");
+  const r = await buGovernedRate();
+  if (!r) return null;
   const kpi = await getKPIById(kpiId);
   if (!kpi) return null;
   const now = new Date();
@@ -194,10 +199,10 @@ export async function recordBuCoverageValue(
     kpi_id: kpiId,
     period_start: new Date(now.getFullYear(), now.getMonth(), 1),
     period_end: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-    actual_value: avg,
+    actual_value: r.value,
     calculated_by: "system_auto",
   });
-  return avg;
+  return r.value;
 }
 
 /**
@@ -223,9 +228,9 @@ export async function syncBuCoverageFromChecklist(): Promise<number | null> {
   return recordBuCoverageValue(kpi.id);
 }
 
-/** Avg coverage % for QM-KPI-008 (used by the leadership feed + auto-calc). */
+/** BU Coverage value (published+audited ÷ 8) for the leadership feed + auto-calc. */
 export async function buCoverageRateForFeed(): Promise<number | null> {
-  const kpi = await getKPIByCode("QM-KPI-008");
-  if (!kpi || !kpi.id) return null;
-  return buCoverageAverage(await getBuCoverage(kpi.id));
+  const { buGovernedRate } = await import("./kpiChecklistDatabase");
+  const r = await buGovernedRate();
+  return r ? r.value : null;
 }

@@ -51,7 +51,7 @@ function bands(target: number, dir: "higher_is_better" | "lower_is_better") {
 const FINAL_KPIS: FinalKpi[] = [
   // ───────────── Quality — Sarah Hijazi (quality_manager) ─────────────
   { code: "QM-KPI-002", name: "Audit Execution Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "audit", unit: "%", target: 90, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "How much of the planned audit programme was actually completed in the period.", formula: "Completed Audits ÷ Planned Audits × 100", data_source: "Internal Audits module (/audits) + completed AI-audit runs (audit_runs)" },
-  { code: "QM-KPI-008", name: "BU Coverage Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "governance", unit: "%", target: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "bu_coverage", north_star: true, description: "Share of business units fully onboarded onto the governance framework (implemented, trained, and operating it).", formula: "Average coverage % across all BUs (partial credit per BU)", data_source: "Per-BU coverage tracker (completion % + due date per Business Unit)" },
+  { code: "QM-KPI-008", name: "BU Coverage Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "governance", unit: "%", target: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "bu_coverage", north_star: true, description: "Share of business units fully governed — framework PUBLISHED and at least one audit cycle COMPLETED. Stricter than Framework Completion: a BU counts only when both framework and audit are live.", formula: "(BUs with Published Framework AND ≥1 Completed Audit ÷ Total BUs Requiring Governance) × 100", data_source: "Per-BU Framework checklist — 'Process Releasing' (published) + 'Trial Audit Report' (audited) milestones" },
   { code: "QM-KPI-003", name: "Gap Closure Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "audit", unit: "%", target: 80, direction: "higher_is_better", frequency: "monthly", calc_mode: "auto", description: "Share of audit findings closed within their agreed deadline.", formula: "Closed Findings Within SLA ÷ Total Findings Due × 100", data_source: "CAPA Register on QMS Platform" },
   { code: "QM-KPI-009", name: "Repeat Findings Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "audit", unit: "%", target: 10, direction: "lower_is_better", frequency: "quarterly", calc_mode: "manual", description: "Findings that recur from earlier audits - shows whether root causes are truly fixed (lower is better).", formula: "Repeat Findings ÷ Total Findings × 100", data_source: "Audit Findings Log on QMS Platform" },
   { code: "QM-KPI-004", name: "QMS Adoption Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "quality", unit: "%", target: 70, direction: "higher_is_better", frequency: "quarterly", calc_mode: "checklist", description: "How widely the QMS processes are actually used across the business units.", formula: "Active QMS Users/Processes ÷ Target Scope × 100", data_source: "QMS Platform" },
@@ -60,7 +60,7 @@ const FINAL_KPIS: FinalKpi[] = [
 
   // ───────────── GRC — Maram AlHarbi (grc_manager) ─────────────
   { code: "GRC-KPI-008", name: "Compliance Coverage Index", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "compliance", unit: "%", target: 90, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Share of applicable obligations mapped to a control or policy.", formula: "Mapped Obligations ÷ Total Obligations × 100", data_source: "QMS Platform → Compliance/Obligations register (applicable obligations with a mapped control or policy ÷ total applicable)" },
-  { code: "QM-KPI-015", name: "Process & Framework Completion", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "governance", unit: "%", target: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "checklist", north_star: true, description: "Share of planned governance frameworks fully built and deployed (documented, approved, trained, rolled out).", formula: "Completed Frameworks ÷ Planned Frameworks × 100", data_source: "Governance Framework Tracker" },
+  { code: "QM-KPI-015", name: "Process & Quality Framework Completion", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "governance", unit: "%", target: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "checklist", north_star: true, description: "Share of required governance frameworks fully built and PUBLISHED. Total required = 8 (one per commercial department: SDR, Sales B2B, Marketplace, Customer Success, Marketing, Sales B2C, Contact Center, + 1 overarching QMS framework).", formula: "(Governance Frameworks Published ÷ Total Frameworks Required [8]) × 100", data_source: "Per-BU Framework checklist — 'Process Releasing' (published) milestone" },
   { code: "GRC-KPI-002", name: "Certification Milestones On Track", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "compliance", unit: "%", target: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", description: "Share of certification / regulatory roadmap milestones achieved on schedule.", formula: "Achieved Milestones ÷ Planned Milestones × 100", data_source: "Certification Roadmap / Document Mapping" },
   { code: "GRC-KPI-003", name: "Audit Evidence Readiness", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "audit", unit: "%", target: 95, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", description: "Share of required audit evidence compiled and ready ahead of the audit.", formula: "Ready Evidence Items ÷ Required Evidence Items × 100", data_source: "Evidence Repository" },
   { code: "QM-KPI-010", name: "Documentation Lifecycle Compliance", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "governance", unit: "%", target: 95, direction: "higher_is_better", frequency: "monthly", calc_mode: "auto", description: "Share of controlled documents kept current through their full lifecycle (reviewed, approved, published on time).", formula: "Documents Reviewed On Time ÷ Documents Due × 100", data_source: "Document Control Register (Integrated QMS)" },
@@ -152,18 +152,17 @@ export async function seedFinalGrqKpis(): Promise<void> {
         AND is_active = true`,
     [FINAL_CODES],
   );
-  // QM-KPI-015 (Process & Framework Completion) is MERGED into BU Coverage Rate
-  // (QM-KPI-008): the per-BU 9-phase checklist is now opened from inside the BU
-  // Coverage modal. The QM-KPI-015 row is kept ONLY as the checklist data store
-  // (getKPIByCode finds it regardless of is_active), but hidden from the KPI list
-  // so there aren't two near-identical framework KPIs. Runs after the upsert
-  // (which re-activates it each boot), so it stays hidden.
+  // QM-KPI-015 (Process & Framework Completion) and QM-KPI-008 (BU Coverage) are
+  // BOTH active, distinct KPIs aligned to the Leadership Platform: Framework
+  // Completion = frameworks PUBLISHED ÷ 8; BU Coverage = PUBLISHED+AUDITED ÷ 8
+  // (stricter). Both read the same per-BU 9-phase checklist at different
+  // milestones; QM-KPI-015 is also reassigned to Quality (Sarah).
   await pool.query(
-    `UPDATE kpi_definitions SET is_active = false, updated_at = NOW()
-      WHERE kpi_code = 'QM-KPI-015' AND is_active = true`,
+    `UPDATE kpi_definitions SET owner_type = 'quality_manager', owner_name = 'Sarah Hijazi', updated_at = NOW()
+      WHERE kpi_code = 'QM-KPI-015'`,
   );
 
   logger.info(
-    `📋 [KPIDB] Seeded ${FINAL_KPIS.length} final GRQ KPIs (Quality/GRC/Specialist/Legal/Shared); deactivated ${res.rowCount ?? 0} superseded + QM-KPI-015 (merged into BU Coverage).`,
+    `📋 [KPIDB] Seeded ${FINAL_KPIS.length} final GRQ KPIs; deactivated ${res.rowCount ?? 0} superseded.`,
   );
 }

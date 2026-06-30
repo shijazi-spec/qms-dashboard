@@ -22,7 +22,6 @@
 
 import { pool } from "./kpiDatabase";
 import { logger } from "./logger";
-import { frameworkInScopeProgress } from "./kpiChecklistDatabase";
 import {
   calcCertMilestoneDelivery,
   calcEvidenceSlaCompliance,
@@ -336,25 +335,21 @@ async function calcProcessQualityFramework() {
 }
 
 /**
- * QM-KPI-015 — Process & Framework Completion = the BU Framework checklist
- * completion for the BUs IN SCOPE THIS QUARTER (in_progress/postponed), the SAME
- * basis the internal /kpis page records (via frameworkInScopeProgress), so the
- * leadership push matches exactly what Sarah tracks/ticks. (Replaced the older
- * policies-based calcProcessQualityFramework, which diverged from /kpis.)
+ * QM-KPI-015 — Process & Quality Framework Completion = BUs with a PUBLISHED
+ * framework ÷ the 8 required (commercial depts + QMS), matching the Leadership
+ * Platform. Binary per BU: a BU counts once its "Process Releasing" phase is
+ * ticked. Same value the /kpis page records (via frameworkPublishedRate).
  */
 async function calcFrameworkChecklistCompletion() {
-  // In-scope this quarter only (BUs marked in_progress/postponed — e.g. Q2 =
-  // Marketplace + CS), NOT all 13 BUs. Uses the SAME shared helper as the /kpis
-  // recorder so the internal page and the leadership feed always match.
-  const ip = await frameworkInScopeProgress();
-  if (!ip) {
-    // No BU in scope this quarter (or no checklist) — unavailable, not a 0%.
-    return { value: 0, dataAvailable: false, reason: "no_bu_in_scope_this_quarter" };
+  const { frameworkPublishedRate } = await import("./kpiChecklistDatabase");
+  const r = await frameworkPublishedRate();
+  if (!r) {
+    return { value: 0, dataAvailable: false, reason: "no_framework_checklist_yet" };
   }
   return {
-    value: ip.pct,
+    value: r.value,
     dataAvailable: true,
-    details: { in_scope_phases: ip.total, completed_phases: ip.done },
+    details: { frameworks_published: r.published, frameworks_required: r.total },
   };
 }
 

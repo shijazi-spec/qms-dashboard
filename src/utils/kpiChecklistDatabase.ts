@@ -46,6 +46,9 @@ export async function initKPIChecklistTables(): Promise<void> {
   );
   logger.info("✅ [KPIChecklist] kpi_checklist_items table ready");
 
+  // One-time migration to the commercial-8 BU list (rename Sales→Sales B2B +
+  // Customer Support→Contact Center, add Sales B2C, drop non-commercial BUs).
+  await migrateToCommercialBUs();
   // Seed the BU Framework Completion KPI (QM-KPI-015) with the Business Units +
   // their standard framework action plan, so it opens ready-to-use. Idempotent.
   await seedBuFrameworkChecklist();
@@ -59,21 +62,25 @@ export async function initKPIChecklistTables(): Promise<void> {
  * The Business Units the Quality governance framework is rolled out across
  * (Quality Plan 2026 → BU Coverage Plan). Editable in the UI afterwards.
  */
+// Aligned to the Leadership Platform's framework list (2026-06-20): the 8
+// required governance frameworks = 7 commercial departments + 1 overarching QMS.
 export const FRAMEWORK_BUSINESS_UNITS = [
   "SDR",
-  "Sales",
+  "Sales B2B",
+  "Sales B2C",
   "Marketplace",
   "Customer Success",
-  "WalaOne",
   "Marketing",
-  "HR",
-  "Finance",
-  "IT",
-  "Software",
-  "Customer Support",
-  "GRC",
-  "Quality",
+  "Contact Center",
+  "QMS",
 ];
+
+/** The non-commercial BUs retired from these KPIs when we adopted the commercial 8. */
+const RETIRED_BUS = ["WalaOne", "HR", "Finance", "IT", "Software", "GRC", "Quality"];
+
+/** The two checklist phases that define the leadership milestones. */
+export const PHASE_PUBLISHED = "Process Releasing";
+export const PHASE_AUDITED = "Trial Audit Report";
 
 /**
  * Standard framework-build action plan applied to every BU — Sarah's actual
@@ -102,31 +109,16 @@ export const BU_FRAMEWORK_ACTION_PLAN = [
 export async function seedBuFrameworkChecklist(): Promise<void> {
   const kpi = await getKPIByCode("QM-KPI-015");
   if (!kpi || !kpi.id) return;
-  const cur = await pool.query(
-    `SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE is_done)::int AS done
-       FROM kpi_checklist_items WHERE kpi_id = $1`,
-    [kpi.id],
-  );
-  const n = Number(cur.rows[0]?.n || 0);
-  const done = Number(cur.rows[0]?.done || 0);
-
-  if (n > 0) {
-    // Does the existing checklist already match the current action plan?
-    const texts = await pool.query(
-      `SELECT DISTINCT item_text FROM kpi_checklist_items WHERE kpi_id = $1`,
-      [kpi.id],
-    );
-    const existing = new Set(texts.rows.map((r: any) => r.item_text));
-    const matches =
-      existing.size === BU_FRAMEWORK_ACTION_PLAN.length &&
-      BU_FRAMEWORK_ACTION_PLAN.every((s) => existing.has(s));
-    if (matches) return; // already current
-    if (done > 0) return; // someone has started ticking — never disturb their progress
-    // Untouched + outdated → rebuild with the current plan.
-    await pool.query(`DELETE FROM kpi_checklist_items WHERE kpi_id = $1`, [kpi.id]);
-  }
-
+  // Ensure EACH BU in the canonical list has its full 9-phase plan. Per-BU so
+  // adding a new BU (e.g. QMS) seeds just that one without disturbing existing
+  // ticks. Never deletes.
+  let added = 0;
   for (const bu of FRAMEWORK_BUSINESS_UNITS) {
+    const has = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM kpi_checklist_items WHERE kpi_id = $1 AND section = $2`,
+      [kpi.id, bu],
+    );
+    if (Number(has.rows[0]?.n || 0) > 0) continue;
     for (const step of BU_FRAMEWORK_ACTION_PLAN) {
       await pool.query(
         `INSERT INTO kpi_checklist_items (kpi_id, section, item_text, updated_by)
@@ -134,10 +126,123 @@ export async function seedBuFrameworkChecklist(): Promise<void> {
         [kpi.id, bu, step],
       );
     }
+    added++;
   }
-  logger.info(
-    `🌱 [KPIChecklist] Seeded BU Framework Completion: ${FRAMEWORK_BUSINESS_UNITS.length} BUs × ${BU_FRAMEWORK_ACTION_PLAN.length} action items`,
+  if (added > 0) {
+    logger.info(
+      `🌱 [KPIChecklist] Seeded ${added} BU framework checklist(s) (${BU_FRAMEWORK_ACTION_PLAN.length} phases each)`,
+    );
+  }
+}
+
+/**
+ * One-time migration to the Leadership-aligned commercial-8 BU list. Renames
+ * Sales→Sales B2B and Customer Support→Contact Center (keeping their ticks),
+ * clones Sales B2C from Sales B2B (Sales was done in 2025 → both segments), and
+ * drops the non-commercial BUs from BOTH the checklist and the BU Coverage
+ * tracker. Idempotent (guarded on "Sales B2B" already existing).
+ */
+export async function migrateToCommercialBUs(): Promise<void> {
+  const fw = await getKPIByCode("QM-KPI-015");
+  if (!fw?.id) return;
+  const guard = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM kpi_checklist_items WHERE kpi_id = $1 AND section = 'Sales B2B'`,
+    [fw.id],
   );
+  if (Number(guard.rows[0]?.n || 0) > 0) return; // already migrated
+
+  await pool.query(`UPDATE kpi_checklist_items SET section='Contact Center' WHERE kpi_id=$1 AND section='Customer Support'`, [fw.id]);
+  await pool.query(`UPDATE kpi_checklist_items SET section='Sales B2B' WHERE kpi_id=$1 AND section='Sales'`, [fw.id]);
+  await pool.query(
+    `INSERT INTO kpi_checklist_items (kpi_id, section, item_text, is_done, updated_by)
+       SELECT kpi_id, 'Sales B2C', item_text, is_done, 'system'
+         FROM kpi_checklist_items WHERE kpi_id=$1 AND section='Sales B2B'`,
+    [fw.id],
+  );
+  await pool.query(
+    `DELETE FROM kpi_checklist_items WHERE kpi_id=$1 AND section = ANY($2::text[])`,
+    [fw.id, RETIRED_BUS],
+  );
+
+  const bu = await getKPIByCode("QM-KPI-008");
+  if (bu?.id) {
+    await pool.query(`UPDATE kpi_bu_coverage SET bu_name='Contact Center' WHERE kpi_id=$1 AND bu_name='Customer Support'`, [bu.id]);
+    await pool.query(`UPDATE kpi_bu_coverage SET bu_name='Sales B2B' WHERE kpi_id=$1 AND bu_name='Sales'`, [bu.id]);
+    await pool.query(
+      `INSERT INTO kpi_bu_coverage (kpi_id, bu_name, completion_pct, status, due_date)
+         SELECT kpi_id, 'Sales B2C', completion_pct, status, due_date FROM kpi_bu_coverage WHERE kpi_id=$1 AND bu_name='Sales B2B'
+       ON CONFLICT (kpi_id, bu_name) DO NOTHING`,
+      [bu.id],
+    );
+    await pool.query(
+      `DELETE FROM kpi_bu_coverage WHERE kpi_id=$1 AND bu_name = ANY($2::text[])`,
+      [bu.id, RETIRED_BUS],
+    );
+  }
+  logger.info("🔀 [KPIChecklist] Migrated framework BUs to commercial 8 (Sales B2B/B2C, Contact Center, +QMS; dropped non-commercial).");
+}
+
+export interface BuMilestone {
+  bu: string;
+  published: boolean;
+  audited: boolean;
+}
+
+/** Per-BU leadership milestones from the checklist: framework published ('Process
+ *  Releasing' done) and audited ('Trial Audit Report' done). */
+export async function buMilestones(): Promise<BuMilestone[]> {
+  const kpi = await getKPIByCode("QM-KPI-015");
+  if (!kpi?.id) return [];
+  const res = await pool.query(
+    `SELECT section AS bu,
+       bool_or(is_done) FILTER (WHERE item_text = $2) AS published,
+       bool_or(is_done) FILTER (WHERE item_text = $3) AS audited
+     FROM kpi_checklist_items
+     WHERE kpi_id = $1 AND COALESCE(section,'') <> ''
+     GROUP BY section`,
+    [kpi.id, PHASE_PUBLISHED, PHASE_AUDITED],
+  );
+  return res.rows.map((r: any) => ({
+    bu: r.bu,
+    published: !!r.published,
+    audited: !!r.audited,
+  }));
+}
+
+/**
+ * Process & Quality Framework Completion (QM-KPI-015) = BUs whose framework is
+ * PUBLISHED ÷ total required (the commercial 8). Binary per BU — matches the
+ * Leadership Platform definition.
+ */
+export async function frameworkPublishedRate(): Promise<{
+  value: number;
+  published: number;
+  total: number;
+} | null> {
+  const total = FRAMEWORK_BUSINESS_UNITS.length;
+  if (total === 0) return null;
+  const set = new Set(FRAMEWORK_BUSINESS_UNITS);
+  const published = (await buMilestones()).filter((m) => set.has(m.bu) && m.published).length;
+  return { value: Math.round((published / total) * 1000) / 10, published, total };
+}
+
+/**
+ * BU Coverage Rate (QM-KPI-008) = BUs that are PUBLISHED *and* AUDITED ÷ total
+ * required (stricter than Framework Completion). Binary per BU — matches the
+ * Leadership Platform definition.
+ */
+export async function buGovernedRate(): Promise<{
+  value: number;
+  covered: number;
+  total: number;
+} | null> {
+  const total = FRAMEWORK_BUSINESS_UNITS.length;
+  if (total === 0) return null;
+  const set = new Set(FRAMEWORK_BUSINESS_UNITS);
+  const covered = (await buMilestones()).filter(
+    (m) => set.has(m.bu) && m.published && m.audited,
+  ).length;
+  return { value: Math.round((covered / total) * 1000) / 10, covered, total };
 }
 
 export async function getChecklistItems(
@@ -303,9 +408,11 @@ export async function recordChecklistKPIValue(
   if (!kpi) return null;
   let pct: number | null;
   if (kpi.kpi_code === "QM-KPI-015") {
-    // Framework Completion counts only the BUs in scope THIS quarter.
-    const ip = await frameworkInScopeProgress();
-    pct = ip ? ip.pct : null;
+    // Framework Completion = BUs with a PUBLISHED framework ÷ the commercial 8
+    // (binary per BU — matches the Leadership Platform). Ticking the "Process
+    // Releasing" phase for a BU flips it to published.
+    const r = await frameworkPublishedRate();
+    pct = r ? r.value : null;
   } else {
     const items = await getChecklistItems(kpiId);
     if (items.length === 0) return null;
