@@ -191,7 +191,11 @@ export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
       // (no account/contact/docs) before its checkbox enables.
       deleteEligible: c.reason === "test",
       linkEligible: c.linkEligible,
-      extra: { amount: Number(r.amount) || 0, hasContact: !!r.contact_id },
+      extra: {
+        amount: Number(r.amount) || 0,
+        hasContact: !!r.contact_id,
+        stage: r.stage ? String(r.stage) : "",
+      },
     });
     if (out.length >= CAP) break;
   }

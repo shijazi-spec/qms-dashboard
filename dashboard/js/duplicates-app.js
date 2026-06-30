@@ -7049,8 +7049,10 @@
             const rows = window['_er_' + kind] || [];
             const body = document.getElementById(bodyId);
             if (!body) return;
+            // Deals have an extra Stage column (6); accounts/contacts have 5.
+            const COLS = kind === 'deals' ? 6 : 5;
             if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_none')) + '</td></tr>';
+                body.innerHTML = '<tr><td colspan="' + COLS + '" class="px-4 py-6 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_none')) + '</td></tr>';
                 // Clear any stale pager left from a previous (non-empty) render —
                 // otherwise "Showing 1–50 of 215 · Page 1/5" lingers under "None found".
                 const _t = body.closest('table');
@@ -7093,10 +7095,20 @@
                 // e.g. a deal that actually has data). Removes it from the list
                 // durably without any Zoho write.
                 const dismissBtn = '<button data-on-click="erDismiss" data-args=\'' + escapeHtml(JSON.stringify([kind, String(r.zohoId)])) + '\' class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-100" title="Not empty — keep this record and remove it from the cleanup list">✕ ' + escapeHtml(WalaPlusI18n.t('duplicates.er_dismiss')) + '</button>';
+                // Stage column — Deals only. Protected stages (Agreement Signed /
+                // Paid) are highlighted so the operator sees at a glance a deal that
+                // should NEVER be tagged.
+                var stageCell = '';
+                if (kind === 'deals') {
+                    var _stg = (r.extra && r.extra.stage) ? String(r.extra.stage) : '';
+                    var _prot = /^(agreement signed|paid)$/i.test(_stg.trim());
+                    stageCell = '<td class="px-3 py-2 text-xs ' + (_prot ? 'text-emerald-700 font-semibold' : 'text-gray-600') + '">' + escapeHtml(_stg || '—') + (_prot ? ' 🔒' : '') + '</td>';
+                }
                 return '<tr class="border-t border-gray-100">'
                     + '<td class="px-3 py-2">' + cb + '</td>'
                     + '<td class="px-3 py-2">' + erReasonBadge(r.reason) + '</td>'
                     + '<td class="px-3 py-2"><a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">' + escapeHtml(r.name || '(no name)') + '</a></td>'
+                    + stageCell
                     + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.owner || '—') + '</td>'
                     + '<td class="px-3 py-2"><div class="flex items-center gap-2 whitespace-nowrap">' + action + dismissBtn + '</div></td>'
                     + '</tr>';
@@ -7107,7 +7119,7 @@
                 const from = start + 1, to = start + pageRows.length;
                 const prevDis = cur === 0 ? ' opacity-40 pointer-events-none' : ' hover:bg-gray-100';
                 const nextDis = cur >= pages - 1 ? ' opacity-40 pointer-events-none' : ' hover:bg-gray-100';
-                footer = '<tr class="bg-gray-50"><td colspan="5" class="px-3 py-2">'
+                footer = '<tr class="bg-gray-50"><td colspan="' + COLS + '" class="px-3 py-2">'
                     + '<div class="flex items-center justify-between text-xs text-gray-600">'
                     + '<span>Showing ' + from.toLocaleString() + '–' + to.toLocaleString() + ' of ' + rows.length.toLocaleString() + '</span>'
                     + '<span class="flex items-center gap-2">'
