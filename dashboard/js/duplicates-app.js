@@ -79,6 +79,39 @@
                 const logsData = await logsRes.json();
                 const ownerAccData = await ownerAccRes.json();
 
+                // Marketplace / Corporate segment overlay — when the operator
+                // has picked a non-default segment, fetch the segment-aware
+                // tiles from filtered-summary and overlay them onto the
+                // all-up summary so the Executive headline cards reflect the
+                // selected slice. KPI rate cards and resolution-rate stay
+                // all-up (they're whole-population denominators).
+                try {
+                    const seg = document.getElementById('filterSegment')?.value || 'all';
+                    if (seg !== 'all' && summary) {
+                        const fsRes = await fetch('/api/duplicates/filtered-summary?segment=' + encodeURIComponent(seg));
+                        if (fsRes.ok) {
+                            const fs = await fsRes.json();
+                            // Only overlay the fields filtered-summary actually
+                            // computes under the filter — leave the deeper KPIs
+                            // (rates / resolution / overall) at their all-up
+                            // values rather than fabricate segment-aware ones.
+                            if (fs && typeof fs === 'object') {
+                                if (fs.totalClusters != null) summary.trueDuplicateClusters = fs.totalClusters;
+                                if (fs.totalClusters != null) summary.totalClusters = fs.totalClusters;
+                                if (fs.highConfidence != null) summary.highConfidence = fs.highConfidence;
+                                if (fs.mediumConfidence != null) summary.mediumConfidence = fs.mediumConfidence;
+                                if (fs.lowConfidence != null) summary.lowConfidence = fs.lowConfidence;
+                                if (fs.estimatedPipelineInflation != null) summary.estimatedPipelineInflation = fs.estimatedPipelineInflation;
+                                if (fs.totalDuplicateLeads != null) summary.totalDuplicateLeads = fs.totalDuplicateLeads;
+                                if (fs.totalDuplicateDeals != null) summary.totalDuplicateDeals = fs.totalDuplicateDeals;
+                                if (fs.totalDuplicateContacts != null) summary.totalDuplicateContacts = fs.totalDuplicateContacts;
+                                if (fs.totalDuplicateAccounts != null) summary.totalDuplicateAccounts = fs.totalDuplicateAccounts;
+                                summary._segmentApplied = seg;
+                            }
+                        }
+                    }
+                } catch (e) { /* segment overlay is best-effort */ }
+
                 updateSummary(summary);
                 renderLogs(logsData.logs || []);
                 renderOwners(ownerAccData.owners || []);
@@ -5942,6 +5975,17 @@
             // (Export Center tab removed — its size-hint listener used to
             // live here. Per-tab "⬇ Export CSV" buttons stream directly
             // via exportTab() without a pre-flight estimate.)
+
+            // Wire the Advanced-Filters Segment dropdown so changing it via
+            // the dropdown updates the chip and re-runs the active tab —
+            // matches the behaviour of clicking the chips at the top.
+            const segDD = document.getElementById('filterSegment');
+            if (segDD && typeof setSegment === 'function') {
+                segDD.addEventListener('change', (e) => {
+                    const v = (e.target && e.target.value) || 'all';
+                    setSegment(v);
+                });
+            }
         });
 
         // D1: Scan with progress bar
@@ -10930,7 +10974,9 @@
                         resultBox.innerHTML = ''
                             + '<div class="font-semibold text-purple-800 mb-1">✓ Dry-run complete</div>'
                             + '<div>' + line + '</div>'
-                            + '<div>Skipped: ' + (resp.skipped_count || 0) + '</div>'
+                            + '<div>Skipped: ' + (resp.skipped_count || 0)
+                                + (resp.no_matched_account_count ? ' (' + resp.no_matched_account_count + ' churned with no existing Account — won\'t be pushed)' : '')
+                                + '</div>'
                             + (resp.sample_payload ? '<div class="mt-2 font-mono text-[10px] bg-white border rounded p-2 overflow-x-auto">Sample payload:<br>' + escapeHtml(JSON.stringify(resp.sample_payload, null, 2)) + '</div>' : '')
                             + '<div class="mt-2 text-amber-700">Uncheck the Dry-run box and Push again to actually create the records.</div>';
                     } else {
@@ -11149,6 +11195,10 @@
                 confidence: document.getElementById('filterConfidence').value || '',
                 dateFrom:   document.getElementById('filterDateFrom').value || '',
                 dateTo:     document.getElementById('filterDateTo').value || '',
+                // Marketplace / Corporate segment — chip toggle at top of page
+                // and the mirror dropdown in Advanced Filters both write to
+                // #filterSegment. 'all' (default) means "no constraint".
+                segment:    (document.getElementById('filterSegment')?.value || 'all'),
             };
         }
 
@@ -11232,6 +11282,21 @@
                 const vals = _advFilterRowValues(row, mapping.layoutField, 'layout');
                 if (!_advFilterMatchMulti(s.layouts, vals)) return false;
             }
+            // Marketplace / Corporate segment — uses the same layout-field
+            // signal as the multi-select Layout above, but binary: rows
+            // are "marketplace" when their layout matches the merchant
+            // layouts (Marketplace / Partner Accounts), "corporate" for
+            // everything else INCLUDING rows with no layout (legacy data
+            // shouldn't get hidden by the binary). Mirrors the server-side
+            // buildSegmentPredicate exactly.
+            if (s.segment && s.segment !== 'all') {
+                const vals = _advFilterRowValues(row, mapping.layoutField, 'layout');
+                const isMarketplace = vals.some(v =>
+                    v === 'marketplace' || v === 'partner accounts'
+                );
+                if (s.segment === 'marketplace' && !isMarketplace) return false;
+                if (s.segment === 'corporate' && isMarketplace) return false;
+            }
             // Pipeline — multi-select.
             if (s.pipelines && s.pipelines.length > 0) {
                 const vals = _advFilterRowValues(row, mapping.pipelineField, 'pipeline');
@@ -11302,6 +11367,10 @@
             // Defaults to 'active' so untouched clusters land in the list.
             const aiStatus = window._aiStatusByTab && window._aiStatusByTab[window._currentTab];
             if (aiStatus && aiStatus !== 'active') params.set('ai_status', aiStatus);
+            // Marketplace / Corporate segment — only send when non-default so
+            // the request URL stays clean when the operator hasn't picked one.
+            const seg = document.getElementById('filterSegment')?.value;
+            if (seg && seg !== 'all') params.set('segment', seg);
             return params;
         }
 
@@ -11316,6 +11385,8 @@
             if (document.getElementById('filterDomain').value) count++;
             if (document.getElementById('filterDateFrom').value) count++;
             if (document.getElementById('filterDateTo').value) count++;
+            const seg = document.getElementById('filterSegment')?.value;
+            if (seg && seg !== 'all') count++;
             return count;
         }
 
@@ -11370,6 +11441,7 @@
                 domain:     document.getElementById('filterDomain')?.value || '',
                 dateFrom:   document.getElementById('filterDateFrom')?.value || '',
                 dateTo:     document.getElementById('filterDateTo')?.value || '',
+                segment:    document.getElementById('filterSegment')?.value || 'all',
             };
         }
 
@@ -11384,8 +11456,50 @@
             _filterSetInputValue('filterDomain',     s ? s.domain     : '');
             _filterSetInputValue('filterDateFrom',   s ? s.dateFrom   : '');
             _filterSetInputValue('filterDateTo',     s ? s.dateTo     : '');
+            _filterSetInputValue('filterSegment',    s ? s.segment    : 'all');
+            _syncSegmentChipFromDropdown();
             _refreshActiveFilterCountBadge();
         }
+
+        // Keep the All / Marketplace / Corporate chip in sync with the
+        // mirror dropdown inside Advanced Filters. Called whenever either
+        // the dropdown or a chip click changes the value.
+        function _syncSegmentChipFromDropdown() {
+            const seg = document.getElementById('filterSegment')?.value || 'all';
+            const map = { all: 'segmentChipAll', marketplace: 'segmentChipMarketplace', corporate: 'segmentChipCorporate' };
+            ['segmentChipAll', 'segmentChipMarketplace', 'segmentChipCorporate'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (id === map[seg]) {
+                    el.classList.add('bg-blue-600', 'text-white', 'font-medium');
+                    el.classList.remove('bg-white', 'text-gray-700', 'hover:bg-gray-50');
+                } else {
+                    el.classList.remove('bg-blue-600', 'text-white', 'font-medium');
+                    el.classList.add('bg-white', 'text-gray-700', 'hover:bg-gray-50');
+                }
+            });
+        }
+
+        // setSegment(newSeg) — called by the chip buttons and from the Advanced
+        // Filters dropdown's onchange. Writes value into the dropdown (single
+        // source of truth), restyles chips, snapshots into this tab's slot,
+        // and re-runs the active tab's load path so the change is immediate.
+        async function setSegment(newSeg) {
+            if (!['all', 'marketplace', 'corporate'].includes(newSeg)) return;
+            _filterSetInputValue('filterSegment', newSeg);
+            _syncSegmentChipFromDropdown();
+            try {
+                const __active = _currentActiveTabId();
+                if (__active && _filterAwareTabs.has(__active)) {
+                    _snapshotFilterFormToTab(__active);
+                }
+            } catch (e) { /* non-fatal */ }
+            _refreshActiveFilterCountBadge();
+            // Re-run the active tab's loader. applyAdvancedFilters() already
+            // routes per-tab; reuse it so we don't duplicate the dispatcher.
+            try { await applyAdvancedFilters(); } catch (e) { console.error('setSegment apply error:', e); }
+        }
+        window.setSegment = setSegment;
 
         function _currentActiveTabId() {
             const el = document.querySelector('[id^="tab-"].tab-active');
@@ -11510,6 +11624,10 @@
             document.getElementById('filterDomain').value = '';
             document.getElementById('filterDateFrom').value = '';
             document.getElementById('filterDateTo').value = '';
+            // Segment dropdown + chip — Clear resets to default 'all'.
+            const segEl = document.getElementById('filterSegment');
+            if (segEl) segEl.value = 'all';
+            _syncSegmentChipFromDropdown();
             document.getElementById('activeFilterCount').classList.add('hidden');
             // Per-tab Clear All — only forget THIS tab's slot. Other tabs
             // keep their own filter selections so a Clear on the Lead tab
