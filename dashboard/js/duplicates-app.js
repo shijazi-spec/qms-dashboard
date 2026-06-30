@@ -7156,28 +7156,43 @@
             const n = (window['_er_' + kind] || []).length;
             if (!n) return;
             if (!confirm('AI-Apply ALL ' + n + ' empty ' + module + '?\n\nFor each one it verifies live in Zoho, tags the genuinely-empty as Empty-Delete (Adam, pending admin delete), prunes any already deleted, and removes any that turn out to have data. It runs batch-after-batch until the whole list is done.\n\nThe platform never deletes — the admin removes the tagged records.')) return;
+            // Visible progress lives in a per-section span next to the button (the
+            // shared #erBulkResult sits in a hidden bar, so the operator couldn't
+            // see anything happening — Ahmad 2026-06-30). Also disable the button +
+            // show a spinner so it's obvious the run is in flight.
             const result = document.getElementById('erBulkResult');
+            const prog = document.getElementById('erAiProgress-' + kind);
+            const btn = document.getElementById('erAiBtn-' + kind);
+            const btnHtml = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.classList.add('opacity-60', 'pointer-events-none'); btn.innerHTML = '⏳ AI-Applying…'; }
+            const setProg = function (txt) { if (prog) prog.textContent = txt; if (result) result.textContent = txt; };
             let tagged = 0, pruned = 0, dismissed = 0, docs = 0, iter = 0;
-            // Loop the batched endpoint until nothing is left (or no progress).
-            while (true) {
-                iter++;
-                if (result) result.textContent = 'AI-Applying ' + module + '… batch ' + iter + ' (tagged ' + tagged + ' so far, verifying live records)';
-                const j = await erAdminPost('/api/duplicates/empty-records/ai-apply', { module: module });
-                if (!j) { if (result) result.textContent = 'Cancelled after ' + tagged + ' tagged.'; break; }
-                if (!j.success) { if (result) result.textContent = 'Stopped: ' + (j.error || 'failed') + ' (after ' + tagged + ' tagged)'; break; }
-                tagged += (j.tagged || 0);
-                pruned += (j.prunedGhosts || 0);
-                dismissed += (j.dismissed || 0);
-                docs += (j.skippedWithDocs || 0);
-                // Progress = anything that removed a record from the list this batch.
-                const progressed = (j.tagged || 0) + (j.prunedGhosts || 0) + (j.dismissed || 0) + (j.skippedAlreadyTagged || 0);
-                if ((j.remaining || 0) <= 0 || progressed === 0 || iter >= 60) {
-                    let msg = '✓ Done (' + iter + ' batch' + (iter === 1 ? '' : 'es') + '): tagged ' + tagged + ' Empty-Delete · pruned ' + pruned + ' ghosts';
-                    if (dismissed > 0) msg += ' · removed ' + dismissed + ' that had data';
-                    if ((j.remaining || 0) > 0 && progressed === 0) msg += ' · ' + j.remaining + ' left need manual review';
-                    if (result) result.textContent = msg;
-                    break;
+            try {
+                // Loop the batched endpoint until nothing is left (or no progress).
+                while (true) {
+                    iter++;
+                    setProg('⏳ Batch ' + iter + ' — verifying live in Zoho… (' + tagged + ' tagged so far)');
+                    if (btn) btn.innerHTML = '⏳ AI-Applying… (' + tagged + ' tagged)';
+                    const j = await erAdminPost('/api/duplicates/empty-records/ai-apply', { module: module });
+                    if (!j) { setProg('Cancelled after ' + tagged + ' tagged.'); break; }
+                    if (!j.success) { setProg('⚠ Stopped: ' + (j.error || 'failed') + ' (after ' + tagged + ' tagged)'); break; }
+                    tagged += (j.tagged || 0);
+                    pruned += (j.prunedGhosts || 0);
+                    dismissed += (j.dismissed || 0);
+                    docs += (j.skippedWithDocs || 0);
+                    // Progress = anything that removed a record from the list this batch.
+                    const progressed = (j.tagged || 0) + (j.prunedGhosts || 0) + (j.dismissed || 0) + (j.skippedAlreadyTagged || 0);
+                    if ((j.remaining || 0) <= 0 || progressed === 0 || iter >= 60) {
+                        let msg = '✓ Done (' + iter + ' batch' + (iter === 1 ? '' : 'es') + '): tagged ' + tagged + ' Empty-Delete · pruned ' + pruned + ' ghosts';
+                        if (dismissed > 0) msg += ' · removed ' + dismissed + ' that had data';
+                        if ((j.remaining || 0) > 0 && progressed === 0) msg += ' · ' + j.remaining + ' left need manual review';
+                        setProg(msg);
+                        break;
+                    }
                 }
+            } finally {
+                // Restore the button regardless of how the loop ended.
+                if (btn) { btn.disabled = false; btn.classList.remove('opacity-60', 'pointer-events-none'); btn.innerHTML = btnHtml; }
             }
             erReload(kind);
             erLoadTaggedStatus();

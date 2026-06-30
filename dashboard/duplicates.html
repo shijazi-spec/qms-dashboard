@@ -1510,7 +1510,8 @@
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_deals">Deals</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_deals_sub">empty / test (missing-account deals → Account Hints)</span></span></h3>
               <span id="erCount-deals" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
               <button data-on-click="erVerifyPage" data-args="[&quot;deals&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-indigo-300 text-indigo-700 hover:bg-indigo-50" title="Live-check the records shown on THIS page against Zoho — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
-              <button data-on-click="erAiApply" data-args="[&quot;deals&quot;]" class="px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button id="erAiBtn-deals" data-on-click="erAiApply" data-args="[&quot;deals&quot;]" class="px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <span id="erAiProgress-deals" class="text-xs font-medium text-rose-700" role="status" aria-live="polite"></span>
               <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
@@ -1526,7 +1527,8 @@
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_accounts">Accounts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_accounts_sub">empty (check attachments first) / test</span></span></h3>
               <span id="erCount-accounts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
               <button data-on-click="erVerifyPage" data-args="[&quot;accounts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-indigo-300 text-indigo-700 hover:bg-indigo-50" title="Live-check the records shown on THIS page against Zoho — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
-              <button data-on-click="erAiApply" data-args="[&quot;accounts&quot;]" class="px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button id="erAiBtn-accounts" data-on-click="erAiApply" data-args="[&quot;accounts&quot;]" class="px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <span id="erAiProgress-accounts" class="text-xs font-medium text-rose-700" role="status" aria-live="polite"></span>
               <button data-on-click="erReload" data-args="[&quot;accounts&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
@@ -1542,7 +1544,8 @@
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_contacts">Contacts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_contacts_sub">name-only / test</span></span></h3>
               <span id="erCount-contacts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
               <button data-on-click="erVerifyPage" data-args="[&quot;contacts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-indigo-300 text-indigo-700 hover:bg-indigo-50" title="Live-check the records shown on THIS page against Zoho — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
-              <button data-on-click="erAiApply" data-args="[&quot;contacts&quot;]" class="px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button id="erAiBtn-contacts" data-on-click="erAiApply" data-args="[&quot;contacts&quot;]" class="px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <span id="erAiProgress-contacts" class="text-xs font-medium text-rose-700" role="status" aria-live="polite"></span>
               <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
@@ -1934,7 +1937,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=16"></script>
+    <script src="/js/duplicates-app.js?v=17"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
