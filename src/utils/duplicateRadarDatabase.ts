@@ -1120,11 +1120,17 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       started_at TIMESTAMPTZ,
       last_progress_at TIMESTAMPTZ,
       finished_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      include_zoho_ids TEXT,
+      link_account_zoho_id TEXT,
+      force_merge BOOLEAN NOT NULL DEFAULT false
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_merge_jobs_cluster ON merge_jobs(cluster_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_merge_jobs_cluster_module_status ON merge_jobs(cluster_id, module, status)`);
+  await pool.query(`ALTER TABLE merge_jobs ADD COLUMN IF NOT EXISTS include_zoho_ids TEXT`);
+  await pool.query(`ALTER TABLE merge_jobs ADD COLUMN IF NOT EXISTS link_account_zoho_id TEXT`);
+  await pool.query(`ALTER TABLE merge_jobs ADD COLUMN IF NOT EXISTS force_merge BOOLEAN NOT NULL DEFAULT false`);
 
   // Durable resolution ledger — keyed by STABLE Zoho identity (module +
   // master_zoho_id), NOT by cluster_id. This table is intentionally NOT part of

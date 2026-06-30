@@ -1,6 +1,6 @@
 import { pool } from "./duplicateRadarDatabase";
 
-export interface MergeJob { id: number; cluster_id: number; module: string; status: "queued"|"running"|"done"|"partial"|"failed"; total: number; processed: number; tagged: number; reparented: number; errors: number; error_message: string | null; master_zoho_id: string | null; created_by: string | null; started_at: string | null; last_progress_at: string | null; finished_at: string | null; created_at: string; }
+export interface MergeJob { id: number; cluster_id: number; module: string; status: "queued"|"running"|"done"|"partial"|"failed"; total: number; processed: number; tagged: number; reparented: number; errors: number; error_message: string | null; master_zoho_id: string | null; created_by: string | null; started_at: string | null; last_progress_at: string | null; finished_at: string | null; created_at: string; include_zoho_ids: string | null; link_account_zoho_id: string | null; force_merge: boolean; }
 
 const STALE_MS = 90_000;
 
@@ -15,11 +15,14 @@ export function isMergeJobStale(job: Pick<MergeJob,"status"|"last_progress_at">,
   return nowMs - Date.parse(job.last_progress_at) > thresholdMs;
 }
 
-export async function createMergeJob(input: { clusterId: number; module: string; total: number; masterZohoId: string | null; createdBy: string | null }): Promise<MergeJob> {
+export async function createMergeJob(input: { clusterId: number; module: string; total: number; masterZohoId: string | null; createdBy: string | null; includeZohoIds: string[] | null; linkAccountZohoId: string | undefined; forceMergeContacts: boolean }): Promise<MergeJob> {
+  const includeZohoIds = input.includeZohoIds ? JSON.stringify(input.includeZohoIds) : null;
+  // NULL = not provided (route default-suggests); '' = explicit "don't link"; id = link.
+  const linkAccountZohoId = input.linkAccountZohoId === undefined ? null : input.linkAccountZohoId;
   const r = await pool.query(
-    `INSERT INTO merge_jobs (cluster_id, module, status, total, processed, tagged, reparented, errors, master_zoho_id, created_by, started_at, last_progress_at)
-     VALUES ($1,$2,'running',$3,0,0,0,0,$4,$5, NOW(), NOW()) RETURNING *`,
-    [input.clusterId, input.module, input.total, input.masterZohoId, input.createdBy],
+    `INSERT INTO merge_jobs (cluster_id, module, status, total, processed, tagged, reparented, errors, master_zoho_id, created_by, started_at, last_progress_at, include_zoho_ids, link_account_zoho_id, force_merge)
+     VALUES ($1,$2,'running',$3,0,0,0,0,$4,$5, NOW(), NOW(), $6,$7,$8) RETURNING *`,
+    [input.clusterId, input.module, input.total, input.masterZohoId, input.createdBy, includeZohoIds, linkAccountZohoId, input.forceMergeContacts],
   );
   return r.rows[0] as MergeJob;
 }

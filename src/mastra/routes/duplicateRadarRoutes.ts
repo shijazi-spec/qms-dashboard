@@ -3793,6 +3793,9 @@ export const duplicateRadarRoutes = [
             masterZohoId: plan.masterZohoId,
             createdBy:
               (sessionUser as any)?.email || (sessionUser as any)?.role || "admin",
+            includeZohoIds,
+            linkAccountZohoId,
+            forceMergeContacts,
           });
 
           void import("../../utils/mergeJobRunner")

@@ -78,6 +78,9 @@ export async function runMergeJob(jobId: number): Promise<void> {
       generatedAt: new Date().toISOString(),
       masterZohoId: job.master_zoho_id,
       taggedAccountDbIds,
+      includeZohoIds: job.include_zoho_ids ? JSON.parse(job.include_zoho_ids) : null,
+      linkAccountZohoId: job.link_account_zoho_id === null ? undefined : job.link_account_zoho_id,
+      forceMergeContacts: job.force_merge,
     });
 
     // Multi-module clusters: Agentic resolves ONE module, so it must NOT
