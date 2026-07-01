@@ -11354,12 +11354,47 @@
                         var line = (action === 4)
                             ? ('Would create: ' + (w.leads || 0) + ' leads')
                             : ('Would create: ' + (w.accounts || 0) + ' accounts / ' + (w.contacts || 0) + ' contacts / ' + (w.deals || 0) + ' deals');
+                        // Diagnostic: full list of exactly what would be pushed,
+                        // so the count (e.g. "why 99?") can be verified by eye.
+                        var eligibleHtml = '';
+                        var ecos = resp.eligible_companies || [];
+                        var eleads = resp.eligible_leads || [];
+                        if (action === 4 && eleads.length) {
+                            var lrows = eleads.map(function (r, i) {
+                                return '<tr class="border-b border-gray-100">'
+                                    + '<td class="pr-2 text-gray-400">' + (i + 1) + '</td>'
+                                    + '<td class="pr-2">' + escapeHtml(r.name || '(no name)') + '</td>'
+                                    + '<td class="pr-2 text-gray-600">' + escapeHtml(r.company || '') + '</td>'
+                                    + '<td class="pr-2 text-gray-500">' + escapeHtml(r.email || r.phone || '') + '</td>'
+                                    + '</tr>';
+                            }).join('');
+                            eligibleHtml = '<details class="mt-2"><summary class="cursor-pointer text-purple-700 font-medium">Show all ' + eleads.length + ' leads</summary>'
+                                + '<div class="mt-1 max-h-64 overflow-y-auto bg-white border rounded p-2"><table class="text-[11px] w-full">' + lrows + '</table></div></details>';
+                        } else if (ecos.length) {
+                            var crows = ecos.map(function (co, i) {
+                                var flag = (action === 1)
+                                    ? (co.account_resolved
+                                        ? '<span class="text-emerald-600">● account found</span>'
+                                        : '<span class="text-amber-600">○ no account (skipped)</span>')
+                                    : '';
+                                return '<tr class="border-b border-gray-100">'
+                                    + '<td class="pr-2 text-gray-400 align-top">' + (i + 1) + '</td>'
+                                    + '<td class="pr-2 align-top">' + escapeHtml(co.company || '') + '</td>'
+                                    + '<td class="pr-2 text-gray-500 align-top">' + escapeHtml(co.domain || '') + '</td>'
+                                    + '<td class="pr-2 text-gray-600 align-top">' + (co.contacts || 0) + ' contact' + ((co.contacts === 1) ? '' : 's') + '</td>'
+                                    + '<td class="align-top">' + flag + '</td>'
+                                    + '</tr>';
+                            }).join('');
+                            eligibleHtml = '<details class="mt-2"><summary class="cursor-pointer text-purple-700 font-medium">Show all ' + ecos.length + ' companies</summary>'
+                                + '<div class="mt-1 max-h-64 overflow-y-auto bg-white border rounded p-2"><table class="text-[11px] w-full">' + crows + '</table></div></details>';
+                        }
                         resultBox.innerHTML = ''
                             + '<div class="font-semibold text-purple-800 mb-1">✓ Dry-run complete</div>'
                             + '<div>' + line + '</div>'
                             + '<div>Skipped: ' + (resp.skipped_count || 0)
                                 + (resp.no_matched_account_count ? ' (' + resp.no_matched_account_count + ' churned with no existing Account — won\'t be pushed)' : '')
                                 + '</div>'
+                            + eligibleHtml
                             + (resp.sample_payload ? '<div class="mt-2 font-mono text-[10px] bg-white border rounded p-2 overflow-x-auto">Sample payload:<br>' + escapeHtml(JSON.stringify(resp.sample_payload, null, 2)) + '</div>' : '')
                             + '<div class="mt-2 text-amber-700">Uncheck the Dry-run box and Push again to actually create the records.</div>';
                     } else {

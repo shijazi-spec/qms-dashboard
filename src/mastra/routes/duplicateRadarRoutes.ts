@@ -8930,6 +8930,9 @@ export const duplicateRadarRoutes = [
             let wouldDeals = 0;
             let wouldLeads = 0;
             let a1SkippedNoAccount = 0;
+            // Diagnostic: exact companies (1/2/3) the plan would push, so the
+            // operator can eyeball the list before firing the real run.
+            const a1ResolvedKeys = new Set<string>();
 
             if (action === 4) {
               wouldLeads = plan.leads.length;
@@ -8973,6 +8976,7 @@ export const duplicateRadarRoutes = [
                 if (accId) {
                   wouldDeals += 1;
                   wouldContacts += co.contacts.length;
+                  a1ResolvedKeys.add(co.companyKey);
                   if (!sampleCo) {
                     sampleCo = co;
                     sampleAccId = accId;
@@ -9052,6 +9056,32 @@ export const duplicateRadarRoutes = [
               }
             }
 
+            // Full, un-truncated list of exactly what this action would push,
+            // so the operator can verify the count (e.g. "why 99?") by eye.
+            const eligibleCompanies =
+              action === 4
+                ? []
+                : plan.companies.map(co => ({
+                    company: co.companyName,
+                    domain: co.domain || null,
+                    contacts: co.contacts.length,
+                    contact_names: co.contacts.map(
+                      cc => cc.contact_name || cc.email || cc.phone || "(no name)",
+                    ),
+                    ...(action === 1
+                      ? { account_resolved: a1ResolvedKeys.has(co.companyKey) }
+                      : {}),
+                  }));
+            const eligibleLeads =
+              action === 4
+                ? plan.leads.map(r => ({
+                    name: r.contact_name || null,
+                    company: r.company || r.domain || null,
+                    email: r.email || null,
+                    phone: r.phone || null,
+                  }))
+                : [];
+
             return c.json({
               success: true,
               dry_run: true,
@@ -9065,6 +9095,8 @@ export const duplicateRadarRoutes = [
                 leads: wouldLeads,
               },
               sample_payload: samplePayload,
+              eligible_companies: eligibleCompanies,
+              eligible_leads: eligibleLeads,
               skipped_count: plan.skipped.length + a1SkippedNoAccount,
               no_matched_account_count: a1SkippedNoAccount,
               skipped_sample: plan.skipped.slice(0, 10),
