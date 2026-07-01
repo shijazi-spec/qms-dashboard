@@ -8978,6 +8978,7 @@ export const duplicateRadarRoutes = [
             let wouldDeals = 0;
             let wouldLeads = 0;
             let a1SkippedNoAccount = 0;
+            let a1ActiveLinkOnly = 0; // A1 links to an active account: contact only, no deal
             // Diagnostic: exact companies (1/2/3) the plan would push, so the
             // operator can eyeball the list before firing the real run.
             const a1ResolvedKeys = new Set<string>();
@@ -9022,7 +9023,11 @@ export const duplicateRadarRoutes = [
                     : null) ??
                   (await resolveAccByDomainName(co.domain, co.companyName));
                 if (accId) {
-                  wouldDeals += 1;
+                  // Deal only for CHURNED accounts; active-client links add the
+                  // contact only. (Existing-contact skipping happens at run time
+                  // via a Zoho email check — not previewed here.)
+                  const isChurnedCo = co.contacts.some(c => c.lifecycle_state === "termination_old");
+                  if (isChurnedCo) wouldDeals += 1; else a1ActiveLinkOnly += 1;
                   wouldContacts += co.contacts.length;
                   a1ResolvedKeys.add(co.companyKey);
                   if (!sampleCo) {
@@ -9147,6 +9152,7 @@ export const duplicateRadarRoutes = [
               eligible_leads: eligibleLeads,
               skipped_count: plan.skipped.length + a1SkippedNoAccount,
               no_matched_account_count: a1SkippedNoAccount,
+              active_link_only_count: a1ActiveLinkOnly,
               skipped_sample: plan.skipped.slice(0, 10),
             });
           }
@@ -9163,6 +9169,7 @@ export const duplicateRadarRoutes = [
           // Track counts
           const created = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
           const failed = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
+          let existingContactsLinked = 0; // A1: contacts already in Zoho (reused, not duplicated)
           let outcomesSample: any[] = [];
 
           if (action === 4) {
@@ -9275,6 +9282,24 @@ export const duplicateRadarRoutes = [
             const contactIdsByCompany = new Map<string, string[]>();
 
             if (companiesWithAccount.length > 0) {
+              // A1 links to EXISTING accounts — check each contact's email
+              // against Zoho FIRST so we never create a duplicate of someone
+              // already in the CRM. Reuse the existing contact id when found.
+              const preexistingByRow = new Map<number, string>();
+              if (action === 1) {
+                const { findContactIdByEmail } = await import("../../utils/zohoCRM");
+                const emailToId = new Map<string, string | null>();
+                for (const co of companiesWithAccount) {
+                  for (const row of co.contacts) {
+                    const em = String(row.email || "").trim().toLowerCase();
+                    if (!em) continue;
+                    if (!emailToId.has(em)) emailToId.set(em, await findContactIdByEmail(em));
+                    const existing = emailToId.get(em);
+                    if (existing) preexistingByRow.set(row.row_index, existing);
+                  }
+                }
+              }
+
               // Build contact payloads (one per contact row, all companies interleaved).
               interface ContactMeta { companyKey: string; rowIndex: number; hasEmail: boolean }
               const contactMeta: ContactMeta[] = [];
@@ -9283,6 +9308,20 @@ export const duplicateRadarRoutes = [
               for (const co of companiesWithAccount) {
                 const accountId = accountIdMap.get(co.companyKey)!;
                 for (const row of co.contacts) {
+                  // Contact already in Zoho (by email) → reuse it, don't create
+                  // a duplicate. Register the existing id for deal linkage/roles.
+                  const existingId = preexistingByRow.get(row.row_index);
+                  if (existingId) {
+                    existingContactsLinked++;
+                    const _cids = contactIdsByCompany.get(co.companyKey) || [];
+                    _cids.push(existingId);
+                    contactIdsByCompany.set(co.companyKey, _cids);
+                    if (!firstContactIdMap.has(co.companyKey)) {
+                      firstContactIdMap.set(co.companyKey, existingId);
+                      primaryRowIndexMap.set(co.companyKey, row.row_index);
+                    }
+                    continue;
+                  }
                   const _nm = splitContactName(row.contact_name || co.companyName);
                   const p: Record<string, any> = {
                     Last_Name: _nm.last || co.companyName,
@@ -9345,6 +9384,11 @@ export const duplicateRadarRoutes = [
                 const firstContactId = firstContactIdMap.get(co.companyKey);
                 // Only create deal if we have at least an account id.
                 if (!accountId) continue;
+                // A1: only a CHURNED account gets a re-engagement Deal. An
+                // active-client link (matched by email domain) just adds the
+                // contact — no Deal. A2/A3 always create the Deal.
+                const isChurnedCo = co.contacts.some(c => c.lifecycle_state === "termination_old");
+                if (action === 1 && !isChurnedCo) continue;
                 const p: Record<string, any> = {
                   Deal_Name: `${co.companyName} — ${dealTag}`,
                   Stage: DEAL.stage,
@@ -9410,7 +9454,7 @@ export const duplicateRadarRoutes = [
             const desc =
               action === 4
                 ? `Preflight structured push (action 4): created ${created.leads} Leads (${failed.leads} failed). Source: "${source}".`
-                : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals (${totalFailed} failed). Source: "${source}".`;
+                : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals${existingContactsLinked ? `, linked ${existingContactsLinked} existing contact(s)` : ""} (${totalFailed} failed). Source: "${source}".`;
             await logEvent({
               userId: sessionUser?.userId ?? 0,
               userEmail: sessionUser?.email ?? "system",
@@ -9434,6 +9478,7 @@ export const duplicateRadarRoutes = [
             action,
             created,
             failed,
+            existing_contacts_linked: existingContactsLinked,
             skipped_count: plan.skipped.length,
             outcomes_sample: outcomesSample,
           });

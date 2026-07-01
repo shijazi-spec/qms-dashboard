@@ -11528,6 +11528,8 @@
                             + '<div>Skipped: ' + (resp.skipped_count || 0)
                                 + (resp.no_matched_account_count ? ' (' + resp.no_matched_account_count + ' churned with no existing Account — won\'t be pushed)' : '')
                                 + '</div>'
+                            + (resp.active_link_only_count ? '<div class="text-indigo-700">' + resp.active_link_only_count + ' active-account link(s) → contact added, no re-engagement Deal (only churned accounts get a Deal).</div>' : '')
+                            + (action === 1 ? '<div class="text-gray-500 text-[11px]">On push, contacts already in Zoho (by email) are reused, not duplicated.</div>' : '')
                             + eligibleHtml
                             + (resp.sample_payload ? '<div class="mt-2 font-mono text-[10px] bg-white border rounded p-2 overflow-x-auto">Sample payload:<br>' + escapeHtml(JSON.stringify(resp.sample_payload, null, 2)) + '</div>' : '')
                             + '<div class="mt-2 text-amber-700">Uncheck the Dry-run box and Push again to actually create the records.</div>';
@@ -11553,6 +11555,7 @@
                         resultBox.innerHTML = ''
                             + '<div class="font-semibold text-emerald-800 mb-1">✓ Push complete</div>'
                             + '<div>' + crLine + '</div>'
+                            + (resp.existing_contacts_linked ? '<div class="text-indigo-700">Reused ' + resp.existing_contacts_linked + ' existing contact(s) — not duplicated.</div>' : '')
                             + '<div>' + flLine + '</div>'
                             + '<div>Skipped: ' + (resp.skipped_count || 0) + '</div>'
                             + (count > 0 ? '<div class="mt-1 text-purple-700">Next batch starts at offset ' + nextOffset + '. Push again for the next ' + count + '.</div>' : '')

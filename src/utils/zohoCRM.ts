@@ -993,6 +993,22 @@ export async function searchZohoRecords(
   );
 }
 
+/** Return the Zoho id of an existing Contact with this exact email, or null.
+ * Used by the Preflight push before adding a contact to an EXISTING account,
+ * so we don't create a duplicate contact for someone already in the CRM. On
+ * any error we return null (treat as not-found) so a real contact is never
+ * silently dropped — the worst case is a duplicate the radar can merge. */
+export async function findContactIdByEmail(email: string): Promise<string | null> {
+  const e = String(email || "").trim();
+  if (!e) return null;
+  try {
+    const rows = await searchZohoRecords("Contacts", `(Email:equals:${e})`);
+    return rows[0]?.id ? String(rows[0].id) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Word-based search — same indexed lookup the Zoho UI uses for the
  * "Global Search" box at the top of the CRM. Searches every indexed
