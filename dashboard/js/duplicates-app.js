@@ -11330,10 +11330,24 @@
                 else if (routed[k].route === 'lead') a4++;
                 else rejected++;
             }
-            var groups = _pfGroupByCompany(accountRows);
-            var isChurnedMatched = function (g) {
-                return g.rows.some(function (r) { return r.lifecycle_state === 'termination_old'; });
+            // Row-level split: matched rows link to existing accounts (A1),
+            // unmatched rows open new accounts (A2/A3). Mirrors the planner.
+            var isRowExistingMatch = function (r) {
+                return (r.matched_account_zoho_id && String(r.matched_account_zoho_id).trim()) ||
+                       r.lifecycle_state === 'termination_old' || r.cluster_id != null;
             };
+            var matched = [], newRows = [];
+            for (var m = 0; m < accountRows.length; m++) {
+                (isRowExistingMatch(accountRows[m]) ? matched : newRows).push(accountRows[m]);
+            }
+            // A1 = distinct existing accounts (by resolved id, else company key).
+            var accKeys = {};
+            matched.forEach(function (r) {
+                var key = (r.matched_account_zoho_id && String(r.matched_account_zoho_id).trim()) || ('name:' + _pfNormCompanyKey(r.company, r.domain));
+                accKeys[key] = 1;
+            });
+            var a1 = Object.keys(accKeys).length;
+            var groups = _pfGroupByCompany(newRows);
             var isNewPass = function (g) {
                 return g.rows.every(function (r) { return r.cluster_id == null; }) &&
                        g.rows.every(function (r) { return r.verdict === 'pass'; });
@@ -11341,10 +11355,9 @@
             var contactCount = function (g) {
                 return g.rows.filter(_pfRowHasContact).length;
             };
-            var a1 = 0, a2 = 0, a3 = 0;
+            var a2 = 0, a3 = 0;
             for (var i = 0; i < groups.length; i++) {
                 var g = groups[i];
-                if (isChurnedMatched(g)) { a1++; continue; }
                 if (isNewPass(g)) {
                     var cc = contactCount(g);
                     if (cc >= 2) a2++;
@@ -11371,46 +11384,49 @@
                 : '';
         }
 
-        // Read-only: check each REJECTED contact's email domain against the
-        // existing-account directory, so we can see how many are already
-        // clients (→ link) vs new (→ Lead) before deciding where to move them.
-        async function erCheckRejectedDomains() {
+        // Layer 1: resolve every contact's existing Zoho Account (email domain →
+        // company domain → name) so matched people LINK to what we already have
+        // instead of being rejected or duplicated. Merges the matched account
+        // ids back into the rows, refreshes the badges, and shows the summary.
+        async function erResolveExistingAccounts() {
             var data = window._preflightLastResult;
             if (!data || !Array.isArray(data.rows)) { alert('Run a Preflight check first.'); return; }
-            var rows = data.rows.map(_pfToSPRow);
-            var btn = document.getElementById('spCheckRejBtn');
+            var btn = document.getElementById('spResolveBtn');
             var box = document.getElementById('spRejResult');
             var orig = btn ? btn.innerHTML : '';
-            if (btn) { btn.disabled = true; btn.innerHTML = 'Checking…'; }
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Resolving…'; }
             try {
-                var res = await fetch('/api/duplicates/preflight/rejected-domain-check', {
+                var rows = data.rows.map(_pfToSPRow);
+                var res = await fetch('/api/duplicates/preflight/resolve-existing-accounts', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ rows: rows }),
                 });
                 var resp = await res.json();
                 if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
-                var ex = resp.existing_client || {}, nw = resp.new_company || {};
-                var rowsHtml = function (list, kind) {
-                    return (list || []).map(function (e) {
-                        return '<tr class="border-b border-gray-100">'
-                            + '<td class="pr-2">' + escapeHtml(e.domain) + '</td>'
-                            + '<td class="pr-2 text-gray-600">' + (e.contacts || 0) + '</td>'
-                            + (kind === 'ex' ? '<td class="pr-2 text-emerald-700">acct ' + escapeHtml(String(e.account_zoho_id || '')) + '</td>' : '<td class="pr-2 text-gray-400">—</td>')
-                            + '<td class="text-gray-500">' + escapeHtml(e.sample || '') + '</td>'
-                            + '</tr>';
-                    }).join('');
-                };
+                // Merge matched account ids back into the source rows (by row_index)
+                // so the badges AND the subsequent push both use them.
+                var byIdx = {};
+                (resp.matches || []).forEach(function (mm) { byIdx[mm.row_index] = mm; });
+                data.rows.forEach(function (r, i) {
+                    var idx = (r.row_index != null ? r.row_index : i);
+                    if (byIdx[idx]) {
+                        r.matched_account_zoho_id = byIdx[idx].matched_account_zoho_id;
+                        if (r.input) r.input.matched_account_zoho_id = byIdx[idx].matched_account_zoho_id;
+                    }
+                });
+                _pfRefreshStructuredPushCounts(data.rows);
+                window._pfResolved = true;
+                var v = resp.by_via || {};
                 if (box) {
                     box.classList.remove('hidden');
                     box.innerHTML = ''
-                        + '<div class="font-semibold text-gray-800 mb-1">Rejected contacts: ' + (resp.rejected_total || 0) + ' — checked ' + (resp.checked_domains || 0) + ' real email domains</div>'
-                        + '<div class="mb-2"><span class="text-emerald-700 font-semibold">' + (ex.domains || 0) + '</span> domains are ALREADY clients (' + (ex.contacts || 0) + ' contacts → can LINK to existing account) · '
-                        + '<span class="text-indigo-700 font-semibold">' + (nw.domains || 0) + '</span> are NEW (' + (nw.contacts || 0) + ' contacts → Lead / new account)</div>'
-                        + (ex.list && ex.list.length ? '<details open class="mb-1"><summary class="cursor-pointer text-emerald-700 font-medium">Existing clients (' + (ex.domains || 0) + ')</summary><table class="text-[11px] w-full mt-1">' + rowsHtml(ex.list, 'ex') + '</table></details>' : '')
-                        + (nw.list && nw.list.length ? '<details class="mb-1"><summary class="cursor-pointer text-indigo-700 font-medium">New companies (' + (nw.domains || 0) + ')</summary><table class="text-[11px] w-full mt-1">' + rowsHtml(nw.list, 'nw') + '</table></details>' : '');
+                        + '<div class="font-semibold text-emerald-800 mb-1">✓ Resolved existing accounts</div>'
+                        + '<div><span class="text-emerald-700 font-semibold">' + (resp.matched || 0) + '</span> of ' + (resp.total || 0) + ' contacts matched an existing account → they LINK (Action 1), never rejected or duplicated.</div>'
+                        + '<div class="text-gray-600 mt-1">Matched via — email domain: ' + (v.email_domain || 0) + ' · company domain: ' + (v.row_domain || 0) + ' · company name: ' + (v.company_name || 0) + '</div>'
+                        + '<div class="text-gray-500 mt-1">' + (resp.unmatched || 0) + ' unmatched → new account / lead / reject per the rules. Badges above are updated.</div>';
                 }
             } catch (e) {
-                if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Check failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
+                if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Resolve failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }

@@ -53,6 +53,47 @@ function buildOtherContactsDescription(
   return `Primary contact: ${label(primary, "(unnamed contact)")}. Other contact(s) on this account: ${othersText}.`;
 }
 
+// Layer 1 of the push resolution ladder: for each row, resolve an EXISTING
+// Zoho Account by the contact's real EMAIL domain first (the reliable employer
+// signal), then the row's own domain, then its company name. Sets
+// matched_account_zoho_id so the planner routes matched contacts to A1 (LINK to
+// existing) instead of creating a new account or rejecting them — guaranteeing
+// a person who belongs to an account we already have is never lost. Lookups are
+// deduped per key. Rows that already carry a matched id are left untouched.
+async function enrichRowsWithExistingAccounts(
+  spRows: any[],
+): Promise<{ rows: any[]; via: Map<number, string> }> {
+  const { getAccountZohoIdByDomainOrName } = await import("../../utils/duplicateRadarDatabase");
+  const { realDomainRoot } = await import("../../utils/preflightStructuredPush");
+  const cache = new Map<string, string | null>();
+  const lookup = async (domain: string, name: string): Promise<string | null> => {
+    const key = String(domain || "").toLowerCase() + "||" + String(name || "").toLowerCase();
+    if (cache.has(key)) return cache.get(key) as string | null;
+    const id = await getAccountZohoIdByDomainOrName(domain, name);
+    cache.set(key, id);
+    return id;
+  };
+  const via = new Map<number, string>();
+  const rows: any[] = [];
+  for (const r of spRows) {
+    if (String(r.matched_account_zoho_id || "").trim()) {
+      via.set(r.row_index, "preset");
+      rows.push(r);
+      continue;
+    }
+    const emailDom = realDomainRoot(r.email);
+    const rowDom = realDomainRoot(r.domain);
+    let id: string | null = null;
+    let matchedVia = "";
+    if (emailDom) { id = await lookup(emailDom, ""); if (id) matchedVia = "email_domain"; }
+    if (!id && rowDom) { id = await lookup(rowDom, ""); if (id) matchedVia = "row_domain"; }
+    if (!id && String(r.company || "").trim().length >= 3) { id = await lookup("", r.company); if (id) matchedVia = "company_name"; }
+    if (id) { via.set(r.row_index, matchedVia); rows.push({ ...r, matched_account_zoho_id: id }); }
+    else rows.push(r);
+  }
+  return { rows, via };
+}
+
 // Parse the shared Advanced Filters query params used by the per-tab record
 // endpoints (leads/deals/contacts/accounts). The Module filter is intentionally
 // omitted: each record tab already pins its own module, so module selection is
@@ -8906,7 +8947,11 @@ export const duplicateRadarRoutes = [
             lifecycle_state: r.lifecycle_state != null ? String(r.lifecycle_state) : null,
           }));
 
-          const plan = buildStructuredPushPlan(action, spRows, { count, offset });
+          // Layer 1: resolve existing accounts (email domain → row domain →
+          // name) BEFORE planning, so matched contacts route to A1 (link) and
+          // are never rejected or duplicated as new accounts.
+          const { rows: enrichedRows } = await enrichRowsWithExistingAccounts(spRows);
+          const plan = buildStructuredPushPlan(action, enrichedRows, { count, offset });
           const DEAL = PREFLIGHT_DEAL_TARGET;
           const LEAD = PREFLIGHT_LEAD_TARGET;
 
@@ -9400,13 +9445,13 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // READ-ONLY. For the contacts the domain-consistency router REJECTS
-    // (corporate email contradicting / at an unverifiable company), check
-    // each one's EMAIL domain against the existing-account directory — the
-    // reliable "is this person's real employer already a client?" signal the
-    // row's (wrong) company label could not answer. No writes. Body: { rows }.
-    // Returns the split: existing-client domains (→ link) vs new (→ Lead).
-    path: "/api/duplicates/preflight/rejected-domain-check",
+    // READ-ONLY. Layer 1 of the resolution ladder for the WHOLE upload: resolve
+    // each contact's existing Zoho Account by EMAIL domain → row domain →
+    // company name (the email-domain check is the new signal the import gate
+    // never ran). Returns per-row matched_account_zoho_id + matched_via and a
+    // summary, so the client can enrich its rows, refresh the action badges,
+    // and send the enriched rows to the push. No writes. Body: { rows }.
+    path: "/api/duplicates/preflight/resolve-existing-accounts",
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -9421,74 +9466,42 @@ export const duplicateRadarRoutes = [
           const rows: any[] = Array.isArray(body?.rows) ? body.rows : [];
           if (rows.length === 0) return c.json({ error: "rows array required" }, 400);
 
-          const { routeContactsByDomainConsistency, realDomainRoot } = await import(
-            "../../utils/preflightStructuredPush"
-          );
-          const { getAccountZohoIdByDomainOrName } = await import(
-            "../../utils/duplicateRadarDatabase"
-          );
-
           const spRows = rows.map((r: any, idx: number) => ({
             row_index: typeof r.row_index === "number" ? r.row_index : idx,
             company: String(r.company ?? r.input?.company_name ?? r.company_name ?? ""),
             domain: String(r.domain ?? r.input?.domain ?? ""),
             email: String(r.email ?? ""),
-            phone: String(r.phone ?? ""),
-            contact_name: String(r.contact_name ?? r.input?.contact_name ?? ""),
-            title: String(r.title ?? r.input?.title ?? ""),
-            verdict: String(r.verdict ?? ""),
-            cluster_id: r.cluster_id != null ? Number(r.cluster_id) : null,
-            matched_account_zoho_id: null,
-            lifecycle_state: r.lifecycle_state != null ? String(r.lifecycle_state) : null,
+            matched_account_zoho_id: (r.matched_account_zoho_id ?? r.input?.matched_account_zoho_id) != null
+              ? String(r.matched_account_zoho_id ?? r.input?.matched_account_zoho_id)
+              : null,
           }));
 
-          const routed = routeContactsByDomainConsistency(spRows);
-          const rejected = routed.filter(r => r.route === "reject");
+          const { rows: enriched, via } = await enrichRowsWithExistingAccounts(spRows);
 
-          // Group rejected contacts by their REAL email domain (true employer).
-          const byDomain = new Map<string, typeof rejected>();
-          for (const r of rejected) {
-            const d = realDomainRoot(r.email);
-            if (!d) continue; // no real email domain to check
-            const arr = byDomain.get(d) || [];
-            if (!byDomain.has(d)) byDomain.set(d, arr);
-            arr.push(r);
-          }
+          // Per-row matches (only the matched ones — keeps payload small).
+          const matches = enriched
+            .filter(r => String(r.matched_account_zoho_id || "").trim())
+            .map(r => ({
+              row_index: r.row_index,
+              matched_account_zoho_id: String(r.matched_account_zoho_id),
+              matched_via: via.get(r.row_index) || "unknown",
+            }));
 
-          // One account lookup per DISTINCT domain (fast, cached in the map).
-          const existing: Array<{ domain: string; account_zoho_id: string; contacts: number; sample: string }> = [];
-          const fresh: Array<{ domain: string; contacts: number; sample: string }> = [];
-          for (const [dom, contacts] of byDomain) {
-            const accId = await getAccountZohoIdByDomainOrName(dom, "");
-            const sample = `${contacts[0].contact_name || "(no name)"} <${contacts[0].email}>`;
-            if (accId) existing.push({ domain: dom, account_zoho_id: accId, contacts: contacts.length, sample });
-            else fresh.push({ domain: dom, contacts: contacts.length, sample });
-          }
-          existing.sort((a, b) => b.contacts - a.contacts);
-          fresh.sort((a, b) => b.contacts - a.contacts);
-
-          const existingContacts = existing.reduce((n, e) => n + e.contacts, 0);
-          const freshContacts = fresh.reduce((n, e) => n + e.contacts, 0);
+          const byVia: Record<string, number> = {};
+          for (const m of matches) byVia[m.matched_via] = (byVia[m.matched_via] || 0) + 1;
 
           return c.json({
             success: true,
-            rejected_total: rejected.length,
-            checked_domains: byDomain.size,
-            existing_client: {
-              domains: existing.length,
-              contacts: existingContacts,
-              list: existing.slice(0, 200),
-            },
-            new_company: {
-              domains: fresh.length,
-              contacts: freshContacts,
-              list: fresh.slice(0, 200),
-            },
+            total: spRows.length,
+            matched: matches.length,
+            unmatched: spRows.length - matches.length,
+            by_via: byVia,
+            matches,
           });
         } catch (error: any) {
-          logger.error("Error in rejected-domain-check:", error);
+          logger.error("Error in resolve-existing-accounts:", error);
           return c.json(
-            { error: "Rejected-domain check failed — " + (error?.message || "unknown") },
+            { error: "Resolve existing accounts failed — " + (error?.message || "unknown") },
             500,
           );
         }

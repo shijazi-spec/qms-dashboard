@@ -72,12 +72,40 @@ assertEq(normalizeCompanyKey("", "Acme.com") === "acme.com", "falls back to doma
   const p = buildStructuredPushPlan(1, rows, {});
   assertEq(p.companies.length === 1 && p.companies[0].clusterId === null, "A1 picks churned company even without cluster_id");
 }
-// A1 ignores a non-churned matched row (it's CRM-matched so account-routed,
-// but not churned → excluded from A1; picked up by A2/A3 instead).
+// A1 ignores a genuinely-new, non-matched company (no existing account, not
+// churned, no cluster) — that belongs in A2/A3, not A1.
 {
-  const rows = [mk({ row_index: 1, company: "Active Co", email: "a@x.co", verdict: "block", cluster_id: 5, lifecycle_state: "onboarding" })];
+  const rows = [mk({ row_index: 1, company: "New Co", domain: "newco.co", email: "a@newco.co", verdict: "pass" })];
   const p = buildStructuredPushPlan(1, rows, {});
-  assertEq(p.companies.length === 0, "A1 skips non-churned company");
+  assertEq(p.companies.length === 0, "A1 skips a non-matched new company");
+}
+// A1 LINKS a contact that matched an existing account (matched_account_zoho_id),
+// grouped by the resolved account id.
+{
+  const rows = [mk({ row_index: 1, company: "Whatever Label", domain: "x.co", email: "a@riyadbank.com", matched_account_zoho_id: "ACC1" })];
+  const p = buildStructuredPushPlan(1, rows, {});
+  assertEq(p.companies.length === 1 && p.companies[0].companyKey === "ACC1", "A1 links a matched contact, keyed by account id");
+}
+// Two contacts under ONE wrong label but matched to DIFFERENT accounts → two
+// separate A1 links (never merged under the bad label).
+{
+  const rows = [
+    mk({ row_index: 1, company: "Maersk", domain: "maersk.com", email: "a@atkinsrealis.com", matched_account_zoho_id: "ACC_A" }),
+    mk({ row_index: 2, company: "Maersk", domain: "maersk.com", email: "b@slb.com", matched_account_zoho_id: "ACC_B" }),
+  ];
+  const p = buildStructuredPushPlan(1, rows, {});
+  assertEq(p.companies.length === 2, "A1 splits same-label contacts matched to different accounts");
+}
+// Matched + unmatched under one label SPLIT: matched → A1, new → A3.
+{
+  const rows = [
+    mk({ row_index: 1, company: "New Startup", domain: "newstartup.com", email: "a@riyadbank.com", matched_account_zoho_id: "ACC1" }),
+    mk({ row_index: 2, company: "New Startup", domain: "newstartup.com", email: "b@newstartup.com" }),
+  ];
+  const a1 = buildStructuredPushPlan(1, rows, {});
+  assertEq(a1.companies.length === 1 && a1.companies[0].companyKey === "ACC1" && a1.companies[0].contacts.length === 1, "ladder: matched contact → A1 (link)");
+  const a3 = buildStructuredPushPlan(3, rows, {});
+  assertEq(a3.companies.length === 1 && a3.companies[0].companyName === "New Startup" && a3.companies[0].contacts.length === 1, "ladder: unmatched colleague → A3 (new)");
 }
 // A2 — new company with 2 contacts → one company, 2 contacts
 {

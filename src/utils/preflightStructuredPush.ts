@@ -244,17 +244,24 @@ export function buildStructuredPushPlan(
     .filter(r => r.route === "reject")
     .forEach(r => skipped.push({ row_index: r.row_index, reason: r.route_reason }));
 
-  const groups = groupByCompany(accountRows);
+  // The matched/unmatched split is at the ROW level, not the group level: a
+  // contact that matches an existing account (Layer 1) links to THAT account
+  // even if a colleague on the same (wrong) label is genuinely new. This is why
+  // two people under one bad label — one @riyadbank.com (existing), one
+  // @newstartup.com (new) — correctly split: the first links to Riyad Bank
+  // (A1), the second opens a new "New Startup" account (A3).
+  const isRowExistingMatch = (r: SPRow) =>
+    !!String(r.matched_account_zoho_id || "").trim() ||
+    r.lifecycle_state === "termination_old" ||
+    r.cluster_id != null;
 
-  // Churned PAST cool-off = re-engage under the existing Account. The account is
-  // resolved by the endpoint from cluster_id when present, else by domain/name
-  // (basic-mode preflight matches churned clients via the CS directory and sets
-  // NO cluster_id — so requiring cluster_id here made this action always empty).
-  const isChurnedMatched = (g: SPCompany) =>
-    g.contacts.some(r => r.lifecycle_state === "termination_old");
   const isNewPass = (g: SPCompany) =>
     g.contacts.every(r => r.cluster_id == null) && g.contacts.every(r => r.verdict === "pass");
   const contactRows = (g: SPCompany) => g.contacts.filter(hasContact);
+
+  // A1 rows link to EXISTING accounts; A2/A3 rows open NEW accounts.
+  const matchedRows = accountRows.filter(isRowExistingMatch);
+  const newGroups = groupByCompany(accountRows.filter(r => !isRowExistingMatch(r)));
 
   // Every action pushes ALL its eligible items in one request, which fires one
   // sequential Zoho Contact_Roles PUT per contact — a big batch (~200 contacts)
@@ -266,7 +273,25 @@ export function buildStructuredPushPlan(
     sliceCount > 0 ? arr.slice(sliceOffset, sliceOffset + sliceCount) : arr;
 
   if (action === 1) {
-    const eligible = groups.filter(isChurnedMatched);
+    // Group A1 contacts by their RESOLVED ACCOUNT (not the label), so contacts
+    // linking to the same account merge and contacts at different real accounts
+    // stay separate even under one shared bad label. Rows with no id yet
+    // (churned in basic mode) fall back to the company key — the endpoint
+    // resolves their account from domain/name.
+    const byAcc = new Map<string, SPCompany>();
+    for (const r of matchedRows) {
+      const key = String(r.matched_account_zoho_id || "").trim() || ("name:" + normalizeCompanyKey(r.company, r.domain));
+      let grp = byAcc.get(key);
+      if (!grp) {
+        grp = { companyKey: key, companyName: r.company || r.domain || key, domain: r.domain || "", clusterId: r.cluster_id ?? null, contacts: [] };
+        byAcc.set(key, grp);
+      }
+      if (r.cluster_id != null && grp.clusterId == null) grp.clusterId = r.cluster_id;
+      grp.contacts.push(r);
+    }
+    const eligible = Array.from(byAcc.values()).sort(
+      (a, b) => Math.min(...a.contacts.map(c => c.row_index)) - Math.min(...b.contacts.map(c => c.row_index)),
+    );
     const companies = applySlice(eligible);
     return {
       action,
@@ -279,8 +304,8 @@ export function buildStructuredPushPlan(
   }
 
   if (action === 2) {
-    const eligible = groups
-      .filter(g => !isChurnedMatched(g) && isNewPass(g) && contactRows(g).length >= 2)
+    const eligible = newGroups
+      .filter(g => isNewPass(g) && contactRows(g).length >= 2)
       .map(g => ({ ...g, contacts: contactRows(g) }));
     const companies = applySlice(eligible);
     return {
@@ -294,8 +319,8 @@ export function buildStructuredPushPlan(
   }
 
   if (action === 3) {
-    const eligible = groups
-      .filter(g => !isChurnedMatched(g) && isNewPass(g) && contactRows(g).length === 1)
+    const eligible = newGroups
+      .filter(g => isNewPass(g) && contactRows(g).length === 1)
       .map(g => ({ ...g, contacts: contactRows(g) }));
     const companies = applySlice(eligible);
     return {

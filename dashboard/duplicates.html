@@ -1342,7 +1342,7 @@
                 </div>
                 <div class="flex items-center flex-wrap gap-2 mt-2">
                     <p id="spRejectedNote" class="text-[11px] text-rose-600 flex-1 min-w-[10rem]"></p>
-                    <button data-on-click="erCheckRejectedDomains" id="spCheckRejBtn" data-testid="button-sp-check-rejected" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50">Check where rejected can go</button>
+                    <button data-on-click="erResolveExistingAccounts" id="spResolveBtn" data-testid="button-sp-resolve" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50">① Resolve existing accounts</button>
                 </div>
                 <div id="spRejResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-72 overflow-y-auto"></div>
                 <p class="text-[11px] text-gray-500 mt-1">Contacts are verified by email domain before filing under an Account: a corporate email at a different company than its label is <strong>rejected</strong>; free-mail / unverifiable contacts go to <strong>Leads</strong> (action 4). Each action pushes in slices — set <em>size</em> per click; <em>from</em> auto-advances after a real push. 0 = all.</p>
@@ -2067,7 +2067,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=35"></script>
+    <script src="/js/duplicates-app.js?v=36"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
