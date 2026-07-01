@@ -1297,13 +1297,20 @@
                         <button data-on-click="erStructuredPush" data-args="[2]" id="spBtn-2" data-testid="button-sp-2" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700"><span data-i18n="pf_sp_push">Push</span></button>
                         <div id="spResult-2" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
                     </div>
-                    <!-- A3 — first N single-contact new companies → full structure -->
+                    <!-- A3 — single-contact new companies → full structure -->
                     <div class="flex flex-wrap items-center gap-2 py-2">
                         <div class="flex-1 min-w-[12rem]">
-                            <span class="text-xs font-medium text-gray-800" data-i18n="pf_sp_a3">New Account + Deal + Contact (first N)</span>
-                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">PASS remaining: <span id="spCount-3">0</span></span>
+                            <span class="text-xs font-medium text-gray-800" data-i18n="pf_sp_a3">New Account + Deal + Contact (single-contact)</span>
+                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">(<span id="spCount-3">0</span>)</span>
                         </div>
-                        <input type="number" id="spNum-3" min="0" value="0" class="w-20 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-num-3" aria-label="First N companies for full structure" />
+                        <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Batch size — how many companies to push this click. 0 = all.">
+                            <span>size</span>
+                            <input type="number" id="spNum-3" min="0" value="20" class="w-16 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-num-3" aria-label="Batch size for single-contact companies" />
+                        </label>
+                        <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Offset — skip the first N companies (auto-advances after each real push).">
+                            <span>from</span>
+                            <input type="number" id="spOff-3" min="0" value="0" class="w-16 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-off-3" aria-label="Offset for single-contact companies" />
+                        </label>
                         <label class="flex items-center gap-1 text-xs text-gray-700">
                             <input type="checkbox" id="spDry-3" checked data-testid="checkbox-sp-dry-3" />
                             <span data-i18n="pf_sp_dry">Dry-run</span>
@@ -1311,13 +1318,20 @@
                         <button data-on-click="erStructuredPush" data-args="[3]" id="spBtn-3" data-testid="button-sp-3" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700"><span data-i18n="pf_sp_push">Push</span></button>
                         <div id="spResult-3" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
                     </div>
-                    <!-- A4 — next M single-contact new companies → Leads (starts after A3's slice) -->
+                    <!-- A4 — lead-routed contacts (free-mail / unverifiable) → Leads -->
                     <div class="flex flex-wrap items-center gap-2 py-2">
                         <div class="flex-1 min-w-[12rem]">
-                            <span class="text-xs font-medium text-gray-800" data-i18n="pf_sp_a4">Push as Leads (next M)</span>
-                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">PASS remaining: <span id="spCount-4">0</span></span>
+                            <span class="text-xs font-medium text-gray-800" data-i18n="pf_sp_a4">Push as Leads (unverifiable contacts)</span>
+                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">(<span id="spCount-4">0</span>)</span>
                         </div>
-                        <input type="number" id="spNum-4" min="0" value="0" class="w-20 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-num-4" aria-label="Next M companies as Leads (after the first N)" />
+                        <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Batch size — how many leads to push this click. 0 = all.">
+                            <span>size</span>
+                            <input type="number" id="spNum-4" min="0" value="20" class="w-16 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-num-4" aria-label="Batch size for leads" />
+                        </label>
+                        <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Offset — skip the first N leads (auto-advances after each real push).">
+                            <span>from</span>
+                            <input type="number" id="spOff-4" min="0" value="0" class="w-16 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-off-4" aria-label="Offset for leads" />
+                        </label>
                         <label class="flex items-center gap-1 text-xs text-gray-700">
                             <input type="checkbox" id="spDry-4" checked data-testid="checkbox-sp-dry-4" />
                             <span data-i18n="pf_sp_dry">Dry-run</span>
@@ -1326,7 +1340,8 @@
                         <div id="spResult-4" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
                     </div>
                 </div>
-                <p class="text-[11px] text-gray-500 mt-2">Rows 3 &amp; 4 draw from the SAME single-contact PASS pool — action 3 takes the first <em>N</em>, action 4 the next <em>M</em> after that slice. Leave a number at 0 to skip.</p>
+                <p id="spRejectedNote" class="text-[11px] text-rose-600 mt-2"></p>
+                <p class="text-[11px] text-gray-500 mt-1">Contacts are verified by email domain before filing under an Account: a corporate email at a different company than its label is <strong>rejected</strong>; free-mail / unverifiable contacts go to <strong>Leads</strong> (action 4). Each action pushes in slices — set <em>size</em> per click; <em>from</em> auto-advances after a real push. 0 = all.</p>
             </div>
 
             <!-- Executive headline strip — hidden until a run completes. -->
@@ -2048,7 +2063,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=33"></script>
+    <script src="/js/duplicates-app.js?v=34"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

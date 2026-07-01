@@ -72,11 +72,12 @@ assertEq(normalizeCompanyKey("", "Acme.com") === "acme.com", "falls back to doma
   const p = buildStructuredPushPlan(1, rows, {});
   assertEq(p.companies.length === 1 && p.companies[0].clusterId === null, "A1 picks churned company even without cluster_id");
 }
-// A1 ignores a non-churned matched row
+// A1 ignores a non-churned matched row (it's CRM-matched so account-routed,
+// but not churned → excluded from A1; picked up by A2/A3 instead).
 {
   const rows = [mk({ row_index: 1, company: "Active Co", email: "a@x.co", verdict: "block", cluster_id: 5, lifecycle_state: "onboarding" })];
   const p = buildStructuredPushPlan(1, rows, {});
-  assertEq(p.companies.length === 0 && p.skipped.length === 1, "A1 skips active client");
+  assertEq(p.companies.length === 0, "A1 skips non-churned company");
 }
 // A2 — new company with 2 contacts → one company, 2 contacts
 {
@@ -93,17 +94,33 @@ assertEq(normalizeCompanyKey("", "Acme.com") === "acme.com", "falls back to doma
   const p = buildStructuredPushPlan(2, rows, {});
   assertEq(p.companies.length === 0, "A2 excludes single-contact company");
 }
-// A3/A4 — single-contact new companies, top-down split by count
+// A3 — single-contact new companies (verified by their own corporate email),
+// sliced by count/offset.
 {
   const rows = [
-    mk({ row_index: 1, company: "S1", email: "a@s1.co" }),
-    mk({ row_index: 2, company: "S2", email: "a@s2.co" }),
-    mk({ row_index: 3, company: "S3", email: "a@s3.co" }),
+    mk({ row_index: 1, company: "S1", domain: "s1.co", email: "a@s1.co" }),
+    mk({ row_index: 2, company: "S2", domain: "s2.co", email: "a@s2.co" }),
+    mk({ row_index: 3, company: "S3", domain: "s3.co", email: "a@s3.co" }),
   ];
   const a3 = buildStructuredPushPlan(3, rows, { count: 2 });
   assertEq(a3.companies.length === 2 && a3.companies[0].companyName === "S1" && a3.companies[1].companyName === "S2", "A3 takes first 2");
-  const a4 = buildStructuredPushPlan(4, rows, { count: 1, offset: 2 });
-  assertEq(a4.leads.length === 1 && a4.leads[0].company === "S3", "A4 takes the next 1 after A3's first 2");
+  const a3b = buildStructuredPushPlan(3, rows, { count: 2, offset: 2 });
+  assertEq(a3b.companies.length === 1 && a3b.companies[0].companyName === "S3", "A3 offset 2 -> S3");
+}
+// A4 — lead-routed rows only (free-mail / phone-only at unverifiable
+// companies), each an individual Lead, sliced by count/offset.
+{
+  const rows = [
+    mk({ row_index: 1, company: "LeadCo1", phone: "+966500000001" }),          // no email, no domain -> lead
+    mk({ row_index: 2, company: "LeadCo2", email: "someone@gmail.com" }),        // free-mail, unverifiable -> lead
+    mk({ row_index: 3, company: "Verified", domain: "ver.co", email: "a@ver.co" }), // account-routed, NOT a lead
+  ];
+  const a4all = buildStructuredPushPlan(4, rows, {});
+  assertEq(a4all.leads.length === 2, "A4 = both lead-routed rows (verified account row excluded)");
+  const a4slice = buildStructuredPushPlan(4, rows, { count: 1, offset: 0 });
+  assertEq(a4slice.leads.length === 1 && a4slice.leads[0].company === "LeadCo1", "A4 slice: first lead");
+  const a4next = buildStructuredPushPlan(4, rows, { count: 1, offset: 1 });
+  assertEq(a4next.leads.length === 1 && a4next.leads[0].company === "LeadCo2", "A4 slice: next lead");
 }
 console.log("buildStructuredPushPlan ok");
 
@@ -196,5 +213,65 @@ console.log("websiteFromDomain ok");
   assertEq(a2Next.companies.length === 2 && a2Next.companies[0].companyName === "M2", "A2 slice: offset 2 -> M2,M3");
 }
 console.log("A1/A2 slicing ok");
+
+// ---------------------------------------------------------------------------
+// routeContactsByDomainConsistency — the domain-consistency router.
+// ---------------------------------------------------------------------------
+import { routeContactsByDomainConsistency } from "./preflightStructuredPush";
+{
+  const routeOf = (rows: any[]) => {
+    const m: Record<number, string> = {};
+    routeContactsByDomainConsistency(rows).forEach(r => { m[r.row_index] = r.route; });
+    return m;
+  };
+
+  // Verified company (one email matches the domain): matching email + phone-only
+  // colleague are kept; a contradicting corporate email is rejected.
+  {
+    const rows = [
+      mk({ row_index: 1, company: "Acme", domain: "acme.com", email: "ceo@acme.com" }),
+      mk({ row_index: 2, company: "Acme", domain: "acme.com", phone: "+966500000000" }),
+      mk({ row_index: 3, company: "Acme", domain: "acme.com", email: "x@other.com" }),
+    ];
+    const r = routeOf(rows);
+    assertEq(r[1] === "account", "route: email matches company domain -> account");
+    assertEq(r[2] === "account", "route: phone-only colleague of verified company -> account");
+    assertEq(r[3] === "reject", "route: contradicting corporate email -> reject");
+  }
+
+  // The Maersk case: two corporate emails, NEITHER matching the company domain
+  // -> unverifiable company -> both rejected (no false Account created).
+  {
+    const rows = [
+      mk({ row_index: 1, company: "Maersk", domain: "maersk.com", email: "a@atkinsrealis.com" }),
+      mk({ row_index: 2, company: "Maersk", domain: "maersk.com", email: "b@slb.com" }),
+    ];
+    const r = routeOf(rows);
+    assertEq(r[1] === "reject" && r[2] === "reject", "route: contradicting emails at unverified company -> reject");
+  }
+
+  // Free-mail and no-email at an unverifiable company -> lead.
+  {
+    const rows = [
+      mk({ row_index: 1, company: "Foo", domain: "#n", email: "person@gmail.com" }),
+      mk({ row_index: 2, company: "Bar", domain: "#n", phone: "+966500000000" }),
+    ];
+    const r = routeOf(rows);
+    assertEq(r[1] === "lead", "route: free-mail at unverifiable company -> lead");
+    assertEq(r[2] === "lead", "route: phone-only at unverifiable company -> lead");
+  }
+
+  // CRM-matched company (churned / cluster / matched account) is trusted: ALL
+  // its contacts stay account-routed even if an email domain differs.
+  {
+    const rows = [
+      mk({ row_index: 1, company: "Churn", domain: "churn.co", email: "a@somewhere-else.com", lifecycle_state: "termination_old" }),
+      mk({ row_index: 2, company: "Churn", domain: "churn.co", phone: "+966500000000" }),
+    ];
+    const r = routeOf(rows);
+    assertEq(r[1] === "account" && r[2] === "account", "route: CRM-matched (churned) company keeps all contacts");
+  }
+}
+console.log("routeContactsByDomainConsistency ok");
 
 if (failed > 0) { console.error(`\n${failed} test(s) FAILED`); process.exit(1); }

@@ -2,8 +2,8 @@
   "pf_sp_title": "Structured push to Zoho",
   "pf_sp_a1": "Re-engage churned (under existing account)",
   "pf_sp_a2": "Deal + contacts: multi-contact companies",
-  "pf_sp_a3": "New Account + Deal + Contact (first N)",
-  "pf_sp_a4": "Push as Leads (next M)",
+  "pf_sp_a3": "New Account + Deal + Contact (single-contact)",
+  "pf_sp_a4": "Push as Leads (unverifiable contacts)",
   "pf_sp_push": "Push",
   "pf_sp_dry": "Dry-run",
   "nav": {

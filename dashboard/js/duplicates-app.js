@@ -11270,9 +11270,67 @@
             }
             return Array.from(map.values());
         }
-        // Returns { a1, a2, singleNew } — singleNew is the SHARED A3/A4 pool size.
-        function _pfCountActions(spRows) {
+        // --- Domain-consistency routing (mirror of preflightStructuredPush.ts
+        //     routeContactsByDomainConsistency, so the badges match the server).
+        var _PF_FREE_MAIL = { '#n':1,'n/a':1,'na':1,'none':1,'null':1,'unknown':1,'gmail':1,'hotmail':1,'yahoo':1,'outlook':1,'icloud':1,'aol':1,'live':1,'msn':1,'proton':1,'protonmail':1,'hotmai':1,'gmai':1,'gmail.com':1,'hotmail.com':1,'yahoo.com':1,'outlook.com':1,'icloud.com':1,'aol.com':1,'live.com':1,'msn.com':1,'protonmail.com':1,'proton.me':1 };
+        function _pfRealDomainRoot(value) {
+            var d = String(value || '').trim().toLowerCase();
+            if (!d) return null;
+            d = d.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+            var at = d.split('@'); d = at[at.length - 1] || d;
+            d = d.replace(/\.$/, '');
+            if (!d || _PF_FREE_MAIL[d]) return null;
+            if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) return null;
+            return d;
+        }
+        function _pfMostCommon(vals) {
+            var counts = {}, order = [], i, v;
+            for (i = 0; i < vals.length; i++) { v = vals[i]; if (!v) continue; if (counts[v] == null) { order.push(v); counts[v] = 0; } counts[v]++; }
+            var best = null, bestN = 0;
+            for (i = 0; i < order.length; i++) { v = order[i]; if (counts[v] > bestN) { best = v; bestN = counts[v]; } }
+            return best;
+        }
+        // Returns [{ row, route }] with route in { 'account','lead','reject' }.
+        function _pfRouteContacts(spRows) {
             var groups = _pfGroupByCompany(spRows);
+            var meta = {};
+            for (var i = 0; i < groups.length; i++) {
+                var g = groups[i];
+                var domAnchor = _pfMostCommon(g.rows.map(function (r) { return _pfRealDomainRoot(r.domain); }));
+                var emlAnchor = _pfMostCommon(g.rows.map(function (r) { return _pfRealDomainRoot(r.email); }));
+                var anchor = domAnchor || emlAnchor;
+                var verified = !!anchor && g.rows.some(function (r) { return _pfRealDomainRoot(r.email) === anchor; });
+                var crm = g.rows.some(function (r) { return r.lifecycle_state === 'termination_old' || (r.matched_account_zoho_id && String(r.matched_account_zoho_id).trim()) || r.cluster_id != null; });
+                meta[g.key] = { anchor: anchor, verified: verified, crm: crm };
+            }
+            return spRows.map(function (r) {
+                var key = _pfNormCompanyKey(r.company, r.domain);
+                var m = meta[key] || { anchor: null, verified: false, crm: false };
+                var er = _pfRealDomainRoot(r.email);
+                var hasEmail = !!String(r.email || '').trim();
+                var route;
+                if (m.crm) route = 'account';
+                else if (m.verified) {
+                    if (er && er === m.anchor) route = 'account';
+                    else if (er) route = 'reject';
+                    else if (!hasEmail) route = 'account';
+                    else route = 'lead';
+                } else {
+                    route = er ? 'reject' : 'lead';
+                }
+                return { row: r, route: route };
+            });
+        }
+        // Returns { a1, a2, a3, a4, rejected } after routing.
+        function _pfCountActions(spRows) {
+            var routed = _pfRouteContacts(spRows);
+            var accountRows = [], a4 = 0, rejected = 0;
+            for (var k = 0; k < routed.length; k++) {
+                if (routed[k].route === 'account') accountRows.push(routed[k].row);
+                else if (routed[k].route === 'lead') a4++;
+                else rejected++;
+            }
+            var groups = _pfGroupByCompany(accountRows);
             var isChurnedMatched = function (g) {
                 return g.rows.some(function (r) { return r.lifecycle_state === 'termination_old'; });
             };
@@ -11283,17 +11341,17 @@
             var contactCount = function (g) {
                 return g.rows.filter(_pfRowHasContact).length;
             };
-            var a1 = 0, a2 = 0, singleNew = 0;
+            var a1 = 0, a2 = 0, a3 = 0;
             for (var i = 0; i < groups.length; i++) {
                 var g = groups[i];
                 if (isChurnedMatched(g)) { a1++; continue; }
                 if (isNewPass(g)) {
                     var cc = contactCount(g);
                     if (cc >= 2) a2++;
-                    else if (cc === 1) singleNew++;
+                    else if (cc === 1) a3++;
                 }
             }
-            return { a1: a1, a2: a2, singleNew: singleNew };
+            return { a1: a1, a2: a2, a3: a3, a4: a4, rejected: rejected };
         }
 
         // Refresh the four count badges + reveal the panel after a Preflight run.
@@ -11305,8 +11363,12 @@
             var set = function (id, n) { var el = document.getElementById(id); if (el) el.textContent = String(n); };
             set('spCount-1', c.a1);
             set('spCount-2', c.a2);
-            set('spCount-3', c.singleNew); // shared single-contact PASS pool
-            set('spCount-4', c.singleNew);
+            set('spCount-3', c.a3); // single-contact verified-account companies
+            set('spCount-4', c.a4); // lead-routed contacts
+            var rej = document.getElementById('spRejectedNote');
+            if (rej) rej.textContent = c.rejected
+                ? (c.rejected + ' contact(s) will be rejected — corporate email at a different company than its label.')
+                : '';
         }
 
         // Action handler — wired via data-on-click="erStructuredPush" data-args="[N]".
@@ -11316,20 +11378,11 @@
             if (!data || !Array.isArray(data.rows)) { alert('Run a Preflight check first.'); return; }
             var rows = data.rows.map(_pfToSPRow);
 
-            // A3 takes the first N; A4 takes the next M starting after A3's slice.
-            var num3 = parseInt((document.getElementById('spNum-3') || {}).value || '0', 10) || 0;
-            var num4 = parseInt((document.getElementById('spNum-4') || {}).value || '0', 10) || 0;
-            // A1/A2 push in operator-sized slices (size = count, from = offset)
-            // so a big batch doesn't exceed the gateway timeout.
-            var num1 = parseInt((document.getElementById('spNum-1') || {}).value || '0', 10) || 0;
-            var off1 = parseInt((document.getElementById('spOff-1') || {}).value || '0', 10) || 0;
-            var num2 = parseInt((document.getElementById('spNum-2') || {}).value || '0', 10) || 0;
-            var off2 = parseInt((document.getElementById('spOff-2') || {}).value || '0', 10) || 0;
-            var count = 0, offset = 0;
-            if (action === 1) { count = num1; offset = off1; }
-            else if (action === 2) { count = num2; offset = off2; }
-            else if (action === 3) { count = num3; offset = 0; }
-            else if (action === 4) { count = num4; offset = num3; }
+            // Every action pushes in operator-sized slices (size = count,
+            // from = offset) so a big batch doesn't exceed the gateway timeout.
+            var g = function (id) { return parseInt((document.getElementById(id) || {}).value || '0', 10) || 0; };
+            var count = g('spNum-' + action);
+            var offset = g('spOff-' + action);
 
             var dryRun = !!(document.getElementById('spDry-' + action) || {}).checked;
             var source = 'Preflight Structured Push — ' + new Date().toISOString().slice(0, 10);
@@ -11414,13 +11467,13 @@
                         var flLine = (action === 4)
                             ? ('Failed: ' + (fl.leads || 0))
                             : ('Failed: ' + ((fl.accounts || 0) + (fl.contacts || 0) + (fl.deals || 0)));
-                        // Auto-advance the A1/A2 offset by the SLICE SIZE (count),
-                        // not by records created — the eligible list is a stable
-                        // window, so moving by count steps cleanly to the next
-                        // slice and never re-creates a company already pushed
+                        // Auto-advance THIS action's offset by the SLICE SIZE
+                        // (count), not by records created — the eligible list is a
+                        // stable window, so moving by count steps cleanly to the
+                        // next slice and never re-creates an item already pushed
                         // (even when some rows in the slice were skipped/failed).
                         var nextOffset = offset + count;
-                        if ((action === 1 || action === 2) && count > 0) {
+                        if (count > 0) {
                             var offEl = document.getElementById('spOff-' + action);
                             if (offEl) offEl.value = String(nextOffset);
                         }
@@ -11429,7 +11482,7 @@
                             + '<div>' + crLine + '</div>'
                             + '<div>' + flLine + '</div>'
                             + '<div>Skipped: ' + (resp.skipped_count || 0) + '</div>'
-                            + ((action === 1 || action === 2) && count > 0 ? '<div class="mt-1 text-purple-700">Next batch starts at offset ' + nextOffset + '. Push again for the next ' + count + '.</div>' : '')
+                            + (count > 0 ? '<div class="mt-1 text-purple-700">Next batch starts at offset ' + nextOffset + '. Push again for the next ' + count + '.</div>' : '')
                             + '<div class="mt-1 text-gray-500">Audit-logged. Source: ' + escapeHtml(source) + '.</div>';
                     }
                 }
