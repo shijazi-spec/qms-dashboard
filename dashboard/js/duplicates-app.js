@@ -11371,6 +11371,51 @@
                 : '';
         }
 
+        // Read-only: check each REJECTED contact's email domain against the
+        // existing-account directory, so we can see how many are already
+        // clients (→ link) vs new (→ Lead) before deciding where to move them.
+        async function erCheckRejectedDomains() {
+            var data = window._preflightLastResult;
+            if (!data || !Array.isArray(data.rows)) { alert('Run a Preflight check first.'); return; }
+            var rows = data.rows.map(_pfToSPRow);
+            var btn = document.getElementById('spCheckRejBtn');
+            var box = document.getElementById('spRejResult');
+            var orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Checking…'; }
+            try {
+                var res = await fetch('/api/duplicates/preflight/rejected-domain-check', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rows: rows }),
+                });
+                var resp = await res.json();
+                if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
+                var ex = resp.existing_client || {}, nw = resp.new_company || {};
+                var rowsHtml = function (list, kind) {
+                    return (list || []).map(function (e) {
+                        return '<tr class="border-b border-gray-100">'
+                            + '<td class="pr-2">' + escapeHtml(e.domain) + '</td>'
+                            + '<td class="pr-2 text-gray-600">' + (e.contacts || 0) + '</td>'
+                            + (kind === 'ex' ? '<td class="pr-2 text-emerald-700">acct ' + escapeHtml(String(e.account_zoho_id || '')) + '</td>' : '<td class="pr-2 text-gray-400">—</td>')
+                            + '<td class="text-gray-500">' + escapeHtml(e.sample || '') + '</td>'
+                            + '</tr>';
+                    }).join('');
+                };
+                if (box) {
+                    box.classList.remove('hidden');
+                    box.innerHTML = ''
+                        + '<div class="font-semibold text-gray-800 mb-1">Rejected contacts: ' + (resp.rejected_total || 0) + ' — checked ' + (resp.checked_domains || 0) + ' real email domains</div>'
+                        + '<div class="mb-2"><span class="text-emerald-700 font-semibold">' + (ex.domains || 0) + '</span> domains are ALREADY clients (' + (ex.contacts || 0) + ' contacts → can LINK to existing account) · '
+                        + '<span class="text-indigo-700 font-semibold">' + (nw.domains || 0) + '</span> are NEW (' + (nw.contacts || 0) + ' contacts → Lead / new account)</div>'
+                        + (ex.list && ex.list.length ? '<details open class="mb-1"><summary class="cursor-pointer text-emerald-700 font-medium">Existing clients (' + (ex.domains || 0) + ')</summary><table class="text-[11px] w-full mt-1">' + rowsHtml(ex.list, 'ex') + '</table></details>' : '')
+                        + (nw.list && nw.list.length ? '<details class="mb-1"><summary class="cursor-pointer text-indigo-700 font-medium">New companies (' + (nw.domains || 0) + ')</summary><table class="text-[11px] w-full mt-1">' + rowsHtml(nw.list, 'nw') + '</table></details>' : '');
+                }
+            } catch (e) {
+                if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Check failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
         // Action handler — wired via data-on-click="erStructuredPush" data-args="[N]".
         async function erStructuredPush(action) {
             action = Number(action);

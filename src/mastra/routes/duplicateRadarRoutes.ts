@@ -9400,6 +9400,102 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // READ-ONLY. For the contacts the domain-consistency router REJECTS
+    // (corporate email contradicting / at an unverifiable company), check
+    // each one's EMAIL domain against the existing-account directory — the
+    // reliable "is this person's real employer already a client?" signal the
+    // row's (wrong) company label could not answer. No writes. Body: { rows }.
+    // Returns the split: existing-client domains (→ link) vs new (→ Lead).
+    path: "/api/duplicates/preflight/rejected-domain-check",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const body = await c.req.json().catch(() => ({}));
+          const rows: any[] = Array.isArray(body?.rows) ? body.rows : [];
+          if (rows.length === 0) return c.json({ error: "rows array required" }, 400);
+
+          const { routeContactsByDomainConsistency, realDomainRoot } = await import(
+            "../../utils/preflightStructuredPush"
+          );
+          const { getAccountZohoIdByDomainOrName } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+
+          const spRows = rows.map((r: any, idx: number) => ({
+            row_index: typeof r.row_index === "number" ? r.row_index : idx,
+            company: String(r.company ?? r.input?.company_name ?? r.company_name ?? ""),
+            domain: String(r.domain ?? r.input?.domain ?? ""),
+            email: String(r.email ?? ""),
+            phone: String(r.phone ?? ""),
+            contact_name: String(r.contact_name ?? r.input?.contact_name ?? ""),
+            title: String(r.title ?? r.input?.title ?? ""),
+            verdict: String(r.verdict ?? ""),
+            cluster_id: r.cluster_id != null ? Number(r.cluster_id) : null,
+            matched_account_zoho_id: null,
+            lifecycle_state: r.lifecycle_state != null ? String(r.lifecycle_state) : null,
+          }));
+
+          const routed = routeContactsByDomainConsistency(spRows);
+          const rejected = routed.filter(r => r.route === "reject");
+
+          // Group rejected contacts by their REAL email domain (true employer).
+          const byDomain = new Map<string, typeof rejected>();
+          for (const r of rejected) {
+            const d = realDomainRoot(r.email);
+            if (!d) continue; // no real email domain to check
+            const arr = byDomain.get(d) || [];
+            if (!byDomain.has(d)) byDomain.set(d, arr);
+            arr.push(r);
+          }
+
+          // One account lookup per DISTINCT domain (fast, cached in the map).
+          const existing: Array<{ domain: string; account_zoho_id: string; contacts: number; sample: string }> = [];
+          const fresh: Array<{ domain: string; contacts: number; sample: string }> = [];
+          for (const [dom, contacts] of byDomain) {
+            const accId = await getAccountZohoIdByDomainOrName(dom, "");
+            const sample = `${contacts[0].contact_name || "(no name)"} <${contacts[0].email}>`;
+            if (accId) existing.push({ domain: dom, account_zoho_id: accId, contacts: contacts.length, sample });
+            else fresh.push({ domain: dom, contacts: contacts.length, sample });
+          }
+          existing.sort((a, b) => b.contacts - a.contacts);
+          fresh.sort((a, b) => b.contacts - a.contacts);
+
+          const existingContacts = existing.reduce((n, e) => n + e.contacts, 0);
+          const freshContacts = fresh.reduce((n, e) => n + e.contacts, 0);
+
+          return c.json({
+            success: true,
+            rejected_total: rejected.length,
+            checked_domains: byDomain.size,
+            existing_client: {
+              domains: existing.length,
+              contacts: existingContacts,
+              list: existing.slice(0, 200),
+            },
+            new_company: {
+              domains: fresh.length,
+              contacts: freshContacts,
+              list: fresh.slice(0, 200),
+            },
+          });
+        } catch (error: any) {
+          logger.error("Error in rejected-domain-check:", error);
+          return c.json(
+            { error: "Rejected-domain check failed — " + (error?.message || "unknown") },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     // Formatted Excel export for the Preflight Check tab. Takes either a
     // PreflightResponse the client already rendered (preferred — no
     // re-run) or `rows` to re-run server-side. Returns an .xlsx with:
