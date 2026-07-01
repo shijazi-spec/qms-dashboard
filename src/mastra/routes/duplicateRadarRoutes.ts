@@ -8900,6 +8900,9 @@ export const duplicateRadarRoutes = [
             title: String(r.title ?? r.input?.title ?? ""),
             verdict: String(r.verdict ?? ""),
             cluster_id: r.cluster_id != null ? Number(r.cluster_id) : null,
+            matched_account_zoho_id: (r.matched_account_zoho_id ?? r.input?.matched_account_zoho_id) != null
+              ? String(r.matched_account_zoho_id ?? r.input?.matched_account_zoho_id)
+              : null,
             lifecycle_state: r.lifecycle_state != null ? String(r.lifecycle_state) : null,
           }));
 
@@ -8960,7 +8963,9 @@ export const duplicateRadarRoutes = [
               let sampleCo: (typeof plan.companies)[number] | null = null;
               let sampleAccId: string | null = null;
               for (const co of plan.companies) {
+                const matchedAcc = co.contacts.map(c => c.matched_account_zoho_id).find(Boolean) || null;
                 const accId =
+                  matchedAcc ??
                   (co.clusterId != null
                     ? await resolveAccForPreview(co.clusterId)
                     : null) ??
@@ -9130,7 +9135,9 @@ export const duplicateRadarRoutes = [
               // present, else by domain/name (basic-mode churned matches carry
               // no cluster_id).
               for (const co of plan.companies) {
+                const matchedAcc = co.contacts.map(c => c.matched_account_zoho_id).find(Boolean) || null;
                 const existingId =
+                  matchedAcc ??
                   (co.clusterId != null
                     ? await getAccountZohoIdByCluster(co.clusterId)
                     : null) ??

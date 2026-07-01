@@ -11245,6 +11245,7 @@
                 title: r.title || (r.input && r.input.title) || '',
                 verdict: r.verdict || '',
                 cluster_id: (r.cluster_id != null ? r.cluster_id : null),
+                matched_account_zoho_id: (r.matched_account_zoho_id || (r.input && r.input.matched_account_zoho_id) || null),
                 lifecycle_state: (r.lifecycle_state != null ? r.lifecycle_state : null),
             };
         }

@@ -128,6 +128,10 @@ export interface PreflightResultRow {
   title?: string | null;
   verdict: PreflightVerdict;
   cluster_id: number | null;
+  /** Zoho id of the existing Account the churn-check matched (from the CS
+   * directory). The re-engage-churned push attaches its Deal to THIS account
+   * — the exact one the check found — instead of re-looking it up. */
+  matched_account_zoho_id?: string | null;
   lifecycle_state:
     | "onboarding"
     | "adoption"
@@ -1809,6 +1813,10 @@ interface CsClientStatus {
   companyName: string | null;
   phase: string | null;
   lifecycleState: PreflightResultRow["lifecycle_state"];
+  /** Zoho id of the client's Account (from the matched CS deal's Account_Name).
+   * Lets the re-engage-churned push attach a Deal to the EXACT Account the
+   * check matched — no second, stricter lookup that could miss it. */
+  accountZohoId: string | null;
 }
 
 interface CsClientDirectory {
@@ -1908,6 +1916,7 @@ function _csStatusFromDeal(input: {
   govType: string | null;
   owner: string | null;
   companyName: string | null;
+  accountZohoId?: string | null;
   todayMs: number;
 }): CsClientStatus {
   const isGov = (input.govType || "").trim() !== "";
@@ -1934,6 +1943,7 @@ function _csStatusFromDeal(input: {
     companyName: (input.companyName || "").trim() || null,
     phase: (input.phase || "").trim() || null,
     lifecycleState,
+    accountZohoId: (input.accountZohoId || "").trim() || null,
   };
 }
 
@@ -1941,15 +1951,21 @@ function _csStatusFromDeal(input: {
  *  churned keep the most recent (smallest churnDays). */
 function _csMergeStatus(prev: CsClientStatus | undefined, next: CsClientStatus): CsClientStatus {
   if (!prev) return next;
-  if (prev.active && !next.active) return prev;
-  if (!prev.active && next.active) return next;
-  if (!prev.active && !next.active) {
+  let winner: CsClientStatus;
+  if (prev.active && !next.active) winner = prev;
+  else if (!prev.active && next.active) winner = next;
+  else if (!prev.active && !next.active) {
     const a = prev.churnDays ?? Number.MAX_SAFE_INTEGER;
     const b = next.churnDays ?? Number.MAX_SAFE_INTEGER;
-    return b < a ? next : prev;
+    winner = b < a ? next : prev;
+  } else {
+    // both active — keep whichever has more info (owner/phase)
+    winner = prev.csOwner || prev.phase ? prev : next;
   }
-  // both active — keep whichever has more info (owner/phase)
-  return prev.csOwner || prev.phase ? prev : next;
+  // Preserve a matched Account id from EITHER status — the winning status may
+  // have been built from a deal that lacked the Account_Name link.
+  const accountZohoId = winner.accountZohoId || prev.accountZohoId || next.accountZohoId || null;
+  return accountZohoId === winner.accountZohoId ? winner : { ...winner, accountZohoId };
 }
 
 let _csDirCache: CsClientDirectory | null = null;
@@ -2191,6 +2207,7 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
         (d.owner_name || "").toString().trim() ||
         null,
       companyName: (d.account_name || d.company_name || "").toString().trim(),
+      accountZohoId: (d.account_id || "").toString().trim() || null,
       todayMs,
     });
     // Index by the deal's company-name variants (Account_Name, Deal company),
@@ -3013,6 +3030,7 @@ async function runPreflightBasic(input: {
     let crmLinks: PreflightResultRow["crm_links"] = null;
     let matchedViaOut: PreflightResultRow["matched_via"] = null;
     let clusterIdOut: number | null = null;
+    let matchedAccountZohoIdOut: string | null = null;
     let sectorOut: PreflightResultRow["sector"] = null;
     let csOwnerOut: string | null = null;
     let churnDateOut: string | null = null;
@@ -3048,6 +3066,7 @@ async function runPreflightBasic(input: {
       churnDateOut = csStatus.churnDate;
       churnDaysOut = csStatus.churnDays;
       csPhaseOut = csStatus.phase;
+      matchedAccountZohoIdOut = csStatus.accountZohoId;
       if (csStatus.lifecycleState) lifecycleOut = csStatus.lifecycleState;
     }
 
@@ -3074,6 +3093,7 @@ async function runPreflightBasic(input: {
       title: r.title ?? null,
       verdict: v.verdict,
       cluster_id: clusterIdOut,
+      matched_account_zoho_id: matchedAccountZohoIdOut,
       lifecycle_state: lifecycleOut,
       sector: sectorOut,
       arr_exposure: null,

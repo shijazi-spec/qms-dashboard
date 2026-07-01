@@ -33,6 +33,7 @@ export interface SPRow {
   title: string;
   verdict: string;
   cluster_id: number | null;
+  matched_account_zoho_id: string | null;
   lifecycle_state: string | null;
 }
 
