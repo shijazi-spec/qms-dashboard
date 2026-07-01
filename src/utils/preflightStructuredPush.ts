@@ -76,8 +76,12 @@ export function buildStructuredPushPlan(
   const skipped: Array<{ row_index: number; reason: string }> = [];
   const groups = groupByCompany(rows);
 
+  // Churned PAST cool-off = re-engage under the existing Account. The account is
+  // resolved by the endpoint from cluster_id when present, else by domain/name
+  // (basic-mode preflight matches churned clients via the CS directory and sets
+  // NO cluster_id — so requiring cluster_id here made this action always empty).
   const isChurnedMatched = (g: SPCompany) =>
-    g.contacts.some(r => r.lifecycle_state === "termination_old" && r.cluster_id != null);
+    g.contacts.some(r => r.lifecycle_state === "termination_old");
   const isNewPass = (g: SPCompany) =>
     g.contacts.every(r => r.cluster_id == null) && g.contacts.every(r => r.verdict === "pass");
   const contactRows = (g: SPCompany) => g.contacts.filter(hasContact);

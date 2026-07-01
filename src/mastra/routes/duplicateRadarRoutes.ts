@@ -8885,15 +8885,18 @@ export const duplicateRadarRoutes = [
               // matched cluster has no Account record is skipped at run time
               // (reason no_matched_account), not turned into a deal. Without
               // this, the dry-run over-promises deals it won't actually create.
-              const { getAccountZohoIdByCluster: resolveAccForPreview } =
-                await import("../../utils/duplicateRadarDatabase");
+              const {
+                getAccountZohoIdByCluster: resolveAccForPreview,
+                getAccountZohoIdByDomainOrName: resolveAccByDomainName,
+              } = await import("../../utils/duplicateRadarDatabase");
               let sampleCo: (typeof plan.companies)[number] | null = null;
               let sampleAccId: string | null = null;
               for (const co of plan.companies) {
                 const accId =
-                  co.clusterId != null
+                  (co.clusterId != null
                     ? await resolveAccForPreview(co.clusterId)
-                    : null;
+                    : null) ??
+                  (await resolveAccByDomainName(co.domain, co.companyName));
                 if (accId) {
                   wouldDeals += 1;
                   wouldContacts += co.contacts.length;
@@ -8981,9 +8984,8 @@ export const duplicateRadarRoutes = [
           // REAL RUN — ordered batched creates with id-mapping.
           // ----------------------------------------------------------------
           const { createZohoRecordsBulk } = await import("../../utils/zohoCRM");
-          const { getAccountZohoIdByCluster } = await import(
-            "../../utils/duplicateRadarDatabase"
-          );
+          const { getAccountZohoIdByCluster, getAccountZohoIdByDomainOrName } =
+            await import("../../utils/duplicateRadarDatabase");
 
           const dealTag = action === 1 ? "Re-engagement" : "Preflight import";
 
@@ -9030,11 +9032,15 @@ export const duplicateRadarRoutes = [
             const companiesSkippedNoAccount: typeof plan.companies = [];
 
             if (action === 1) {
-              // A1: resolve existing account id per company.
+              // A1: resolve existing account id per company — by cluster when
+              // present, else by domain/name (basic-mode churned matches carry
+              // no cluster_id).
               for (const co of plan.companies) {
-                const existingId = co.clusterId != null
-                  ? await getAccountZohoIdByCluster(co.clusterId)
-                  : null;
+                const existingId =
+                  (co.clusterId != null
+                    ? await getAccountZohoIdByCluster(co.clusterId)
+                    : null) ??
+                  (await getAccountZohoIdByDomainOrName(co.domain, co.companyName));
                 if (!existingId) {
                   // Cannot push without a matched account — skip this company.
                   companiesSkippedNoAccount.push(co);

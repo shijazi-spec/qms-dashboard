@@ -40,6 +40,13 @@ assertEq(normalizeCompanyKey("", "Acme.com") === "acme.com", "falls back to doma
   assertEq(p.companies.length === 1 && p.companies[0].clusterId === 9, "A1 picks churned-matched company");
   assertEq(p.eligible_count === 1 && p.contact_count === 1, "A1 counts");
 }
+// A1 — churned past cool-off with NO cluster_id (basic-mode CS-directory match):
+// still eligible — the endpoint resolves the account by domain/name.
+{
+  const rows = [mk({ row_index: 1, company: "Churn Co", domain: "churn.co", email: "a@churn.co", verdict: "pass", cluster_id: null, lifecycle_state: "termination_old" })];
+  const p = buildStructuredPushPlan(1, rows, {});
+  assertEq(p.companies.length === 1 && p.companies[0].clusterId === null, "A1 picks churned company even without cluster_id");
+}
 // A1 ignores a non-churned matched row
 {
   const rows = [mk({ row_index: 1, company: "Active Co", email: "a@x.co", verdict: "block", cluster_id: 5, lifecycle_state: "onboarding" })];

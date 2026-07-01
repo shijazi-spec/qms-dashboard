@@ -5442,6 +5442,43 @@ export async function getAccountZohoIdByCluster(clusterId: number): Promise<stri
   return r.rows[0]?.zoho_record_id ? String(r.rows[0].zoho_record_id) : null;
 }
 
+/** Resolve the Zoho id of an existing Account by domain (preferred) then by
+ * exact normalized company name. Used by the Preflight Structured Push
+ * "re-engage churned" action: churned clients are matched via the CS directory
+ * (which sets no cluster_id in basic mode), so the existing Account must be
+ * found the same way the match was — by domain / company name. Null if none. */
+export async function getAccountZohoIdByDomainOrName(
+  domain: string | null | undefined,
+  companyName: string | null | undefined,
+): Promise<string | null> {
+  const dom = String(domain || "").trim().toLowerCase();
+  if (dom) {
+    const r = await pool.query(
+      `SELECT zoho_record_id FROM duplicate_records
+         WHERE record_type = 'account' AND LOWER(btrim(domain)) = $1
+           AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+         ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST
+         LIMIT 1`,
+      [dom],
+    );
+    if (r.rows[0]?.zoho_record_id) return String(r.rows[0].zoho_record_id);
+  }
+  const nm = String(companyName || "").trim().toLowerCase();
+  if (nm && nm.length >= 3) {
+    const r = await pool.query(
+      `SELECT zoho_record_id FROM duplicate_records
+         WHERE record_type = 'account'
+           AND LOWER(btrim(COALESCE(record_name, company_name, ''))) = $1
+           AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+         ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST
+         LIMIT 1`,
+      [nm],
+    );
+    if (r.rows[0]?.zoho_record_id) return String(r.rows[0].zoho_record_id);
+  }
+  return null;
+}
+
 /**
  * Returns true if `clusterId` already has at least one record whose
  * corporate domain differs from `candidateDomain`. Used as a guard so

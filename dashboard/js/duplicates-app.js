@@ -11272,7 +11272,7 @@
         function _pfCountActions(spRows) {
             var groups = _pfGroupByCompany(spRows);
             var isChurnedMatched = function (g) {
-                return g.rows.some(function (r) { return r.lifecycle_state === 'termination_old' && r.cluster_id != null; });
+                return g.rows.some(function (r) { return r.lifecycle_state === 'termination_old'; });
             };
             var isNewPass = function (g) {
                 return g.rows.every(function (r) { return r.cluster_id == null; }) &&
