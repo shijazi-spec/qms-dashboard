@@ -8811,7 +8811,7 @@
                 return out.map(s => s.trim());
             };
             const headers = splitCsv(lines[0]).map(h => h.toLowerCase());
-            const allowed = ['domain','email','company_name','contact_name','phone','ref'];
+            const allowed = ['domain','email','company_name','contact_name','phone','ref','title'];
             const rows = [];
             for (let i = 1; i < lines.length; i++) {
                 const parts = splitCsv(lines[i]);
@@ -11242,6 +11242,7 @@
                 email:   r.email || '',
                 phone:   r.phone || '',
                 contact_name: r.contact_name || (r.input && r.input.contact_name) || '',
+                title: r.title || (r.input && r.input.title) || '',
                 verdict: r.verdict || '',
                 cluster_id: (r.cluster_id != null ? r.cluster_id : null),
                 lifecycle_state: (r.lifecycle_state != null ? r.lifecycle_state : null),

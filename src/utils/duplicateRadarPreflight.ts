@@ -99,6 +99,9 @@ export interface PreflightInputRow {
   /** Person name — when present with NO email AND NO phone, the row is REJECTED
    *  (verdict no_contact) since the contact can't be reached. */
   contact_name?: string | null;
+  /** Contact job title from the uploaded row — optional, carried through to
+   *  the Zoho Contact/Lead payload's Title field on push. */
+  title?: string | null;
   /** Free-form row identifier echoed back in the response (defaults to array index). */
   ref?: string | null;
 }
@@ -120,6 +123,9 @@ export interface PreflightResultRow {
   email?: string | null;
   phone?: string | null;
   contact_name?: string | null;
+  /** Echoed contact job title from the uploaded row (normalized). Null when
+   *  the upload had no title column / the row had no title. */
+  title?: string | null;
   verdict: PreflightVerdict;
   cluster_id: number | null;
   lifecycle_state:
@@ -3065,6 +3071,7 @@ async function runPreflightBasic(input: {
       email: email ?? null,
       phone: phone ?? null,
       contact_name: contactName || null,
+      title: r.title ?? null,
       verdict: v.verdict,
       cluster_id: clusterIdOut,
       lifecycle_state: lifecycleOut,

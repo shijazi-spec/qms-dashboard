@@ -19,6 +19,7 @@ export interface SPRow {
   email: string;
   phone: string;
   contact_name: string;
+  title: string;
   verdict: string;
   cluster_id: number | null;
   lifecycle_state: string | null;

@@ -8284,6 +8284,13 @@ export const duplicateRadarRoutes = [
           );
           const firstNameIdx = findCol("first_name", "first name", "firstname");
           const lastNameIdx = findCol("last_name", "last name", "lastname");
+          // Contact job title — carried through to the Zoho Contact/Lead
+          // payload's Title field on push. Optional: a workbook without any
+          // of these columns simply produces an empty title (no behavior
+          // change for existing uploads).
+          const titleIdx = findCol(
+            "title", "job title", "job_title", "jobtitle", "designation", "position", "role",
+          );
 
           if (domainIdx < 0 && emailIdx < 0) {
             return c.json(
@@ -8306,6 +8313,7 @@ export const duplicateRadarRoutes = [
             phone: string;
             company_name: string;
             contact_name: string;
+            title: string;
             original_row: Record<string, any>;
             source_row_number: number;
           }
@@ -8371,6 +8379,7 @@ export const duplicateRadarRoutes = [
                   .join(" ")
                   .trim();
               }
+              const title = titleIdx >= 0 ? cellToString(rv[titleIdx + 1]).trim() : "";
 
               // Keep a row that has ANY signal — a domain, an email, a phone, OR a
               // contact name. A NAMED contact with no email/phone used to be dropped
@@ -8395,6 +8404,7 @@ export const duplicateRadarRoutes = [
                 phone,
                 company_name: companyName,
                 contact_name: contactName,
+                title,
                 original_row: originalRow,
                 source_row_number: i,
               });
@@ -8478,6 +8488,7 @@ export const duplicateRadarRoutes = [
               phone: r.phone,
               company_name: r.company_name,
               contact_name: r.contact_name,
+              title: r.title,
             })),
             original_rows: rows.map((r) => r.original_row),
             source_row_numbers: rows.map((r) => r.source_row_number),
@@ -8698,11 +8709,17 @@ export const duplicateRadarRoutes = [
           }
 
           // Build the Zoho Lead payloads.
+          const { splitContactName } = await import(
+            "../../utils/preflightStructuredPush"
+          );
           const payloads: Array<Record<string, any>> = eligible.map((r, i) => {
             const dom = (r?.input?.domain ?? r?.domain ?? "").toString().trim() || null;
             const email = (r?.email ?? "").toString().trim() || null;
             const company = (r?.input?.company_name ?? r?.company_name ?? "").toString().trim() || null;
             const phone = (r?.phone ?? "").toString().trim() || null;
+            const title = (r?.title ?? r?.input?.title ?? "").toString().trim() || null;
+            const contactName = (r?.contact_name ?? r?.input?.contact_name ?? "").toString().trim();
+            const _nm = splitContactName(contactName);
             const ownerForRow =
               ownerMode === "self"
                 ? sessionUser?.email || null
@@ -8711,13 +8728,15 @@ export const duplicateRadarRoutes = [
                   : ownerId;
             const p: Record<string, any> = {
               Company: company || dom || "(unknown)",
-              Last_Name: company || dom || "(unknown)",
+              Last_Name: _nm.last || company || dom || "(unknown)",
+              ...(_nm.first ? { First_Name: _nm.first } : {}),
               Lead_Source: source,
               Description: `Imported via QMS Preflight Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
               Layout: { id: layoutId },
             };
             if (email) p.Email = email;
             if (phone) p.Phone = phone;
+            if (title) p.Title = title;
             if (dom) p.Website = dom.startsWith("http") ? dom : `https://${dom}`;
             if (ownerForRow && ownerMode !== "self") {
               p.Owner = { id: ownerForRow };
@@ -8867,6 +8886,7 @@ export const duplicateRadarRoutes = [
             email: String(r.email ?? ""),
             phone: String(r.phone ?? ""),
             contact_name: String(r.contact_name ?? r.input?.contact_name ?? ""),
+            title: String(r.title ?? r.input?.title ?? ""),
             verdict: String(r.verdict ?? ""),
             cluster_id: r.cluster_id != null ? Number(r.cluster_id) : null,
             lifecycle_state: r.lifecycle_state != null ? String(r.lifecycle_state) : null,
@@ -8912,6 +8932,7 @@ export const duplicateRadarRoutes = [
                   Lead_Status: LEAD.status,
                   ...(r.email ? { Email: r.email } : {}),
                   ...(r.phone ? { Phone: r.phone } : {}),
+                  ...(r.title ? { Title: r.title } : {}),
                   ...(dom ? { Website: dom.startsWith("http") ? dom : `https://${dom}` } : {}),
                 };
               }
@@ -8955,6 +8976,7 @@ export const duplicateRadarRoutes = [
                     ...(_nm.first ? { First_Name: _nm.first } : {}),
                     ...(sampleCo.contacts[0].email ? { Email: sampleCo.contacts[0].email } : {}),
                     ...(sampleCo.contacts[0].phone ? { Phone: sampleCo.contacts[0].phone } : {}),
+                    ...(sampleCo.contacts[0].title ? { Title: sampleCo.contacts[0].title } : {}),
                     Account_Name: { id: sampleAccId },
                   } : null,
                   deal: {
@@ -8992,6 +9014,7 @@ export const duplicateRadarRoutes = [
                     ...(_nm.first ? { First_Name: _nm.first } : {}),
                     ...(co.contacts[0].email ? { Email: co.contacts[0].email } : {}),
                     ...(co.contacts[0].phone ? { Phone: co.contacts[0].phone } : {}),
+                    ...(co.contacts[0].title ? { Title: co.contacts[0].title } : {}),
                     Account_Name: { id: accountId },
                   } : null,
                   deal: {
@@ -9058,6 +9081,7 @@ export const duplicateRadarRoutes = [
               };
               if (r.email) p.Email = r.email;
               if (r.phone) p.Phone = r.phone;
+              if (r.title) p.Title = r.title;
               if (dom) p.Website = dom.startsWith("http") ? dom : `https://${dom}`;
               const ownerVal = ownerForIndex(i);
               if (ownerVal && ownerMode !== "self") {
@@ -9157,6 +9181,7 @@ export const duplicateRadarRoutes = [
                   };
                   if (row.email) p.Email = row.email;
                   if (row.phone) p.Phone = row.phone;
+                  if (row.title) p.Title = row.title;
                   contactPayloads.push(p);
                   contactMeta.push({ companyKey: co.companyKey, rowIndex: row.row_index, hasEmail: !!String(row.email || "").trim() });
                 }
