@@ -13,6 +13,12 @@ export const PREFLIGHT_LEAD_TARGET = {
 // Env-overridable so a future batch/source can change it without a code change.
 export const PREFLIGHT_LEAD_SOURCE = process.env.PREFLIGHT_LEAD_SOURCE || "Mawsool";
 
+// Zoho Tags applied to pushed records (the tags already exist in the CRM).
+// Leads → "Mawsool"; Deals → "Mawsool/Sales". Env-overridable. Contacts get
+// no tag (not requested). Empty string disables tagging for that module.
+export const PREFLIGHT_LEAD_TAG = process.env.PREFLIGHT_LEAD_TAG ?? "Mawsool";
+export const PREFLIGHT_DEAL_TAG = process.env.PREFLIGHT_DEAL_TAG ?? "Mawsool/Sales";
+
 // ---------------------------------------------------------------------------
 // Task 2: Pure planner — no Zoho, no DB
 // ---------------------------------------------------------------------------

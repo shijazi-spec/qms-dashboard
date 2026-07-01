@@ -8709,7 +8709,7 @@ export const duplicateRadarRoutes = [
           }
 
           // Build the Zoho Lead payloads.
-          const { splitContactName, PREFLIGHT_LEAD_SOURCE } = await import(
+          const { splitContactName, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG } = await import(
             "../../utils/preflightStructuredPush"
           );
           const payloads: Array<Record<string, any>> = eligible.map((r, i) => {
@@ -8760,12 +8760,23 @@ export const duplicateRadarRoutes = [
             });
           }
 
-          const { createZohoRecordsBulk } = await import(
+          const { createZohoRecordsBulk, addZohoTags } = await import(
             "../../utils/zohoCRM"
           );
           const outcomes = await createZohoRecordsBulk("Leads", payloads);
           const created = outcomes.filter((o) => o.status === "success").length;
           const failed = outcomes.filter((o) => o.status === "error").length;
+          // Tag the created Leads (best-effort — never fails the push).
+          try {
+            const leadIds = outcomes
+              .filter((o) => o.status === "success" && o.id)
+              .map((o) => String(o.id));
+            if (leadIds.length && PREFLIGHT_LEAD_TAG) {
+              await addZohoTags("Leads", leadIds, [PREFLIGHT_LEAD_TAG]);
+            }
+          } catch (_) {
+            /* tagging is non-fatal */
+          }
 
           // Audit log — every push gets one row in event_logs.
           try {
@@ -8876,7 +8887,7 @@ export const duplicateRadarRoutes = [
           ).toString().trim();
 
           // Map raw body rows to SPRow shape.
-          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, splitContactName } =
+          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, splitContactName } =
             await import("../../utils/preflightStructuredPush");
 
           const spRows = rows.map((r: any, idx: number) => ({
@@ -9058,7 +9069,7 @@ export const duplicateRadarRoutes = [
           // ----------------------------------------------------------------
           // REAL RUN — ordered batched creates with id-mapping.
           // ----------------------------------------------------------------
-          const { createZohoRecordsBulk } = await import("../../utils/zohoCRM");
+          const { createZohoRecordsBulk, addZohoTags } = await import("../../utils/zohoCRM");
           const { getAccountZohoIdByCluster, getAccountZohoIdByDomainOrName } =
             await import("../../utils/duplicateRadarDatabase");
 
@@ -9100,6 +9111,11 @@ export const duplicateRadarRoutes = [
             created.leads = leadOut.filter(o => o.status === "success").length;
             failed.leads = leadOut.filter(o => o.status === "error").length;
             outcomesSample = leadOut.slice(0, 20);
+            // Tag created Leads (best-effort).
+            try {
+              const leadIds = leadOut.filter(o => o.status === "success" && o.id).map(o => String(o.id));
+              if (leadIds.length && PREFLIGHT_LEAD_TAG) await addZohoTags("Leads", leadIds, [PREFLIGHT_LEAD_TAG]);
+            } catch (_) { /* tagging non-fatal */ }
           } else {
             // --- ACTIONS 1/2/3: Account → Contact → Deal ---
 
@@ -9265,6 +9281,11 @@ export const duplicateRadarRoutes = [
               created.deals = dealOut.filter(o => o.status === "success").length;
               failed.deals = dealOut.filter(o => o.status === "error").length;
               outcomesSample = dealOut.slice(0, 20);
+              // Tag created Deals (best-effort).
+              try {
+                const dealIds = dealOut.filter(o => o.status === "success" && o.id).map(o => String(o.id));
+                if (dealIds.length && PREFLIGHT_DEAL_TAG) await addZohoTags("Deals", dealIds, [PREFLIGHT_DEAL_TAG]);
+              } catch (_) { /* tagging non-fatal */ }
             }
 
             // Add skipped-no-account to the plan's skipped count.
