@@ -412,6 +412,12 @@ export async function listAccountInferenceHints(opts: {
        LEFT JOIN duplicate_records a  ON a.id  = h.suggested_account_record_id
        LEFT JOIN duplicate_records ct ON ct.id = h.evidence_contact_record_id
       WHERE h.status = $1
+        -- Empty/Junk exclusion (Task 3), Account-Hints exception: hide the
+        -- deal if it's been classified empty/test/junk/tagged cleanup, but
+        -- KEEP 'orphaned' deals — Account Hints is their intended home for
+        -- linking to the right Account. d may be NULL if the source deal
+        -- record was since removed, so don't drop those rows here.
+        AND (d.cleanup_class IS NULL OR d.cleanup_class = 'orphaned')
       ORDER BY h.confidence DESC, h.updated_at DESC
       LIMIT $2`,
     [status, limit],

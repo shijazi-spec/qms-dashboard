@@ -6701,6 +6701,11 @@ export const duplicateRadarRoutes = [
           const conds: string[] = [
             "cs_overlap_verdict IS NOT NULL",
             "status = 'active'",
+            // Empty/Junk exclusion (Task 3): a cluster only belongs here while
+            // it still holds at least one REAL record (cleanup_class IS NULL).
+            // Cleanup records (empty/test/junk/orphaned/tagged) live on the
+            // Empty/Junk tab, not CS Pipeline Overlap.
+            "EXISTS (SELECT 1 FROM duplicate_records dr2 WHERE dr2.cluster_id = duplicate_clusters.id AND dr2.cleanup_class IS NULL)",
           ];
           const params: any[] = [];
           if (verdict && ["block", "review", "warn"].includes(verdict)) {
@@ -6738,6 +6743,10 @@ export const duplicateRadarRoutes = [
                FROM duplicate_clusters
               WHERE cs_overlap_verdict IS NOT NULL
                 AND status = 'active'
+                AND EXISTS (
+                  SELECT 1 FROM duplicate_records dr2
+                   WHERE dr2.cluster_id = duplicate_clusters.id AND dr2.cleanup_class IS NULL
+                )
               GROUP BY cs_overlap_verdict`,
           );
           const summary: Record<string, { count: number; arr: number }> = {};

@@ -1831,6 +1831,13 @@ export async function getAllClusters(filters?: {
     query += ` AND (SELECT COUNT(*) FROM duplicate_records dx WHERE dx.cluster_id = duplicate_clusters.id AND NOT ${queuedForDeletionSql("dx")}) >= 2`;
   }
 
+  // Empty/Junk exclusion (Task 3): a cluster only belongs on this tab while
+  // it still holds >=2 REAL records (cleanup_class IS NULL). Cleanup records
+  // (empty/test/junk/orphaned/tagged) are classified post-scan by
+  // classifyCleanupRecords() and are hidden here — their home is the
+  // Empty/Junk tab, not Domain Clusters.
+  query += ` AND (SELECT COUNT(*) FROM duplicate_records dc2 WHERE dc2.cluster_id = duplicate_clusters.id AND dc2.cleanup_class IS NULL) >= 2`;
+
   const sortKey = filters?.sort && CLUSTER_SORT_COLUMNS[filters.sort]
     ? CLUSTER_SORT_COLUMNS[filters.sort]
     : "total_records";
@@ -4173,6 +4180,10 @@ export async function findSameDomainClusterDuplicates(opts: {
         AND domain <> ''
         AND domain <> '${PLACEHOLDER_CLUSTER_DOMAIN}'
         AND NOT (total_deals = total_records AND total_records > 0)
+        AND EXISTS (
+          SELECT 1 FROM duplicate_records dr2
+           WHERE dr2.cluster_id = duplicate_clusters.id AND dr2.cleanup_class IS NULL
+        )
       GROUP BY domain
      HAVING COUNT(*) > 1
       ORDER BY SUM(total_records) DESC, domain ASC
@@ -4207,6 +4218,10 @@ export async function findSameDomainClusterDuplicates(opts: {
       WHERE domain = ANY($1::text[])
         AND status = 'active'
         AND NOT (total_deals = total_records AND total_records > 0)
+        AND EXISTS (
+          SELECT 1 FROM duplicate_records dr2
+           WHERE dr2.cluster_id = duplicate_clusters.id AND dr2.cleanup_class IS NULL
+        )
       ORDER BY domain ASC, total_records DESC, id ASC`,
     [domains],
   );
@@ -7944,7 +7959,7 @@ export async function getDuplicateRecordsByType(
     WHERE dc.${countField} > 1 ${statusFilter}${mergeActionFilter}
       AND EXISTS (
         SELECT 1 FROM duplicate_records dr
-        WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
+        WHERE dr.cluster_id = dc.id AND dr.record_type = $1 AND dr.cleanup_class IS NULL${dateFilter}
       )${genuineDupFilter}${stillTwoUntagged}
     ${clusterOrderBy}
     LIMIT $${dateParams.length + 2} OFFSET $${dateParams.length + 3}
@@ -7961,7 +7976,7 @@ export async function getDuplicateRecordsByType(
     WHERE dc.${countField} > 1 ${statusFilter}${mergeActionFilter}
       AND EXISTS (
         SELECT 1 FROM duplicate_records dr
-        WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
+        WHERE dr.cluster_id = dc.id AND dr.record_type = $1 AND dr.cleanup_class IS NULL${dateFilter}
       )${genuineDupFilter}${stillTwoUntagged}
   `,
     [recordType, ...dateParams],
@@ -8031,7 +8046,7 @@ export async function getDuplicateRecordsByType(
            dc.id as cluster_id_ref
     FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-    WHERE dr.record_type = $1 AND dr.cluster_id = ANY($2::int[])${recDateFilter}
+    WHERE dr.record_type = $1 AND dr.cluster_id = ANY($2::int[]) AND dr.cleanup_class IS NULL${recDateFilter}
       ${hideQueued ? `AND NOT ${queuedForDeletionSql("dr")}` : ""}
     ORDER BY dc.confidence_score DESC, dc.id ASC, dr.is_primary DESC, dr.created_date ASC
   `,
@@ -8667,10 +8682,10 @@ export async function getCrossModuleOverlaps(opts: {
       )
       AND (
         ${statusOpt === "active"
-          ? `(CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'lead'    AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
-         CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'contact' AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
-         CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'account' AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
-         CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'deal'    AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END`
+          ? `(CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'lead'    AND dr.cleanup_class IS NULL AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
+         CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'contact' AND dr.cleanup_class IS NULL AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
+         CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'account' AND dr.cleanup_class IS NULL AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END +
+         CASE WHEN EXISTS (SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id AND dr.record_type = 'deal'    AND dr.cleanup_class IS NULL AND NOT ${queuedForDeletionSql("dr")}) THEN 1 ELSE 0 END`
           : `(CASE WHEN total_leads > 0 THEN 1 ELSE 0 END +
          CASE WHEN total_contacts > 0 THEN 1 ELSE 0 END +
          CASE WHEN total_accounts > 0 THEN 1 ELSE 0 END +
@@ -8728,6 +8743,10 @@ export async function getCrossModuleOverlaps(opts: {
       const ids = realOverlaps.map((c) => c.id);
       const agg = await pool.query(
         `SELECT cluster_id,
+                COUNT(*) FILTER (WHERE record_type = 'lead')    AS real_leads,
+                COUNT(*) FILTER (WHERE record_type = 'contact') AS real_contacts,
+                COUNT(*) FILTER (WHERE record_type = 'account') AS real_accounts,
+                COUNT(*) FILTER (WHERE record_type = 'deal')    AS real_deals,
                 array_agg(DISTINCT record_type)
                   FILTER (WHERE record_type IS NOT NULL)                       AS modules_present,
                 array_agg(DISTINCT owner_name)
@@ -8756,7 +8775,7 @@ export async function getCrossModuleOverlaps(opts: {
                       AND lg.action_type IN ('resolve','module_resolved')
                   ))                                                            AS modules_ledger_resolved
            FROM duplicate_records
-          WHERE cluster_id = ANY($1::int[])
+          WHERE cluster_id = ANY($1::int[]) AND cleanup_class IS NULL
           GROUP BY cluster_id`,
         [ids],
       );
@@ -8765,6 +8784,14 @@ export async function getCrossModuleOverlaps(opts: {
       for (const c of realOverlaps as any[]) {
         const a = byId.get(c.id);
         if (!a) continue;
+        // Overwrite the denormalized duplicate_clusters totals with REAL
+        // (cleanup_class IS NULL) per-type counts so isActionable/byAction/
+        // matchesPairingChip below judge the cluster's cross-module status
+        // on genuine records only, not cleanup (empty/test/junk/tagged) ones.
+        c.total_leads = Number(a.real_leads ?? 0);
+        c.total_contacts = Number(a.real_contacts ?? 0);
+        c.total_accounts = Number(a.real_accounts ?? 0);
+        c.total_deals = Number(a.real_deals ?? 0);
         c.modules_present = a.modules_present ?? [];
         c.owners = a.owners ?? [];
         c.owner_name = (a.owners ?? []).join(", ");
@@ -10036,6 +10063,7 @@ export async function scanCsLifecycleViolations(opts: {
        FROM duplicate_records r
        LEFT JOIN duplicate_clusters dc ON dc.id = r.cluster_id
       WHERE r.zoho_module = 'Deals'
+        AND r.cleanup_class IS NULL
         AND (dc.status IS NULL OR dc.status = 'active')
       ORDER BY r.modified_date DESC NULLS LAST
       LIMIT $1`,
@@ -10197,6 +10225,7 @@ export async function scanDealStageAgingViolations(
        FROM duplicate_records r
        LEFT JOIN duplicate_clusters dc ON dc.id = r.cluster_id
       WHERE r.zoho_module = 'Deals'
+        AND r.cleanup_class IS NULL
         AND (dc.status IS NULL OR dc.status = 'active')
       ORDER BY r.modified_date DESC NULLS LAST
       LIMIT $1`,
