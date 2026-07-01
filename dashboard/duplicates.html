@@ -158,9 +158,9 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Preflight Check
             </button>
-            <button data-on-click="showTab" data-args="[&quot;empty-records&quot;]" id="tab-empty-records" data-testid="tab-empty-records" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Empty / Orphaned Records — orphaned deals (no account), empty accounts (no deals/contacts/attachments), name-only contacts, plus test/placeholder records. Tag 'Empty-Delete' for the Zoho admin to delete; the platform never deletes.">
+            <button data-on-click="showTab" data-args="[&quot;empty-records&quot;]" id="tab-empty-records" data-testid="tab-empty-records" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Empty / Junk — records to clean up: empty (accounts with no deals/contacts/attachments, name-only contacts, empty deals), junk/gibberish names, testing (incl. 'walaplus'), and orphaned deals (no account). Tag 'Empty-Delete' for the Zoho admin to delete; the platform never deletes. These are hidden from the other tabs.">
                 <span class="inline-block w-2 h-2 rounded-full bg-rose-500"></span>
-                🧹 <span data-i18n="duplicates.er_tab">Empty / Orphaned</span>
+                🧹 <span data-i18n="duplicates.er_tab">Empty / Junk</span>
             </button>
             <!-- Auto-CAPA KPIs tab retired 2026-05-30 per operator request.
                  CAPAs are now opened manually from each actionable row via
@@ -1588,6 +1588,7 @@
             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800" data-i18n="duplicates.er_badge_orphaned">ORPHANED</span>
             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-200 text-gray-700" data-i18n="duplicates.er_badge_empty">EMPTY</span>
             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700" data-i18n="duplicates.er_badge_test">TEST</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800" data-i18n="duplicates.er_badge_junk">JUNK</span>
           </div>
 
           <div id="erBulkBar" class="hidden sticky top-0 z-10 bg-white border border-rose-300 rounded-lg shadow p-2 mb-3 flex items-center gap-3 flex-wrap">
@@ -2031,7 +2032,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=27"></script>
+    <script src="/js/duplicates-app.js?v=28"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

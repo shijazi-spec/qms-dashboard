@@ -7314,7 +7314,7 @@
             if (chip) chip.textContent = (data.rows || []).length.toLocaleString();
         }
         function erReasonBadge(reason) {
-            const m = { orphaned: ['bg-amber-100', 'text-amber-800', 'ORPHANED'], empty: ['bg-gray-200', 'text-gray-700', 'EMPTY'], test: ['bg-rose-100', 'text-rose-700', 'TEST'] };
+            const m = { orphaned: ['bg-amber-100', 'text-amber-800', 'ORPHANED'], empty: ['bg-gray-200', 'text-gray-700', 'EMPTY'], test: ['bg-rose-100', 'text-rose-700', 'TEST'], junk: ['bg-orange-100', 'text-orange-800', 'JUNK'] };
             const x = m[reason] || m.empty;
             const lbl = WalaPlusI18n.t('duplicates.er_badge_' + (m[reason] ? reason : 'empty'));
             return '<span class="px-2 py-0.5 rounded text-[10px] font-bold ' + x[0] + ' ' + x[1] + '">' + lbl + '</span>';
