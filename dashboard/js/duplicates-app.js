@@ -438,9 +438,67 @@
             renderCrossModuleTable();
         }
 
+        // Sort state — mirrors sortCsOverlap / sortCsLifecycle. No default
+        // key (server order — confidence/recency from the scan — is kept
+        // until the user clicks a header).
+        window._crossModuleSort = window._crossModuleSort || { key: null, dir: 'desc' };
+
+        function crossModuleSortValue(c, key) {
+            switch (key) {
+                case 'domain':     return (c.domain || '').toLowerCase();
+                case 'company':    return (c.company_name || '').toLowerCase();
+                case 'records':    return Number(c.total_records || 0);
+                case 'confidence': return Number(c.confidence_score || 0);
+                case 'pipeline':   return Number(c.estimated_pipeline_value || 0);
+                default:           return 0;
+            }
+        }
+
+        function sortCrossModuleRows(rows, key, dir) {
+            const factor = dir === 'asc' ? 1 : -1;
+            return rows.slice().sort((a, b) => {
+                const va = crossModuleSortValue(a, key);
+                const vb = crossModuleSortValue(b, key);
+                if (va < vb) return -1 * factor;
+                if (va > vb) return  1 * factor;
+                return 0;
+            });
+        }
+
+        function updateCrossModuleSortIndicators() {
+            const headers = document.querySelectorAll('#crossModuleTableHead .cross-module-sort');
+            headers.forEach(h => {
+                const key = h.getAttribute('data-sort-key');
+                const ind = h.querySelector('.cross-module-sort-indicator');
+                if (!ind) return;
+                if (key === window._crossModuleSort.key) {
+                    ind.textContent = window._crossModuleSort.dir === 'asc' ? '↑' : '↓';
+                    ind.classList.remove('opacity-30');
+                    ind.classList.add('text-gray-900');
+                } else {
+                    ind.textContent = '⇅';
+                    ind.classList.add('opacity-30');
+                    ind.classList.remove('text-gray-900');
+                }
+            });
+        }
+
+        function sortCrossModuleBy(key) {
+            const cur = window._crossModuleSort;
+            if (cur.key === key) {
+                cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                cur.key = key;
+                cur.dir = ['records','confidence','pipeline'].includes(key) ? 'desc' : 'asc';
+            }
+            window._crossModulePage = 0;
+            renderCrossModuleTable();
+        }
+
         function renderCrossModuleTable() {
             const tbody = document.getElementById('crossModuleTable');
             if (!tbody) return;
+            updateCrossModuleSortIndicators();
             const _cmSpec = getAdvancedFilterSpec();
             const list = (crossModuleClusters || []).filter(c => {
                 if (!_cmoClusterMatchesChip(c, crossModuleFilter)) return false;
@@ -485,15 +543,20 @@
                 updateCrossModuleBulkBar();
                 return;
             }
+            // Full-array sort — sort the WHOLE filtered list before paginating,
+            // not just the visible page. No key selected yet = keep server order.
+            const sortedList = window._crossModuleSort.key
+                ? sortCrossModuleRows(list, window._crossModuleSort.key, window._crossModuleSort.dir)
+                : list;
             // Client-side pagination — 20 cross-module clusters per page.
             window._crossModulePage = Number.isFinite(window._crossModulePage) ? window._crossModulePage : 0;
-            const crossModuleTotalPages = Math.max(1, Math.ceil(list.length / RADAR_PAGE_SIZE));
+            const crossModuleTotalPages = Math.max(1, Math.ceil(sortedList.length / RADAR_PAGE_SIZE));
             if (window._crossModulePage >= crossModuleTotalPages) window._crossModulePage = 0;
             const crossModulePageStart = window._crossModulePage * RADAR_PAGE_SIZE;
-            const crossModuleSlice = list.slice(crossModulePageStart, crossModulePageStart + RADAR_PAGE_SIZE);
+            const crossModuleSlice = sortedList.slice(crossModulePageStart, crossModulePageStart + RADAR_PAGE_SIZE);
             renderPagination('crossModulePagination', window._crossModulePage, crossModuleTotalPages,
                 (p) => { window._crossModulePage = p; renderCrossModuleTable(); },
-                list.length, 'clusters');
+                sortedList.length, 'clusters');
             tbody.innerHTML = crossModuleSlice.map(c => {
                 const meta = CROSS_MODULE_PAIRING_LABELS[c.pairing] || { label: c.pairing || '—', action: 'Open cluster for per-record recommendations' };
                 const modules = [];
@@ -8047,9 +8110,66 @@
             }
         }
 
+        // Sort state — mirrors sortCsOverlap / sortCsLifecycle.
+        window._accountHintsSort = window._accountHintsSort || { key: null, dir: 'desc' };
+
+        function accountHintsSortValue(h, key) {
+            switch (key) {
+                case 'deal':       return (h.deal_company_name || h.deal_account_name || '').toLowerCase();
+                case 'current':    return (h.deal_account_name || '').toLowerCase();
+                case 'suggested':  return (h.suggested_account_name || '').toLowerCase();
+                case 'domain':     return (h.suggested_domain || '').toLowerCase();
+                case 'evidence':   return (h.evidence_contact_email || '').toLowerCase();
+                case 'confidence': return Number(h.confidence || 0);
+                default:           return 0;
+            }
+        }
+
+        function sortAccountHintsRows(rows, key, dir) {
+            const factor = dir === 'asc' ? 1 : -1;
+            return rows.slice().sort((a, b) => {
+                const va = accountHintsSortValue(a, key);
+                const vb = accountHintsSortValue(b, key);
+                if (va < vb) return -1 * factor;
+                if (va > vb) return  1 * factor;
+                return 0;
+            });
+        }
+
+        function updateAccountHintsSortIndicators() {
+            const headers = document.querySelectorAll('#accountHintsTableHead .account-hints-sort');
+            headers.forEach(h => {
+                const key = h.getAttribute('data-sort-key');
+                const ind = h.querySelector('.account-hints-sort-indicator');
+                if (!ind) return;
+                if (key === window._accountHintsSort.key) {
+                    ind.textContent = window._accountHintsSort.dir === 'asc' ? '↑' : '↓';
+                    ind.classList.remove('opacity-30');
+                    ind.classList.add('text-gray-900');
+                } else {
+                    ind.textContent = '⇅';
+                    ind.classList.add('opacity-30');
+                    ind.classList.remove('text-gray-900');
+                }
+            });
+        }
+
+        function sortAccountHintsBy(key) {
+            const cur = window._accountHintsSort;
+            if (cur.key === key) {
+                cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                cur.key = key;
+                cur.dir = key === 'confidence' ? 'desc' : 'asc';
+            }
+            window._accountHintsPage = 0;
+            if (window._accountHintsData) renderAccountHints(window._accountHintsData);
+        }
+
         function renderAccountHints(data) {
             // Cache for the per-tab "Export CSV" button (exportAccountHints).
             window._accountHintsData = data;
+            updateAccountHintsSortIndicators();
             const summary = data.summary || { pending: 0, applied: 0, dismissed: 0 };
             document.getElementById('accountHintsSumPending').textContent   = summary.pending;
             document.getElementById('accountHintsSumApplied').textContent   = summary.applied;
@@ -8087,15 +8207,20 @@
                 renderPagination('accountHintsPagination', 0, 1, () => {}, 0, 'hints');
                 return;
             }
+            // Full-array sort — sort the WHOLE filtered list before paginating.
+            // No key selected yet = keep the bucket's default (server) order.
+            const sortedRows = window._accountHintsSort.key
+                ? sortAccountHintsRows(rows, window._accountHintsSort.key, window._accountHintsSort.dir)
+                : rows;
             // Client-side pagination — 20 hints per page.
             window._accountHintsPage = Number.isFinite(window._accountHintsPage) ? window._accountHintsPage : 0;
-            const accountHintsTotalPages = Math.max(1, Math.ceil(rows.length / RADAR_PAGE_SIZE));
+            const accountHintsTotalPages = Math.max(1, Math.ceil(sortedRows.length / RADAR_PAGE_SIZE));
             if (window._accountHintsPage >= accountHintsTotalPages) window._accountHintsPage = 0;
             const accountHintsPageStart = window._accountHintsPage * RADAR_PAGE_SIZE;
-            const accountHintsSlice = rows.slice(accountHintsPageStart, accountHintsPageStart + RADAR_PAGE_SIZE);
+            const accountHintsSlice = sortedRows.slice(accountHintsPageStart, accountHintsPageStart + RADAR_PAGE_SIZE);
             renderPagination('accountHintsPagination', window._accountHintsPage, accountHintsTotalPages,
                 (p) => { window._accountHintsPage = p; renderAccountHints(window._accountHintsData); },
-                rows.length, 'hints');
+                sortedRows.length, 'hints');
             body.innerHTML = accountHintsSlice.map(h => {
                 const dealCell = h.deal_zoho_id
                     ? zohoLink(h.deal_zoho_id, 'Deals', h.deal_company_name || h.deal_account_name || h.deal_zoho_id)
@@ -9278,6 +9403,65 @@
         window._dealLifecycleStageFilter = '';
         window._dealLifecycleData = null;
 
+        // Sort state — mirrors sortCsOverlap / sortCsLifecycle. Sorts the
+        // FILTERED set (post rowMatchesAdvancedFilter) so sort + filter compose.
+        window._dealLifecycleSort = window._dealLifecycleSort || { key: null, dir: 'desc' };
+
+        const DEAL_LIFECYCLE_SEVERITY_RANK = { critical: 3, warning: 2, info: 1 };
+
+        function dealLifecycleSortValue(r, key) {
+            const v = r.violation || {};
+            switch (key) {
+                case 'severity': return DEAL_LIFECYCLE_SEVERITY_RANK[v.severity] || 0;
+                case 'deal':     return (r.deal_name || r.account_name || '').toLowerCase();
+                case 'account':  return (r.account_name || '').toLowerCase();
+                case 'stage':    return (r.stage || '').toLowerCase();
+                case 'owner':    return (r.owner_name || '').toLowerCase();
+                case 'aging':    return v.aging_calendar_days == null ? -1 : Number(v.aging_calendar_days);
+                default:         return 0;
+            }
+        }
+
+        function sortDealLifecycleRows(rows, key, dir) {
+            const factor = dir === 'asc' ? 1 : -1;
+            return rows.slice().sort((a, b) => {
+                const va = dealLifecycleSortValue(a, key);
+                const vb = dealLifecycleSortValue(b, key);
+                if (va < vb) return -1 * factor;
+                if (va > vb) return  1 * factor;
+                return 0;
+            });
+        }
+
+        function updateDealLifecycleSortIndicators() {
+            const headers = document.querySelectorAll('#dealLifecycleTableHead .deal-lifecycle-sort');
+            headers.forEach(h => {
+                const key = h.getAttribute('data-sort-key');
+                const ind = h.querySelector('.deal-lifecycle-sort-indicator');
+                if (!ind) return;
+                if (key === window._dealLifecycleSort.key) {
+                    ind.textContent = window._dealLifecycleSort.dir === 'asc' ? '↑' : '↓';
+                    ind.classList.remove('opacity-30');
+                    ind.classList.add('text-gray-900');
+                } else {
+                    ind.textContent = '⇅';
+                    ind.classList.add('opacity-30');
+                    ind.classList.remove('text-gray-900');
+                }
+            });
+        }
+
+        function sortDealLifecycleBy(key) {
+            const cur = window._dealLifecycleSort;
+            if (cur.key === key) {
+                cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                cur.key = key;
+                cur.dir = ['severity','aging'].includes(key) ? 'desc' : 'asc';
+            }
+            if (window._dealLifecycleData) renderDealLifecycle(window._dealLifecycleData);
+        }
+
         function dealLifeSeverityBadge(s) {
             const map = {
                 critical: 'bg-red-100 text-red-800 border-red-200',
@@ -9345,6 +9529,8 @@
                 stageSelect.innerHTML = '<option value="">All stages</option>' + stages.map(s => '<option value="' + escapeHtml(s) + '"' + (s === cur ? ' selected' : '') + '>' + escapeHtml(s) + '</option>').join('');
             }
 
+            updateDealLifecycleSortIndicators();
+
             const body = document.getElementById('dealLifecycleTable');
             if (!body) return;
             const allRows = data.violations || [];
@@ -9370,7 +9556,13 @@
                 body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No deals match the active filters. Adjust Advanced Filters or click <em>Clear All Filters</em>.</td></tr>';
                 return;
             }
-            body.innerHTML = rows.map(r => {
+            // Full-array sort — sort the FILTERED set (post advanced-filter)
+            // so sort + filter compose, exactly like CS Lifecycle. No key
+            // selected yet = keep the API's default order.
+            const sortedRows = window._dealLifecycleSort.key
+                ? sortDealLifecycleRows(rows, window._dealLifecycleSort.key, window._dealLifecycleSort.dir)
+                : rows;
+            body.innerHTML = sortedRows.map(r => {
                 const v = r.violation || {};
                 const unitLabel = v.unit === 'business_days' ? 'BD' : 'days';
                 const slaLabel = v.unit === 'business_days'

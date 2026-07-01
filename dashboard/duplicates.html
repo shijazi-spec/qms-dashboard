@@ -1040,16 +1040,16 @@
 
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
+                    <thead id="crossModuleTableHead" class="bg-gray-50">
                         <tr>
                             <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase w-10"><input type="checkbox" id="cmoSelectAll" data-on-change="toggleCrossModuleSelectAll" aria-label="Select all visible cross-module clusters" /></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Pairing</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;domain&quot;]" class="cross-module-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;company&quot;]" class="cross-module-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="company">Company <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Modules present</th>
-                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Records</th>
-                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Confidence</th>
-                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Pipeline value</th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;records&quot;]" class="cross-module-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="records">Records <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;confidence&quot;]" class="cross-module-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="confidence">Confidence <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;pipeline&quot;]" class="cross-module-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="pipeline">Pipeline value <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Recommended action</th>
                             <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Track</th>
                         </tr>
@@ -1463,14 +1463,14 @@
             <!-- Table -->
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
+                    <thead id="accountHintsTableHead" class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Deal</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Current account</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Suggested account</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Evidence (contact)</th>
-                            <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;deal&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="deal">Deal <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;current&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="current">Current account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;suggested&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="suggested">Suggested account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;domain&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;evidence&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="evidence">Evidence (contact) <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;confidence&quot;]" class="account-hints-sort px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="confidence">Confidence <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                     </thead>
@@ -1727,13 +1727,13 @@
             <!-- Table -->
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
+                    <thead id="dealLifecycleTableHead" class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">Severity</th>
-                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase">Deal / Account</th>
-                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">Stage</th>
-                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">Owner</th>
-                            <th scope="col" class="px-2 py-2 text-end text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap" title="Aging in the unit the SOP defines for that stage (business days for Not Attend Meeting / Meeting, calendar days otherwise).">Aging</th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;severity&quot;]" class="deal-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="severity">Severity <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;deal&quot;]" class="deal-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="deal">Deal / Account <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;stage&quot;]" class="deal-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="stage">Stage <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;owner&quot;]" class="deal-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="owner">Owner <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;aging&quot;]" class="deal-lifecycle-sort px-2 py-2 text-end text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="aging" title="Aging in the unit the SOP defines for that stage (business days for Not Attend Meeting / Meeting, calendar days otherwise).">Aging <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">SLA / Clause</th>
                             <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase">Suggested action</th>
                         </tr>
@@ -2031,7 +2031,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=26"></script>
+    <script src="/js/duplicates-app.js?v=27"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
