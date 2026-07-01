@@ -12,7 +12,7 @@ export interface EmptyRecordRow {
   zohoId: string;
   name: string;
   owner: string | null;
-  reason: "orphaned" | "empty" | "test";
+  reason: "orphaned" | "empty" | "test" | "junk";
   deleteEligible: boolean;
   linkEligible?: boolean;
   extra?: Record<string, any>;

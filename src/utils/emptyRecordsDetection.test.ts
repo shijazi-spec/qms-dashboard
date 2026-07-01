@@ -10,6 +10,7 @@ import {
   classifyAccount,
   classifyContact,
   isProtectedDealStage,
+  isJunkOrTestName,
 } from "./emptyRecordsDetection";
 
 let passed = 0;
@@ -114,6 +115,27 @@ console.log("classifyAccount — email + attachment guards");
 assert(classifyAccount({ hasDeals: false, hasContacts: false, hasEmail: true, name: "X", hasAttachments: false }).reason !== "empty", "account with email not empty");
 assert(classifyAccount({ hasDeals: false, hasContacts: false, hasEmail: false, name: "X", hasAttachments: true }).reason !== "empty", "account with documents not empty");
 assert(classifyAccount({ hasDeals: false, hasContacts: false, hasEmail: false, name: "X", hasAttachments: false }).reason === "empty", "bare account is empty");
+
+console.log("isJunkOrTestName");
+// walaplus exact
+assert(isJunkOrTestName("WalaPlus").test === true, "walaplus exact → test");
+assert(isJunkOrTestName("wala plus").test === true, "wala plus (collapsed) → test");
+assert(isJunkOrTestName("WalaPlus Partners").test === false, "walaplus substring → NOT test");
+assert(isJunkOrTestName("walaplus.com deal").test === false, "walaplus in phrase → NOT test");
+// junk J1 repeated token (how the gibberish actually appears in the data)
+assert(isJunkOrTestName("JYupWMLW JYupWMLW").junk === true, "repeated token → junk");
+assert(isJunkOrTestName("tsSLAueP tsSLAueP").junk === true, "repeated token 2 → junk");
+assert(isJunkOrTestName("IxbfYeaa IxbfYeaa").junk === true, "repeated token 3 → junk");
+// junk J2 machine string (single token, random internal casing >=4 switches)
+assert(isJunkOrTestName("jJQaBOcg").junk === true, "machine string → junk");
+// guards: never junk
+assert(isJunkOrTestName("شركة الرياض").junk === false, "arabic → not junk");
+assert(isJunkOrTestName("Acme Trading Co").junk === false, "real multiword → not junk");
+assert(isJunkOrTestName("SES").junk === false, "short acronym → not junk");
+assert(isJunkOrTestName("12345").junk === false, "numeric → not junk");
+assert(isJunkOrTestName("McDonald").junk === false, "CamelCase brand → not junk (no false delete)");
+assert(isJunkOrTestName("LinkedIn").junk === false, "CamelCase brand 2 → not junk");
+console.log("isJunkOrTestName ok");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
