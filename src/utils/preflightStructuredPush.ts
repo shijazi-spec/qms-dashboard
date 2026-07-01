@@ -45,6 +45,20 @@ export function normalizeCompanyKey(company: string, domain: string): string {
   return String(company || domain || "").trim().toLowerCase();
 }
 
+// ---------------------------------------------------------------------------
+// splitContactName — pure helper: splits a full display name into
+// First_Name / Last_Name for Zoho Contact/Lead payloads. Single-token names
+// (e.g. "Basserah") go entirely into Last_Name (Zoho requires Last_Name;
+// First_Name is optional). Multi-token names put everything but the final
+// token into First_Name, and the final token into Last_Name.
+// ---------------------------------------------------------------------------
+export function splitContactName(full: string | null | undefined): { first: string; last: string } {
+  const parts = String(full || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { first: "", last: "" };
+  if (parts.length === 1) return { first: "", last: parts[0] };
+  return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
+}
+
 function hasContact(r: SPRow): boolean {
   return !!(String(r.email || "").trim() || String(r.phone || "").trim() || String(r.contact_name || "").trim());
 }

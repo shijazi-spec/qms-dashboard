@@ -19,6 +19,40 @@ async function requireDuplicateRadarAccess(c: any) {
   return requireRoleOrKey(c, [...DUPLICATE_RADAR_READ_ROLES]);
 }
 
+// ---------------------------------------------------------------------------
+// Preflight Structured Push helpers — smarter primary-contact selection +
+// a Deal Description noting the other reachable contacts on the account.
+// Pure (no Zoho/DB access) so they're safe to use in both the dry-run
+// preview and the real-run payload builders.
+// ---------------------------------------------------------------------------
+
+// Pick the contact row to use as the Deal's primary: prefer the first row
+// that HAS an email; fall back to the first row overall when none do.
+function pickPrimaryContact<T extends { email?: string | null }>(contacts: T[]): T | null {
+  if (!contacts || contacts.length === 0) return null;
+  return contacts.find(r => String(r?.email || "").trim()) || contacts[0];
+}
+
+// Build a plain-text Deal Description naming the primary contact and listing
+// any OTHER contacts on the account (name + email + phone) so the sales
+// agent knows who else can be reached. Returns "" when there's only one
+// contact (callers should omit Description in that case).
+function buildOtherContactsDescription(
+  contacts: Array<{ contact_name?: string | null; email?: string | null; phone?: string | null }>,
+  primary: { contact_name?: string | null; email?: string | null; phone?: string | null } | null,
+): string {
+  if (!contacts || contacts.length <= 1) return "";
+  const label = (r: { contact_name?: string | null; email?: string | null; phone?: string | null } | null | undefined, fallback: string): string => {
+    if (!r) return fallback;
+    const name = String(r.contact_name || "").trim() || fallback;
+    const reach = [String(r.email || "").trim(), String(r.phone || "").trim()].filter(Boolean).join(" / ");
+    return reach ? `${name} (${reach})` : name;
+  };
+  const others = contacts.filter(r => r !== primary);
+  const othersText = others.map(r => label(r, "(unnamed contact)")).join("; ");
+  return `Primary contact: ${label(primary, "(unnamed contact)")}. Other contact(s) on this account: ${othersText}.`;
+}
+
 // Parse the shared Advanced Filters query params used by the per-tab record
 // endpoints (leads/deals/contacts/accounts). The Module filter is intentionally
 // omitted: each record tab already pins its own module, so module selection is
@@ -8823,7 +8857,7 @@ export const duplicateRadarRoutes = [
           ).toString().trim();
 
           // Map raw body rows to SPRow shape.
-          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET } =
+          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, splitContactName } =
             await import("../../utils/preflightStructuredPush");
 
           const spRows = rows.map((r: any, idx: number) => ({
@@ -8868,8 +8902,10 @@ export const duplicateRadarRoutes = [
               const r = plan.leads[0];
               if (r) {
                 const dom = r.domain || null;
+                const _nm = splitContactName(r.contact_name || r.company || r.domain);
                 samplePayload = {
-                  Last_Name: r.contact_name || r.company || r.domain || "(unknown)",
+                  Last_Name: _nm.last || r.company || r.domain || "(unknown)",
+                  ...(_nm.first ? { First_Name: _nm.first } : {}),
                   Company: r.company || r.domain || "(unknown)",
                   Lead_Source: source,
                   Layout: { id: LEAD.layoutId },
@@ -8910,10 +8946,13 @@ export const duplicateRadarRoutes = [
               }
               wouldAccounts = 0; // A1 never creates an account.
               if (sampleCo) {
+                const primary = pickPrimaryContact(sampleCo.contacts);
+                const _nm = splitContactName(sampleCo.contacts[0]?.contact_name || sampleCo.companyName);
                 samplePayload = {
                   account: null,
                   contact: sampleCo.contacts[0] ? {
-                    Last_Name: sampleCo.contacts[0].contact_name || sampleCo.companyName,
+                    Last_Name: _nm.last || sampleCo.companyName,
+                    ...(_nm.first ? { First_Name: _nm.first } : {}),
                     ...(sampleCo.contacts[0].email ? { Email: sampleCo.contacts[0].email } : {}),
                     ...(sampleCo.contacts[0].phone ? { Phone: sampleCo.contacts[0].phone } : {}),
                     Account_Name: { id: sampleAccId },
@@ -8925,6 +8964,9 @@ export const duplicateRadarRoutes = [
                     Layout: { id: DEAL.layoutId },
                     Account_Name: { id: sampleAccId },
                     Contact_Name: { id: "(would-be-created)" },
+                    ...(sampleCo.contacts.length > 1
+                      ? { Description: buildOtherContactsDescription(sampleCo.contacts, primary) }
+                      : {}),
                   },
                 };
               }
@@ -8937,6 +8979,8 @@ export const duplicateRadarRoutes = [
                 const dom = co.domain || null;
                 const accountId = "(would-be-created)";
                 const contactId = "(would-be-created)";
+                const primary = pickPrimaryContact(co.contacts);
+                const _nm = splitContactName(co.contacts[0]?.contact_name || co.companyName);
                 samplePayload = {
                   account: {
                     Account_Name: co.companyName,
@@ -8944,7 +8988,8 @@ export const duplicateRadarRoutes = [
                     ...(dom ? { Website: dom.startsWith("http") ? dom : `https://${dom}` } : {}),
                   },
                   contact: co.contacts[0] ? {
-                    Last_Name: co.contacts[0].contact_name || co.companyName,
+                    Last_Name: _nm.last || co.companyName,
+                    ...(_nm.first ? { First_Name: _nm.first } : {}),
                     ...(co.contacts[0].email ? { Email: co.contacts[0].email } : {}),
                     ...(co.contacts[0].phone ? { Phone: co.contacts[0].phone } : {}),
                     Account_Name: { id: accountId },
@@ -8956,6 +9001,9 @@ export const duplicateRadarRoutes = [
                     Layout: { id: DEAL.layoutId },
                     Account_Name: { id: accountId },
                     Contact_Name: { id: contactId },
+                    ...(co.contacts.length > 1
+                      ? { Description: buildOtherContactsDescription(co.contacts, primary) }
+                      : {}),
                   },
                 };
               }
@@ -8998,8 +9046,10 @@ export const duplicateRadarRoutes = [
             // --- ACTION 4: create Leads only ---
             const leadPayloads = plan.leads.map((r, i) => {
               const dom = r.domain || null;
+              const _nm = splitContactName(r.contact_name || r.company || r.domain);
               const p: Record<string, any> = {
-                Last_Name: r.contact_name || r.company || r.domain || "(unknown)",
+                Last_Name: _nm.last || r.company || r.domain || "(unknown)",
+                ...(_nm.first ? { First_Name: _nm.first } : {}),
                 Company: r.company || r.domain || "(unknown)",
                 Lead_Source: source,
                 Layout: { id: LEAD.layoutId },
@@ -9082,26 +9132,33 @@ export const duplicateRadarRoutes = [
             }
 
             // Step 2: Create contacts for companies that have an account id.
-            // Map companyKey → firstContactId (for deal linkage)
+            // Map companyKey → primary contact id (for deal linkage) — prefers
+            // the created id of the first EMAIL-bearing contact row; falls
+            // back to the first row's created id when no row has an email.
             const firstContactIdMap = new Map<string, string>();
+            // Map companyKey → the row_index chosen as primary, so Step 3 can
+            // build the "other contacts" Description from the remaining rows.
+            const primaryRowIndexMap = new Map<string, number>();
 
             if (companiesWithAccount.length > 0) {
               // Build contact payloads (one per contact row, all companies interleaved).
-              interface ContactMeta { companyKey: string; rowIndex: number }
+              interface ContactMeta { companyKey: string; rowIndex: number; hasEmail: boolean }
               const contactMeta: ContactMeta[] = [];
               const contactPayloads: Record<string, any>[] = [];
 
               for (const co of companiesWithAccount) {
                 const accountId = accountIdMap.get(co.companyKey)!;
                 for (const row of co.contacts) {
+                  const _nm = splitContactName(row.contact_name || co.companyName);
                   const p: Record<string, any> = {
-                    Last_Name: row.contact_name || co.companyName,
+                    Last_Name: _nm.last || co.companyName,
+                    ...(_nm.first ? { First_Name: _nm.first } : {}),
                     Account_Name: { id: accountId },
                   };
                   if (row.email) p.Email = row.email;
                   if (row.phone) p.Phone = row.phone;
                   contactPayloads.push(p);
-                  contactMeta.push({ companyKey: co.companyKey, rowIndex: row.row_index });
+                  contactMeta.push({ companyKey: co.companyKey, rowIndex: row.row_index, hasEmail: !!String(row.email || "").trim() });
                 }
               }
 
@@ -9111,14 +9168,30 @@ export const duplicateRadarRoutes = [
               created.contacts = conOut.filter(o => o.status === "success").length;
               failed.contacts = conOut.filter(o => o.status === "error").length;
 
-              // First successful contact per company → firstContactId for Deal.
+              // Primary contact per company: prefer the first successfully-created
+              // row that HAS an email; fall back to the first successfully-created
+              // row if no email-bearing contact was created for that company.
+              const fallbackContactIdMap = new Map<string, string>();
+              const fallbackRowIndexMap = new Map<string, number>();
               for (let i = 0; i < conOut.length; i++) {
                 const out = conOut[i];
                 if (out?.status === "success" && out.id) {
                   const meta = contactMeta[i];
-                  if (!firstContactIdMap.has(meta.companyKey)) {
-                    firstContactIdMap.set(meta.companyKey, out.id);
+                  if (!fallbackContactIdMap.has(meta.companyKey)) {
+                    fallbackContactIdMap.set(meta.companyKey, out.id);
+                    fallbackRowIndexMap.set(meta.companyKey, meta.rowIndex);
                   }
+                  if (meta.hasEmail && !firstContactIdMap.has(meta.companyKey)) {
+                    firstContactIdMap.set(meta.companyKey, out.id);
+                    primaryRowIndexMap.set(meta.companyKey, meta.rowIndex);
+                  }
+                }
+              }
+              // Fill in companies with no email-bearing created contact from the fallback.
+              for (const [companyKey, id] of fallbackContactIdMap) {
+                if (!firstContactIdMap.has(companyKey)) {
+                  firstContactIdMap.set(companyKey, id);
+                  primaryRowIndexMap.set(companyKey, fallbackRowIndexMap.get(companyKey)!);
                 }
               }
             }
@@ -9142,6 +9215,14 @@ export const duplicateRadarRoutes = [
                 };
                 if (firstContactId) {
                   p.Contact_Name = { id: firstContactId };
+                }
+                if (co.contacts.length > 1) {
+                  const primaryRowIndex = primaryRowIndexMap.get(co.companyKey);
+                  const primaryRow = primaryRowIndex != null
+                    ? co.contacts.find(r => r.row_index === primaryRowIndex) || null
+                    : pickPrimaryContact(co.contacts);
+                  const desc = buildOtherContactsDescription(co.contacts, primaryRow);
+                  if (desc) p.Description = desc;
                 }
                 dealPayloads.push(p);
                 dealCompanyKeys.push(co.companyKey);

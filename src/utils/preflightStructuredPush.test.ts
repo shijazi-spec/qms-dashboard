@@ -13,7 +13,7 @@ function assertEq(cond: boolean, label: string): void {
   else { console.error(`  ✗ ${label}`); failed++; }
 }
 
-import { PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET } from "./preflightStructuredPush";
+import { PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, splitContactName } from "./preflightStructuredPush";
 assertEq(PREFLIGHT_DEAL_TARGET.layoutId === "5146753000000019023", "deal layout id default");
 assertEq(PREFLIGHT_DEAL_TARGET.pipeline === "Standard (Corporates)", "deal pipeline default");
 assertEq(PREFLIGHT_DEAL_TARGET.stage === "New Deal", "deal stage default");
@@ -22,6 +22,31 @@ assertEq(PREFLIGHT_LEAD_TARGET.status === "New Lead", "lead status default");
 console.log("preflightStructuredPush constants ok");
 
 if (failed > 0) { console.error(`\n${failed} test(s) FAILED`); process.exit(1); }
+
+// ---------------------------------------------------------------------------
+// splitContactName tests
+// ---------------------------------------------------------------------------
+{
+  const r1 = splitContactName("Sally Mahasna");
+  assertEq(r1.first === "Sally" && r1.last === "Mahasna", "splitContactName: two-token name");
+
+  const r2 = splitContactName("Sulaiman Al Qafari");
+  assertEq(r2.first === "Sulaiman Al" && r2.last === "Qafari", "splitContactName: three-token name");
+
+  const r3 = splitContactName("Basserah");
+  assertEq(r3.first === "" && r3.last === "Basserah", "splitContactName: single token");
+
+  const r4 = splitContactName("");
+  assertEq(r4.first === "" && r4.last === "", "splitContactName: empty string");
+
+  const r5 = splitContactName(null);
+  assertEq(r5.first === "" && r5.last === "", "splitContactName: null");
+
+  const r6 = splitContactName(undefined);
+  assertEq(r6.first === "" && r6.last === "", "splitContactName: undefined");
+}
+if (failed > 0) { console.error(`\n${failed} test(s) FAILED`); process.exit(1); }
+console.log("splitContactName ok");
 
 // ---------------------------------------------------------------------------
 // Task 2: buildStructuredPushPlan tests
