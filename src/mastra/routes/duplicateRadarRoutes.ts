@@ -62,11 +62,31 @@ function buildOtherContactsDescription(
 // deduped per key. Rows that already carry a matched id are left untouched.
 async function enrichRowsWithExistingAccounts(
   spRows: any[],
-): Promise<{ rows: any[]; via: Map<number, string> }> {
+): Promise<{ rows: any[]; via: Map<number, string>; possibleClientOf: (row: any) => { zohoId: string; name: string } | null }> {
   const { getAccountDirectory } = await import("../../utils/duplicateRadarDatabase");
-  const { realDomainRoot } = await import("../../utils/preflightStructuredPush");
+  const { realDomainRoot, normalizeCoreName, significantTokens, domainRootToken } =
+    await import("../../utils/preflightStructuredPush");
   // ONE query loads the whole account directory; all matching is in-memory.
   const dir = await getAccountDirectory();
+
+  // Fuzzy indexes for the "possible existing client" FLAG (never auto-links —
+  // that stays on exact matches; this only warns for human verification).
+  const byCore = new Map<string, { zohoId: string; name: string }>();
+  const byNameToken = new Map<string, { zohoId: string; name: string }>();
+  for (const ref of dir.byId.values()) {
+    const core = normalizeCoreName(ref.name);
+    if (core.length >= 4 && !byCore.has(core)) byCore.set(core, ref);
+    for (const tok of significantTokens(ref.name)) if (!byNameToken.has(tok)) byNameToken.set(tok, ref);
+  }
+  // Warn only for rows that did NOT auto-match (else they'd be A1 already).
+  const possibleClientOf = (row: any): { zohoId: string; name: string } | null => {
+    if (String(row?.matched_account_zoho_id || "").trim()) return null;
+    const core = normalizeCoreName(row?.company);
+    if (core.length >= 4 && byCore.has(core)) return byCore.get(core)!;
+    const root = domainRootToken(row?.domain) || domainRootToken(row?.email);
+    if (root && root.length >= 4 && byNameToken.has(root)) return byNameToken.get(root)!;
+    return null;
+  };
   const byDomain = (d: string | null): { zohoId: string; name: string } | null =>
     d ? dir.byDomain.get(d) || null : null;
   const byName = (n: string): { zohoId: string; name: string } | null => {
@@ -99,7 +119,7 @@ async function enrichRowsWithExistingAccounts(
     if (ref) { via.set(r.row_index, matchedVia); rows.push({ ...r, matched_account_zoho_id: ref.zohoId, matched_account_name: ref.name }); }
     else rows.push(r);
   }
-  return { rows, via };
+  return { rows, via, possibleClientOf };
 }
 
 // Parse the shared Advanced Filters query params used by the per-tab record
@@ -8961,8 +8981,21 @@ export const duplicateRadarRoutes = [
           // Layer 1: resolve existing accounts (email domain → row domain →
           // name) BEFORE planning, so matched contacts route to A1 (link) and
           // are never rejected or duplicated as new accounts.
-          const { rows: enrichedRows } = await enrichRowsWithExistingAccounts(spRows);
+          const { rows: enrichedRows, possibleClientOf } = await enrichRowsWithExistingAccounts(spRows);
           const plan = buildStructuredPushPlan(action, enrichedRows, { count, offset });
+
+          // "Possible existing client" warning text for a lead/new-deal row that
+          // FUZZY-matches an existing account (but wasn't exact enough to link).
+          const POSSIBLE_CLIENT_NOTE = (name: string) =>
+            `⚠ POSSIBLE EXISTING CLIENT — resembles existing account "${name}". Verify before contacting / creating a duplicate. `;
+          // How many of THIS action's items fuzzy-match an existing account
+          // (leads for A4, new-account companies for A2/A3). A1 already links.
+          const possibleClientCount =
+            action === 4
+              ? plan.leads.filter(r => possibleClientOf(r)).length
+              : action !== 1
+                ? plan.companies.filter(co => possibleClientOf({ company: co.companyName, domain: co.domain, email: co.contacts[0]?.email })).length
+                : 0;
           const DEAL = PREFLIGHT_DEAL_TARGET;
           const LEAD = PREFLIGHT_LEAD_TARGET;
 
@@ -9161,6 +9194,7 @@ export const duplicateRadarRoutes = [
               skipped_count: plan.skipped.length + a1SkippedNoAccount,
               no_matched_account_count: a1SkippedNoAccount,
               active_link_only_count: a1ActiveLinkOnly,
+              possible_existing_client_count: possibleClientCount,
               skipped_sample: plan.skipped.slice(0, 10),
             });
           }
@@ -9185,6 +9219,7 @@ export const duplicateRadarRoutes = [
             const leadPayloads = plan.leads.map((r, i) => {
               const web = websiteFromDomain(r.domain);
               const _nm = splitContactName(r.contact_name || r.company || r.domain);
+              const maybeClient = possibleClientOf(r);
               const p: Record<string, any> = {
                 Last_Name: _nm.last || r.company || r.domain || "(unknown)",
                 ...(_nm.first ? { First_Name: _nm.first } : {}),
@@ -9192,7 +9227,7 @@ export const duplicateRadarRoutes = [
                 Lead_Source: PREFLIGHT_LEAD_SOURCE,
                 Layout: { id: LEAD.layoutId },
                 Lead_Status: LEAD.status,
-                Description: `Imported via QMS Preflight Structured Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
+                Description: `${maybeClient ? POSSIBLE_CLIENT_NOTE(maybeClient.name) : ""}Imported via QMS Preflight Structured Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
               };
               if (r.email) p.Email = r.email;
               if (r.phone) p.Phone = r.phone;
@@ -9408,14 +9443,20 @@ export const duplicateRadarRoutes = [
                 if (firstContactId) {
                   p.Contact_Name = { id: firstContactId };
                 }
+                // A2/A3 open a NEW account — warn if it fuzzy-matches an
+                // existing one (possible duplicate / existing client).
+                const maybeClient = action !== 1
+                  ? possibleClientOf({ company: co.companyName, domain: co.domain, email: co.contacts[0]?.email })
+                  : null;
+                let dealDesc = maybeClient ? POSSIBLE_CLIENT_NOTE(maybeClient.name) : "";
                 if (co.contacts.length > 1) {
                   const primaryRowIndex = primaryRowIndexMap.get(co.companyKey);
                   const primaryRow = primaryRowIndex != null
                     ? co.contacts.find(r => r.row_index === primaryRowIndex) || null
                     : pickPrimaryContact(co.contacts);
-                  const desc = buildOtherContactsDescription(co.contacts, primaryRow);
-                  if (desc) p.Description = desc;
+                  dealDesc += buildOtherContactsDescription(co.contacts, primaryRow);
                 }
+                if (dealDesc) p.Description = dealDesc;
                 dealPayloads.push(p);
                 dealCompanyKeys.push(co.companyKey);
               }
@@ -9487,6 +9528,7 @@ export const duplicateRadarRoutes = [
             created,
             failed,
             existing_contacts_linked: existingContactsLinked,
+            possible_existing_client_count: possibleClientCount,
             skipped_count: plan.skipped.length,
             outcomes_sample: outcomesSample,
           });

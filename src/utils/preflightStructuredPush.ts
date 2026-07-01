@@ -95,6 +95,53 @@ export function websiteFromDomain(domain: string | null | undefined): string | n
 }
 
 // ---------------------------------------------------------------------------
+// Fuzzy company-identity helpers — used ONLY to FLAG a lead/new-deal as a
+// "possible existing client" for human verification (never to auto-link; that
+// stays on exact matches). Keeps the sales team from cold-contacting an active
+// client whose contact used a personal email or a slightly different name.
+// ---------------------------------------------------------------------------
+// Pure legal-form words only — so "X Co." / "X Company" / "X" all normalize
+// alike. Descriptive words (Trading, Group, Holding, General) are kept: they
+// are part of a company's identity and dropping them causes false matches.
+const LEGAL_SUFFIX_TOKENS = new Set([
+  "co", "company", "corp", "corporation", "ltd", "limited", "llc", "inc", "incorporated", "plc", "شركة",
+]);
+
+// normalizeCoreName — lowercase, drop the bilingual second half, strip
+// punctuation and legal-form suffix words, collapse spaces. "Acme Trading Co."
+// and "acme trading" both normalize to "acme trading".
+export function normalizeCoreName(name: string | null | undefined): string {
+  let s = String(name || "").toLowerCase();
+  s = s.split("|")[0].split(" - ")[0];               // drop bilingual/second half
+  s = s.replace(/[^\p{L}\p{N}]+/gu, " ").trim();     // non-alphanumeric → space
+  const tokens = s.split(/\s+/).filter(t => t && t.length >= 2 && !LEGAL_SUFFIX_TOKENS.has(t));
+  return tokens.join(" ");
+}
+
+// significantTokens — the ≥4-char core-name tokens, for matching a domain root
+// against an account name ("arabiandrilling" token in "Arabian Drilling").
+export function significantTokens(name: string | null | undefined): string[] {
+  return normalizeCoreName(name).split(/\s+/).filter(t => t.length >= 4);
+}
+
+const MULTI_PART_TLDS = ["com.sa", "edu.sa", "gov.sa", "org.sa", "net.sa", "med.sa", "sch.sa", "co.uk", "com.qa", "com.kw", "com.bh", "com.eg", "com.ae"];
+
+// domainRootToken — the second-level label of a real domain ("arabiandrilling"
+// from arabiandrilling.com, "kfshrc" from kfshrc.edu.sa). "" when not a real
+// domain. Used to match a domain against account NAMES (accounts with no domain
+// stored still get caught if their name contains the root).
+export function domainRootToken(domain: string | null | undefined): string {
+  let d = realDomainRoot(domain);
+  if (!d) return "";
+  for (const t of MULTI_PART_TLDS) {
+    if (d.endsWith("." + t)) { d = d.slice(0, d.length - t.length - 1); return d.split(".").pop() || ""; }
+  }
+  const parts = d.split(".");
+  if (parts.length >= 2) parts.pop();                 // strip single TLD
+  return parts.pop() || "";
+}
+
+// ---------------------------------------------------------------------------
 // Contact domain-consistency routing.
 // The Mawsool export's "Company" label is an unreliable enrichment: rows
 // grouped under one company name frequently carry corporate emails at

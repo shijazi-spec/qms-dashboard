@@ -224,6 +224,24 @@ import { websiteFromDomain } from "./preflightStructuredPush";
 console.log("websiteFromDomain ok");
 
 // ---------------------------------------------------------------------------
+// Fuzzy identity helpers (possible-existing-client flag).
+// ---------------------------------------------------------------------------
+import { normalizeCoreName, significantTokens, domainRootToken } from "./preflightStructuredPush";
+{
+  assertEq(normalizeCoreName("Acme Trading Co.") === "acme trading", "core: strips legal suffix + punctuation");
+  assertEq(normalizeCoreName("acme trading") === "acme trading", "core: already normalized");
+  assertEq(normalizeCoreName("Shaqra University | جامعة شقراء") === "shaqra university", "core: drops bilingual half");
+  assertEq(normalizeCoreName("Al Rajhi Bank") === "al rajhi bank", "core: keeps distinguishing words (not an article strip)");
+  assertEq(significantTokens("Arabian Drilling Co.").join(",") === "arabian,drilling", "tokens: >=4-char core tokens");
+  assertEq(domainRootToken("arabiandrilling.com") === "arabiandrilling", "domainRoot: .com");
+  assertEq(domainRootToken("kfshrc.edu.sa") === "kfshrc", "domainRoot: .edu.sa multi-part TLD");
+  assertEq(domainRootToken("sub.acme.com") === "acme", "domainRoot: subdomain");
+  assertEq(domainRootToken("#n") === "", "domainRoot: placeholder -> empty");
+  assertEq(domainRootToken("a@riyadbank.com") === "riyadbank", "domainRoot: from an email");
+}
+console.log("fuzzy identity helpers ok");
+
+// ---------------------------------------------------------------------------
 // A1/A2 slicing — count/offset must window the eligible companies so a big
 // batch can be pushed in timeout-safe slices. count<=0 = all (back-compat).
 // ---------------------------------------------------------------------------

@@ -11532,6 +11532,7 @@
                                 + (resp.no_matched_account_count ? ' (' + resp.no_matched_account_count + ' churned with no existing Account — won\'t be pushed)' : '')
                                 + '</div>'
                             + (resp.active_link_only_count ? '<div class="text-indigo-700">' + resp.active_link_only_count + ' active-account link(s) → contact added, no re-engagement Deal (only churned accounts get a Deal).</div>' : '')
+                            + (resp.possible_existing_client_count ? '<div class="text-amber-700 font-medium">⚠ ' + resp.possible_existing_client_count + ' possible existing client(s) — resemble an account we already have; each is tagged in its Description "verify before contacting."</div>' : '')
                             + (action === 1 ? '<div class="text-gray-500 text-[11px]">On push, contacts already in Zoho (by email) are reused, not duplicated.</div>' : '')
                             + eligibleHtml
                             + (resp.sample_payload ? '<div class="mt-2 font-mono text-[10px] bg-white border rounded p-2 overflow-x-auto">Sample payload:<br>' + escapeHtml(JSON.stringify(resp.sample_payload, null, 2)) + '</div>' : '')
@@ -11559,6 +11560,7 @@
                             + '<div class="font-semibold text-emerald-800 mb-1">✓ Push complete</div>'
                             + '<div>' + crLine + '</div>'
                             + (resp.existing_contacts_linked ? '<div class="text-indigo-700">Reused ' + resp.existing_contacts_linked + ' existing contact(s) — not duplicated.</div>' : '')
+                            + (resp.possible_existing_client_count ? '<div class="text-amber-700">⚠ ' + resp.possible_existing_client_count + ' flagged as possible existing client(s) — see each record\'s Description.</div>' : '')
                             + '<div>' + flLine + '</div>'
                             + '<div>Skipped: ' + (resp.skipped_count || 0) + '</div>'
                             + (count > 0 ? '<div class="mt-1 text-purple-700">Next batch starts at offset ' + nextOffset + '. Push again for the next ' + count + '.</div>' : '')
