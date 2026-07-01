@@ -5479,6 +5479,43 @@ export async function getAccountZohoIdByDomainOrName(
   return null;
 }
 
+/** Like getAccountZohoIdByDomainOrName but returns the account's display NAME
+ * alongside its Zoho id, so the Preflight push can show a human-readable
+ * "links to <Account>" instead of a bare id. Same domain→name match order. */
+export async function getAccountRefByDomainOrName(
+  domain: string | null | undefined,
+  companyName: string | null | undefined,
+): Promise<{ zohoId: string; name: string } | null> {
+  const dom = String(domain || "").trim().toLowerCase();
+  if (dom) {
+    const r = await pool.query(
+      `SELECT zoho_record_id, COALESCE(NULLIF(btrim(record_name), ''), NULLIF(btrim(company_name), ''), '') AS name
+         FROM duplicate_records
+         WHERE record_type = 'account' AND LOWER(btrim(domain)) = $1
+           AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+         ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST
+         LIMIT 1`,
+      [dom],
+    );
+    if (r.rows[0]?.zoho_record_id) return { zohoId: String(r.rows[0].zoho_record_id), name: String(r.rows[0].name || "") };
+  }
+  const nm = String(companyName || "").trim().toLowerCase();
+  if (nm && nm.length >= 3) {
+    const r = await pool.query(
+      `SELECT zoho_record_id, COALESCE(NULLIF(btrim(record_name), ''), NULLIF(btrim(company_name), ''), '') AS name
+         FROM duplicate_records
+         WHERE record_type = 'account'
+           AND LOWER(btrim(COALESCE(record_name, company_name, ''))) = $1
+           AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+         ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST
+         LIMIT 1`,
+      [nm],
+    );
+    if (r.rows[0]?.zoho_record_id) return { zohoId: String(r.rows[0].zoho_record_id), name: String(r.rows[0].name || "") };
+  }
+  return null;
+}
+
 /**
  * Returns true if `clusterId` already has at least one record whose
  * corporate domain differs from `candidateDomain`. Used as a guard so

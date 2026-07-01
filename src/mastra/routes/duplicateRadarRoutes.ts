@@ -63,15 +63,15 @@ function buildOtherContactsDescription(
 async function enrichRowsWithExistingAccounts(
   spRows: any[],
 ): Promise<{ rows: any[]; via: Map<number, string> }> {
-  const { getAccountZohoIdByDomainOrName } = await import("../../utils/duplicateRadarDatabase");
+  const { getAccountRefByDomainOrName } = await import("../../utils/duplicateRadarDatabase");
   const { realDomainRoot } = await import("../../utils/preflightStructuredPush");
-  const cache = new Map<string, string | null>();
-  const lookup = async (domain: string, name: string): Promise<string | null> => {
+  const cache = new Map<string, { zohoId: string; name: string } | null>();
+  const lookup = async (domain: string, name: string): Promise<{ zohoId: string; name: string } | null> => {
     const key = String(domain || "").toLowerCase() + "||" + String(name || "").toLowerCase();
-    if (cache.has(key)) return cache.get(key) as string | null;
-    const id = await getAccountZohoIdByDomainOrName(domain, name);
-    cache.set(key, id);
-    return id;
+    if (cache.has(key)) return cache.get(key) as { zohoId: string; name: string } | null;
+    const ref = await getAccountRefByDomainOrName(domain, name);
+    cache.set(key, ref);
+    return ref;
   };
   const via = new Map<number, string>();
   const rows: any[] = [];
@@ -83,12 +83,12 @@ async function enrichRowsWithExistingAccounts(
     }
     const emailDom = realDomainRoot(r.email);
     const rowDom = realDomainRoot(r.domain);
-    let id: string | null = null;
+    let ref: { zohoId: string; name: string } | null = null;
     let matchedVia = "";
-    if (emailDom) { id = await lookup(emailDom, ""); if (id) matchedVia = "email_domain"; }
-    if (!id && rowDom) { id = await lookup(rowDom, ""); if (id) matchedVia = "row_domain"; }
-    if (!id && String(r.company || "").trim().length >= 3) { id = await lookup("", r.company); if (id) matchedVia = "company_name"; }
-    if (id) { via.set(r.row_index, matchedVia); rows.push({ ...r, matched_account_zoho_id: id }); }
+    if (emailDom) { ref = await lookup(emailDom, ""); if (ref) matchedVia = "email_domain"; }
+    if (!ref && rowDom) { ref = await lookup(rowDom, ""); if (ref) matchedVia = "row_domain"; }
+    if (!ref && String(r.company || "").trim().length >= 3) { ref = await lookup("", r.company); if (ref) matchedVia = "company_name"; }
+    if (ref) { via.set(r.row_index, matchedVia); rows.push({ ...r, matched_account_zoho_id: ref.zohoId, matched_account_name: ref.name }); }
     else rows.push(r);
   }
   return { rows, via };
@@ -8944,6 +8944,9 @@ export const duplicateRadarRoutes = [
             matched_account_zoho_id: (r.matched_account_zoho_id ?? r.input?.matched_account_zoho_id) != null
               ? String(r.matched_account_zoho_id ?? r.input?.matched_account_zoho_id)
               : null,
+            matched_account_name: (r.matched_account_name ?? r.input?.matched_account_name) != null
+              ? String(r.matched_account_name ?? r.input?.matched_account_name)
+              : null,
             lifecycle_state: r.lifecycle_state != null ? String(r.lifecycle_state) : null,
           }));
 
@@ -9484,6 +9487,7 @@ export const duplicateRadarRoutes = [
             .map(r => ({
               row_index: r.row_index,
               matched_account_zoho_id: String(r.matched_account_zoho_id),
+              matched_account_name: String(r.matched_account_name || ""),
               matched_via: via.get(r.row_index) || "unknown",
             }));
 

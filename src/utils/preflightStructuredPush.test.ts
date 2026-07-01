@@ -80,11 +80,13 @@ assertEq(normalizeCompanyKey("", "Acme.com") === "acme.com", "falls back to doma
   assertEq(p.companies.length === 0, "A1 skips a non-matched new company");
 }
 // A1 LINKS a contact that matched an existing account (matched_account_zoho_id),
-// grouped by the resolved account id.
+// grouped by the resolved account id and named by the resolved account NAME
+// (not the row's wrong label).
 {
-  const rows = [mk({ row_index: 1, company: "Whatever Label", domain: "x.co", email: "a@riyadbank.com", matched_account_zoho_id: "ACC1" })];
+  const rows = [mk({ row_index: 1, company: "Whatever Label", domain: "x.co", email: "a@riyadbank.com", matched_account_zoho_id: "ACC1", matched_account_name: "Riyad Bank" })];
   const p = buildStructuredPushPlan(1, rows, {});
   assertEq(p.companies.length === 1 && p.companies[0].companyKey === "ACC1", "A1 links a matched contact, keyed by account id");
+  assertEq(p.companies[0].companyName === "Riyad Bank", "A1 names the group by the RESOLVED account name, not the label");
 }
 // Two contacts under ONE wrong label but matched to DIFFERENT accounts → two
 // separate A1 links (never merged under the bad label).

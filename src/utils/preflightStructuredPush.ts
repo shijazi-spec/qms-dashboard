@@ -34,6 +34,7 @@ export interface SPRow {
   verdict: string;
   cluster_id: number | null;
   matched_account_zoho_id: string | null;
+  matched_account_name?: string | null;
   lifecycle_state: string | null;
 }
 
@@ -283,9 +284,13 @@ export function buildStructuredPushPlan(
       const key = String(r.matched_account_zoho_id || "").trim() || ("name:" + normalizeCompanyKey(r.company, r.domain));
       let grp = byAcc.get(key);
       if (!grp) {
-        grp = { companyKey: key, companyName: r.company || r.domain || key, domain: r.domain || "", clusterId: r.cluster_id ?? null, contacts: [] };
+        // Prefer the RESOLVED account name (human-readable "links to <Account>")
+        // over the row's often-wrong label.
+        const displayName = String(r.matched_account_name || "").trim() || r.company || r.domain || key;
+        grp = { companyKey: key, companyName: displayName, domain: r.domain || "", clusterId: r.cluster_id ?? null, contacts: [] };
         byAcc.set(key, grp);
       }
+      if (!String(grp.companyName || "").trim() && String(r.matched_account_name || "").trim()) grp.companyName = String(r.matched_account_name).trim();
       if (r.cluster_id != null && grp.clusterId == null) grp.clusterId = r.cluster_id;
       grp.contacts.push(r);
     }

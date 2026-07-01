@@ -11246,6 +11246,7 @@
                 verdict: r.verdict || '',
                 cluster_id: (r.cluster_id != null ? r.cluster_id : null),
                 matched_account_zoho_id: (r.matched_account_zoho_id || (r.input && r.input.matched_account_zoho_id) || null),
+                matched_account_name: (r.matched_account_name || (r.input && r.input.matched_account_name) || null),
                 lifecycle_state: (r.lifecycle_state != null ? r.lifecycle_state : null),
             };
         }
@@ -11411,18 +11412,29 @@
                     var idx = (r.row_index != null ? r.row_index : i);
                     if (byIdx[idx]) {
                         r.matched_account_zoho_id = byIdx[idx].matched_account_zoho_id;
-                        if (r.input) r.input.matched_account_zoho_id = byIdx[idx].matched_account_zoho_id;
+                        r.matched_account_name = byIdx[idx].matched_account_name || '';
+                        if (r.input) {
+                            r.input.matched_account_zoho_id = byIdx[idx].matched_account_zoho_id;
+                            r.input.matched_account_name = byIdx[idx].matched_account_name || '';
+                        }
                     }
                 });
                 _pfRefreshStructuredPushCounts(data.rows);
                 window._pfResolved = true;
                 var v = resp.by_via || {};
+                // Sample of the human-readable account links (name ← contact).
+                var linkSample = (resp.matches || []).slice(0, 40).map(function (mm) {
+                    var src = data.rows[mm.row_index] || {};
+                    var who = (src.contact_name || (src.input && src.input.contact_name) || src.email || '(contact)');
+                    return '<tr class="border-b border-gray-100"><td class="pr-2 text-emerald-700">' + escapeHtml(mm.matched_account_name || ('acct ' + mm.matched_account_zoho_id)) + '</td><td class="text-gray-500">← ' + escapeHtml(String(who)) + ' <span class="text-gray-400">(' + escapeHtml(mm.matched_via || '') + ')</span></td></tr>';
+                }).join('');
                 if (box) {
                     box.classList.remove('hidden');
                     box.innerHTML = ''
                         + '<div class="font-semibold text-emerald-800 mb-1">✓ Resolved existing accounts</div>'
                         + '<div><span class="text-emerald-700 font-semibold">' + (resp.matched || 0) + '</span> of ' + (resp.total || 0) + ' contacts matched an existing account → they LINK (Action 1), never rejected or duplicated.</div>'
                         + '<div class="text-gray-600 mt-1">Matched via — email domain: ' + (v.email_domain || 0) + ' · company domain: ' + (v.row_domain || 0) + ' · company name: ' + (v.company_name || 0) + '</div>'
+                        + (linkSample ? '<details class="mt-1"><summary class="cursor-pointer text-emerald-700 font-medium">Show account links</summary><table class="text-[11px] w-full mt-1">' + linkSample + '</table></details>' : '')
                         + '<div class="text-gray-500 mt-1">' + (resp.unmatched || 0) + ' unmatched → new account / lead / reject per the rules. Badges above are updated.</div>';
                 }
             } catch (e) {
