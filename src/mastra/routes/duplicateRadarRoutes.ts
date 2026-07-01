@@ -63,15 +63,15 @@ function buildOtherContactsDescription(
 async function enrichRowsWithExistingAccounts(
   spRows: any[],
 ): Promise<{ rows: any[]; via: Map<number, string> }> {
-  const { getAccountRefByDomainOrName } = await import("../../utils/duplicateRadarDatabase");
+  const { getAccountDirectory } = await import("../../utils/duplicateRadarDatabase");
   const { realDomainRoot } = await import("../../utils/preflightStructuredPush");
-  const cache = new Map<string, { zohoId: string; name: string } | null>();
-  const lookup = async (domain: string, name: string): Promise<{ zohoId: string; name: string } | null> => {
-    const key = String(domain || "").toLowerCase() + "||" + String(name || "").toLowerCase();
-    if (cache.has(key)) return cache.get(key) as { zohoId: string; name: string } | null;
-    const ref = await getAccountRefByDomainOrName(domain, name);
-    cache.set(key, ref);
-    return ref;
+  // ONE query loads the whole account directory; all matching is in-memory.
+  const dir = await getAccountDirectory();
+  const byDomain = (d: string | null): { zohoId: string; name: string } | null =>
+    d ? dir.byDomain.get(d) || null : null;
+  const byName = (n: string): { zohoId: string; name: string } | null => {
+    const k = String(n || "").trim().toLowerCase();
+    return k.length >= 3 ? dir.byName.get(k) || null : null;
   };
   const via = new Map<number, string>();
   const rows: any[] = [];
@@ -85,9 +85,9 @@ async function enrichRowsWithExistingAccounts(
     const rowDom = realDomainRoot(r.domain);
     let ref: { zohoId: string; name: string } | null = null;
     let matchedVia = "";
-    if (emailDom) { ref = await lookup(emailDom, ""); if (ref) matchedVia = "email_domain"; }
-    if (!ref && rowDom) { ref = await lookup(rowDom, ""); if (ref) matchedVia = "row_domain"; }
-    if (!ref && String(r.company || "").trim().length >= 3) { ref = await lookup("", r.company); if (ref) matchedVia = "company_name"; }
+    if (emailDom) { ref = byDomain(emailDom); if (ref) matchedVia = "email_domain"; }
+    if (!ref && rowDom) { ref = byDomain(rowDom); if (ref) matchedVia = "row_domain"; }
+    if (!ref && String(r.company || "").trim().length >= 3) { ref = byName(r.company); if (ref) matchedVia = "company_name"; }
     if (ref) { via.set(r.row_index, matchedVia); rows.push({ ...r, matched_account_zoho_id: ref.zohoId, matched_account_name: ref.name }); }
     else rows.push(r);
   }

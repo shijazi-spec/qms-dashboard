@@ -152,6 +152,19 @@ assertEq(normalizeCompanyKey("", "Acme.com") === "acme.com", "falls back to doma
   const a4next = buildStructuredPushPlan(4, rows, { count: 1, offset: 1 });
   assertEq(a4next.leads.length === 1 && a4next.leads[0].company === "LeadCo2", "A4 slice: next lead");
 }
+// PASS-gate: non-PASS rows (block / review / duplicate / no-contact) are NEVER
+// pushable — not via A1 (even if they match an existing account), not via A4.
+{
+  const rows = [
+    mk({ row_index: 1, company: "Dup Co", domain: "dup.co", email: "a@dup.co", matched_account_zoho_id: "ACC1", verdict: "duplicate" }),
+    mk({ row_index: 2, company: "Blocked", domain: "#n", phone: "+966500000000", verdict: "block" }),
+    mk({ row_index: 3, company: "Good", domain: "good.co", email: "a@good.co", verdict: "pass" }),
+  ];
+  assertEq(buildStructuredPushPlan(1, rows, {}).companies.length === 0, "PASS-gate: duplicate row excluded from A1 even with a matched account");
+  assertEq(buildStructuredPushPlan(4, rows, {}).leads.length === 0, "PASS-gate: block row excluded from A4");
+  const a3 = buildStructuredPushPlan(3, rows, {});
+  assertEq(a3.companies.length === 1 && a3.companies[0].companyName === "Good", "PASS-gate: only the pass row survives");
+}
 console.log("buildStructuredPushPlan ok");
 
 // ---------------------------------------------------------------------------

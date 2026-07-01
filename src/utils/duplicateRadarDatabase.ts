@@ -5479,6 +5479,37 @@ export async function getAccountZohoIdByDomainOrName(
   return null;
 }
 
+/** Load the ENTIRE existing-account directory in ONE query, indexed by domain
+ * and by normalized name, for bulk existing-account matching. The Preflight
+ * push enriches ~900 rows at once; doing a per-row SQL lookup was ~900
+ * sequential scans (it hung the UI). This loads once, then callers match in
+ * memory. Best row per key wins (primary, then most-recently-modified). */
+export async function getAccountDirectory(): Promise<{
+  byDomain: Map<string, { zohoId: string; name: string }>;
+  byName: Map<string, { zohoId: string; name: string }>;
+}> {
+  const r = await pool.query(
+    `SELECT zoho_record_id,
+            LOWER(btrim(domain)) AS dom,
+            LOWER(btrim(COALESCE(record_name, company_name, ''))) AS nm,
+            COALESCE(NULLIF(btrim(record_name), ''), NULLIF(btrim(company_name), ''), '') AS disp
+       FROM duplicate_records
+      WHERE record_type = 'account'
+        AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+      ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST`,
+  );
+  const byDomain = new Map<string, { zohoId: string; name: string }>();
+  const byName = new Map<string, { zohoId: string; name: string }>();
+  for (const row of r.rows) {
+    const ref = { zohoId: String(row.zoho_record_id), name: String(row.disp || "") };
+    const dom = String(row.dom || "");
+    const nm = String(row.nm || "");
+    if (dom && !byDomain.has(dom)) byDomain.set(dom, ref);   // first = best (query is pre-ordered)
+    if (nm && nm.length >= 3 && !byName.has(nm)) byName.set(nm, ref);
+  }
+  return { byDomain, byName };
+}
+
 /** Like getAccountZohoIdByDomainOrName but returns the account's display NAME
  * alongside its Zoho id, so the Preflight push can show a human-readable
  * "links to <Account>" instead of a bare id. Same domain→name match order. */

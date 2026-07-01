@@ -234,11 +234,18 @@ export function buildStructuredPushPlan(
 ): StructuredPushPlan {
   const skipped: Array<{ row_index: number; reason: string }> = [];
 
+  // ONLY verdict === "pass" rows are ever pushable. The caller may hand us the
+  // full result set (block / review / duplicate / no-contact included); those
+  // must never reach Zoho — e.g. the 563 "duplicate" rows already exist in the
+  // CRM and would otherwise be pulled into A1 as existing-account links. A1 and
+  // A4 don't re-check the verdict downstream, so we gate it here, up front.
+  const pushableRows = rows.filter(r => String(r.verdict || "").toLowerCase() === "pass");
+
   // Domain-consistency routing FIRST. Only "account"-routed rows may be filed
   // under an Account (A1/A2/A3). "lead"-routed rows become individual Leads
   // (A4). "reject"-routed rows (corporate email contradicting the company, or
   // a corporate email at an unverifiable company) are dropped and reported.
-  const routed = routeContactsByDomainConsistency(rows);
+  const routed = routeContactsByDomainConsistency(pushableRows);
   const accountRows: SPRow[] = routed.filter(r => r.route === "account");
   const leadRows: SPRow[] = routed.filter(r => r.route === "lead");
   routed

@@ -11234,6 +11234,9 @@
         // Map a raw preflight result row to the SPRow shape the endpoint wants.
         // verdict / cluster_id / lifecycle_state are TOP-LEVEL on each row;
         // company / domain / contact_name fall back through r.input.
+        // Only verdict === "pass" rows are pushable — block/review/duplicate/
+        // no-contact must never reach the push (they're the 734 rejected).
+        function _pfIsPass(r) { return String(r && r.verdict || '').toLowerCase() === 'pass'; }
         function _pfToSPRow(r, idx) {
             return {
                 row_index: (r.row_index != null ? r.row_index : idx),
@@ -11372,7 +11375,7 @@
         function _pfRefreshStructuredPushCounts(rawRows) {
             var panel = document.getElementById('structuredPushPanel');
             if (panel) panel.classList.remove('hidden');
-            var spRows = (rawRows || []).map(_pfToSPRow);
+            var spRows = (rawRows || []).map(_pfToSPRow).filter(_pfIsPass);
             var c = _pfCountActions(spRows);
             var set = function (id, n) { var el = document.getElementById(id); if (el) el.textContent = String(n); };
             set('spCount-1', c.a1);
@@ -11397,7 +11400,7 @@
             var orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = 'Resolving…'; }
             try {
-                var rows = data.rows.map(_pfToSPRow);
+                var rows = data.rows.map(_pfToSPRow).filter(_pfIsPass);
                 var res = await fetch('/api/duplicates/preflight/resolve-existing-accounts', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ rows: rows }),
@@ -11449,7 +11452,7 @@
             action = Number(action);
             var data = window._preflightLastResult;
             if (!data || !Array.isArray(data.rows)) { alert('Run a Preflight check first.'); return; }
-            var rows = data.rows.map(_pfToSPRow);
+            var rows = data.rows.map(_pfToSPRow).filter(_pfIsPass);
 
             // Every action pushes in operator-sized slices (size = count,
             // from = offset) so a big batch doesn't exceed the gateway timeout.
