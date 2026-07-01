@@ -8,6 +8,11 @@ export const PREFLIGHT_LEAD_TARGET = {
   status: process.env.PREFLIGHT_LEAD_STATUS || "New Lead",
 };
 
+// Lead_Source stamped on EVERY record the push creates (Leads, Contacts, Deals).
+// Ahmad 2026-07-01: all Preflight-pushed records carry Lead_Source = "Mawsool".
+// Env-overridable so a future batch/source can change it without a code change.
+export const PREFLIGHT_LEAD_SOURCE = process.env.PREFLIGHT_LEAD_SOURCE || "Mawsool";
+
 // ---------------------------------------------------------------------------
 // Task 2: Pure planner — no Zoho, no DB
 // ---------------------------------------------------------------------------

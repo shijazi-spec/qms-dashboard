@@ -8709,7 +8709,7 @@ export const duplicateRadarRoutes = [
           }
 
           // Build the Zoho Lead payloads.
-          const { splitContactName } = await import(
+          const { splitContactName, PREFLIGHT_LEAD_SOURCE } = await import(
             "../../utils/preflightStructuredPush"
           );
           const payloads: Array<Record<string, any>> = eligible.map((r, i) => {
@@ -8730,7 +8730,7 @@ export const duplicateRadarRoutes = [
               Company: company || dom || "(unknown)",
               Last_Name: _nm.last || company || dom || "(unknown)",
               ...(_nm.first ? { First_Name: _nm.first } : {}),
-              Lead_Source: source,
+              Lead_Source: PREFLIGHT_LEAD_SOURCE,
               Description: `Imported via QMS Preflight Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
               Layout: { id: layoutId },
             };
@@ -8876,7 +8876,7 @@ export const duplicateRadarRoutes = [
           ).toString().trim();
 
           // Map raw body rows to SPRow shape.
-          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, splitContactName } =
+          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, splitContactName } =
             await import("../../utils/preflightStructuredPush");
 
           const spRows = rows.map((r: any, idx: number) => ({
@@ -8927,7 +8927,7 @@ export const duplicateRadarRoutes = [
                   Last_Name: _nm.last || r.company || r.domain || "(unknown)",
                   ...(_nm.first ? { First_Name: _nm.first } : {}),
                   Company: r.company || r.domain || "(unknown)",
-                  Lead_Source: source,
+                  Lead_Source: PREFLIGHT_LEAD_SOURCE,
                   Layout: { id: LEAD.layoutId },
                   Lead_Status: LEAD.status,
                   ...(r.email ? { Email: r.email } : {}),
@@ -8974,6 +8974,7 @@ export const duplicateRadarRoutes = [
                   contact: sampleCo.contacts[0] ? {
                     Last_Name: _nm.last || sampleCo.companyName,
                     ...(_nm.first ? { First_Name: _nm.first } : {}),
+                    Lead_Source: PREFLIGHT_LEAD_SOURCE,
                     ...(sampleCo.contacts[0].email ? { Email: sampleCo.contacts[0].email } : {}),
                     ...(sampleCo.contacts[0].phone ? { Phone: sampleCo.contacts[0].phone } : {}),
                     ...(sampleCo.contacts[0].title ? { Title: sampleCo.contacts[0].title } : {}),
@@ -8983,6 +8984,7 @@ export const duplicateRadarRoutes = [
                     Deal_Name: `${sampleCo.companyName} — ${dealTag}`,
                     Stage: DEAL.stage,
                     Pipeline: DEAL.pipeline,
+                    Lead_Source: PREFLIGHT_LEAD_SOURCE,
                     Layout: { id: DEAL.layoutId },
                     Account_Name: { id: sampleAccId },
                     Contact_Name: { id: "(would-be-created)" },
@@ -9012,6 +9014,7 @@ export const duplicateRadarRoutes = [
                   contact: co.contacts[0] ? {
                     Last_Name: _nm.last || co.companyName,
                     ...(_nm.first ? { First_Name: _nm.first } : {}),
+                    Lead_Source: PREFLIGHT_LEAD_SOURCE,
                     ...(co.contacts[0].email ? { Email: co.contacts[0].email } : {}),
                     ...(co.contacts[0].phone ? { Phone: co.contacts[0].phone } : {}),
                     ...(co.contacts[0].title ? { Title: co.contacts[0].title } : {}),
@@ -9021,6 +9024,7 @@ export const duplicateRadarRoutes = [
                     Deal_Name: `${co.companyName} — ${dealTag}`,
                     Stage: DEAL.stage,
                     Pipeline: DEAL.pipeline,
+                    Lead_Source: PREFLIGHT_LEAD_SOURCE,
                     Layout: { id: DEAL.layoutId },
                     Account_Name: { id: accountId },
                     Contact_Name: { id: contactId },
@@ -9074,7 +9078,7 @@ export const duplicateRadarRoutes = [
                 Last_Name: _nm.last || r.company || r.domain || "(unknown)",
                 ...(_nm.first ? { First_Name: _nm.first } : {}),
                 Company: r.company || r.domain || "(unknown)",
-                Lead_Source: source,
+                Lead_Source: PREFLIGHT_LEAD_SOURCE,
                 Layout: { id: LEAD.layoutId },
                 Lead_Status: LEAD.status,
                 Description: `Imported via QMS Preflight Structured Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
@@ -9177,6 +9181,7 @@ export const duplicateRadarRoutes = [
                   const p: Record<string, any> = {
                     Last_Name: _nm.last || co.companyName,
                     ...(_nm.first ? { First_Name: _nm.first } : {}),
+                    Lead_Source: PREFLIGHT_LEAD_SOURCE,
                     Account_Name: { id: accountId },
                   };
                   if (row.email) p.Email = row.email;
@@ -9235,6 +9240,7 @@ export const duplicateRadarRoutes = [
                   Deal_Name: `${co.companyName} — ${dealTag}`,
                   Stage: DEAL.stage,
                   Pipeline: DEAL.pipeline,
+                  Lead_Source: PREFLIGHT_LEAD_SOURCE,
                   Layout: { id: DEAL.layoutId },
                   Account_Name: { id: accountId },
                 };
