@@ -5487,6 +5487,7 @@ export async function getAccountZohoIdByDomainOrName(
 export async function getAccountDirectory(): Promise<{
   byDomain: Map<string, { zohoId: string; name: string }>;
   byName: Map<string, { zohoId: string; name: string }>;
+  byId: Map<string, { zohoId: string; name: string }>;
 }> {
   const r = await pool.query(
     `SELECT zoho_record_id,
@@ -5500,14 +5501,16 @@ export async function getAccountDirectory(): Promise<{
   );
   const byDomain = new Map<string, { zohoId: string; name: string }>();
   const byName = new Map<string, { zohoId: string; name: string }>();
+  const byId = new Map<string, { zohoId: string; name: string }>();
   for (const row of r.rows) {
     const ref = { zohoId: String(row.zoho_record_id), name: String(row.disp || "") };
     const dom = String(row.dom || "");
     const nm = String(row.nm || "");
     if (dom && !byDomain.has(dom)) byDomain.set(dom, ref);   // first = best (query is pre-ordered)
     if (nm && nm.length >= 3 && !byName.has(nm)) byName.set(nm, ref);
+    if (!byId.has(ref.zohoId)) byId.set(ref.zohoId, ref);
   }
-  return { byDomain, byName };
+  return { byDomain, byName, byId };
 }
 
 /** Like getAccountZohoIdByDomainOrName but returns the account's display NAME

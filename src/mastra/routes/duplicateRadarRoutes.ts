@@ -76,9 +76,17 @@ async function enrichRowsWithExistingAccounts(
   const via = new Map<number, string>();
   const rows: any[] = [];
   for (const r of spRows) {
-    if (String(r.matched_account_zoho_id || "").trim()) {
+    const presetId = String(r.matched_account_zoho_id || "").trim();
+    if (presetId) {
       via.set(r.row_index, "preset");
-      rows.push(r);
+      // Fill the account NAME for a preset id (from the preflight CS match)
+      // so the UI shows "<Account>" instead of a bare id.
+      if (!String(r.matched_account_name || "").trim()) {
+        const known = dir.byId.get(presetId);
+        rows.push(known ? { ...r, matched_account_name: known.name } : r);
+      } else {
+        rows.push(r);
+      }
       continue;
     }
     const emailDom = realDomainRoot(r.email);
