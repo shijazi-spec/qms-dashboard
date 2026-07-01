@@ -6,6 +6,8 @@ import {
   classifyContact,
   testKeywordLikePatterns,
   isProtectedDealStage,
+  isJunkOrTestName,
+  isTestOrPlaceholderName,
 } from "./emptyRecordsDetection";
 
 export interface EmptyRecordRow {
@@ -889,4 +891,153 @@ export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
     if (out.length >= CAP) break;
   }
   return out;
+}
+
+// --- Post-scan cleanup_class persistence (Sarah 2026-07-01) ---------------
+//
+// Recomputes `duplicate_records.cleanup_class` for every deal/account/contact
+// row from the SYNCED SNAPSHOT ONLY (no live Zoho calls — this runs on every
+// scan and must stay cheap even at 100k+ records). Values:
+//   'tagged'   — already queued for the Zoho admin to delete (ledger or a
+//                synced Empty-Delete/Duplicate-Delete tag)
+//   'empty'    — structurally empty (reuses the exact WHERE shape
+//                getEmptyDeals/getEmptyAccounts/getEmptyContacts use)
+//   'test'     — structurally empty AND a test/placeholder/walaplus name
+//   'junk'     — structurally empty AND a junk/gibberish name
+//   'orphaned' — deal with real data but no Account link (Account Hints owns
+//                these — never hidden there)
+//   NULL       — real data; never a cleanup class, even with a junk-looking
+//                name (same safety gate as classifyDeal/Account/Contact)
+//
+// Precedence (first match wins, enforced by only ever writing into rows that
+// are still NULL after each pass): tagged > test/junk > orphaned > empty.
+// Structural signals are pure SQL (fast, set-based); name-based test/junk
+// needs the JS classifier (isJunkOrTestName/isTestOrPlaceholderName aren't
+// expressible in SQL), so that part runs as a targeted id+name pass over just
+// the already-empty candidates, batched back with UPDATE ... WHERE id = ANY(...).
+export async function classifyCleanupRecords(): Promise<number> {
+  // 0. Reset — every scan recomputes from scratch so stale classes (e.g. a
+  // record that got real data since the last scan) don't linger.
+  await pool.query(
+    `UPDATE duplicate_records SET cleanup_class = NULL WHERE cleanup_class IS NOT NULL`,
+  );
+
+  // 1. tagged — highest precedence. Reuses the exact ledger + synced-tag check
+  // the empty-records queries use (empty_delete_ledger OR synced Empty-Delete
+  // /Duplicate-Delete tag). Scoped to deal/account/contact (leads have no
+  // empty-records concept in this feature).
+  await pool.query(
+    `UPDATE duplicate_records dr
+        SET cleanup_class = 'tagged'
+      WHERE dr.record_type IN ('deal','account','contact')
+        AND ( dr.zoho_record_id IN (SELECT zoho_record_id FROM empty_delete_ledger)
+              OR EXISTS (
+                SELECT 1 FROM jsonb_array_elements(
+                  CASE WHEN jsonb_typeof(dr.raw_data->'Tag') = 'array'
+                       THEN dr.raw_data->'Tag' ELSE '[]'::jsonb END
+                ) AS _dt
+                WHERE _dt->>'name' = ANY($1::text[])
+              ) )`,
+    [DELETE_TAGS],
+  );
+
+  // 2. Structural empty/orphaned — set-based, mirrors the WHERE shapes of
+  // getEmptyDeals/getEmptyAccounts/getEmptyContacts (excluding rows already
+  // classified 'tagged' above).
+
+  // Deals: empty = no Account AND no Contact (no attachment signal available
+  // snapshot-only — matches the deleteEligible='empty' path's DB-only shape;
+  // the live "Check documents" gate still applies before an operator deletes).
+  // orphaned = has data (account/contact link) but no Account — Account Hints
+  // territory, not a delete candidate.
+  await pool.query(
+    `UPDATE duplicate_records dr
+        SET cleanup_class = CASE
+              WHEN COALESCE(NULLIF(dr.raw_data->'Account_Name'->>'id',''), NULL) IS NULL
+                   AND COALESCE(NULLIF(dr.raw_data->'Contact_Name'->>'id',''), NULL) IS NULL
+                THEN 'empty'
+              ELSE 'orphaned'
+            END
+      WHERE dr.record_type = 'deal'
+        AND dr.cleanup_class IS NULL
+        AND COALESCE(NULLIF(dr.raw_data->'Account_Name'->>'id',''), NULL) IS NULL
+        AND LOWER(COALESCE(NULLIF(dr.stage,''), dr.raw_data->>'Stage', '')) NOT IN ('agreement signed', 'paid')`,
+  );
+
+  // Accounts: structurally empty = no deal/contact anywhere in the snapshot
+  // references this account id (mirrors the `linked` CTE in getEmptyAccounts).
+  await pool.query(
+    `WITH linked AS (
+        SELECT DISTINCT raw_data->'Account_Name'->>'id' AS aid
+          FROM duplicate_records
+         WHERE record_type IN ('deal','contact')
+           AND raw_data->'Account_Name'->>'id' IS NOT NULL
+           AND raw_data->'Account_Name'->>'id' <> ''
+     )
+     UPDATE duplicate_records a
+        SET cleanup_class = 'empty'
+      WHERE a.record_type = 'account'
+        AND a.cleanup_class IS NULL
+        AND a.zoho_record_id NOT IN (SELECT aid FROM linked)
+        AND COALESCE(NULLIF(a.email,''), a.raw_data->>'Email') IS NULL`,
+  );
+
+  // Contacts: name-only = no email/phone/account link AND not referenced as a
+  // deal's Contact_Name anywhere in the snapshot (mirrors the `deal_contacts`
+  // CTE in getEmptyContacts).
+  await pool.query(
+    `WITH deal_contacts AS (
+        SELECT DISTINCT raw_data->'Contact_Name'->>'id' AS cid
+          FROM duplicate_records
+         WHERE record_type='deal'
+           AND raw_data->'Contact_Name'->>'id' IS NOT NULL
+           AND raw_data->'Contact_Name'->>'id' <> ''
+     )
+     UPDATE duplicate_records c
+        SET cleanup_class = 'empty'
+      WHERE c.record_type = 'contact'
+        AND c.cleanup_class IS NULL
+        AND (c.email IS NULL OR c.email = '')
+        AND (c.phone_normalized IS NULL OR c.phone_normalized = '')
+        AND (c.mobile_normalized IS NULL OR c.mobile_normalized = '')
+        AND (c.raw_data->'Account_Name'->>'id' IS NULL OR c.raw_data->'Account_Name'->>'id' = '')
+        AND c.zoho_record_id NOT IN (SELECT cid FROM deal_contacts)`,
+  );
+
+  // 3. Name-based test/junk refinement — JS-only classifiers, so pull just the
+  // rows currently marked 'empty' (small subset — already filtered to
+  // structurally-empty by step 2) plus the coarse ILIKE-name candidates step 2
+  // wouldn't catch (a record WITH an account/contact link never gets here —
+  // gate stays "only if structurally empty", same as the live classifiers).
+  const nameCandidates = await pool.query<{ id: number; record_name: string | null }>(
+    `SELECT id, record_name FROM duplicate_records
+      WHERE record_type IN ('deal','account','contact')
+        AND cleanup_class = 'empty'`,
+  );
+  const testIds: number[] = [];
+  const junkIds: number[] = [];
+  for (const row of nameCandidates.rows) {
+    const name = row.record_name || "";
+    const jt = isJunkOrTestName(name);
+    if (jt.junk) junkIds.push(row.id);
+    else if (jt.test || isTestOrPlaceholderName(name)) testIds.push(row.id);
+  }
+  const BATCH = 1000;
+  for (let i = 0; i < junkIds.length; i += BATCH) {
+    await pool.query(
+      `UPDATE duplicate_records SET cleanup_class = 'junk' WHERE id = ANY($1::int[])`,
+      [junkIds.slice(i, i + BATCH)],
+    );
+  }
+  for (let i = 0; i < testIds.length; i += BATCH) {
+    await pool.query(
+      `UPDATE duplicate_records SET cleanup_class = 'test' WHERE id = ANY($1::int[])`,
+      [testIds.slice(i, i + BATCH)],
+    );
+  }
+
+  const countRes = await pool.query<{ n: string }>(
+    `SELECT COUNT(*) AS n FROM duplicate_records WHERE cleanup_class IS NOT NULL`,
+  );
+  return Number(countRes.rows[0]?.n ?? 0);
 }

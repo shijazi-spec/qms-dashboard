@@ -1002,6 +1002,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       account_type VARCHAR(100),
       is_mock_data BOOLEAN DEFAULT FALSE,
       raw_data JSONB,
+      cleanup_class TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -1072,6 +1073,12 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS account_type VARCHAR(100)`,
+  );
+  // Empty/Junk cleanup classification (Sarah 2026-07-01) — recomputed every
+  // scan from the synced snapshot by classifyCleanupRecords(). Values:
+  // 'empty' | 'test' | 'junk' | 'orphaned' | 'tagged' | NULL (real data).
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS cleanup_class TEXT`,
   );
 
   await pool.query(`
@@ -1400,6 +1407,9 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_record_tasks_record ON duplicate_record_tasks(related_record_id)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_cleanup_class ON duplicate_records(cleanup_class)`,
   );
 
   // B4: pg_trgm for fuzzy matching

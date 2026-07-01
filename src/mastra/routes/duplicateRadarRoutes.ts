@@ -1176,6 +1176,23 @@ async function scanZohoCRMForDuplicates(
       .reconcileEmptyDeleteDeletions()
       .catch(() => {});
 
+    // Persist per-record cleanup_class (empty/test/junk/orphaned/tagged) from
+    // the synced snapshot — snapshot-only, no live Zoho calls — so later reads
+    // can hide cleanup records from the other Radar tabs (Sarah 2026-07-01).
+    try {
+      const { classifyCleanupRecords } = await import(
+        "../../utils/emptyRecordsDatabase"
+      );
+      const cleanupClassified = await classifyCleanupRecords();
+      logger.info(
+        `[DuplicateRadar] cleanup_class classified for ${cleanupClassified} record(s)`,
+      );
+    } catch (e) {
+      logger.warn(
+        `[DuplicateRadar] post-scan cleanup_class classification skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+
     await restoreLedgerResolvedClusterStatus().catch((e) =>
       logger.warn(
         `[DuplicateRadar] post-scan ledger restore skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
