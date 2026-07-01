@@ -58,6 +58,29 @@ export function normalizeCompanyKey(company: string, domain: string): string {
   return String(company || domain || "").trim().toLowerCase();
 }
 
+// Free-mail providers + placeholder tokens that must NEVER be written as an
+// Account/Lead Website. The Mawsool export uses "#n" for "no domain" and bare
+// free-mail tokens ("gmail", "hotmail") for personal-email contacts — writing
+// "https://#n" or "https://gmail" would pollute ~half the new records.
+const FREE_MAIL_OR_PLACEHOLDER = new Set([
+  "#n", "n/a", "na", "none", "null", "unknown",
+  "gmail", "hotmail", "yahoo", "outlook", "icloud", "aol", "live", "msn", "proton", "protonmail", "hotmai", "gmai",
+  "gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com", "aol.com", "live.com", "msn.com", "protonmail.com", "proton.me",
+]);
+
+// websiteFromDomain — pure. Returns a clean https:// URL for a REAL company
+// domain, or null for blank/placeholder/free-mail domains (which must not be
+// written to the CRM). A real domain must contain a dot and a plausible TLD.
+export function websiteFromDomain(domain: string | null | undefined): string | null {
+  let d = String(domain || "").trim().toLowerCase();
+  if (!d) return null;
+  d = d.replace(/^https?:\/\//, "").replace(/\/.*$/, "");   // strip scheme/path
+  d = d.split("@").pop() || d;                               // strip any local-part
+  if (!d || FREE_MAIL_OR_PLACEHOLDER.has(d)) return null;
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+\.?$/.test(d)) return null; // needs a dotted TLD
+  return `https://${d.replace(/\.$/, "")}`;
+}
+
 // ---------------------------------------------------------------------------
 // splitContactName — pure helper: splits a full display name into
 // First_Name / Last_Name for Zoho Contact/Lead payloads. Single-token names
@@ -113,8 +136,18 @@ export function buildStructuredPushPlan(
     g.contacts.every(r => r.cluster_id == null) && g.contacts.every(r => r.verdict === "pass");
   const contactRows = (g: SPCompany) => g.contacts.filter(hasContact);
 
+  // A1/A2 push ALL their eligible companies in one request, which fires one
+  // sequential Zoho Contact_Roles PUT per contact — a 99-company A2 (~200
+  // contacts) would exceed the gateway timeout. count/offset let the operator
+  // push in slices (e.g. 20 at a time). count<=0 = push all (back-compat).
+  const sliceCount = Math.max(0, Math.floor(opts.count ?? 0));
+  const sliceOffset = Math.max(0, Math.floor(opts.offset ?? 0));
+  const applySlice = <T,>(arr: T[]): T[] =>
+    sliceCount > 0 ? arr.slice(sliceOffset, sliceOffset + sliceCount) : arr;
+
   if (action === 1) {
-    const companies = groups.filter(isChurnedMatched);
+    const eligible = groups.filter(isChurnedMatched);
+    const companies = applySlice(eligible);
     groups
       .filter(g => !isChurnedMatched(g))
       .forEach(g => g.contacts.forEach(r => skipped.push({ row_index: r.row_index, reason: "not_churned_past_cooloff" })));
@@ -129,9 +162,10 @@ export function buildStructuredPushPlan(
   }
 
   if (action === 2) {
-    const companies = groups
+    const eligible = groups
       .filter(g => !isChurnedMatched(g) && isNewPass(g) && contactRows(g).length >= 2)
       .map(g => ({ ...g, contacts: contactRows(g) }));
+    const companies = applySlice(eligible);
     return {
       action,
       companies,

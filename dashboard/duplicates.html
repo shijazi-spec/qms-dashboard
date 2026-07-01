@@ -1261,6 +1261,14 @@
                             <span class="text-xs font-medium text-gray-800" data-i18n="pf_sp_a1">Re-engage churned (under existing account)</span>
                             <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-800">(<span id="spCount-1">0</span>)</span>
                         </div>
+                        <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Batch size — how many companies to push this click (avoids gateway timeout). 0 = all.">
+                            <span>size</span>
+                            <input type="number" id="spNum-1" min="0" value="20" class="w-16 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-num-1" aria-label="Batch size for churned re-engage" />
+                        </label>
+                        <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Offset — skip the first N companies (auto-advances after each real push).">
+                            <span>from</span>
+                            <input type="number" id="spOff-1" min="0" value="0" class="w-16 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-off-1" aria-label="Offset for churned re-engage" />
+                        </label>
                         <label class="flex items-center gap-1 text-xs text-gray-700">
                             <input type="checkbox" id="spDry-1" checked data-testid="checkbox-sp-dry-1" />
                             <span data-i18n="pf_sp_dry">Dry-run</span>
@@ -1274,6 +1282,14 @@
                             <span class="text-xs font-medium text-gray-800" data-i18n="pf_sp_a2">Deal + contacts: multi-contact companies</span>
                             <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-800">(<span id="spCount-2">0</span>)</span>
                         </div>
+                        <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Batch size — how many companies to push this click (avoids gateway timeout). 0 = all.">
+                            <span>size</span>
+                            <input type="number" id="spNum-2" min="0" value="20" class="w-16 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-num-2" aria-label="Batch size for multi-contact companies" />
+                        </label>
+                        <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Offset — skip the first N companies (auto-advances after each real push).">
+                            <span>from</span>
+                            <input type="number" id="spOff-2" min="0" value="0" class="w-16 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-sp-off-2" aria-label="Offset for multi-contact companies" />
+                        </label>
                         <label class="flex items-center gap-1 text-xs text-gray-700">
                             <input type="checkbox" id="spDry-2" checked data-testid="checkbox-sp-dry-2" />
                             <span data-i18n="pf_sp_dry">Dry-run</span>
@@ -2032,7 +2048,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=32"></script>
+    <script src="/js/duplicates-app.js?v=33"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

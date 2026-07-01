@@ -11319,8 +11319,16 @@
             // A3 takes the first N; A4 takes the next M starting after A3's slice.
             var num3 = parseInt((document.getElementById('spNum-3') || {}).value || '0', 10) || 0;
             var num4 = parseInt((document.getElementById('spNum-4') || {}).value || '0', 10) || 0;
+            // A1/A2 push in operator-sized slices (size = count, from = offset)
+            // so a big batch doesn't exceed the gateway timeout.
+            var num1 = parseInt((document.getElementById('spNum-1') || {}).value || '0', 10) || 0;
+            var off1 = parseInt((document.getElementById('spOff-1') || {}).value || '0', 10) || 0;
+            var num2 = parseInt((document.getElementById('spNum-2') || {}).value || '0', 10) || 0;
+            var off2 = parseInt((document.getElementById('spOff-2') || {}).value || '0', 10) || 0;
             var count = 0, offset = 0;
-            if (action === 3) { count = num3; offset = 0; }
+            if (action === 1) { count = num1; offset = off1; }
+            else if (action === 2) { count = num2; offset = off2; }
+            else if (action === 3) { count = num3; offset = 0; }
             else if (action === 4) { count = num4; offset = num3; }
 
             var dryRun = !!(document.getElementById('spDry-' + action) || {}).checked;
@@ -11406,11 +11414,22 @@
                         var flLine = (action === 4)
                             ? ('Failed: ' + (fl.leads || 0))
                             : ('Failed: ' + ((fl.accounts || 0) + (fl.contacts || 0) + (fl.deals || 0)));
+                        // Auto-advance the A1/A2 offset by the SLICE SIZE (count),
+                        // not by records created — the eligible list is a stable
+                        // window, so moving by count steps cleanly to the next
+                        // slice and never re-creates a company already pushed
+                        // (even when some rows in the slice were skipped/failed).
+                        var nextOffset = offset + count;
+                        if ((action === 1 || action === 2) && count > 0) {
+                            var offEl = document.getElementById('spOff-' + action);
+                            if (offEl) offEl.value = String(nextOffset);
+                        }
                         resultBox.innerHTML = ''
                             + '<div class="font-semibold text-emerald-800 mb-1">✓ Push complete</div>'
                             + '<div>' + crLine + '</div>'
                             + '<div>' + flLine + '</div>'
                             + '<div>Skipped: ' + (resp.skipped_count || 0) + '</div>'
+                            + ((action === 1 || action === 2) && count > 0 ? '<div class="mt-1 text-purple-700">Next batch starts at offset ' + nextOffset + '. Push again for the next ' + count + '.</div>' : '')
                             + '<div class="mt-1 text-gray-500">Audit-logged. Source: ' + escapeHtml(source) + '.</div>';
                     }
                 }

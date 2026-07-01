@@ -8887,7 +8887,7 @@ export const duplicateRadarRoutes = [
           ).toString().trim();
 
           // Map raw body rows to SPRow shape.
-          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, splitContactName } =
+          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, splitContactName, websiteFromDomain } =
             await import("../../utils/preflightStructuredPush");
 
           const spRows = rows.map((r: any, idx: number) => ({
@@ -8938,7 +8938,7 @@ export const duplicateRadarRoutes = [
               wouldLeads = plan.leads.length;
               const r = plan.leads[0];
               if (r) {
-                const dom = r.domain || null;
+                const web = websiteFromDomain(r.domain);
                 const _nm = splitContactName(r.contact_name || r.company || r.domain);
                 samplePayload = {
                   Last_Name: _nm.last || r.company || r.domain || "(unknown)",
@@ -8950,7 +8950,7 @@ export const duplicateRadarRoutes = [
                   ...(r.email ? { Email: r.email } : {}),
                   ...(r.phone ? { Phone: r.phone } : {}),
                   ...(r.title ? { Title: r.title } : {}),
-                  ...(dom ? { Website: dom.startsWith("http") ? dom : `https://${dom}` } : {}),
+                  ...(web ? { Website: web } : {}),
                 };
               }
             } else if (action === 1) {
@@ -9020,7 +9020,7 @@ export const duplicateRadarRoutes = [
               wouldDeals = plan.companies.length;
               const co = plan.companies[0];
               if (co) {
-                const dom = co.domain || null;
+                const web = websiteFromDomain(co.domain);
                 const accountId = "(would-be-created)";
                 const contactId = "(would-be-created)";
                 const primary = pickPrimaryContact(co.contacts);
@@ -9029,7 +9029,7 @@ export const duplicateRadarRoutes = [
                   account: {
                     Account_Name: co.companyName,
                     Layout: { id: DEAL.layoutId },
-                    ...(dom ? { Website: dom.startsWith("http") ? dom : `https://${dom}` } : {}),
+                    ...(web ? { Website: web } : {}),
                   },
                   contact: co.contacts[0] ? {
                     Last_Name: _nm.last || co.companyName,
@@ -9120,7 +9120,7 @@ export const duplicateRadarRoutes = [
           if (action === 4) {
             // --- ACTION 4: create Leads only ---
             const leadPayloads = plan.leads.map((r, i) => {
-              const dom = r.domain || null;
+              const web = websiteFromDomain(r.domain);
               const _nm = splitContactName(r.contact_name || r.company || r.domain);
               const p: Record<string, any> = {
                 Last_Name: _nm.last || r.company || r.domain || "(unknown)",
@@ -9134,7 +9134,7 @@ export const duplicateRadarRoutes = [
               if (r.email) p.Email = r.email;
               if (r.phone) p.Phone = r.phone;
               if (r.title) p.Title = r.title;
-              if (dom) p.Website = dom.startsWith("http") ? dom : `https://${dom}`;
+              if (web) p.Website = web;
               const ownerVal = ownerForIndex(i);
               if (ownerVal && ownerMode !== "self") {
                 p.Owner = { id: ownerVal };
@@ -9185,12 +9185,12 @@ export const duplicateRadarRoutes = [
             } else {
               // A2/A3: create all accounts first.
               const accountPayloads = plan.companies.map((co) => {
-                const dom = co.domain || null;
+                const web = websiteFromDomain(co.domain);
                 const p: Record<string, any> = {
                   Account_Name: co.companyName,
                   Layout: { id: DEAL.layoutId },
                 };
-                if (dom) p.Website = dom.startsWith("http") ? dom : `https://${dom}`;
+                if (web) p.Website = web;
                 return p;
               });
 

@@ -143,4 +143,58 @@ function preflightRowToSPRow(r: any, idx: number): any {
 }
 console.log("preflight row-shape regression ok");
 
+// ---------------------------------------------------------------------------
+// websiteFromDomain — must suppress placeholder/free-mail domains so the push
+// never writes "https://#n" / "https://gmail" onto new Accounts/Leads.
+// ---------------------------------------------------------------------------
+import { websiteFromDomain } from "./preflightStructuredPush";
+{
+  assertEq(websiteFromDomain("nesma.com") === "https://nesma.com", "website: real domain kept");
+  assertEq(websiteFromDomain("Nesma.COM") === "https://nesma.com", "website: lowercased");
+  assertEq(websiteFromDomain("http://x.co/path") === "https://x.co", "website: strips scheme+path");
+  assertEq(websiteFromDomain("sub.example.co.uk") === "https://sub.example.co.uk", "website: multi-label kept");
+  assertEq(websiteFromDomain("#n") === null, "website: #n placeholder suppressed");
+  assertEq(websiteFromDomain("gmail") === null, "website: bare free-mail token suppressed");
+  assertEq(websiteFromDomain("hotmail.com") === null, "website: free-mail domain suppressed");
+  assertEq(websiteFromDomain("N/A") === null, "website: N/A suppressed");
+  assertEq(websiteFromDomain("localhost") === null, "website: no-dot token suppressed");
+  assertEq(websiteFromDomain("") === null, "website: empty -> null");
+  assertEq(websiteFromDomain(null) === null, "website: null -> null");
+}
+console.log("websiteFromDomain ok");
+
+// ---------------------------------------------------------------------------
+// A1/A2 slicing — count/offset must window the eligible companies so a big
+// batch can be pushed in timeout-safe slices. count<=0 = all (back-compat).
+// ---------------------------------------------------------------------------
+{
+  // 5 distinct churned companies (past cool-off) -> A1 eligible.
+  const churned: any[] = [];
+  for (let i = 0; i < 5; i++) {
+    churned.push(mk({ row_index: i, company: `C${i}`, email: `c${i}@x.com`, verdict: "pass", lifecycle_state: "termination_old" }));
+  }
+  const a1All = buildStructuredPushPlan(1, churned, {});
+  assertEq(a1All.companies.length === 5, "A1 slice: count omitted -> all 5");
+  const a1First = buildStructuredPushPlan(1, churned, { count: 2, offset: 0 });
+  assertEq(a1First.companies.length === 2 && a1First.companies[0].companyName === "C0" && a1First.companies[1].companyName === "C1", "A1 slice: first 2 (C0,C1)");
+  const a1Mid = buildStructuredPushPlan(1, churned, { count: 2, offset: 2 });
+  assertEq(a1Mid.companies.length === 2 && a1Mid.companies[0].companyName === "C2", "A1 slice: offset 2 -> C2,C3");
+  const a1Tail = buildStructuredPushPlan(1, churned, { count: 2, offset: 4 });
+  assertEq(a1Tail.companies.length === 1 && a1Tail.companies[0].companyName === "C4" && a1Tail.eligible_count === 1, "A1 slice: tail shorter than count");
+
+  // 5 distinct multi-contact NEW companies -> A2 eligible (2 contacts each).
+  const multi: any[] = [];
+  for (let i = 0; i < 5; i++) {
+    multi.push(mk({ row_index: i * 2, company: `M${i}`, email: `a${i}@x.com`, verdict: "pass" }));
+    multi.push(mk({ row_index: i * 2 + 1, company: `M${i}`, phone: `12300${i}`, verdict: "pass" }));
+  }
+  const a2All = buildStructuredPushPlan(2, multi, {});
+  assertEq(a2All.companies.length === 5, "A2 slice: count omitted -> all 5");
+  const a2Slice = buildStructuredPushPlan(2, multi, { count: 2, offset: 0 });
+  assertEq(a2Slice.companies.length === 2 && a2Slice.eligible_count === 2, "A2 slice: first 2 companies");
+  const a2Next = buildStructuredPushPlan(2, multi, { count: 2, offset: 2 });
+  assertEq(a2Next.companies.length === 2 && a2Next.companies[0].companyName === "M2", "A2 slice: offset 2 -> M2,M3");
+}
+console.log("A1/A2 slicing ok");
+
 if (failed > 0) { console.error(`\n${failed} test(s) FAILED`); process.exit(1); }
