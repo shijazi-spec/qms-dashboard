@@ -9069,7 +9069,7 @@ export const duplicateRadarRoutes = [
           // ----------------------------------------------------------------
           // REAL RUN — ordered batched creates with id-mapping.
           // ----------------------------------------------------------------
-          const { createZohoRecordsBulk, addZohoTags } = await import("../../utils/zohoCRM");
+          const { createZohoRecordsBulk, addZohoTags, addDealContactRoles } = await import("../../utils/zohoCRM");
           const { getAccountZohoIdByCluster, getAccountZohoIdByDomainOrName } =
             await import("../../utils/duplicateRadarDatabase");
 
@@ -9183,6 +9183,9 @@ export const duplicateRadarRoutes = [
             // Map companyKey → the row_index chosen as primary, so Step 3 can
             // build the "other contacts" Description from the remaining rows.
             const primaryRowIndexMap = new Map<string, number>();
+            // Map companyKey → ALL created contact ids, so Step 3 can associate
+            // every contact of a company to its Deal's Contact Roles.
+            const contactIdsByCompany = new Map<string, string[]>();
 
             if (companiesWithAccount.length > 0) {
               // Build contact payloads (one per contact row, all companies interleaved).
@@ -9223,6 +9226,9 @@ export const duplicateRadarRoutes = [
                 const out = conOut[i];
                 if (out?.status === "success" && out.id) {
                   const meta = contactMeta[i];
+                  const _cids = contactIdsByCompany.get(meta.companyKey) || [];
+                  _cids.push(String(out.id));
+                  contactIdsByCompany.set(meta.companyKey, _cids);
                   if (!fallbackContactIdMap.has(meta.companyKey)) {
                     fallbackContactIdMap.set(meta.companyKey, out.id);
                     fallbackRowIndexMap.set(meta.companyKey, meta.rowIndex);
@@ -9286,6 +9292,20 @@ export const duplicateRadarRoutes = [
                 const dealIds = dealOut.filter(o => o.status === "success" && o.id).map(o => String(o.id));
                 if (dealIds.length && PREFLIGHT_DEAL_TAG) await addZohoTags("Deals", dealIds, [PREFLIGHT_DEAL_TAG]);
               } catch (_) { /* tagging non-fatal */ }
+              // Associate every created contact of a company to its Deal's
+              // Contact Roles (the primary is also the Deal's Contact_Name).
+              // Best-effort — never fails the push. Env PREFLIGHT_CONTACT_ROLE
+              // sets an optional role name; omitted → role-less association.
+              try {
+                const contactRole = process.env.PREFLIGHT_CONTACT_ROLE || null;
+                for (let i = 0; i < dealOut.length; i++) {
+                  const o = dealOut[i];
+                  if (o?.status === "success" && o.id) {
+                    const cids = contactIdsByCompany.get(dealCompanyKeys[i]) || [];
+                    if (cids.length) await addDealContactRoles(String(o.id), cids, contactRole);
+                  }
+                }
+              } catch (_) { /* contact-role association non-fatal */ }
             }
 
             // Add skipped-no-account to the plan's skipped count.

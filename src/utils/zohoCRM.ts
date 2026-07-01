@@ -1837,6 +1837,51 @@ export async function addZohoTags(
   );
 }
 
+/** Associate contacts to a Deal's Contact Roles related list (Zoho v2:
+ * PUT /Deals/{dealId}/Contact_Roles/{contactId}). `role` is optional — when
+ * omitted we send a role-less association (matches a manually-added blank
+ * Role Name). Best-effort per contact: one failure doesn't abort the rest.
+ * Used by the Preflight push so ALL of a company's contacts appear under the
+ * created Deal's Contact Roles (the primary is also the Deal's Contact_Name). */
+export async function addDealContactRoles(
+  dealId: string,
+  contactIds: string[],
+  role?: string | null,
+): Promise<{ associated: number; failed: number }> {
+  let associated = 0;
+  let failed = 0;
+  for (const cid of contactIds.filter(Boolean)) {
+    try {
+      await makeZohoRequest(
+        async (config) => {
+          const url = `${config.apiDomain}/crm/v2/Deals/${encodeURIComponent(dealId)}/Contact_Roles/${encodeURIComponent(cid)}`;
+          return fetch(url, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ data: [role ? { Contact_Role: role } : {}] }),
+          });
+        },
+        async (response) => {
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(`Zoho contact-role error: ${response.status} - ${error.message || response.statusText}`);
+          }
+          return response.json().catch(() => ({}));
+        },
+      );
+      associated++;
+    } catch (_e) {
+      failed++;
+      logger.warn(`⚠️ [ZohoCRM] contact-role associate failed: deal=${dealId} contact=${cid}`);
+    }
+  }
+  logger.info(`🔗 [ZohoCRM] Deal ${dealId}: ${associated} contact role(s) associated, ${failed} failed`);
+  return { associated, failed };
+}
+
 /** Remove tags from records (Zoho v2 `actions/remove_tags`) — rollback for addZohoTags. */
 export async function removeZohoTags(
   module: string,
