@@ -8959,7 +8959,7 @@ export const duplicateRadarRoutes = [
           ).toString().trim();
 
           // Map raw body rows to SPRow shape.
-          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, PREFLIGHT_PRODUCT, PREFLIGHT_EMPLOYEES, PREFLIGHT_SALESPERSON_EMAIL, PREFLIGHT_GOV_TYPE, PREFLIGHT_CS_MEMBER_EMAIL, splitContactName, websiteFromDomain } =
+          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, PREFLIGHT_PRODUCT, PREFLIGHT_EMPLOYEES, PREFLIGHT_SALESPERSON_EMAIL, PREFLIGHT_GOV_TYPE, PREFLIGHT_CS_MEMBER, splitContactName, websiteFromDomain } =
             await import("../../utils/preflightStructuredPush");
           const PRODUCTS_FIELD = PREFLIGHT_PRODUCT ? [PREFLIGHT_PRODUCT] : null;
 
@@ -8967,18 +8967,13 @@ export const duplicateRadarRoutes = [
           // Deals can satisfy the required Sales Person field. Null if not found
           // (the create will then surface MANDATORY_NOT_FOUND so we can adjust).
           let salesPersonId: string | null = null;
-          let csMemberId: string | null = null;
-          if (!dryRun && action !== 4 && (PREFLIGHT_SALESPERSON_EMAIL || PREFLIGHT_CS_MEMBER_EMAIL)) {
+          if (!dryRun && action !== 4 && PREFLIGHT_SALESPERSON_EMAIL) {
             try {
               const { fetchZohoUsers } = await import("../../utils/zohoCRM");
               const users = await fetchZohoUsers("ActiveUsers");
-              const idByEmail = (e: string) => {
-                const m = users.find(u => String(u.email || "").toLowerCase() === String(e || "").toLowerCase());
-                return m?.id ? String(m.id) : null;
-              };
-              if (PREFLIGHT_SALESPERSON_EMAIL) salesPersonId = idByEmail(PREFLIGHT_SALESPERSON_EMAIL);
-              if (PREFLIGHT_CS_MEMBER_EMAIL) csMemberId = idByEmail(PREFLIGHT_CS_MEMBER_EMAIL);
-            } catch { salesPersonId = null; csMemberId = null; }
+              const match = users.find(u => String(u.email || "").toLowerCase() === PREFLIGHT_SALESPERSON_EMAIL.toLowerCase());
+              salesPersonId = match?.id ? String(match.id) : null;
+            } catch { salesPersonId = null; }
           }
 
           const spRows = rows.map((r: any, idx: number) => ({
@@ -9127,7 +9122,7 @@ export const duplicateRadarRoutes = [
                     ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
                     No_of_Employees: PREFLIGHT_EMPLOYEES,
                     Sales_Person: { email: PREFLIGHT_SALESPERSON_EMAIL },
-                    ...(PREFLIGHT_CS_MEMBER_EMAIL ? { CS_Member: { email: PREFLIGHT_CS_MEMBER_EMAIL } } : {}),
+                    ...(PREFLIGHT_CS_MEMBER ? { CS_Member: PREFLIGHT_CS_MEMBER } : {}),
                     ...(PREFLIGHT_GOV_TYPE ? { Gov_Type: PREFLIGHT_GOV_TYPE } : {}),
                     Contact_Name: { id: "(would-be-created)" },
                     ...(sampleCo.contacts.length > 1
@@ -9171,7 +9166,7 @@ export const duplicateRadarRoutes = [
                     ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
                     No_of_Employees: PREFLIGHT_EMPLOYEES,
                     Sales_Person: { email: PREFLIGHT_SALESPERSON_EMAIL },
-                    ...(PREFLIGHT_CS_MEMBER_EMAIL ? { CS_Member: { email: PREFLIGHT_CS_MEMBER_EMAIL } } : {}),
+                    ...(PREFLIGHT_CS_MEMBER ? { CS_Member: PREFLIGHT_CS_MEMBER } : {}),
                     ...(PREFLIGHT_GOV_TYPE ? { Gov_Type: PREFLIGHT_GOV_TYPE } : {}),
                     Contact_Name: { id: contactId },
                     ...(co.contacts.length > 1
@@ -9529,7 +9524,7 @@ export const duplicateRadarRoutes = [
                 if (PRODUCTS_FIELD) p.Products = PRODUCTS_FIELD;
                 p.No_of_Employees = PREFLIGHT_EMPLOYEES;
                 if (salesPersonId) p.Sales_Person = { id: salesPersonId };
-                if (csMemberId) p.CS_Member = { id: csMemberId };
+                if (PREFLIGHT_CS_MEMBER) p.CS_Member = PREFLIGHT_CS_MEMBER;
                 if (PREFLIGHT_GOV_TYPE) p.Gov_Type = PREFLIGHT_GOV_TYPE;
                 if (firstContactId) {
                   p.Contact_Name = { id: firstContactId };
