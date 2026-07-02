@@ -9330,15 +9330,19 @@ export const duplicateRadarRoutes = [
               // already in the CRM. Reuse the existing contact id when found.
               const preexistingByRow = new Map<number, string>();
               if (action === 1) {
-                const { findContactIdByEmail } = await import("../../utils/zohoCRM");
-                const emailToId = new Map<string, string | null>();
+                // ONE batched email-existence check (OR-chunks of 10). THROWS on
+                // a Zoho error — and this runs BEFORE any create, so a failure
+                // aborts with zero records written instead of silently treating
+                // everyone as new and duplicating existing contacts.
+                const { findContactIdsByEmails } = await import("../../utils/zohoCRM");
+                const emails = companiesWithAccount.flatMap(co =>
+                  co.contacts.map(r => String(r.email || "").trim()).filter(Boolean),
+                );
+                const found = await findContactIdsByEmails(emails);
                 for (const co of companiesWithAccount) {
                   for (const row of co.contacts) {
                     const em = String(row.email || "").trim().toLowerCase();
-                    if (!em) continue;
-                    if (!emailToId.has(em)) emailToId.set(em, await findContactIdByEmail(em));
-                    const existing = emailToId.get(em);
-                    if (existing) preexistingByRow.set(row.row_index, existing);
+                    if (em && found.has(em)) preexistingByRow.set(row.row_index, found.get(em)!);
                   }
                 }
               }
@@ -9347,10 +9351,15 @@ export const duplicateRadarRoutes = [
               interface ContactMeta { companyKey: string; rowIndex: number; hasEmail: boolean }
               const contactMeta: ContactMeta[] = [];
               const contactPayloads: Record<string, any>[] = [];
+              // Intra-batch email dedup: an email is created ONCE per push; later
+              // rows sharing it reuse that created id (no duplicate within one push).
+              const emailToPayloadIndex = new Map<string, number>();
+              const deferredDupes: Array<{ companyKey: string; rowIndex: number; payloadIndex: number }> = [];
 
               for (const co of companiesWithAccount) {
                 const accountId = accountIdMap.get(co.companyKey)!;
                 for (const row of co.contacts) {
+                  const em = String(row.email || "").trim().toLowerCase();
                   // Contact already in Zoho (by email) → reuse it, don't create
                   // a duplicate. Register the existing id for deal linkage/roles.
                   const existingId = preexistingByRow.get(row.row_index);
@@ -9365,6 +9374,12 @@ export const duplicateRadarRoutes = [
                     }
                     continue;
                   }
+                  // Same email already queued for creation in THIS batch → reuse
+                  // its created id afterwards instead of creating a second copy.
+                  if (em && emailToPayloadIndex.has(em)) {
+                    deferredDupes.push({ companyKey: co.companyKey, rowIndex: row.row_index, payloadIndex: emailToPayloadIndex.get(em)! });
+                    continue;
+                  }
                   const _nm = splitContactName(row.contact_name || co.companyName);
                   const p: Record<string, any> = {
                     Last_Name: _nm.last || co.companyName,
@@ -9375,8 +9390,10 @@ export const duplicateRadarRoutes = [
                   if (row.email) p.Email = row.email;
                   if (row.phone) p.Phone = row.phone;
                   if (row.title) p.Title = row.title;
+                  const payloadIndex = contactPayloads.length;
                   contactPayloads.push(p);
-                  contactMeta.push({ companyKey: co.companyKey, rowIndex: row.row_index, hasEmail: !!String(row.email || "").trim() });
+                  contactMeta.push({ companyKey: co.companyKey, rowIndex: row.row_index, hasEmail: !!em });
+                  if (em) emailToPayloadIndex.set(em, payloadIndex);
                 }
               }
 
@@ -9413,6 +9430,21 @@ export const duplicateRadarRoutes = [
                 if (!firstContactIdMap.has(companyKey)) {
                   firstContactIdMap.set(companyKey, id);
                   primaryRowIndexMap.set(companyKey, fallbackRowIndexMap.get(companyKey)!);
+                }
+              }
+              // Attach deferred same-email rows to the id created for that email,
+              // so a shared-email colleague still lands on their company's Deal
+              // (roles + primary) without a duplicate Contact being created.
+              for (const d of deferredDupes) {
+                const out = conOut[d.payloadIndex];
+                if (out?.status === "success" && out.id) {
+                  const _cids = contactIdsByCompany.get(d.companyKey) || [];
+                  _cids.push(String(out.id));
+                  contactIdsByCompany.set(d.companyKey, _cids);
+                  if (!firstContactIdMap.has(d.companyKey)) {
+                    firstContactIdMap.set(d.companyKey, String(out.id));
+                    primaryRowIndexMap.set(d.companyKey, d.rowIndex);
+                  }
                 }
               }
             }

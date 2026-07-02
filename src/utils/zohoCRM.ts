@@ -1009,6 +1009,36 @@ export async function findContactIdByEmail(email: string): Promise<string | null
   }
 }
 
+/** Batched existence check: map of lowercased email → existing Contact id, for
+ * the emails that already exist in Zoho. Searches in OR-chunks of 10 (far fewer
+ * round-trips than one-per-email). THROWS on a genuine Zoho error (after one
+ * retry per chunk) — the Preflight A1 push calls this BEFORE creating anything,
+ * so a failure aborts cleanly with zero records written, rather than silently
+ * treating everyone as "new" and creating duplicates of existing contacts. */
+export async function findContactIdsByEmails(emails: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const clean = Array.from(new Set(emails.map(e => String(e || "").trim()).filter(Boolean)));
+  const CHUNK = 10;
+  for (let s = 0; s < clean.length; s += CHUNK) {
+    const chunk = clean.slice(s, s + CHUNK);
+    const criteria = chunk.map(e => `(Email:equals:${e})`).join("or");
+    let rows: ZohoCRMRecord[] | null = null;
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < 2 && rows === null; attempt++) {
+      try { rows = await searchZohoRecords("Contacts", criteria); }
+      catch (e) { lastErr = e; rows = null; }
+    }
+    if (rows === null) {
+      throw new Error(`Contact email-existence check failed: ${lastErr?.message || String(lastErr)}`);
+    }
+    for (const r of rows) {
+      const em = String(r.data?.Email || "").trim().toLowerCase();
+      if (em && r.id && !out.has(em)) out.set(em, String(r.id));
+    }
+  }
+  return out;
+}
+
 /**
  * Word-based search — same indexed lookup the Zoho UI uses for the
  * "Global Search" box at the top of the CRM. Searches every indexed
