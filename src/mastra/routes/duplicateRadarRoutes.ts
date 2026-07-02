@@ -9627,6 +9627,79 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Title BACKFILL. Sets the Title on already-created Leads/Contacts (which
+    // were pushed from an input without a Title column) by matching each source
+    // row to the record BY EMAIL and updating Title from the row. This is an
+    // UPDATE (not create) — dry-run by default, admin-gated, sliced by
+    // count/offset. Body: { rows, module?, dry_run?, count?, offset? }.
+    path: "/api/duplicates/preflight/backfill-titles",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const body = await c.req.json().catch(() => ({}));
+          const rowsIn: any[] = Array.isArray(body?.rows) ? body.rows : [];
+          if (rowsIn.length === 0) return c.json({ error: "rows array required" }, 400);
+          const module = body?.module === "Contacts" ? "Contacts" : "Leads";
+          const dryRun = body?.dry_run !== false;
+          const count = typeof body?.count === "number" && body.count > 0 ? Math.floor(body.count) : 0;
+          const offset = typeof body?.offset === "number" && body.offset >= 0 ? Math.floor(body.offset) : 0;
+
+          // Candidates: rows that have BOTH an email (to match on) and a title.
+          const candidates = rowsIn
+            .map((r: any) => ({
+              email: String(r.email ?? r.input?.email ?? "").trim(),
+              title: String(r.title ?? r.input?.title ?? "").trim(),
+            }))
+            .filter(r => r.email && r.title);
+          const sliced = count > 0 ? candidates.slice(offset, offset + count) : candidates;
+
+          const { findRecordIdsByEmails, updateZohoRecordsBulk } = await import("../../utils/zohoCRM");
+          const idByEmail = await findRecordIdsByEmails(module, sliced.map(r => r.email));
+
+          // One update per matched record (dedupe by id; first title wins).
+          const seen = new Set<string>();
+          const updates: Array<{ id: string; Title: string }> = [];
+          let notFound = 0;
+          for (const r of sliced) {
+            const id = idByEmail.get(r.email.toLowerCase());
+            if (!id) { notFound++; continue; }
+            if (seen.has(id)) continue;
+            seen.add(id);
+            updates.push({ id, Title: r.title });
+          }
+
+          if (dryRun) {
+            return c.json({
+              success: true, dry_run: true, module,
+              candidates: sliced.length,
+              would_update: updates.length,
+              not_found: notFound,
+              sample: updates.slice(0, 10),
+            });
+          }
+
+          const out = updates.length > 0 ? await updateZohoRecordsBulk(module, updates) : [];
+          const updated = out.filter(o => o.status === "success").length;
+          const failed = out.filter(o => o.status === "error").length;
+          const errorSample = out.filter(o => o.status === "error").slice(0, 5).map(o => ({ code: o.code, message: o.message }));
+          return c.json({
+            success: true, dry_run: false, module,
+            candidates: sliced.length, updated, failed, not_found: notFound,
+            error_sample: errorSample,
+          });
+        } catch (error: any) {
+          logger.error("Error in backfill-titles:", error);
+          return c.json({ error: "Title backfill failed — " + (error?.message || "unknown") }, 500);
+        }
+      };
+    },
+  },
+  {
     // READ-ONLY diagnostic. Returns the AUTHORITATIVE required fields (and their
     // exact api_names) for the Deals and Leads modules, plus the specific fields
     // the push fills (products / employees / sales person), so we can confirm

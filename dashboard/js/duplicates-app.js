@@ -11388,6 +11388,46 @@
                 : '';
         }
 
+        // Backfill Title on already-pushed Leads: matches each loaded row to a
+        // Lead BY EMAIL and updates its Title. Requires the TITLED Excel loaded
+        // (rows must carry a title). Dry-run by default.
+        async function erBackfillTitles() {
+            var data = window._preflightLastResult;
+            if (!data || !Array.isArray(data.rows)) { alert('Load the titled Excel and run a Preflight check first.'); return; }
+            var rows = data.rows.map(_pfToSPRow);
+            var withTitle = rows.filter(function (r) { return String(r.title || '').trim() && String(r.email || '').trim(); }).length;
+            if (withTitle === 0) { alert('No rows with BOTH an email and a title. Load the Excel that has the Title column, then run Preflight.'); return; }
+            var dry = !!(document.getElementById('spBackfillDry') || {}).checked;
+            var btn = document.getElementById('spBackfillBtn');
+            var box = document.getElementById('spBackfillResult');
+            var orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = dry ? 'Checking…' : 'Backfilling…'; }
+            try {
+                var res = await fetch('/api/duplicates/preflight/backfill-titles', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rows: rows, module: 'Leads', dry_run: dry }),
+                });
+                var resp = await res.json();
+                if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
+                if (box) {
+                    box.classList.remove('hidden');
+                    if (resp.dry_run) {
+                        box.innerHTML = '<div class="font-semibold text-amber-800">✓ Dry-run complete</div>'
+                            + '<div>' + (resp.candidates || 0) + ' rows with email+title · <span class="text-emerald-700 font-semibold">' + (resp.would_update || 0) + '</span> matched a Lead (would set Title) · ' + (resp.not_found || 0) + ' not found by email.</div>'
+                            + '<div class="mt-1 text-amber-700">Uncheck Dry-run and click again to apply.</div>';
+                    } else {
+                        box.innerHTML = '<div class="font-semibold text-emerald-800">✓ Backfill complete</div>'
+                            + '<div>Updated: ' + (resp.updated || 0) + ' · Failed: ' + (resp.failed || 0) + ' · Not found: ' + (resp.not_found || 0) + '</div>'
+                            + ((resp.error_sample && resp.error_sample.length) ? '<div class="text-red-700 mt-1">' + resp.error_sample.map(function (e) { return escapeHtml(e.code || '') + ' — ' + escapeHtml(e.message || ''); }).join('<br>') + '</div>' : '');
+                    }
+                }
+            } catch (e) {
+                if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Backfill failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
         // Read-only diagnostic: pull the exact required fields + api_names for
         // Deals and Leads from the live CRM, so we can confirm the push fills
         // them under the right api_names (no guessing).

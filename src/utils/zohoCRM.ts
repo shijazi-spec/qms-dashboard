@@ -1021,7 +1021,7 @@ export async function findContactIdByEmail(email: string): Promise<string | null
  * retry per chunk) — the Preflight A1 push calls this BEFORE creating anything,
  * so a failure aborts cleanly with zero records written, rather than silently
  * treating everyone as "new" and creating duplicates of existing contacts. */
-export async function findContactIdsByEmails(emails: string[]): Promise<Map<string, string>> {
+export async function findRecordIdsByEmails(module: string, emails: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const clean = Array.from(new Set(emails.map(e => String(e || "").trim()).filter(Boolean)));
   const CHUNK = 10;
@@ -1031,11 +1031,11 @@ export async function findContactIdsByEmails(emails: string[]): Promise<Map<stri
     let rows: ZohoCRMRecord[] | null = null;
     let lastErr: any = null;
     for (let attempt = 0; attempt < 2 && rows === null; attempt++) {
-      try { rows = await searchZohoRecords("Contacts", criteria); }
+      try { rows = await searchZohoRecords(module, criteria); }
       catch (e) { lastErr = e; rows = null; }
     }
     if (rows === null) {
-      throw new Error(`Contact email-existence check failed: ${lastErr?.message || String(lastErr)}`);
+      throw new Error(`${module} email lookup failed: ${lastErr?.message || String(lastErr)}`);
     }
     for (const r of rows) {
       const em = String(r.data?.Email || "").trim().toLowerCase();
@@ -1043,6 +1043,59 @@ export async function findContactIdsByEmails(emails: string[]): Promise<Map<stri
     }
   }
   return out;
+}
+
+/** Contacts-module wrapper (the Preflight push's pre-create dedup check). */
+export async function findContactIdsByEmails(emails: string[]): Promise<Map<string, string>> {
+  return findRecordIdsByEmails("Contacts", emails);
+}
+
+/** Bulk UPDATE (Zoho v2 PUT /crm/v2/{module}). Each record MUST carry `id`
+ * plus the fields to change. Chunks at 100; returns per-record outcomes
+ * positionally aligned to input (same shape as createZohoRecordsBulk). Used by
+ * the title backfill to set Title on already-created Leads/Contacts. */
+export async function updateZohoRecordsBulk(
+  module: string,
+  records: Array<Record<string, any>>,
+): Promise<BulkCreateOutcome[]> {
+  if (records.length === 0) return [];
+  const BATCH = 100;
+  const outcomes: BulkCreateOutcome[] = [];
+  for (let start = 0; start < records.length; start += BATCH) {
+    const chunk = records.slice(start, start + BATCH);
+    logger.info(`✏️ [ZohoCRM] Bulk updating ${chunk.length} ${module} (offset ${start}/${records.length})`);
+    try {
+      const data: any = await makeZohoRequest(
+        async (config) => fetch(`${config.apiDomain}/crm/v2/${module}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Zoho-oauthtoken ${config.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ data: chunk }),
+        }),
+        async (response) => {
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok && response.status !== 207) {
+            throw new Error(`Zoho bulk update error: ${response.status} - ${body?.message || response.statusText}`);
+          }
+          return body;
+        },
+      );
+      const rows: any[] = Array.isArray(data?.data) ? data.data : [];
+      for (let i = 0; i < chunk.length; i++) {
+        const r = rows[i] || {};
+        outcomes.push(r.status === 'success'
+          ? { index: start + i, status: 'success', id: r.details?.id ?? undefined, code: r.code, message: r.message, details: r.details }
+          : { index: start + i, status: 'error', code: r.code || 'UNKNOWN', message: r.message || 'Failed', details: r.details });
+      }
+    } catch (e: any) {
+      for (let i = 0; i < chunk.length; i++) {
+        outcomes.push({ index: start + i, status: 'error', code: 'BATCH_ERROR', message: e?.message || String(e) });
+      }
+    }
+  }
+  return outcomes;
 }
 
 /**
