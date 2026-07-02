@@ -13,6 +13,12 @@ export const PREFLIGHT_LEAD_TARGET = {
 // Sent as an array (multi-select picklist format): ["WalaPlus"].
 export const PREFLIGHT_PRODUCT = process.env.PREFLIGHT_PRODUCT ?? "WalaPlus";
 
+// Other required fields the import can't source: No. of Employees defaults to
+// 0 (the sales agent updates it after), and Sales Person defaults to a user
+// resolved by email. Both env-overridable.
+export const PREFLIGHT_EMPLOYEES = Number(process.env.PREFLIGHT_EMPLOYEES ?? 0) || 0;
+export const PREFLIGHT_SALESPERSON_EMAIL = process.env.PREFLIGHT_SALESPERSON_EMAIL || "client@walaplus.com";
+
 // Lead_Source stamped on EVERY record the push creates (Leads, Contacts, Deals).
 // Ahmad 2026-07-01: all Preflight-pushed records carry Lead_Source = "Mawsool".
 // Env-overridable so a future batch/source can change it without a code change.

@@ -8956,9 +8956,22 @@ export const duplicateRadarRoutes = [
           ).toString().trim();
 
           // Map raw body rows to SPRow shape.
-          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, PREFLIGHT_PRODUCT, splitContactName, websiteFromDomain } =
+          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, PREFLIGHT_PRODUCT, PREFLIGHT_EMPLOYEES, PREFLIGHT_SALESPERSON_EMAIL, splitContactName, websiteFromDomain } =
             await import("../../utils/preflightStructuredPush");
           const PRODUCTS_FIELD = PREFLIGHT_PRODUCT ? [PREFLIGHT_PRODUCT] : null;
+
+          // Resolve the default Sales Person (a Zoho user) by email once, so
+          // Deals can satisfy the required Sales Person field. Null if not found
+          // (the create will then surface MANDATORY_NOT_FOUND so we can adjust).
+          let salesPersonId: string | null = null;
+          if (!dryRun && action !== 4 && PREFLIGHT_SALESPERSON_EMAIL) {
+            try {
+              const { fetchZohoUsers } = await import("../../utils/zohoCRM");
+              const users = await fetchZohoUsers("ActiveUsers");
+              const match = users.find(u => String(u.email || "").toLowerCase() === PREFLIGHT_SALESPERSON_EMAIL.toLowerCase());
+              salesPersonId = match?.id ? String(match.id) : null;
+            } catch { salesPersonId = null; }
+          }
 
           const spRows = rows.map((r: any, idx: number) => ({
             row_index: typeof r.row_index === "number" ? r.row_index : idx,
@@ -9043,6 +9056,7 @@ export const duplicateRadarRoutes = [
                   ...(r.title ? { Title: r.title } : {}),
                   ...(web ? { Website: web } : {}),
                   ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
+                  No_of_Employees: PREFLIGHT_EMPLOYEES,
                 };
               }
             } else if (action === 1) {
@@ -9104,6 +9118,8 @@ export const duplicateRadarRoutes = [
                     Layout: { id: DEAL.layoutId },
                     Account_Name: { id: sampleAccId },
                     ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
+                    No_of_Employees: PREFLIGHT_EMPLOYEES,
+                    Sales_Person: { email: PREFLIGHT_SALESPERSON_EMAIL },
                     Contact_Name: { id: "(would-be-created)" },
                     ...(sampleCo.contacts.length > 1
                       ? { Description: buildOtherContactsDescription(sampleCo.contacts, primary) }
@@ -9144,6 +9160,8 @@ export const duplicateRadarRoutes = [
                     Layout: { id: DEAL.layoutId },
                     Account_Name: { id: accountId },
                     ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
+                    No_of_Employees: PREFLIGHT_EMPLOYEES,
+                    Sales_Person: { email: PREFLIGHT_SALESPERSON_EMAIL },
                     Contact_Name: { id: contactId },
                     ...(co.contacts.length > 1
                       ? { Description: buildOtherContactsDescription(co.contacts, primary) }
@@ -9251,6 +9269,7 @@ export const duplicateRadarRoutes = [
               if (r.title) p.Title = r.title;
               if (web) p.Website = web;
               if (PRODUCTS_FIELD) p.Products = PRODUCTS_FIELD;
+              p.No_of_Employees = PREFLIGHT_EMPLOYEES;
               const ownerVal = ownerForIndex(i);
               if (ownerVal && ownerMode !== "self") {
                 p.Owner = { id: ownerVal };
@@ -9496,6 +9515,8 @@ export const duplicateRadarRoutes = [
                   Account_Name: { id: accountId },
                 };
                 if (PRODUCTS_FIELD) p.Products = PRODUCTS_FIELD;
+                p.No_of_Employees = PREFLIGHT_EMPLOYEES;
+                if (salesPersonId) p.Sales_Person = { id: salesPersonId };
                 if (firstContactId) {
                   p.Contact_Name = { id: firstContactId };
                 }
