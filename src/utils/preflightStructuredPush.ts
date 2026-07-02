@@ -8,6 +8,11 @@ export const PREFLIGHT_LEAD_TARGET = {
   status: process.env.PREFLIGHT_LEAD_STATUS || "New Lead",
 };
 
+// The Lead/Deal layouts make "Products" a required multi-select — stamp this
+// value on every pushed Lead and Deal. Env-overridable; empty string omits it.
+// Sent as an array (multi-select picklist format): ["WalaPlus"].
+export const PREFLIGHT_PRODUCT = process.env.PREFLIGHT_PRODUCT ?? "WalaPlus";
+
 // Lead_Source stamped on EVERY record the push creates (Leads, Contacts, Deals).
 // Ahmad 2026-07-01: all Preflight-pushed records carry Lead_Source = "Mawsool".
 // Env-overridable so a future batch/source can change it without a code change.

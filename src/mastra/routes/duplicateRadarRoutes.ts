@@ -8956,8 +8956,9 @@ export const duplicateRadarRoutes = [
           ).toString().trim();
 
           // Map raw body rows to SPRow shape.
-          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, splitContactName, websiteFromDomain } =
+          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, PREFLIGHT_PRODUCT, splitContactName, websiteFromDomain } =
             await import("../../utils/preflightStructuredPush");
+          const PRODUCTS_FIELD = PREFLIGHT_PRODUCT ? [PREFLIGHT_PRODUCT] : null;
 
           const spRows = rows.map((r: any, idx: number) => ({
             row_index: typeof r.row_index === "number" ? r.row_index : idx,
@@ -9041,6 +9042,7 @@ export const duplicateRadarRoutes = [
                   ...(r.phone ? { Phone: r.phone } : {}),
                   ...(r.title ? { Title: r.title } : {}),
                   ...(web ? { Website: web } : {}),
+                  ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
                 };
               }
             } else if (action === 1) {
@@ -9101,6 +9103,7 @@ export const duplicateRadarRoutes = [
                     Lead_Source: PREFLIGHT_LEAD_SOURCE,
                     Layout: { id: DEAL.layoutId },
                     Account_Name: { id: sampleAccId },
+                    ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
                     Contact_Name: { id: "(would-be-created)" },
                     ...(sampleCo.contacts.length > 1
                       ? { Description: buildOtherContactsDescription(sampleCo.contacts, primary) }
@@ -9140,6 +9143,7 @@ export const duplicateRadarRoutes = [
                     Lead_Source: PREFLIGHT_LEAD_SOURCE,
                     Layout: { id: DEAL.layoutId },
                     Account_Name: { id: accountId },
+                    ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
                     Contact_Name: { id: contactId },
                     ...(co.contacts.length > 1
                       ? { Description: buildOtherContactsDescription(co.contacts, primary) }
@@ -9246,6 +9250,7 @@ export const duplicateRadarRoutes = [
               if (r.phone) p.Phone = r.phone;
               if (r.title) p.Title = r.title;
               if (web) p.Website = web;
+              if (PRODUCTS_FIELD) p.Products = PRODUCTS_FIELD;
               const ownerVal = ownerForIndex(i);
               if (ownerVal && ownerMode !== "self") {
                 p.Owner = { id: ownerVal };
@@ -9490,6 +9495,7 @@ export const duplicateRadarRoutes = [
                   Layout: { id: DEAL.layoutId },
                   Account_Name: { id: accountId },
                 };
+                if (PRODUCTS_FIELD) p.Products = PRODUCTS_FIELD;
                 if (firstContactId) {
                   p.Contact_Name = { id: firstContactId };
                 }
