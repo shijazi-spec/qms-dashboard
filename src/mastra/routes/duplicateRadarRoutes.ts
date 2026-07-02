@@ -993,10 +993,47 @@ async function scanZohoCRMForDuplicates(
       const n = parseInt(process.env.DUPLICATE_MODULE_CONCURRENCY || "", 10);
       return Number.isFinite(n) && n >= 1 && n <= 4 ? n : 1;
     })();
-    // Destructure in the SAME order as the task array below (Deals, Contacts,
-    // Accounts, Leads) — runModulesWithConcurrency preserves input order.
-    const [dealsResult, contactsResult, accountsResult, leadsResult] =
+    // ACCOUNTS FIRST — the Preflight recovery (Resolve → link contacts/deals to
+    // an existing account) needs the account directory refreshed before the big
+    // Deals/Contacts pulls, so the operator isn't blocked for hours waiting on
+    // them. Array order MUST match the destructuring below —
+    // runModulesWithConcurrency preserves input order.
+    const [accountsResult, dealsResult, contactsResult, leadsResult] =
       await runModulesWithConcurrency([
+        () => processModule("Accounts", "account", clustersUpdated, (record) => {
+          const d = record.data;
+          const websiteRaw = d.Website || "";
+          const websiteDomain =
+            websiteRaw.replace(/^https?:\/\/(www\.)?/, "").split("/")[0] || "";
+          return {
+            companyName: d.Account_Name || "Unknown",
+            email: d.Email || "",
+            phone: d.Phone || "",
+            recordName: d.Account_Name || "Unknown",
+            domain:
+              extractDomain(d.Email || "") ||
+              (websiteDomain && !websiteDomain.includes(" ")
+                ? websiteDomain
+                : null),
+            ownerName: d.Owner?.name || "Unknown",
+            ownerEmail: d.Owner?.email || "",
+            status: "Account",
+            source: "Account",
+            createdTime: d.Created_Time || "",
+            modifiedTime: d.Modified_Time || "",
+            layoutName: d.Layout?.name || d.$layout?.name || "",
+            layoutId: d.Layout?.id || d.$layout?.id || "",
+            zohoModule: "Accounts",
+            website: websiteRaw,
+            crNumber: d.CR_Number || d.Registration_Number || "",
+            vatNumber: d.VAT_Number || d.Tax_ID || "",
+            country: d.Billing_Country || d.Shipping_Country || "",
+            region: d.Billing_State || d.Shipping_State || "",
+            industry: d.Industry || "",
+            noOfEmployees: parseInt(d.Employees) || undefined,
+            accountType: d.Account_Type || "",
+          };
+        }, sinceFor("Accounts"), (frac) => reportFetch("Accounts", frac)),
         () => processModule("Deals", "deal", clustersUpdated, (record) => {
           const d = record.data;
           // Reflect the CS "Company Domain" field (e.g. riyadbank.com) into the
@@ -1056,40 +1093,6 @@ async function scanZohoCRMForDuplicates(
             country: d.Mailing_Country || d.Other_Country || "",
           };
         }, sinceFor("Contacts"), (frac) => reportFetch("Contacts", frac)),
-        () => processModule("Accounts", "account", clustersUpdated, (record) => {
-          const d = record.data;
-          const websiteRaw = d.Website || "";
-          const websiteDomain =
-            websiteRaw.replace(/^https?:\/\/(www\.)?/, "").split("/")[0] || "";
-          return {
-            companyName: d.Account_Name || "Unknown",
-            email: d.Email || "",
-            phone: d.Phone || "",
-            recordName: d.Account_Name || "Unknown",
-            domain:
-              extractDomain(d.Email || "") ||
-              (websiteDomain && !websiteDomain.includes(" ")
-                ? websiteDomain
-                : null),
-            ownerName: d.Owner?.name || "Unknown",
-            ownerEmail: d.Owner?.email || "",
-            status: "Account",
-            source: "Account",
-            createdTime: d.Created_Time || "",
-            modifiedTime: d.Modified_Time || "",
-            layoutName: d.Layout?.name || d.$layout?.name || "",
-            layoutId: d.Layout?.id || d.$layout?.id || "",
-            zohoModule: "Accounts",
-            website: websiteRaw,
-            crNumber: d.CR_Number || d.Registration_Number || "",
-            vatNumber: d.VAT_Number || d.Tax_ID || "",
-            country: d.Billing_Country || d.Shipping_Country || "",
-            region: d.Billing_State || d.Shipping_State || "",
-            industry: d.Industry || "",
-            noOfEmployees: parseInt(d.Employees) || undefined,
-            accountType: d.Account_Type || "",
-          };
-        }, sinceFor("Accounts"), (frac) => reportFetch("Accounts", frac)),
         () => processModule("Leads", "lead", clustersUpdated, (record) => {
           const d = record.data;
           return {
@@ -9028,7 +9031,7 @@ export const duplicateRadarRoutes = [
           // ----------------------------------------------------------------
           // DRY-RUN — no Zoho calls.
           // ----------------------------------------------------------------
-          if (dryRun) {
+          if (dryRun) {
 
             // Build sample payloads per action type.
             let samplePayload: Record<string, any> | null = null;
@@ -9234,7 +9237,7 @@ export const duplicateRadarRoutes = [
           const { createZohoRecordsBulk, addZohoTags, addDealContactRoles } = await import("../../utils/zohoCRM");
           const { getAccountZohoIdByCluster, getAccountZohoIdByDomainOrName } =
             await import("../../utils/duplicateRadarDatabase");
-
+
 
           // Track counts
           const created = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
