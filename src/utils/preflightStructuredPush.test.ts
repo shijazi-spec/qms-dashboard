@@ -14,7 +14,7 @@ function assertEq(cond: boolean, label: string): void {
 }
 
 import { PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, splitContactName } from "./preflightStructuredPush";
-assertEq(PREFLIGHT_DEAL_TARGET.layoutId === "5146753000000019023", "deal layout id default");
+assertEq(PREFLIGHT_DEAL_TARGET.layoutId === "5146753000000091023", "deal layout id default (WalaPlus Deals layout)");
 assertEq(PREFLIGHT_DEAL_TARGET.pipeline === "Standard (Corporates)", "deal pipeline default");
 assertEq(PREFLIGHT_DEAL_TARGET.stage === "New Deal", "deal stage default");
 assertEq(PREFLIGHT_LEAD_TARGET.layoutId === "5146753000000091055", "lead layout id default");
