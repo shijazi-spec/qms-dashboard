@@ -9214,11 +9214,15 @@ export const duplicateRadarRoutes = [
           let outcomesSample: any[] = [];
           // Zoho per-record failure reasons (code + message) so the UI can show
           // WHY a create failed (required field, duplicate, invalid layout, …).
-          const errorSamples: Array<{ stage: string; code?: string; message?: string }> = [];
+          const errorSamples: Array<{ stage: string; code?: string; message?: string; field?: string }> = [];
           const collectErrors = (stage: string, outs: any[]) => {
             for (const o of outs) {
               if (o?.status === "error" && errorSamples.length < 10) {
-                errorSamples.push({ stage, code: o.code, message: o.message });
+                // Zoho names the offending field in details.api_name (both
+                // MANDATORY_NOT_FOUND and INVALID_DATA) — surface it so we know
+                // exactly which field to add/fix.
+                const field = o?.details?.api_name || o?.details?.expected_data_type || undefined;
+                errorSamples.push({ stage, code: o.code, message: o.message, field });
               }
             }
           };
