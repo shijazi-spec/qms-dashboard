@@ -11371,6 +11371,71 @@
             return { a1: a1, a2: a2, a3: a3, a4: a4, rejected: rejected };
         }
 
+        // Reconciliation — proves every Mawsool record has a destination.
+        // Categorizes ALL loaded rows (CONTACT-level) and checks the sum:
+        //   total = not-imported (block/review/duplicate/no-contact)
+        //         + PASS (A1 link + A2 + A3 + A4 leads + rejected).
+        // Returns an "unaccounted" count that MUST be 0.
+        function _pfReconcile(rawRows) {
+            var all = (rawRows || []).map(_pfToSPRow);
+            var v = { block: 0, review: 0, duplicate: 0, no_contact: 0, warn: 0, pass: 0, other: 0 };
+            all.forEach(function (r) {
+                var vv = String(r.verdict || '').toLowerCase();
+                if (v[vv] != null) v[vv]++; else if (!vv) v.other++; else v.other++;
+            });
+            var pass = all.filter(_pfIsPass);
+            var routed = _pfRouteContacts(pass);
+            var acct = [], a4 = 0, rejected = 0;
+            routed.forEach(function (x) {
+                if (x.route === 'account') acct.push(x.row);
+                else if (x.route === 'lead') a4++;
+                else rejected++;
+            });
+            var isMatch = function (r) {
+                return (r.matched_account_zoho_id && String(r.matched_account_zoho_id).trim()) ||
+                       r.lifecycle_state === 'termination_old' || r.cluster_id != null;
+            };
+            var a1 = 0, newRows = [];
+            acct.forEach(function (r) { if (isMatch(r)) a1++; else newRows.push(r); });
+            var groups = _pfGroupByCompany(newRows);
+            var a2 = 0, a3 = 0;
+            groups.forEach(function (g) {
+                var cc = g.rows.filter(_pfRowHasContact).length;
+                if (cc >= 2) a2 += cc; else if (cc === 1) a3 += 1;
+            });
+            var passSum = a1 + a2 + a3 + a4 + rejected;
+            var notImported = v.block + v.review + v.duplicate + v.no_contact + v.warn + v.other;
+            return {
+                total: all.length, pass: pass.length, notImported: notImported, verdicts: v,
+                a1: a1, a2: a2, a3: a3, a4: a4, rejected: rejected,
+                passSum: passSum,
+                unaccounted_pass: pass.length - passSum,
+                unaccounted_total: all.length - (notImported + passSum),
+            };
+        }
+
+        // Renders the reconciliation into #spReconcileResult.
+        function erReconcile() {
+            var data = window._preflightLastResult;
+            var box = document.getElementById('spReconcileResult');
+            if (!data || !Array.isArray(data.rows)) { alert('Run a Preflight check first.'); return; }
+            var r = _pfReconcile(data.rows);
+            var ok = (r.unaccounted_total === 0 && r.unaccounted_pass === 0);
+            var vv = r.verdicts;
+            if (box) {
+                box.classList.remove('hidden');
+                box.innerHTML = ''
+                    + '<div class="font-semibold ' + (ok ? 'text-emerald-800' : 'text-red-700') + ' mb-1">'
+                        + (ok ? '✓ Every record accounted for' : '✗ ' + r.unaccounted_total + ' record(s) UNACCOUNTED') + '</div>'
+                    + '<div>Total loaded: <strong>' + r.total + '</strong></div>'
+                    + '<div class="mt-1 text-gray-700">Not imported (' + r.notImported + '): '
+                        + 'duplicate ' + vv.duplicate + ' · block ' + vv.block + ' · review ' + vv.review + ' · no-contact ' + vv.no_contact + (vv.warn ? ' · warn ' + vv.warn : '') + (vv.other ? ' · other ' + vv.other : '') + '</div>'
+                    + '<div class="mt-1 text-gray-700">PASS (' + r.pass + '): A1 link ' + r.a1 + ' · A2 ' + r.a2 + ' · A3 ' + r.a3 + ' · A4 leads ' + r.a4 + ' · rejected ' + r.rejected + ' = <strong>' + r.passSum + '</strong>'
+                        + (r.unaccounted_pass ? ' <span class="text-red-700">(' + r.unaccounted_pass + ' unclassified!)</span>' : ' ✓') + '</div>'
+                    + '<div class="mt-1 ' + (ok ? 'text-emerald-700' : 'text-red-700') + '">' + r.notImported + ' + ' + r.passSum + ' = ' + (r.notImported + r.passSum) + ' / ' + r.total + '</div>';
+            }
+        }
+
         // Refresh the four count badges + reveal the panel after a Preflight run.
         function _pfRefreshStructuredPushCounts(rawRows) {
             var panel = document.getElementById('structuredPushPanel');
