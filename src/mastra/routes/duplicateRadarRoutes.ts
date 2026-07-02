@@ -9028,8 +9028,7 @@ export const duplicateRadarRoutes = [
           // ----------------------------------------------------------------
           // DRY-RUN — no Zoho calls.
           // ----------------------------------------------------------------
-          if (dryRun) {
-            const dealTag = action === 1 ? "Re-engagement" : "Preflight import";
+          if (dryRun) {
 
             // Build sample payloads per action type.
             let samplePayload: Record<string, any> | null = null;
@@ -9116,7 +9115,7 @@ export const duplicateRadarRoutes = [
                     Account_Name: { id: sampleAccId },
                   } : null,
                   deal: {
-                    Deal_Name: `${sampleCo.companyName} — ${dealTag}`,
+                    Deal_Name: sampleCo.companyName,
                     Stage: DEAL.stage,
                     Pipeline: DEAL.pipeline,
                     Lead_Source: PREFLIGHT_LEAD_SOURCE,
@@ -9160,7 +9159,7 @@ export const duplicateRadarRoutes = [
                     Account_Name: { id: accountId },
                   } : null,
                   deal: {
-                    Deal_Name: `${co.companyName} — ${dealTag}`,
+                    Deal_Name: co.companyName || co.domain || "(unknown)",
                     Stage: DEAL.stage,
                     Pipeline: DEAL.pipeline,
                     Lead_Source: PREFLIGHT_LEAD_SOURCE,
@@ -9235,8 +9234,7 @@ export const duplicateRadarRoutes = [
           const { createZohoRecordsBulk, addZohoTags, addDealContactRoles } = await import("../../utils/zohoCRM");
           const { getAccountZohoIdByCluster, getAccountZohoIdByDomainOrName } =
             await import("../../utils/duplicateRadarDatabase");
-
-          const dealTag = action === 1 ? "Re-engagement" : "Preflight import";
+
 
           // Track counts
           const created = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
@@ -9518,7 +9516,7 @@ export const duplicateRadarRoutes = [
                 const isChurnedCo = co.contacts.some(c => c.lifecycle_state === "termination_old");
                 if (action === 1 && !isChurnedCo) continue;
                 const p: Record<string, any> = {
-                  Deal_Name: `${co.companyName} — ${dealTag}`,
+                  Deal_Name: co.companyName || co.domain || "(unknown)",
                   Stage: DEAL.stage,
                   Pipeline: DEAL.pipeline,
                   Lead_Source: PREFLIGHT_LEAD_SOURCE,
