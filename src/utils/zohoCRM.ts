@@ -979,7 +979,13 @@ export async function searchZohoRecords(
         throw new Error(`Zoho CRM search error: ${response.status} - ${error.message || response.statusText}`);
       }
 
-      const data = await response.json();
+      // Zoho search returns 204 No Content (empty body) when NOTHING matches —
+      // and 204 is response.ok, so we must handle it before parsing or
+      // response.json() throws "Unexpected end of JSON input" on the empty body.
+      if (response.status === 204) return [];
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
 
       return (data.data || []).map((record: any) => ({
         id: record.id,

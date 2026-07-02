@@ -11562,6 +11562,7 @@
                             + (resp.existing_contacts_linked ? '<div class="text-indigo-700">Reused ' + resp.existing_contacts_linked + ' existing contact(s) — not duplicated.</div>' : '')
                             + (resp.possible_existing_client_count ? '<div class="text-amber-700">⚠ ' + resp.possible_existing_client_count + ' flagged as possible existing client(s) — see each record\'s Description.</div>' : '')
                             + '<div>' + flLine + '</div>'
+                            + ((resp.error_sample && resp.error_sample.length) ? '<div class="mt-1 text-red-700">Failure reason(s):<ul class="list-disc ms-5">' + resp.error_sample.map(function (e) { return '<li>' + escapeHtml(e.stage) + ': ' + escapeHtml(e.code || '') + ' — ' + escapeHtml(e.message || '') + '</li>'; }).join('') + '</ul></div>' : '')
                             + '<div>Skipped: ' + (resp.skipped_count || 0) + '</div>'
                             + (count > 0 ? '<div class="mt-1 text-purple-700">Next batch starts at offset ' + nextOffset + '. Push again for the next ' + count + '.</div>' : '')
                             + '<div class="mt-1 text-gray-500">Audit-logged. Source: ' + escapeHtml(source) + '.</div>';

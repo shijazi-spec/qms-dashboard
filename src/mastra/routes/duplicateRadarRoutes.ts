@@ -9122,7 +9122,6 @@ export const duplicateRadarRoutes = [
                 samplePayload = {
                   account: {
                     Account_Name: co.companyName,
-                    Layout: { id: DEAL.layoutId },
                     ...(web ? { Website: web } : {}),
                   },
                   contact: co.contacts[0] ? {
@@ -9213,6 +9212,16 @@ export const duplicateRadarRoutes = [
           const failed = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
           let existingContactsLinked = 0; // A1: contacts already in Zoho (reused, not duplicated)
           let outcomesSample: any[] = [];
+          // Zoho per-record failure reasons (code + message) so the UI can show
+          // WHY a create failed (required field, duplicate, invalid layout, …).
+          const errorSamples: Array<{ stage: string; code?: string; message?: string }> = [];
+          const collectErrors = (stage: string, outs: any[]) => {
+            for (const o of outs) {
+              if (o?.status === "error" && errorSamples.length < 10) {
+                errorSamples.push({ stage, code: o.code, message: o.message });
+              }
+            }
+          };
 
           if (action === 4) {
             // --- ACTION 4: create Leads only ---
@@ -9245,6 +9254,7 @@ export const duplicateRadarRoutes = [
               : [];
             created.leads = leadOut.filter(o => o.status === "success").length;
             failed.leads = leadOut.filter(o => o.status === "error").length;
+            collectErrors("lead", leadOut);
             outcomesSample = leadOut.slice(0, 20);
             // Tag created Leads (best-effort).
             try {
@@ -9284,9 +9294,11 @@ export const duplicateRadarRoutes = [
               // A2/A3: create all accounts first.
               const accountPayloads = plan.companies.map((co) => {
                 const web = websiteFromDomain(co.domain);
+                // NOTE: no Layout — DEAL.layoutId is a DEALS-module layout and is
+                // invalid on an Account create (Zoho rejects it). Accounts use
+                // the org's default Accounts layout.
                 const p: Record<string, any> = {
                   Account_Name: co.companyName,
-                  Layout: { id: DEAL.layoutId },
                 };
                 if (web) p.Website = web;
                 return p;
@@ -9297,6 +9309,7 @@ export const duplicateRadarRoutes = [
                 : [];
               created.accounts = accOut.filter(o => o.status === "success").length;
               failed.accounts = accOut.filter(o => o.status === "error").length;
+              collectErrors("account", accOut);
 
               // Map companyKey → created account id.
               for (let i = 0; i < plan.companies.length; i++) {
@@ -9402,6 +9415,7 @@ export const duplicateRadarRoutes = [
                 : [];
               created.contacts = conOut.filter(o => o.status === "success").length;
               failed.contacts = conOut.filter(o => o.status === "error").length;
+              collectErrors("contact", conOut);
 
               // Primary contact per company: prefer the first successfully-created
               // row that HAS an email; fall back to the first successfully-created
@@ -9498,6 +9512,7 @@ export const duplicateRadarRoutes = [
                 : [];
               created.deals = dealOut.filter(o => o.status === "success").length;
               failed.deals = dealOut.filter(o => o.status === "error").length;
+              collectErrors("deal", dealOut);
               outcomesSample = dealOut.slice(0, 20);
               // Tag created Deals (best-effort).
               try {
@@ -9562,6 +9577,7 @@ export const duplicateRadarRoutes = [
             existing_contacts_linked: existingContactsLinked,
             possible_existing_client_count: possibleClientCount,
             skipped_count: plan.skipped.length,
+            error_sample: errorSamples,
             outcomes_sample: outcomesSample,
           });
         } catch (error: any) {
