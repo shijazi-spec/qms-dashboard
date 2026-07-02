@@ -20,6 +20,10 @@ export const PREFLIGHT_EMPLOYEES = Number(process.env.PREFLIGHT_EMPLOYEES ?? 0) 
 export const PREFLIGHT_SALESPERSON_EMAIL = process.env.PREFLIGHT_SALESPERSON_EMAIL || "client@walaplus.com";
 // Gov Type picklist — set to "Private" for the whole batch for now.
 export const PREFLIGHT_GOV_TYPE = process.env.PREFLIGHT_GOV_TYPE ?? "Private";
+// CS Member — a User field Zoho enforces as mandatory on Deal create (via a
+// layout/validation rule, not the field's basic required flag). Set to a user
+// by email (placeholder; the team reassigns). Empty string omits it.
+export const PREFLIGHT_CS_MEMBER_EMAIL = process.env.PREFLIGHT_CS_MEMBER_EMAIL ?? "client@walaplus.com";
 
 // Lead_Source stamped on EVERY record the push creates (Leads, Contacts, Deals).
 // Ahmad 2026-07-01: all Preflight-pushed records carry Lead_Source = "Mawsool".
