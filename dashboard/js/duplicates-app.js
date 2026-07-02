@@ -11460,9 +11460,11 @@
             var data = window._preflightLastResult;
             if (!data || !Array.isArray(data.rows)) { alert('Load the titled Excel and run a Preflight check first.'); return; }
             var rows = data.rows.map(_pfToSPRow);
-            var withTitle = rows.filter(function (r) { return String(r.title || '').trim() && String(r.email || '').trim(); }).length;
-            if (withTitle === 0) { alert('No rows with BOTH an email and a title. Load the Excel that has the Title column, then run Preflight.'); return; }
+            var withTitle = rows.filter(function (r) { return String(r.title || '').trim() && (String(r.email || '').trim() || String(r.contact_name || '').trim()); }).length;
+            if (withTitle === 0) { alert('No rows with a Title (plus an email or a name to match on). Load the Excel that has the Title column, then run Preflight.'); return; }
             var dry = !!(document.getElementById('spBackfillDry') || {}).checked;
+            var count = parseInt((document.getElementById('spBackfillNum') || {}).value || '0', 10) || 0;
+            var offset = parseInt((document.getElementById('spBackfillOff') || {}).value || '0', 10) || 0;
             var btn = document.getElementById('spBackfillBtn');
             var box = document.getElementById('spBackfillResult');
             var orig = btn ? btn.innerHTML : '';
@@ -11470,7 +11472,7 @@
             try {
                 var res = await fetch('/api/duplicates/preflight/backfill-titles', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ rows: rows, module: 'Leads', dry_run: dry }),
+                    body: JSON.stringify({ rows: rows, module: 'Leads', dry_run: dry, count: count, offset: offset }),
                 });
                 var resp = await res.json();
                 if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
@@ -11478,12 +11480,14 @@
                     box.classList.remove('hidden');
                     if (resp.dry_run) {
                         box.innerHTML = '<div class="font-semibold text-amber-800">✓ Dry-run complete</div>'
-                            + '<div>' + (resp.candidates || 0) + ' rows with email+title · <span class="text-emerald-700 font-semibold">' + (resp.would_update || 0) + '</span> matched a Lead (would set Title) · ' + (resp.not_found || 0) + ' not found by email.</div>'
-                            + '<div class="mt-1 text-amber-700">Uncheck Dry-run and click again to apply.</div>';
+                            + '<div>' + (resp.candidates || 0) + ' rows checked · <span class="text-emerald-700 font-semibold">' + (resp.would_update || 0) + '</span> matched a Lead (' + (resp.matched_by_name || 0) + ' by name) · ' + (resp.not_found || 0) + ' not found.</div>'
+                            + '<div class="mt-1 text-amber-700">Uncheck Dry-run and click again to apply. Advance <em>from</em> for the next slice.</div>';
                     } else {
                         box.innerHTML = '<div class="font-semibold text-emerald-800">✓ Backfill complete</div>'
-                            + '<div>Updated: ' + (resp.updated || 0) + ' · Failed: ' + (resp.failed || 0) + ' · Not found: ' + (resp.not_found || 0) + '</div>'
+                            + '<div>Updated: ' + (resp.updated || 0) + ' (' + (resp.matched_by_name || 0) + ' by name) · Failed: ' + (resp.failed || 0) + ' · Not found: ' + (resp.not_found || 0) + '</div>'
                             + ((resp.error_sample && resp.error_sample.length) ? '<div class="text-red-700 mt-1">' + resp.error_sample.map(function (e) { return escapeHtml(e.code || '') + ' — ' + escapeHtml(e.message || ''); }).join('<br>') + '</div>' : '');
+                        var offEl = document.getElementById('spBackfillOff');
+                        if (offEl && count > 0) offEl.value = String(offset + count);
                     }
                 }
             } catch (e) {

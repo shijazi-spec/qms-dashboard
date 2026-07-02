@@ -9653,24 +9653,33 @@ export const duplicateRadarRoutes = [
           const count = typeof body?.count === "number" && body.count > 0 ? Math.floor(body.count) : 0;
           const offset = typeof body?.offset === "number" && body.offset >= 0 ? Math.floor(body.offset) : 0;
 
-          // Candidates: rows that have BOTH an email (to match on) and a title.
+          // Candidates: rows that have a title AND a way to match (email or name).
           const candidates = rowsIn
             .map((r: any) => ({
               email: String(r.email ?? r.input?.email ?? "").trim(),
               title: String(r.title ?? r.input?.title ?? "").trim(),
+              contact_name: String(r.contact_name ?? r.input?.contact_name ?? "").trim(),
             }))
-            .filter(r => r.email && r.title);
+            .filter(r => r.title && (r.email || r.contact_name));
           const sliced = count > 0 ? candidates.slice(offset, offset + count) : candidates;
 
-          const { findRecordIdsByEmails, updateZohoRecordsBulk } = await import("../../utils/zohoCRM");
-          const idByEmail = await findRecordIdsByEmails(module, sliced.map(r => r.email));
+          const { findRecordIdsByEmails, findRecordIdByName, updateZohoRecordsBulk } = await import("../../utils/zohoCRM");
+          const { splitContactName } = await import("../../utils/preflightStructuredPush");
+          // Email match is batched (fast); name match is a per-row search (for
+          // phone-only leads with no email) and only accepts a UNIQUE match.
+          const idByEmail = await findRecordIdsByEmails(module, sliced.map(r => r.email).filter(Boolean));
 
-          // One update per matched record (dedupe by id; first title wins).
           const seen = new Set<string>();
           const updates: Array<{ id: string; Title: string }> = [];
           let notFound = 0;
+          let matchedByName = 0;
           for (const r of sliced) {
-            const id = idByEmail.get(r.email.toLowerCase());
+            let id = r.email ? idByEmail.get(r.email.toLowerCase()) || null : null;
+            if (!id && r.contact_name) {
+              const nm = splitContactName(r.contact_name);
+              id = await findRecordIdByName(module, nm.first, nm.last);
+              if (id) matchedByName++;
+            }
             if (!id) { notFound++; continue; }
             if (seen.has(id)) continue;
             seen.add(id);
@@ -9682,6 +9691,7 @@ export const duplicateRadarRoutes = [
               success: true, dry_run: true, module,
               candidates: sliced.length,
               would_update: updates.length,
+              matched_by_name: matchedByName,
               not_found: notFound,
               sample: updates.slice(0, 10),
             });
@@ -9694,6 +9704,7 @@ export const duplicateRadarRoutes = [
           return c.json({
             success: true, dry_run: false, module,
             candidates: sliced.length, updated, failed, not_found: notFound,
+            matched_by_name: matchedByName,
             error_sample: errorSample,
           });
         } catch (error: any) {

@@ -1050,6 +1050,25 @@ export async function findContactIdsByEmails(emails: string[]): Promise<Map<stri
   return findRecordIdsByEmails("Contacts", emails);
 }
 
+/** Find a record id by exact First+Last name — used by the Title backfill for
+ * phone-only leads that have no email to match on. Returns the id ONLY when the
+ * search yields EXACTLY ONE record (a unique match), so an ambiguous name never
+ * gets the wrong title. Returns null on 0, >1, or error. */
+export async function findRecordIdByName(module: string, firstName: string, lastName: string): Promise<string | null> {
+  const last = String(lastName || "").trim();
+  if (!last) return null;
+  const first = String(firstName || "").trim();
+  const criteria = first
+    ? `(Last_Name:equals:${last})and(First_Name:equals:${first})`
+    : `(Last_Name:equals:${last})`;
+  try {
+    const rows = await searchZohoRecords(module, criteria);
+    return rows.length === 1 && rows[0]?.id ? String(rows[0].id) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Bulk UPDATE (Zoho v2 PUT /crm/v2/{module}). Each record MUST carry `id`
  * plus the fields to change. Chunks at 100; returns per-record outcomes
  * positionally aligned to input (same shape as createZohoRecordsBulk). Used by
