@@ -18,6 +18,8 @@ export const PREFLIGHT_PRODUCT = process.env.PREFLIGHT_PRODUCT ?? "WalaPlus";
 // resolved by email. Both env-overridable.
 export const PREFLIGHT_EMPLOYEES = Number(process.env.PREFLIGHT_EMPLOYEES ?? 0) || 0;
 export const PREFLIGHT_SALESPERSON_EMAIL = process.env.PREFLIGHT_SALESPERSON_EMAIL || "client@walaplus.com";
+// Gov Type picklist — set to "Private" for the whole batch for now.
+export const PREFLIGHT_GOV_TYPE = process.env.PREFLIGHT_GOV_TYPE ?? "Private";
 
 // Lead_Source stamped on EVERY record the push creates (Leads, Contacts, Deals).
 // Ahmad 2026-07-01: all Preflight-pushed records carry Lead_Source = "Mawsool".

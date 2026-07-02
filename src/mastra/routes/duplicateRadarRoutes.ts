@@ -8956,7 +8956,7 @@ export const duplicateRadarRoutes = [
           ).toString().trim();
 
           // Map raw body rows to SPRow shape.
-          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, PREFLIGHT_PRODUCT, PREFLIGHT_EMPLOYEES, PREFLIGHT_SALESPERSON_EMAIL, splitContactName, websiteFromDomain } =
+          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, PREFLIGHT_PRODUCT, PREFLIGHT_EMPLOYEES, PREFLIGHT_SALESPERSON_EMAIL, PREFLIGHT_GOV_TYPE, splitContactName, websiteFromDomain } =
             await import("../../utils/preflightStructuredPush");
           const PRODUCTS_FIELD = PREFLIGHT_PRODUCT ? [PREFLIGHT_PRODUCT] : null;
 
@@ -9120,6 +9120,7 @@ export const duplicateRadarRoutes = [
                     ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
                     No_of_Employees: PREFLIGHT_EMPLOYEES,
                     Sales_Person: { email: PREFLIGHT_SALESPERSON_EMAIL },
+                    ...(PREFLIGHT_GOV_TYPE ? { Gov_Type: PREFLIGHT_GOV_TYPE } : {}),
                     Contact_Name: { id: "(would-be-created)" },
                     ...(sampleCo.contacts.length > 1
                       ? { Description: buildOtherContactsDescription(sampleCo.contacts, primary) }
@@ -9162,6 +9163,7 @@ export const duplicateRadarRoutes = [
                     ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
                     No_of_Employees: PREFLIGHT_EMPLOYEES,
                     Sales_Person: { email: PREFLIGHT_SALESPERSON_EMAIL },
+                    ...(PREFLIGHT_GOV_TYPE ? { Gov_Type: PREFLIGHT_GOV_TYPE } : {}),
                     Contact_Name: { id: contactId },
                     ...(co.contacts.length > 1
                       ? { Description: buildOtherContactsDescription(co.contacts, primary) }
@@ -9517,6 +9519,7 @@ export const duplicateRadarRoutes = [
                 if (PRODUCTS_FIELD) p.Products = PRODUCTS_FIELD;
                 p.No_of_Employees = PREFLIGHT_EMPLOYEES;
                 if (salesPersonId) p.Sales_Person = { id: salesPersonId };
+                if (PREFLIGHT_GOV_TYPE) p.Gov_Type = PREFLIGHT_GOV_TYPE;
                 if (firstContactId) {
                   p.Contact_Name = { id: firstContactId };
                 }
