@@ -9368,11 +9368,13 @@ export const duplicateRadarRoutes = [
             const contactIdsByCompany = new Map<string, string[]>();
 
             if (companiesWithAccount.length > 0) {
-              // A1 links to EXISTING accounts — check each contact's email
-              // against Zoho FIRST so we never create a duplicate of someone
-              // already in the CRM. Reuse the existing contact id when found.
+              // Check each contact's email against Zoho FIRST (ALL of A1/A2/A3)
+              // so we never fail on a duplicate-email contact: an existing
+              // contact is REUSED (its id links the Deal's Contact_Name) instead
+              // of Zoho rejecting a duplicate and leaving the Deal with no
+              // contact (MANDATORY_NOT_FOUND Contact_Name).
               const preexistingByRow = new Map<number, string>();
-              if (action === 1) {
+              {
                 // ONE batched email-existence check (OR-chunks of 10). THROWS on
                 // a Zoho error — and this runs BEFORE any create, so a failure
                 // aborts with zero records written instead of silently treating
