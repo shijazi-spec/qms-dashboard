@@ -1775,6 +1775,41 @@ export async function fetchZohoLayouts(module: string): Promise<ZohoLayout[]> {
   );
 }
 
+/** Fetch a module's field metadata — the AUTHORITATIVE api_name + required flag
+ * for every field. Used to confirm exactly which fields the Preflight push must
+ * fill (and their real api_names) instead of guessing from labels. */
+export interface ZohoFieldMeta { api_name: string; label: string; required: boolean; data_type: string; }
+export async function fetchZohoFields(module: string): Promise<ZohoFieldMeta[]> {
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/settings/fields?module=${encodeURIComponent(module)}`;
+      return fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Zoho-oauthtoken ${config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(`Zoho Fields API error: ${response.status} - ${error.message || response.statusText}`);
+      }
+      if (response.status === 204) return [];
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return (data.fields || []).map((f: any) => ({
+        api_name: String(f.api_name || ''),
+        label: String(f.field_label || f.display_label || ''),
+        required: !!(f.system_mandatory || f.required),
+        data_type: String(f.data_type || ''),
+      }));
+    },
+  );
+}
+
 export interface ZohoUser {
   id: string;
   full_name: string;

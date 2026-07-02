@@ -9622,6 +9622,36 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // READ-ONLY diagnostic. Returns the AUTHORITATIVE required fields (and their
+    // exact api_names) for the Deals and Leads modules, plus the specific fields
+    // the push fills (products / employees / sales person), so we can confirm
+    // the api_names match what the push sends — no guessing. No writes.
+    path: "/api/duplicates/preflight/zoho-required-fields",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+          const { fetchZohoFields } = await import("../../utils/zohoCRM");
+          const rx = /product|employ|sales|person/i;
+          const summarize = (fields: any[]) => ({
+            required: fields.filter(f => f.required).map(f => ({ api_name: f.api_name, label: f.label, type: f.data_type })),
+            push_targets: fields
+              .filter(f => rx.test(f.label) || rx.test(f.api_name))
+              .map(f => ({ api_name: f.api_name, label: f.label, type: f.data_type, required: f.required })),
+          });
+          const [deals, leads] = await Promise.all([fetchZohoFields("Deals"), fetchZohoFields("Leads")]);
+          return c.json({ success: true, deals: summarize(deals), leads: summarize(leads) });
+        } catch (error: any) {
+          logger.error("Error in zoho-required-fields:", error);
+          return c.json({ error: "Field metadata fetch failed — " + (error?.message || "unknown") }, 500);
+        }
+      };
+    },
+  },
+  {
     // READ-ONLY. Layer 1 of the resolution ladder for the WHOLE upload: resolve
     // each contact's existing Zoho Account by EMAIL domain → row domain →
     // company name (the email-domain check is the new signal the import gate

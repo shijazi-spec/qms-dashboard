@@ -1342,6 +1342,7 @@
                 </div>
                 <div class="flex items-center flex-wrap gap-2 mt-2">
                     <p id="spRejectedNote" class="text-[11px] text-rose-600 flex-1 min-w-[10rem]"></p>
+                    <button data-on-click="erCheckZohoFields" id="spFieldsBtn" data-testid="button-sp-fields" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-indigo-300 text-indigo-700 hover:bg-indigo-50">Check required fields</button>
                     <button data-on-click="erResolveExistingAccounts" id="spResolveBtn" data-testid="button-sp-resolve" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50">① Resolve existing accounts</button>
                 </div>
                 <div id="spRejResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-72 overflow-y-auto"></div>
@@ -2067,7 +2068,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=43"></script>
+    <script src="/js/duplicates-app.js?v=44"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

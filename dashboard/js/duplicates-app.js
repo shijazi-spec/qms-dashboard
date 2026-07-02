@@ -11388,6 +11388,40 @@
                 : '';
         }
 
+        // Read-only diagnostic: pull the exact required fields + api_names for
+        // Deals and Leads from the live CRM, so we can confirm the push fills
+        // them under the right api_names (no guessing).
+        async function erCheckZohoFields() {
+            var btn = document.getElementById('spFieldsBtn');
+            var box = document.getElementById('spRejResult');
+            var orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Checking…'; }
+            try {
+                var res = await fetch('/api/duplicates/preflight/zoho-required-fields');
+                var resp = await res.json();
+                if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
+                var fieldRows = function (list) {
+                    return (list || []).map(function (f) {
+                        return '<tr class="border-b border-gray-100"><td class="pr-2 font-mono">' + escapeHtml(f.api_name) + '</td><td class="pr-2">' + escapeHtml(f.label || '') + '</td><td class="text-gray-500">' + escapeHtml(f.type || '') + (f.required ? ' · <span class="text-rose-600">required</span>' : '') + '</td></tr>';
+                    }).join('');
+                };
+                var section = function (title, mod) {
+                    return '<div class="mt-1 font-semibold text-gray-800">' + title + ' — push fills these:</div>'
+                        + '<table class="text-[11px] w-full mb-1">' + fieldRows(mod.push_targets) + '</table>'
+                        + '<details><summary class="cursor-pointer text-indigo-700">All required ' + title + ' fields (' + (mod.required || []).length + ')</summary><table class="text-[11px] w-full">' + fieldRows(mod.required) + '</table></details>';
+                };
+                if (box) {
+                    box.classList.remove('hidden');
+                    box.innerHTML = '<div class="font-semibold text-indigo-800 mb-1">Zoho required fields (live)</div>'
+                        + section('Deals', resp.deals || {}) + section('Leads', resp.leads || {});
+                }
+            } catch (e) {
+                if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Field check failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
         // Layer 1: resolve every contact's existing Zoho Account (email domain →
         // company domain → name) so matched people LINK to what we already have
         // instead of being rejected or duplicated. Merges the matched account
