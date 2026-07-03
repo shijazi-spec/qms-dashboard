@@ -11702,7 +11702,9 @@
                         resultBox.innerHTML = ''
                             + '<div class="font-semibold text-emerald-800 mb-1">✓ Push complete</div>'
                             + '<div>' + crLine + '</div>'
+                            + (resp.reused_accounts ? '<div class="text-indigo-700">Reused ' + resp.reused_accounts + ' existing account(s) — not duplicated.</div>' : '')
                             + (resp.existing_contacts_linked ? '<div class="text-indigo-700">Reused ' + resp.existing_contacts_linked + ' existing contact(s) — not duplicated.</div>' : '')
+                            + (resp.existing_deals_skipped ? '<div class="text-indigo-700">Skipped ' + resp.existing_deals_skipped + ' deal(s) already under the account — not duplicated.</div>' : '')
                             + (resp.possible_existing_client_count ? '<div class="text-amber-700">⚠ ' + resp.possible_existing_client_count + ' flagged as possible existing client(s) — see each record\'s Description.</div>' : '')
                             + '<div>' + flLine + '</div>'
                             + ((resp.error_sample && resp.error_sample.length) ? '<div class="mt-1 text-red-700">Failure reason(s):<ul class="list-disc ms-5">' + resp.error_sample.map(function (e) { return '<li>' + escapeHtml(e.stage) + ': ' + escapeHtml(e.code || '') + ' — ' + escapeHtml(e.message || '') + (e.field ? ' <strong>[field: ' + escapeHtml(e.field) + ']</strong>' : '') + '</li>'; }).join('') + '</ul></div>' : '')
