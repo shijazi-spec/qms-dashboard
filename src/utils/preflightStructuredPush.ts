@@ -295,7 +295,7 @@ function groupByCompany(rows: SPRow[]): SPCompany[] {
 export function buildStructuredPushPlan(
   action: 1 | 2 | 3 | 4,
   rows: SPRow[],
-  opts: { count?: number; offset?: number },
+  opts: { count?: number; offset?: number; dealPercent?: number },
 ): StructuredPushPlan {
   const skipped: Array<{ row_index: number; reason: string }> = [];
 
@@ -335,6 +335,27 @@ export function buildStructuredPushPlan(
   // A1 rows link to EXISTING accounts; A2/A3 rows open NEW accounts.
   const matchedRows = accountRows.filter(isRowExistingMatch);
   const newGroups = groupByCompany(accountRows.filter(r => !isRowExistingMatch(r)));
+
+  // Head-of-sales leads↔deals split: of the deal-ELIGIBLE new companies, only
+  // `dealPercent`% are pushed as Deals (A2/A3); the rest are PARKED as Leads
+  // (A4) for the sales team to work later. 100 = every new company eligible for
+  // a deal (default / back-compat). Unverifiable / free-mail contacts are
+  // ALWAYS leads regardless — they can never be a deal. The split is by COMPANY
+  // (one company = one deal), ranked richest-first (most contacts = best
+  // pipeline) with a deterministic row tiebreak so the same data splits the same
+  // way every time.
+  const dealPercent = Math.min(100, Math.max(0, Math.floor(opts.dealPercent ?? 100)));
+  const newGroupsRanked = [...newGroups].sort((a, b) => {
+    const byCount = contactRows(b).length - contactRows(a).length;
+    if (byCount !== 0) return byCount;
+    return Math.min(...a.contacts.map(c => c.row_index)) - Math.min(...b.contacts.map(c => c.row_index));
+  });
+  const dealGroupCount = Math.ceil((dealPercent / 100) * newGroupsRanked.length);
+  const dealNewGroups = newGroupsRanked.slice(0, dealGroupCount);
+  const parkedAsLeadRows: SPRow[] = newGroupsRanked.slice(dealGroupCount).flatMap(g => contactRows(g));
+  // Parked new-company contacts join the A4 lead pool (after the naturally
+  // lead-routed rows, so slicing order stays stable).
+  const effectiveLeadRows: SPRow[] = leadRows.concat(parkedAsLeadRows);
 
   // Every action pushes ALL its eligible items in one request, which fires one
   // sequential Zoho Contact_Roles PUT per contact — a big batch (~200 contacts)
@@ -381,7 +402,7 @@ export function buildStructuredPushPlan(
   }
 
   if (action === 2) {
-    const eligible = newGroups
+    const eligible = dealNewGroups
       .filter(g => isNewPass(g) && contactRows(g).length >= 2)
       .map(g => ({ ...g, contacts: contactRows(g) }));
     const companies = applySlice(eligible);
@@ -396,7 +417,7 @@ export function buildStructuredPushPlan(
   }
 
   if (action === 3) {
-    const eligible = newGroups
+    const eligible = dealNewGroups
       .filter(g => isNewPass(g) && contactRows(g).length === 1)
       .map(g => ({ ...g, contacts: contactRows(g) }));
     const companies = applySlice(eligible);
@@ -410,8 +431,9 @@ export function buildStructuredPushPlan(
     };
   }
 
-  // action === 4 — every lead-routed contact, sliced by count/offset.
-  const leads = applySlice(leadRows);
+  // action === 4 — every lead-routed contact PLUS any new companies parked as
+  // leads by the deal split, sliced by count/offset.
+  const leads = applySlice(effectiveLeadRows);
   return {
     action,
     companies: [],

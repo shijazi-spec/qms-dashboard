@@ -1254,6 +1254,18 @@
                     <h3 class="text-sm font-bold text-gray-900" data-i18n="pf_sp_title">Structured push to Zoho</h3>
                     <span class="text-[11px] text-gray-500">Dry-run by default · admin-gated · create-only</span>
                 </div>
+                <!-- Head-of-sales leads↔deals split. Of the deal-eligible NEW
+                     companies, this % become Deals (A2/A3, richest first); the
+                     rest are parked as Leads (A4). Change it anytime for a new
+                     Mawsool batch. Unverifiable contacts are always Leads. -->
+                <div class="flex flex-wrap items-center gap-2 mb-2 px-2 py-2 rounded-lg bg-indigo-50 border border-indigo-100">
+                    <span class="text-[11px] font-semibold text-indigo-900">Leads ↔ Deals split</span>
+                    <label class="flex items-center gap-1 text-[11px] text-indigo-800" title="Of the NEW companies, this % become Deals (A2/A3); the rest are pushed as Leads (A4). Set by head of sales; change anytime for a new batch. 100 = every new company a deal.">
+                        <span>Deals %</span>
+                        <input type="number" id="spDealPercent" min="0" max="100" value="33" data-on-input="erRecountSplit" class="w-16 text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400" data-testid="input-sp-deal-percent" aria-label="Percent of new companies pushed as Deals" />
+                    </label>
+                    <span class="text-[11px] text-indigo-700">The rest of the new companies are pushed as Leads. Badges below update as you change it.</span>
+                </div>
                 <div class="divide-y divide-gray-100">
                     <!-- A1 — re-engage churned under existing account -->
                     <div class="flex flex-wrap items-center gap-2 py-2">
@@ -2078,7 +2090,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=49"></script>
+    <script src="/js/duplicates-app.js?v=50"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

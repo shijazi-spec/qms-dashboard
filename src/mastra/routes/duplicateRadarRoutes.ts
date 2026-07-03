@@ -8934,6 +8934,13 @@ export const duplicateRadarRoutes = [
             typeof body?.offset === "number" && body.offset >= 0
               ? Math.floor(body.offset)
               : 0;
+          // Head-of-sales leads↔deals split: % of new companies pushed as Deals
+          // (the rest are parked as Leads). Omitted → 100 (every new company a
+          // deal, back-compat). Clamped 0–100.
+          const dealPercent =
+            typeof body?.deal_percent === "number" && isFinite(body.deal_percent)
+              ? Math.min(100, Math.max(0, Math.floor(body.deal_percent)))
+              : 100;
           const dryRun = body?.dry_run !== false;
 
           const ownerMode = String(body?.owner_mode || "self").trim();
@@ -8999,7 +9006,7 @@ export const duplicateRadarRoutes = [
           // name) BEFORE planning, so matched contacts route to A1 (link) and
           // are never rejected or duplicated as new accounts.
           const { rows: enrichedRows, possibleClientOf } = await enrichRowsWithExistingAccounts(spRows);
-          const plan = buildStructuredPushPlan(action, enrichedRows, { count, offset });
+          const plan = buildStructuredPushPlan(action, enrichedRows, { count, offset, dealPercent });
 
           // "Possible existing client" warning text for a lead/new-deal row that
           // FUZZY-matches an existing account (but wasn't exact enough to link).

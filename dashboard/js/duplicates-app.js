@@ -11325,8 +11325,19 @@
                 return { row: r, route: route };
             });
         }
-        // Returns { a1, a2, a3, a4, rejected } after routing.
-        function _pfCountActions(spRows) {
+        // Read the head-of-sales "Deals %" knob (default 100 = all new companies
+        // eligible for a deal). Kept in one place so badges + push agree.
+        function _pfDealPercent() {
+            var el = document.getElementById('spDealPercent');
+            var v = el ? parseInt(el.value, 10) : NaN;
+            if (isNaN(v)) return 100;
+            return Math.min(100, Math.max(0, v));
+        }
+        // Returns { a1, a2, a3, a4, rejected } after routing. dealPercent splits
+        // the new-company pool: that % become Deals (A2/A3), the rest are parked
+        // as Leads (their contacts fold into A4).
+        function _pfCountActions(spRows, dealPercent) {
+            var pct = (typeof dealPercent === 'number') ? Math.min(100, Math.max(0, dealPercent)) : 100;
             var routed = _pfRouteContacts(spRows);
             var accountRows = [], a4 = 0, rejected = 0;
             for (var k = 0; k < routed.length; k++) {
@@ -11359,16 +11370,33 @@
             var contactCount = function (g) {
                 return g.rows.filter(_pfRowHasContact).length;
             };
-            var a2 = 0, a3 = 0;
+            // Deal-eligible new companies, ranked richest-first (matches the
+            // server planner), then split by dealPercent: the top slice become
+            // deals (A2/A3 by contact count); the rest are parked as leads.
+            var eligibleGroups = [];
             for (var i = 0; i < groups.length; i++) {
-                var g = groups[i];
-                if (isNewPass(g)) {
+                if (isNewPass(groups[i]) && contactCount(groups[i]) >= 1) eligibleGroups.push(groups[i]);
+            }
+            eligibleGroups.sort(function (a, b) {
+                var d = contactCount(b) - contactCount(a);
+                if (d !== 0) return d;
+                var ai = Math.min.apply(null, a.rows.map(function (r) { return (r.row_index != null ? r.row_index : 0); }));
+                var bi = Math.min.apply(null, b.rows.map(function (r) { return (r.row_index != null ? r.row_index : 0); }));
+                return ai - bi;
+            });
+            var dealCount = Math.ceil((pct / 100) * eligibleGroups.length);
+            var a2 = 0, a3 = 0, parkedLeads = 0;
+            for (var i = 0; i < eligibleGroups.length; i++) {
+                var g = eligibleGroups[i];
+                if (i < dealCount) {
                     var cc = contactCount(g);
                     if (cc >= 2) a2++;
-                    else if (cc === 1) a3++;
+                    else a3++;
+                } else {
+                    parkedLeads += contactCount(g);
                 }
             }
-            return { a1: a1, a2: a2, a3: a3, a4: a4, rejected: rejected };
+            return { a1: a1, a2: a2, a3: a3, a4: a4 + parkedLeads, rejected: rejected };
         }
 
         // Reconciliation — proves every Mawsool record has a destination.
@@ -11441,7 +11469,7 @@
             var panel = document.getElementById('structuredPushPanel');
             if (panel) panel.classList.remove('hidden');
             var spRows = (rawRows || []).map(_pfToSPRow).filter(_pfIsPass);
-            var c = _pfCountActions(spRows);
+            var c = _pfCountActions(spRows, _pfDealPercent());
             var set = function (id, n) { var el = document.getElementById(id); if (el) el.textContent = String(n); };
             set('spCount-1', c.a1);
             set('spCount-2', c.a2);
@@ -11590,6 +11618,12 @@
             }
         }
 
+        // Re-count the four badges when the Deals % split changes (live).
+        function erRecountSplit() {
+            var data = window._preflightLastResult;
+            if (data && Array.isArray(data.rows)) _pfRefreshStructuredPushCounts(data.rows);
+        }
+
         // Action handler — wired via data-on-click="erStructuredPush" data-args="[N]".
         async function erStructuredPush(action) {
             action = Number(action);
@@ -11620,6 +11654,7 @@
                         rows: rows,
                         count: count,
                         offset: offset,
+                        deal_percent: _pfDealPercent(),
                         dry_run: dryRun,
                         owner_mode: 'self',
                         source: source,

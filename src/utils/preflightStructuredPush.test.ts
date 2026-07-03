@@ -165,6 +165,29 @@ assertEq(normalizeCompanyKey("", "Acme.com") === "acme.com", "falls back to doma
   const a3 = buildStructuredPushPlan(3, rows, {});
   assertEq(a3.companies.length === 1 && a3.companies[0].companyName === "Good", "PASS-gate: only the pass row survives");
 }
+// Deal split — of the NEW companies, only dealPercent% become deals (richest
+// first); the rest are parked as leads. Unverifiable contacts stay leads.
+{
+  // 4 genuinely-new single-contact companies (all A3-eligible), 1 free-mail lead.
+  const rows = [
+    mk({ row_index: 1, company: "NewA", domain: "newa.co", email: "a@newa.co" }),
+    mk({ row_index: 2, company: "NewB", domain: "newb.co", email: "b@newb.co" }),
+    mk({ row_index: 3, company: "NewC", domain: "newc.co", email: "c@newc.co" }),
+    mk({ row_index: 4, company: "NewD", domain: "newd.co", email: "d@newd.co" }),
+    mk({ row_index: 5, company: "FreeLead", email: "x@gmail.com" }),
+  ];
+  // 100% (default) → all 4 new companies are deals, only the free-mail is a lead.
+  assertEq(buildStructuredPushPlan(3, rows, { dealPercent: 100 }).companies.length === 4, "split 100%: all 4 new companies are deals");
+  assertEq(buildStructuredPushPlan(4, rows, { dealPercent: 100 }).leads.length === 1, "split 100%: only free-mail is a lead");
+  // 25% → ceil(0.25*4)=1 deal, other 3 parked as leads (+ the free-mail = 4).
+  assertEq(buildStructuredPushPlan(3, rows, { dealPercent: 25 }).companies.length === 1, "split 25%: 1 new company is a deal");
+  assertEq(buildStructuredPushPlan(4, rows, { dealPercent: 25 }).leads.length === 4, "split 25%: 3 parked + 1 free-mail = 4 leads");
+  // 0% → no deals, all 4 new companies parked as leads (+ free-mail = 5).
+  assertEq(buildStructuredPushPlan(3, rows, { dealPercent: 0 }).companies.length === 0, "split 0%: no deals");
+  assertEq(buildStructuredPushPlan(4, rows, { dealPercent: 0 }).leads.length === 5, "split 0%: all parked as leads");
+  // Omitted dealPercent = back-compat 100%.
+  assertEq(buildStructuredPushPlan(3, rows, {}).companies.length === 4, "split omitted: defaults to all-deals");
+}
 console.log("buildStructuredPushPlan ok");
 
 // ---------------------------------------------------------------------------
