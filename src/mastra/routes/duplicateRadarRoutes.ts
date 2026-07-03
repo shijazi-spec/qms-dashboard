@@ -9247,7 +9247,7 @@ export const duplicateRadarRoutes = [
           let existingContactsLinked = 0; // A1: contacts already in Zoho (reused, not duplicated)
           let reusedAccounts = 0; // accounts found live and reused instead of duplicated
           let existingDealsSkipped = 0; // deals that already exist under the account (idempotent retry)
-          let activeAccountsContactOnly = 0; // A1 existing accounts with a signed/paid deal → contact only, no new deal
+          let liveClientsRejected = 0; // A1 existing accounts with a signed/paid deal → REJECTED (live client, not pushed)
           let leadsSkippedExisting = 0; // leads already in Zoho (by email/phone) — skipped, not duplicated
           let outcomesSample: any[] = [];
           // Zoho per-record failure reasons (code + message) so the UI can show
@@ -9421,6 +9421,35 @@ export const duplicateRadarRoutes = [
               }
             }
 
+            // Step 1b: REJECT live clients (A1). An existing account that already
+            // has a signed/paid deal is an active client — we do NOT push it at
+            // all (no contact, no deal). Checked live in Zoho. This is deliberate:
+            // active clients are rejected data, handled by CS, not cold-contacted
+            // via this import. (A2/A3 open new accounts → nothing to check.)
+            if (action === 1 && companiesWithAccount.length > 0) {
+              const { getAccountsWithSignedDeal } = await import("../../utils/zohoCRM");
+              const signedSet = await getAccountsWithSignedDeal(
+                companiesWithAccount.map(co => accountIdMap.get(co.companyKey) || "").filter(Boolean),
+              );
+              if (signedSet.size > 0) {
+                const keep: typeof companiesWithAccount = [];
+                for (const co of companiesWithAccount) {
+                  const accId = accountIdMap.get(co.companyKey) || "";
+                  if (accId && signedSet.has(accId)) {
+                    liveClientsRejected += co.contacts.length;
+                    plan.skipped.push(
+                      ...co.contacts.map(r => ({ row_index: r.row_index, reason: "live_client_active_deal" })),
+                    );
+                    accountIdMap.delete(co.companyKey);
+                  } else {
+                    keep.push(co);
+                  }
+                }
+                companiesWithAccount.length = 0;
+                companiesWithAccount.push(...keep);
+              }
+            }
+
             // Step 2: Create contacts for companies that have an account id.
             // Map companyKey → primary contact id (for deal linkage) — prefers
             // the created id of the first EMAIL-bearing contact row; falls
@@ -9589,7 +9618,7 @@ export const duplicateRadarRoutes = [
               // Idempotent guard: skip a company whose account already has an
               // OPEN deal of the same name (a retry) so we don't stack dupes.
               // (An old CLOSED/lost deal of the same name does NOT block a new one.)
-              const { findExistingDealKeys, getAccountsWithSignedDeal } = await import("../../utils/zohoCRM");
+              const { findExistingDealKeys } = await import("../../utils/zohoCRM");
               const existingDealKeys = await findExistingDealKeys(
                 companiesWithAccount
                   .map(co => ({
@@ -9598,27 +9627,14 @@ export const duplicateRadarRoutes = [
                   }))
                   .filter(p => p.accountId),
               );
-              // A1 rule: create a new deal under the EXISTING account UNLESS it
-              // already has a signed/paid deal (a live client — contact only).
-              // Live-checked in Zoho. Covers churned AND never-converted accounts.
-              // (A2/A3 open new accounts → no existing deals to check.)
-              const accountsWithSignedDeal = action === 1
-                ? await getAccountsWithSignedDeal(
-                    companiesWithAccount.map(co => accountIdMap.get(co.companyKey) || "").filter(Boolean),
-                  )
-                : new Set<string>();
 
               for (const co of companiesWithAccount) {
                 const accountId = accountIdMap.get(co.companyKey);
                 const firstContactId = firstContactIdMap.get(co.companyKey);
                 // Only create deal if we have at least an account id.
+                // (Live clients — existing account with a signed/paid deal — were
+                // already rejected in Step 1b, so every A1 company here gets a deal.)
                 if (!accountId) continue;
-                // A1: the existing account gets a new deal UNLESS it already has
-                // a signed/paid deal (live client → contact only, don't disturb).
-                if (action === 1 && accountsWithSignedDeal.has(accountId)) {
-                  activeAccountsContactOnly++;
-                  continue;
-                }
                 const dealName = co.companyName || co.domain || "(unknown)";
                 // Already an OPEN deal of this name under this account → skip (retry).
                 if (existingDealKeys.has(`${accountId}::${dealName.trim().toLowerCase()}`)) {
@@ -9702,7 +9718,7 @@ export const duplicateRadarRoutes = [
             const desc =
               action === 4
                 ? `Preflight structured push (action 4): created ${created.leads} Leads${leadsSkippedExisting ? `, skipped ${leadsSkippedExisting} already-existing` : ""} (${failed.leads} failed). Source: "${source}".`
-                : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals${reusedAccounts ? `, reused ${reusedAccounts} existing account(s)` : ""}${existingContactsLinked ? `, linked ${existingContactsLinked} existing contact(s)` : ""}${activeAccountsContactOnly ? `, ${activeAccountsContactOnly} active account(s) contact-only` : ""}${existingDealsSkipped ? `, skipped ${existingDealsSkipped} existing deal(s)` : ""} (${totalFailed} failed). Source: "${source}".`;
+                : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals${reusedAccounts ? `, reused ${reusedAccounts} existing account(s)` : ""}${existingContactsLinked ? `, linked ${existingContactsLinked} existing contact(s)` : ""}${liveClientsRejected ? `, rejected ${liveClientsRejected} live-client contact(s)` : ""}${existingDealsSkipped ? `, skipped ${existingDealsSkipped} existing deal(s)` : ""} (${totalFailed} failed). Source: "${source}".`;
             await logEvent({
               userId: sessionUser?.userId ?? 0,
               userEmail: sessionUser?.email ?? "system",
@@ -9729,7 +9745,7 @@ export const duplicateRadarRoutes = [
             existing_contacts_linked: existingContactsLinked,
             reused_accounts: reusedAccounts,
             existing_deals_skipped: existingDealsSkipped,
-            active_accounts_contact_only: activeAccountsContactOnly,
+            live_clients_rejected: liveClientsRejected,
             leads_skipped_existing: leadsSkippedExisting,
             possible_existing_client_count: possibleClientCount,
             skipped_count: plan.skipped.length,
