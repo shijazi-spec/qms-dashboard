@@ -9238,6 +9238,8 @@ export const duplicateRadarRoutes = [
           const created = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
           const failed = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
           let existingContactsLinked = 0; // A1: contacts already in Zoho (reused, not duplicated)
+          let reusedAccounts = 0; // accounts found live and reused instead of duplicated
+          let existingDealsSkipped = 0; // deals that already exist under the account (idempotent retry)
           let outcomesSample: any[] = [];
           // Zoho per-record failure reasons (code + message) so the UI can show
           // WHY a create failed (required field, duplicate, invalid layout, …).
@@ -9297,63 +9299,87 @@ export const duplicateRadarRoutes = [
           } else {
             // --- ACTIONS 1/2/3: Account → Contact → Deal ---
 
-            // Step 1: For A1 resolve existing account ids; for A2/A3 create accounts.
-            // companyKey → accountId (string)
+            // Step 1: Resolve existing account ids LIVE (idempotent) so a retry
+            // NEVER creates a duplicate account. Truth order per company:
+            //   explicit matched id (enrichment) → live domain → live exact name
+            //   → (A1 only) cluster / synced-directory fallback.
+            // A1 requires an existing account (skip if none). A2/A3 create ONLY
+            // the accounts that genuinely don't exist yet; the rest are reused.
             const accountIdMap = new Map<string, string>();
             const companiesWithAccount: typeof plan.companies = [];
             const companiesSkippedNoAccount: typeof plan.companies = [];
 
-            if (action === 1) {
-              // A1: resolve existing account id per company — by cluster when
-              // present, else by domain/name (basic-mode churned matches carry
-              // no cluster_id).
-              for (const co of plan.companies) {
-                const matchedAcc = co.contacts.map(c => c.matched_account_zoho_id).find(Boolean) || null;
-                const existingId =
-                  matchedAcc ??
-                  (co.clusterId != null
-                    ? await getAccountZohoIdByCluster(co.clusterId)
-                    : null) ??
-                  (await getAccountZohoIdByDomainOrName(co.domain, co.companyName));
-                if (!existingId) {
-                  // Cannot push without a matched account — skip this company.
-                  companiesSkippedNoAccount.push(co);
-                } else {
-                  accountIdMap.set(co.companyKey, existingId);
-                  companiesWithAccount.push(co);
+            {
+              const { findAccountIdsByDomains, findAccountIdsByNames } =
+                await import("../../utils/zohoCRM");
+              const { realDomainRoot } = await import("../../utils/preflightStructuredPush");
+              const domainKey = (co: any) =>
+                String(realDomainRoot(co.domain) || co.domain || "").trim().toLowerCase();
+              const nameKey = (co: any) => String(co.companyName || "").trim().toLowerCase();
+
+              // Two batched LIVE lookups for the whole slice (not the stale
+              // synced snapshot — that's what let retries duplicate).
+              const acctByDomain = await findAccountIdsByDomains(plan.companies.map(domainKey));
+              const acctByName = await findAccountIdsByNames(plan.companies.map(co => co.companyName));
+
+              const resolveLive = (co: any): string | null => {
+                const matchedAcc =
+                  co.contacts.map((c: any) => c.matched_account_zoho_id).find(Boolean) || null;
+                return matchedAcc || acctByDomain.get(domainKey(co)) || acctByName.get(nameKey(co)) || null;
+              };
+
+              if (action === 1) {
+                for (const co of plan.companies) {
+                  const existingId =
+                    resolveLive(co) ??
+                    (co.clusterId != null ? await getAccountZohoIdByCluster(co.clusterId) : null) ??
+                    (await getAccountZohoIdByDomainOrName(co.domain, co.companyName));
+                  if (!existingId) {
+                    companiesSkippedNoAccount.push(co);
+                  } else {
+                    accountIdMap.set(co.companyKey, existingId);
+                    companiesWithAccount.push(co);
+                    reusedAccounts++;
+                  }
                 }
-              }
-            } else {
-              // A2/A3: create all accounts first.
-              const accountPayloads = plan.companies.map((co) => {
-                const web = websiteFromDomain(co.domain);
-                // NOTE: no Layout — DEAL.layoutId is a DEALS-module layout and is
-                // invalid on an Account create (Zoho rejects it). Accounts use
-                // the org's default Accounts layout.
-                const p: Record<string, any> = {
-                  Account_Name: co.companyName,
-                };
-                if (web) p.Website = web;
-                return p;
-              });
-
-              const accOut = accountPayloads.length > 0
-                ? await createZohoRecordsBulk("Accounts", accountPayloads)
-                : [];
-              created.accounts = accOut.filter(o => o.status === "success").length;
-              failed.accounts = accOut.filter(o => o.status === "error").length;
-              collectErrors("account", accOut);
-
-              // Map companyKey → created account id.
-              for (let i = 0; i < plan.companies.length; i++) {
-                const co = plan.companies[i];
-                const out = accOut[i];
-                if (out?.status === "success" && out.id) {
-                  accountIdMap.set(co.companyKey, out.id);
-                  companiesWithAccount.push(co);
-                } else {
-                  // Account creation failed — skip this company's contacts + deal.
-                  companiesSkippedNoAccount.push(co);
+              } else {
+                // A2/A3: reuse the account where it already exists; create only
+                // the ones that don't. Reused-account companies still get their
+                // contact + deal (the deal step gates churned only for A1).
+                const toCreate: typeof plan.companies = [];
+                for (const co of plan.companies) {
+                  const existingId = resolveLive(co);
+                  if (existingId) {
+                    accountIdMap.set(co.companyKey, existingId);
+                    companiesWithAccount.push(co);
+                    reusedAccounts++;
+                  } else {
+                    toCreate.push(co);
+                  }
+                }
+                if (toCreate.length > 0) {
+                  const accountPayloads = toCreate.map((co) => {
+                    const web = websiteFromDomain(co.domain);
+                    // NOTE: no Layout — DEAL.layoutId is a DEALS-module layout,
+                    // invalid on an Account create. Accounts use the default layout.
+                    const p: Record<string, any> = { Account_Name: co.companyName };
+                    if (web) p.Website = web;
+                    return p;
+                  });
+                  const accOut = await createZohoRecordsBulk("Accounts", accountPayloads);
+                  created.accounts = accOut.filter(o => o.status === "success").length;
+                  failed.accounts = accOut.filter(o => o.status === "error").length;
+                  collectErrors("account", accOut);
+                  for (let i = 0; i < toCreate.length; i++) {
+                    const co = toCreate[i];
+                    const out = accOut[i];
+                    if (out?.status === "success" && out.id) {
+                      accountIdMap.set(co.companyKey, out.id);
+                      companiesWithAccount.push(co);
+                    } else {
+                      companiesSkippedNoAccount.push(co);
+                    }
+                  }
                 }
               }
             }
@@ -9376,21 +9402,33 @@ export const duplicateRadarRoutes = [
               // contact is REUSED (its id links the Deal's Contact_Name) instead
               // of Zoho rejecting a duplicate and leaving the Deal with no
               // contact (MANDATORY_NOT_FOUND Contact_Name).
+              const { normalizePhoneKey } = await import("../../utils/zohoCRM");
               const preexistingByRow = new Map<number, string>();
               {
-                // ONE batched email-existence check (OR-chunks of 10). THROWS on
-                // a Zoho error — and this runs BEFORE any create, so a failure
-                // aborts with zero records written instead of silently treating
-                // everyone as new and duplicating existing contacts.
-                const { findContactIdsByEmails } = await import("../../utils/zohoCRM");
+                // Batched existence check by EMAIL and PHONE (OR-chunks). Both
+                // THROW on a Zoho error — and this runs BEFORE any create, so a
+                // failure aborts with zero records written instead of silently
+                // treating everyone as new and duplicating existing contacts.
+                // PHONE is the fix for phone-only contacts (no email), which the
+                // email check can't see — the exact gap that duplicated the
+                // Mawsool contacts on every retry.
+                const { findContactIdsByEmails, findRecordIdsByPhones } =
+                  await import("../../utils/zohoCRM");
                 const emails = companiesWithAccount.flatMap(co =>
                   co.contacts.map(r => String(r.email || "").trim()).filter(Boolean),
                 );
-                const found = await findContactIdsByEmails(emails);
+                const phones = companiesWithAccount.flatMap(co =>
+                  co.contacts.map(r => String(r.phone || "").trim()).filter(Boolean),
+                );
+                const foundEmail = await findContactIdsByEmails(emails);
+                const foundPhone = await findRecordIdsByPhones("Contacts", phones);
                 for (const co of companiesWithAccount) {
                   for (const row of co.contacts) {
                     const em = String(row.email || "").trim().toLowerCase();
-                    if (em && found.has(em)) preexistingByRow.set(row.row_index, found.get(em)!);
+                    const pk = normalizePhoneKey(row.phone);
+                    const id =
+                      (em && foundEmail.get(em)) || (pk && foundPhone.get(pk)) || null;
+                    if (id) preexistingByRow.set(row.row_index, id);
                   }
                 }
               }
@@ -9399,17 +9437,19 @@ export const duplicateRadarRoutes = [
               interface ContactMeta { companyKey: string; rowIndex: number; hasEmail: boolean }
               const contactMeta: ContactMeta[] = [];
               const contactPayloads: Record<string, any>[] = [];
-              // Intra-batch email dedup: an email is created ONCE per push; later
+              // Intra-batch dedup: an email/phone is created ONCE per push; later
               // rows sharing it reuse that created id (no duplicate within one push).
               const emailToPayloadIndex = new Map<string, number>();
+              const phoneToPayloadIndex = new Map<string, number>();
               const deferredDupes: Array<{ companyKey: string; rowIndex: number; payloadIndex: number }> = [];
 
               for (const co of companiesWithAccount) {
                 const accountId = accountIdMap.get(co.companyKey)!;
                 for (const row of co.contacts) {
                   const em = String(row.email || "").trim().toLowerCase();
-                  // Contact already in Zoho (by email) → reuse it, don't create
-                  // a duplicate. Register the existing id for deal linkage/roles.
+                  const pk = normalizePhoneKey(row.phone);
+                  // Contact already in Zoho (by email or phone) → reuse it, don't
+                  // create a duplicate. Register the existing id for deal linkage.
                   const existingId = preexistingByRow.get(row.row_index);
                   if (existingId) {
                     existingContactsLinked++;
@@ -9428,6 +9468,11 @@ export const duplicateRadarRoutes = [
                     deferredDupes.push({ companyKey: co.companyKey, rowIndex: row.row_index, payloadIndex: emailToPayloadIndex.get(em)! });
                     continue;
                   }
+                  // Phone-only row whose phone is already queued this batch → same.
+                  if (!em && pk && phoneToPayloadIndex.has(pk)) {
+                    deferredDupes.push({ companyKey: co.companyKey, rowIndex: row.row_index, payloadIndex: phoneToPayloadIndex.get(pk)! });
+                    continue;
+                  }
                   const _nm = splitContactName(row.contact_name || co.companyName);
                   const p: Record<string, any> = {
                     Last_Name: _nm.last || co.companyName,
@@ -9442,6 +9487,7 @@ export const duplicateRadarRoutes = [
                   contactPayloads.push(p);
                   contactMeta.push({ companyKey: co.companyKey, rowIndex: row.row_index, hasEmail: !!em });
                   if (em) emailToPayloadIndex.set(em, payloadIndex);
+                  if (pk) phoneToPayloadIndex.set(pk, payloadIndex);
                 }
               }
 
@@ -9503,6 +9549,18 @@ export const duplicateRadarRoutes = [
               const dealPayloads: Record<string, any>[] = [];
               const dealCompanyKeys: string[] = [];
 
+              // Idempotent guard: skip a company whose account already has a deal
+              // of the same name (a retry) so we don't stack duplicate deals.
+              const { findExistingDealKeys } = await import("../../utils/zohoCRM");
+              const existingDealKeys = await findExistingDealKeys(
+                companiesWithAccount
+                  .map(co => ({
+                    accountId: accountIdMap.get(co.companyKey) || "",
+                    name: co.companyName || co.domain || "(unknown)",
+                  }))
+                  .filter(p => p.accountId),
+              );
+
               for (const co of companiesWithAccount) {
                 const accountId = accountIdMap.get(co.companyKey);
                 const firstContactId = firstContactIdMap.get(co.companyKey);
@@ -9513,8 +9571,14 @@ export const duplicateRadarRoutes = [
                 // contact — no Deal. A2/A3 always create the Deal.
                 const isChurnedCo = co.contacts.some(c => c.lifecycle_state === "termination_old");
                 if (action === 1 && !isChurnedCo) continue;
+                const dealName = co.companyName || co.domain || "(unknown)";
+                // Already have this deal under this account → skip (idempotent).
+                if (existingDealKeys.has(`${accountId}::${dealName.trim().toLowerCase()}`)) {
+                  existingDealsSkipped++;
+                  continue;
+                }
                 const p: Record<string, any> = {
-                  Deal_Name: co.companyName || co.domain || "(unknown)",
+                  Deal_Name: dealName,
                   Stage: DEAL.stage,
                   Pipeline: DEAL.pipeline,
                   Lead_Source: PREFLIGHT_LEAD_SOURCE,
@@ -9590,7 +9654,7 @@ export const duplicateRadarRoutes = [
             const desc =
               action === 4
                 ? `Preflight structured push (action 4): created ${created.leads} Leads (${failed.leads} failed). Source: "${source}".`
-                : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals${existingContactsLinked ? `, linked ${existingContactsLinked} existing contact(s)` : ""} (${totalFailed} failed). Source: "${source}".`;
+                : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals${reusedAccounts ? `, reused ${reusedAccounts} existing account(s)` : ""}${existingContactsLinked ? `, linked ${existingContactsLinked} existing contact(s)` : ""}${existingDealsSkipped ? `, skipped ${existingDealsSkipped} existing deal(s)` : ""} (${totalFailed} failed). Source: "${source}".`;
             await logEvent({
               userId: sessionUser?.userId ?? 0,
               userEmail: sessionUser?.email ?? "system",
@@ -9615,6 +9679,8 @@ export const duplicateRadarRoutes = [
             created,
             failed,
             existing_contacts_linked: existingContactsLinked,
+            reused_accounts: reusedAccounts,
+            existing_deals_skipped: existingDealsSkipped,
             possible_existing_client_count: possibleClientCount,
             skipped_count: plan.skipped.length,
             error_sample: errorSamples,

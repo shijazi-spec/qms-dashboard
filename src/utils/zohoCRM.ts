@@ -1069,6 +1069,139 @@ export async function findRecordIdByName(module: string, firstName: string, last
   }
 }
 
+/** Normalize a phone to a comparable key: digits only, with a leading Saudi
+ * country code (966 / 00966) or leading zero stripped, so "+966 55…", "0055…",
+ * "9665…" and "55…" all collapse to the same local number. Returns "" for
+ * fewer than 7 digits (too short to be a reliable match). Exported so the
+ * Preflight push can key its phone-dedup map the same way it looks up. */
+export function normalizePhoneKey(phone: string): string {
+  let d = String(phone || "").replace(/\D+/g, "");
+  if (!d) return "";
+  if (d.startsWith("00966")) d = d.slice(5);
+  else if (d.startsWith("966")) d = d.slice(3);
+  d = d.replace(/^0+/, "");
+  return d.length >= 7 ? d : "";
+}
+
+/** True when a value is safe to embed literally in a Zoho search criteria —
+ * parentheses/commas are criteria grouping syntax and there is no documented
+ * escape, so values containing them are excluded from equals-searches (they
+ * fall back to another signal, e.g. domain). */
+function isSafeCriteriaValue(v: string): boolean {
+  return !!v && !/[(),]/.test(v);
+}
+
+/** Batched existence check by PHONE — map of normalized-phone-key → existing
+ * record id. Searches Phone AND Mobile in OR-chunks. Same THROW-on-error
+ * contract as findRecordIdsByEmails so the push aborts cleanly rather than
+ * silently duplicating. This is what protects phone-only contacts (no email),
+ * which the email check cannot see — the exact gap that duplicated the
+ * Mawsool contacts on every retry. */
+export async function findRecordIdsByPhones(module: string, phones: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const raw = Array.from(new Set(phones.map(p => String(p || "").trim()).filter(Boolean)));
+  const CHUNK = 5;
+  for (let s = 0; s < raw.length; s += CHUNK) {
+    const chunk = raw.slice(s, s + CHUNK);
+    const criteria = chunk.map(p => `(Phone:equals:${p})or(Mobile:equals:${p})`).join("or");
+    let rows: ZohoCRMRecord[] | null = null;
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < 2 && rows === null; attempt++) {
+      try { rows = await searchZohoRecords(module, criteria); }
+      catch (e) { lastErr = e; rows = null; }
+    }
+    if (rows === null) throw new Error(`${module} phone lookup failed: ${lastErr?.message || String(lastErr)}`);
+    for (const r of rows) {
+      for (const key of [normalizePhoneKey(r.data?.Phone), normalizePhoneKey(r.data?.Mobile)]) {
+        if (key && r.id && !out.has(key)) out.set(key, String(r.id));
+      }
+    }
+  }
+  return out;
+}
+
+/** Batched Account existence check by DOMAIN (Website contains the domain).
+ * Map of lowercased queried-domain → existing Account id. `contains` catches
+ * https://x.com, www.x.com, x.com/… . OR-chunks of 5 (contains is heavier).
+ * THROWS on a genuine Zoho error after one retry so the push aborts cleanly
+ * rather than creating a duplicate account. Domains carry no criteria-special
+ * characters, so the query is always well-formed. */
+export async function findAccountIdsByDomains(domains: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const clean = Array.from(new Set(domains.map(d => String(d || "").trim().toLowerCase()).filter(Boolean)));
+  const CHUNK = 5;
+  for (let s = 0; s < clean.length; s += CHUNK) {
+    const chunk = clean.slice(s, s + CHUNK);
+    const criteria = chunk.map(d => `(Website:contains:${d})`).join("or");
+    let rows: ZohoCRMRecord[] | null = null;
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < 2 && rows === null; attempt++) {
+      try { rows = await searchZohoRecords("Accounts", criteria); }
+      catch (e) { lastErr = e; rows = null; }
+    }
+    if (rows === null) throw new Error(`Accounts domain lookup failed: ${lastErr?.message || String(lastErr)}`);
+    for (const r of rows) {
+      const web = String(r.data?.Website || "").trim().toLowerCase();
+      if (!web || !r.id) continue;
+      for (const d of chunk) {
+        if (web.includes(d) && !out.has(d)) out.set(d, String(r.id));
+      }
+    }
+  }
+  return out;
+}
+
+/** Batched Account existence check by EXACT name. Map of lowercased name →
+ * Account id. Names with parentheses/commas are skipped (criteria-unsafe) and
+ * rely on the domain signal instead. OR-chunks of 10. THROWS on a genuine
+ * Zoho error after one retry. */
+export async function findAccountIdsByNames(names: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const clean = Array.from(new Set(names.map(n => String(n || "").trim()).filter(isSafeCriteriaValue)));
+  const CHUNK = 10;
+  for (let s = 0; s < clean.length; s += CHUNK) {
+    const chunk = clean.slice(s, s + CHUNK);
+    const criteria = chunk.map(n => `(Account_Name:equals:${n})`).join("or");
+    let rows: ZohoCRMRecord[] | null = null;
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < 2 && rows === null; attempt++) {
+      try { rows = await searchZohoRecords("Accounts", criteria); }
+      catch (e) { lastErr = e; rows = null; }
+    }
+    if (rows === null) throw new Error(`Accounts name lookup failed: ${lastErr?.message || String(lastErr)}`);
+    for (const r of rows) {
+      const nm = String(r.data?.Account_Name || "").trim().toLowerCase();
+      if (nm && r.id && !out.has(nm)) out.set(nm, String(r.id));
+    }
+  }
+  return out;
+}
+
+/** Best-effort set of "accountId::dealNameLower" for deals that already exist,
+ * so the push never creates a second identical Deal under the same account on a
+ * retry. Best-effort (a lookup failure just means we might create a duplicate
+ * the radar can merge — never a data-loss risk), so it swallows errors rather
+ * than aborting. Names with criteria-special characters are skipped. */
+export async function findExistingDealKeys(
+  pairs: Array<{ accountId: string; name: string }>,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  const names = Array.from(new Set(pairs.map(p => String(p.name || "").trim()).filter(isSafeCriteriaValue)));
+  const CHUNK = 10;
+  for (let s = 0; s < names.length; s += CHUNK) {
+    const chunk = names.slice(s, s + CHUNK);
+    const criteria = chunk.map(n => `(Deal_Name:equals:${n})`).join("or");
+    let rows: ZohoCRMRecord[] = [];
+    try { rows = await searchZohoRecords("Deals", criteria); } catch { rows = []; }
+    for (const r of rows) {
+      const acc = String(r.data?.Account_Name?.id || "");
+      const nm = String(r.data?.Deal_Name || "").trim().toLowerCase();
+      if (acc && nm) out.add(`${acc}::${nm}`);
+    }
+  }
+  return out;
+}
+
 /** Bulk UPDATE (Zoho v2 PUT /crm/v2/{module}). Each record MUST carry `id`
  * plus the fields to change. Chunks at 100; returns per-record outcomes
  * positionally aligned to input (same shape as createZohoRecordsBulk). Used by
