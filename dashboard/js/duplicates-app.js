@@ -11312,18 +11312,46 @@
                 var m = meta[key] || { anchor: null, verified: false, crm: false };
                 var er = _pfRealDomainRoot(r.email);
                 var hasEmail = !!String(r.email || '').trim();
-                var route;
-                if (m.crm) route = 'account';
+                var route, reason;
+                if (m.crm) { route = 'account'; reason = 'crm_matched_company'; }
                 else if (m.verified) {
-                    if (er && er === m.anchor) route = 'account';
-                    else if (er) route = 'reject';
-                    else if (!hasEmail) route = 'account';
-                    else route = 'lead';
+                    if (er && er === m.anchor) { route = 'account'; reason = 'email_matches_company'; }
+                    else if (er) { route = 'reject'; reason = 'email_contradicts_company'; }
+                    else if (!hasEmail) { route = 'account'; reason = 'phone_only_verified_company'; }
+                    else { route = 'lead'; reason = 'free_mail_verified_company'; }
                 } else {
-                    route = er ? 'reject' : 'lead';
+                    if (er) { route = 'reject'; reason = 'corporate_email_unverifiable_company'; }
+                    else { route = 'lead'; reason = 'unverifiable_company'; }
                 }
-                return { row: r, route: route };
+                return { row: r, route: route, reason: reason };
             });
+        }
+        // Rubbish Data = the rejected contradictions (email domain contradicts the
+        // company label, or a corporate email at an unverifiable company). Never
+        // pushed — surfaced here so the operator can review/export them.
+        function _pfRubbishRows(spRows) {
+            var routed = _pfRouteContacts(spRows);
+            var out = [];
+            for (var i = 0; i < routed.length; i++) {
+                if (routed[i].route !== 'reject') continue;
+                var r = routed[i].row;
+                out.push({
+                    company: r.company || '', contact_name: r.contact_name || '',
+                    email: r.email || '', phone: r.phone || '', title: r.title || '',
+                    reason: routed[i].reason === 'email_contradicts_company'
+                        ? 'Email domain contradicts the company label'
+                        : 'Corporate email at an unverifiable company',
+                });
+            }
+            return out;
+        }
+        // Export the rubbish data as CSV so the operator can review the rejects.
+        function erDownloadRubbish() {
+            var rows = window._pfRubbishData || [];
+            if (!rows.length) { alert('No rubbish data — nothing was rejected.'); return; }
+            downloadCsvRows('rubbish-data-' + new Date().toISOString().slice(0, 10) + '.csv',
+                ['Company', 'Contact Name', 'Email', 'Phone', 'Title', 'Reason'],
+                rows.map(function (r) { return [r.company, r.contact_name, r.email, r.phone, r.title, r.reason]; }));
         }
         // Read the head-of-sales "Deals %" knob (default 100 = all new companies
         // eligible for a deal). Kept in one place so badges + push agree.
@@ -11475,10 +11503,15 @@
             set('spCount-2', c.a2);
             set('spCount-3', c.a3); // single-contact verified-account companies
             set('spCount-4', c.a4); // lead-routed contacts
+            // Rubbish Data — rejected contradictions, surfaced + downloadable.
+            var rubbish = _pfRubbishRows(spRows);
+            window._pfRubbishData = rubbish;
             var rej = document.getElementById('spRejectedNote');
-            if (rej) rej.textContent = c.rejected
-                ? (c.rejected + ' contact(s) will be rejected — corporate email at a different company than its label.')
+            if (rej) rej.textContent = rubbish.length
+                ? ('🗑 Rubbish Data: ' + rubbish.length + ' contact(s) rejected (email domain contradicts the company, or corporate email at an unverifiable company) — NOT pushed.')
                 : '';
+            var dlBtn = document.getElementById('spRubbishDownloadBtn');
+            if (dlBtn) dlBtn.classList.toggle('hidden', rubbish.length === 0);
         }
 
         // Backfill Title on already-pushed Leads: matches each loaded row to a

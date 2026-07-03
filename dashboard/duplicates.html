@@ -1355,6 +1355,7 @@
                 </div>
                 <div class="flex items-center flex-wrap gap-2 mt-2">
                     <p id="spRejectedNote" class="text-[11px] text-rose-600 flex-1 min-w-[10rem]"></p>
+                    <button data-on-click="erDownloadRubbish" id="spRubbishDownloadBtn" data-testid="button-sp-rubbish" class="hidden px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50">🗑 Download Rubbish Data</button>
                     <button data-on-click="erReconcile" id="spReconcileBtn" data-testid="button-sp-reconcile" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-400 text-gray-700 hover:bg-gray-50">Reconcile (all accounted?)</button>
                     <button data-on-click="erCheckZohoFields" id="spFieldsBtn" data-testid="button-sp-fields" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-indigo-300 text-indigo-700 hover:bg-indigo-50">Check required fields</button>
                     <button data-on-click="erResolveExistingAccounts" id="spResolveBtn" data-testid="button-sp-resolve" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50">① Resolve existing accounts</button>
@@ -2091,7 +2092,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=52"></script>
+    <script src="/js/duplicates-app.js?v=53"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
