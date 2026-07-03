@@ -9421,21 +9421,25 @@ export const duplicateRadarRoutes = [
               }
             }
 
-            // Step 1b: REJECT live clients (A1). An existing account that already
-            // has a signed/paid deal is an active client — we do NOT push it at
-            // all (no contact, no deal). Checked live in Zoho. This is deliberate:
-            // active clients are rejected data, handled by CS, not cold-contacted
-            // via this import. (A2/A3 open new accounts → nothing to check.)
+            // Step 1b: REJECT live clients (A1). An existing account is a LIVE
+            // client when it has a customer deal (signed/paid or CS renewal/churn
+            // data) that is NOT churned — churned only counts when the churn date
+            // is the most recent event (churn set AND after the renewal date, or
+            // no renewal). Live clients are rejected data (handled by CS, not
+            // cold-contacted) → NOT pushed at all (no contact, no deal). A past
+            // client (churned after renewal) or never-converted account is NOT
+            // live → it flows through to get the re-engagement / new deal.
+            // Checked live in Zoho. (A2/A3 open new accounts → nothing to check.)
             if (action === 1 && companiesWithAccount.length > 0) {
-              const { getAccountsWithSignedDeal } = await import("../../utils/zohoCRM");
-              const signedSet = await getAccountsWithSignedDeal(
+              const { getLiveClientAccounts } = await import("../../utils/zohoCRM");
+              const liveSet = await getLiveClientAccounts(
                 companiesWithAccount.map(co => accountIdMap.get(co.companyKey) || "").filter(Boolean),
               );
-              if (signedSet.size > 0) {
+              if (liveSet.size > 0) {
                 const keep: typeof companiesWithAccount = [];
                 for (const co of companiesWithAccount) {
                   const accId = accountIdMap.get(co.companyKey) || "";
-                  if (accId && signedSet.has(accId)) {
+                  if (accId && liveSet.has(accId)) {
                     liveClientsRejected += co.contacts.length;
                     plan.skipped.push(
                       ...co.contacts.map(r => ({ row_index: r.row_index, reason: "live_client_active_deal" })),

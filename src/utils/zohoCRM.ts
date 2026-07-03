@@ -1214,22 +1214,40 @@ export async function findExistingDealKeys(
   return out;
 }
 
-/** Live check: which of these account ids already have at least one Deal in a
- * SIGNED/PAID stage — i.e. a live client we must NOT disturb with a new deal.
- * Uses the Deals related-list per account. Best-effort per account: a failed
- * lookup falls back to "no signed deal" (→ create the deal), because the
- * open-same-name dedup still prevents an actual duplicate. Signed/paid stages
- * are env-configurable (PREFLIGHT_SIGNED_STAGES). */
-export async function getAccountsWithSignedDeal(accountIds: string[]): Promise<Set<string>> {
+/** Live check: which of these account ids are LIVE clients — an account with a
+ * customer Deal (signed/paid, or carrying Customer-Success renewal/churn data)
+ * that is NOT churned. The churn/renewal fields live on the Deal (CS section):
+ *   PREFLIGHT_CHURN_DATE_FIELD   (default Churn_Date)
+ *   PREFLIGHT_RENEWAL_DATE_FIELD (default Renewal_Date)
+ *
+ * Timeline rule (Sarah): a customer deal counts as CHURNED only when its churn
+ * date is the most recent event — i.e. churn date is set AND (there is no
+ * renewal date, or the churn date is AFTER the renewal date). If churn is empty,
+ * or a renewal is dated on/after the churn (they came back), the deal is LIVE.
+ * An account is a live client if ANY of its customer deals is live → REJECTED.
+ * A past client (all customer deals churned-after-renewal) or a never-converted
+ * account is NOT live → it gets the re-engagement / new deal.
+ *
+ * Best-effort per account: a lookup failure falls back to NOT-live (→ push),
+ * since the import gate + open-same-name dedup are the other safety nets. */
+export async function getLiveClientAccounts(accountIds: string[]): Promise<Set<string>> {
   const out = new Set<string>();
   const signed = (process.env.PREFLIGHT_SIGNED_STAGES || "Agreement Signed,Paid")
     .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  const churnField = process.env.PREFLIGHT_CHURN_DATE_FIELD || "Churn_Date";
+  const renewalField = process.env.PREFLIGHT_RENEWAL_DATE_FIELD || "Renewal_Date";
+  const parseDate = (v: any): number | null => {
+    const s = String(v ?? "").trim();
+    if (!s) return null;
+    const t = Date.parse(s);
+    return isNaN(t) ? null : t;
+  };
   const ids = Array.from(new Set(accountIds.map(i => String(i || "").trim()).filter(Boolean)));
   for (const accId of ids) {
     try {
       const deals: any[] = await makeZohoRequest(
         async (config) => fetch(
-          `${config.apiDomain}/crm/v2/Accounts/${accId}/Deals?fields=Stage&per_page=200`,
+          `${config.apiDomain}/crm/v2/Accounts/${accId}/Deals?fields=Stage,${churnField},${renewalField}&per_page=200`,
           { method: "GET", headers: { Authorization: `Zoho-oauthtoken ${config.accessToken}`, "Content-Type": "application/json" } },
         ),
         async (response) => {
@@ -1240,12 +1258,20 @@ export async function getAccountsWithSignedDeal(accountIds: string[]): Promise<S
           return JSON.parse(t).data || [];
         },
       );
-      const hasSigned = deals.some(d => {
+      let live = false;
+      for (const d of deals) {
         const st = String(d?.Stage || "").trim().toLowerCase();
-        return signed.some(sig => st === sig || st.includes(sig));
-      });
-      if (hasSigned) out.add(accId);
-    } catch { /* best-effort: treat as no signed deal → create the deal */ }
+        const churn = parseDate(d?.[churnField]);
+        const renewal = parseDate(d?.[renewalField]);
+        // A "customer deal" = signed/paid stage, or carries CS renewal/churn data.
+        const isCustomerDeal = signed.some(sig => st === sig || st.includes(sig)) || churn != null || renewal != null;
+        if (!isCustomerDeal) continue;
+        // Churned only when churn is the most recent event.
+        const churned = churn != null && (renewal == null || churn > renewal);
+        if (!churned) { live = true; break; } // a live (non-churned) customer deal
+      }
+      if (live) out.add(accId);
+    } catch { /* best-effort: treat as NOT a live client → push */ }
   }
   return out;
 }

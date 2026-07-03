@@ -11773,7 +11773,7 @@
                             + (resp.leads_skipped_existing ? '<div class="text-indigo-700">Skipped ' + resp.leads_skipped_existing + ' lead(s) already in Zoho — not duplicated.</div>' : '')
                             + (resp.reused_accounts ? '<div class="text-indigo-700">Reused ' + resp.reused_accounts + ' existing account(s) — not duplicated.</div>' : '')
                             + (resp.existing_contacts_linked ? '<div class="text-indigo-700">Reused ' + resp.existing_contacts_linked + ' existing contact(s) — not duplicated.</div>' : '')
-                            + (resp.live_clients_rejected ? '<div class="text-rose-700">🚫 ' + resp.live_clients_rejected + ' contact(s) REJECTED — company is a live client (has a signed/paid deal). Not pushed.</div>' : '')
+                            + (resp.live_clients_rejected ? '<div class="text-rose-700">🚫 ' + resp.live_clients_rejected + ' contact(s) REJECTED — company is a live client (active deal, not churned after its renewal). Not pushed.</div>' : '')
                             + (resp.existing_deals_skipped ? '<div class="text-indigo-700">Skipped ' + resp.existing_deals_skipped + ' deal(s) already open under the account — not duplicated.</div>' : '')
                             + (resp.possible_existing_client_count ? '<div class="text-amber-700">⚠ ' + resp.possible_existing_client_count + ' flagged as possible existing client(s) — see each record\'s Description.</div>' : '')
                             + '<div>' + flLine + '</div>'

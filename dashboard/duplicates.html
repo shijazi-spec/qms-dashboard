@@ -1272,7 +1272,7 @@
                         <div class="flex-1 min-w-[12rem]">
                             <span class="text-xs font-semibold text-purple-900" data-i18n="pf_sp_a1">① EXISTING accounts (past clients / no live deal) → link + new deal</span>
                             <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-800">(<span id="spCount-1">0</span>)</span>
-                            <div class="text-[11px] text-gray-500 mt-0.5" data-i18n="pf_sp_a1_hint">Reuses the existing account — never a duplicate. Creates a new deal + adds the new contact(s), with every colleague at that company (by domain) attached to the deal as a Contact Role. If the account already has a signed/paid deal, it is a live client → REJECTED, not pushed at all.</div>
+                            <div class="text-[11px] text-gray-500 mt-0.5" data-i18n="pf_sp_a1_hint">Reuses the existing account — never a duplicate. Creates a new deal + adds the new contact(s), with every colleague at that company (by domain) attached to the deal as a Contact Role. If the account is a LIVE client (active deal, churn date not after its renewal), it is REJECTED, not pushed. A past client (churned after renewal) or a never-converted account gets the new deal.</div>
                         </div>
                         <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Batch size — how many companies to push this click (avoids gateway timeout). 0 = all.">
                             <span>size</span>
@@ -2092,7 +2092,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=55"></script>
+    <script src="/js/duplicates-app.js?v=56"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
