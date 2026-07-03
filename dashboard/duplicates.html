@@ -1361,7 +1361,7 @@
                 <div id="spReconcileResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1"></div>
                 <div id="spRejResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-72 overflow-y-auto"></div>
                 <div class="flex items-center flex-wrap gap-2 mt-1">
-                    <span class="text-[11px] text-gray-500">Backfill <strong>Title</strong> on already-pushed Leads (load the titled Excel &amp; run Preflight first — matches by email, then by name):</span>
+                    <span class="text-[11px] text-gray-500">Backfill <strong>Title</strong> on already-pushed Leads (load the titled Excel &amp; run Preflight first — matches by email → phone → name):</span>
                     <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Batch size — name-matching is a per-row search, so push in slices to avoid a timeout. 0 = all."><span>size</span><input type="number" id="spBackfillNum" min="0" value="50" class="w-16 text-xs border rounded-lg px-2 py-1.5" data-testid="input-sp-backfill-num" aria-label="Backfill batch size" /></label>
                     <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Offset — skip the first N; advance it each click."><span>from</span><input type="number" id="spBackfillOff" min="0" value="0" class="w-16 text-xs border rounded-lg px-2 py-1.5" data-testid="input-sp-backfill-off" aria-label="Backfill offset" /></label>
                     <label class="flex items-center gap-1 text-xs text-gray-700"><input type="checkbox" id="spBackfillDry" checked data-testid="checkbox-sp-backfill-dry" /><span>Dry-run</span></label>
@@ -2090,7 +2090,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=50"></script>
+    <script src="/js/duplicates-app.js?v=51"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

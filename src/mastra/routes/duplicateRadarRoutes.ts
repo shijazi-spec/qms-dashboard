@@ -9756,28 +9756,39 @@ export const duplicateRadarRoutes = [
           const count = typeof body?.count === "number" && body.count > 0 ? Math.floor(body.count) : 0;
           const offset = typeof body?.offset === "number" && body.offset >= 0 ? Math.floor(body.offset) : 0;
 
-          // Candidates: rows that have a title AND a way to match (email or name).
+          // Candidates: rows that have a title AND a way to match (email, phone,
+          // or name). PHONE is essential — most Mawsool leads are phone-only
+          // (no email), so phone is how we reach them reliably.
           const candidates = rowsIn
             .map((r: any) => ({
               email: String(r.email ?? r.input?.email ?? "").trim(),
+              phone: String(r.phone ?? r.input?.phone ?? "").trim(),
               title: String(r.title ?? r.input?.title ?? "").trim(),
               contact_name: String(r.contact_name ?? r.input?.contact_name ?? "").trim(),
             }))
-            .filter(r => r.title && (r.email || r.contact_name));
+            .filter(r => r.title && (r.email || r.phone || r.contact_name));
           const sliced = count > 0 ? candidates.slice(offset, offset + count) : candidates;
 
-          const { findRecordIdsByEmails, findRecordIdByName, updateZohoRecordsBulk } = await import("../../utils/zohoCRM");
+          const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey, findRecordIdByName, updateZohoRecordsBulk } = await import("../../utils/zohoCRM");
           const { splitContactName } = await import("../../utils/preflightStructuredPush");
-          // Email match is batched (fast); name match is a per-row search (for
-          // phone-only leads with no email) and only accepts a UNIQUE match.
+          // Match order: EMAIL (batched) → PHONE (batched, reliable for phone-only
+          // leads) → NAME (per-row search, UNIQUE match only so a common name
+          // never gets the wrong title).
           const idByEmail = await findRecordIdsByEmails(module, sliced.map(r => r.email).filter(Boolean));
+          const idByPhone = await findRecordIdsByPhones(module, sliced.map(r => r.phone).filter(Boolean));
 
           const seen = new Set<string>();
           const updates: Array<{ id: string; Title: string }> = [];
           let notFound = 0;
+          let matchedByPhone = 0;
           let matchedByName = 0;
           for (const r of sliced) {
             let id = r.email ? idByEmail.get(r.email.toLowerCase()) || null : null;
+            if (!id && r.phone) {
+              const pk = normalizePhoneKey(r.phone);
+              id = pk ? idByPhone.get(pk) || null : null;
+              if (id) matchedByPhone++;
+            }
             if (!id && r.contact_name) {
               const nm = splitContactName(r.contact_name);
               id = await findRecordIdByName(module, nm.first, nm.last);
@@ -9794,6 +9805,7 @@ export const duplicateRadarRoutes = [
               success: true, dry_run: true, module,
               candidates: sliced.length,
               would_update: updates.length,
+              matched_by_phone: matchedByPhone,
               matched_by_name: matchedByName,
               not_found: notFound,
               sample: updates.slice(0, 10),
@@ -9807,6 +9819,7 @@ export const duplicateRadarRoutes = [
           return c.json({
             success: true, dry_run: false, module,
             candidates: sliced.length, updated, failed, not_found: notFound,
+            matched_by_phone: matchedByPhone,
             matched_by_name: matchedByName,
             error_sample: errorSample,
           });
