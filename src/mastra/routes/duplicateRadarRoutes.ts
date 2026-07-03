@@ -9240,6 +9240,7 @@ export const duplicateRadarRoutes = [
           let existingContactsLinked = 0; // A1: contacts already in Zoho (reused, not duplicated)
           let reusedAccounts = 0; // accounts found live and reused instead of duplicated
           let existingDealsSkipped = 0; // deals that already exist under the account (idempotent retry)
+          let leadsSkippedExisting = 0; // leads already in Zoho (by email/phone) — skipped, not duplicated
           let outcomesSample: any[] = [];
           // Zoho per-record failure reasons (code + message) so the UI can show
           // WHY a create failed (required field, duplicate, invalid layout, …).
@@ -9258,7 +9259,35 @@ export const duplicateRadarRoutes = [
 
           if (action === 4) {
             // --- ACTION 4: create Leads only ---
-            const leadPayloads = plan.leads.map((r, i) => {
+            // Idempotent guard: skip prospects that already exist as a Lead by
+            // EMAIL or PHONE (phone covers the phone-only leads Zoho's built-in
+            // email-dup check can't catch). Runs BEFORE any create — email/phone
+            // lookups THROW on a Zoho error, so a failure aborts with zero
+            // written rather than duplicating. Intra-batch dedup too.
+            const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey } =
+              await import("../../utils/zohoCRM");
+            const leadEmails = plan.leads.map(r => String(r.email || "").trim()).filter(Boolean);
+            const leadPhones = plan.leads.map(r => String(r.phone || "").trim()).filter(Boolean);
+            const leadFoundEmail = await findRecordIdsByEmails("Leads", leadEmails);
+            const leadFoundPhone = await findRecordIdsByPhones("Leads", leadPhones);
+            const seenLeadEmail = new Set<string>();
+            const seenLeadPhone = new Set<string>();
+            const freshLeads = plan.leads.filter((r) => {
+              const em = String(r.email || "").trim().toLowerCase();
+              const pk = normalizePhoneKey(r.phone);
+              // Already in Zoho as a Lead → skip (idempotent retry).
+              if ((em && leadFoundEmail.has(em)) || (pk && leadFoundPhone.has(pk))) {
+                leadsSkippedExisting++;
+                return false;
+              }
+              // Duplicate within THIS batch → skip the second copy.
+              if (em && seenLeadEmail.has(em)) { leadsSkippedExisting++; return false; }
+              if (!em && pk && seenLeadPhone.has(pk)) { leadsSkippedExisting++; return false; }
+              if (em) seenLeadEmail.add(em);
+              if (pk) seenLeadPhone.add(pk);
+              return true;
+            });
+            const leadPayloads = freshLeads.map((r, i) => {
               const web = websiteFromDomain(r.domain);
               const _nm = splitContactName(r.contact_name || r.company || r.domain);
               const maybeClient = possibleClientOf(r);
@@ -9653,7 +9682,7 @@ export const duplicateRadarRoutes = [
             const totalFailed = failed.accounts + failed.contacts + failed.deals + failed.leads;
             const desc =
               action === 4
-                ? `Preflight structured push (action 4): created ${created.leads} Leads (${failed.leads} failed). Source: "${source}".`
+                ? `Preflight structured push (action 4): created ${created.leads} Leads${leadsSkippedExisting ? `, skipped ${leadsSkippedExisting} already-existing` : ""} (${failed.leads} failed). Source: "${source}".`
                 : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals${reusedAccounts ? `, reused ${reusedAccounts} existing account(s)` : ""}${existingContactsLinked ? `, linked ${existingContactsLinked} existing contact(s)` : ""}${existingDealsSkipped ? `, skipped ${existingDealsSkipped} existing deal(s)` : ""} (${totalFailed} failed). Source: "${source}".`;
             await logEvent({
               userId: sessionUser?.userId ?? 0,
@@ -9681,6 +9710,7 @@ export const duplicateRadarRoutes = [
             existing_contacts_linked: existingContactsLinked,
             reused_accounts: reusedAccounts,
             existing_deals_skipped: existingDealsSkipped,
+            leads_skipped_existing: leadsSkippedExisting,
             possible_existing_client_count: possibleClientCount,
             skipped_count: plan.skipped.length,
             error_sample: errorSamples,

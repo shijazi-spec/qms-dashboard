@@ -11702,6 +11702,7 @@
                         resultBox.innerHTML = ''
                             + '<div class="font-semibold text-emerald-800 mb-1">✓ Push complete</div>'
                             + '<div>' + crLine + '</div>'
+                            + (resp.leads_skipped_existing ? '<div class="text-indigo-700">Skipped ' + resp.leads_skipped_existing + ' lead(s) already in Zoho — not duplicated.</div>' : '')
                             + (resp.reused_accounts ? '<div class="text-indigo-700">Reused ' + resp.reused_accounts + ' existing account(s) — not duplicated.</div>' : '')
                             + (resp.existing_contacts_linked ? '<div class="text-indigo-700">Reused ' + resp.existing_contacts_linked + ' existing contact(s) — not duplicated.</div>' : '')
                             + (resp.existing_deals_skipped ? '<div class="text-indigo-700">Skipped ' + resp.existing_deals_skipped + ' deal(s) already under the account — not duplicated.</div>' : '')
