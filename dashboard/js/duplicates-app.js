@@ -11773,7 +11773,8 @@
                             + (resp.leads_skipped_existing ? '<div class="text-indigo-700">Skipped ' + resp.leads_skipped_existing + ' lead(s) already in Zoho — not duplicated.</div>' : '')
                             + (resp.reused_accounts ? '<div class="text-indigo-700">Reused ' + resp.reused_accounts + ' existing account(s) — not duplicated.</div>' : '')
                             + (resp.existing_contacts_linked ? '<div class="text-indigo-700">Reused ' + resp.existing_contacts_linked + ' existing contact(s) — not duplicated.</div>' : '')
-                            + (resp.existing_deals_skipped ? '<div class="text-indigo-700">Skipped ' + resp.existing_deals_skipped + ' deal(s) already under the account — not duplicated.</div>' : '')
+                            + (resp.active_accounts_contact_only ? '<div class="text-indigo-700">' + resp.active_accounts_contact_only + ' existing account(s) already have a signed/paid deal → contact added, no new deal.</div>' : '')
+                            + (resp.existing_deals_skipped ? '<div class="text-indigo-700">Skipped ' + resp.existing_deals_skipped + ' deal(s) already open under the account — not duplicated.</div>' : '')
                             + (resp.possible_existing_client_count ? '<div class="text-amber-700">⚠ ' + resp.possible_existing_client_count + ' flagged as possible existing client(s) — see each record\'s Description.</div>' : '')
                             + '<div>' + flLine + '</div>'
                             + ((resp.error_sample && resp.error_sample.length) ? '<div class="mt-1 text-red-700">Failure reason(s):<ul class="list-disc ms-5">' + resp.error_sample.map(function (e) { return '<li>' + escapeHtml(e.stage) + ': ' + escapeHtml(e.code || '') + ' — ' + escapeHtml(e.message || '') + (e.field ? ' <strong>[field: ' + escapeHtml(e.field) + ']</strong>' : '') + '</li>'; }).join('') + '</ul></div>' : '')

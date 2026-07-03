@@ -1,7 +1,7 @@
 {
   "pf_sp_title": "Structured push to Zoho",
-  "pf_sp_a1": "① Re-engage PAST CLIENTS (churned) → existing account + new deal",
-  "pf_sp_a1_hint": "Reuses the existing (churned) account — never a duplicate. Adds the new contact(s); every colleague at that company is attached to the one re-engagement deal as a Contact Role.",
+  "pf_sp_a1": "① EXISTING accounts (past clients / no live deal) → link + new deal",
+  "pf_sp_a1_hint": "Reuses the existing account — never a duplicate. Creates a new deal UNLESS the account already has a signed/paid deal (live client → contact only, we don't disturb it). Every colleague at that company (by domain) attaches to the deal as a Contact Role.",
   "pf_sp_a2": "Deal + contacts: multi-contact companies",
   "pf_sp_a3": "New Account + Deal + Contact (single-contact)",
   "pf_sp_a4": "Push as Leads (unverifiable contacts)",

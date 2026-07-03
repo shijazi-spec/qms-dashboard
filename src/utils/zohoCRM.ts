@@ -1177,11 +1177,22 @@ export async function findAccountIdsByNames(names: string[]): Promise<Map<string
   return out;
 }
 
-/** Best-effort set of "accountId::dealNameLower" for deals that already exist,
- * so the push never creates a second identical Deal under the same account on a
- * retry. Best-effort (a lookup failure just means we might create a duplicate
- * the radar can merge — never a data-loss risk), so it swallows errors rather
- * than aborting. Names with criteria-special characters are skipped. */
+/** Markers that identify a CLOSED deal stage (won or lost). A deal whose Stage
+ * contains any of these is treated as closed; anything else is "open/in-progress". */
+const CLOSED_STAGE_MARKERS = (process.env.PREFLIGHT_CLOSED_STAGE_MARKERS ||
+  "closed,lost,won,paid,agreement signed,terminat,cancel,churn,dropped")
+  .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+function isClosedStage(stage: string): boolean {
+  const st = String(stage || "").trim().toLowerCase();
+  return !!st && CLOSED_STAGE_MARKERS.some(m => st.includes(m));
+}
+
+/** Best-effort set of "accountId::dealNameLower" for OPEN deals that already
+ * exist, so the push never creates a second identical Deal under the same
+ * account on a retry — while an OLD CLOSED deal (lost/terminated) with the same
+ * name does NOT block a legitimate new/re-engagement deal. Best-effort (a
+ * lookup failure just means we might create a duplicate the radar can merge —
+ * never data loss), so it swallows errors. Criteria-unsafe names are skipped. */
 export async function findExistingDealKeys(
   pairs: Array<{ accountId: string; name: string }>,
 ): Promise<Set<string>> {
@@ -1196,8 +1207,45 @@ export async function findExistingDealKeys(
     for (const r of rows) {
       const acc = String(r.data?.Account_Name?.id || "");
       const nm = String(r.data?.Deal_Name || "").trim().toLowerCase();
-      if (acc && nm) out.add(`${acc}::${nm}`);
+      // Only an OPEN same-name deal blocks — a closed/lost old deal does not.
+      if (acc && nm && !isClosedStage(r.data?.Stage)) out.add(`${acc}::${nm}`);
     }
+  }
+  return out;
+}
+
+/** Live check: which of these account ids already have at least one Deal in a
+ * SIGNED/PAID stage — i.e. a live client we must NOT disturb with a new deal.
+ * Uses the Deals related-list per account. Best-effort per account: a failed
+ * lookup falls back to "no signed deal" (→ create the deal), because the
+ * open-same-name dedup still prevents an actual duplicate. Signed/paid stages
+ * are env-configurable (PREFLIGHT_SIGNED_STAGES). */
+export async function getAccountsWithSignedDeal(accountIds: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  const signed = (process.env.PREFLIGHT_SIGNED_STAGES || "Agreement Signed,Paid")
+    .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  const ids = Array.from(new Set(accountIds.map(i => String(i || "").trim()).filter(Boolean)));
+  for (const accId of ids) {
+    try {
+      const deals: any[] = await makeZohoRequest(
+        async (config) => fetch(
+          `${config.apiDomain}/crm/v2/Accounts/${accId}/Deals?fields=Stage&per_page=200`,
+          { method: "GET", headers: { Authorization: `Zoho-oauthtoken ${config.accessToken}`, "Content-Type": "application/json" } },
+        ),
+        async (response) => {
+          if (response.status === 204) return [];
+          if (!response.ok) throw new Error(`Account ${accId} deals: ${response.status}`);
+          const t = await response.text();
+          if (!t || !t.trim()) return [];
+          return JSON.parse(t).data || [];
+        },
+      );
+      const hasSigned = deals.some(d => {
+        const st = String(d?.Stage || "").trim().toLowerCase();
+        return signed.some(sig => st === sig || st.includes(sig));
+      });
+      if (hasSigned) out.add(accId);
+    } catch { /* best-effort: treat as no signed deal → create the deal */ }
   }
   return out;
 }
