@@ -532,7 +532,6 @@ export const mastra = new Mastra({
         runQualityAuditIfStale,
         runKPIAutoCalcIfStale,
         runCsOverlapScanIfStale,
-        runWeeklySupabaseRefreshIfStale,
         runAutonomousResolutionIfStale,
         runResolutionDigestIfDue,
         runWeeklyExecBriefIfDue,
@@ -554,12 +553,6 @@ export const mastra = new Mastra({
         { name: "ResolutionDigest", fn: () => runResolutionDigestIfDue() },
         // Weekly leadership exec brief (Sunday 06:00 KSA). No-ops otherwise.
         { name: "ExecBriefWeekly", fn: () => runWeeklyExecBriefIfDue() },
-        // Opt-in via SUPABASE_DATABASE_URL. No-ops silently when unset, so
-        // it's safe to ship without any env work on Replit. See helper
-        // body for the Friday 19:00–23:00 UTC time gate (= Friday 22:00–02:00
-        // Riyadh). Last successful run is tracked in scanner_run_log under
-        // scanner_name='weekly-supabase-refresh'.
-        { name: "WeeklySupabaseRefresh", fn: () => runWeeklySupabaseRefreshIfStale() },
       ];
       for (const h of helpers) {
         try {
