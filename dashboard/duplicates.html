@@ -1566,6 +1566,20 @@
                     <button data-on-click="erBackfillTitles" id="spBackfillBtn" data-testid="button-sp-backfill" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-50">Backfill Titles</button>
                 </div>
                 <div id="spBackfillResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1"></div>
+                <!-- Create the MISSING deals for companies ALREADY pushed (accounts +
+                     contacts exist, only the deal is missing). Runs action 1 on the
+                     full list (bypasses the PASS gate), reuses the existing account +
+                     contacts, creates only the deal — most senior = primary, the rest
+                     Contact Roles. Idempotent: skips a company that already has an open
+                     deal; never creates accounts/contacts/leads. -->
+                <div class="flex items-center flex-wrap gap-2 mt-1 px-2 py-2 rounded-lg bg-purple-50 border border-purple-100">
+                    <span class="text-[11px] text-purple-900"><strong>Create missing DEALS</strong> for companies already pushed (accounts + contacts exist) — reuses them, creates only the deal, most senior = primary + colleagues as Contact Roles. Load the SAME list &amp; run Preflight first.</span>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Batch size — each deal fires a Contact-Roles PUT per contact, so push in slices. 0 = all."><span>size</span><input type="number" id="spDealsNum" min="0" value="20" class="w-16 text-xs border rounded-lg px-2 py-1.5" data-testid="input-sp-deals-num" aria-label="Missing-deals batch size" /></label>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Offset — skip the first N companies; advance it each click."><span>from</span><input type="number" id="spDealsOff" min="0" value="0" class="w-16 text-xs border rounded-lg px-2 py-1.5" data-testid="input-sp-deals-off" aria-label="Missing-deals offset" /></label>
+                    <label class="flex items-center gap-1 text-xs text-gray-700"><input type="checkbox" id="spDealsDry" checked data-testid="checkbox-sp-deals-dry" /><span>Dry-run</span></label>
+                    <button data-on-click="erCreateMissingDeals" id="spDealsBtn" data-testid="button-sp-deals" class="rr-btn rr-btn-ai">📄 Create missing deals</button>
+                </div>
+                <div id="spDealsResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-72 overflow-y-auto"></div>
                 <p class="text-[11px] text-gray-500 mt-1">Contacts are verified by email domain before filing under an Account: a corporate email at a different company than its label is <strong>rejected</strong>; free-mail / unverifiable contacts go to <strong>Leads</strong> (action 4). Each action pushes in slices — set <em>size</em> per click; <em>from</em> auto-advances after a real push. 0 = all. <strong>Finish an action's slices before re-running Resolve</strong> — re-resolving mid-way can shift the slice window.</p>
             </div>
 
@@ -2382,7 +2396,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=80"></script>
+    <script src="/js/duplicates-app.js?v=81"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

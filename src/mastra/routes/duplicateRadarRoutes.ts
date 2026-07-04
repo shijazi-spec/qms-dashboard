@@ -9202,6 +9202,11 @@ export const duplicateRadarRoutes = [
               ? Math.min(100, Math.max(0, Math.floor(body.deal_percent)))
               : 100;
           const dryRun = body?.dry_run !== false;
+          // Deal-backfill mode (action 1 only): create the MISSING deals for
+          // companies already pushed (accounts + contacts exist, only the deal
+          // is missing). Lets rows that now read "duplicate" through, gated to
+          // those that resolve to an existing account. See buildStructuredPushPlan.
+          const dealBackfill = body?.deal_backfill === true && action === 1;
 
           const ownerMode = String(body?.owner_mode || "self").trim();
           const ownerId = body?.owner_id ? String(body.owner_id).trim() : null;
@@ -9266,7 +9271,7 @@ export const duplicateRadarRoutes = [
           // name) BEFORE planning, so matched contacts route to A1 (link) and
           // are never rejected or duplicated as new accounts.
           const { rows: enrichedRows, possibleClientOf } = await enrichRowsWithExistingAccounts(spRows);
-          const plan = buildStructuredPushPlan(action, enrichedRows, { count, offset, dealPercent });
+          const plan = buildStructuredPushPlan(action, enrichedRows, { count, offset, dealPercent, dealBackfill });
 
           // "Possible existing client" warning text for a lead/new-deal row that
           // FUZZY-matches an existing account (but wasn't exact enough to link).

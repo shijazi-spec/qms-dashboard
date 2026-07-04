@@ -305,7 +305,7 @@ function groupByCompany(rows: SPRow[]): SPCompany[] {
 export function buildStructuredPushPlan(
   action: 1 | 2 | 3 | 4,
   rows: SPRow[],
-  opts: { count?: number; offset?: number; dealPercent?: number },
+  opts: { count?: number; offset?: number; dealPercent?: number; dealBackfill?: boolean },
 ): StructuredPushPlan {
   const skipped: Array<{ row_index: number; reason: string }> = [];
 
@@ -314,7 +314,17 @@ export function buildStructuredPushPlan(
   // must never reach Zoho — e.g. the 563 "duplicate" rows already exist in the
   // CRM and would otherwise be pulled into A1 as existing-account links. A1 and
   // A4 don't re-check the verdict downstream, so we gate it here, up front.
-  const pushableRows = rows.filter(r => String(r.verdict || "").toLowerCase() === "pass");
+  //
+  // dealBackfill (action 1 ONLY) is the deliberate exception: create the MISSING
+  // deals for companies we ALREADY pushed. Their accounts + contacts exist (so
+  // the rows now read "duplicate"); we only need the deal. In that mode any row
+  // that RESOLVED to an existing account (Layer-1 enrichment set
+  // matched_account_zoho_id) is eligible — the A1 run reuses the account +
+  // contacts and creates only the deal, skipping a company that already has an
+  // open deal. It never creates accounts/contacts (they're found and reused).
+  const pushableRows = opts.dealBackfill && action === 1
+    ? rows.filter(r => !!String(r.matched_account_zoho_id || "").trim())
+    : rows.filter(r => String(r.verdict || "").toLowerCase() === "pass");
 
   // Domain-consistency routing FIRST. Only "account"-routed rows may be filed
   // under an Account (A1/A2/A3). "lead"-routed rows become individual Leads

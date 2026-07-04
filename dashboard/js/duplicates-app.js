@@ -12094,6 +12094,70 @@
             if (data && Array.isArray(data.rows)) _pfRefreshStructuredPushCounts(data.rows);
         }
 
+        // Create the MISSING deals for companies ALREADY pushed (accounts +
+        // contacts exist, only the deal is missing). Sends the FULL list (NOT
+        // PASS-filtered — the already-pushed contacts now read "duplicate") to
+        // action 1 with deal_backfill. The backend reuses the existing account +
+        // contacts and creates only the deal (most senior = primary, rest =
+        // Contact Roles), idempotently skipping a company that already has an
+        // open deal. It never creates accounts / contacts / leads.
+        async function erCreateMissingDeals() {
+            var data = window._preflightLastResult;
+            if (!data || !Array.isArray(data.rows)) { rrToast('Load the list and run a Preflight check first.', 'warn'); return; }
+            var rows = data.rows.map(_pfToSPRow); // ALL rows — do NOT PASS-filter here
+            var g = function (id) { return parseInt((document.getElementById(id) || {}).value || '0', 10) || 0; };
+            var count = g('spDealsNum');
+            var offset = g('spDealsOff');
+            var dryRun = !!(document.getElementById('spDealsDry') || {}).checked;
+            var btn = document.getElementById('spDealsBtn');
+            var orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = dryRun ? 'Dry-running…' : 'Creating deals…'; }
+            var box = document.getElementById('spDealsResult');
+            try {
+                var res = await fetch('/api/duplicates/preflight/structured-push', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 1,
+                        rows: rows,
+                        count: count,
+                        offset: offset,
+                        dry_run: dryRun,
+                        deal_backfill: true,
+                        owner_mode: 'self',
+                        source: 'Preflight Missing-Deals Backfill — ' + new Date().toISOString().slice(0, 10),
+                    }),
+                });
+                var resp = await res.json();
+                if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
+                if (box) {
+                    box.classList.remove('hidden');
+                    if (resp.dry_run) {
+                        var w = resp.would || {};
+                        box.innerHTML = '<div class="font-semibold text-purple-800">✓ Dry-run complete</div>'
+                            + '<div>Would create: <span class="text-emerald-700 font-semibold">' + (w.deals || 0) + '</span> deal(s) under existing accounts · ' + (w.contacts || 0) + ' missing contact(s) · <strong>0</strong> new accounts.</div>'
+                            + (resp.live_client_rejected_count ? '<div class="text-rose-700">' + resp.live_client_rejected_count + ' live client(s) skipped (existing signed/paid deal).</div>' : '')
+                            + '<div class="text-gray-500 mt-1">' + (resp.no_matched_account_count || 0) + ' with no existing account found (skipped — nothing to attach a deal to).</div>'
+                            + '<div class="mt-1 text-amber-700">Uncheck Dry-run and click again to create them. Advance <em>from</em> for the next slice.</div>';
+                    } else {
+                        var cr = resp.created || {};
+                        box.innerHTML = '<div class="font-semibold text-emerald-800">✓ Deals created</div>'
+                            + '<div>Created: <span class="text-emerald-700 font-semibold">' + (cr.deals || 0) + '</span> deal(s) · reused ' + (resp.reused_accounts || 0) + ' account(s) · linked ' + (resp.existing_contacts_linked || 0) + ' existing contact(s) · created ' + (cr.contacts || 0) + ' missing contact(s).</div>'
+                            + (resp.existing_deals_skipped ? '<div class="text-gray-600">' + resp.existing_deals_skipped + ' company(ies) skipped — already had an open deal.</div>' : '')
+                            + (resp.live_clients_rejected ? '<div class="text-rose-700">' + resp.live_clients_rejected + ' live client(s) skipped.</div>' : '')
+                            + ((resp.failed && resp.failed.deals) ? '<div class="text-red-700">' + resp.failed.deals + ' deal(s) failed' + ((resp.error_sample && resp.error_sample.length) ? ' — ' + escapeHtml(resp.error_sample.map(function (e) { return (e.code || '') + ' ' + (e.field || ''); }).join(', ')) : '') + '</div>' : '');
+                        var offEl = document.getElementById('spDealsOff');
+                        if (offEl && count > 0) offEl.value = String(offset + count);
+                    }
+                }
+                rrToast(dryRun ? 'Dry-run done — missing-deals preview ready.' : 'Missing deals created.', 'good');
+            } catch (e) {
+                if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
+                rrToast('Create missing deals failed: ' + (e && e.message || e), 'warn');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
         // Action handler — wired via data-on-click="erStructuredPush" data-args="[N]".
         async function erStructuredPush(action) {
             action = Number(action);
