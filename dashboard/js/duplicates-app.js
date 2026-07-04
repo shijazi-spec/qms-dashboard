@@ -530,6 +530,9 @@
                     msg = 'No cross-module overlaps match this filter — try the <strong>All</strong> chip.';
                 }
                 tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-8 text-center text-sm">${msg}</td></tr>`;
+                // Reset the pager too — otherwise it keeps a STALE count (e.g.
+                // "1–20 of 12,971") from a previous render while the table is empty.
+                renderPagination('crossModulePagination', 0, 1, () => {}, 0, 'clusters');
                 updateCrossModuleBulkBar();
                 return;
             }
