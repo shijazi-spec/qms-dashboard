@@ -313,13 +313,7 @@
                 const el = document.getElementById('cmoStatus-' + k);
                 if (!el) return;
                 const active = k === window._crossModuleStatusFilter;
-                const palette = {
-                    active:   active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                    resolved: active ? 'bg-green-700 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200',
-                    ignored:  active ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
-                    all:      active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                };
-                el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + palette[k];
+                el.className = 'rr-chip' + (active ? ' rr-chip-active' : '');
             });
             window._crossModulePage = 0;
             loadCrossModule();
@@ -431,19 +425,10 @@
                 const isAll = btn.id === 'cmoChip-all';
                 const isMatch = (crossModuleFilter === 'all' && isAll) ||
                                 btn.id === 'cmoChip-' + crossModuleFilter;
-                if (isMatch) {
-                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white';
-                } else if (isAll) {
-                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300';
-                } else if (btn.id === 'cmoChip-mixed') {
-                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200';
-                } else if (btn.id === 'cmoChip-lead_deal') {
-                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-rose-100 text-rose-700 hover:bg-rose-200';
-                } else if (btn.id === 'cmoChip-existing_clients') {
-                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200';
-                } else {
-                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200';
-                }
+                // Phase 4: one chip shape — active=brand blue, inactive=quiet
+                // outline. The severity dot inside each chip (static markup) is
+                // untouched by the className swap.
+                btn.className = 'rr-chip' + (isMatch ? ' rr-chip-active' : '');
             });
             renderCrossModuleTable();
         }

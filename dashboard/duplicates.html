@@ -96,9 +96,45 @@
         .rr-btn.rr-btn-ghost { background: transparent; color: #6B7280; border-color: #E5E7EB; }
         .rr-btn.rr-btn-ghost:hover { background: #F9FAFB; color: #111827; }
         .rr-btn.rr-btn-icon { padding: 5px 8px; }
+        .rr-btn:focus-visible { outline: 2px solid #1E3A8A; outline-offset: 2px; }
         html.wp-dark .rr-btn.rr-btn-primary { background: #2563EB; }
         html.wp-dark .rr-btn.rr-btn-ghost { color: #94A3B8; border-color: #2B3A52; }
         html.wp-dark .rr-btn.rr-btn-ghost:hover { background: #16233B; color: #F1F5F9; }
+        html.wp-dark .rr-btn:focus-visible { outline-color: #2563EB; }
+        /* SaaS phase 4 — control layer. Toolbar buttons reuse .rr-btn + these
+           role variants; AI (Adam) keeps a reserved purple, destructive a red
+           outline. Plus shared filter chips / selects / search. Dark-aware. */
+        .rr-btn.rr-btn-ai { background: #F5F3FF; color: #6D28D9; border-color: transparent; }
+        .rr-btn.rr-btn-ai:hover { filter: brightness(0.97); }
+        html.wp-dark .rr-btn.rr-btn-ai { background: #241B3D; color: #A78BFA; border-color: #6D28D9; }
+        .rr-btn.rr-btn-danger { background: #fff; color: #B91C1C; border-color: rgba(185,28,28,.4); }
+        .rr-btn.rr-btn-danger:hover { background: #FEF2F2; }
+        html.wp-dark .rr-btn.rr-btn-danger { background: transparent; color: #F87171; border-color: rgba(248,113,113,.4); }
+        html.wp-dark .rr-btn.rr-btn-danger:hover { background: rgba(248,113,113,.12); }
+        .rr-btn.rr-btn-subtle { background: transparent; color: #6B7280; border-color: transparent; }
+        .rr-btn.rr-btn-subtle:hover { background: #F9FAFB; color: #111827; }
+        html.wp-dark .rr-btn.rr-btn-subtle { color: #94A3B8; }
+        html.wp-dark .rr-btn.rr-btn-subtle:hover { background: #16233B; color: #F1F5F9; }
+        /* filter chips — one shape, active=brand blue, inactive=quiet outline */
+        .rr-chip { font-size: 12.5px; font-weight: 500; padding: 6px 13px; border-radius: 999px; border: 1px solid #E5E7EB; background: #fff; color: #6B7280; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; line-height: 1; transition: background .12s, color .12s, border-color .12s; }
+        .rr-chip:hover { background: #F9FAFB; color: #111827; }
+        .rr-chip.rr-chip-active { background: #1E3A8A; color: #fff; border-color: #1E3A8A; }
+        .rr-chip .rr-chip-n { font-variant-numeric: tabular-nums; font-weight: 600; opacity: .85; }
+        .rr-chip .rr-chip-dot { width: 7px; height: 7px; border-radius: 999px; }
+        .rr-chip .rr-chip-dot.warn { background: #B91C1C; } .rr-chip .rr-chip-dot.amber { background: #B45309; } .rr-chip .rr-chip-dot.info { background: #1D4ED8; }
+        .rr-chip:focus-visible { outline: 2px solid #1E3A8A; outline-offset: 2px; }
+        html.wp-dark .rr-chip { background: #0F1A2E; color: #94A3B8; border-color: #2B3A52; }
+        html.wp-dark .rr-chip:hover { background: #16233B; color: #F1F5F9; }
+        html.wp-dark .rr-chip.rr-chip-active { background: #2563EB; color: #fff; border-color: #2563EB; }
+        html.wp-dark .rr-chip .rr-chip-dot.warn { background: #F87171; } html.wp-dark .rr-chip .rr-chip-dot.amber { background: #FBBF24; } html.wp-dark .rr-chip .rr-chip-dot.info { background: #60A5FA; }
+        /* shared select + search field */
+        .rr-select { font-size: 12.5px; color: #111827; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+        .rr-select:focus-visible { outline: 2px solid #1E3A8A; outline-offset: 1px; }
+        html.wp-dark .rr-select { background: #0F1A2E; color: #F1F5F9; border-color: #2B3A52; }
+        .rr-search { display: inline-flex; align-items: center; gap: 8px; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 7px 12px; font-size: 12.5px; color: #9CA3AF; }
+        .rr-search input { border: 0; background: transparent; outline: 0; color: #111827; font-family: inherit; font-size: 12.5px; }
+        html.wp-dark .rr-search { background: #16233B; border-color: #2B3A52; color: #64748B; }
+        html.wp-dark .rr-search input { color: #F1F5F9; }
         .confidence-high { background-color: #FEE2E2; color: #991B1B; }
         .confidence-medium { background-color: #FEF3C7; color: #92400E; }
         .confidence-low { background-color: #DCFCE7; color: #166534; }
@@ -1078,20 +1114,20 @@
                  tabs). Previously sat below the table where they were easy to
                  miss — operators expect Export / Refresh / Run scan up top. -->
             <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
-                <button data-on-click="exportCrossModule" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of exactly the cross-module overlap clusters shown below, in the current order and pairing filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="reconcileDeletedRecords" id="cmoReconcileDeletedBtn" title="Verify a batch of records against live Zoho and prune the ones deleted/merged in the CRM. Incremental sync doesn't report deletions, so this clears rows that were resolved in Zoho but still show here. Rotates through all records over repeated runs. Requires admin key." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-200 text-rose-900 hover:bg-rose-300">🧹 Verify &amp; prune deleted</button>
-                <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300">🔍 Run Scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;cross-module&quot;]" data-testid="button-open-capa-cross-module" title="Open a corrective-action record (CAPA) on one of the cross-module clusters below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="rr-btn rr-btn-primary">🔍 Run Scan</button>
+                <button data-on-click="exportCrossModule" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of exactly the cross-module overlap clusters shown below, in the current order and pairing filter." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+                <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="reconcileDeletedRecords" id="cmoReconcileDeletedBtn" title="Verify a batch of records against live Zoho and prune the ones deleted/merged in the CRM. Incremental sync doesn't report deletions, so this clears rows that were resolved in Zoho but still show here. Rotates through all records over repeated runs. Requires admin key." class="rr-btn rr-btn-ghost">🧹 Verify &amp; prune deleted</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;cross-module&quot;]" data-testid="button-open-capa-cross-module" title="Open a corrective-action record (CAPA) on one of the cross-module clusters below. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
 
             <!-- Status filter: open queue vs handled/dismissed (auditable) -->
             <div class="flex flex-wrap items-center gap-2 mb-2" id="cmoStatusChips">
                 <span class="text-xs text-gray-500 me-1">Status:</span>
-                <button data-on-click="setCrossModuleStatus" data-args="[&quot;active&quot;]" id="cmoStatus-active" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">Open</button>
-                <button data-on-click="setCrossModuleStatus" data-args="[&quot;resolved&quot;]" id="cmoStatus-resolved" title="Overlaps you marked done (converted / linked / closed in Zoho) — includes what was previously 'Handled'." class="px-3 py-1.5 text-xs font-medium rounded-full bg-green-100 text-green-700 hover:bg-green-200">Resolved</button>
-                <button data-on-click="setCrossModuleStatus" data-args="[&quot;ignored&quot;]" id="cmoStatus-ignored" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300">Dismissed</button>
-                <button data-on-click="setCrossModuleStatus" data-args="[&quot;all&quot;]" id="cmoStatus-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">All</button>
+                <button data-on-click="setCrossModuleStatus" data-args="[&quot;active&quot;]" id="cmoStatus-active" class="rr-chip rr-chip-active">Open</button>
+                <button data-on-click="setCrossModuleStatus" data-args="[&quot;resolved&quot;]" id="cmoStatus-resolved" title="Overlaps you marked done (converted / linked / closed in Zoho) — includes what was previously 'Handled'." class="rr-chip">Resolved</button>
+                <button data-on-click="setCrossModuleStatus" data-args="[&quot;ignored&quot;]" id="cmoStatus-ignored" class="rr-chip">Dismissed</button>
+                <button data-on-click="setCrossModuleStatus" data-args="[&quot;all&quot;]" id="cmoStatus-all" class="rr-chip">All</button>
             </div>
 
             <!-- Filter chips — refined rules (Sarah 2026-06-16):
@@ -1102,10 +1138,10 @@
                  clusters where any member is a Paid / Agreement Signed
                  deal (CS-owned). -->
             <div class="flex flex-wrap gap-2 mb-4" id="cmoChips">
-                <button data-on-click="filterCrossModule" data-args="[&quot;all&quot;]" id="cmoChip-all" data-testid="cmo-chip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;lead_deal&quot;]" id="cmoChip-lead_deal" data-testid="cmo-chip-lead-deal" class="px-3 py-1.5 text-xs font-medium rounded-full bg-rose-100 text-rose-700 hover:bg-rose-200">Lead ↔ Active Deal</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;mixed&quot;]" id="cmoChip-mixed" data-testid="cmo-chip-mixed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">3+ modules</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;existing_clients&quot;]" id="cmoChip-existing_clients" data-testid="cmo-chip-existing-clients" class="px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200">Existing clients · CS</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;all&quot;]" id="cmoChip-all" data-testid="cmo-chip-all" class="rr-chip rr-chip-active">All</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;lead_deal&quot;]" id="cmoChip-lead_deal" data-testid="cmo-chip-lead-deal" class="rr-chip"><span class="rr-chip-dot warn"></span>Lead ↔ Active Deal</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;mixed&quot;]" id="cmoChip-mixed" data-testid="cmo-chip-mixed" class="rr-chip"><span class="rr-chip-dot amber"></span>3+ modules</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;existing_clients&quot;]" id="cmoChip-existing_clients" data-testid="cmo-chip-existing-clients" class="rr-chip"><span class="rr-chip-dot warn"></span>Existing clients · CS</button>
             </div>
 
             <!-- Follow-up 3: bulk-close action bar. Visible only when 1+
@@ -1115,8 +1151,8 @@
                     <span id="cmoSelectedCount" class="font-semibold">0</span> cluster<span id="cmoSelectedPlural">s</span> selected. Bulk action will set <code class="bg-amber-100 px-1 rounded">Lead_Status = "Lost Lead"</code> in Zoho for every Lead record in these clusters, then mark each cluster Resolved.
                 </div>
                 <div class="flex items-center gap-2">
-                    <button data-on-click="bulkCloseLeadsDryRun" data-testid="button-cmo-bulk-dry-run" class="px-3 py-1.5 text-xs font-medium rounded bg-white border border-amber-300 text-amber-800 hover:bg-amber-100">Dry run</button>
-                    <button data-on-click="bulkCloseLeadsExecute" data-testid="button-cmo-bulk-execute" class="px-3 py-1.5 text-xs font-semibold rounded bg-amber-600 text-white hover:bg-amber-700">Close lead records in Zoho</button>
+                    <button data-on-click="bulkCloseLeadsDryRun" data-testid="button-cmo-bulk-dry-run" class="rr-btn rr-btn-ghost">Dry run</button>
+                    <button data-on-click="bulkCloseLeadsExecute" data-testid="button-cmo-bulk-execute" class="rr-btn rr-btn-danger">Close lead records in Zoho</button>
                 </div>
             </div>
 
@@ -2265,7 +2301,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=73"></script>
+    <script src="/js/duplicates-app.js?v=74"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
