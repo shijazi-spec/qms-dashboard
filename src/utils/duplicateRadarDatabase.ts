@@ -8709,6 +8709,7 @@ export interface CrossModuleClusterRow {
   pairing: CrossModulePairing | null;
   estimated_pipeline_value: number;
   status: string;
+  cross_module_handled_at?: Date | null;
   created_at: Date | null;
   updated_at: Date | null;
   // Per-record dimensions aggregated from duplicate_records so the dashboard's
@@ -8795,9 +8796,14 @@ export async function getCrossModuleOverlaps(opts: {
       ? "TRUE"
       : statusOpt === "handled"
         ? "duplicate_clusters.status = 'active'"
-        : "duplicate_clusters.status = $2";
+        : statusOpt === "resolved"
+          // Merged view (Sarah 2026-07-04): the operator sees NO difference
+          // between "handled" and "resolved" on this tab, so "Resolved" returns
+          // BOTH — whole-cluster resolved OR cross-module marked-done (handled).
+          ? "(duplicate_clusters.status = 'resolved' OR (duplicate_clusters.status = 'active' AND duplicate_clusters.cross_module_handled_at IS NOT NULL))"
+          : "duplicate_clusters.status = $2";
   const params: any[] =
-    statusOpt === "all" || statusOpt === "handled"
+    statusOpt === "all" || statusOpt === "handled" || statusOpt === "resolved"
       ? [limit]
       : [limit, statusOpt];
   const r = await pool.query<CrossModuleClusterRow>(
@@ -8808,7 +8814,7 @@ export async function getCrossModuleOverlaps(opts: {
       total_records,
       total_leads, total_contacts, total_accounts, total_deals,
       COALESCE(estimated_pipeline_value, 0)::numeric AS estimated_pipeline_value,
-      status, created_at, updated_at
+      status, cross_module_handled_at, created_at, updated_at
     FROM duplicate_clusters
     WHERE ${statusClause}
       AND (

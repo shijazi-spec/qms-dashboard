@@ -1002,8 +1002,7 @@
             <div class="flex flex-wrap items-center gap-2 mb-2" id="cmoStatusChips">
                 <span class="text-xs text-gray-500 me-1">Status:</span>
                 <button data-on-click="setCrossModuleStatus" data-args="[&quot;active&quot;]" id="cmoStatus-active" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">Open</button>
-                <button data-on-click="setCrossModuleStatus" data-args="[&quot;handled&quot;]" id="cmoStatus-handled" title="Cross-module overlaps marked Handled (module-scoped — the cluster itself stayed active; same-module duplicates remain visible elsewhere)" class="px-3 py-1.5 text-xs font-medium rounded-full bg-teal-100 text-teal-700 hover:bg-teal-200">Handled</button>
-                <button data-on-click="setCrossModuleStatus" data-args="[&quot;resolved&quot;]" id="cmoStatus-resolved" class="px-3 py-1.5 text-xs font-medium rounded-full bg-green-100 text-green-700 hover:bg-green-200">Resolved</button>
+                <button data-on-click="setCrossModuleStatus" data-args="[&quot;resolved&quot;]" id="cmoStatus-resolved" title="Overlaps you marked done (converted / linked / closed in Zoho) — includes what was previously 'Handled'." class="px-3 py-1.5 text-xs font-medium rounded-full bg-green-100 text-green-700 hover:bg-green-200">Resolved</button>
                 <button data-on-click="setCrossModuleStatus" data-args="[&quot;ignored&quot;]" id="cmoStatus-ignored" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300">Dismissed</button>
                 <button data-on-click="setCrossModuleStatus" data-args="[&quot;all&quot;]" id="cmoStatus-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">All</button>
             </div>
@@ -2154,7 +2153,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=63"></script>
+    <script src="/js/duplicates-app.js?v=64"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
