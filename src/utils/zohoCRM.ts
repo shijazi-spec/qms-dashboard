@@ -1149,7 +1149,15 @@ export async function findAccountIdsByDomains(domains: string[]): Promise<Map<st
       try { rows = await searchZohoRecords("Accounts", criteria); }
       catch (e) { lastErr = e; rows = null; }
     }
-    if (rows === null) throw new Error(`Accounts domain lookup failed: ${lastErr?.message || String(lastErr)}`);
+    // BEST-EFFORT: a single bad chunk (e.g. a value that still trips Zoho's
+    // criteria parser → 400) must NOT abort the whole push. Skip this chunk and
+    // keep going — the affected companies fall back to the name / cluster /
+    // domain-or-name resolvers. (This lookup is an idempotency helper, not the
+    // sole account source.) Only the domain hits from good chunks are used.
+    if (rows === null) {
+      try { console.warn("[findAccountIdsByDomains] chunk skipped:", lastErr?.message || String(lastErr)); } catch { /* noop */ }
+      continue;
+    }
     for (const r of rows) {
       const web = String(r.data?.Website || "").trim().toLowerCase();
       if (!web || !r.id) continue;
@@ -1178,7 +1186,12 @@ export async function findAccountIdsByNames(names: string[]): Promise<Map<string
       try { rows = await searchZohoRecords("Accounts", criteria); }
       catch (e) { lastErr = e; rows = null; }
     }
-    if (rows === null) throw new Error(`Accounts name lookup failed: ${lastErr?.message || String(lastErr)}`);
+    // Best-effort like findAccountIdsByDomains — a bad chunk skips, never aborts
+    // the push (the company falls back to the domain / cluster resolver).
+    if (rows === null) {
+      try { console.warn("[findAccountIdsByNames] chunk skipped:", lastErr?.message || String(lastErr)); } catch { /* noop */ }
+      continue;
+    }
     for (const r of rows) {
       const nm = String(r.data?.Account_Name || "").trim().toLowerCase();
       if (nm && r.id && !out.has(nm)) out.set(nm, String(r.id));
