@@ -11,9 +11,14 @@
     <style>
         html { font-family: 'Inter', sans-serif; height: 100%; }
         body { font-family: 'Inter', sans-serif; height: 100%; margin: 0; overflow: hidden; display: flex; flex-direction: column; }
-        .tab-active { background-color: #111827; color: #fff; }
+        .tab-active { background-color: #1E3A8A; color: #fff; }
         .tab-inactive { background-color: transparent; color: #6B7280; }
         .tab-inactive:hover { background-color: #F3F4F6; color: #111827; }
+        html.wp-dark .tab-active { background-color: #2563EB; color: #fff; }
+        html.wp-dark .tab-inactive { color: #94A3B8; }
+        html.wp-dark .tab-inactive:hover { background-color: #334155; color: #F1F5F9; }
+        html.wp-dark .read-only-badge { background: #6366F1; }
+        html.wp-dark .cluster-card:hover { border-color: #3B82F6; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
         .confidence-high { background-color: #FEE2E2; color: #991B1B; }
         .confidence-medium { background-color: #FEF3C7; color: #92400E; }
         .confidence-low { background-color: #DCFCE7; color: #166534; }
