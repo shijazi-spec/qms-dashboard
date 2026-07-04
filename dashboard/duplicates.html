@@ -1792,20 +1792,20 @@
 
             <!-- Table -->
             <div class="bg-white rounded-lg shadow overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead id="csLifecycleTableHead" class="bg-gray-50">
+                <table class="rr-table min-w-full">
+                    <thead id="csLifecycleTableHead">
                         <tr>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;severity&quot;]" class="cs-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="severity">Severity <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;account&quot;]" class="cs-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="account" title="Account name (top line) and domain (bottom line, mono).">Account / Domain <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;phase&quot;]" class="cs-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="phase">Phase <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">CS Owner</th>
-                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase" title="Three CS lifecycle dates stacked: Since (Customer Since) / Renew (Renewal Date) / Churn (Churn Date).">Lifecycle Dates</th>
-                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap" title="ExtID (Admin) — Zoho custom field. Set the API name via the DUPLICATE_RADAR_FIELD_EXT_ID env var if your tenant uses a non-default field name.">ExtID</th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;days&quot;]" class="cs-lifecycle-sort px-2 py-2 text-end text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="days" title="Days since the deal was last modified in Zoho.">Idle (d) <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="violation" title="Violation pills (top) and the human-readable explanation message (below). Click to sort by worst violation code.">Violation / Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;severity&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="severity">Severity <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;account&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="account" title="Account name (top line) and domain (bottom line, mono).">Account / Domain <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;phase&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="phase">Phase <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" class="whitespace-nowrap">CS Owner</th>
+                            <th scope="col" title="Three CS lifecycle dates stacked: Since (Customer Since) / Renew (Renewal Date) / Churn (Churn Date).">Lifecycle Dates</th>
+                            <th scope="col" class="whitespace-nowrap" title="ExtID (Admin) — Zoho custom field. Set the API name via the DUPLICATE_RADAR_FIELD_EXT_ID env var if your tenant uses a non-default field name.">ExtID</th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;days&quot;]" class="rr-num cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="days" title="Days since the deal was last modified in Zoho.">Idle (d) <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="violation" title="Violation pills (top) and the human-readable explanation message (below). Click to sort by worst violation code.">Violation / Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                         </tr>
                     </thead>
-                    <tbody id="csLifecycleTable" class="bg-white divide-y divide-gray-200">
+                    <tbody id="csLifecycleTable">
                         <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
                     </tbody>
                 </table>
@@ -1960,19 +1960,19 @@
 
             <!-- Table -->
             <div class="bg-white rounded-lg shadow overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead id="dealLifecycleTableHead" class="bg-gray-50">
+                <table class="rr-table min-w-full">
+                    <thead id="dealLifecycleTableHead">
                         <tr>
-                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;severity&quot;]" class="deal-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="severity">Severity <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;deal&quot;]" class="deal-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="deal">Deal / Account <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;stage&quot;]" class="deal-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="stage">Stage <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;owner&quot;]" class="deal-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="owner">Owner <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;aging&quot;]" class="deal-lifecycle-sort px-2 py-2 text-end text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="aging" title="Aging in the unit the SOP defines for that stage (business days for Not Attend Meeting / Meeting, calendar days otherwise).">Aging <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">SLA / Clause</th>
-                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase">Suggested action</th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;severity&quot;]" class="deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="severity">Severity <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;deal&quot;]" class="deal-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="deal">Deal / Account <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;stage&quot;]" class="deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="stage">Stage <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;owner&quot;]" class="deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="owner">Owner <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;aging&quot;]" class="rr-num deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="aging" title="Aging in the unit the SOP defines for that stage (business days for Not Attend Meeting / Meeting, calendar days otherwise).">Aging <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" class="whitespace-nowrap">SLA / Clause</th>
+                            <th scope="col">Suggested action</th>
                         </tr>
                     </thead>
-                    <tbody id="dealLifecycleTable" class="bg-white divide-y divide-gray-200">
+                    <tbody id="dealLifecycleTable">
                         <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
                     </tbody>
                 </table>
@@ -2265,7 +2265,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=71"></script>
+    <script src="/js/duplicates-app.js?v=72"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

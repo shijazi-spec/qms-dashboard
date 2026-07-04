@@ -9811,13 +9811,15 @@
         }
 
         function dealLifeSeverityBadge(s) {
-            const map = {
-                critical: 'bg-red-100 text-red-800 border-red-200',
-                warning:  'bg-amber-100 text-amber-800 border-amber-200',
-                info:     'bg-blue-100 text-blue-800 border-blue-200',
-            };
-            const cls = map[s] || 'bg-gray-100 text-gray-800 border-gray-200';
-            return '<span class="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full border ' + cls + '">' + (s || '—').toUpperCase() + '</span>';
+            const map = { critical: 'rr-warn rr-dot', warning: 'rr-amber rr-dot', info: 'rr-info' };
+            const cls = map[s] || 'rr-neutral';
+            return '<span class="rr-badge ' + cls + '">' + (s || '—').toUpperCase() + '</span>';
+        }
+        // Shared lifecycle severity → row stripe class (CS + Deals lifecycle).
+        function lifeSeveritySev(s) {
+            if (s === 'critical') return 'rr-sev-warn';
+            if (s === 'warning')  return 'rr-sev-amber';
+            return 'rr-sev-info';
         }
 
         async function loadDealLifecycle() {
@@ -9916,20 +9918,21 @@
                 const slaLabel = v.unit === 'business_days'
                     ? (v.sla_units + ' BD')
                     : (v.sla_units + ' days');
-                const dealCell = (r.deal_name ? '<div class="font-medium text-gray-900">' + escapeHtml(r.deal_name) + '</div>' : '')
-                    + (r.account_name ? '<div class="text-xs text-gray-500">' + escapeHtml(r.account_name) + '</div>' : '');
+                const dealCell = (r.deal_name ? '<div class="rr-primary">' + escapeHtml(r.deal_name) + '</div>' : '')
+                    + (r.account_name ? '<div class="rr-sub">' + escapeHtml(r.account_name) + '</div>' : '');
                 const ownerCell = (r.owner_name ? '<div>' + escapeHtml(r.owner_name) + '</div>' : '<span class="text-gray-400">—</span>')
-                    + (r.owner_email ? '<div class="text-[10px] text-gray-500 font-mono">' + escapeHtml(r.owner_email) + '</div>' : '');
-                const stageCell = '<div class="font-medium text-gray-800">' + escapeHtml(r.stage) + '</div>'
-                    + (r.pipeline ? '<div class="text-[10px] text-gray-500">' + escapeHtml(r.pipeline) + '</div>' : '');
-                return '<tr class="hover:bg-orange-50">'
-                    + '<td class="px-2 py-2 align-top">' + dealLifeSeverityBadge(v.severity) + '</td>'
-                    + '<td class="px-2 py-2 align-top">' + dealCell + '</td>'
-                    + '<td class="px-2 py-2 align-top">' + stageCell + '</td>'
-                    + '<td class="px-2 py-2 align-top text-xs text-gray-700">' + ownerCell + '</td>'
-                    + '<td class="px-2 py-2 align-top text-end font-semibold ' + (v.severity === 'critical' ? 'text-red-700' : v.severity === 'warning' ? 'text-amber-700' : 'text-gray-700') + '">' + (v.aging_units ?? '—') + ' ' + unitLabel + '<div class="text-[10px] font-normal text-gray-500">' + (v.aging_calendar_days ?? '—') + ' calendar d</div></td>'
-                    + '<td class="px-2 py-2 align-top text-xs"><div class="font-mono text-gray-800">≤ ' + escapeHtml(slaLabel) + '</div><div class="text-[10px] text-gray-500">Sales SOP §' + escapeHtml(v.clause_ref) + '</div></td>'
-                    + '<td class="px-2 py-2 align-top text-xs text-gray-700">' + escapeHtml(v.suggested_action || v.message || '') + '</td>'
+                    + (r.owner_email ? '<div class="rr-sub" style="font-family:ui-monospace,Menlo,Consolas,monospace">' + escapeHtml(r.owner_email) + '</div>' : '');
+                const stageCell = '<div class="rr-primary">' + escapeHtml(r.stage) + '</div>'
+                    + (r.pipeline ? '<div class="rr-sub">' + escapeHtml(r.pipeline) + '</div>' : '');
+                const agingColor = v.severity === 'critical' ? '#B91C1C' : v.severity === 'warning' ? '#B45309' : '';
+                return '<tr class="' + lifeSeveritySev(v.severity) + '" style="vertical-align:top">'
+                    + '<td class="rr-lead">' + dealLifeSeverityBadge(v.severity) + '</td>'
+                    + '<td>' + dealCell + '</td>'
+                    + '<td>' + stageCell + '</td>'
+                    + '<td class="rr-muted">' + ownerCell + '</td>'
+                    + '<td class="rr-num rr-strong"' + (agingColor ? ' style="color:' + agingColor + '"' : '') + '>' + (v.aging_units ?? '—') + ' ' + unitLabel + '<div class="rr-sub" style="text-align:end">' + (v.aging_calendar_days ?? '—') + ' calendar d</div></td>'
+                    + '<td class="rr-mono">≤ ' + escapeHtml(slaLabel) + '<div class="rr-sub">Sales SOP §' + escapeHtml(v.clause_ref) + '</div></td>'
+                    + '<td class="rr-muted">' + escapeHtml(v.suggested_action || v.message || '') + '</td>'
                     + '</tr>';
             }).join('');
         }
@@ -10041,12 +10044,12 @@
 
         function csLifeSeverityBadge(s) {
             const map = {
-                critical: { bg: 'bg-red-100',    fg: 'text-red-700',    label: 'CRITICAL' },
-                warning:  { bg: 'bg-amber-100',  fg: 'text-amber-700',  label: 'WARNING'  },
-                info:     { bg: 'bg-blue-100',   fg: 'text-blue-700',   label: 'INFO'     },
+                critical: { cls: 'rr-warn rr-dot',  label: 'CRITICAL' },
+                warning:  { cls: 'rr-amber rr-dot', label: 'WARNING'  },
+                info:     { cls: 'rr-info',         label: 'INFO'     },
             };
-            const m = map[s] || { bg: 'bg-gray-100', fg: 'text-gray-600', label: (s || '—').toUpperCase() };
-            return '<span class="px-2 py-1 text-xs font-bold rounded ' + m.bg + ' ' + m.fg + '">' + m.label + '</span>';
+            const m = map[s] || { cls: 'rr-neutral', label: (s || '—').toUpperCase() };
+            return '<span class="rr-badge ' + m.cls + '">' + m.label + '</span>';
         }
 
         function csLifeViolationLabel(code) {
@@ -10485,8 +10488,8 @@
                 // Account + Domain stacked into one cell. Domain in mono
                 // font and 10px so it reads as a secondary label.
                 const accountDomainCell =
-                    '<div class="text-xs text-gray-800 leading-tight">' + accountCell + '</div>'
-                    + '<div class="text-[10px] font-mono text-gray-500 leading-tight">' + escapeHtml(g.domain || '—') + '</div>';
+                    '<div class="rr-primary leading-tight">' + accountCell + '</div>'
+                    + '<div class="rr-sub leading-tight" style="font-family:ui-monospace,Menlo,Consolas,monospace">' + escapeHtml(g.domain || '—') + '</div>';
                 // Three lifecycle dates stacked with mini labels. Same
                 // pattern as the Created column on the duplicate tabs.
                 const fmtDate = (d) => (d == null || d === '') ? '—' : escapeHtml(String(d));
@@ -10505,15 +10508,15 @@
                 const violationCell =
                     '<div class="flex flex-wrap gap-1 mb-1">' + violationPills + '</div>'
                     + '<div class="text-[11px] text-gray-700 leading-snug">' + messageStack + '</div>';
-                return '<tr class="hover:bg-gray-50 align-top">'
-                    + '<td class="px-2 py-2 whitespace-nowrap">' + csLifeSeverityBadge(g.worst_severity) + countSuffix + '</td>'
-                    + '<td class="px-2 py-2">' + accountDomainCell + '</td>'
-                    + '<td class="px-2 py-2 text-xs text-gray-800 whitespace-nowrap">' + escapeHtml(g.current_phase || '—') + '</td>'
-                    + '<td class="px-2 py-2 text-xs text-gray-700">' + escapeHtml(g.cs_owner_name || '—') + '</td>'
-                    + '<td class="px-2 py-2">' + datesCell + '</td>'
-                    + '<td class="px-2 py-2 text-[11px] font-mono text-gray-700 whitespace-nowrap">' + escapeHtml(g.ext_id == null || g.ext_id === '' ? '—' : String(g.ext_id)) + '</td>'
-                    + '<td class="px-2 py-2 text-xs text-end text-gray-600 whitespace-nowrap">' + (g.days_since_modified == null ? '—' : g.days_since_modified) + '</td>'
-                    + '<td class="px-2 py-2">' + violationCell + '</td>'
+                return '<tr class="' + lifeSeveritySev(g.worst_severity) + '" style="vertical-align:top">'
+                    + '<td class="rr-lead" style="white-space:nowrap">' + csLifeSeverityBadge(g.worst_severity) + countSuffix + '</td>'
+                    + '<td>' + accountDomainCell + '</td>'
+                    + '<td class="rr-muted" style="white-space:nowrap">' + escapeHtml(g.current_phase || '—') + '</td>'
+                    + '<td class="rr-muted">' + escapeHtml(g.cs_owner_name || '—') + '</td>'
+                    + '<td>' + datesCell + '</td>'
+                    + '<td class="rr-mono" style="white-space:nowrap">' + escapeHtml(g.ext_id == null || g.ext_id === '' ? '—' : String(g.ext_id)) + '</td>'
+                    + '<td class="rr-num rr-muted" style="white-space:nowrap">' + (g.days_since_modified == null ? '—' : g.days_since_modified) + '</td>'
+                    + '<td>' + violationCell + '</td>'
                     + '</tr>';
             }).join('');
 
