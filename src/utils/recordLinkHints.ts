@@ -1,5 +1,4 @@
 import { pool } from "./duplicateRadarDatabase";
-import { extractDomain } from "./duplicateRadarDatabase";
 import { realDomainRoot } from "./preflightStructuredPush";
 import { logger } from "./logger";
 import { updateZohoRecord } from "./zohoCRM";
@@ -122,10 +121,11 @@ export async function inferAccountForContact(
 ): Promise<LinkHint | null> {
   if (!contactNeedsAccount(contact.raw_data)) return null;
 
+  // realDomainRoot filters out free-mail/placeholder domains (gmail, hotmail,
+  // "#n", …) — use it as the FIRST resolver, not a fallback, so a contact whose
+  // domain column is literally "gmail.com" can't be linked to a bogus account.
   const domain =
-    (contact.domain && contact.domain.trim()) ||
     realDomainRoot(contact.domain) ||
-    (contact.email ? extractDomain(contact.email) : null) ||
     (contact.email ? realDomainRoot(contact.email) : null);
   const normDomain = String(domain || "").trim().toLowerCase();
   if (!normDomain) return null;
@@ -271,11 +271,22 @@ export async function inferContactForDeal(
 export async function scanRecordLinkHints(): Promise<{ contact_account: number; deal_contact: number }> {
   const t0 = Date.now();
 
+  // Pre-filter needs-help in SQL (mirrors contactNeedsAccount) so the scan
+  // loads only contacts missing an account, not the whole table. The JS
+  // predicate below stays as the authority for any edge the SQL misses.
   const contactsRes = await pool.query(
     `SELECT id, zoho_record_id, record_name, company_name, email, domain,
             account_name, contact_name, raw_data, cluster_id
        FROM duplicate_records
-      WHERE record_type = 'contact'`,
+      WHERE record_type = 'contact'
+        AND (
+          raw_data->'Account_Name' IS NULL
+          OR (
+            raw_data->'Account_Name'->>'id' IS NULL
+            AND LOWER(TRIM(COALESCE(raw_data->'Account_Name'->>'name', '')))
+                IN ('', '-', 'n/a', 'na', 'none', 'null', 'unknown', 'test')
+          )
+        )`,
   );
 
   for (const row of contactsRes.rows) {
@@ -286,11 +297,13 @@ export async function scanRecordLinkHints(): Promise<{ contact_account: number; 
     await upsertLinkHint(hint);
   }
 
+  // Pre-filter to deals with no primary contact (mirrors dealNeedsContact).
   const dealsRes = await pool.query(
     `SELECT id, zoho_record_id, record_name, company_name, email, domain,
             account_name, contact_name, raw_data, cluster_id
        FROM duplicate_records
-      WHERE record_type = 'deal'`,
+      WHERE record_type = 'deal'
+        AND raw_data->'Contact_Name'->>'id' IS NULL`,
   );
 
   for (const row of dealsRes.rows) {

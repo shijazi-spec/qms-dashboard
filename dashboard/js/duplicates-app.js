@@ -271,16 +271,15 @@
         function _cmoPaintTiles(totalClusters, counts, arrSum) {
             const totalEl    = document.getElementById('cmoTotal');
             const ladEl      = document.getElementById('cmoLeadActiveDeal');
-            const linkEl     = document.getElementById('cmoLinkGaps');
+            const linkEl     = document.getElementById('cmoLinkGaps'); // now the "3+ modules" tile
             const clientsEl  = document.getElementById('cmoExistingClients');
             const arrEl      = document.getElementById('cmoArr');
-            const linkGaps =
-                (counts.contact_account_link || 0) +
-                (counts.deal_account_link || 0) +
-                (counts.contact_deal_link || 0);
             if (totalEl)   totalEl.textContent   = _fn(totalClusters);
             if (ladEl)     ladEl.textContent     = _fn(counts.lead_vs_active_deal || 0);
-            if (linkEl)    linkEl.textContent    = _fn(linkGaps);
+            // The 3 pure-linking pairings moved to Record Hint and are excluded
+            // from this tab, so the old contact/deal/account "link gaps" sum was
+            // inflated (mixed clusters triple-count). Show the real 3+-module count.
+            if (linkEl)    linkEl.textContent    = _fn(counts.three_plus_modules || 0);
             if (clientsEl) clientsEl.textContent = _fn(counts.existing_client_cs_owned || 0);
             if (arrEl)     arrEl.textContent     = formatCurrency(Number(arrSum || 0));
         }
