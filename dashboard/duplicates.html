@@ -322,63 +322,63 @@
                 <strong>Executive summary.</strong> Cross-module headline counts for every duplicate the radar is tracking right now — total clusters, records inside those clusters, ARR exposure, and a creation-rate trend so leadership can see whether duplicate hygiene is improving week over week. Use this tab for status reporting; drill into the per-module tabs (Leads, Deals, Contacts, Accounts) to act on individual clusters.
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-blue-600" title="Active clusters with 2 or more records of the same kind. Singleton clusters (1 record alone) are excluded — they aren't duplicates. This is the number to act on.">
-                    <div class="text-xs text-gray-500" data-i18n="duplicates.true_duplicates">True Duplicates</div>
-                    <div id="totalClusters" data-testid="text-total-clusters" class="text-xl font-bold text-blue-600">-</div>
-                    <div class="text-xs text-gray-600">clusters</div>
+                <div class="rr-kpi" title="Active clusters with 2 or more records of the same kind. Singleton clusters (1 record alone) are excluded — they aren't duplicates. This is the number to act on.">
+                    <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.true_duplicates">True Duplicates</div>
+                    <div id="totalClusters" data-testid="text-total-clusters" class="rr-kpi-value">-</div>
+                    <div class="rr-kpi-sub">clusters</div>
                     <div class="mt-1.5 flex items-end justify-between gap-1 min-h-[20px]">
                         <div id="clustersSparkline" data-testid="sparkline-clusters"></div>
                         <div id="clustersDelta" data-testid="delta-clusters"></div>
                     </div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-amber-500" title="Number of Lead records that should be deleted to deduplicate — every Lead in an active duplicate cluster EXCEPT the chosen survivor. Rate = this count ÷ total Leads in the radar. Matches the 2% KPI target framing.">
-                    <div class="text-xs text-gray-500" data-i18n="duplicates.dup_leads">Dup Leads</div>
-                    <div id="totalLeads" data-testid="text-total-leads" class="text-xl font-bold text-amber-600">-</div>
-                    <div id="leadRate" class="text-xs text-amber-700">-% rate</div>
+                <div class="rr-kpi" title="Number of Lead records that should be deleted to deduplicate — every Lead in an active duplicate cluster EXCEPT the chosen survivor. Rate = this count ÷ total Leads in the radar. Matches the 2% KPI target framing.">
+                    <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.dup_leads">Dup Leads</div>
+                    <div id="totalLeads" data-testid="text-total-leads" class="rr-kpi-value rr-amber">-</div>
+                    <div id="leadRate" class="rr-kpi-sub">-% rate</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-red-500" title="Number of Deal records that should be deleted to deduplicate — every Deal in an active duplicate cluster EXCEPT the survivor. Rate = this count ÷ total Deals.">
-                    <div class="text-xs text-gray-500" data-i18n="duplicates.dup_deals">Dup Deals</div>
-                    <div id="totalDeals" data-testid="text-total-deals" class="text-xl font-bold text-red-600">-</div>
-                    <div id="dealRate" class="text-xs text-red-600">-% rate</div>
+                <div class="rr-kpi" title="Number of Deal records that should be deleted to deduplicate — every Deal in an active duplicate cluster EXCEPT the survivor. Rate = this count ÷ total Deals.">
+                    <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.dup_deals">Dup Deals</div>
+                    <div id="totalDeals" data-testid="text-total-deals" class="rr-kpi-value rr-warn">-</div>
+                    <div id="dealRate" class="rr-kpi-sub">-% rate</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-teal-500" title="Contact records that should be deleted to deduplicate — actionable count, excluding the survivor in each cluster.">
-                    <div class="text-xs text-gray-500" data-i18n="duplicates.dup_contacts">Dup Contacts</div>
-                    <div id="totalContacts" data-testid="text-total-contacts" class="text-xl font-bold text-teal-600">-</div>
+                <div class="rr-kpi" title="Contact records that should be deleted to deduplicate — actionable count, excluding the survivor in each cluster.">
+                    <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.dup_contacts">Dup Contacts</div>
+                    <div id="totalContacts" data-testid="text-total-contacts" class="rr-kpi-value">-</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-indigo-500" title="Account records that should be deleted to deduplicate — actionable count, excluding the survivor in each cluster.">
-                    <div class="text-xs text-gray-500" data-i18n="duplicates.dup_accounts">Dup Accounts</div>
-                    <div id="totalAccounts" data-testid="text-total-accounts" class="text-xl font-bold text-indigo-600">-</div>
+                <div class="rr-kpi" title="Account records that should be deleted to deduplicate — actionable count, excluding the survivor in each cluster.">
+                    <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.dup_accounts">Dup Accounts</div>
+                    <div id="totalAccounts" data-testid="text-total-accounts" class="rr-kpi-value">-</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-red-500" title="True duplicate clusters where confidence_level = 'high' (≥90% match score). These are the safest to auto-resolve.">
-                    <div class="text-xs text-gray-500">Strong</div>
-                    <div id="highConfidence" data-testid="text-high-confidence" class="text-xl font-bold text-red-600">-</div>
-                    <div class="text-xs text-red-600">≥90%</div>
+                <div class="rr-kpi" title="True duplicate clusters where confidence_level = 'high' (≥90% match score). These are the safest to auto-resolve.">
+                    <div class="rr-kpi-label" style="text-transform:none;">Strong</div>
+                    <div id="highConfidence" data-testid="text-high-confidence" class="rr-kpi-value rr-warn">-</div>
+                    <div class="rr-kpi-sub">≥90%</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-yellow-500" title="True duplicate clusters at 60–89% match — review before acting.">
-                    <div class="text-xs text-gray-500">Moderate</div>
-                    <div id="mediumConfidence" data-testid="text-medium-confidence" class="text-xl font-bold text-yellow-800">-</div>
-                    <div class="text-xs text-yellow-700">60-89%</div>
+                <div class="rr-kpi" title="True duplicate clusters at 60–89% match — review before acting.">
+                    <div class="rr-kpi-label" style="text-transform:none;">Moderate</div>
+                    <div id="mediumConfidence" data-testid="text-medium-confidence" class="rr-kpi-value rr-amber">-</div>
+                    <div class="rr-kpi-sub">60-89%</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-purple-500" title="Sum of Deal.Amount across the duplicate clusters' non-survivor records — the SAR exposure currently inflating pipeline reporting because the same opportunity is counted multiple times.">
-                    <div class="text-xs text-gray-500" data-i18n="duplicates.pipeline_inflation">Pipeline Inflation</div>
-                    <div id="pipelineInflation" data-testid="text-pipeline-inflation" class="text-xl font-bold text-purple-600">-</div>
+                <div class="rr-kpi" title="Sum of Deal.Amount across the duplicate clusters' non-survivor records — the SAR exposure currently inflating pipeline reporting because the same opportunity is counted multiple times.">
+                    <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.pipeline_inflation">Pipeline Inflation</div>
+                    <div id="pipelineInflation" data-testid="text-pipeline-inflation" class="rr-kpi-value">-</div>
                 </div>
             </div>
 
             <!-- D4: Total cleanup actions + Resolution Rate + KPI Gauge + Last Scan -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div class="bg-white rounded-lg shadow p-4" title="Every ACTION taken across the Duplicate Radar action tabs — duplicate merges + dismissals, Empty-Delete tags (Empty/Orphaned), and Account-Hints links. Monitoring tabs (Deal Compliance, CS Lifecycle, Preflight) are checks, not actions, so they're excluded. Cross-module overlaps ARE duplicate clusters, so their resolutions are already counted under merges (shown separately below to avoid double-counting).">
-                    <div class="text-sm font-medium text-gray-500 mb-2">Total cleanup actions <span class="text-[10px] text-gray-400">· all tabs</span></div>
-                    <div id="cleanupTotal" data-testid="text-cleanup-total" class="text-3xl font-bold text-indigo-600">-</div>
-                    <div class="text-xs text-gray-400 mt-1" id="cleanupBreakdown">—</div>
+                <div class="rr-kpi" title="Every ACTION taken across the Duplicate Radar action tabs — duplicate merges + dismissals, Empty-Delete tags (Empty/Orphaned), and Account-Hints links. Monitoring tabs (Deal Compliance, CS Lifecycle, Preflight) are checks, not actions, so they're excluded. Cross-module overlaps ARE duplicate clusters, so their resolutions are already counted under merges (shown separately below to avoid double-counting).">
+                    <div class="rr-kpi-label" style="text-transform:none;">Total cleanup actions <span class="text-[10px] text-gray-400">· all tabs</span></div>
+                    <div id="cleanupTotal" data-testid="text-cleanup-total" class="text-3xl font-bold text-indigo-600 mt-1">-</div>
+                    <div class="rr-kpi-sub" id="cleanupBreakdown">—</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4" title="Share of DUPLICATE-cluster work that is closed (this metric is duplicates only — the Total cleanup actions card to the left covers every tab). Numerator = resolved + dismissed. Denominator = true duplicate clusters (active) + resolved + dismissed. Singleton (non-duplicate) clusters are excluded so the rate isn't diluted to 0%.">
-                    <div class="text-sm font-medium text-gray-500 mb-2" data-i18n="duplicates.resolution_rate">Duplicate Resolution Rate</div>
-                    <div id="resolutionRate" data-testid="text-resolution-rate" class="text-3xl font-bold text-green-600">-</div>
-                    <div class="text-xs text-gray-400 mt-1"><span id="resolvedCount">0</span> resolved + <span id="ignoredCount">0</span> dismissed</div>
+                <div class="rr-kpi" title="Share of DUPLICATE-cluster work that is closed (this metric is duplicates only — the Total cleanup actions card to the left covers every tab). Numerator = resolved + dismissed. Denominator = true duplicate clusters (active) + resolved + dismissed. Singleton (non-duplicate) clusters are excluded so the rate isn't diluted to 0%.">
+                    <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.resolution_rate">Duplicate Resolution Rate</div>
+                    <div id="resolutionRate" data-testid="text-resolution-rate" class="text-3xl font-bold text-green-600 mt-1">-</div>
+                    <div class="rr-kpi-sub"><span id="resolvedCount">0</span> resolved + <span id="ignoredCount">0</span> dismissed</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-sm font-medium text-gray-500 mb-2" title="Whole-system duplicate rate — actionable duplicate records across ALL modules (Leads + Deals + Contacts + Accounts) over the total record count. Company target is ≤2% (SDR-KPI-09). The Leads-only rate is on the Dup Leads card above; per-module rates are on the Owner Accountability tab.">Overall Duplicate Rate — all modules (target ≤ 2%)</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label" style="text-transform:none;" title="Whole-system duplicate rate — actionable duplicate records across ALL modules (Leads + Deals + Contacts + Accounts) over the total record count. Company target is ≤2% (SDR-KPI-09). The Leads-only rate is on the Dup Leads card above; per-module rates are on the Owner Accountability tab.">Overall Duplicate Rate — all modules (target ≤ 2%)</div>
                     <div class="flex items-end gap-4">
                         <div>
                             <div id="kpiGaugeValue" data-testid="text-kpi-gauge" class="text-3xl font-bold text-blue-600">-</div>
@@ -397,9 +397,9 @@
                         </div>
                     </div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-sm font-medium text-gray-500 mb-2">Sync Activity</div>
-                    <div id="lastSyncDate" data-testid="text-last-sync" class="text-base font-bold text-gray-800">Never</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label" style="text-transform:none;">Sync Activity</div>
+                    <div id="lastSyncDate" data-testid="text-last-sync" class="text-base font-bold text-gray-800 mt-1">Never</div>
                     <div id="lastSyncRelative" class="text-[11px] text-gray-500 mt-0.5"></div>
                     <div class="border-t border-gray-100 my-2"></div>
                     <div class="text-[10px] uppercase tracking-wide text-gray-400">Last full rebuild</div>
@@ -480,25 +480,25 @@
                         <div class="chart-container"><canvas id="creationTrendChart" role="img" aria-label="Duplicate creation trend: line chart showing new duplicate records per week" aria-describedby="creationTrendChart-summary"></canvas><table id="creationTrendChart-summary" class="sr-only"><caption>Duplicate Creation Trend</caption><thead><tr><th scope="col">Week</th><th scope="col">New duplicates</th><th scope="col">Duplicate rate</th></tr></thead><tbody></tbody></table></div>
                     </div>
                     <div class="lg:col-span-1 space-y-3">
-                        <div class="bg-gray-50 rounded p-3" title="How many NEW Zoho records created in the latest week ended up in a duplicate cluster. Lower is better.">
-                            <div class="text-xs text-gray-500">New duplicates this week</div>
-                            <div id="trendLatestCount" class="text-2xl font-bold text-gray-900" data-testid="text-trend-latest-count">—</div>
-                            <div id="trendLatestDelta" class="text-xs font-medium text-gray-500" data-testid="text-trend-delta">vs previous week: —</div>
+                        <div class="rr-kpi" title="How many NEW Zoho records created in the latest week ended up in a duplicate cluster. Lower is better.">
+                            <div class="rr-kpi-label" style="text-transform:none;">New duplicates this week</div>
+                            <div id="trendLatestCount" class="rr-kpi-value" data-testid="text-trend-latest-count">—</div>
+                            <div id="trendLatestDelta" class="rr-kpi-sub" data-testid="text-trend-delta">vs previous week: —</div>
                         </div>
-                        <div class="bg-gray-50 rounded p-3" title="The latest week's duplicate creation rate = new duplicates ÷ all new records that week. Target ≤ 2%. This is the leading indicator — when it drops below 2% your prevention is working.">
-                            <div class="text-xs text-gray-500">Last week's dup rate</div>
-                            <div id="trendLatestRate" class="text-2xl font-bold text-gray-900" data-testid="text-trend-latest-rate">—</div>
-                            <div id="trendRateVsTarget" class="text-[11px] text-gray-400">Target ≤ 2%</div>
+                        <div class="rr-kpi" title="The latest week's duplicate creation rate = new duplicates ÷ all new records that week. Target ≤ 2%. This is the leading indicator — when it drops below 2% your prevention is working.">
+                            <div class="rr-kpi-label" style="text-transform:none;">Last week's dup rate</div>
+                            <div id="trendLatestRate" class="rr-kpi-value" data-testid="text-trend-latest-rate">—</div>
+                            <div id="trendRateVsTarget" class="rr-kpi-sub">Target ≤ 2%</div>
                         </div>
-                        <div class="bg-gray-50 rounded p-3" title="Total new duplicates created across the whole window selected above. Useful for total volume sanity checks.">
-                            <div class="text-xs text-gray-500">Window total</div>
-                            <div id="trendWindowTotal" class="text-2xl font-bold text-gray-900" data-testid="text-trend-window-total">—</div>
-                            <div class="text-[11px] text-gray-400">New duplicates in window</div>
+                        <div class="rr-kpi" title="Total new duplicates created across the whole window selected above. Useful for total volume sanity checks.">
+                            <div class="rr-kpi-label" style="text-transform:none;">Window total</div>
+                            <div id="trendWindowTotal" class="rr-kpi-value" data-testid="text-trend-window-total">—</div>
+                            <div class="rr-kpi-sub">New duplicates in window</div>
                         </div>
-                        <div class="bg-gray-50 rounded p-3" title="Average new duplicates per week over the selected window. The baseline you're trying to beat.">
-                            <div class="text-xs text-gray-500">Weekly average (window)</div>
-                            <div id="trendWindowAvg" class="text-2xl font-bold text-gray-900" data-testid="text-trend-window-avg">—</div>
-                            <div id="trendVsAvg" class="text-[11px] text-gray-400">Latest vs avg: —</div>
+                        <div class="rr-kpi" title="Average new duplicates per week over the selected window. The baseline you're trying to beat.">
+                            <div class="rr-kpi-label" style="text-transform:none;">Weekly average (window)</div>
+                            <div id="trendWindowAvg" class="rr-kpi-value" data-testid="text-trend-window-avg">—</div>
+                            <div id="trendVsAvg" class="rr-kpi-sub">Latest vs avg: —</div>
                         </div>
                     </div>
                 </div>
@@ -528,13 +528,13 @@
                 <h3 class="text-lg font-semibold mb-4" data-i18n="duplicates.sec_hygiene">Data Hygiene KPIs</h3>
                 <p class="text-xs text-gray-500 mb-4">Lead / Deal rates moved to the headline cards above (single source of truth, matching the 2% target). These two tiles are unique to this section.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="p-4 bg-gray-50 rounded-lg" title="Distinct email domains that have more than one open Deal attached. Useful for spotting same-customer pipeline duplication where Account_Name was set inconsistently.">
-                        <div class="text-sm text-gray-500" data-i18n="duplicates.kpi_multi_deals">Domains with Multiple Deals</div>
-                        <div id="kpiMultiDeal" data-testid="text-kpi-multi-deal" class="text-xl font-bold text-blue-600">-</div>
+                    <div class="rr-kpi" title="Distinct email domains that have more than one open Deal attached. Useful for spotting same-customer pipeline duplication where Account_Name was set inconsistently.">
+                        <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.kpi_multi_deals">Domains with Multiple Deals</div>
+                        <div id="kpiMultiDeal" data-testid="text-kpi-multi-deal" class="rr-kpi-value">-</div>
                     </div>
-                    <div class="p-4 bg-gray-50 rounded-lg" title="Active duplicate clusters — same definition as 'True Duplicates' top-left. Singleton clusters (1 record alone) are excluded because they aren't duplicates.">
-                        <div class="text-sm text-gray-500">Active Duplicate Clusters</div>
-                        <div id="kpiActive" data-testid="text-kpi-active" class="text-xl font-bold text-blue-600">-</div>
+                    <div class="rr-kpi" title="Active duplicate clusters — same definition as 'True Duplicates' top-left. Singleton clusters (1 record alone) are excluded because they aren't duplicates.">
+                        <div class="rr-kpi-label" style="text-transform:none;">Active Duplicate Clusters</div>
+                        <div id="kpiActive" data-testid="text-kpi-active" class="rr-kpi-value">-</div>
                     </div>
                 </div>
             </div>
@@ -670,12 +670,12 @@
             </div>
             <!-- Summary cards (consistent with CS Lifecycle) -->
             <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
-                <div class="rounded-lg border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">In scope</div><div id="dcCardScope" class="text-2xl font-bold text-gray-900">—</div></div>
-                <div class="rounded-lg border border-green-200 bg-green-50 p-3"><div class="text-xs text-green-700">Compliant</div><div id="dcCardOk" class="text-2xl font-bold text-green-700">—</div></div>
-                <div class="rounded-lg border border-red-200 bg-red-50 p-3"><div class="text-xs text-red-700">Missing docs</div><div id="dcCardMissing" class="text-2xl font-bold text-red-700">—</div></div>
-                <div class="rounded-lg border border-red-300 bg-red-50 p-3" title="Total deal Amount (SAR) of deals with missing documents"><div class="text-xs text-red-700">Amount at risk (SAR)</div><div id="dcCardAtRisk" class="text-2xl font-bold text-red-700">—</div></div>
-                <div class="rounded-lg border border-amber-200 bg-amber-50 p-3"><div class="text-xs text-amber-700">Not yet checked</div><div id="dcCardPending" class="text-2xl font-bold text-amber-700">—</div></div>
-                <div class="rounded-lg border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">Scanned (Zoho)</div><div id="dcCardScanned" class="text-2xl font-bold text-gray-900">—</div></div>
+                <div class="rr-kpi"><div class="rr-kpi-label">In scope</div><div id="dcCardScope" class="rr-kpi-value">—</div></div>
+                <div class="rr-kpi"><div class="rr-kpi-label">Compliant</div><div id="dcCardOk" class="rr-kpi-value rr-good">—</div></div>
+                <div class="rr-kpi"><div class="rr-kpi-label">Missing docs</div><div id="dcCardMissing" class="rr-kpi-value rr-warn">—</div></div>
+                <div class="rr-kpi" title="Total deal Amount (SAR) of deals with missing documents"><div class="rr-kpi-label">Amount at risk (SAR)</div><div id="dcCardAtRisk" class="rr-kpi-value rr-warn">—</div></div>
+                <div class="rr-kpi"><div class="rr-kpi-label">Not yet checked</div><div id="dcCardPending" class="rr-kpi-value rr-amber">—</div></div>
+                <div class="rr-kpi"><div class="rr-kpi-label">Scanned (Zoho)</div><div id="dcCardScanned" class="rr-kpi-value">—</div></div>
             </div>
             <div id="dealComplianceSummary" class="text-sm text-gray-600 mb-2">—</div>
             <!-- Toolbar — same right-aligned layout as Lead/Deal/Contact/Account
@@ -1673,25 +1673,25 @@
 
             <!-- Summary -->
             <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-red-500">
-                    <div class="text-xs text-red-600 uppercase">Critical</div>
-                    <div id="csLifeSumCritical" class="text-2xl font-bold text-red-700">—</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Critical</div>
+                    <div id="csLifeSumCritical" class="rr-kpi-value rr-warn">—</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-amber-500">
-                    <div class="text-xs text-amber-600 uppercase">Warning</div>
-                    <div id="csLifeSumWarning" class="text-2xl font-bold text-amber-700">—</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Warning</div>
+                    <div id="csLifeSumWarning" class="rr-kpi-value rr-amber">—</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-blue-400">
-                    <div class="text-xs text-blue-700 uppercase">Info</div>
-                    <div id="csLifeSumInfo" class="text-2xl font-bold text-blue-700">—</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Info</div>
+                    <div id="csLifeSumInfo" class="rr-kpi-value">—</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-gray-300">
-                    <div class="text-xs text-gray-600 uppercase">CS Deals scanned</div>
-                    <div id="csLifeSumDeals" class="text-2xl font-bold text-gray-700">—</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">CS deals scanned</div>
+                    <div id="csLifeSumDeals" class="rr-kpi-value">—</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-green-500">
-                    <div class="text-xs text-green-700 uppercase">Total violations</div>
-                    <div id="csLifeSumTotal" class="text-2xl font-bold text-green-700">—</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Total violations</div>
+                    <div id="csLifeSumTotal" class="rr-kpi-value">—</div>
                 </div>
             </div>
 
@@ -1843,25 +1843,25 @@
 
             <!-- Summary cards -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-red-500">
-                    <div class="text-xs text-red-600 uppercase">Critical</div>
-                    <div id="dealLifeSumCritical" class="text-2xl font-bold text-red-700">—</div>
-                    <div class="text-[10px] text-gray-500 mt-0.5">Past 1.5× SOP allowance</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Critical</div>
+                    <div id="dealLifeSumCritical" class="rr-kpi-value rr-warn">—</div>
+                    <div class="rr-kpi-sub">Past 1.5× SOP allowance</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-amber-500">
-                    <div class="text-xs text-amber-600 uppercase">Warning</div>
-                    <div id="dealLifeSumWarning" class="text-2xl font-bold text-amber-700">—</div>
-                    <div class="text-[10px] text-gray-500 mt-0.5">Crossed SOP threshold</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Warning</div>
+                    <div id="dealLifeSumWarning" class="rr-kpi-value rr-amber">—</div>
+                    <div class="rr-kpi-sub">Crossed SOP threshold</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-gray-300">
-                    <div class="text-xs text-gray-600 uppercase">Deals scanned</div>
-                    <div id="dealLifeSumDeals" class="text-2xl font-bold text-gray-700">—</div>
-                    <div class="text-[10px] text-gray-500 mt-0.5">Tracked-stage deals only</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Deals scanned</div>
+                    <div id="dealLifeSumDeals" class="rr-kpi-value">—</div>
+                    <div class="rr-kpi-sub">Tracked-stage deals only</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-orange-500">
-                    <div class="text-xs text-orange-700 uppercase">Total violations</div>
-                    <div id="dealLifeSumTotal" class="text-2xl font-bold text-orange-700">—</div>
-                    <div class="text-[10px] text-gray-500 mt-0.5">Critical + Warning</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Total violations</div>
+                    <div id="dealLifeSumTotal" class="rr-kpi-value rr-amber">—</div>
+                    <div class="rr-kpi-sub">Critical + Warning</div>
                 </div>
             </div>
 
