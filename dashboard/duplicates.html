@@ -994,6 +994,7 @@
             <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
                 <button data-on-click="exportCrossModule" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of exactly the cross-module overlap clusters shown below, in the current order and pairing filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="reconcileDeletedRecords" id="cmoReconcileDeletedBtn" title="Verify a batch of records against live Zoho and prune the ones deleted/merged in the CRM. Incremental sync doesn't report deletions, so this clears rows that were resolved in Zoho but still show here. Rotates through all records over repeated runs. Requires admin key." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-200 text-rose-900 hover:bg-rose-300">🧹 Verify &amp; prune deleted</button>
                 <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;cross-module&quot;]" data-testid="button-open-capa-cross-module" title="Open a corrective-action record (CAPA) on one of the cross-module clusters below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
@@ -2153,7 +2154,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=65"></script>
+    <script src="/js/duplicates-app.js?v=66"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

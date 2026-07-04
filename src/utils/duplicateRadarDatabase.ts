@@ -1003,10 +1003,17 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       is_mock_data BOOLEAN DEFAULT FALSE,
       raw_data JSONB,
       cleanup_class TEXT,
+      last_verified_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS last_verified_at TIMESTAMP`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_verified ON duplicate_records(last_verified_at ASC NULLS FIRST)`,
+  );
   await pool.query(
     `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS phone_normalized VARCHAR(50)`,
   );

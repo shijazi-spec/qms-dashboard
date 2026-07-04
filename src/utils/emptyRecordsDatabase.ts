@@ -879,6 +879,88 @@ export async function reconcileEmptyDeleteDeletions(
   return { checked, nowDeleted, nowDismissed };
 }
 
+/** General deletion-reconcile: verify a ROTATING batch of duplicate_records
+ * against LIVE Zoho and PRUNE the ones that are gone (deleted or merged in the
+ * CRM). Incremental sync (If-Modified-Since) never reports deletions, so without
+ * this a record deleted in Zoho lingers in the mirror and keeps its cluster
+ * showing on every tab. Rotates by last_verified_at so repeated runs sweep the
+ * whole table; bounded batch + small concurrency to stay polite with Zoho.
+ * Best-effort: individual fetch errors are swallowed. */
+export async function reconcileDeletedRecords(
+  opts: { module?: string; limit?: number } = {},
+): Promise<{ checked: number; pruned: number }> {
+  const { fetchZohoRecordById } = await import("./zohoCRM");
+  const mod = opts.module || null;
+  const limit = Math.min(2000, Math.max(1, Math.floor(opts.limit ?? 300)));
+
+  const batch = await pool.query<{ zoho_record_id: string; record_type: string | null; zoho_module: string | null }>(
+    `SELECT zoho_record_id, record_type, zoho_module
+       FROM duplicate_records
+      WHERE zoho_record_id IS NOT NULL AND zoho_record_id <> ''
+        AND ($1::text IS NULL OR record_type = $1)
+      ORDER BY last_verified_at ASC NULLS FIRST
+      LIMIT $2`,
+    [mod, limit],
+  );
+
+  const moduleOf = (rt: string | null | undefined, zm: string | null | undefined): string => {
+    if (zm) return zm;
+    const t = (rt || "").toLowerCase();
+    if (t === "deal") return "Deals";
+    if (t === "contact") return "Contacts";
+    if (t === "account") return "Accounts";
+    return "Leads";
+  };
+
+  let checked = 0;
+  let pruned = 0;
+  const CONCURRENCY = 4;
+  for (let i = 0; i < batch.rows.length; i += CONCURRENCY) {
+    const chunk = batch.rows.slice(i, i + CONCURRENCY);
+    await Promise.all(chunk.map(async (row) => {
+      const id = row.zoho_record_id;
+      const module = moduleOf(row.record_type, row.zoho_module);
+      try {
+        let rec: Awaited<ReturnType<typeof fetchZohoRecordById>> = null;
+        try {
+          rec = await fetchZohoRecordById(module, id);
+        } catch (e) {
+          if (isZohoGhostError(e)) {
+            await pruneGhostRecords([id]);
+            pruned++; checked++;
+            return;
+          }
+          checked++; // transient/non-ghost error → leave it for the next pass
+          return;
+        }
+        if (!rec) {
+          await pruneGhostRecords([id]); // 204/404 — gone from Zoho
+          pruned++;
+        } else {
+          await pool.query(
+            `UPDATE duplicate_records SET last_verified_at = NOW() WHERE zoho_record_id = $1`,
+            [id],
+          );
+        }
+        checked++;
+      } catch {
+        checked++;
+      }
+    }));
+  }
+
+  // Pruning can leave a cluster below 2 records — drop those singleton clusters
+  // so a formerly-duplicate cluster stops showing once its dups are gone.
+  if (pruned > 0) {
+    try {
+      const db: any = await import("./duplicateRadarDatabase");
+      if (typeof db.cleanupSingletonClusters === "function") await db.cleanupSingletonClusters();
+    } catch { /* best-effort */ }
+  }
+
+  return { checked, pruned };
+}
+
 // Contacts: name-only (no email/phone/account/deal) OR test-name.
 export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
   const q = await pool.query(

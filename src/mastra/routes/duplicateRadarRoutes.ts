@@ -11124,6 +11124,31 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Admin-gated: general deletion-reconcile — verify a rotating batch of
+    // records against live Zoho and PRUNE the ones deleted/merged in the CRM
+    // (incremental sync never reports deletions, so they linger + keep their
+    // cluster showing). POST /api/duplicates/reconcile-deleted { module?, limit? }
+    path: "/api/duplicates/reconcile-deleted",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const module = body?.module ? String(body.module) : undefined;
+        const limit = typeof body?.limit === "number" ? body.limit : undefined;
+        const { reconcileDeletedRecords } = await import("../../utils/emptyRecordsDatabase");
+        const r = await reconcileDeletedRecords({ module, limit });
+        return c.json({ success: true, ...r });
+      } catch (e: any) {
+        logger.error("reconcile-deleted failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
     // Admin-gated: manually trigger the deletion-reconcile pass (also runs
     // automatically on every post-sync).  Checks pending_delete rows against
     // live Zoho; stamps ledger 'deleted' + prunes mirror when gone.

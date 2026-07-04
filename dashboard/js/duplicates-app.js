@@ -325,6 +325,26 @@
             loadCrossModule();
         }
 
+        // Verify a batch of records against live Zoho and prune the ones deleted
+        // in the CRM. Incremental sync never reports deletions, so this is what
+        // clears rows that were resolved/deleted in Zoho but still show here.
+        async function reconcileDeletedRecords() {
+            const btn = document.getElementById('cmoReconcileDeletedBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '🧹 Verifying…'; }
+            try {
+                const j = await erAdminPost('/api/duplicates/reconcile-deleted', { limit: 300 });
+                if (!j) return; // cancelled at the admin-key prompt
+                if (!j.success) { alert('Verify failed: ' + (j.error || 'unknown')); return; }
+                alert('Verified ' + (j.checked || 0) + ' record(s) · pruned ' + (j.pruned || 0) + ' that were deleted in Zoho.\n\nRuns in batches (oldest-checked first) — click again to sweep more of the CRM.');
+                if (typeof loadCrossModule === 'function') loadCrossModule();
+            } catch (e) {
+                alert('Verify failed: ' + (e && e.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
         // Mark a cross-module overlap as HANDLED. This is MODULE-SCOPED (bug
         // #4 fix): it only acknowledges the cross-module relationship (e.g.
         // Lead<->Account) — it does NOT resolve the whole cluster, so a
