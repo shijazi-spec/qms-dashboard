@@ -8107,6 +8107,34 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // HITL apply for a stalled deal — close (Stage=Closed Lost) or reengage
+    // (Stage forward). Admin-gated Zoho write; never deletes.
+    //   POST /api/duplicates/record-hints/stale-deals/apply { dealZohoId, action }
+    path: "/api/duplicates/record-hints/stale-deals/apply",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const dealZohoId = String(body?.dealZohoId ?? "").trim();
+        const action =
+          body?.action === "close" ? "close" : body?.action === "reengage" ? "reengage" : null;
+        if (!dealZohoId || !action) {
+          return c.json({ error: "dealZohoId and action (close|reengage) required" }, 400);
+        }
+        const { applyStaleDealDisposition } = await import("../../utils/recordLinkHints");
+        const r = await applyStaleDealDisposition(dealZohoId, action);
+        return c.json({ success: r.applied, ...r });
+      } catch (e: any) {
+        logger.error("record-hints/stale-deals/apply failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
     //   ?status=pending|dismissed|applied (default pending)
     //   ?limit=N (default 500, max 2000)
     path: "/api/duplicates/record-hints",

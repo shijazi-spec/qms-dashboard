@@ -670,3 +670,32 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
     };
   });
 }
+
+const CLOSE_STAGE = process.env.RECORD_HINT_CLOSE_STAGE || "Closed Lost";
+const REENGAGE_STAGE = process.env.RECORD_HINT_REENGAGE_STAGE || "New Deal";
+
+/** HITL apply for a stalled deal. close → set Stage = Closed Lost; reengage →
+ * move the Stage to an active working stage. A Zoho write (updateZohoRecord) —
+ * never deletes. Also updates the mirror's stage so the deal drops off the
+ * stale-deals scan before the next sync. Stages are env-configurable. */
+export async function applyStaleDealDisposition(
+  dealZohoId: string,
+  action: "close" | "reengage",
+): Promise<{ applied: boolean; stage: string; reason?: string }> {
+  const id = String(dealZohoId || "").trim();
+  if (!id) return { applied: false, stage: "", reason: "missing_deal_id" };
+  const stage = action === "close" ? CLOSE_STAGE : REENGAGE_STAGE;
+  try {
+    await updateZohoRecord("Deals", id, { Stage: stage });
+  } catch (e: any) {
+    return { applied: false, stage, reason: e?.message || String(e) };
+  }
+  try {
+    await pool.query(
+      `UPDATE duplicate_records SET stage = $2 WHERE zoho_record_id = $1 AND record_type = 'deal'`,
+      [id, stage],
+    );
+  } catch { /* best-effort mirror refresh */ }
+  logger.info(`[recordLinkHints] stale-deal ${action} → ${id} Stage=${stage}`);
+  return { applied: true, stage };
+}

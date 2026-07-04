@@ -8545,17 +8545,37 @@
                 body.innerHTML = deals.map(function (d) {
                     const dealLink = '<a href="' + erZohoUrl('deals', d.dealZohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">' + escapeHtml(d.dealName) + '</a>';
                     const acctCell = d.accountName ? escapeHtml(d.accountName) : '<span class="text-gray-400">— none —</span>';
+                    const actions = '<div class="mt-1 whitespace-nowrap">'
+                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + escapeHtml(d.dealZohoId) + '&quot;,&quot;close&quot;]" title="Set this deal\'s Stage to Closed Lost in Zoho." class="px-2 py-0.5 rounded text-[10px] font-medium border border-red-300 text-red-700 hover:bg-red-50 me-1">Close</button>'
+                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + escapeHtml(d.dealZohoId) + '&quot;,&quot;reengage&quot;]" title="Move this deal\'s Stage forward into the active pipeline in Zoho." class="px-2 py-0.5 rounded text-[10px] font-medium border border-green-300 text-green-700 hover:bg-green-50">Re-engage</button>'
+                        + '</div>';
                     return '<tr class="hover:bg-gray-50">'
                         + '<td class="px-3 py-2 text-xs">' + dealLink + '</td>'
                         + '<td class="px-3 py-2 text-xs text-gray-700">' + acctCell + '</td>'
                         + '<td class="px-3 py-2 text-xs"><span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800">' + escapeHtml(d.stage || '—') + '</span></td>'
-                        + '<td class="px-3 py-2 text-xs">' + dispPill(d.disposition) + ' <span class="text-gray-500">' + escapeHtml(d.reason || '') + '</span></td>'
+                        + '<td class="px-3 py-2 text-xs">' + dispPill(d.disposition) + ' <span class="text-gray-500">' + escapeHtml(d.reason || '') + '</span>' + actions + '</td>'
                         + '</tr>';
                 }).join('');
             } catch (e) {
                 body.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-sm text-amber-700">Error: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
+        // HITL apply for a stalled deal — close (Closed Lost) or re-engage.
+        async function applyStaleDeal(dealZohoId, action) {
+            const what = action === 'close'
+                ? 'CLOSE this deal — set Stage = Closed Lost'
+                : 'RE-ENGAGE this deal — move its Stage forward into the active pipeline';
+            if (!confirm('Apply in Zoho now?\n\n' + what + '.\n\nThis is a real change on the deal in Zoho (reversible by editing the deal). Nothing else is touched.')) return;
+            try {
+                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/apply', { dealZohoId: dealZohoId, action: action });
+                if (!j) return; // cancelled at the admin-key prompt
+                if (!j.success) { alert('Apply failed: ' + (j.reason || j.error || 'unknown')); return; }
+                loadStaleDeals(); // re-scan — the deal is now re-staged and drops off
+            } catch (e) {
+                alert('Apply failed: ' + (e && e.message || e));
             }
         }
 
