@@ -1128,7 +1128,17 @@ export async function findRecordIdsByPhones(module: string, phones: string[]): P
  * characters, so the query is always well-formed. */
 export async function findAccountIdsByDomains(domains: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  const clean = Array.from(new Set(domains.map(d => String(d || "").trim().toLowerCase()).filter(Boolean)));
+  // Only search values shaped like a real domain (letters/digits/dot/hyphen).
+  // A malformed "domain" (a space, comma, parenthesis, Arabic text, a whole
+  // company name mistakenly in the domain field, …) breaks Zoho's criteria
+  // syntax → "400 Invalid query formed" and fails the WHOLE push. Dropping a
+  // bad value here just means that company falls back to the name/cluster
+  // resolver — never data loss.
+  const clean = Array.from(new Set(
+    domains
+      .map(d => String(d || "").trim().toLowerCase())
+      .filter(d => /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(d)),
+  ));
   const CHUNK = 5;
   for (let s = 0; s < clean.length; s += CHUNK) {
     const chunk = clean.slice(s, s + CHUNK);
