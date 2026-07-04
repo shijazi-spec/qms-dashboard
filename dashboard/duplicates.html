@@ -19,6 +19,18 @@
         html.wp-dark .tab-inactive:hover { background-color: #334155; color: #F1F5F9; }
         html.wp-dark .read-only-badge { background: #6366F1; }
         html.wp-dark .cluster-card:hover { border-color: #3B82F6; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+        /* SaaS phase 2 — flat KPI/metric tiles. Neutral value; add .rr-warn for a
+           semantic-red warning KPI. Dark-aware. */
+        .rr-kpi { background: #F9FAFB; border-radius: 10px; padding: 14px 16px; }
+        html.wp-dark .rr-kpi { background: #1E293B; }
+        .rr-kpi-label { font-size: 12px; color: #6B7280; }
+        html.wp-dark .rr-kpi-label { color: #94A3B8; }
+        .rr-kpi-value { font-size: 22px; font-weight: 500; margin-top: 2px; color: #111827; }
+        html.wp-dark .rr-kpi-value { color: #F8FAFC; }
+        .rr-kpi-value.rr-warn { color: #B91C1C; }
+        html.wp-dark .rr-kpi-value.rr-warn { color: #F87171; }
+        .rr-kpi-sub { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
+        html.wp-dark .rr-kpi-sub { color: #64748B; }
         .confidence-high { background-color: #FEE2E2; color: #991B1B; }
         .confidence-medium { background-color: #FEF3C7; color: #92400E; }
         .confidence-low { background-color: #DCFCE7; color: #166534; }
@@ -967,30 +979,30 @@
                  numbers are recomputed from the filtered cluster list when
                  the operator narrows by Advanced Filters / chip / search. -->
             <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500">Total open</div>
-                    <div id="cmoTotal" class="text-2xl font-bold text-gray-900 mt-1" data-testid="text-cmo-total">—</div>
-                    <div class="text-[10px] text-gray-400">Actionable clusters</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Total open</div>
+                    <div id="cmoTotal" class="rr-kpi-value" data-testid="text-cmo-total">—</div>
+                    <div class="rr-kpi-sub">Actionable clusters</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500">Lead ↔ Active Deal</div>
-                    <div id="cmoLeadActiveDeal" class="text-2xl font-bold text-rose-700 mt-1" data-testid="text-cmo-lead-active-deal">—</div>
-                    <div class="text-[10px] text-gray-400">Close the redundant Lead</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Lead ↔ active deal</div>
+                    <div id="cmoLeadActiveDeal" class="rr-kpi-value rr-warn" data-testid="text-cmo-lead-active-deal">—</div>
+                    <div class="rr-kpi-sub">Close the redundant lead</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500" title="Clusters spanning 3+ modules (compound cases). Contact/Deal/Account link gaps now live in the Record Hint tab.">3+ modules</div>
-                    <div id="cmoLinkGaps" class="text-2xl font-bold text-indigo-700 mt-1" data-testid="text-cmo-link-gaps">—</div>
-                    <div class="text-[10px] text-gray-400">Set Account_Name / Contact_Name</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label" title="Clusters spanning 3+ modules (compound cases). Contact/Deal/Account link gaps now live in the Record Hint tab.">3+ modules</div>
+                    <div id="cmoLinkGaps" class="rr-kpi-value" data-testid="text-cmo-link-gaps">—</div>
+                    <div class="rr-kpi-sub">Compound cases</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500">Existing clients</div>
-                    <div id="cmoExistingClients" class="text-2xl font-bold text-red-700 mt-1" data-testid="text-cmo-existing-clients">—</div>
-                    <div class="text-[10px] text-gray-400">CS owns — do not pursue</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Existing clients</div>
+                    <div id="cmoExistingClients" class="rr-kpi-value rr-warn" data-testid="text-cmo-existing-clients">—</div>
+                    <div class="rr-kpi-sub">CS owns — do not pursue</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500">ARR exposure</div>
-                    <div id="cmoArr" class="text-2xl font-bold text-gray-900 mt-1" data-testid="text-cmo-arr">—</div>
-                    <div class="text-[10px] text-gray-400">Sum of pipeline value</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">ARR exposure</div>
+                    <div id="cmoArr" class="rr-kpi-value" data-testid="text-cmo-arr">—</div>
+                    <div class="rr-kpi-sub">Sum of pipeline value</div>
                 </div>
             </div>
 
