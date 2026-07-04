@@ -2,6 +2,7 @@ import { pool } from "./duplicateRadarDatabase";
 import { extractDomain } from "./duplicateRadarDatabase";
 import { realDomainRoot } from "./preflightStructuredPush";
 import { logger } from "./logger";
+import { updateZohoRecord } from "./zohoCRM";
 
 // Placeholder / non-real account labels (mirror accountInference.ts).
 export const PLACEHOLDER_ACCOUNTS = new Set(["", "-", "n/a", "na", "none", "null", "unknown", "test"]);
@@ -347,4 +348,222 @@ async function upsertLinkHint(hint: LinkHint): Promise<void> {
       hint.confidence,
     ],
   );
+}
+
+export type RecordLinkHintType = "contact_account" | "deal_contact";
+
+const LINK_TYPE_TO_FIELD: Record<RecordLinkHintType, "Account_Name" | "Contact_Name"> = {
+  contact_account: "Account_Name",
+  deal_contact: "Contact_Name",
+};
+
+export interface RecordLinkHintRow {
+  id: number;
+  source_record_id: number;
+  source_type: string;
+  source_zoho_id: string | null;
+  source_record_name: string | null;
+  link_field: string;
+  current_value: string | null;
+  suggested_target_record_id: number | null;
+  suggested_target_zoho_id: string | null;
+  suggested_target_name: string | null;
+  suggested_domain: string | null;
+  evidence_record_id: number | null;
+  evidence_detail: string | null;
+  confidence: number;
+  status: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * List record_link_hints rows for the dashboard, mirroring
+ * listAccountInferenceHints's join-for-display + status/limit filtering.
+ * `type` maps to the hint's link_field (contact_account -> Account_Name,
+ * deal_contact -> Contact_Name); omit it to return both kinds together.
+ */
+export async function listRecordLinkHints(opts: {
+  type?: RecordLinkHintType;
+  status?: string;
+  limit?: number;
+}): Promise<{
+  hints: RecordLinkHintRow[];
+  summary: { pending: number; dismissed: number; applied: number };
+}> {
+  const limit = Math.max(1, Math.min(opts.limit ?? 500, 2000));
+  const status = opts.status && ["pending", "dismissed", "applied"].includes(opts.status)
+    ? opts.status
+    : "pending";
+  const linkField = opts.type ? LINK_TYPE_TO_FIELD[opts.type] : null;
+
+  const params: any[] = [status];
+  let linkFieldClause = "";
+  if (linkField) {
+    params.push(linkField);
+    linkFieldClause = `AND h.link_field = $${params.length}`;
+  }
+  params.push(limit);
+  const limitParam = `$${params.length}`;
+
+  const rows = await pool.query(
+    `SELECT h.id,
+            h.source_record_id,
+            h.source_type,
+            s.zoho_record_id  AS source_zoho_id,
+            s.record_name     AS source_record_name,
+            h.link_field,
+            CASE WHEN h.link_field = 'Account_Name' THEN s.account_name
+                 ELSE s.contact_name END AS current_value,
+            h.suggested_target_record_id,
+            h.suggested_target_zoho_id,
+            h.suggested_target_name,
+            h.suggested_domain,
+            h.evidence_record_id,
+            h.evidence_detail,
+            h.confidence,
+            h.status,
+            h.created_at,
+            h.updated_at
+       FROM record_link_hints h
+       LEFT JOIN duplicate_records s ON s.id = h.source_record_id
+      WHERE h.status = $1
+        ${linkFieldClause}
+      ORDER BY h.confidence DESC, h.updated_at DESC
+      LIMIT ${limitParam}`,
+    params,
+  );
+
+  const summaryRes = await pool.query(
+    `SELECT status, COUNT(*)::int AS n
+       FROM record_link_hints
+      ${linkField ? "WHERE link_field = $1" : ""}
+      GROUP BY status`,
+    linkField ? [linkField] : [],
+  );
+  const summary = { pending: 0, dismissed: 0, applied: 0 };
+  for (const s of summaryRes.rows) {
+    if (s.status === "pending") summary.pending = s.n;
+    else if (s.status === "dismissed") summary.dismissed = s.n;
+    else if (s.status === "applied") summary.applied = s.n;
+  }
+  return { hints: rows.rows, summary };
+}
+
+/**
+ * AI-resolve a single Record-Link-Hint row: write the suggested target
+ * directly onto the Zoho source record's link field, then mark the hint
+ * applied. Generic over module/field — both come from the hint row itself
+ * (source_type -> module, link_field -> the field to write), unlike
+ * aiResolveAccountHint which is hard-coded to Deals/Account_Name. Refuses to
+ * act when confidence is below the threshold (default 70%).
+ */
+export async function aiResolveRecordLinkHint(
+  id: number,
+  minConfidence = 70,
+): Promise<{ applied: boolean; confidence: number; reason?: string }> {
+  const res = await pool.query(
+    `SELECT h.id, h.status, h.confidence, h.link_field, h.source_type,
+            s.zoho_record_id AS source_zoho_id,
+            h.suggested_target_zoho_id
+       FROM record_link_hints h
+       JOIN duplicate_records s ON s.id = h.source_record_id
+      WHERE h.id = $1
+      LIMIT 1`,
+    [id],
+  );
+  const row = res.rows[0];
+  if (!row) {
+    return { applied: false, confidence: 0, reason: "not_found" };
+  }
+  if (row.status !== "pending") {
+    return {
+      applied: false,
+      confidence: Number(row.confidence || 0),
+      reason: `already_${row.status}`,
+    };
+  }
+  const confidence = Number(row.confidence || 0);
+  if (confidence < minConfidence) {
+    return { applied: false, confidence, reason: "below_threshold" };
+  }
+
+  const sourceModule = row.source_type === "contact" ? "Contacts" : "Deals";
+  const linkField = row.link_field as "Account_Name" | "Contact_Name";
+  const sourceZohoId = row.source_zoho_id as string | null;
+  const targetZohoId = row.suggested_target_zoho_id as string | null;
+  if (!sourceZohoId || !targetZohoId) {
+    return { applied: false, confidence, reason: "missing_zoho_ids" };
+  }
+
+  try {
+    await updateZohoRecord(sourceModule, sourceZohoId, {
+      [linkField]: { id: targetZohoId },
+    });
+  } catch (e: any) {
+    return { applied: false, confidence, reason: e?.message || String(e) };
+  }
+
+  await pool.query(
+    `UPDATE record_link_hints
+        SET status = 'applied',
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1`,
+    [id],
+  );
+  logger.info(
+    `[recordLinkHints] AI-resolved hint #${id}: ${sourceModule} ${sourceZohoId} → ${linkField} ${targetZohoId} (confidence ${confidence}%)`,
+  );
+  return { applied: true, confidence };
+}
+
+/**
+ * Bulk AI-resolve every pending record_link_hints row at-or-above the
+ * confidence threshold, optionally scoped to one link type. Sequential to
+ * keep Zoho call rate under the per-account ceiling, mirroring
+ * aiResolveAllAccountHints.
+ */
+export async function aiResolveAllRecordLinkHints(opts: {
+  type?: RecordLinkHintType;
+  minConfidence?: number;
+  limit?: number;
+} = {}): Promise<{ applied: number; skipped: number }> {
+  const minConfidence = opts.minConfidence ?? 70;
+  const limit = Math.max(1, Math.min(opts.limit ?? 200, 1000));
+  const linkField = opts.type ? LINK_TYPE_TO_FIELD[opts.type] : null;
+
+  const params: any[] = [minConfidence];
+  let linkFieldClause = "";
+  if (linkField) {
+    params.push(linkField);
+    linkFieldClause = `AND link_field = $${params.length}`;
+  }
+  params.push(limit);
+  const limitParam = `$${params.length}`;
+
+  const candidates = await pool.query(
+    `SELECT id FROM record_link_hints
+      WHERE status = 'pending' AND confidence >= $1
+        ${linkFieldClause}
+      ORDER BY confidence DESC, id ASC
+      LIMIT ${limitParam}`,
+    params,
+  );
+
+  let applied = 0;
+  let skipped = 0;
+  for (const c of candidates.rows) {
+    try {
+      const r = await aiResolveRecordLinkHint(c.id, minConfidence);
+      if (r.applied) applied++;
+      else skipped++;
+    } catch {
+      skipped++;
+    }
+  }
+
+  logger.info(
+    `[recordLinkHints] Bulk AI-resolve: applied=${applied} skipped=${skipped} (type=${opts.type || "all"})`,
+  );
+  return { applied, skipped };
 }
