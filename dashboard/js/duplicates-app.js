@@ -8512,6 +8512,53 @@
             deal_contact: 'recordHintsDealContactScanBtn',
         };
 
+        // Record Hint section 4 — stalled/Unaccounted deals with a suggested
+        // disposition. Read-only (suggestions only); apply is a later HITL step.
+        async function loadStaleDeals() {
+            const body = document.getElementById('staleDealsBody');
+            const summaryEl = document.getElementById('staleDealsSummary');
+            const badge = document.getElementById('staleDealsBadge');
+            const btn = document.getElementById('staleDealsScanBtn');
+            if (!body) return;
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '🔍 Scanning…'; }
+            body.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-sm text-gray-400">Loading…</td></tr>';
+            try {
+                const res = await fetch('/api/duplicates/record-hints/stale-deals', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                const deals = data.deals || [];
+                const s = data.summary || {};
+                if (summaryEl) summaryEl.textContent = deals.length
+                    ? ((s.total || 0) + ' stalled · ' + (s.close || 0) + ' to close · ' + (s.reengage || 0) + ' to re-engage · ' + (s.review || 0) + ' review')
+                    : '';
+                if (badge) { if (deals.length) { badge.textContent = deals.length; badge.classList.remove('hidden'); } else badge.classList.add('hidden'); }
+                if (deals.length === 0) {
+                    body.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-sm text-gray-500">No stalled deals found.</td></tr>';
+                    return;
+                }
+                const dispPill = function (d) {
+                    if (d === 'close') return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">Close</span>';
+                    if (d === 'reengage') return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-800">Re-engage</span>';
+                    return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700">Review</span>';
+                };
+                body.innerHTML = deals.map(function (d) {
+                    const dealLink = '<a href="' + erZohoUrl('deals', d.dealZohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">' + escapeHtml(d.dealName) + '</a>';
+                    const acctCell = d.accountName ? escapeHtml(d.accountName) : '<span class="text-gray-400">— none —</span>';
+                    return '<tr class="hover:bg-gray-50">'
+                        + '<td class="px-3 py-2 text-xs">' + dealLink + '</td>'
+                        + '<td class="px-3 py-2 text-xs text-gray-700">' + acctCell + '</td>'
+                        + '<td class="px-3 py-2 text-xs"><span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800">' + escapeHtml(d.stage || '—') + '</span></td>'
+                        + '<td class="px-3 py-2 text-xs">' + dispPill(d.disposition) + ' <span class="text-gray-500">' + escapeHtml(d.reason || '') + '</span></td>'
+                        + '</tr>';
+                }).join('');
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-sm text-amber-700">Error: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
         async function renderRecordHintsSection(type, tbodyId) {
             const body = document.getElementById(tbodyId);
             if (!body) return;

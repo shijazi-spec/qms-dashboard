@@ -1602,6 +1602,31 @@
                     </table>
                 </div>
             </div>
+
+            <!-- ═══ SECTION 4: Unaccounted deals — decide (close vs re-engage) ═══ -->
+            <div class="mb-4">
+                <h3 class="text-sm font-bold text-gray-900 mb-2">4. Unaccounted deals — decide <span id="staleDealsBadge" class="hidden inline-block min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white text-center align-middle">0</span></h3>
+                <p class="text-xs text-gray-500 mb-2">Deals parked in a stalled stage (e.g. Unaccounted), compared with the company's deal picture. If the company already has a signed/paid deal, the stalled one is redundant &rarr; close it; otherwise re-engage it. Suggestions only &mdash; nothing writes to Zoho here yet.</p>
+                <div class="mb-2">
+                    <button data-on-click="loadStaleDeals" id="staleDealsScanBtn" data-testid="button-stale-deals-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
+                    <span id="staleDealsSummary" class="text-xs text-gray-500"></span>
+                </div>
+                <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Deal</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Account</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Stage</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Suggested</th>
+                            </tr>
+                        </thead>
+                        <tbody id="staleDealsBody" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="4" class="px-4 py-8 text-center text-sm text-gray-500">Click <em>Run scan</em> to find stalled deals.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <!-- ═══ CS LIFECYCLE COMPLIANCE TAB ═══ -->
@@ -2154,7 +2179,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=66"></script>
+    <script src="/js/duplicates-app.js?v=67"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

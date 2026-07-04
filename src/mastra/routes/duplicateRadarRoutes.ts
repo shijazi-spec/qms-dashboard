@@ -8081,6 +8081,32 @@ export const duplicateRadarRoutes = [
   {
     // List record-link hints. Query params:
     //   ?type=contact_account|deal_contact (default both)
+    // Record Hint section 4 — stalled/Unaccounted deals with a suggested
+    // disposition (close vs re-engage) per company deal-picture. Read-only.
+    //   GET /api/duplicates/record-hints/stale-deals?limit=N
+    path: "/api/duplicates/record-hints/stale-deals",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const limit = Number(c.req.query("limit")) || undefined;
+        const { scanStaleDeals } = await import("../../utils/recordLinkHints");
+        const deals = await scanStaleDeals({ limit });
+        const summary = {
+          total: deals.length,
+          close: deals.filter(d => d.disposition === "close").length,
+          reengage: deals.filter(d => d.disposition === "reengage").length,
+          review: deals.filter(d => d.disposition === "review").length,
+        };
+        return c.json({ success: true, deals, summary });
+      } catch (e: any) {
+        logger.error("record-hints/stale-deals failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
     //   ?status=pending|dismissed|applied (default pending)
     //   ?limit=N (default 500, max 2000)
     path: "/api/duplicates/record-hints",

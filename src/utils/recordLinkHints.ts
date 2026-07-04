@@ -587,3 +587,86 @@ export async function aiResolveAllRecordLinkHints(opts: {
   );
   return { applied, skipped };
 }
+
+// ---------------------------------------------------------------------------
+// Unaccounted / stalled deals — disposition hints (Record Hint section 4).
+// A deal parked in a stalled stage (e.g. "Unaccounted") is compared against its
+// company's deal picture: if the company already has a live signed/paid deal
+// this stalled one is redundant → suggest CLOSE; otherwise there's no live deal
+// to protect → suggest RE-ENGAGE (move it forward). Read-only computation from
+// the synced mirror; the apply (Zoho write) is a separate HITL step.
+// ---------------------------------------------------------------------------
+const STALE_DEAL_STAGES = (process.env.RECORD_HINT_STALE_STAGES || "Unaccounted")
+  .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+const SIGNED_DEAL_STAGES = (process.env.PREFLIGHT_SIGNED_STAGES || "Agreement Signed,Paid")
+  .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+
+export type StaleDealHint = {
+  dealZohoId: string;
+  dealName: string;
+  stage: string;
+  accountZohoId: string | null;
+  accountName: string | null;
+  disposition: "close" | "reengage" | "review";
+  reason: string;
+};
+
+/** Scan the synced mirror for deals in a stalled stage and suggest a
+ * disposition per company deal-picture. Read-only — no Zoho calls, no writes. */
+export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<StaleDealHint[]> {
+  const limit = Math.min(3000, Math.max(1, Math.floor(opts.limit ?? 500)));
+  const dealsRes = await pool.query<{
+    zoho_record_id: string; record_name: string | null; stage: string | null;
+    account_zoho_id: string | null; account_name: string | null;
+  }>(
+    `SELECT zoho_record_id, record_name,
+            COALESCE(NULLIF(stage,''), raw_data->>'Stage') AS stage,
+            raw_data->'Account_Name'->>'id' AS account_zoho_id,
+            account_name
+       FROM duplicate_records
+      WHERE record_type = 'deal'
+        AND LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage', '')) = ANY($1::text[])
+      ORDER BY id
+      LIMIT $2`,
+    [STALE_DEAL_STAGES, limit],
+  );
+  if (dealsRes.rows.length === 0) return [];
+
+  const acctIds = Array.from(new Set(dealsRes.rows.map(r => r.account_zoho_id).filter(Boolean) as string[]));
+  const signedAccts = new Set<string>();
+  if (acctIds.length > 0) {
+    const sr = await pool.query<{ acc: string }>(
+      `SELECT DISTINCT raw_data->'Account_Name'->>'id' AS acc
+         FROM duplicate_records
+        WHERE record_type = 'deal'
+          AND raw_data->'Account_Name'->>'id' = ANY($1::text[])
+          AND LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage', '')) = ANY($2::text[])`,
+      [acctIds, SIGNED_DEAL_STAGES],
+    );
+    for (const r of sr.rows) if (r.acc) signedAccts.add(r.acc);
+  }
+
+  return dealsRes.rows.map((r) => {
+    let disposition: "close" | "reengage" | "review";
+    let reason: string;
+    if (!r.account_zoho_id) {
+      disposition = "review";
+      reason = "No account linked — decide manually.";
+    } else if (signedAccts.has(r.account_zoho_id)) {
+      disposition = "close";
+      reason = "This company already has a signed/paid deal — the stalled deal is redundant.";
+    } else {
+      disposition = "reengage";
+      reason = "No live signed/paid deal for this company — move this deal forward.";
+    }
+    return {
+      dealZohoId: r.zoho_record_id,
+      dealName: r.record_name || "(deal)",
+      stage: r.stage || "",
+      accountZohoId: r.account_zoho_id || null,
+      accountName: r.account_name || null,
+      disposition,
+      reason,
+    };
+  });
+}
