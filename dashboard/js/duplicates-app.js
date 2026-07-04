@@ -425,10 +425,9 @@
                 const isAll = btn.id === 'cmoChip-all';
                 const isMatch = (crossModuleFilter === 'all' && isAll) ||
                                 btn.id === 'cmoChip-' + crossModuleFilter;
-                // Phase 4: one chip shape — active=brand blue, inactive=quiet
-                // outline. The severity dot inside each chip (static markup) is
-                // untouched by the className swap.
-                btn.className = 'rr-chip' + (isMatch ? ' rr-chip-active' : '');
+                // Phase 4/5: one chip shape. Toggle only the active class so the
+                // static rr-sev-* colour + severity dot survive the repaint.
+                btn.classList.toggle('rr-chip-active', isMatch);
             });
             renderCrossModuleTable();
         }
@@ -8215,7 +8214,7 @@
             ['pending','applied','dismissed'].forEach(k => {
                 const el = document.getElementById('accountHintsChip-' + k);
                 if (!el) return;
-                el.className = 'rr-chip' + (k === status ? ' rr-chip-active' : '');
+                el.classList.toggle('rr-chip-active', k === status);
             });
             const body = document.getElementById('accountHintsTable');
             body.innerHTML = rrSkeletonRows(7);
@@ -8995,7 +8994,7 @@
             ['all','block','review','warn'].forEach(k => {
                 const el = document.getElementById('csOverlapChip-' + k);
                 if (!el) return;
-                el.className = 'rr-chip' + (k === window._csOverlapFilter ? ' rr-chip-active' : '');
+                el.classList.toggle('rr-chip-active', k === window._csOverlapFilter);
             });
             const body = document.getElementById('csOverlapTable');
             body.innerHTML = rrSkeletonRows(8);
@@ -9981,7 +9980,7 @@
             ['all','critical','warning','info'].forEach(k => {
                 const el = document.getElementById('dealLifeChip-' + k);
                 if (!el) return;
-                el.className = 'rr-chip' + (k === window._dealLifecycleSeverityFilter ? ' rr-chip-active' : '');
+                el.classList.toggle('rr-chip-active', k === window._dealLifecycleSeverityFilter);
             });
             loadDealLifecycle();
         }
@@ -10190,7 +10189,7 @@
             ['all','critical','warning','info'].forEach(k => {
                 const el = document.getElementById('csLifeChip-' + k);
                 if (!el) return;
-                el.className = 'rr-chip' + (k === window._csLifecycleFilter ? ' rr-chip-active' : '');
+                el.classList.toggle('rr-chip-active', k === window._csLifecycleFilter);
             });
             const body = document.getElementById('csLifecycleTable');
             body.innerHTML = rrSkeletonRows(12);
@@ -12106,9 +12105,9 @@
                             + '<div class="font-semibold text-purple-800 mb-1">✓ Dry-run complete</div>'
                             + '<div>' + line + '</div>'
                             + '<div>Skipped: ' + (resp.skipped_count || 0)
-                                + (resp.no_matched_account_count ? ' (' + resp.no_matched_account_count + ' churned with no existing Account — won\'t be pushed)' : '')
+                                + (resp.no_matched_account_count ? ' (' + resp.no_matched_account_count + ' with no existing Account found — won\'t be pushed)' : '')
                                 + '</div>'
-                            + (resp.active_link_only_count ? '<div class="text-indigo-700">' + resp.active_link_only_count + ' active-account link(s) → contact added, no re-engagement Deal (only churned accounts get a Deal).</div>' : '')
+                            + (resp.live_client_rejected_count ? '<div class="text-rose-700">' + resp.live_client_rejected_count + ' live client(s) → rejected: existing signed/paid deal, routed to CS (not pushed).</div>' : '')
                             + (resp.possible_existing_client_count ? '<div class="text-amber-700 font-medium">⚠ ' + resp.possible_existing_client_count + ' possible existing client(s) — resemble an account we already have; each is tagged in its Description "verify before contacting."</div>' : '')
                             + (action === 1 ? '<div class="text-gray-500 text-[11px]">On push, contacts already in Zoho (by email) are reused, not duplicated.</div>' : '')
                             + eligibleHtml

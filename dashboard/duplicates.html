@@ -71,10 +71,10 @@
         /* standardized status badge */
         .rr-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
         .rr-badge.rr-dot::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; opacity: .9; }
-        .rr-badge.rr-warn  { background: #FEF2F2; color: #B91C1C; }
-        .rr-badge.rr-amber { background: #FFFBEB; color: #B45309; }
-        .rr-badge.rr-good  { background: #F0FDF4; color: #15803D; }
-        .rr-badge.rr-info  { background: #EFF6FF; color: #1D4ED8; }
+        .rr-badge.rr-warn  { background: #FEE2E2; color: #991B1B; }
+        .rr-badge.rr-amber { background: #FEF3C7; color: #92400E; }
+        .rr-badge.rr-good  { background: #DCFCE7; color: #166534; }
+        .rr-badge.rr-info  { background: #DBEAFE; color: #1E40AF; }
         .rr-badge.rr-neutral { background: #F3F4F6; color: #6B7280; }
         html.wp-dark .rr-badge.rr-warn  { background: rgba(248,113,113,.12); color: #F87171; }
         html.wp-dark .rr-badge.rr-amber { background: rgba(251,191,36,.12); color: #FBBF24; }
@@ -119,6 +119,24 @@
         .rr-chip { font-size: 12.5px; font-weight: 500; padding: 6px 13px; border-radius: 999px; border: 1px solid #E5E7EB; background: #fff; color: #6B7280; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; line-height: 1; transition: background .12s, color .12s, border-color .12s; }
         .rr-chip:hover { background: #F9FAFB; color: #111827; }
         .rr-chip.rr-chip-active { background: #1E3A8A; color: #fff; border-color: #1E3A8A; }
+        /* semantic chips — coloured text + tinted border when idle, solid colour
+           when active. The severity is a static class; the active toggle is set
+           by JS via classList so the colour survives a repaint. */
+        .rr-chip.rr-sev-warn  { color: #B91C1C; border-color: #FCA5A5; }
+        .rr-chip.rr-sev-amber { color: #B45309; border-color: #FCD34D; }
+        .rr-chip.rr-sev-good  { color: #15803D; border-color: #86EFAC; }
+        .rr-chip.rr-sev-warn:hover  { background: #FEF2F2; color: #991B1B; }
+        .rr-chip.rr-sev-amber:hover { background: #FFFBEB; color: #92400E; }
+        .rr-chip.rr-sev-good:hover  { background: #F0FDF4; color: #166534; }
+        .rr-chip.rr-sev-warn.rr-chip-active  { background: #B91C1C; color: #fff; border-color: #B91C1C; }
+        .rr-chip.rr-sev-amber.rr-chip-active { background: #B45309; color: #fff; border-color: #B45309; }
+        .rr-chip.rr-sev-good.rr-chip-active  { background: #15803D; color: #fff; border-color: #15803D; }
+        html.wp-dark .rr-chip.rr-sev-warn  { color: #F87171; border-color: rgba(248,113,113,.4); }
+        html.wp-dark .rr-chip.rr-sev-amber { color: #FBBF24; border-color: rgba(251,191,36,.4); }
+        html.wp-dark .rr-chip.rr-sev-good  { color: #4ADE80; border-color: rgba(74,222,128,.4); }
+        html.wp-dark .rr-chip.rr-sev-warn.rr-chip-active  { background: #DC2626; color: #fff; border-color: #DC2626; }
+        html.wp-dark .rr-chip.rr-sev-amber.rr-chip-active { background: #B45309; color: #fff; border-color: #B45309; }
+        html.wp-dark .rr-chip.rr-sev-good.rr-chip-active  { background: #15803D; color: #fff; border-color: #15803D; }
         .rr-chip .rr-chip-n { font-variant-numeric: tabular-nums; font-weight: 600; opacity: .85; }
         .rr-chip .rr-chip-dot { width: 7px; height: 7px; border-radius: 999px; }
         .rr-chip .rr-chip-dot.warn { background: #B91C1C; } .rr-chip .rr-chip-dot.amber { background: #B45309; } .rr-chip .rr-chip-dot.info { background: #1D4ED8; }
@@ -1199,9 +1217,9 @@
                  deal (CS-owned). -->
             <div class="flex flex-wrap gap-2 mb-4" id="cmoChips">
                 <button data-on-click="filterCrossModule" data-args="[&quot;all&quot;]" id="cmoChip-all" data-testid="cmo-chip-all" class="rr-chip rr-chip-active">All</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;lead_deal&quot;]" id="cmoChip-lead_deal" data-testid="cmo-chip-lead-deal" class="rr-chip"><span class="rr-chip-dot warn"></span>Lead ↔ Active Deal</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;mixed&quot;]" id="cmoChip-mixed" data-testid="cmo-chip-mixed" class="rr-chip"><span class="rr-chip-dot amber"></span>3+ modules</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;existing_clients&quot;]" id="cmoChip-existing_clients" data-testid="cmo-chip-existing-clients" class="rr-chip"><span class="rr-chip-dot warn"></span>Existing clients · CS</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;lead_deal&quot;]" id="cmoChip-lead_deal" data-testid="cmo-chip-lead-deal" class="rr-chip rr-sev-warn"><span class="rr-chip-dot warn"></span>Lead ↔ Active Deal</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;mixed&quot;]" id="cmoChip-mixed" data-testid="cmo-chip-mixed" class="rr-chip rr-sev-amber"><span class="rr-chip-dot amber"></span>3+ modules</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;existing_clients&quot;]" id="cmoChip-existing_clients" data-testid="cmo-chip-existing-clients" class="rr-chip rr-sev-warn"><span class="rr-chip-dot warn"></span>Existing clients · CS</button>
             </div>
 
             <!-- Follow-up 3: bulk-close action bar. Visible only when 1+
@@ -1293,9 +1311,9 @@
             <div class="flex flex-wrap items-center gap-2 mb-3">
                 <div class="flex items-center gap-1">
                     <button data-on-click="filterCsOverlap" data-args="[&quot;all&quot;]" id="csOverlapChip-all" data-testid="cs-overlap-chip-all" class="rr-chip rr-chip-active">All</button>
-                    <button data-on-click="filterCsOverlap" data-args="[&quot;block&quot;]" id="csOverlapChip-block" data-testid="cs-overlap-chip-block" class="rr-chip"><span class="rr-chip-dot warn"></span>Block</button>
-                    <button data-on-click="filterCsOverlap" data-args="[&quot;review&quot;]" id="csOverlapChip-review" data-testid="cs-overlap-chip-review" class="rr-chip"><span class="rr-chip-dot amber"></span>Review</button>
-                    <button data-on-click="filterCsOverlap" data-args="[&quot;warn&quot;]" id="csOverlapChip-warn" data-testid="cs-overlap-chip-warn" class="rr-chip"><span class="rr-chip-dot amber"></span>Warn</button>
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;block&quot;]" id="csOverlapChip-block" data-testid="cs-overlap-chip-block" class="rr-chip rr-sev-warn"><span class="rr-chip-dot warn"></span>Block</button>
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;review&quot;]" id="csOverlapChip-review" data-testid="cs-overlap-chip-review" class="rr-chip rr-sev-amber"><span class="rr-chip-dot amber"></span>Review</button>
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;warn&quot;]" id="csOverlapChip-warn" data-testid="cs-overlap-chip-warn" class="rr-chip rr-sev-amber"><span class="rr-chip-dot amber"></span>Warn</button>
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportCsOverlap" id="csOverlapExportBtn" data-testid="button-export-cs-overlap" title="Download a CSV of exactly the CS-overlap clusters shown below, in the current sort order and filter." class="rr-btn rr-btn-ghost me-2">⬇ Export CSV</button>
@@ -1690,8 +1708,8 @@
                 <!-- Filter + scan -->
                 <div class="flex flex-wrap items-center gap-2 mb-3">
                     <div class="flex items-center gap-1">
-                        <button data-on-click="filterAccountHints" data-args="[&quot;pending&quot;]" id="accountHintsChip-pending" class="rr-chip rr-chip-active">Pending</button>
-                        <button data-on-click="filterAccountHints" data-args="[&quot;applied&quot;]" id="accountHintsChip-applied" class="rr-chip">Applied</button>
+                        <button data-on-click="filterAccountHints" data-args="[&quot;pending&quot;]" id="accountHintsChip-pending" class="rr-chip rr-sev-amber rr-chip-active">Pending</button>
+                        <button data-on-click="filterAccountHints" data-args="[&quot;applied&quot;]" id="accountHintsChip-applied" class="rr-chip rr-sev-good">Applied</button>
                         <button data-on-click="filterAccountHints" data-args="[&quot;dismissed&quot;]" id="accountHintsChip-dismissed" class="rr-chip">Dismissed</button>
                     </div>
                     <div class="flex-1"></div>
@@ -1859,8 +1877,8 @@
             <div class="flex flex-wrap items-center gap-2 mb-3">
                 <div class="flex items-center gap-1">
                     <button data-on-click="filterCsLifecycle" data-args="[&quot;all&quot;]" id="csLifeChip-all" class="rr-chip rr-chip-active">All</button>
-                    <button data-on-click="filterCsLifecycle" data-args="[&quot;critical&quot;]" id="csLifeChip-critical" class="rr-chip">Critical</button>
-                    <button data-on-click="filterCsLifecycle" data-args="[&quot;warning&quot;]" id="csLifeChip-warning" class="rr-chip">Warning</button>
+                    <button data-on-click="filterCsLifecycle" data-args="[&quot;critical&quot;]" id="csLifeChip-critical" class="rr-chip rr-sev-warn">Critical</button>
+                    <button data-on-click="filterCsLifecycle" data-args="[&quot;warning&quot;]" id="csLifeChip-warning" class="rr-chip rr-sev-amber">Warning</button>
                     <button data-on-click="filterCsLifecycle" data-args="[&quot;info&quot;]" id="csLifeChip-info" class="rr-chip">Info</button>
                 </div>
                 <!--
@@ -2037,8 +2055,8 @@
             <div class="flex flex-wrap items-center gap-2 mb-3">
                 <div class="flex items-center gap-1">
                     <button data-on-click="filterDealLifecycle" data-args="[&quot;all&quot;]" id="dealLifeChip-all" class="rr-chip rr-chip-active">All</button>
-                    <button data-on-click="filterDealLifecycle" data-args="[&quot;critical&quot;]" id="dealLifeChip-critical" class="rr-chip">Critical</button>
-                    <button data-on-click="filterDealLifecycle" data-args="[&quot;warning&quot;]" id="dealLifeChip-warning" class="rr-chip">Warning</button>
+                    <button data-on-click="filterDealLifecycle" data-args="[&quot;critical&quot;]" id="dealLifeChip-critical" class="rr-chip rr-sev-warn">Critical</button>
+                    <button data-on-click="filterDealLifecycle" data-args="[&quot;warning&quot;]" id="dealLifeChip-warning" class="rr-chip rr-sev-amber">Warning</button>
                     <button data-on-click="filterDealLifecycle" data-args="[&quot;info&quot;]" id="dealLifeChip-info" class="rr-chip">Info</button>
                 </div>
                 <div class="flex items-center gap-1 ms-2">
@@ -2361,7 +2379,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=78"></script>
+    <script src="/js/duplicates-app.js?v=79"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

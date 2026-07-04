@@ -9276,7 +9276,7 @@ export const duplicateRadarRoutes = [
             let wouldDeals = 0;
             let wouldLeads = 0;
             let a1SkippedNoAccount = 0;
-            let a1ActiveLinkOnly = 0; // A1 links to an active account: contact only, no deal
+            let a1LiveRejected = 0; // A1 matched account is a LIVE client (signed/paid) → REJECTED: no contact, no deal
             // Diagnostic: exact companies (1/2/3) the plan would push, so the
             // operator can eyeball the list before firing the real run.
             const a1ResolvedKeys = new Set<string>();
@@ -9303,17 +9303,24 @@ export const duplicateRadarRoutes = [
                 };
               }
             } else if (action === 1) {
-              // A1 re-engages under an EXISTING Account. Resolve the matched
-              // account NOW so the preview is honest: a churned company whose
-              // matched cluster has no Account record is skipped at run time
-              // (reason no_matched_account), not turned into a deal. Without
-              // this, the dry-run over-promises deals it won't actually create.
+              // A1 re-engages under an EXISTING Account. Mirror the REAL run so
+              // the preview's deal count is honest: resolve each company's
+              // account, then run the SAME live-client check the push uses
+              // (Step 1b). A LIVE client (existing signed/paid deal, not churned)
+              // is REJECTED — no contact, no deal. Everything else (never-
+              // converted OR churned-after-renewal) each gets a re-engagement
+              // deal + its contacts, exactly like Step 3. The old preview only
+              // credited a deal to `termination_old` rows, so it under-reported
+              // deals for never-converted accounts (showed 0 when the real push
+              // would create them).
               const {
                 getAccountZohoIdByCluster: resolveAccForPreview,
                 getAccountZohoIdByDomainOrName: resolveAccByDomainName,
               } = await import("../../utils/duplicateRadarDatabase");
               let sampleCo: (typeof plan.companies)[number] | null = null;
               let sampleAccId: string | null = null;
+              // Pass 1: resolve the existing account for every A1 company.
+              const resolvedA1: Array<{ co: (typeof plan.companies)[number]; accId: string }> = [];
               for (const co of plan.companies) {
                 const matchedAcc = co.contacts.map(c => c.matched_account_zoho_id).find(Boolean) || null;
                 const accId =
@@ -9322,20 +9329,29 @@ export const duplicateRadarRoutes = [
                     ? await resolveAccForPreview(co.clusterId)
                     : null) ??
                   (await resolveAccByDomainName(co.domain, co.companyName));
-                if (accId) {
-                  // Deal only for CHURNED accounts; active-client links add the
-                  // contact only. (Existing-contact skipping happens at run time
-                  // via a Zoho email check — not previewed here.)
-                  const isChurnedCo = co.contacts.some(c => c.lifecycle_state === "termination_old");
-                  if (isChurnedCo) wouldDeals += 1; else a1ActiveLinkOnly += 1;
+                if (accId) resolvedA1.push({ co, accId });
+                else a1SkippedNoAccount += 1;
+              }
+              // Pass 2: one batched live-client check (read-only) for the whole
+              // preview — same call the real run makes in Step 1b.
+              let a1LiveSet = new Set<string>();
+              if (resolvedA1.length > 0) {
+                try {
+                  const { getLiveClientAccounts } = await import("../../utils/zohoCRM");
+                  a1LiveSet = await getLiveClientAccounts(resolvedA1.map(x => x.accId));
+                } catch { a1LiveSet = new Set(); }
+              }
+              for (const { co, accId } of resolvedA1) {
+                if (a1LiveSet.has(accId)) {
+                  a1LiveRejected += co.contacts.length; // live client → rejected, not pushed
+                } else {
+                  wouldDeals += 1;                       // never-converted / churned → new deal
                   wouldContacts += co.contacts.length;
                   a1ResolvedKeys.add(co.companyKey);
                   if (!sampleCo) {
                     sampleCo = co;
                     sampleAccId = accId;
                   }
-                } else {
-                  a1SkippedNoAccount += 1;
                 }
               }
               wouldAccounts = 0; // A1 never creates an account.
@@ -9461,7 +9477,7 @@ export const duplicateRadarRoutes = [
               eligible_leads: eligibleLeads,
               skipped_count: plan.skipped.length + a1SkippedNoAccount,
               no_matched_account_count: a1SkippedNoAccount,
-              active_link_only_count: a1ActiveLinkOnly,
+              live_client_rejected_count: a1LiveRejected,
               possible_existing_client_count: possibleClientCount,
               skipped_sample: plan.skipped.slice(0, 10),
             });
