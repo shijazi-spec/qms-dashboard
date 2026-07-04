@@ -135,6 +135,50 @@
         .rr-search input { border: 0; background: transparent; outline: 0; color: #111827; font-family: inherit; font-size: 12.5px; }
         html.wp-dark .rr-search { background: #16233B; border-color: #2B3A52; color: #64748B; }
         html.wp-dark .rr-search input { color: #F1F5F9; }
+        /* SaaS phase 5 — polish. Unified info banner, filter fields, empty +
+           loading states, selection bar. Dark-aware. */
+        .rr-note { border-radius: 10px; padding: 12px 14px; font-size: 12.5px; border: 1px solid; color: #374151; }
+        .rr-note b, .rr-note strong { color: #111827; }
+        .rr-note code { background: rgba(0,0,0,.05); border-radius: 4px; padding: 0 4px; }
+        .rr-note.rr-note-info { background: #EFF6FF; border-color: #BFDBFE; }
+        .rr-note.rr-note-warn { background: #FEF2F2; border-color: #FECACA; }
+        .rr-note.rr-note-amber { background: #FFFBEB; border-color: #FDE68A; }
+        html.wp-dark .rr-note { color: #94A3B8; }
+        html.wp-dark .rr-note b, html.wp-dark .rr-note strong { color: #F1F5F9; }
+        html.wp-dark .rr-note code { background: rgba(255,255,255,.08); }
+        html.wp-dark .rr-note.rr-note-info { background: rgba(96,165,250,.1); border-color: rgba(96,165,250,.28); }
+        html.wp-dark .rr-note.rr-note-warn { background: rgba(248,113,113,.1); border-color: rgba(248,113,113,.28); }
+        html.wp-dark .rr-note.rr-note-amber { background: rgba(251,191,36,.1); border-color: rgba(251,191,36,.28); }
+        /* filter fields */
+        .rr-field { display: flex; flex-direction: column; gap: 5px; }
+        .rr-field label { font-size: 11px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .03em; }
+        .rr-input { font-size: 12.5px; color: #111827; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 7px 11px; width: 100%; }
+        .rr-input:focus-visible, .rr-select:focus-visible { outline: 2px solid #1E3A8A; outline-offset: 1px; }
+        html.wp-dark .rr-field label { color: #94A3B8; }
+        html.wp-dark .rr-input { background: #16233B; color: #F1F5F9; border-color: #2B3A52; }
+        /* empty + loading states */
+        .rr-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 40px 20px; color: #6B7280; }
+        .rr-empty .rr-empty-glyph { width: 40px; height: 40px; border-radius: 10px; background: #F3F4F6; display: grid; place-items: center; font-size: 18px; color: #9CA3AF; margin-bottom: 2px; }
+        .rr-empty .rr-empty-t { font-size: 13.5px; font-weight: 600; color: #111827; }
+        .rr-empty .rr-empty-d { font-size: 12px; max-width: 46ch; }
+        html.wp-dark .rr-empty { color: #94A3B8; }
+        html.wp-dark .rr-empty .rr-empty-glyph { background: #16233B; color: #64748B; }
+        html.wp-dark .rr-empty .rr-empty-t { color: #F1F5F9; }
+        .rr-skel { height: 12px; border-radius: 6px; background: linear-gradient(90deg,#F3F4F6,#E5E7EB,#F3F4F6); background-size: 200% 100%; animation: rrSh 1.3s linear infinite; }
+        html.wp-dark .rr-skel { background: linear-gradient(90deg,#16233B,#1B2740,#16233B); background-size: 200% 100%; }
+        @keyframes rrSh { to { background-position: -200% 0; } }
+        @media (prefers-reduced-motion: reduce) { .rr-skel { animation: none; } }
+        /* selection / bulk-action bar */
+        .rr-bulkbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 14px; border-radius: 10px; background: #EEF2FF; border: 1px solid #C7D2FE; font-size: 12.5px; color: #111827; }
+        .rr-bulkbar .rr-bulkbar-sel { font-weight: 600; }
+        html.wp-dark .rr-bulkbar { background: #1E293B; border-color: #3B4B66; color: #F1F5F9; }
+        /* shared pager (rendered by renderPagination) */
+        .rr-pager-btn { font-size: 12px; padding: 5px 12px; border-radius: 7px; border: 1px solid #E5E7EB; background: #fff; color: #6B7280; cursor: pointer; font-variant-numeric: tabular-nums; font-family: inherit; }
+        .rr-pager-btn:hover { background: #F9FAFB; color: #111827; }
+        .rr-pager-info { font-size: 12.5px; color: #6B7280; font-weight: 500; }
+        html.wp-dark .rr-pager-btn { background: #0F1A2E; color: #94A3B8; border-color: #2B3A52; }
+        html.wp-dark .rr-pager-btn:hover { background: #16233B; color: #F1F5F9; }
+        html.wp-dark .rr-pager-info { color: #94A3B8; }
         .confidence-high { background-color: #FEE2E2; color: #991B1B; }
         .confidence-medium { background-color: #FEF3C7; color: #92400E; }
         .confidence-low { background-color: #DCFCE7; color: #166534; }
@@ -354,15 +398,15 @@
                     <span class="text-[10px] font-normal text-gray-400 ms-1" title="Each tab keeps its own filter selection — switching tabs restores that tab's filters.">· per tab</span>
                 </button>
                 <div class="flex gap-2">
-                    <button data-on-click="applyAdvancedFilters" data-testid="button-apply-filters" class="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Apply</button>
-                    <button data-on-click="clearAllFilters" data-testid="button-clear-filters" class="px-3 py-1 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg">Clear All</button>
+                    <button data-on-click="applyAdvancedFilters" data-testid="button-apply-filters" class="rr-btn rr-btn-primary">Apply</button>
+                    <button data-on-click="clearAllFilters" data-testid="button-clear-filters" class="rr-btn rr-btn-ghost">Clear All</button>
                 </div>
             </div>
             <div id="filterPanelBody" class="hidden">
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Segment <span class="text-gray-400 font-normal" title="Mirrors the Marketplace / Corporate chip at the top of the page.">(mirrors chip)</span></label>
-                        <select id="filterSegment" aria-label="Filter by segment (marketplace / corporate)" data-testid="select-filter-segment" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                        <select id="filterSegment" aria-label="Filter by segment (marketplace / corporate)" data-testid="select-filter-segment" class="rr-input">
                             <option value="all">All</option>
                             <option value="marketplace">Marketplace only</option>
                             <option value="corporate">Corporate only</option>
@@ -370,7 +414,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Module</label>
-                        <select id="filterModule" aria-label="Filter by module" data-testid="select-filter-module" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4">
+                        <select id="filterModule" aria-label="Filter by module" data-testid="select-filter-module" multiple class="rr-input" size="4">
                             <option value="Leads">Leads</option>
                             <option value="Deals">Deals</option>
                             <option value="Contacts">Contacts</option>
@@ -379,23 +423,23 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Owner</label>
-                        <select id="filterOwner" aria-label="Filter by owner" data-testid="select-filter-owner" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                        <select id="filterOwner" aria-label="Filter by owner" data-testid="select-filter-owner" multiple class="rr-input" size="4"></select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Layout</label>
-                        <select id="filterLayout" aria-label="Filter by layout" data-testid="select-filter-layout" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                        <select id="filterLayout" aria-label="Filter by layout" data-testid="select-filter-layout" multiple class="rr-input" size="4"></select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Pipeline</label>
-                        <select id="filterPipeline" aria-label="Filter by pipeline" data-testid="select-filter-pipeline" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                        <select id="filterPipeline" aria-label="Filter by pipeline" data-testid="select-filter-pipeline" multiple class="rr-input" size="4"></select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Stage <span class="text-gray-400 font-normal">(Deals)</span></label>
-                        <select id="filterStage" aria-label="Filter by deal stage" data-testid="select-filter-stage" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                        <select id="filterStage" aria-label="Filter by deal stage" data-testid="select-filter-stage" multiple class="rr-input" size="4"></select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Confidence</label>
-                        <select id="filterConfidence" aria-label="Filter by confidence level" data-testid="select-filter-confidence" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                        <select id="filterConfidence" aria-label="Filter by confidence level" data-testid="select-filter-confidence" class="rr-input">
                             <option value="">All</option>
                             <option value="high">High (≥90%)</option>
                             <option value="medium">Medium (60-89%)</option>
@@ -404,7 +448,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Domain</label>
-                        <input type="text" id="filterDomain" data-testid="input-filter-domain" placeholder="e.g. acme.com" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                        <input type="text" id="filterDomain" data-testid="input-filter-domain" placeholder="e.g. acme.com" class="rr-input">
                     </div>
                 </div>
                 <div class="flex gap-3 items-center">
@@ -418,7 +462,7 @@
 
         <!-- ═══ EXECUTIVE SUMMARY TAB (D4 enhanced) ═══ -->
         <div id="content-summary" class="tab-content">
-            <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4 text-sm text-indigo-900">
+            <div class="rr-note rr-note-info mb-4">
                 <strong>Executive summary.</strong> Cross-module headline counts for every duplicate the radar is tracking right now — total clusters, records inside those clusters, ARR exposure, and a creation-rate trend so leadership can see whether duplicate hygiene is improving week over week. Use this tab for status reporting; drill into the per-module tabs (Leads, Deals, Contacts, Accounts) to act on individual clusters.
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
@@ -727,7 +771,7 @@
              group and merges the rest in (records reparented + sources
              deleted; undo-able via captured snapshots). -->
         <div id="content-merge-candidates" class="tab-content hidden">
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-900">
+            <div class="rr-note rr-note-info mb-4">
                 <div class="font-semibold mb-1">Cluster merge candidates — same domain, two clusters</div>
                 <p>These are domains where the radar has <strong>≥2 separate clusters</strong> for the same Zoho domain. It happens when concurrent syncs both miss the existing row and both insert one (no UNIQUE constraint on <code class="bg-blue-100 px-1 rounded">duplicate_clusters.domain</code>). Pick a master per group — the engine reparents every record into it, snapshots the source pre-merge (undo-able), logs to Manual Actions, and deletes the now-empty clusters. Recommended master: the cluster with an <strong>Account</strong> record and the highest record count.</p>
             </div>
@@ -761,7 +805,7 @@
 
         <!-- ═══ DEAL COMPLIANCE TAB (Sales SOP 7.5 — docs + fields) ═══ -->
         <div id="content-deal-compliance" class="tab-content hidden">
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-900">
+            <div class="rr-note rr-note-info mb-4">
                 <strong>Deal Compliance — Documents.</strong> Verifies the <strong>Zoho Attachments</strong> on deals in the closing stages per Sales SOP 7.5.10:
                 <strong>Proposal</strong> needs the financial offer (العرض المالي); <strong>Agreement Signed</strong> and <strong>Paid</strong> need the proposal, contract/PO, VAT certificate, Commercial Registration and National Address.
                 <strong>Paid</strong> is the Agreement-Signed stage re-labelled for backdated/migrated deals — same document requirement.
@@ -826,7 +870,7 @@
 
         <!-- ═══ CLUSTERS TAB (C4: paginated 30/page) ═══ -->
         <div id="content-clusters" class="tab-content hidden">
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-900">
+            <div class="rr-note rr-note-info mb-4">
                 <strong>Domain clusters.</strong> Groups of records that share the same company domain (e.g. <code>acme.com</code>) across one or more Zoho modules. Each cluster is a candidate merge: open one to see the underlying Leads / Deals / Contacts / Accounts, decide which record should survive, and take action in Zoho. Filter by module or cluster type to focus on a specific cleanup batch.
             </div>
             <div class="mb-4 flex gap-4 items-center">
@@ -923,7 +967,7 @@
 
         <!-- ═══ DEALS TAB ═══ -->
         <div id="content-deals" class="tab-content hidden">
-            <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3 text-sm text-emerald-900">
+            <div class="rr-note rr-note-info mb-3">
                 <strong>Deal duplicates.</strong> Deals on the same Account (or same company domain) that look like they describe the same opportunity. Critical to clean up before quarter-end because each duplicate deal inflates pipeline value and skews forecast accuracy.
             </div>
             <div class="flex justify-end mb-3 gap-2">
@@ -962,7 +1006,7 @@
 
         <!-- ═══ CONTACTS TAB ═══ -->
         <div id="content-contacts" class="tab-content hidden">
-            <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 text-sm text-purple-900">
+            <div class="rr-note rr-note-info mb-3">
                 <strong>Contact duplicates.</strong> Contact records that share an email address, phone, or full name within the same Account. Merging these keeps activity history (calls, emails, meetings) attached to a single person instead of scattered across copies, and prevents duplicate outreach.
             </div>
             <div class="flex justify-end mb-3 gap-2">
@@ -1011,7 +1055,7 @@
 
         <!-- ═══ ACCOUNTS TAB ═══ -->
         <div id="content-accounts" class="tab-content hidden">
-            <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 text-sm text-amber-900">
+            <div class="rr-note rr-note-amber mb-3">
                 <strong>Account duplicates.</strong> Account records that appear to describe the same company — same domain, same legal name, or close fuzzy-name match. Resolving these is the foundation of clean reporting: once Accounts are unique, related Contacts and Deals roll up correctly under one customer.
             </div>
             <div class="flex justify-end mb-3 gap-2">
@@ -1067,7 +1111,7 @@
              detail modal; this tab gives operators a dedicated triage queue
              grouped by pairing type. -->
         <div id="content-cross-module" class="tab-content hidden">
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-900">
+            <div class="rr-note rr-note-info mb-4">
                 <div class="font-semibold mb-1">Cross-module overlaps — actionable work only</div>
                 <p>Clusters where the same company appears across multiple Zoho modules AND there is something to do <strong>here</strong>. We surface only the cases that have a Zoho action available on this tab:</p>
                 <ul class="list-disc ms-5 mt-1 space-y-0.5">
@@ -1146,9 +1190,9 @@
 
             <!-- Follow-up 3: bulk-close action bar. Visible only when 1+
                  lead-bearing rows are checked. -->
-            <div id="cmoBulkActionBar" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-center justify-between gap-3">
-                <div class="text-xs text-amber-900">
-                    <span id="cmoSelectedCount" class="font-semibold">0</span> cluster<span id="cmoSelectedPlural">s</span> selected. Bulk action will set <code class="bg-amber-100 px-1 rounded">Lead_Status = "Lost Lead"</code> in Zoho for every Lead record in these clusters, then mark each cluster Resolved.
+            <div id="cmoBulkActionBar" class="hidden rr-bulkbar mb-3">
+                <div class="text-xs">
+                    <span id="cmoSelectedCount" class="rr-bulkbar-sel">0</span> cluster<span id="cmoSelectedPlural">s</span> selected. Bulk action will set <code>Lead_Status = "Lost Lead"</code> in Zoho for every Lead record in these clusters, then mark each cluster Resolved.
                 </div>
                 <div class="flex items-center gap-2">
                     <button data-on-click="bulkCloseLeadsDryRun" data-testid="button-cmo-bulk-dry-run" class="rr-btn rr-btn-ghost">Dry run</button>
@@ -1271,7 +1315,7 @@
 
         <!-- ═══ PREFLIGHT CHECK TAB ═══ -->
         <div id="content-preflight" class="tab-content hidden">
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-sm text-blue-900">
+            <div class="rr-note rr-note-info mb-3">
                 <strong>Pre-import check.</strong> Paste your incoming lead/deal list (CSV with a <code>domain</code> column, or a JSON array) and click <em>Check</em>. Each row is matched against existing CRM data and gets a verdict so you don't push duplicates or active customers as fresh leads.
             </div>
 
@@ -1539,7 +1583,7 @@
                             </button>
                         </div>
                         <div class="space-y-3">
-                            <div class="bg-purple-50 border border-purple-200 rounded p-2 text-xs text-purple-900">
+                            <div class="rr-note rr-note-info">
                                 <span id="pushZohoEligibleCount" class="font-semibold">0</span> PASS row(s) eligible to push. Rows with verdict BLOCK / REVIEW / WARN / DUPLICATE are never sent.
                             </div>
 
@@ -1598,7 +1642,7 @@
 
         <!-- ═══ ACCOUNT HINTS TAB ═══ -->
         <div id="content-account-hints" class="tab-content hidden">
-            <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3 text-sm text-emerald-900">
+            <div class="rr-note rr-note-info mb-3">
                 <strong>Record Hint.</strong> Smart inference across three record-linking gaps: a Deal missing its Account, a Contact missing its Account, and a Deal missing its Contact. Each section below infers the missing link from related records (email domain, shared company, etc.) and lets Sales fix the Zoho record from here — the next sync auto-reclassifies.
             </div>
 
@@ -1767,7 +1811,7 @@
         -->
         <div id="content-cs-lifecycle" class="tab-content hidden lg:-mx-8 xl:-mx-16 2xl:-mx-32">
           <div class="lg:px-8 xl:px-16 2xl:px-32">
-            <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 text-sm text-purple-900">
+            <div class="rr-note rr-note-info mb-3">
                 <strong>Customer Success lifecycle compliance.</strong> Deals where the CS section deviates from GRQ-defined process rules (onboarding duration, phase ↔ churn-date sync, phase-transition SLA). Critical violations should be resolved within one working day per CS team policy.
             </div>
 
@@ -2094,7 +2138,7 @@
                  action (preview / dry-run / apply), sourced from
                  /api/duplicates/resolution-activity. -->
             <div class="mt-6">
-                <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 text-sm text-purple-900">
+                <div class="rr-note rr-note-info mb-3">
                     <strong>🤖 Agent Activity.</strong> Every preview, dry-run and apply the AI Duplicate Resolution agent performed — the survivor it kept, what it migrated/tagged/reparented, who ran it, and any errors. This is the audit trail of all AI-driven changes.
                 </div>
                 <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -2123,7 +2167,7 @@
                  alongside the autonomous agent's work above for a complete
                  audit picture per cluster. -->
             <div class="mt-6">
-                <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-3 text-sm text-indigo-900">
+                <div class="rr-note rr-note-info mb-3">
                     <strong>👥 Manual Actions.</strong> Every Mark Resolved, Mark Dismissed, partial-apply (cross-module module_resolved), and Bulk-split contacts decision taken by an operator. This is the audit trail of HUMAN-driven cluster lifecycle changes — pairs with the AI activity above for a complete audit picture per cluster.
                 </div>
                 <div class="flex items-center gap-2 flex-wrap mb-2 text-xs">
@@ -2301,7 +2345,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=75"></script>
+    <script src="/js/duplicates-app.js?v=76"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

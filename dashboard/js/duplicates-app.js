@@ -1494,7 +1494,7 @@
             el.innerHTML = '';
 
             const showButtons = totalPages > 1;
-            const btnClass = 'px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm';
+            const btnClass = 'rr-pager-btn';
 
             if (showButtons && currentPage > 0) {
                 const prevBtn = document.createElement('button');
@@ -1514,7 +1514,7 @@
             // "Page 2 of 62" alone because the operator immediately sees
             // the corpus they're working through.
             const status = document.createElement('span');
-            status.className = 'px-3 py-1 text-sm text-gray-600 font-medium';
+            status.className = 'rr-pager-info';
             const parts = [];
             if (showButtons) {
                 parts.push(WalaPlusI18n.t('dyn.common.page_x_of_y', {
