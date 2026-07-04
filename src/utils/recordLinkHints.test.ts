@@ -18,6 +18,8 @@ ok(pickAccountForContact("acme.co", [{ id: "A1", domain: "acme.co", name: "Acme"
 ok(pickAccountForContact("acme.co", []) === null, "no account candidate -> null");
 ok(pickContactForDeal("acme.co", [{ id: "C1", domain: "acme.co", name: "Sara" }])?.id === "C1", "deal->contact single under account");
 ok(pickContactForDeal("x.co", [{ id: "C1", domain: "a.co" }, { id: "C2", domain: "b.co" }]) === null, "deal->contact ambiguous -> null");
+ok(pickContactForDeal("acme.co", [{ id: "C1", domain: "acme.co" }, { id: "C2", domain: "acme.co" }]) === null, "deal->contact MULTIPLE same-domain -> null (never arbitrary auto-write)");
+ok(pickContactForDeal("acme.co", [{ id: "C1", domain: "acme.co" }, { id: "C2", domain: "other.co" }])?.id === "C1", "deal->contact UNIQUE domain match among several -> that one");
 
 console.log(fail === 0 ? "recordLinkHints ok" : ("FAIL " + fail));
 if (fail > 0) process.exit(1);

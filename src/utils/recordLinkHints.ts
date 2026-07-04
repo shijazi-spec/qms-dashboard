@@ -42,7 +42,13 @@ export function pickAccountForContact(domain: string, cands: Array<{ id: string;
 export function pickContactForDeal(domain: string, cands: Array<{ id: string; domain?: string; name?: string }>) {
   if (cands.length === 1) return cands[0];
   const d = String(domain || "").trim().toLowerCase();
-  return cands.find(c => String(c.domain || "").toLowerCase() === d) || null;
+  if (!d) return null;
+  // Only a UNIQUE domain match is a safe auto-suggestion. If several contacts
+  // share the deal's domain, the pick would be arbitrary (and could reach the
+  // ≥70% auto-resolve gate and write the WRONG person to the Deal's
+  // Contact_Name) — so leave it with no hint for a human to resolve.
+  const matches = cands.filter(c => String(c.domain || "").toLowerCase() === d);
+  return matches.length === 1 ? matches[0] : null;
 }
 
 export type LinkHint = {
@@ -194,7 +200,8 @@ async function findContactCandidatesForDeal(
         AND (
           ($1::text IS NOT NULL AND LOWER(domain) = $1)
           OR ($2::text IS NOT NULL AND LOWER(company_name) = LOWER($2))
-        )`,
+        )
+      ORDER BY id`,
     [domain, accountName],
   );
   return res.rows;
