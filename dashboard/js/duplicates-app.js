@@ -7353,10 +7353,10 @@
             if (chip) chip.textContent = (data.rows || []).length.toLocaleString();
         }
         function erReasonBadge(reason) {
-            const m = { orphaned: ['bg-amber-100', 'text-amber-800', 'ORPHANED'], empty: ['bg-gray-200', 'text-gray-700', 'EMPTY'], test: ['bg-rose-100', 'text-rose-700', 'TEST'], junk: ['bg-orange-100', 'text-orange-800', 'JUNK'] };
-            const x = m[reason] || m.empty;
+            const m = { orphaned: 'rr-amber', empty: 'rr-neutral', test: 'rr-warn', junk: 'rr-amber' };
+            const cls = m[reason] || 'rr-neutral';
             const lbl = WalaPlusI18n.t('duplicates.er_badge_' + (m[reason] ? reason : 'empty'));
-            return '<span class="px-2 py-0.5 rounded text-[10px] font-bold ' + x[0] + ' ' + x[1] + '">' + lbl + '</span>';
+            return '<span class="rr-badge ' + cls + (cls === 'rr-neutral' ? '' : ' rr-dot') + '">' + lbl + '</span>';
         }
         function erZohoUrl(kind, id) {
             const tab = kind === 'deals' ? 'Potentials' : kind === 'accounts' ? 'Accounts' : 'Contacts';
@@ -7417,13 +7417,13 @@
                         // a merely-empty record → "empty — ready" (neutral).
                         var _isTest = r.reason === 'test';
                         var _lbl = WalaPlusI18n.t(_isTest ? 'duplicates.er_test_ready' : 'duplicates.er_empty_ready');
-                        action = '<span class="text-xs ' + (_isTest ? 'text-rose-600' : 'text-emerald-700') + '">' + escapeHtml(_lbl) + '</span>';
+                        action = '<span class="rr-badge ' + (_isTest ? 'rr-warn rr-dot' : 'rr-good rr-dot') + '">' + escapeHtml(_lbl) + '</span>';
                     } else {
                         // "Check documents" — live-verify this one record (no account/
                         // contact/docs) before it becomes delete-eligible. Same gate for
                         // Accounts and Deals.
                         var _kargs = escapeHtml(JSON.stringify([kind, String(r.zohoId)]));
-                        action = '<span id="eratt-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erCheckDocuments" data-args=\'' + _kargs + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 ' + escapeHtml(WalaPlusI18n.t('duplicates.er_check_att')) + '</button></span>';
+                        action = '<span id="eratt-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erCheckDocuments" data-args=\'' + _kargs + '\' class="rr-btn rr-btn-ghost">📎 ' + escapeHtml(WalaPlusI18n.t('duplicates.er_check_att')) + '</button></span>';
                     }
                 } else {
                     action = '';
@@ -7431,7 +7431,7 @@
                 // Per-row Dismiss — "this isn't empty, keep it" (false positive,
                 // e.g. a deal that actually has data). Removes it from the list
                 // durably without any Zoho write.
-                const dismissBtn = '<button data-on-click="erDismiss" data-args=\'' + escapeHtml(JSON.stringify([kind, String(r.zohoId)])) + '\' class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-100" title="Not empty — keep this record and remove it from the cleanup list">✕ ' + escapeHtml(WalaPlusI18n.t('duplicates.er_dismiss')) + '</button>';
+                const dismissBtn = '<button data-on-click="erDismiss" data-args=\'' + escapeHtml(JSON.stringify([kind, String(r.zohoId)])) + '\' class="rr-btn rr-btn-ghost" title="Not empty — keep this record and remove it from the cleanup list">✕ ' + escapeHtml(WalaPlusI18n.t('duplicates.er_dismiss')) + '</button>';
                 // Stage column — Deals only. Protected stages (Agreement Signed /
                 // Paid) are highlighted so the operator sees at a glance a deal that
                 // should NEVER be tagged.
@@ -7439,18 +7439,18 @@
                 if (kind === 'deals') {
                     var _stg = (r.extra && r.extra.stage) ? String(r.extra.stage) : '';
                     var _prot = /^(agreement signed|paid)$/i.test(_stg.trim());
-                    stageCell = '<td class="px-3 py-2 text-xs ' + (_prot ? 'text-emerald-700 font-semibold' : 'text-gray-600') + '">' + escapeHtml(_stg || '—') + (_prot ? ' 🔒' : '') + '</td>';
+                    stageCell = '<td class="rr-muted"' + (_prot ? ' style="color:#15803D;font-weight:600"' : '') + '>' + escapeHtml(_stg || '—') + (_prot ? ' 🔒' : '') + '</td>';
                     var _cr = (r.extra && r.extra.created) ? new Date(r.extra.created) : null;
-                    createdCell = '<td class="px-3 py-2 text-xs text-gray-500">' + escapeHtml(_cr && !isNaN(_cr) ? _cr.toLocaleDateString() : '—') + '</td>';
+                    createdCell = '<td class="rr-muted">' + escapeHtml(_cr && !isNaN(_cr) ? _cr.toLocaleDateString() : '—') + '</td>';
                 }
-                return '<tr class="border-t border-gray-100">'
-                    + '<td class="px-3 py-2">' + cb + '</td>'
-                    + '<td class="px-3 py-2">' + erReasonBadge(r.reason) + '</td>'
-                    + '<td class="px-3 py-2"><a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">' + escapeHtml(r.name || '(no name)') + '</a></td>'
+                return '<tr>'
+                    + '<td>' + cb + '</td>'
+                    + '<td>' + erReasonBadge(r.reason) + '</td>'
+                    + '<td class="rr-primary"><a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.name || '(no name)') + '</a></td>'
                     + stageCell
                     + createdCell
-                    + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.owner || '—') + '</td>'
-                    + '<td class="px-3 py-2"><div class="flex items-center gap-2 whitespace-nowrap">' + action + dismissBtn + '</div></td>'
+                    + '<td class="rr-muted">' + escapeHtml(r.owner || '—') + '</td>'
+                    + '<td><div class="rr-actions" style="justify-content:flex-start">' + action + dismissBtn + '</div></td>'
                     + '</tr>';
             }).join('');
             // Pagination footer (only when there's more than one page).
@@ -7883,23 +7883,23 @@
             body.innerHTML = pageRows.map(function (r) {
                 const kindMap = { Deals: 'deals', Accounts: 'accounts', Contacts: 'contacts' };
                 const kind = kindMap[r.module] || 'accounts';
-                const link = '<a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline font-mono text-xs">' + escapeHtml(r.zohoId) + '</a>';
+                const link = '<a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.zohoId) + '</a>';
                 const statusChip = r.status === 'deleted'
-                    ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_deleted')) + '</span>'
+                    ? '<span class="rr-badge rr-good rr-dot">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_deleted')) + '</span>'
                     : r.status === 'dismissed'
-                    ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700" title="Delete tag was removed in Zoho — will NOT be deleted by admin">Dismissed</span>'
-                    : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_pending')) + '</span>';
+                    ? '<span class="rr-badge rr-neutral" title="Delete tag was removed in Zoho — will NOT be deleted by admin">Dismissed</span>'
+                    : '<span class="rr-badge rr-amber rr-dot">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_pending')) + '</span>';
                 const taggedAt = r.createdAt ? new Date(r.createdAt).toLocaleString() : '—';
                 // Pending rows get a manual Dismiss (local disposition — no Zoho write).
                 const statusCell = r.status === 'pending_delete'
-                    ? statusChip + ' <button data-on-click="erDismissTagged" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]" class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-300 text-slate-600 hover:bg-slate-100" title="Move to Dismissed without changing Zoho — it will not be deleted by admin">Dismiss</button>'
+                    ? '<div class="rr-actions" style="justify-content:flex-start">' + statusChip + '<button data-on-click="erDismissTagged" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]" class="rr-btn rr-btn-ghost" title="Move to Dismissed without changing Zoho — it will not be deleted by admin">Dismiss</button></div>'
                     : statusChip;
-                return '<tr class="border-t border-gray-100">'
-                    + '<td class="px-3 py-2">' + link + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.module || '—') + '</td>'
-                    + '<td class="px-3 py-2">' + statusCell + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.taggedBy || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-500">' + escapeHtml(taggedAt) + '</td>'
+                return '<tr>'
+                    + '<td class="rr-mono">' + link + '</td>'
+                    + '<td class="rr-muted">' + escapeHtml(r.module || '—') + '</td>'
+                    + '<td>' + statusCell + '</td>'
+                    + '<td class="rr-muted">' + escapeHtml(r.taggedBy || '—') + '</td>'
+                    + '<td class="rr-muted">' + escapeHtml(taggedAt) + '</td>'
                     + '</tr>';
             }).join('');
             if (table) {
@@ -8343,7 +8343,8 @@
                     ? zohoLink(h.evidence_contact_zoho_id, 'Contacts', h.evidence_contact_email)
                     : escapeHtml(h.evidence_contact_email || '—');
                 const conf = Number(h.confidence || 0);
-                const confColor = conf >= 80 ? 'text-emerald-700' : conf >= 60 ? 'text-amber-700' : 'text-gray-600';
+                const confBarColor = conf >= 80 ? '#15803D' : conf >= 60 ? '#B45309' : '#9CA3AF';
+                const confCell = '<span class="rr-conf"><span class="rr-bar"><i style="width:' + Math.max(0, Math.min(100, conf)) + '%;background:' + confBarColor + '"></i></span><span class="rr-val">' + conf + '%</span></span>';
                 // High-confidence rows (≥70%) get the 🤖 Resolve with AI
                 // button — one click writes Account_Name on the Zoho Deal
                 // and flips the hint to Applied. Below the threshold, only
@@ -8352,19 +8353,19 @@
                 const aiEligible = h.status === 'pending' && Number(h.confidence || 0) >= 70;
                 const actions = h.status === 'pending'
                     ? (aiEligible
-                        ? '<button data-on-click="resolveAccountHintWithAi" data-args="[' + h.id + ']" class="px-2 py-1 rounded bg-purple-600 text-white text-xs hover:bg-purple-700 me-1" title="Write the suggested Account_Name on the Zoho Deal automatically — confidence ≥70%, attributed to GRQ Assistant.">🤖 Resolve with AI</button>'
+                        ? '<button data-on-click="resolveAccountHintWithAi" data-args="[' + h.id + ']" class="rr-btn rr-btn-primary" title="Write the suggested Account_Name on the Zoho Deal automatically — confidence ≥70%, attributed to GRQ Assistant.">🤖 Resolve with AI</button>'
                         : '')
-                    + '<button data-on-click="markAccountHintApplied" data-args="[' + h.id + ']" class="px-2 py-1 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700" title="I fixed the Zoho record — mark applied">Applied</button>'
-                    + ' <button data-on-click="dismissAccountHint" data-args="[' + h.id + ']" class="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs hover:bg-gray-300" title="This suggestion is wrong">Dismiss</button>'
-                    : '<span class="text-xs text-gray-400 capitalize">' + escapeHtml(h.status) + '</span>';
-                return '<tr class="hover:bg-gray-50">'
-                    + '<td class="px-3 py-2 text-xs text-gray-800">' + dealCell + '</td>'
-                    + '<td class="px-3 py-2 text-xs"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">' + escapeHtml(h.deal_account_name || '— missing —') + '</span></td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-800">' + suggestedCell + '</td>'
-                    + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(h.suggested_domain || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-700">' + evidenceCell + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-end font-medium ' + confColor + '">' + conf + '%</td>'
-                    + '<td class="px-3 py-2 text-xs text-end whitespace-nowrap">' + actions + '</td>'
+                    + '<button data-on-click="markAccountHintApplied" data-args="[' + h.id + ']" class="rr-btn rr-btn-ghost" title="I fixed the Zoho record — mark applied">Applied</button>'
+                    + '<button data-on-click="dismissAccountHint" data-args="[' + h.id + ']" class="rr-btn rr-btn-ghost" title="This suggestion is wrong">Dismiss</button>'
+                    : '<span class="rr-badge rr-neutral" style="text-transform:capitalize">' + escapeHtml(h.status) + '</span>';
+                return '<tr>'
+                    + '<td class="rr-primary">' + dealCell + '</td>'
+                    + '<td><span class="rr-badge rr-amber">' + escapeHtml(h.deal_account_name || '— missing —') + '</span></td>'
+                    + '<td class="rr-primary">' + suggestedCell + '</td>'
+                    + '<td class="rr-mono">' + escapeHtml(h.suggested_domain || '—') + '</td>'
+                    + '<td class="rr-muted">' + evidenceCell + '</td>'
+                    + '<td class="rr-num">' + confCell + '</td>'
+                    + '<td class="rr-num"><div class="rr-actions">' + actions + '</div></td>'
                     + '</tr>';
             }).join('');
         }
@@ -8560,22 +8561,27 @@
                     return;
                 }
                 const dispPill = function (d) {
-                    if (d === 'close') return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">Close</span>';
-                    if (d === 'reengage') return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-800">Re-engage</span>';
-                    return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700">Review</span>';
+                    if (d === 'close') return '<span class="rr-badge rr-warn rr-dot">Close</span>';
+                    if (d === 'reengage') return '<span class="rr-badge rr-good rr-dot">Re-engage</span>';
+                    return '<span class="rr-badge rr-neutral">Review</span>';
+                };
+                const dispSev = function (d) {
+                    if (d === 'close') return 'rr-sev-warn';
+                    if (d === 'reengage') return 'rr-sev-good';
+                    return 'rr-sev-info';
                 };
                 body.innerHTML = deals.map(function (d) {
-                    const dealLink = '<a href="' + erZohoUrl('deals', d.dealZohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">' + escapeHtml(d.dealName) + '</a>';
+                    const dealLink = '<a href="' + erZohoUrl('deals', d.dealZohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(d.dealName) + '</a>';
                     const acctCell = d.accountName ? escapeHtml(d.accountName) : '<span class="text-gray-400">— none —</span>';
-                    const actions = '<div class="mt-1 whitespace-nowrap">'
-                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + escapeHtml(d.dealZohoId) + '&quot;,&quot;close&quot;]" title="Set this deal\'s Stage to Closed Lost in Zoho." class="px-2 py-0.5 rounded text-[10px] font-medium border border-red-300 text-red-700 hover:bg-red-50 me-1">Close</button>'
-                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + escapeHtml(d.dealZohoId) + '&quot;,&quot;reengage&quot;]" title="Move this deal\'s Stage forward into the active pipeline in Zoho." class="px-2 py-0.5 rounded text-[10px] font-medium border border-green-300 text-green-700 hover:bg-green-50">Re-engage</button>'
-                        + '</div>';
-                    return '<tr class="hover:bg-gray-50">'
-                        + '<td class="px-3 py-2 text-xs">' + dealLink + '</td>'
-                        + '<td class="px-3 py-2 text-xs text-gray-700">' + acctCell + '</td>'
-                        + '<td class="px-3 py-2 text-xs"><span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800">' + escapeHtml(d.stage || '—') + '</span></td>'
-                        + '<td class="px-3 py-2 text-xs">' + dispPill(d.disposition) + ' <span class="text-gray-500">' + escapeHtml(d.reason || '') + '</span>' + actions + '</td>'
+                    const actions = '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">'
+                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + escapeHtml(d.dealZohoId) + '&quot;,&quot;close&quot;]" title="Set this deal\'s Stage to Closed Lost in Zoho." class="rr-btn rr-btn-ghost">Close</button>'
+                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + escapeHtml(d.dealZohoId) + '&quot;,&quot;reengage&quot;]" title="Move this deal\'s Stage forward into the active pipeline in Zoho." class="rr-btn rr-btn-ghost">Re-engage</button>'
+                        + '</div></div>';
+                    return '<tr class="' + dispSev(d.disposition) + '" style="vertical-align:top">'
+                        + '<td class="rr-lead rr-primary">' + dealLink + '</td>'
+                        + '<td class="rr-muted">' + acctCell + '</td>'
+                        + '<td><span class="rr-badge rr-amber">' + escapeHtml(d.stage || '—') + '</span></td>'
+                        + '<td>' + dispPill(d.disposition) + ' <span class="rr-muted">' + escapeHtml(d.reason || '') + '</span>' + actions + '</td>'
                         + '</tr>';
                 }).join('');
             } catch (e) {
@@ -8645,23 +8651,24 @@
                         : escapeHtml(suggestedName);
                     const evidenceCell = escapeHtml(h.evidence_detail || '—');
                     const conf = Number(h.confidence || 0);
-                    const confColor = conf >= 80 ? 'text-emerald-700' : conf >= 60 ? 'text-amber-700' : 'text-gray-600';
+                    const confBarColor = conf >= 80 ? '#15803D' : conf >= 60 ? '#B45309' : '#9CA3AF';
+                    const confCell = '<span class="rr-conf"><span class="rr-bar"><i style="width:' + Math.max(0, Math.min(100, conf)) + '%;background:' + confBarColor + '"></i></span><span class="rr-val">' + conf + '%</span></span>';
                     const aiEligible = h.status === 'pending' && conf >= 70;
                     const actions = h.status === 'pending'
                         ? (aiEligible
-                            ? '<button data-on-click="resolveRecordHintWithAi" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="px-2 py-1 rounded bg-purple-600 text-white text-xs hover:bg-purple-700 me-1" title="Write the suggested value on the Zoho record automatically — confidence ≥70%, attributed to GRQ Assistant.">🤖 Resolve with AI</button>'
+                            ? '<button data-on-click="resolveRecordHintWithAi" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-primary" title="Write the suggested value on the Zoho record automatically — confidence ≥70%, attributed to GRQ Assistant.">🤖 Resolve with AI</button>'
                             : '')
-                        + '<button data-on-click="markRecordHintApplied" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="px-2 py-1 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700" title="I fixed the Zoho record — mark applied">Applied</button>'
-                        + ' <button data-on-click="dismissRecordHint" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs hover:bg-gray-300" title="This suggestion is wrong">Dismiss</button>'
-                        : '<span class="text-xs text-gray-400 capitalize">' + escapeHtml(h.status) + '</span>';
-                    return '<tr class="hover:bg-gray-50">'
-                        + '<td class="px-3 py-2 text-xs text-gray-800">' + sourceCell + '</td>'
-                        + '<td class="px-3 py-2 text-xs"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">' + escapeHtml(h.current_value || '— missing —') + '</span></td>'
-                        + '<td class="px-3 py-2 text-xs text-gray-800">' + suggestedCell + '</td>'
-                        + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(h.suggested_domain || '—') + '</td>'
-                        + '<td class="px-3 py-2 text-xs text-gray-700">' + evidenceCell + '</td>'
-                        + '<td class="px-3 py-2 text-xs text-end font-medium ' + confColor + '">' + conf + '%</td>'
-                        + '<td class="px-3 py-2 text-xs text-end whitespace-nowrap">' + actions + '</td>'
+                        + '<button data-on-click="markRecordHintApplied" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost" title="I fixed the Zoho record — mark applied">Applied</button>'
+                        + '<button data-on-click="dismissRecordHint" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost" title="This suggestion is wrong">Dismiss</button>'
+                        : '<span class="rr-badge rr-neutral" style="text-transform:capitalize">' + escapeHtml(h.status) + '</span>';
+                    return '<tr>'
+                        + '<td class="rr-primary">' + sourceCell + '</td>'
+                        + '<td><span class="rr-badge rr-amber">' + escapeHtml(h.current_value || '— missing —') + '</span></td>'
+                        + '<td class="rr-primary">' + suggestedCell + '</td>'
+                        + '<td class="rr-mono">' + escapeHtml(h.suggested_domain || '—') + '</td>'
+                        + '<td class="rr-muted">' + evidenceCell + '</td>'
+                        + '<td class="rr-num">' + confCell + '</td>'
+                        + '<td class="rr-num"><div class="rr-actions">' + actions + '</div></td>'
                         + '</tr>';
                 }).join('');
             } catch (e) {

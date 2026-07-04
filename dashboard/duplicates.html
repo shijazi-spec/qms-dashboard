@@ -1609,19 +1609,19 @@
 
                 <!-- Table -->
                 <div class="bg-white rounded-lg shadow overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead id="accountHintsTableHead" class="bg-gray-50">
+                    <table class="rr-table min-w-full">
+                        <thead id="accountHintsTableHead">
                             <tr>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;deal&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="deal">Deal <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;current&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="current">Current account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;suggested&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="suggested">Suggested account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;domain&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;evidence&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="evidence">Evidence (contact) <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;confidence&quot;]" class="account-hints-sort px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="confidence">Confidence <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;deal&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="deal">Deal <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;current&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="current">Current account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;suggested&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="suggested">Suggested account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;domain&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;evidence&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="evidence">Evidence (contact) <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;confidence&quot;]" class="rr-num account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="confidence">Confidence <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" class="rr-num">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="accountHintsTable" class="bg-white divide-y divide-gray-200">
+                        <tbody id="accountHintsTable">
                             <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Click <em>Run scan</em> to generate suggestions.</td></tr>
                         </tbody>
                     </table>
@@ -1640,19 +1640,19 @@
                 </div>
 
                 <div class="bg-white rounded-lg shadow overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
+                    <table class="rr-table min-w-full">
+                        <thead>
                             <tr>
-                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Source record</th>
-                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Current account</th>
-                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Suggested account</th>
-                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Evidence</th>
-                                <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Confidence</th>
-                                <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th scope="col">Source record</th>
+                                <th scope="col">Current account</th>
+                                <th scope="col">Suggested account</th>
+                                <th scope="col">Domain</th>
+                                <th scope="col">Evidence</th>
+                                <th scope="col" class="rr-num">Confidence</th>
+                                <th scope="col" class="rr-num">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="recordHintsContactAccountBody" class="bg-white divide-y divide-gray-200">
+                        <tbody id="recordHintsContactAccountBody">
                             <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Click <em>Run scan</em> to generate suggestions.</td></tr>
                         </tbody>
                     </table>
@@ -1670,19 +1670,19 @@
                 </div>
 
                 <div class="bg-white rounded-lg shadow overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
+                    <table class="rr-table min-w-full">
+                        <thead>
                             <tr>
-                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Source record</th>
-                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Current contact</th>
-                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Suggested contact</th>
-                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Evidence</th>
-                                <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Confidence</th>
-                                <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th scope="col">Source record</th>
+                                <th scope="col">Current contact</th>
+                                <th scope="col">Suggested contact</th>
+                                <th scope="col">Domain</th>
+                                <th scope="col">Evidence</th>
+                                <th scope="col" class="rr-num">Confidence</th>
+                                <th scope="col" class="rr-num">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="recordHintsDealContactBody" class="bg-white divide-y divide-gray-200">
+                        <tbody id="recordHintsDealContactBody">
                             <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Click <em>Run scan</em> to generate suggestions.</td></tr>
                         </tbody>
                     </table>
@@ -1698,16 +1698,16 @@
                     <span id="staleDealsSummary" class="text-xs text-gray-500"></span>
                 </div>
                 <div class="overflow-x-auto border border-gray-200 rounded-lg">
-                    <table class="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead class="bg-gray-50">
+                    <table class="rr-table min-w-full">
+                        <thead>
                             <tr>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Deal</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Account</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Stage</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Suggested</th>
+                                <th scope="col">Deal</th>
+                                <th scope="col">Account</th>
+                                <th scope="col">Stage</th>
+                                <th scope="col">Suggested</th>
                             </tr>
                         </thead>
-                        <tbody id="staleDealsBody" class="bg-white divide-y divide-gray-200">
+                        <tbody id="staleDealsBody">
                             <tr><td colspan="4" class="px-4 py-8 text-center text-sm text-gray-500">Click <em>Run scan</em> to find stalled deals.</td></tr>
                         </tbody>
                     </table>
@@ -1842,8 +1842,8 @@
               <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
-              <table class="min-w-full text-sm" data-no-sort>
-                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start"><input type="checkbox" class="er-selall" data-on-click="erSelectAllPage" data-pass-event title="Select / clear all delete-ready rows on THIS page"></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;deals&quot;,&quot;reason&quot;]"><span data-i18n="duplicates.er_th_reason">Reason</span><span class="er-sort-caret" data-sk="deals:reason"></span></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;deals&quot;,&quot;name&quot;]"><span data-i18n="duplicates.er_th_deal">Deal</span><span class="er-sort-caret" data-sk="deals:name"></span></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;deals&quot;,&quot;stage&quot;]"><span data-i18n="duplicates.er_th_stage">Stage</span><span class="er-sort-caret" data-sk="deals:stage"></span></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;deals&quot;,&quot;created&quot;]"><span data-i18n="duplicates.er_th_created">Created</span><span class="er-sort-caret" data-sk="deals:created"></span></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;deals&quot;,&quot;owner&quot;]"><span data-i18n="duplicates.er_th_owner">Owner</span><span class="er-sort-caret" data-sk="deals:owner"></span></th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_action">Action</th></tr></thead>
+              <table class="rr-table min-w-full" data-no-sort>
+                <thead><tr><th scope="col"><input type="checkbox" class="er-selall" data-on-click="erSelectAllPage" data-pass-event title="Select / clear all delete-ready rows on THIS page"></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;deals&quot;,&quot;reason&quot;]"><span data-i18n="duplicates.er_th_reason">Reason</span><span class="er-sort-caret" data-sk="deals:reason"></span></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;deals&quot;,&quot;name&quot;]"><span data-i18n="duplicates.er_th_deal">Deal</span><span class="er-sort-caret" data-sk="deals:name"></span></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;deals&quot;,&quot;stage&quot;]"><span data-i18n="duplicates.er_th_stage">Stage</span><span class="er-sort-caret" data-sk="deals:stage"></span></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;deals&quot;,&quot;created&quot;]"><span data-i18n="duplicates.er_th_created">Created</span><span class="er-sort-caret" data-sk="deals:created"></span></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;deals&quot;,&quot;owner&quot;]"><span data-i18n="duplicates.er_th_owner">Owner</span><span class="er-sort-caret" data-sk="deals:owner"></span></th><th scope="col" data-i18n="duplicates.er_th_action">Action</th></tr></thead>
                 <tbody id="erDealsBody"></tbody>
               </table>
             </div>
@@ -1859,8 +1859,8 @@
               <button data-on-click="erReload" data-args="[&quot;accounts&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
-              <table class="min-w-full text-sm" data-no-sort>
-                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start"><input type="checkbox" class="er-selall" data-on-click="erSelectAllPage" data-pass-event title="Select / clear all delete-ready rows on THIS page"></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;accounts&quot;,&quot;reason&quot;]"><span data-i18n="duplicates.er_th_reason">Reason</span><span class="er-sort-caret" data-sk="accounts:reason"></span></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;accounts&quot;,&quot;name&quot;]"><span data-i18n="duplicates.er_th_account">Account</span><span class="er-sort-caret" data-sk="accounts:name"></span></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;accounts&quot;,&quot;owner&quot;]"><span data-i18n="duplicates.er_th_owner">Owner</span><span class="er-sort-caret" data-sk="accounts:owner"></span></th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_action">Action</th></tr></thead>
+              <table class="rr-table min-w-full" data-no-sort>
+                <thead><tr><th scope="col"><input type="checkbox" class="er-selall" data-on-click="erSelectAllPage" data-pass-event title="Select / clear all delete-ready rows on THIS page"></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;accounts&quot;,&quot;reason&quot;]"><span data-i18n="duplicates.er_th_reason">Reason</span><span class="er-sort-caret" data-sk="accounts:reason"></span></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;accounts&quot;,&quot;name&quot;]"><span data-i18n="duplicates.er_th_account">Account</span><span class="er-sort-caret" data-sk="accounts:name"></span></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;accounts&quot;,&quot;owner&quot;]"><span data-i18n="duplicates.er_th_owner">Owner</span><span class="er-sort-caret" data-sk="accounts:owner"></span></th><th scope="col" data-i18n="duplicates.er_th_action">Action</th></tr></thead>
                 <tbody id="erAccountsBody"></tbody>
               </table>
             </div>
@@ -1876,8 +1876,8 @@
               <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
-              <table class="min-w-full text-sm" data-no-sort>
-                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start"><input type="checkbox" class="er-selall" data-on-click="erSelectAllPage" data-pass-event title="Select / clear all delete-ready rows on THIS page"></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;contacts&quot;,&quot;reason&quot;]"><span data-i18n="duplicates.er_th_reason">Reason</span><span class="er-sort-caret" data-sk="contacts:reason"></span></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;contacts&quot;,&quot;name&quot;]"><span data-i18n="duplicates.er_th_contact">Contact</span><span class="er-sort-caret" data-sk="contacts:name"></span></th><th class="px-3 py-2 text-start cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;contacts&quot;,&quot;owner&quot;]"><span data-i18n="duplicates.er_th_owner">Owner</span><span class="er-sort-caret" data-sk="contacts:owner"></span></th><th class="px-3 py-2 text-start" data-i18n="duplicates.er_th_action">Action</th></tr></thead>
+              <table class="rr-table min-w-full" data-no-sort>
+                <thead><tr><th scope="col"><input type="checkbox" class="er-selall" data-on-click="erSelectAllPage" data-pass-event title="Select / clear all delete-ready rows on THIS page"></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;contacts&quot;,&quot;reason&quot;]"><span data-i18n="duplicates.er_th_reason">Reason</span><span class="er-sort-caret" data-sk="contacts:reason"></span></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;contacts&quot;,&quot;name&quot;]"><span data-i18n="duplicates.er_th_contact">Contact</span><span class="er-sort-caret" data-sk="contacts:name"></span></th><th scope="col" class="cursor-pointer select-none hover:bg-gray-100" data-on-click="erSortBy" data-args="[&quot;contacts&quot;,&quot;owner&quot;]"><span data-i18n="duplicates.er_th_owner">Owner</span><span class="er-sort-caret" data-sk="contacts:owner"></span></th><th scope="col" data-i18n="duplicates.er_th_action">Action</th></tr></thead>
                 <tbody id="erContactsBody"></tbody>
               </table>
             </div>
@@ -1890,8 +1890,8 @@
               <button data-on-click="erRecheckDeletions" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">🔄 <span data-i18n="duplicates.er_recheck">Re-check CRM</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
-              <table class="min-w-full text-sm">
-                <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Module</th><th class="px-3 py-2 text-start">Status</th><th class="px-3 py-2 text-start">Tagged by</th><th class="px-3 py-2 text-start">Tagged at</th></tr></thead>
+              <table class="rr-table min-w-full">
+                <thead><tr><th scope="col">Record</th><th scope="col">Module</th><th scope="col">Status</th><th scope="col">Tagged by</th><th scope="col">Tagged at</th></tr></thead>
                 <tbody id="erTaggedBody"></tbody>
               </table>
             </div>
@@ -2265,7 +2265,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=72"></script>
+    <script src="/js/duplicates-app.js?v=73"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
