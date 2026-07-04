@@ -12127,7 +12127,7 @@
                         source: 'Preflight Missing-Deals Backfill — ' + new Date().toISOString().slice(0, 10),
                     }),
                 });
-                var resp = await res.json();
+                var resp = await _pfReadJson(res);
                 if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
                 if (box) {
                     box.classList.remove('hidden');
@@ -12159,6 +12159,18 @@
         }
 
         // Action handler — wired via data-on-click="erStructuredPush" data-args="[N]".
+        // Parse a fetch Response that SHOULD be JSON but might be a plain-text
+        // gateway error ("Internal Server Error" on a timeout). Returns the
+        // parsed JSON, or throws a friendly retry message instead of the raw
+        // "Unexpected token 'I'…" JSON-parse error the browser would surface.
+        async function _pfReadJson(res) {
+            var text = await res.text();
+            try { return JSON.parse(text); }
+            catch (e) {
+                var snippet = (text || '').slice(0, 80).replace(/\s+/g, ' ').trim();
+                throw new Error('Server error ' + res.status + (snippet ? ' (' + snippet + '…)' : '') + ' — usually a transient timeout on a big list. Click again to retry, or use a smaller slice size.');
+            }
+        }
         async function erStructuredPush(action) {
             action = Number(action);
             var data = window._preflightLastResult;
@@ -12194,7 +12206,7 @@
                         source: source,
                     }),
                 });
-                var resp = await res.json();
+                var resp = await _pfReadJson(res);
                 if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
                 if (resultBox) {
                     resultBox.classList.remove('hidden');
