@@ -8052,6 +8052,183 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Record-Link inference scan — walks every Contact missing an Account
+    // and every Deal missing a Contact, and infers a link via shared
+    // domain/company evidence. See src/utils/recordLinkHints.ts.
+    path: "/api/duplicates/record-hints/scan",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const { scanRecordLinkHints } = await import(
+            "../../utils/recordLinkHints"
+          );
+          const r = await scanRecordLinkHints();
+          return c.json({ success: true, ...r });
+        } catch (error: any) {
+          logger.error("Error running record-hints scan:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // List record-link hints. Query params:
+    //   ?type=contact_account|deal_contact (default both)
+    //   ?status=pending|dismissed|applied (default pending)
+    //   ?limit=N (default 500, max 2000)
+    path: "/api/duplicates/record-hints",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const type = c.req.query("type") || undefined;
+          const status = c.req.query("status") || undefined;
+          const limitRaw = c.req.query("limit");
+          const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+
+          const { listRecordLinkHints } = await import(
+            "../../utils/recordLinkHints"
+          );
+          const result = await listRecordLinkHints({ type, status, limit });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error listing record-hints:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // AI-resolve a single Record-Link-Hint: write the suggested target
+    // directly onto the Zoho source record's link field and mark the hint
+    // applied. Refuses when confidence is below the threshold (default
+    // 70%). DESTRUCTIVE (writes to Zoho) → requireAdminOrKey.
+    //   POST /api/duplicates/record-hints/:id/resolve-with-ai
+    //   Body: { minConfidence?: number }
+    path: "/api/duplicates/record-hints/:id/resolve-with-ai",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid hint id" }, 400);
+          let body: { minConfidence?: number } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          const { aiResolveRecordLinkHint } = await import(
+            "../../utils/recordLinkHints"
+          );
+          const out = await aiResolveRecordLinkHint(
+            Number(id),
+            Number.isFinite(body.minConfidence)
+              ? Number(body.minConfidence)
+              : 70,
+          );
+          return c.json({ success: out.applied, ...out });
+        } catch (error: any) {
+          logger.error("Error AI-resolving record-hint:", error);
+          return c.json({ error: error?.message || String(error) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Bulk AI-resolve every pending Record-Link Hint at-or-above the
+    // confidence threshold. Same per-row logic as the single-id endpoint
+    // above, but looped. DESTRUCTIVE (writes to Zoho) → requireAdminOrKey.
+    //   POST /api/duplicates/record-hints/resolve-all-with-ai
+    //   Body: { type?: "contact_account"|"deal_contact", minConfidence?: number, limit?: number }
+    path: "/api/duplicates/record-hints/resolve-all-with-ai",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          let body: {
+            type?: "contact_account" | "deal_contact";
+            minConfidence?: number;
+            limit?: number;
+          } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          const { aiResolveAllRecordLinkHints } = await import(
+            "../../utils/recordLinkHints"
+          );
+          const report = await aiResolveAllRecordLinkHints({
+            type: body.type,
+            minConfidence: Number.isFinite(body.minConfidence)
+              ? Number(body.minConfidence)
+              : undefined,
+            limit: Number.isFinite(body.limit) ? Number(body.limit) : undefined,
+          });
+          return c.json({ success: true, ...report });
+        } catch (error: any) {
+          logger.error("Error bulk AI-resolving record-hints:", error);
+          return c.json({ error: error?.message || String(error) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Mark a record-link hint as dismissed (operator reviewed and rejected)
+    // or applied (operator fixed the link manually in Zoho).
+    // Body: { status: "dismissed" | "applied" }
+    path: "/api/duplicates/record-hints/:id/status",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid hint id" }, 400);
+          let body: { status?: string } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          if (body.status !== "dismissed" && body.status !== "applied") {
+            return c.json({ error: "invalid status" }, 400);
+          }
+          const { pool } = await import("../../utils/duplicateRadarDatabase");
+          await pool.query(
+            `UPDATE record_link_hints
+                SET status = $1,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE id = $2`,
+            [body.status, id],
+          );
+          return c.json({ success: true });
+        } catch (error: any) {
+          logger.error("Error updating record-hint status:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // R5 — Single-record Preflight Webhook for inbound integrations.
     //
     // The existing /api/duplicates/preflight endpoint is built for
