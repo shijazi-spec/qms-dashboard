@@ -26,11 +26,37 @@ async function requireDuplicateRadarAccess(c: any) {
 // preview and the real-run payload builders.
 // ---------------------------------------------------------------------------
 
-// Pick the contact row to use as the Deal's primary: prefer the first row
-// that HAS an email; fall back to the first row overall when none do.
-function pickPrimaryContact<T extends { email?: string | null }>(contacts: T[]): T | null {
+// Seniority ladder for choosing a Deal's PRIMARY contact (Contact_Name).
+// Higher = more senior (Sarah 2026-07-04). Owner / Founder / Partner sit at the
+// top WITH C-level, then VP → Director → Head → Manager → everyone else.
+function seniorityRank(title?: string | null): number {
+  const t = String(title || "").toLowerCase();
+  if (!t.trim()) return 0;
+  if (/\bowner\b|\bfounder\b|\bco[-\s]?founder\b|\bpartner\b|\bproprietor\b|\bpresident\b|\bchair(?:man|woman|person)?\b/.test(t)) return 6;
+  if (/\bchief\b|\bceo\b|\bcfo\b|\bcoo\b|\bcto\b|\bcio\b|\bcmo\b|\bcco\b|\bchro\b|\bcpo\b|\bcxo\b/.test(t)) return 6;
+  if (/\bvp\b|\bvice[-\s]?president\b|\bevp\b|\bsvp\b/.test(t)) return 5;
+  if (/\bmanaging\s+director\b|\bdirector\b/.test(t)) return 4;
+  if (/\bhead\b/.test(t)) return 3;
+  if (/\bmanager\b|\bsupervisor\b|\blead\b/.test(t)) return 2;
+  return 1; // has a title but no recognised seniority keyword
+}
+
+// Pick a company's PRIMARY contact (the Deal's Contact_Name): the MOST SENIOR
+// by title. Tie-break prefers a contact that HAS an email (reliable deal↔contact
+// linkage), then original order. (Was: first email-bearing, ignoring seniority.)
+function pickPrimaryContact<T extends { email?: string | null; title?: string | null }>(contacts: T[]): T | null {
   if (!contacts || contacts.length === 0) return null;
-  return contacts.find(r => String(r?.email || "").trim()) || contacts[0];
+  let best: T | null = null;
+  let bestRank = -1;
+  let bestHasEmail = false;
+  for (const r of contacts) {
+    const rank = seniorityRank(r?.title);
+    const hasEmail = !!String(r?.email || "").trim();
+    if (best === null || rank > bestRank || (rank === bestRank && hasEmail && !bestHasEmail)) {
+      best = r; bestRank = rank; bestHasEmail = hasEmail;
+    }
+  }
+  return best || contacts[0];
 }
 
 // Build a plain-text Deal Description naming the primary contact and listing
@@ -9912,6 +9938,48 @@ export const duplicateRadarRoutes = [
                 if (!firstContactIdMap.has(companyKey)) {
                   firstContactIdMap.set(companyKey, id);
                   primaryRowIndexMap.set(companyKey, fallbackRowIndexMap.get(companyKey)!);
+                }
+              }
+              // Seniority override (Sarah 2026-07-04): the Deal's PRIMARY contact
+              // (Contact_Name) must be the MOST SENIOR contact of the company —
+              // not merely the first email-bearing one. Now that every contact
+              // has an id (reused OR newly created), re-pick the primary by title
+              // seniority across BOTH. The other colleagues stay as Contact Roles.
+              {
+                const createdIdByRow = new Map<number, string>();
+                for (let i = 0; i < conOut.length; i++) {
+                  const out = conOut[i];
+                  if (out?.status === "success" && out.id) {
+                    createdIdByRow.set(contactMeta[i].rowIndex, String(out.id));
+                  }
+                }
+                for (const co of companiesWithAccount) {
+                  let bestRow: any = null;
+                  let bestRank = -1;
+                  let bestHasEmail = false;
+                  for (const row of co.contacts) {
+                    const rid =
+                      preexistingByRow.get(row.row_index) || createdIdByRow.get(row.row_index);
+                    if (!rid) continue; // no id (create failed) → can't be primary
+                    const rank = seniorityRank(row.title);
+                    const hasEmail = !!String(row.email || "").trim();
+                    if (
+                      bestRow === null ||
+                      rank > bestRank ||
+                      (rank === bestRank && hasEmail && !bestHasEmail)
+                    ) {
+                      bestRow = row; bestRank = rank; bestHasEmail = hasEmail;
+                    }
+                  }
+                  if (bestRow) {
+                    const rid =
+                      preexistingByRow.get(bestRow.row_index) ||
+                      createdIdByRow.get(bestRow.row_index);
+                    if (rid) {
+                      firstContactIdMap.set(co.companyKey, rid);
+                      primaryRowIndexMap.set(co.companyKey, bestRow.row_index);
+                    }
+                  }
                 }
               }
               // Attach deferred same-email rows to the id created for that email,
