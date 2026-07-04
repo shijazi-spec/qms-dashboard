@@ -329,11 +329,11 @@
             try {
                 const j = await erAdminPost('/api/duplicates/reconcile-deleted', { limit: 300 });
                 if (!j) return; // cancelled at the admin-key prompt
-                if (!j.success) { alert('Verify failed: ' + (j.error || 'unknown')); return; }
-                alert('Verified ' + (j.checked || 0) + ' record(s) · pruned ' + (j.pruned || 0) + ' that were deleted in Zoho.\n\nRuns in batches (oldest-checked first) — click again to sweep more of the CRM.');
+                if (!j.success) { rrToast('Verify failed: ' + (j.error || 'unknown')); return; }
+                rrToast('Verified ' + (j.checked || 0) + ' record(s) · pruned ' + (j.pruned || 0) + ' that were deleted in Zoho.\n\nRuns in batches (oldest-checked first) — click again to sweep more of the CRM.');
                 if (typeof loadCrossModule === 'function') loadCrossModule();
             } catch (e) {
-                alert('Verify failed: ' + (e && e.message || e));
+                rrToast('Verify failed: ' + (e && e.message || e));
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
@@ -366,7 +366,7 @@
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
                 loadCrossModule();
             } catch (e) {
-                alert('Could not mark handled: ' + (e && e.message || e));
+                rrToast('Could not mark handled: ' + (e && e.message || e));
             }
         }
 
@@ -391,7 +391,7 @@
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
                 loadCrossModule();
             } catch (e) {
-                alert('Could not un-handle: ' + (e && e.message || e));
+                rrToast('Could not un-handle: ' + (e && e.message || e));
             }
         }
 
@@ -725,7 +725,7 @@
                 });
                 const data = await res.json();
                 if (!data.success) {
-                    alert(data.error || 'Bulk-close failed.');
+                    rrToast(data.error || 'Bulk-close failed.');
                     return;
                 }
                 showCmoBulkResult(data);
@@ -736,7 +736,7 @@
                     loadCrossModule();
                 }
             } catch (e) {
-                alert('Network error during bulk-close: ' + (e && e.message || e));
+                rrToast('Network error during bulk-close: ' + (e && e.message || e));
             }
         }
 
@@ -1576,6 +1576,56 @@
             return out;
         }
 
+        // Phase 5b — non-blocking toast, the drop-in replacement for rrToast().
+        // One string arg keeps every call site a 1:1 swap; severity is inferred
+        // from the message unless an explicit type ('good'|'warn'|'info') is
+        // passed. Message is set via textContent, so it can never inject HTML.
+        function rrToast(message, type) {
+            try {
+                const msg = message == null ? '' : String(message);
+                if (!type) {
+                    if (/\b(fail|failed|error|errored|rejected|denied|couldn'?t|could not|invalid|unable)\b/i.test(msg)) type = 'warn';
+                    else if (msg.charAt(0) === '✓' || /\b(success|succeeded|done|complete|completed|merged|applied|created|resolved|saved|updated|pushed|tagged|dismissed)\b/i.test(msg)) type = 'good';
+                    else type = 'info';
+                }
+                let host = document.getElementById('rrToastHost');
+                if (!host) {
+                    host = document.createElement('div');
+                    host.id = 'rrToastHost';
+                    host.className = 'rr-toast-host';
+                    host.setAttribute('role', 'status');
+                    host.setAttribute('aria-live', 'polite');
+                    document.body.appendChild(host);
+                }
+                const el = document.createElement('div');
+                el.className = 'rr-toast rr-toast-' + type;
+                const ic = document.createElement('span');
+                ic.className = 'rr-toast-ic';
+                ic.textContent = type === 'good' ? '✓' : type === 'warn' ? '!' : 'i';
+                const mg = document.createElement('span');
+                mg.className = 'rr-toast-msg';
+                mg.textContent = msg;
+                const x = document.createElement('span');
+                x.className = 'rr-toast-x';
+                x.textContent = '✕';
+                x.setAttribute('role', 'button');
+                x.setAttribute('aria-label', 'Dismiss');
+                el.appendChild(ic); el.appendChild(mg); el.appendChild(x);
+                host.appendChild(el);
+                // Cap the stack so a burst of messages can't fill the screen.
+                while (host.children.length > 4) host.removeChild(host.firstChild);
+                // Auto-dismiss; longer messages linger longer. Hover pauses it.
+                const dur = Math.min(12000, Math.max(4500, msg.length * 55));
+                const remove = () => { if (el.parentNode) el.parentNode.removeChild(el); };
+                let timer = setTimeout(remove, dur);
+                x.addEventListener('click', () => { clearTimeout(timer); remove(); });
+                el.addEventListener('mouseenter', () => clearTimeout(timer));
+                el.addEventListener('mouseleave', () => { timer = setTimeout(remove, 2500); });
+            } catch (e) {
+                try { console.warn('[rrToast]', message); } catch (_) {}
+            }
+        }
+
         // C4: Paginated record tabs (20/page)
         let recordPages = { leads: 0, deals: 0, contacts: 0, accounts: 0 };
 
@@ -1670,7 +1720,7 @@
             }
             const totalIds = Object.values(byModule).reduce((n, s) => n + s.size, 0);
             if (totalIds === 0) {
-                if (!silent) alert('No Zoho records on this view to refresh.');
+                if (!silent) rrToast('No Zoho records on this view to refresh.');
                 return { refreshed: 0, skipped: true };
             }
 
@@ -1719,7 +1769,7 @@
                     setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
                 }
                 if (!silent) {
-                    alert('Refresh from Zoho failed: ' + (e.message || e));
+                    rrToast('Refresh from Zoho failed: ' + (e.message || e));
                 } else {
                     try { console.error('Refresh from Zoho failed:', e); } catch (_) {}
                 }
@@ -1753,7 +1803,7 @@
                 } catch (_) { /* ignore malformed data-args */ }
             }
             if (clusterIds.size === 0) {
-                if (!silent) alert('No clusters on this view to refresh.');
+                if (!silent) rrToast('No clusters on this view to refresh.');
                 return { refreshed: 0, skipped: true };
             }
 
@@ -1834,7 +1884,7 @@
                     btn.innerHTML = '✗ Failed';
                     setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
                 }
-                if (!silent) alert('Refresh from Zoho failed: ' + (e.message || e));
+                if (!silent) rrToast('Refresh from Zoho failed: ' + (e.message || e));
                 return { refreshed: 0, error: String(e && e.message || e) };
             }
         }
@@ -1890,7 +1940,7 @@
                     btn.innerHTML = '✗ Failed';
                     setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
                 }
-                alert('Refresh failed: ' + (e.message || e));
+                rrToast('Refresh failed: ' + (e.message || e));
             }
         }
 
@@ -1925,7 +1975,7 @@
                     .filter(id => id && !id.startsWith('test_') && !id.startsWith('LEAD_') && !id.startsWith('DEAL_'))
             ));
             if (ids.length === 0) {
-                if (!silent) alert('No records on this page to refresh.');
+                if (!silent) rrToast('No records on this page to refresh.');
                 return { refreshed: 0, skipped: true };
             }
             const orig = btn ? btn.innerHTML : null;
@@ -1968,7 +2018,7 @@
                     setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
                 }
                 if (!silent) {
-                    alert('Refresh from Zoho failed: ' + (e.message || e));
+                    rrToast('Refresh from Zoho failed: ' + (e.message || e));
                 } else {
                     try { console.error('Refresh from Zoho failed:', e); } catch (_) {}
                 }
@@ -3398,7 +3448,7 @@
                 if (tr && tr.dataset.ownerKey) checkedKeys.add(tr.dataset.ownerKey);
             });
             if (checkedKeys.size === 0) {
-                alert('Tick at least one row in the table to include it in the CSV.');
+                rrToast('Tick at least one row in the table to include it in the CSV.');
                 return;
             }
             const selected = _ownersCache.filter((o, idx) => {
@@ -3514,9 +3564,9 @@
                 });
                 const data = await res.json();
                 const s = (data && data.summary) || {};
-                alert('Re-do complete for #' + clusterId + ': applied ' + (s.applied || 0) + ', queued ' + (s.queued || 0) + ', errors ' + (s.errors || 0) + '.');
+                rrToast('Re-do complete for #' + clusterId + ': applied ' + (s.applied || 0) + ', queued ' + (s.queued || 0) + ', errors ' + (s.errors || 0) + '.');
                 loadAgentActivity();
-            } catch (e) { alert('Re-do failed: ' + e); }
+            } catch (e) { rrToast('Re-do failed: ' + e); }
         }
 
         // Manual Actions table — Mark Resolved / Mark Dismissed / Bulk-split
@@ -3591,9 +3641,9 @@
                     method: 'POST', credentials: 'same-origin'
                 });
                 const data = await res.json();
-                alert((data && data.message) || (data && data.ok ? 'Undone.' : 'Undo failed.'));
+                rrToast((data && data.message) || (data && data.ok ? 'Undone.' : 'Undo failed.'));
                 loadAgentActivity();
-            } catch (e) { alert('Undo failed: ' + e); }
+            } catch (e) { rrToast('Undo failed: ' + e); }
         }
 
         // D2: Enhanced cluster modal with side-by-side comparison + AI recommendations
@@ -4107,7 +4157,7 @@
         async function splitClusterByDomain(clusterId) {
             const mixed = window.__currentMixedSignal || { domains: [] };
             if (!mixed.domains || mixed.domains.length < 2) {
-                alert('This cluster has only one corporate domain — nothing to split.');
+                rrToast('This cluster has only one corporate domain — nothing to split.');
                 return;
             }
             const sorted = [...mixed.domains].sort((a, b) => {
@@ -4138,14 +4188,14 @@
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) {
-                    alert(data.error || 'Split failed.');
+                    rrToast(data.error || 'Split failed.');
                     return;
                 }
-                alert(`Split complete: ${data.split_count} new cluster(s) created.`);
+                rrToast(`Split complete: ${data.split_count} new cluster(s) created.`);
                 closeModal();
                 refreshData();
             } catch (e) {
-                alert('Network error during split.');
+                rrToast('Network error during split.');
             }
         }
 
@@ -4186,7 +4236,7 @@
         // plan's checkboxes to pick exactly which to merge.
         async function resolveGroupWithAI(module, clusterId, groupZohoIds) {
             if (!clusterId) {
-                alert('This group has no cluster id yet — run a scan first, then try again.');
+                rrToast('This group has no cluster id yet — run a scan first, then try again.');
                 return;
             }
             try { await showClusterDetails(clusterId); } catch (_) { /* modal still opens */ }
@@ -4946,7 +4996,7 @@
                 const d = await res.json().catch(function () { return {}; });
                 if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
             } catch (e) {
-                alert('Dismiss failed: ' + (e && e.message || e));
+                rrToast('Dismiss failed: ' + (e && e.message || e));
                 return;
             }
             g._dismissed = true;
@@ -5237,7 +5287,7 @@
             var linkOnly = !!(st.linkAccount && String(st.linkAccount).trim());
             var minSel = linkOnly ? 1 : 2;
             if (sel.size < minSel) {
-                alert(linkOnly ? 'Keep at least the survivor contact selected.' : 'Select at least 2 records to merge (or pick an Account to link to for a link-only cascade).');
+                rrToast(linkOnly ? 'Keep at least the survivor contact selected.' : 'Select at least 2 records to merge (or pick an Account to link to for a link-only cascade).');
                 previewMergePlan(module, window.__planClusterId);
                 return;
             }
@@ -5271,10 +5321,10 @@
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
-                alert('Done — linked to "' + (accountName || accountZohoId) + '" in Zoho. The next sync will reflect it.');
+                rrToast('Done — linked to "' + (accountName || accountZohoId) + '" in Zoho. The next sync will reflect it.');
                 if (window.__planClusterId) previewMergePlan(module, window.__planClusterId);
             } catch (e) {
-                alert('Could not link: ' + (e && e.message || e) + (/403|401|admin/i.test(String(e && e.message || e)) ? '\n(Admin access is required to link records.)' : ''));
+                rrToast('Could not link: ' + (e && e.message || e) + (/403|401|admin/i.test(String(e && e.message || e)) ? '\n(Admin access is required to link records.)' : ''));
             }
         }
 
@@ -5318,11 +5368,11 @@
             const recs = (st.planRecords || []).filter(r => r.zohoId && selected.has(String(r.zohoId)));
             const dbIds = recs.map(r => r.dbId).filter(x => x !== null && x !== undefined);
             if (dbIds.length < 1) {
-                alert('Tick the records you want to move into a new cluster first (e.g. the accounts that belong to the OTHER company), then click Split.');
+                rrToast('Tick the records you want to move into a new cluster first (e.g. the accounts that belong to the OTHER company), then click Split.');
                 return;
             }
             if ((st.planRecords || []).length && dbIds.length >= (st.planRecords || []).length) {
-                alert('Leave at least one record behind — splitting every record would just move the cluster. Untick the records that should stay.');
+                rrToast('Leave at least one record behind — splitting every record would just move the cluster. Untick the records that should stay.');
                 return;
             }
             if (!confirm('Move the ' + dbIds.length + ' ticked record(s) into a NEW cluster?\n\nThey become a separate cluster you can resolve on their own. This changes nothing in Zoho.')) return;
@@ -5334,11 +5384,11 @@
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
-                alert('Done — ' + dbIds.length + ' record(s) split into a new cluster. It now appears separately in the list to resolve.');
+                rrToast('Done — ' + dbIds.length + ' record(s) split into a new cluster. It now appears separately in the list to resolve.');
                 closeModal();
                 refreshData();
             } catch (e) {
-                alert('Could not split: ' + (e && e.message || e) + (/403|401|admin/i.test(String(e && e.message || e)) ? '\n(Admin access is required to split a cluster.)' : ''));
+                rrToast('Could not split: ' + (e && e.message || e) + (/403|401|admin/i.test(String(e && e.message || e)) ? '\n(Admin access is required to split a cluster.)' : ''));
             }
         }
 
@@ -5354,11 +5404,11 @@
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
-                alert('Split into ' + ((data.new_cluster_ids || []).length) + ' new cluster(s) by company name. They now appear separately in the list to resolve.');
+                rrToast('Split into ' + ((data.new_cluster_ids || []).length) + ' new cluster(s) by company name. They now appear separately in the list to resolve.');
                 closeModal();
                 refreshData();
             } catch (e) {
-                alert('Could not split by name: ' + (e && e.message || e) + (/403|401|admin/i.test(String(e && e.message || e)) ? '\n(Admin access is required to split a cluster.)' : ''));
+                rrToast('Could not split by name: ' + (e && e.message || e) + (/403|401|admin/i.test(String(e && e.message || e)) ? '\n(Admin access is required to split a cluster.)' : ''));
             }
         }
 
@@ -5401,7 +5451,7 @@
             const st = _planSt(module);
             const sel = (st.selected || []);
             if (sel.length < 2) {
-                alert('Tick the contacts that are the SAME person — at least 2 (the survivor + the one(s) to merge into it) — then click Force-merge.');
+                rrToast('Tick the contacts that are the SAME person — at least 2 (the survivor + the one(s) to merge into it) — then click Force-merge.');
                 return;
             }
             const ok = window.confirm(
@@ -5831,24 +5881,24 @@
                 res = await fetch('/api/duplicates/clusters/' + clusterId + '/verify-tags', { credentials: 'same-origin' });
                 data = await res.json().catch(() => null);
             } catch (e) {
-                alert('Could not reach server to verify: ' + (e && e.message || e));
+                rrToast('Could not reach server to verify: ' + (e && e.message || e));
                 return;
             }
             if (!res.ok || !data) {
-                alert('Verify failed: ' + ((data && data.error) || ('HTTP ' + res.status)));
+                rrToast('Verify failed: ' + ((data && data.error) || ('HTTP ' + res.status)));
                 return;
             }
             if (data.message || (data.total || 0) === 0) {
-                alert(data.message || 'No tagged duplicates on this cluster yet — run Apply first, then have the Zoho admin delete the tagged records.');
+                rrToast(data.message || 'No tagged duplicates on this cluster yet — run Apply first, then have the Zoho admin delete the tagged records.');
                 return;
             }
             const total = data.total || 0, deleted = data.deleted || 0, alive = data.alive || 0, errors = data.errors || 0;
             if (errors > 0) {
-                alert('Could not verify ' + errors + ' of ' + total + ' tagged record(s) (Zoho error). Try again in a moment — not marking Resolved until every record is confirmed.');
+                rrToast('Could not verify ' + errors + ' of ' + total + ' tagged record(s) (Zoho error). Try again in a moment — not marking Resolved until every record is confirmed.');
                 return;
             }
             if (alive > 0) {
-                alert(deleted + ' of ' + total + ' tagged duplicate(s) have been deleted in Zoho.\n\n' + alive + ' are STILL in Zoho — the admin hasn\'t removed these yet. Open the cluster to see which records, share them with the admin, and re-run Verify once deleted.\n\nNot marked Resolved.');
+                rrToast(deleted + ' of ' + total + ' tagged duplicate(s) have been deleted in Zoho.\n\n' + alive + ' are STILL in Zoho — the admin hasn\'t removed these yet. Open the cluster to see which records, share them with the admin, and re-run Verify once deleted.\n\nNot marked Resolved.');
                 return;
             }
             // All tagged duplicates confirmed deleted → mark Resolved (verified).
@@ -5878,7 +5928,7 @@
                     loadCrossModule();
                 } else if (typeof refreshData === 'function') { refreshData(); }
             } catch (e) {
-                alert('Verified deleted, but could not mark Resolved: ' + (e && e.message || e));
+                rrToast('Verified deleted, but could not mark Resolved: ' + (e && e.message || e));
             }
         }
 
@@ -5913,14 +5963,14 @@
                     + '• ' + data.pending + ' still have records in Zoho → left open\n'
                     + (data.errored ? ('• ' + data.errored + ' had Zoho errors → left open (retry later)\n') : '');
                 if (data.more) msg += '\nThere are more AI-Applied clusters than processed this run — click again to continue.';
-                alert(msg);
+                rrToast(msg);
                 var tab = String(module || '').toLowerCase();
                 if (['leads','deals','contacts','accounts'].includes(tab)) {
                     window._loadedTabs && window._loadedTabs.delete(tab);
                     loadRecordTab(tab, 0);
                 } else if (typeof refreshData === 'function') { refreshData(); }
             } catch (e) {
-                alert('Bulk verify failed: ' + (e && e.message || e));
+                rrToast('Bulk verify failed: ' + (e && e.message || e));
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = origLabel; }
             }
@@ -5958,7 +6008,7 @@
                     refreshData();
                 }
             } catch (e) {
-                alert('Could not dismiss: ' + (e && e.message || e));
+                rrToast('Could not dismiss: ' + (e && e.message || e));
             }
         }
 
@@ -5992,7 +6042,7 @@
                     loadCrossModule();
                 } else if (typeof refreshData === 'function') { refreshData(); }
             } catch (e) {
-                alert('Could not re-open: ' + (e && e.message || e));
+                rrToast('Could not re-open: ' + (e && e.message || e));
             }
         }
 
@@ -6036,7 +6086,7 @@
         // Bulk re-open selected clusters — recover ones dismissed/resolved by mistake.
         async function bulkReopenSelected() {
             const ids = Array.from(window._dupBulkSel || []).map(Number).filter(function (x) { return Number.isFinite(x); });
-            if (!ids.length) { alert('Select at least one cluster (tick the checkboxes or "Select all on page").'); return; }
+            if (!ids.length) { rrToast('Select at least one cluster (tick the checkboxes or "Select all on page").'); return; }
             if (!confirm('Re-open ' + ids.length + ' selected cluster(s)?\n\nThey return to the active "Untouched" list so you can action them. No Zoho changes.')) return;
             const payload = JSON.stringify({ cluster_ids: ids, action: 'reopen' });
             try {
@@ -6062,7 +6112,7 @@
                     loadRecordTab(tab, 0);
                 } else if (typeof refreshData === 'function') { refreshData(); }
             } catch (e) {
-                alert('Could not re-open selected: ' + (e && e.message || e));
+                rrToast('Could not re-open selected: ' + (e && e.message || e));
             }
         }
         async function bulkDismissSelected() {
@@ -6093,7 +6143,7 @@
                     loadRecordTab(tab, 0);
                 } else if (typeof refreshData === 'function') { refreshData(); }
             } catch (e) {
-                alert('Could not dismiss selected: ' + (e && e.message || e));
+                rrToast('Could not dismiss selected: ' + (e && e.message || e));
             }
         }
 
@@ -6107,11 +6157,11 @@
             });
             const data = await res.json();
             if (data.success) {
-                alert(action === 'resolve' ? WalaPlusI18n.t('dyn.duplicates.cluster_resolved') : WalaPlusI18n.t('dyn.duplicates.cluster_ignored'));
+                rrToast(action === 'resolve' ? WalaPlusI18n.t('dyn.duplicates.cluster_resolved') : WalaPlusI18n.t('dyn.duplicates.cluster_ignored'));
                 closeModal();
                 refreshData();
             } else {
-                alert(data.error || WalaPlusI18n.t('dyn.duplicates.failed_action'));
+                rrToast(data.error || WalaPlusI18n.t('dyn.duplicates.failed_action'));
             }
         }
 
@@ -6267,7 +6317,7 @@
                 });
                 const data = await res.json();
                 if (!data.success && data.error) {
-                    alert(data.error);
+                    rrToast(data.error);
                     btn.disabled = false;
                     btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> Scan from Zoho';
                     return;
@@ -6277,7 +6327,7 @@
                 document.getElementById('scanProgressBar').classList.remove('hidden');
                 startScanPolling();
             } catch (e) {
-                alert(WalaPlusI18n.t('dyn.duplicates.error_starting_scan'));
+                rrToast(WalaPlusI18n.t('dyn.duplicates.error_starting_scan'));
                 btn.disabled = false;
                 btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.scan_zoho_btn'));
             }
@@ -6301,7 +6351,7 @@
                 });
                 const data = await res.json();
                 if (!data.success) {
-                    alert(data.error || WalaPlusI18n.t('dyn.duplicates.failed_rebuild'));
+                    rrToast(data.error || WalaPlusI18n.t('dyn.duplicates.failed_rebuild'));
                     btn.disabled = false;
                     btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.rebuild_clusters_btn'));
                     return;
@@ -6311,7 +6361,7 @@
                 document.getElementById('scanProgressText').textContent = WalaPlusI18n.t('dyn.duplicates.tables_wiped');
                 startScanPolling();
             } catch (e) {
-                alert(WalaPlusI18n.t('dyn.duplicates.error_rebuild'));
+                rrToast(WalaPlusI18n.t('dyn.duplicates.error_rebuild'));
                 btn.disabled = false;
                 btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.rebuild_clusters_btn'));
             }
@@ -6594,7 +6644,7 @@
         function exportCsLifecycle() {
             const data = window._csLifecycleData;
             const violations = (data && data.violations) || [];
-            if (!violations.length) { alert('Nothing to export for the current filter.'); return; }
+            if (!violations.length) { rrToast('Nothing to export for the current filter.'); return; }
             const groups = groupCsLifecycleByDeal(violations);
             const sorted = sortCsLifecycleRows(groups, window._csLifecycleSort.key, window._csLifecycleSort.dir);
             // CSV keeps BOTH Health and ExtID (Admin) — the dashboard UI
@@ -6624,7 +6674,7 @@
         function exportCsOverlap() {
             const data = window._csOverlapData;
             const clusters = (data && data.clusters) || [];
-            if (!clusters.length) { alert('Nothing to export for the current filter.'); return; }
+            if (!clusters.length) { rrToast('Nothing to export for the current filter.'); return; }
             const sorted = sortCsOverlapRows(clusters, window._csOverlapSort.key, window._csOverlapSort.dir);
             const sectorText = s => s === 'government' ? 'Government' : s === 'private' ? 'Private' : '';
             const headers = ['Verdict', 'Domain', 'Company', 'Sector', 'Phase', 'ARR Exposure', 'Records', 'Updated'];
@@ -6644,7 +6694,7 @@
         function exportAccountHints() {
             const data = window._accountHintsData;
             const hints = (data && data.hints) || [];
-            if (!hints.length) { alert('Nothing to export for the current filter.'); return; }
+            if (!hints.length) { rrToast('Nothing to export for the current filter.'); return; }
             const headers = ['Deal', 'Deal Account (current)', 'Suggested Account', 'Suggested Domain', 'Evidence Contact', 'Confidence %', 'Status'];
             const rows = hints.map(h => [
                 h.deal_company_name || h.deal_account_name || '',
@@ -6664,7 +6714,7 @@
         function exportCrossModule() {
             const list = (crossModuleClusters || []).filter(c =>
                 crossModuleFilter === 'all' ? true : c.pairing === crossModuleFilter);
-            if (!list.length) { alert('Nothing to export for the current filter.'); return; }
+            if (!list.length) { rrToast('Nothing to export for the current filter.'); return; }
             const headers = ['Pairing', 'Domain', 'Company', 'Modules', 'Records', 'Confidence %', 'Pipeline Value', 'Recommended Action'];
             const rows = list.map(c => {
                 const meta = CROSS_MODULE_PAIRING_LABELS[c.pairing] || { label: c.pairing || '', action: '' };
@@ -6725,7 +6775,7 @@
             };
 
             const hasValue = Object.values(params).some(v => v && v.trim());
-            if (!hasValue) { alert(WalaPlusI18n.t('dyn.duplicates.search_no_criteria')); return; }
+            if (!hasValue) { rrToast(WalaPlusI18n.t('dyn.duplicates.search_no_criteria')); return; }
 
             const res = await fetch('/api/duplicates/search', {
                 method: 'POST',
@@ -6863,7 +6913,7 @@
         async function combineSelectedSearchClusters() {
             const boxes = Array.from(document.querySelectorAll('.search-cluster-cb:checked'));
             const ids = boxes.map(b => Number(b.getAttribute('data-cid'))).filter(Boolean);
-            if (ids.length < 2) { alert('Tick at least 2 clusters that are the SAME company.'); return; }
+            if (ids.length < 2) { rrToast('Tick at least 2 clusters that are the SAME company.'); return; }
             // Target = the ticked cluster with the most records (keeps the richest one).
             let target = ids[0], best = -1;
             for (const b of boxes) {
@@ -6887,11 +6937,11 @@
                 });
                 const j = await res.json().catch(() => ({}));
                 if (!res.ok || !j.success) throw new Error(j.error || ('HTTP ' + res.status));
-                alert('Combined into cluster #' + target + ' — ' + (j.records_moved || 0) + ' record(s) moved. Opening it so you can merge the Accounts.');
+                rrToast('Combined into cluster #' + target + ' — ' + (j.records_moved || 0) + ' record(s) moved. Opening it so you can merge the Accounts.');
                 if (typeof showClusterDetails === 'function') showClusterDetails(target);
                 else if (typeof performSearch === 'function') performSearch();
             } catch (e) {
-                alert('Combine failed: ' + (e.message || e));
+                rrToast('Combine failed: ' + (e.message || e));
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
@@ -7745,7 +7795,7 @@
         function erDoLinkDealManual(id) {
             const inp = document.getElementById('erlinkacc-' + id);
             const accId = inp ? (inp.value || '').trim() : '';
-            if (!accId) { alert('Enter an Account Zoho ID.'); return; }
+            if (!accId) { rrToast('Enter an Account Zoho ID.'); return; }
             erDoLinkDeal(id, accId);
         }
         async function erDoLinkDeal(dealId, accountId) {
@@ -7851,7 +7901,7 @@
                 _erRenderTaggedHeader();
                 _erRenderTaggedPage();
             } catch (e) {
-                alert('Dismiss failed: ' + (e && e.message || e));
+                rrToast('Dismiss failed: ' + (e && e.message || e));
             }
         }
         function erTaggedChangePage(delta) {
@@ -7988,7 +8038,7 @@
             const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             const j = await erAdminPost('/api/duplicates/empty-records/dismiss', { module: module, zohoIds: [String(id)] });
             if (!j) return; // cancelled at admin-key prompt
-            if (!j.success) { alert('Could not dismiss: ' + (j.error || 'failed')); return; }
+            if (!j.success) { rrToast('Could not dismiss: ' + (j.error || 'failed')); return; }
             _erRemoveLocal(kind, [String(id)]);
         }
         // Bulk Dismiss for the current selection (across all pages).
@@ -8133,7 +8183,7 @@
         // CSV export of the deals shown + their document status.
         function exportDealCompliance() {
             var deals = window._dcDeals || [];
-            if (!deals.length) { alert('Nothing to export — load the tab first.'); return; }
+            if (!deals.length) { rrToast('Nothing to export — load the tab first.'); return; }
             var results = window._dcResults || {};
             var esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
             var rows = [['Deal', 'Stage', 'Owner', 'Lead source', 'Created', 'Amount', 'Account', 'Doc status', 'Missing documents', 'Attachments', 'Checked at'].join(',')];
@@ -8405,7 +8455,7 @@
                 document.getElementById('accountHintsLastScan').textContent = summary;
                 await loadAccountHints();
             } catch (e) {
-                alert('Scan failed: ' + (e.message || e));
+                rrToast('Scan failed: ' + (e.message || e));
             } finally {
                 btn.disabled = false;
                 btn.textContent = original;
@@ -8422,7 +8472,7 @@
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 await loadAccountHints();
             } catch (e) {
-                alert('Update failed: ' + (e.message || e));
+                rrToast('Update failed: ' + (e.message || e));
             }
         }
         function markAccountHintApplied(id) { return setAccountHintStatus(id, 'applied'); }
@@ -8488,16 +8538,16 @@
                 });
                 const data = await res.json().catch(() => null);
                 if (!res.ok) {
-                    alert('AI resolve failed: ' + ((data && (data.error || data.reason)) || ('HTTP ' + res.status)));
+                    rrToast('AI resolve failed: ' + ((data && (data.error || data.reason)) || ('HTTP ' + res.status)));
                     return;
                 }
                 if (data && data.success === false) {
-                    alert(data.reason || data.error || 'AI resolve refused.');
+                    rrToast(data.reason || data.error || 'AI resolve refused.');
                     return;
                 }
                 await loadAccountHints();
             } catch (e) {
-                alert('AI resolve failed: ' + (e && e.message ? e.message : e));
+                rrToast('AI resolve failed: ' + (e && e.message ? e.message : e));
             }
         }
 
@@ -8588,10 +8638,10 @@
             try {
                 const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/apply', { dealZohoId: dealZohoId, action: action });
                 if (!j) return; // cancelled at the admin-key prompt
-                if (!j.success) { alert('Apply failed: ' + (j.reason || j.error || 'unknown')); return; }
+                if (!j.success) { rrToast('Apply failed: ' + (j.reason || j.error || 'unknown')); return; }
                 loadStaleDeals(); // re-scan — the deal is now re-staged and drops off
             } catch (e) {
-                alert('Apply failed: ' + (e && e.message || e));
+                rrToast('Apply failed: ' + (e && e.message || e));
             }
         }
 
@@ -8683,7 +8733,7 @@
                 await renderRecordHintsSection('contact_account', 'recordHintsContactAccountBody');
                 await renderRecordHintsSection('deal_contact', 'recordHintsDealContactBody');
             } catch (e) {
-                alert('Scan failed: ' + (e && e.message ? e.message : e));
+                rrToast('Scan failed: ' + (e && e.message ? e.message : e));
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = original; }
             }
@@ -8699,7 +8749,7 @@
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 await renderRecordHintsSection(type, RECORD_HINT_TBODY_BY_TYPE[type]);
             } catch (e) {
-                alert('Update failed: ' + (e && e.message ? e.message : e));
+                rrToast('Update failed: ' + (e && e.message ? e.message : e));
             }
         }
         function markRecordHintApplied(id, type) { return setRecordHintStatus(id, type, 'applied'); }
@@ -8715,16 +8765,16 @@
                 });
                 const data = await res.json().catch(() => null);
                 if (!res.ok) {
-                    alert('AI resolve failed: ' + ((data && (data.error || data.reason)) || ('HTTP ' + res.status)));
+                    rrToast('AI resolve failed: ' + ((data && (data.error || data.reason)) || ('HTTP ' + res.status)));
                     return;
                 }
                 if (data && data.success === false) {
-                    alert(data.reason || data.error || 'AI resolve refused.');
+                    rrToast(data.reason || data.error || 'AI resolve refused.');
                     return;
                 }
                 await renderRecordHintsSection(type, RECORD_HINT_TBODY_BY_TYPE[type]);
             } catch (e) {
-                alert('AI resolve failed: ' + (e && e.message ? e.message : e));
+                rrToast('AI resolve failed: ' + (e && e.message ? e.message : e));
             }
         }
 
@@ -8904,12 +8954,12 @@
             const card = document.querySelector('[data-cmc-group="' + Number(groupIdx) + '"]');
             if (!card) return;
             const masterEl = card.querySelector('input[type=radio]:checked');
-            if (!masterEl) { alert('Pick a master cluster first.'); return; }
+            if (!masterEl) { rrToast('Pick a master cluster first.'); return; }
             const targetId = Number(masterEl.value);
             const sourceIds = Array.from(card.querySelectorAll('[data-cmc-source-cb]:checked'))
                 .map(cb => Number(cb.getAttribute('data-cluster')))
                 .filter(n => Number.isFinite(n) && n > 0 && n !== targetId);
-            if (sourceIds.length === 0) { alert('Tick at least one source cluster to merge.'); return; }
+            if (sourceIds.length === 0) { rrToast('Tick at least one source cluster to merge.'); return; }
             const grp = (_cmcData && _cmcData.groups && _cmcData.groups[groupIdx]) || null;
             const dom = grp ? grp.domain : '(unknown domain)';
             if (!confirm(
@@ -8933,10 +8983,10 @@
                 }
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
-                alert('✓ Merged ' + (data.records_moved || 0) + ' record(s) into cluster #' + targetId + ', deleted ' + (data.source_clusters_deleted || 0) + ' source cluster(s).');
+                rrToast('✓ Merged ' + (data.records_moved || 0) + ' record(s) into cluster #' + targetId + ', deleted ' + (data.source_clusters_deleted || 0) + ' source cluster(s).');
                 loadClusterMergeCandidates();
             } catch (e) {
-                alert('Merge failed: ' + (e && e.message || e));
+                rrToast('Merge failed: ' + (e && e.message || e));
             }
         }
 
@@ -9099,7 +9149,7 @@
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 await loadCsOverlap(window._csOverlapFilter || 'all');
             } catch (e) {
-                alert('Scan failed: ' + (e.message || e));
+                rrToast('Scan failed: ' + (e.message || e));
             } finally {
                 btn.disabled = false;
                 btn.textContent = original;
@@ -9292,9 +9342,9 @@
                 if (!res.ok || !body || body.success === false) {
                     const errMsg = (body && (body.error || body.detail)) || ('Upload failed: HTTP ' + res.status);
                     if (body && Array.isArray(body.detected_headers)) {
-                        alert(errMsg + '\n\nHeaders found in row ' + (body.header_row || 1) + ':\n  ' + body.detected_headers.join(', '));
+                        rrToast(errMsg + '\n\nHeaders found in row ' + (body.header_row || 1) + ':\n  ' + body.detected_headers.join(', '));
                     } else {
-                        alert(errMsg);
+                        rrToast(errMsg);
                     }
                     return;
                 }
@@ -9331,7 +9381,7 @@
                     countSpan.className = 'ms-auto text-xs ' + ((dupDomainRows > 0 || skipped > 0) ? 'text-amber-700' : 'text-emerald-700') + ' font-medium';
                 }
             } catch (e) {
-                alert('Upload failed: ' + ((e && e.message) || String(e)));
+                rrToast('Upload failed: ' + ((e && e.message) || String(e)));
             } finally {
                 if (uploadBtn) {
                     uploadBtn.disabled = false;
@@ -9358,12 +9408,12 @@
             const isPass = mode === 'pass';
             const data = preflightLastResult || window._preflightLastResult;
             if (!data || !Array.isArray(data.rows)) {
-                alert('Run the preflight Check first.');
+                rrToast('Run the preflight Check first.');
                 return;
             }
             const subset = data.rows.filter(r => r && r.verdict && (isPass ? r.verdict === 'pass' : r.verdict !== 'pass'));
             if (subset.length === 0) {
-                alert(isPass ? 'No PASS (safe-to-import) rows in the last run.' : 'No flagged rows (Block / Review / Warn / Duplicate) in the last run — nothing to send.');
+                rrToast(isPass ? 'No PASS (safe-to-import) rows in the last run.' : 'No flagged rows (Block / Review / Warn / Duplicate) in the last run — nothing to send.');
                 return;
             }
             const subsetIdx = new Set(subset.map(r => r.row_index));
@@ -9460,7 +9510,7 @@
                 a.click();
                 setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 100);
             } catch (e) {
-                alert((isPass ? 'PASS' : 'Flagged') + ' export failed: ' + (e.message || e));
+                rrToast((isPass ? 'PASS' : 'Flagged') + ' export failed: ' + (e.message || e));
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
@@ -9634,11 +9684,11 @@
             try {
                 rows = parsePreflightInput(raw);
             } catch (e) {
-                alert('Could not parse input: ' + e.message);
+                rrToast('Could not parse input: ' + e.message);
                 return;
             }
             if (rows.length === 0) {
-                alert('No rows to check. Paste a CSV with a domain column or a JSON array.');
+                rrToast('No rows to check. Paste a CSV with a domain column or a JSON array.');
                 return;
             }
             document.getElementById('preflightParsedCount').textContent = rows.length + ' row(s) parsed';
@@ -9724,7 +9774,7 @@
                     }
                 }
             } catch (e) {
-                alert('Preflight failed: ' + (e.message || e));
+                rrToast('Preflight failed: ' + (e.message || e));
             } finally {
                 btn.disabled = false;
                 btn.textContent = original;
@@ -9948,7 +9998,7 @@
                 .map(v => v.zoho_record_id)
                 .filter(Boolean))).slice(0, 50); // endpoint caps at 50
             if (ids.length === 0) {
-                if (!opts || !opts.silent) alert('No deals on screen to refresh.');
+                if (!opts || !opts.silent) rrToast('No deals on screen to refresh.');
                 return;
             }
             const btn = document.getElementById('dealLifeZohoRefreshBtn');
@@ -9965,7 +10015,7 @@
                 await loadDealLifecycle();
             } catch (e) {
                 try { console.error('Deals Lifecycle live refresh failed:', e); } catch (_) {}
-                if (!opts || !opts.silent) alert('Refresh from Zoho failed: ' + (e.message || e));
+                if (!opts || !opts.silent) rrToast('Refresh from Zoho failed: ' + (e.message || e));
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
@@ -9986,7 +10036,7 @@
         function exportDealLifecycle() {
             const data = window._dealLifecycleData;
             if (!data || !Array.isArray(data.violations) || data.violations.length === 0) {
-                alert('Nothing to export — run a scan first or clear filters.');
+                rrToast('Nothing to export — run a scan first or clear filters.');
                 return;
             }
             const headers = ['Severity','Stage','Deal','Account','Owner','Owner email','Aging units','Aging unit','Aging calendar days','SLA units','SOP clause','Modified date','Suggested action'];
@@ -10080,7 +10130,7 @@
             if (ids.length === 0) {
                 // When chained from the global Refresh button there's nothing
                 // to do and no need to interrupt the user with an alert.
-                if (!silent) alert('No violations to refresh.');
+                if (!silent) rrToast('No violations to refresh.');
                 return { refreshed: 0, failed: 0, missing: 0, skipped: true };
             }
             const orig = btn ? btn.innerHTML : null;
@@ -10127,7 +10177,7 @@
                 // green button — when chained from the global Refresh the
                 // error is logged and the table just keeps the prior data.
                 if (!silent) {
-                    alert('Refresh from Zoho failed: ' + (e.message || e));
+                    rrToast('Refresh from Zoho failed: ' + (e.message || e));
                 } else {
                     try { console.error('CS Lifecycle live refresh failed:', e); } catch (_) {}
                 }
@@ -10992,7 +11042,7 @@
         function openCapaPicker(tabKey) {
             const provider = CAPA_TAB_PROVIDERS[tabKey];
             if (typeof provider !== 'function') {
-                alert('No CAPA picker is configured for this tab yet.');
+                rrToast('No CAPA picker is configured for this tab yet.');
                 return;
             }
             const rows = provider() || [];
@@ -11010,7 +11060,7 @@
             };
             const tabLabel = tabLabelMap[tabKey] || tabKey;
             if (rows.length === 0) {
-                alert('No rows are loaded on the ' + tabLabel + ' tab yet — open the tab (and run a scan if needed) so the picker has something to choose from.');
+                rrToast('No rows are loaded on the ' + tabLabel + ' tab yet — open the tab (and run a scan if needed) so the picker has something to choose from.');
                 return;
             }
             // Stash for the picker change-handler to look up.
@@ -11368,7 +11418,7 @@
                 });
                 const j = await resp.json().catch(function () { return {}; });
                 if (!resp.ok || !j.success) {
-                    alert('Re-check failed: ' + (j.error || ('HTTP ' + resp.status)));
+                    rrToast('Re-check failed: ' + (j.error || ('HTTP ' + resp.status)));
                     return;
                 }
                 // Returned rows are in the SAME order as `affected` — map by
@@ -11396,9 +11446,9 @@
 
                 const upd = (j.resync && j.resync.updated) || 0;
                 const co = names[0] || domains[0] || 'company';
-                alert('Re-checked ' + co + ':\n• ' + upd + ' deal(s) refreshed from Zoho\n• ' + movedToPass + ' row(s) now PASS');
+                rrToast('Re-checked ' + co + ':\n• ' + upd + ' deal(s) refreshed from Zoho\n• ' + movedToPass + ' row(s) now PASS');
             } catch (err) {
-                alert('Re-check error: ' + (err && err.message ? err.message : err));
+                rrToast('Re-check error: ' + (err && err.message ? err.message : err));
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = origLabel || '↻ Re-check'; }
             }
@@ -11411,10 +11461,10 @@
 
         async function openPushToZohoModal() {
             const data = window._preflightLastResult;
-            if (!data) { alert('Run a Preflight check first.'); return; }
+            if (!data) { rrToast('Run a Preflight check first.'); return; }
             const passRows = (data.rows || []).filter(r => r.verdict === 'pass');
             if (passRows.length === 0) {
-                alert('No PASS rows in this run — nothing to push.');
+                rrToast('No PASS rows in this run — nothing to push.');
                 return;
             }
             window._preflightPushPassRows = passRows;
@@ -11471,9 +11521,9 @@
 
         async function runPushToZoho() {
             const rows = window._preflightPushPassRows || [];
-            if (rows.length === 0) { alert('Reopen the modal — no rows in memory.'); return; }
+            if (rows.length === 0) { rrToast('Reopen the modal — no rows in memory.'); return; }
             const layoutId = (document.getElementById('pushZohoLayout') || {}).value || '';
-            if (!layoutId) { alert('Pick a Zoho Layout first.'); return; }
+            if (!layoutId) { rrToast('Pick a Zoho Layout first.'); return; }
             const mode = (document.querySelector('input[name="pushZohoOwnerMode"]:checked') || {}).value || 'self';
             const dryRun = !!(document.getElementById('pushZohoDryRun') || {}).checked;
             const source = ((document.getElementById('pushZohoSource') || {}).value || '').trim();
@@ -11487,11 +11537,11 @@
             };
             if (mode === 'custom') {
                 body.owner_id = (document.getElementById('pushZohoOwnerCustom') || {}).value || '';
-                if (!body.owner_id) { alert('Pick the Zoho user to assign all rows to.'); return; }
+                if (!body.owner_id) { rrToast('Pick the Zoho user to assign all rows to.'); return; }
             } else if (mode === 'round_robin') {
                 const sel = document.getElementById('pushZohoOwnerRR');
                 body.round_robin_user_ids = sel ? Array.from(sel.selectedOptions).map(o => o.value).filter(Boolean) : [];
-                if (body.round_robin_user_ids.length === 0) { alert('Pick at least one user for round-robin.'); return; }
+                if (body.round_robin_user_ids.length === 0) { rrToast('Pick at least one user for round-robin.'); return; }
             }
 
             const btn = document.getElementById('pushZohoRunBtn');
@@ -11664,7 +11714,7 @@
         // Export the rubbish data as CSV so the operator can review the rejects.
         function erDownloadRubbish() {
             var rows = window._pfRubbishData || [];
-            if (!rows.length) { alert('No rubbish data — nothing was rejected.'); return; }
+            if (!rows.length) { rrToast('No rubbish data — nothing was rejected.'); return; }
             downloadCsvRows('rubbish-data-' + new Date().toISOString().slice(0, 10) + '.csv',
                 ['Company', 'Contact Name', 'Email', 'Phone', 'Title', 'Reason'],
                 rows.map(function (r) { return [r.company, r.contact_name, r.email, r.phone, r.title, r.reason]; }));
@@ -11790,7 +11840,7 @@
         function erReconcile() {
             var data = window._preflightLastResult;
             var box = document.getElementById('spReconcileResult');
-            if (!data || !Array.isArray(data.rows)) { alert('Run a Preflight check first.'); return; }
+            if (!data || !Array.isArray(data.rows)) { rrToast('Run a Preflight check first.'); return; }
             var r = _pfReconcile(data.rows);
             var ok = (r.unaccounted_total === 0 && r.unaccounted_pass === 0);
             var vv = r.verdicts;
@@ -11835,10 +11885,10 @@
         // (rows must carry a title). Dry-run by default.
         async function erBackfillTitles() {
             var data = window._preflightLastResult;
-            if (!data || !Array.isArray(data.rows)) { alert('Load the titled Excel and run a Preflight check first.'); return; }
+            if (!data || !Array.isArray(data.rows)) { rrToast('Load the titled Excel and run a Preflight check first.'); return; }
             var rows = data.rows.map(_pfToSPRow);
             var withTitle = rows.filter(function (r) { return String(r.title || '').trim() && (String(r.email || '').trim() || String(r.phone || '').trim() || String(r.contact_name || '').trim()); }).length;
-            if (withTitle === 0) { alert('No rows with a Title (plus an email, phone, or name to match on). Load the Excel that has the Title column, then run Preflight.'); return; }
+            if (withTitle === 0) { rrToast('No rows with a Title (plus an email, phone, or name to match on). Load the Excel that has the Title column, then run Preflight.'); return; }
             var dry = !!(document.getElementById('spBackfillDry') || {}).checked;
             var count = parseInt((document.getElementById('spBackfillNum') || {}).value || '0', 10) || 0;
             var offset = parseInt((document.getElementById('spBackfillOff') || {}).value || '0', 10) || 0;
@@ -11914,7 +11964,7 @@
         // ids back into the rows, refreshes the badges, and shows the summary.
         async function erResolveExistingAccounts() {
             var data = window._preflightLastResult;
-            if (!data || !Array.isArray(data.rows)) { alert('Run a Preflight check first.'); return; }
+            if (!data || !Array.isArray(data.rows)) { rrToast('Run a Preflight check first.'); return; }
             var btn = document.getElementById('spResolveBtn');
             var box = document.getElementById('spRejResult');
             var orig = btn ? btn.innerHTML : '';
@@ -11977,7 +12027,7 @@
         async function erStructuredPush(action) {
             action = Number(action);
             var data = window._preflightLastResult;
-            if (!data || !Array.isArray(data.rows)) { alert('Run a Preflight check first.'); return; }
+            if (!data || !Array.isArray(data.rows)) { rrToast('Run a Preflight check first.'); return; }
             var rows = data.rows.map(_pfToSPRow).filter(_pfIsPass);
 
             // Every action pushes in operator-sized slices (size = count,
@@ -12137,7 +12187,7 @@
 
         async function copyPreflightEmailBody() {
             const data = window._preflightLastResult;
-            if (!data) { alert('Run a Preflight check first.'); return; }
+            if (!data) { rrToast('Run a Preflight check first.'); return; }
             const s = data.summary || {};
             const actionable = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0) + (s.no_contact || 0);
             const examined = data.examined || 0;
@@ -12204,7 +12254,7 @@
                 ta.select();
                 try { document.execCommand('copy'); } catch {}
                 document.body.removeChild(ta);
-                alert('Email body copied — paste into your mail client.');
+                rrToast('Email body copied — paste into your mail client.');
             }
         }
 
@@ -12826,7 +12876,7 @@
                 const res = await fetch('/api/calls/diagnostic/zoho');
                 const data = await res.json();
                 if (!data.success) {
-                    alert(`Zoho diagnostic failed: ${data.error || 'unknown'}`);
+                    rrToast(`Zoho diagnostic failed: ${data.error || 'unknown'}`);
                     return;
                 }
                 const lines = [];
@@ -12885,7 +12935,7 @@
                 document.body.appendChild(modal);
                 console.log('[Zoho Diagnostic]', data);
             } catch (e) {
-                alert('Zoho diagnostic threw: ' + (e.message || e));
+                rrToast('Zoho diagnostic threw: ' + (e.message || e));
             } finally {
                 if (btn) btn.disabled = false;
             }
@@ -12923,7 +12973,7 @@
                 }
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
-                    alert(err.error || WalaPlusI18n.t('dyn.duplicates.sync_failed'));
+                    rrToast(err.error || WalaPlusI18n.t('dyn.duplicates.sync_failed'));
                     btn.disabled = false;
                     btn.innerHTML = originalHTML;
                     return;
@@ -12945,7 +12995,7 @@
                 }, 2000);
                 setTimeout(() => { btn.disabled = false; btn.innerHTML = originalHTML; clearInterval(restoreBtn); }, 600000);
             } catch (e) {
-                alert(WalaPlusI18n.t('dyn.duplicates.sync_failed_msg', { msg: e.message || e }));
+                rrToast(WalaPlusI18n.t('dyn.duplicates.sync_failed_msg', { msg: e.message || e }));
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
             }

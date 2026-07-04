@@ -179,6 +179,22 @@
         html.wp-dark .rr-pager-btn { background: #0F1A2E; color: #94A3B8; border-color: #2B3A52; }
         html.wp-dark .rr-pager-btn:hover { background: #16233B; color: #F1F5F9; }
         html.wp-dark .rr-pager-info { color: #94A3B8; }
+        /* phase 5b — non-blocking toast (replaces native alert). Bottom-right
+           stack, auto-dismiss, hover-to-persist, manual close. Dark-aware. */
+        .rr-toast-host { position: fixed; bottom: 18px; right: 18px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; max-width: 380px; }
+        .rr-toast { display: flex; align-items: flex-start; gap: 10px; padding: 11px 12px; border-radius: 10px; background: #fff; border: 1px solid #E5E7EB; box-shadow: 0 4px 14px rgba(16,24,40,.12); font-size: 12.5px; color: #111827; animation: rrToastIn .18s ease; }
+        .rr-toast .rr-toast-ic { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; flex: none; margin-top: 1px; }
+        .rr-toast .rr-toast-msg { white-space: pre-line; line-height: 1.4; flex: 1; word-break: break-word; }
+        .rr-toast .rr-toast-x { color: #9CA3AF; cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; flex: none; }
+        .rr-toast .rr-toast-x:hover { color: #111827; }
+        .rr-toast.rr-toast-good .rr-toast-ic { background: #15803D; }
+        .rr-toast.rr-toast-warn .rr-toast-ic { background: #B91C1C; }
+        .rr-toast.rr-toast-info .rr-toast-ic { background: #1D4ED8; }
+        @keyframes rrToastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        @media (prefers-reduced-motion: reduce) { .rr-toast { animation: none; } }
+        html.wp-dark .rr-toast { background: #0F1A2E; border-color: #2B3A52; color: #F1F5F9; box-shadow: 0 4px 14px rgba(0,0,0,.5); }
+        html.wp-dark .rr-toast .rr-toast-x { color: #64748B; }
+        html.wp-dark .rr-toast .rr-toast-x:hover { color: #F1F5F9; }
         .confidence-high { background-color: #FEE2E2; color: #991B1B; }
         .confidence-medium { background-color: #FEF3C7; color: #92400E; }
         .confidence-low { background-color: #DCFCE7; color: #166534; }
@@ -2345,7 +2361,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=77"></script>
+    <script src="/js/duplicates-app.js?v=78"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
