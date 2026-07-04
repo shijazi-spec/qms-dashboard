@@ -11,14 +11,15 @@
     <style>
         html { font-family: 'Inter', sans-serif; height: 100%; }
         body { font-family: 'Inter', sans-serif; height: 100%; margin: 0; overflow: hidden; display: flex; flex-direction: column; }
-        .tab-active { background-color: #1E3A8A; color: white; }
-        .tab-inactive { background-color: #E5E7EB; color: #374151; }
+        .tab-active { background-color: #111827; color: #fff; }
+        .tab-inactive { background-color: transparent; color: #6B7280; }
+        .tab-inactive:hover { background-color: #F3F4F6; color: #111827; }
         .confidence-high { background-color: #FEE2E2; color: #991B1B; }
         .confidence-medium { background-color: #FEF3C7; color: #92400E; }
         .confidence-low { background-color: #DCFCE7; color: #166534; }
-        .read-only-badge { background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); }
-        .cluster-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        .cluster-card { transition: all 0.2s ease; }
+        .read-only-badge { background: #4F46E5; }
+        .cluster-card:hover { border-color: #C7D2FE; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .cluster-card { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
         .chart-container { height: 220px; position: relative; }
         .main-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
         .rag-green { background-color: #DCFCE7; color: #166534; }
