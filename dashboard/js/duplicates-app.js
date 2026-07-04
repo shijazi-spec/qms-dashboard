@@ -7217,16 +7217,16 @@
             body.innerHTML = deals.map(function (d) {
                 var reqd = (d.requiredDocs || []).map(function (x) { return x.label; }).join(', ');
                 var docArgs = escapeHtml(JSON.stringify([String(d.id), String(d.stage)]));
-                return '<tr class="border-t border-gray-100 align-top" data-deal-id="' + escapeHtml(String(d.id)) + '" data-deal-stage="' + escapeHtml(String(d.stage)) + '" data-deal-owner="' + escapeHtml(String(d.owner || '—')) + '">' +
-                    '<td class="px-3 py-2 font-medium">' +
-                        '<a href="https://crm.zoho.com/crm/org766568398/tab/Potentials/' + encodeURIComponent(String(d.id)) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in Zoho CRM">' + escapeHtml(d.name) + '</a>' +
-                        (d.accountName ? '<div class="text-xs text-gray-400">' + escapeHtml(d.accountName) + '</div>' : '') + '</td>' +
-                    '<td class="px-3 py-2"><span class="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-xs">' + escapeHtml(d.stage) + '</span></td>' +
-                    '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(d.owner) + '</td>' +
-                    '<td class="px-3 py-2 text-xs text-gray-600">' + (d.source ? escapeHtml(d.source) : '—') + '</td>' +
-                    '<td class="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">' + _dcFmtDate(d.createdTime) + '</td>' +
-                    '<td class="px-3 py-2 text-end text-xs text-gray-700">' + (d.amount != null ? escapeHtml(String(d.amount)) : '—') + '</td>' +
-                    '<td class="px-3 py-2"><span id="docs-' + escapeHtml(String(d.id)) + '" title="Required: ' + escapeHtml(reqd) + '"><button data-on-click="checkDealDocs" data-args=\'' + docArgs + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 Check documents</button></span></td>' +
+                return '<tr class="align-top" data-deal-id="' + escapeHtml(String(d.id)) + '" data-deal-stage="' + escapeHtml(String(d.stage)) + '" data-deal-owner="' + escapeHtml(String(d.owner || '—')) + '">' +
+                    '<td class="rr-lead rr-primary">' +
+                        '<a href="https://crm.zoho.com/crm/org766568398/tab/Potentials/' + encodeURIComponent(String(d.id)) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit" title="Open this deal in Zoho CRM">' + escapeHtml(d.name) + '</a>' +
+                        (d.accountName ? '<div class="rr-sub">' + escapeHtml(d.accountName) + '</div>' : '') + '</td>' +
+                    '<td><span class="rr-badge rr-neutral">' + escapeHtml(d.stage) + '</span></td>' +
+                    '<td class="rr-muted">' + escapeHtml(d.owner) + '</td>' +
+                    '<td class="rr-muted">' + (d.source ? escapeHtml(d.source) : '—') + '</td>' +
+                    '<td class="rr-muted" style="white-space:nowrap">' + _dcFmtDate(d.createdTime) + '</td>' +
+                    '<td class="rr-num rr-muted">' + (d.amount != null ? escapeHtml(String(d.amount)) : '—') + '</td>' +
+                    '<td><span id="docs-' + escapeHtml(String(d.id)) + '" title="Required: ' + escapeHtml(reqd) + '"><button data-on-click="checkDealDocs" data-args=\'' + docArgs + '\' class="rr-btn rr-btn-ghost">📎 Check documents</button></span></td>' +
                     '</tr>';
             }).join('');
             // Restore previously-scanned results (persisted) so re-opening the
@@ -7287,6 +7287,7 @@
             _dcStorePut(id, rec);
             _dcUpdateCards();
             if (span) span.innerHTML = _dcDocCellHtml(id, rec, stage);
+            _dcSetRowSev(id, rec.compliant);
         }
 
         // ══ Empty / Orphaned Records cleanup tab ════════════════════════════
@@ -8058,13 +8059,21 @@
             try { return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
             catch (e) { return iso; }
         }
+        // Row severity stripe reflects the compliance result once scanned
+        // (compliant → green, missing docs → red). No-op until a scan exists.
+        function _dcSetRowSev(id, compliant) {
+            var tr = document.querySelector('#dealComplianceBody tr[data-deal-id="' + String(id) + '"]');
+            if (!tr) return;
+            tr.classList.remove('rr-sev-good', 'rr-sev-warn');
+            tr.classList.add(compliant ? 'rr-sev-good' : 'rr-sev-warn');
+        }
         // Renders the document-status cell from a stored/live result record.
         function _dcDocCellHtml(id, rec, stage) {
             var present = (rec.present || []).map(function (l) { return '<div class="text-xs text-green-700">✓ ' + escapeHtml(l) + '</div>'; }).join('');
             var missing = (rec.missing || []).map(function (l) { return '<div class="text-xs text-red-700">✗ ' + escapeHtml(l) + '</div>'; }).join('');
             var head = rec.compliant
-                ? '<div class="text-xs font-medium text-green-700 mb-1">✓ All required docs present (' + (rec.attachmentCount || 0) + ' files)</div>'
-                : '<div class="text-xs font-medium text-red-700 mb-1">✗ ' + ((rec.missing || []).length) + ' missing (' + (rec.attachmentCount || 0) + ' files attached)</div>';
+                ? '<div class="mb-1"><span class="rr-badge rr-good rr-dot">All docs present</span> <span class="text-[10px] text-gray-400">' + (rec.attachmentCount || 0) + ' files</span></div>'
+                : '<div class="mb-1"><span class="rr-badge rr-warn rr-dot">' + ((rec.missing || []).length) + ' missing</span> <span class="text-[10px] text-gray-400">' + (rec.attachmentCount || 0) + ' files attached</span></div>';
             // Surface "checked by" alongside the timestamp so a second
             // reviewer can see who already ran the scan on this deal
             // (the server's deal_doc_compliance row carries checkedBy,
@@ -8089,6 +8098,7 @@
                 window._dcResults[String(d.id)] = rec;
                 var span = document.getElementById('docs-' + d.id);
                 if (span) span.innerHTML = _dcDocCellHtml(d.id, rec, d.stage);
+                _dcSetRowSev(d.id, rec.compliant);
                 restored++;
             });
             if (restored > 0) _dcUpdateCards();
@@ -8117,6 +8127,7 @@
                 _dcStorePut(d.id, rec); // keep local cache in sync with server
                 var span = document.getElementById('docs-' + d.id);
                 if (span) span.innerHTML = _dcDocCellHtml(d.id, rec, d.stage);
+                _dcSetRowSev(d.id, rec.compliant);
                 n++;
             });
             if (n > 0) _dcUpdateCards();
@@ -8829,17 +8840,20 @@
                     if ((c.total_deals || 0) > 0)    modChips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700 me-1">D ' + (c.total_deals||0) + '</span>');
                     if ((c.total_contacts || 0) > 0) modChips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-700 me-1">C ' + (c.total_contacts||0) + '</span>');
                     if ((c.total_accounts || 0) > 0) modChips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700 me-1">A ' + (c.total_accounts||0) + '</span>');
+                    const cmcStatusBadge = c.status === 'resolved'
+                        ? '<span class="rr-badge rr-good rr-dot">' + escapeHtml(c.status) + '</span>'
+                        : '<span class="rr-badge rr-info">' + escapeHtml(c.status) + '</span>';
                     return ''
-                        + '<tr class="' + (isMaster ? 'bg-emerald-50' : '') + '">'
-                        +   '<td class="px-3 py-2 text-xs text-center"><input type="radio" name="cmc-master-' + gi + '" value="' + Number(c.id) + '" data-on-change="_cmcOnMasterChange" data-args="[' + gi + ',' + Number(c.id) + ']" ' + (isMaster ? 'checked' : '') + ' aria-label="Set cluster ' + Number(c.id) + ' as master" /></td>'
-                        +   '<td class="px-3 py-2 text-xs text-center"><input type="checkbox" data-cmc-source-cb data-group="' + gi + '" data-cluster="' + Number(c.id) + '" ' + (isMaster ? 'disabled' : 'checked') + ' aria-label="Include cluster ' + Number(c.id) + ' as a source to merge" /></td>'
-                        +   '<td class="px-3 py-2 text-xs font-mono text-gray-700">#' + Number(c.id) + '</td>'
-                        +   '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(c.company_name || '—') + '</td>'
-                        +   '<td class="px-3 py-2 text-xs">' + (modChips.join('') || '<span class="text-gray-300 text-[10px]">—</span>') + '</td>'
-                        +   '<td class="px-3 py-2 text-xs text-end font-medium">' + _fn(c.total_records || 0) + '</td>'
-                        +   '<td class="px-3 py-2 text-xs text-end">' + (c.confidence_score != null ? (_fn(c.confidence_score) + '%') : '—') + '</td>'
-                        +   '<td class="px-3 py-2 text-xs"><span class="' + (c.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') + ' px-2 py-0.5 rounded text-[10px] font-semibold">' + escapeHtml(c.status) + '</span></td>'
-                        +   '<td class="px-3 py-2 text-xs"><button type="button" data-on-click="showClusterDetails" data-args="[' + Number(c.id) + ']" class="text-blue-700 hover:underline">Open →</button></td>'
+                        + '<tr class="' + (isMaster ? 'rr-sev-good' : '') + '">'
+                        +   '<td class="rr-lead rr-num" style="text-align:center"><input type="radio" name="cmc-master-' + gi + '" value="' + Number(c.id) + '" data-on-change="_cmcOnMasterChange" data-args="[' + gi + ',' + Number(c.id) + ']" ' + (isMaster ? 'checked' : '') + ' aria-label="Set cluster ' + Number(c.id) + ' as master" /></td>'
+                        +   '<td class="rr-num" style="text-align:center"><input type="checkbox" data-cmc-source-cb data-group="' + gi + '" data-cluster="' + Number(c.id) + '" ' + (isMaster ? 'disabled' : 'checked') + ' aria-label="Include cluster ' + Number(c.id) + ' as a source to merge" /></td>'
+                        +   '<td class="rr-mono">#' + Number(c.id) + '</td>'
+                        +   '<td class="rr-primary">' + escapeHtml(c.company_name || '—') + '</td>'
+                        +   '<td>' + (modChips.join('') || '<span class="rr-muted">—</span>') + '</td>'
+                        +   '<td class="rr-num rr-strong">' + _fn(c.total_records || 0) + '</td>'
+                        +   '<td class="rr-num rr-muted">' + (c.confidence_score != null ? (_fn(c.confidence_score) + '%') : '—') + '</td>'
+                        +   '<td>' + cmcStatusBadge + '</td>'
+                        +   '<td><button type="button" data-on-click="showClusterDetails" data-args="[' + Number(c.id) + ']" class="rr-btn rr-btn-ghost rr-btn-icon">Open →</button></td>'
                         + '</tr>';
                 }).join('');
                 return ''
@@ -8848,24 +8862,24 @@
                     +     '<span class="font-mono text-sm text-gray-900 break-all">' + escapeHtml(g.domain) + '</span>'
                     +     '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-700">' + _fn(g.cluster_count) + ' clusters</span>'
                     +     '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-200 text-gray-700">' + _fn(g.total_records) + ' records</span>'
-                    +     '<button type="button" data-on-click="mergeClusterGroup" data-args="[' + gi + ']" data-testid="button-cmc-merge-' + gi + '" class="ms-auto px-3 py-1.5 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700">Merge selected → master</button>'
+                    +     '<button type="button" data-on-click="mergeClusterGroup" data-args="[' + gi + ']" data-testid="button-cmc-merge-' + gi + '" class="rr-btn rr-btn-primary ms-auto">Merge selected → master</button>'
                     +   '</div>'
                     +   '<div class="overflow-x-auto">'
-                    +     '<table class="min-w-full divide-y divide-gray-200">'
-                    +       '<thead class="bg-gray-50">'
+                    +     '<table class="rr-table min-w-full">'
+                    +       '<thead>'
                     +         '<tr>'
-                    +           '<th scope="col" class="px-3 py-2 text-xs font-medium text-gray-500 uppercase" title="Pick which cluster to merge the others INTO">Master</th>'
-                    +           '<th scope="col" class="px-3 py-2 text-xs font-medium text-gray-500 uppercase" title="Tick the clusters whose records get moved into the master">Merge in?</th>'
-                    +           '<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Cluster</th>'
-                    +           '<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Company</th>'
-                    +           '<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Modules</th>'
-                    +           '<th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Records</th>'
-                    +           '<th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Conf.</th>'
-                    +           '<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Status</th>'
-                    +           '<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">View</th>'
+                    +           '<th scope="col" style="text-align:center" title="Pick which cluster to merge the others INTO">Master</th>'
+                    +           '<th scope="col" style="text-align:center" title="Tick the clusters whose records get moved into the master">Merge in?</th>'
+                    +           '<th scope="col">Cluster</th>'
+                    +           '<th scope="col">Company</th>'
+                    +           '<th scope="col">Modules</th>'
+                    +           '<th scope="col" class="rr-num">Records</th>'
+                    +           '<th scope="col" class="rr-num">Conf.</th>'
+                    +           '<th scope="col">Status</th>'
+                    +           '<th scope="col">View</th>'
                     +         '</tr>'
                     +       '</thead>'
-                    +       '<tbody class="bg-white divide-y divide-gray-200">' + rows + '</tbody>'
+                    +       '<tbody>' + rows + '</tbody>'
                     +     '</table>'
                     +   '</div>'
                     + '</div>';

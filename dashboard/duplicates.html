@@ -777,11 +777,11 @@
                 <button data-on-click="clearDcChartFilter" class="text-indigo-600 hover:text-indigo-800 font-medium">✕ clear filter</button>
             </div>
             <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
-                    <thead><tr class="text-xs text-gray-500 text-start border-b border-gray-200">
-                        <th scope="col" class="px-3 py-2">Deal</th><th scope="col" class="px-3 py-2">Stage</th><th scope="col" class="px-3 py-2">Owner</th>
-                        <th scope="col" class="px-3 py-2">Lead source</th><th scope="col" class="px-3 py-2">Created</th>
-                        <th scope="col" class="px-3 py-2 text-end">Amount</th><th scope="col" class="px-3 py-2">Required documents</th>
+                <table class="rr-table min-w-full">
+                    <thead><tr>
+                        <th scope="col">Deal</th><th scope="col">Stage</th><th scope="col">Owner</th>
+                        <th scope="col">Lead source</th><th scope="col">Created</th>
+                        <th scope="col" class="rr-num">Amount</th><th scope="col">Required documents</th>
                     </tr></thead>
                     <tbody id="dealComplianceBody"><tr><td colspan="7" class="px-3 py-4 text-gray-500">Open this tab to load deals…</td></tr></tbody>
                 </table>
@@ -2265,7 +2265,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=70"></script>
+    <script src="/js/duplicates-app.js?v=71"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
