@@ -606,7 +606,7 @@
                 const checked = crossModuleSelected.has(c.id) ? 'checked' : '';
                 const checkboxCell = hasLead
                     ? `<td class="rr-num" style="text-align:center"><input type="checkbox" data-on-change="toggleCrossModuleRowSelection" data-args="[${c.id}]" data-cmo-row="${c.id}" ${checked} aria-label="Select cluster ${c.id} for bulk-close" /></td>`
-                    : '<td class="rr-num rr-sub" style="text-align:center" title="No Lead records — nothing to bulk-close">—</td>';
+                    : '<td class="rr-num rr-muted" style="text-align:center" title="No Lead records — nothing to bulk-close">—</td>';
                 // The row stays clickable to open the cluster modal, but
                 // the checkbox uses stopPropagation in toggleCrossModuleRowSelection
                 // so clicking it doesn't also open the modal.
@@ -8727,12 +8727,18 @@
 
         function csVerdictBadge(v) {
             const map = {
-                block:  { bg: 'bg-red-100',    fg: 'text-red-700',    label: 'BLOCK'  },
-                review: { bg: 'bg-amber-100',  fg: 'text-amber-700',  label: 'REVIEW' },
-                warn:   { bg: 'bg-yellow-100', fg: 'text-yellow-700', label: 'WARN'   },
+                block:  { cls: 'rr-warn',  label: 'BLOCK'  },
+                review: { cls: 'rr-amber', label: 'REVIEW' },
+                warn:   { cls: 'rr-amber', label: 'WARN'   },
             };
-            const m = map[v] || { bg: 'bg-gray-100', fg: 'text-gray-600', label: (v || '—').toUpperCase() };
-            return '<span class="px-2 py-1 text-xs font-bold rounded ' + m.bg + ' ' + m.fg + '">' + m.label + '</span>';
+            const m = map[v] || { cls: 'rr-neutral', label: (v || '—').toUpperCase() };
+            return '<span class="rr-badge ' + m.cls + ' rr-dot">' + m.label + '</span>';
+        }
+        // verdict → row severity stripe class (leading cell).
+        function csVerdictSev(v) {
+            if (v === 'block') return 'rr-sev-warn';
+            if (v === 'review' || v === 'warn') return 'rr-sev-amber';
+            return 'rr-sev-info';
         }
 
         function csPhaseLabel(state) {
@@ -9069,17 +9075,17 @@
                 // single Zoho record) — so an external Zoho link would not
                 // have a unique target.
                 const companyCell = r.id
-                    ? '<a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[' + r.id + ']" class="text-blue-700 hover:text-blue-900 hover:underline text-xs" title="View this cluster\'s underlying records">' + safeCompany + '</a>'
+                    ? '<a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[' + r.id + ']" class="rr-primary hover:underline" style="color:inherit" title="View this cluster\'s underlying records">' + safeCompany + '</a>'
                     : safeCompany;
-                return '<tr class="hover:bg-gray-50">'
-                    + '<td class="px-4 py-2 whitespace-nowrap">' + csVerdictBadge(r.cs_overlap_verdict) + '</td>'
-                    + '<td class="px-4 py-2">' + domainCell + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-gray-800">' + companyCell + '</td>'
-                    + '<td class="px-4 py-2 text-xs">' + csSectorLabel(r.client_sector) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.pipeline_lifecycle_state)) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-end font-medium">' + formatCurrency(r.arr_exposure || 0) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-end text-gray-600">' + (r.total_records || 0) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-end text-gray-500">' + formatDate(r.updated_at) + '</td>'
+                return '<tr class="' + csVerdictSev(r.cs_overlap_verdict) + '">'
+                    + '<td class="rr-lead" style="white-space:nowrap">' + csVerdictBadge(r.cs_overlap_verdict) + '</td>'
+                    + '<td class="rr-mono">' + domainCell + '</td>'
+                    + '<td class="rr-primary">' + companyCell + '</td>'
+                    + '<td>' + csSectorLabel(r.client_sector) + '</td>'
+                    + '<td class="rr-muted">' + escapeHtml(csPhaseLabel(r.pipeline_lifecycle_state)) + '</td>'
+                    + '<td class="rr-num rr-strong">' + formatCurrency(r.arr_exposure || 0) + '</td>'
+                    + '<td class="rr-num rr-muted">' + (r.total_records || 0) + '</td>'
+                    + '<td class="rr-num rr-muted">' + formatDate(r.updated_at) + '</td>'
                     + '</tr>';
             }).join('');
         }
@@ -9147,21 +9153,28 @@
 
         function preflightVerdictBadge(v, reason) {
             const map = {
-                block:     { bg: 'bg-red-100',     fg: 'text-red-700',    label: 'BLOCK'     },
-                review:    { bg: 'bg-amber-100',   fg: 'text-amber-700',  label: 'REVIEW'    },
-                warn:      { bg: 'bg-yellow-100',  fg: 'text-yellow-700', label: 'WARN'      },
-                duplicate:  { bg: 'bg-gray-200',    fg: 'text-gray-700',   label: 'DUPLICATE' },
-                no_contact: { bg: 'bg-rose-100',    fg: 'text-rose-700',   label: 'REJECTED'  },
-                pass:       { bg: 'bg-green-100',   fg: 'text-green-700',  label: 'PASS'      },
+                block:      { cls: 'rr-warn rr-dot',  label: 'BLOCK'     },
+                review:     { cls: 'rr-amber rr-dot', label: 'REVIEW'    },
+                warn:       { cls: 'rr-amber rr-dot', label: 'WARN'      },
+                duplicate:  { cls: 'rr-neutral',      label: 'DUPLICATE' },
+                no_contact: { cls: 'rr-warn rr-dot',  label: 'REJECTED'  },
+                pass:       { cls: 'rr-good rr-dot',  label: 'PASS'      },
             };
-            const m = map[v] || { bg: 'bg-gray-100', fg: 'text-gray-600', label: (v || '—').toUpperCase() };
+            const m = map[v] || { cls: 'rr-neutral', label: (v || '—').toUpperCase() };
             // R9 (quick wins): hover tooltip explains the verdict in plain
             // English so operators don't have to guess what `active_phase:adoption`
             // or `termination_within_cooloff:60d<180d` means.
             const human = reason ? humanizePreflightReason(reason) : '';
             const titleAttr = human ? ' title="' + escAttr(human) + '"' : '';
             const cursor = human ? ' cursor-help' : '';
-            return '<span class="px-2 py-1 text-xs font-bold rounded ' + m.bg + ' ' + m.fg + cursor + '"' + titleAttr + '>' + m.label + '</span>';
+            return '<span class="rr-badge ' + m.cls + cursor + '"' + titleAttr + '>' + m.label + '</span>';
+        }
+        // preflight verdict → row severity stripe class (leading cell).
+        function preflightVerdictSev(v) {
+            if (v === 'block' || v === 'no_contact') return 'rr-sev-warn';
+            if (v === 'review' || v === 'warn') return 'rr-sev-amber';
+            if (v === 'pass') return 'rr-sev-good';
+            return 'rr-sev-info';
         }
 
         // Translate the classifier's machine-style reason codes into plain
@@ -11264,13 +11277,6 @@
                 body.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">No rows processed.</td></tr>';
                 return;
             }
-            const sevTint = {
-                critical: 'bg-red-50',
-                high: 'bg-amber-50',
-                medium: 'bg-yellow-50',
-                low: 'bg-blue-50',
-                info: '',
-            };
             // Sarah 2026-06-17 — ARR column dropped from the result table
             // (mostly "—" on a vendor list since ARR only fires on
             // BLOCK/cs-overlap rows). Still emitted in the Excel export +
@@ -11289,7 +11295,6 @@
                 const ownerStr = Array.isArray(r.owners) && r.owners.length > 0
                     ? r.owners.slice(0, 2).map(o => escapeHtml(o)).join(', ') + (r.owners.length > 2 ? ' <span class="text-gray-400">+' + (r.owners.length - 2) + '</span>' : '')
                     : '<span class="text-gray-400">—</span>';
-                const tint = sevTint[r.executive_severity] || '';
                 const execAction = r.executive_action || r.suggested_action || '';
                 // "↻ Re-check from CRM" — only on rows flagged because of a CRM
                 // match the operator may have just corrected in Zoho. (no_contact
@@ -11302,16 +11307,16 @@
                         + ' data-pf-company="' + escAttr(r.input.company_name || '') + '"'
                         + ' title="Re-fetch this company&#39;s deals from Zoho and re-check — use after you corrected it in the CRM">↻ Re-check</button>'
                     : '';
-                return '<tr class="hover:bg-gray-50 ' + tint + '">'
-                    + '<td class="px-3 py-2 text-xs text-gray-500">' + (r.row_index + 1) + '</td>'
-                    + '<td class="px-3 py-2 whitespace-nowrap">' + preflightVerdictBadge(r.verdict, r.reason) + '</td>'
-                    + '<td class="px-3 py-2 text-xs font-mono">' + _preflightDomainCell(r.input.domain) + '</td>'
-                    + '<td class="px-3 py-2 text-xs">' + _preflightCompanyCell(r.input.company_name) + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-700">' + ownerStr + '</td>'
-                    + '<td class="px-3 py-2">' + _preflightModulesCell(r.module_counts) + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.lifecycle_state)) + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-800" title="' + escAttr(r.reason || '') + '">' + escapeHtml(execAction) + '</td>'
-                    + '<td class="px-3 py-2 whitespace-nowrap">' + _preflightViewCell(r.cluster_id) + recheckBtn + '</td>'
+                return '<tr class="' + preflightVerdictSev(r.verdict) + '">'
+                    + '<td class="rr-lead rr-num rr-muted">' + (r.row_index + 1) + '</td>'
+                    + '<td style="white-space:nowrap">' + preflightVerdictBadge(r.verdict, r.reason) + '</td>'
+                    + '<td class="rr-mono">' + _preflightDomainCell(r.input.domain) + '</td>'
+                    + '<td class="rr-primary">' + _preflightCompanyCell(r.input.company_name) + '</td>'
+                    + '<td class="rr-muted">' + ownerStr + '</td>'
+                    + '<td>' + _preflightModulesCell(r.module_counts) + '</td>'
+                    + '<td class="rr-muted">' + escapeHtml(csPhaseLabel(r.lifecycle_state)) + '</td>'
+                    + '<td title="' + escAttr(r.reason || '') + '">' + escapeHtml(execAction) + '</td>'
+                    + '<td style="white-space:nowrap;text-align:center">' + _preflightViewCell(r.cluster_id) + recheckBtn + '</td>'
                     + '</tr>';
             }).join('');
             const moreNote = rows.length > MAX_VISIBLE_PREFLIGHT

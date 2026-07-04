@@ -1212,20 +1212,20 @@
 
             <!-- Table -->
             <div class="bg-white rounded-lg shadow overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead id="csOverlapTableHead" class="bg-gray-50">
+                <table class="rr-table min-w-full">
+                    <thead id="csOverlapTableHead">
                         <tr>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;verdict&quot;]" class="cs-overlap-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="verdict">Verdict <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;domain&quot;]" class="cs-overlap-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;company&quot;]" class="cs-overlap-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="company">Company <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;sector&quot;]" class="cs-overlap-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="sector">Sector <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;phase&quot;]" class="cs-overlap-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="phase">CS Phase <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;arr&quot;]" class="cs-overlap-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="arr">ARR Exposure <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;records&quot;]" class="cs-overlap-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="records">Records <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;updated&quot;]" class="cs-overlap-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="updated">Updated <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;verdict&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="verdict">Verdict <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;domain&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;company&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="company">Company <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;sector&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="sector">Sector <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;phase&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="phase">CS Phase <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;arr&quot;]" class="rr-num cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="arr">ARR Exposure <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;records&quot;]" class="rr-num cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="records">Records <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;updated&quot;]" class="rr-num cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="updated">Updated <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
                         </tr>
                     </thead>
-                    <tbody id="csOverlapTable" class="bg-white divide-y divide-gray-200">
+                    <tbody id="csOverlapTable">
                         <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
                     </tbody>
                 </table>
@@ -1469,21 +1469,21 @@
 
             <!-- Result table -->
             <div class="bg-white rounded-lg shadow overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
+                <table class="rr-table min-w-full">
+                    <thead>
                         <tr>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">#</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Verdict</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="Sales/CS rep who currently owns the matched record in CRM">Existing owner</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="How many existing CRM records the matched cluster contains, broken down by module">Records</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">CS Phase</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="Business-language action — what the Head of Sales / Sales rep should actually do">Recommended action</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="Open the cluster detail in the Duplicate Radar — see every underlying record, modules touched, owners. ARR exposure (when relevant) is retained in the Excel export.">View</th>
+                            <th scope="col" class="rr-num">#</th>
+                            <th scope="col">Verdict</th>
+                            <th scope="col">Domain</th>
+                            <th scope="col">Company</th>
+                            <th scope="col" title="Sales/CS rep who currently owns the matched record in CRM">Existing owner</th>
+                            <th scope="col" title="How many existing CRM records the matched cluster contains, broken down by module">Records</th>
+                            <th scope="col">CS Phase</th>
+                            <th scope="col" title="Business-language action — what the Head of Sales / Sales rep should actually do">Recommended action</th>
+                            <th scope="col" style="text-align:center" title="Open the cluster detail in the Duplicate Radar — see every underlying record, modules touched, owners. ARR exposure (when relevant) is retained in the Excel export.">View</th>
                         </tr>
                     </thead>
-                    <tbody id="preflightResultTable" class="bg-white divide-y divide-gray-200">
+                    <tbody id="preflightResultTable">
                         <tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>
                     </tbody>
                 </table>
@@ -2265,7 +2265,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=69"></script>
+    <script src="/js/duplicates-app.js?v=70"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
