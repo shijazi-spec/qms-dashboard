@@ -7755,7 +7755,8 @@
             }
             const rows = data.rows || [];
             const counts = data.counts || {};
-            if (progress) progress.textContent = (counts.tagged || 0) + ' tagged · ' + (counts.deleted || 0) + ' deleted · ' + (counts.pending || 0) + ' pending';
+            window._erTaggedCounts = counts;
+            _erRenderTaggedHeader();
             // PERF (Ahmad 2026-06-30): this can be 1000+ rows. Rendering them all
             // bloated the DOM so badly that every reflow (e.g. the sticky bulk-bar
             // appearing on a checkbox tick) froze the tab for ~a minute. Paginate
@@ -7764,8 +7765,37 @@
             window._erTaggedPage = 0;
             _erRenderTaggedPage();
         }
-        function erTaggedChangePage(delta) {
+        // Clickable status filter chips for the Tagged · pending-delete view.
+        // 'dismissed' = the operator removed the delete tag in Zoho, so the admin
+        // will never delete it — the re-check moved it out of Pending.
+        function _erRenderTaggedHeader() {
+            const progress = document.getElementById('erTaggedProgress');
+            if (!progress) return;
+            const counts = window._erTaggedCounts || {};
+            const f = window._erTaggedFilter || 'all';
+            const chip = function (key, label, n, activeCls) {
+                const active = f === key;
+                const cls = active ? (activeCls + ' ring-2 ring-offset-1 ring-gray-300') : 'bg-gray-100 text-gray-600 hover:bg-gray-200';
+                return '<button data-on-click="erTaggedFilter" data-args="[&quot;' + key + '&quot;]" class="px-2 py-0.5 rounded text-xs font-medium ' + cls + '" title="Show only these">' + label + ': ' + n + '</button>';
+            };
+            progress.innerHTML = chip('all', 'All tagged', (counts.tagged || 0), 'bg-gray-800 text-white')
+                + ' ' + chip('deleted', 'Deleted', (counts.deleted || 0), 'bg-emerald-600 text-white')
+                + ' ' + chip('pending_delete', 'Pending', (counts.pending || 0), 'bg-amber-500 text-white')
+                + ' ' + chip('dismissed', 'Dismissed', (counts.dismissed || 0), 'bg-slate-600 text-white');
+        }
+        function erTaggedFilter(status) {
+            window._erTaggedFilter = status;
+            window._erTaggedPage = 0;
+            _erRenderTaggedHeader();
+            _erRenderTaggedPage();
+        }
+        function _erTaggedFilteredRows() {
             const rows = window._erTagged || [];
+            const f = window._erTaggedFilter || 'all';
+            return f === 'all' ? rows : rows.filter(function (r) { return r.status === f; });
+        }
+        function erTaggedChangePage(delta) {
+            const rows = _erTaggedFilteredRows();
             const pages = Math.max(1, Math.ceil(rows.length / ER_PAGE_SIZE));
             window._erTaggedPage = Math.min(pages - 1, Math.max(0, (window._erTaggedPage || 0) + delta));
             _erRenderTaggedPage();
@@ -7773,11 +7803,12 @@
         function _erRenderTaggedPage() {
             const body = document.getElementById('erTaggedBody');
             if (!body) return;
-            const rows = window._erTagged || [];
+            const rows = _erTaggedFilteredRows();
             const table = body.closest('table');
             const clearPager = function () { const tf = table && table.querySelector('tfoot.er-pager'); if (tf) tf.innerHTML = ''; };
             if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-gray-400">None yet.</td></tr>';
+                const f = window._erTaggedFilter || 'all';
+                body.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-gray-400">' + (f === 'all' ? 'None yet.' : 'No ' + escapeHtml(f === 'pending_delete' ? 'pending' : f) + ' records.') + '</td></tr>';
                 clearPager();
                 return;
             }
@@ -7792,6 +7823,8 @@
                 const link = '<a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline font-mono text-xs">' + escapeHtml(r.zohoId) + '</a>';
                 const statusChip = r.status === 'deleted'
                     ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_deleted')) + '</span>'
+                    : r.status === 'dismissed'
+                    ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700" title="Delete tag was removed in Zoho — will NOT be deleted by admin">Dismissed</span>'
                     : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_pending')) + '</span>';
                 const taggedAt = r.createdAt ? new Date(r.createdAt).toLocaleString() : '—';
                 return '<tr class="border-t border-gray-100">'
@@ -7829,8 +7862,12 @@
             await erLoadTaggedStatus();
             const prog = document.getElementById('erTaggedProgress');
             if (prog) {
-                const extra = ' · checked ' + (j.checked || 0) + ', ' + (j.nowDeleted || 0) + ' now deleted';
-                prog.textContent = prog.textContent + extra;
+                // erLoadTaggedStatus re-rendered the filter chips (innerHTML) — append
+                // the re-check result as a note rather than overwriting them.
+                const note = document.createElement('span');
+                note.className = 'ms-2 text-xs text-gray-500';
+                note.textContent = 'checked ' + (j.checked || 0) + ' · ' + (j.nowDeleted || 0) + ' now deleted · ' + (j.nowDismissed || 0) + ' now dismissed';
+                prog.appendChild(note);
             }
         }
         async function erTagSelected() {

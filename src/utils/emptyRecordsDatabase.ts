@@ -696,7 +696,7 @@ export async function getTaggedStatus(module?: string): Promise<{
     createdAt: string;
     deletedAt: string | null;
   }>;
-  counts: { tagged: number; deleted: number; pending: number };
+  counts: { tagged: number; deleted: number; pending: number; dismissed: number };
 }> {
   const mod = module || null;
   const [rowsRes, countsRes] = await Promise.all([
@@ -715,11 +715,12 @@ export async function getTaggedStatus(module?: string): Promise<{
         LIMIT 1000`,
       [mod],
     ),
-    pool.query<{ total: string; deleted: string; pending: string }>(
+    pool.query<{ total: string; deleted: string; pending: string; dismissed: string }>(
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'deleted') AS deleted,
-         COUNT(*) FILTER (WHERE status = 'pending_delete') AS pending
+         COUNT(*) FILTER (WHERE status = 'pending_delete') AS pending,
+         COUNT(*) FILTER (WHERE status = 'dismissed') AS dismissed
        FROM empty_delete_ledger
        WHERE ($1::text IS NULL OR module = $1)`,
       [mod],
@@ -740,6 +741,7 @@ export async function getTaggedStatus(module?: string): Promise<{
     tagged: Number(c?.total ?? 0),
     deleted: Number(c?.deleted ?? 0),
     pending: Number(c?.pending ?? 0),
+    dismissed: Number(c?.dismissed ?? 0),
   };
 
   return { rows, counts };
@@ -756,7 +758,7 @@ export async function getTaggedStatus(module?: string): Promise<{
  * because that also deletes from empty_delete_ledger. */
 export async function reconcileEmptyDeleteDeletions(
   module?: string,
-): Promise<{ checked: number; nowDeleted: number }> {
+): Promise<{ checked: number; nowDeleted: number; nowDismissed: number }> {
   const { fetchZohoRecordById } = await import("./zohoCRM");
   const mod = module || null;
 
@@ -772,6 +774,7 @@ export async function reconcileEmptyDeleteDeletions(
 
   let checked = 0;
   let nowDeleted = 0;
+  let nowDismissed = 0;
 
   for (const row of pending.rows) {
     const id = row.zoho_record_id;
@@ -822,11 +825,30 @@ export async function reconcileEmptyDeleteDeletions(
         );
         nowDeleted++;
       } else {
-        // Still present — just refresh last_checked_at
-        await pool.query(
-          `UPDATE empty_delete_ledger SET last_checked_at = NOW() WHERE zoho_record_id = $1`,
-          [id],
+        // Still present in Zoho. Did the operator REMOVE the delete tag there?
+        // If the record no longer carries ANY delete tag, the admin will never
+        // delete it → move it OUT of pending into 'dismissed' (drops off the
+        // pending queue; the ledger row is kept so it still excludes the record
+        // from the cleanup list and shows under the Dismissed bucket).
+        const liveTags: string[] = (((rec as any)?.data?.Tag as any[]) || []).map(
+          (t: any) => String(t?.name || ""),
         );
+        const stillTaggedForDelete = liveTags.some((t) => DELETE_TAGS.includes(t));
+        if (!stillTaggedForDelete) {
+          await pool.query(
+            `UPDATE empty_delete_ledger
+                SET status = 'dismissed', last_checked_at = NOW(), deleted_at = NULL
+              WHERE zoho_record_id = $1`,
+            [id],
+          );
+          nowDismissed++;
+        } else {
+          // Still tagged — just refresh last_checked_at
+          await pool.query(
+            `UPDATE empty_delete_ledger SET last_checked_at = NOW() WHERE zoho_record_id = $1`,
+            [id],
+          );
+        }
       }
       checked++;
     } catch (e) {
@@ -839,7 +861,7 @@ export async function reconcileEmptyDeleteDeletions(
     }
   }
 
-  return { checked, nowDeleted };
+  return { checked, nowDeleted, nowDismissed };
 }
 
 // Contacts: name-only (no email/phone/account/deal) OR test-name.
