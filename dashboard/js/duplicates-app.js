@@ -526,15 +526,15 @@
             // server-load totals.
             updateCrossModuleKpisFromList(list);
             if (list.length === 0) {
-                let msg;
+                let emptyRow;
                 if (crossModuleLoadError) {
-                    msg = `<div class="text-red-700 font-medium mb-1">Cross-module fetch failed</div><div class="text-xs text-red-600 break-all">${escapeHtml(crossModuleLoadError)}</div><div class="text-xs text-gray-500 mt-2">Click <strong>Run scan</strong> to rebuild, or check the server logs for <code>cross-module-overlaps</code>.</div>`;
+                    emptyRow = rrEmptyRow(10, { glyph: '⚠', title: 'Cross-module fetch failed', desc: escapeHtml(crossModuleLoadError) + ' — click <strong>Run scan</strong> to rebuild, or check the server logs for <code>cross-module-overlaps</code>.' });
                 } else if ((crossModuleClusters || []).length === 0) {
-                    msg = '<div class="text-gray-600">No cross-module overlaps detected.</div><div class="text-xs text-gray-500 mt-1">Either the latest sync found none, or no Zoho scan has been run yet. Click <strong>Run scan</strong> to rebuild clusters.</div>';
+                    emptyRow = rrEmptyRow(10, { glyph: '✓', title: 'No cross-module overlaps detected', desc: 'Either the latest sync found none, or no Zoho scan has been run yet. Click <strong>Run scan</strong> to rebuild clusters.' });
                 } else {
-                    msg = 'No cross-module overlaps match this filter — try the <strong>All</strong> chip.';
+                    emptyRow = rrEmptyRow(10, { glyph: '🔍', title: 'No overlaps match this filter', desc: 'Try the <strong>All</strong> chip.' });
                 }
-                tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-8 text-center text-sm">${msg}</td></tr>`;
+                tbody.innerHTML = emptyRow;
                 // Reset the pager too — otherwise it keeps a STALE count (e.g.
                 // "1–20 of 12,971") from a previous render while the table is empty.
                 renderPagination('crossModulePagination', 0, 1, () => {}, 0, 'clusters');
@@ -1547,6 +1547,33 @@
                 });
                 el.appendChild(nextBtn);
             }
+        }
+
+        // Phase 5 — shared table states. rrEmptyRow renders one full-width cell
+        // with the .rr-empty treatment (glyph + title + optional description +
+        // optional action HTML). rrSkeletonRows renders shimmer rows while a
+        // table loads. Both accept the table's colspan so callers stay one-liners.
+        // opts.title/desc/action may contain trusted HTML (e.g. <em>, a button).
+        function rrEmptyRow(colspan, opts) {
+            opts = opts || {};
+            const glyph = opts.glyph || '—';
+            const title = opts.title || 'Nothing here';
+            const desc  = opts.desc   ? '<span class="rr-empty-d">' + opts.desc + '</span>' : '';
+            const action = opts.action ? '<div style="margin-top:8px">' + opts.action + '</div>' : '';
+            return '<tr><td colspan="' + colspan + '"><div class="rr-empty">'
+                + '<span class="rr-empty-glyph">' + glyph + '</span>'
+                + '<span class="rr-empty-t">' + title + '</span>'
+                + desc + action
+                + '</div></td></tr>';
+        }
+        function rrSkeletonRows(colspan, rows) {
+            rows = rows || 6;
+            let out = '';
+            for (let i = 0; i < rows; i++) {
+                const w = 55 + ((i * 13) % 40); // vary 55–95% so it reads as content
+                out += '<tr><td colspan="' + colspan + '" style="padding:11px 16px"><div class="rr-skel" style="width:' + w + '%"></div></td></tr>';
+            }
+            return out;
         }
 
         // C4: Paginated record tabs (20/page)
@@ -2584,7 +2611,7 @@
                     rows += `<tr data-dup-group="${_gid}" class="hidden bg-white">${leadCell}${signalCell}${emailCell}${phoneCell}${layoutCell}<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td>${createdCell}</tr>`;
                 });
             });
-            tbody.innerHTML = rows || `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No duplicate leads detected on this page — every lead has a unique name, email, phone, and CRM ID.</td></tr>`;
+            tbody.innerHTML = rows || rrEmptyRow(8, { glyph: '✓', title: 'No duplicate leads on this page', desc: 'Every lead has a unique name, email, phone, and CRM ID.' });
         }
 
         // ─── DEALS ───
@@ -2648,7 +2675,7 @@
                     rows += `<tr data-dup-group="${gid}" class="hidden bg-white">${identity}${signalCell}${stageCell}${valueCell}${_dupLayoutCell(r)}${ownerCell}${_dupCreatedCell(r)}</tr>`;
                 });
             });
-            tbody.innerHTML = rows || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No duplicate deals detected on this page — every deal has a unique name-on-account and CRM ID.</td></tr>`;
+            tbody.innerHTML = rows || rrEmptyRow(7, { glyph: '✓', title: 'No duplicate deals on this page', desc: 'Every deal has a unique name-on-account and CRM ID.' });
         }
 
         // ─── CONTACTS ───
@@ -2726,7 +2753,7 @@
                     rows += `<tr data-dup-group="${gid}" class="hidden bg-white">${identity}${signalCell}${emailCell}${phoneCell}${_dupContactTypeCell(r)}${ownerCell}${_dupCreatedCell(r)}</tr>`;
                 });
             });
-            tbody.innerHTML = rows || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No duplicate contacts detected on this page — every contact has a unique name, email, phone, and CRM ID.</td></tr>`;
+            tbody.innerHTML = rows || rrEmptyRow(7, { glyph: '✓', title: 'No duplicate contacts on this page', desc: 'Every contact has a unique name, email, phone, and CRM ID.' });
             // How many groups actually rendered (client re-groups by a DIRECT
             // name/email/phone signal and drops colleague/chained-match clusters).
             // The caller uses this so the footer count can't disagree with the
@@ -2827,7 +2854,7 @@
                     rows += `<tr data-dup-group="${gid}" class="hidden bg-white">${identity}${signalCell}${emailCell}${phoneCell}${websiteCell}${_dupLayoutCell(r)}${ownerCell}${_dupCreatedCell(r)}</tr>`;
                 });
             });
-            tbody.innerHTML = rows || `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No duplicate accounts detected on this page — every account has a unique name, email, phone, website, and CRM ID.</td></tr>`;
+            tbody.innerHTML = rows || rrEmptyRow(8, { glyph: '✓', title: 'No duplicate accounts on this page', desc: 'Every account has a unique name, email, phone, website, and CRM ID.' });
         }
 
         // C3: Owner accountability with RAG status.
@@ -2973,7 +3000,7 @@
                 ownerField: 'owner_name',
             }));
             if (_ownersCache.length > 0 && filteredOwners.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No owners match the active filters. Clear the Advanced Filters or pick a different owner.</td></tr>';
+                tbody.innerHTML = rrEmptyRow(8, { glyph: '🔍', title: 'No owners match the active filters', desc: 'Clear the Advanced Filters or pick a different owner.' });
                 renderPagination('ownersPagination', 0, 1, () => {}, 0, 'owners');
                 return;
             }
@@ -3019,7 +3046,7 @@
                     <td class="px-6 py-3 text-sm">${_fn(o.high_confidence_duplicates)}</td>
                     <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}</td>
                 </tr>`;
-            }).join('') || `<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_owner_data'))}</td></tr>`;
+            }).join('') || rrEmptyRow(9, { glyph: '—', title: escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_owner_data')) });
             // Re-apply any active filter and refresh select-all/count chrome.
             filterOwnersTable();
             syncOwnersSelectionState();
@@ -3427,7 +3454,7 @@
                     <td class="px-6 py-3 text-sm">${l.detection_duration_ms ? _fn((l.detection_duration_ms / 1000).toFixed(1)) + 's' : '-'}</td>
                     <td class="px-6 py-3 text-sm"><span class="px-2 py-1 rounded text-xs ${statusClass}">${escapeHtml(safeStatus)}</span></td>
                 </tr>`;
-            }).join('') || `<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_scan_logs'))}</td></tr>`;
+            }).join('') || rrEmptyRow(7, { glyph: '📄', title: escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_scan_logs')) });
         }
 
         // Agent Activity Log — every AI Duplicate Resolution action from
@@ -3446,7 +3473,7 @@
             const tbody = document.getElementById('agentActivityTable');
             if (!tbody) return;
             if (!rows.length) {
-                tbody.innerHTML = '<tr><td colspan="10" class="px-6 py-4 text-center text-gray-400">No AI resolution activity yet — it appears here as soon as the agent previews, dry-runs, or applies a merge.</td></tr>';
+                tbody.innerHTML = rrEmptyRow(10, { glyph: '🤖', title: 'No AI resolution activity yet', desc: 'It appears here as soon as the agent previews, dry-runs, or applies a merge.' });
                 return;
             }
             const actionBadge = (t) => {
@@ -3524,7 +3551,7 @@
             const tbody = document.getElementById('manualActionsTable');
             if (!tbody) return;
             if (!rows.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-400">No manual actions yet for this filter — Mark Resolved / Mark Dismissed / Bulk-split events land here as soon as an operator acts.</td></tr>';
+                tbody.innerHTML = rrEmptyRow(6, { glyph: '📝', title: 'No manual actions yet for this filter', desc: 'Mark Resolved / Mark Dismissed / Bulk-split events land here as soon as an operator acts.' });
                 return;
             }
             const actionBadge = function (t) {
@@ -7155,7 +7182,7 @@
             if (!body) return;
             window._dcResults = {};
             if (typeof clearDcChartFilter === 'function') clearDcChartFilter(); // rows rebuilt → drop any active chart filter
-            body.innerHTML = '<tr><td colspan="7" class="px-3 py-4 text-gray-500">Loading deals from Zoho…</td></tr>';
+            body.innerHTML = rrSkeletonRows(7);
             var stages = _dcSelectedStages();
             var url = '/api/duplicates/deal-compliance' + (stages.length ? ('?stages=' + encodeURIComponent(stages.join(','))) : '');
             var data;
@@ -7303,7 +7330,7 @@
         async function erLoad(kind, bodyId) {
             const body = document.getElementById(bodyId);
             if (!body) return;
-            body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_loading')) + '</td></tr>';
+            body.innerHTML = rrSkeletonRows(5);
             let data;
             try {
                 const res = await fetch('/api/duplicates/empty-records/' + kind, { credentials: 'same-origin' });
@@ -7359,7 +7386,7 @@
             // Deals have extra Stage + Created columns (7); accounts/contacts have 5.
             const COLS = kind === 'deals' ? 7 : 5;
             if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="' + COLS + '" class="px-4 py-6 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_none')) + '</td></tr>';
+                body.innerHTML = rrEmptyRow(COLS, { glyph: '✓', title: escapeHtml(WalaPlusI18n.t('duplicates.er_none')) });
                 // Clear any stale pager left from a previous (non-empty) render —
                 // otherwise "Showing 1–50 of 215 · Page 1/5" lingers under "None found".
                 const _t = body.closest('table');
@@ -7755,7 +7782,7 @@
             const body = document.getElementById('erTaggedBody');
             const progress = document.getElementById('erTaggedProgress');
             if (!body) return;
-            body.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-gray-400">' + escapeHtml(WalaPlusI18n.t('duplicates.er_loading')) + '</td></tr>';
+            body.innerHTML = rrSkeletonRows(5);
             let data;
             try {
                 const res = await fetch('/api/duplicates/empty-records/tagged-status', { credentials: 'same-origin' });
@@ -7841,7 +7868,7 @@
             const clearPager = function () { const tf = table && table.querySelector('tfoot.er-pager'); if (tf) tf.innerHTML = ''; };
             if (!rows.length) {
                 const f = window._erTaggedFilter || 'all';
-                body.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-gray-400">' + (f === 'all' ? 'None yet.' : 'No ' + escapeHtml(f === 'pending_delete' ? 'pending' : f) + ' records.') + '</td></tr>';
+                body.innerHTML = rrEmptyRow(5, { glyph: '🏷', title: (f === 'all' ? 'Nothing tagged yet' : 'No ' + escapeHtml(f === 'pending_delete' ? 'pending' : f) + ' records') });
                 clearPager();
                 return;
             }
@@ -8141,7 +8168,7 @@
                 el.className = 'rr-chip' + (k === status ? ' rr-chip-active' : '');
             });
             const body = document.getElementById('accountHintsTable');
-            body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
+            body.innerHTML = rrSkeletonRows(7);
             // Track this load so a later filter switch / tab change cancels
             // any in-flight auto-retry instead of stomping the new view.
             const loadId = (window._accountHintsLoadId = (window._accountHintsLoadId || 0) + 1);
@@ -8261,7 +8288,7 @@
             const body = document.getElementById('accountHintsTable');
             const allHints = data.hints || [];
             if (allHints.length === 0) {
-                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No hints in this bucket. Click <em>Run scan</em> to generate fresh suggestions.</td></tr>';
+                body.innerHTML = rrEmptyRow(7, { glyph: '💡', title: 'No hints in this bucket', desc: 'Click <em>Run scan</em> to generate fresh suggestions.' });
                 // Reset the pagination footer too — otherwise it keeps the stale
                 // count from the previously-viewed bucket (e.g. "1–20 of 475"
                 // under an empty Pending bucket after everything was Applied).
@@ -8275,7 +8302,7 @@
                 confidenceField: 'confidence',
             }));
             if (rows.length === 0) {
-                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No hints match the active filters. Adjust the bucket chip or click <em>Clear All Filters</em>.</td></tr>';
+                body.innerHTML = rrEmptyRow(7, { glyph: '🔍', title: 'No hints match the active filters', desc: 'Adjust the bucket chip or click <em>Clear All Filters</em>.' });
                 renderPagination('accountHintsPagination', 0, 1, () => {}, 0, 'hints');
                 return;
             }
@@ -8506,7 +8533,7 @@
             if (!body) return;
             const orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = '🔍 Scanning…'; }
-            body.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-sm text-gray-400">Loading…</td></tr>';
+            body.innerHTML = rrSkeletonRows(4);
             try {
                 const res = await fetch('/api/duplicates/record-hints/stale-deals', { credentials: 'same-origin' });
                 const data = await res.json();
@@ -8518,7 +8545,7 @@
                     : '';
                 if (badge) { if (deals.length) { badge.textContent = deals.length; badge.classList.remove('hidden'); } else badge.classList.add('hidden'); }
                 if (deals.length === 0) {
-                    body.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-sm text-gray-500">No stalled deals found.</td></tr>';
+                    body.innerHTML = rrEmptyRow(4, { glyph: '✓', title: 'No stalled deals found', desc: 'Nothing parked in an unaccounted stage right now.' });
                     return;
                 }
                 const dispPill = function (d) {
@@ -8571,7 +8598,7 @@
         async function renderRecordHintsSection(type, tbodyId) {
             const body = document.getElementById(tbodyId);
             if (!body) return;
-            body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
+            body.innerHTML = rrSkeletonRows(7);
             try {
                 const res = await fetch('/api/duplicates/record-hints?type=' + encodeURIComponent(type) + '&status=pending');
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -8591,7 +8618,7 @@
                 }
 
                 if (hints.length === 0) {
-                    body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No hints in this bucket. Click <em>Run scan</em> to generate fresh suggestions.</td></tr>';
+                    body.innerHTML = rrEmptyRow(7, { glyph: '💡', title: 'No hints in this bucket', desc: 'Click <em>Run scan</em> to generate fresh suggestions.' });
                     return;
                 }
 
@@ -8921,7 +8948,7 @@
                 el.className = 'rr-chip' + (k === window._csOverlapFilter ? ' rr-chip-active' : '');
             });
             const body = document.getElementById('csOverlapTable');
-            body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
+            body.innerHTML = rrSkeletonRows(8);
 
             let url = '/api/duplicates/cs-overlap/clusters?limit=500';
             if (window._csOverlapFilter !== 'all') url += '&verdict=' + encodeURIComponent(window._csOverlapFilter);
@@ -9012,7 +9039,7 @@
             const body = document.getElementById('csOverlapTable');
             const allRows = data.clusters || [];
             if (allRows.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS-pipeline overlaps detected. Click <em>Run scan</em> to evaluate.</td></tr>';
+                body.innerHTML = rrEmptyRow(8, { glyph: '✓', title: 'No CS-pipeline overlaps detected', desc: 'Click <em>Run scan</em> to evaluate.' });
                 return;
             }
             // Advanced Filter — client-side. CS-Overlap clusters expose
@@ -9023,7 +9050,7 @@
                 dateField:   'updated_at',
             }));
             if (filteredRows.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS-Overlap clusters match the active filters. Adjust the chip above or click <em>Clear All Filters</em>.</td></tr>';
+                body.innerHTML = rrEmptyRow(8, { glyph: '🔍', title: 'No CS-Overlap clusters match the active filters', desc: 'Adjust the chip above or click <em>Clear All Filters</em>.' });
                 return;
             }
             const rows = sortCsOverlapRows(filteredRows, window._csOverlapSort.key, window._csOverlapSort.dir);
@@ -9445,7 +9472,7 @@
             document.getElementById('preflightInput').value = '';
             document.getElementById('preflightParsedCount').textContent = '';
             const body = document.getElementById('preflightResultTable');
-            body.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>';
+            body.innerHTML = rrEmptyRow(10, { glyph: '📋', title: 'Nothing checked yet', desc: 'Paste a list (or upload Excel) and click <em>Check</em>.' });
             ['Block','Review','Warn','Dup','NoContact','Pass'].forEach(k => {
                 const el = document.getElementById('preflightSum' + k);
                 if (el) el.textContent = '—';
@@ -9782,7 +9809,7 @@
 
         async function loadDealLifecycle() {
             const body = document.getElementById('dealLifecycleTable');
-            if (body) body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
+            if (body) body.innerHTML = rrSkeletonRows(7);
             try {
                 const sevQ = window._dealLifecycleSeverityFilter !== 'all'
                     ? ('&severity=' + encodeURIComponent(window._dealLifecycleSeverityFilter))
@@ -9843,7 +9870,7 @@
             if (!body) return;
             const allRows = data.violations || [];
             if (allRows.length === 0) {
-                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No stage-aging violations 🎉</td></tr>';
+                body.innerHTML = rrEmptyRow(7, { glyph: '🎉', title: 'No stage-aging violations', desc: 'Every tracked-stage deal is within its Sales SOP allowance.' });
                 return;
             }
 
@@ -9861,7 +9888,7 @@
                 stageField:    'stage',
             }));
             if (rows.length === 0) {
-                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No deals match the active filters. Adjust Advanced Filters or click <em>Clear All Filters</em>.</td></tr>';
+                body.innerHTML = rrEmptyRow(7, { glyph: '🔍', title: 'No deals match the active filters', desc: 'Adjust Advanced Filters or click <em>Clear All Filters</em>.' });
                 return;
             }
             // Full-array sort — sort the FILTERED set (post advanced-filter)
@@ -10116,7 +10143,7 @@
                 el.className = 'rr-chip' + (k === window._csLifecycleFilter ? ' rr-chip-active' : '');
             });
             const body = document.getElementById('csLifecycleTable');
-            body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
+            body.innerHTML = rrSkeletonRows(12);
 
             // Ask for the full deal corpus. The bulk Zoho sync caps each
             // module at 5,000 records so 10,000 comfortably covers every
@@ -10352,7 +10379,7 @@
             const body = document.getElementById('csLifecycleTable');
             const allViolations = data.violations || [];
             if (allViolations.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No violations detected. CS is compliant for the current filter.</td></tr>';
+                body.innerHTML = rrEmptyRow(8, { glyph: '✓', title: 'No violations detected', desc: 'CS is compliant for the current filter.' });
                 _refreshCsLifecyclePhaseOptions([]);
                 return;
             }
@@ -10394,7 +10421,7 @@
             const sorted = sortCsLifecycleRows(filtered, window._csLifecycleSort.key, window._csLifecycleSort.dir);
 
             if (sorted.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS deals match the active filters. Adjust the phase chip or click <em>Clear All Filters</em> in the Advanced Filters panel.</td></tr>';
+                body.innerHTML = rrEmptyRow(8, { glyph: '🔍', title: 'No CS deals match the active filters', desc: 'Adjust the phase chip or click <em>Clear All Filters</em> in the Advanced Filters panel.' });
                 renderPagination('csLifecyclePagination', 0, 1, () => {}, 0, 'deals');
                 return;
             }
@@ -11235,7 +11262,7 @@
             const body = document.getElementById('preflightResultTable');
             const rows = data.rows || [];
             if (rows.length === 0) {
-                body.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">No rows processed.</td></tr>';
+                body.innerHTML = rrEmptyRow(9, { glyph: '📋', title: 'No rows processed' });
                 return;
             }
             // Sarah 2026-06-17 — ARR column dropped from the result table
