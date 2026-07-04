@@ -581,34 +581,45 @@
                 // rose (strategic), LINK queue=indigo. The Existing-client
                 // badge is shown OUT-OF-BAND beside the pairing chip when
                 // any deal is in Paid / Agreement Signed (CS-owned).
-                let chipBg = 'bg-indigo-100 text-indigo-700';
-                if (c.pairing === 'mixed') chipBg = 'bg-amber-100 text-amber-700';
-                else if (c.pairing === 'lead_deal') chipBg = 'bg-rose-100 text-rose-700';
-                const pairingChip = '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold ' + chipBg + '">' + escapeHtml(meta.label) + '</span>'
+                // Phase-3 pairing badge: one neutral-info pill; row severity is
+                // carried by the leading-cell stripe, not the chip colour.
+                const pairingChip = '<span class="rr-badge rr-info">' + escapeHtml(meta.label) + '</span>'
                     + (c.has_client_deal
-                        ? ' <span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700" title="Cluster contains a Paid / Agreement Signed deal — owned by Customer Success. Do NOT pursue from Sales.">Existing client · CS</span>'
+                        ? ' <span class="rr-badge rr-warn rr-dot" title="Cluster contains a Paid / Agreement Signed deal — owned by Customer Success. Do NOT pursue from Sales.">Existing client · CS</span>'
                         : '');
+                // Severity stripe on the leading cell: existing-client (CS-owned)
+                // is the most urgent → red; Lead↔Active-Deal → red (strategic);
+                // 3+ modules → amber; plain link queue → info.
+                let sev = 'rr-sev-info';
+                if (c.pairing === 'mixed') sev = 'rr-sev-amber';
+                else if (c.pairing === 'lead_deal') sev = 'rr-sev-warn';
+                if (c.has_client_deal) sev = 'rr-sev-warn';
+                // Confidence mini-meter: width = score, colour = high/med/low band.
+                const confLevel = getConfidenceLevel(c.confidence_score || 0);
+                const confColor = confLevel === 'high' ? '#15803D' : (confLevel === 'medium' ? '#B45309' : '#B91C1C');
+                const confWidth = Math.max(0, Math.min(100, Number(c.confidence_score || 0)));
+                const confCell = '<span class="rr-conf"><span class="rr-bar"><i style="width:' + confWidth + '%;background:' + confColor + '"></i></span><span class="rr-val">' + _fn(c.confidence_score || 0) + '%</span></span>';
                 // Follow-up 3: checkbox cell only when the cluster has a
                 // Lead — leads are what the bulk action closes; a row with
                 // no lead has nothing for the action to do.
                 const hasLead = (c.total_leads || 0) > 0;
                 const checked = crossModuleSelected.has(c.id) ? 'checked' : '';
                 const checkboxCell = hasLead
-                    ? `<td class="px-3 py-2 text-xs text-center"><input type="checkbox" data-on-change="toggleCrossModuleRowSelection" data-args="[${c.id}]" data-cmo-row="${c.id}" ${checked} aria-label="Select cluster ${c.id} for bulk-close" /></td>`
-                    : '<td class="px-3 py-2 text-xs text-center text-gray-300" title="No Lead records — nothing to bulk-close">—</td>';
+                    ? `<td class="rr-num" style="text-align:center"><input type="checkbox" data-on-change="toggleCrossModuleRowSelection" data-args="[${c.id}]" data-cmo-row="${c.id}" ${checked} aria-label="Select cluster ${c.id} for bulk-close" /></td>`
+                    : '<td class="rr-num rr-sub" style="text-align:center" title="No Lead records — nothing to bulk-close">—</td>';
                 // The row stays clickable to open the cluster modal, but
                 // the checkbox uses stopPropagation in toggleCrossModuleRowSelection
                 // so clicking it doesn't also open the modal.
-                return '<tr class="hover:bg-gray-50" data-testid="row-cmo-' + c.id + '">'
+                return '<tr class="' + sev + '" data-testid="row-cmo-' + c.id + '">'
                     + checkboxCell
-                    + '<td class="px-4 py-2 text-xs cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + pairingChip + '</td>'
-                    + '<td class="px-4 py-2 text-xs font-mono text-gray-700 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(c.domain || '—') + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-gray-800 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(c.company_name || '—') + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-gray-600 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(modules.join(' · ')) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-end font-medium cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + _fn(c.total_records || 0) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-end cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']"><span class="confidence-' + getConfidenceLevel(c.confidence_score || 0) + ' px-2 py-1 rounded">' + _fn(c.confidence_score || 0) + '%</span></td>'
-                    + '<td class="px-4 py-2 text-xs text-end font-medium cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + formatCurrency(Number(c.estimated_pipeline_value || 0)) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-gray-700 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(meta.action) + '</td>'
+                    + '<td class="rr-lead cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + pairingChip + '</td>'
+                    + '<td class="rr-mono cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(c.domain || '—') + '</td>'
+                    + '<td class="rr-primary cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(c.company_name || '—') + '</td>'
+                    + '<td class="rr-muted cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(modules.join(' · ')) + '</td>'
+                    + '<td class="rr-num rr-strong cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + _fn(c.total_records || 0) + '</td>'
+                    + '<td class="rr-num cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + confCell + '</td>'
+                    + '<td class="rr-num rr-strong cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + formatCurrency(Number(c.estimated_pipeline_value || 0)) + '</td>'
+                    + '<td class="rr-muted cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(meta.action) + '</td>'
                     + _crossModuleTrackCell(c)
                     + '</tr>';
             }).join('');
@@ -628,32 +639,32 @@
             // Open queue: the two actions. (Handled clusters are excluded from the
             // Open filter, so a row here is genuinely open.)
             if (st === 'active') {
-                return '<td class="px-4 py-2 text-xs text-center whitespace-nowrap">'
-                    + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark resolved — I converted / linked / closed this in Zoho. Removes it from the open queue (the cluster stays active so any same-module duplicate still shows elsewhere). Reversible." class="px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 me-1">✓ Resolved</button>'
-                    + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No Zoho changes." class="px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">🚫</button>'
-                    + '</td>';
+                return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">'
+                    + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark resolved — I converted / linked / closed this in Zoho. Removes it from the open queue (the cluster stays active so any same-module duplicate still shows elsewhere). Reversible." class="rr-btn rr-btn-primary">✓ Resolved</button>'
+                    + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🚫</button>'
+                    + '</div></td>';
             }
             // Resolved (merged: whole-cluster resolved OR cross-module marked-done).
             if (isResolvedCluster || isHandled) {
                 // Re-open uses the right reversal: un-handle for a marked-done
                 // cross-module overlap, reopen for a whole-cluster resolution.
                 const reopen = isHandled && !isResolvedCluster
-                    ? '<button data-on-click="unhandleCrossModule" data-args="[' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200">🔓</button>'
-                    : '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200">🔓</button>';
-                return '<td class="px-4 py-2 text-xs text-center whitespace-nowrap">'
-                    + '<span class="text-[10px] text-green-600 me-1">Resolved</span>' + reopen + '</td>';
+                    ? '<button data-on-click="unhandleCrossModule" data-args="[' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>'
+                    : '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>';
+                return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">'
+                    + '<span class="rr-badge rr-good rr-dot">Resolved</span>' + reopen + '</div></td>';
             }
             if (isDismissed) {
-                return '<td class="px-4 py-2 text-xs text-center whitespace-nowrap">'
-                    + '<span class="text-[10px] text-gray-500 me-1">Dismissed</span>'
-                    + '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200">🔓</button>'
-                    + '</td>';
+                return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">'
+                    + '<span class="rr-badge rr-neutral">Dismissed</span>'
+                    + '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>'
+                    + '</div></td>';
             }
             // Fallback (e.g. All view, still-open cluster): the open-queue actions.
-            return '<td class="px-4 py-2 text-xs text-center whitespace-nowrap">'
-                + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark resolved — I converted / linked / closed this in Zoho. Reversible." class="px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 me-1">✓ Resolved</button>'
-                + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No Zoho changes." class="px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">🚫</button>'
-                + '</td>';
+            return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">'
+                + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark resolved — I converted / linked / closed this in Zoho. Reversible." class="rr-btn rr-btn-primary">✓ Resolved</button>'
+                + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🚫</button>'
+                + '</div></td>';
         }
 
         // Follow-up 3: bulk-close selection state + action.

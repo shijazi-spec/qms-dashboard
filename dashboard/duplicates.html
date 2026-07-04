@@ -35,6 +35,70 @@
         html.wp-dark .rr-kpi-value.rr-good { color: #4ADE80; }
         .rr-kpi-sub { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
         html.wp-dark .rr-kpi-sub { color: #64748B; }
+        /* SaaS phase 3 — shared data-table language (.rr-table). Sticky header,
+           breathing rows, severity stripe, standardized badge + confidence meter +
+           row-action buttons. Dark-aware. Rolled out tab-by-tab. */
+        .rr-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+        .rr-table thead th { position: sticky; top: 0; z-index: 1; background: #F9FAFB; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #6B7280; text-align: start; white-space: nowrap; padding: 11px 16px; border-bottom: 1px solid #E5E7EB; }
+        .rr-table thead th.rr-num { text-align: end; }
+        .rr-table tbody td { padding: 12px 16px; color: #111827; border-bottom: 1px solid #F1F3F5; vertical-align: middle; font-size: 13px; }
+        .rr-table tbody tr:last-child td { border-bottom: 0; }
+        .rr-table tbody tr { transition: background .12s ease; }
+        .rr-table tbody tr:hover { background: #F9FAFB; }
+        .rr-table td.rr-num { text-align: end; }
+        .rr-table .rr-strong { font-weight: 600; }
+        .rr-table .rr-muted { color: #6B7280; }
+        .rr-table .rr-mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; color: #6B7280; }
+        .rr-table .rr-primary { color: #111827; font-weight: 500; }
+        .rr-table .rr-sub { display: block; font-size: 11.5px; color: #9CA3AF; margin-top: 1px; }
+        html.wp-dark .rr-table thead th { background: #16233B; color: #94A3B8; border-bottom-color: #2B3A52; }
+        html.wp-dark .rr-table tbody td { color: #F1F5F9; border-bottom-color: #1B2740; }
+        html.wp-dark .rr-table tbody tr:hover { background: #16233B; }
+        html.wp-dark .rr-table .rr-muted, html.wp-dark .rr-table .rr-mono { color: #94A3B8; }
+        html.wp-dark .rr-table .rr-primary { color: #F1F5F9; }
+        html.wp-dark .rr-table .rr-sub { color: #64748B; }
+        /* severity stripe on the leading cell */
+        .rr-table td.rr-lead { position: relative; padding-left: 20px; }
+        .rr-table td.rr-lead::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: transparent; }
+        .rr-table tr.rr-sev-warn  td.rr-lead::before { background: #B91C1C; }
+        .rr-table tr.rr-sev-amber td.rr-lead::before { background: #B45309; }
+        .rr-table tr.rr-sev-good  td.rr-lead::before { background: #15803D; }
+        .rr-table tr.rr-sev-info  td.rr-lead::before { background: #1D4ED8; }
+        html.wp-dark .rr-table tr.rr-sev-warn  td.rr-lead::before { background: #F87171; }
+        html.wp-dark .rr-table tr.rr-sev-amber td.rr-lead::before { background: #FBBF24; }
+        html.wp-dark .rr-table tr.rr-sev-good  td.rr-lead::before { background: #4ADE80; }
+        html.wp-dark .rr-table tr.rr-sev-info  td.rr-lead::before { background: #60A5FA; }
+        /* standardized status badge */
+        .rr-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+        .rr-badge.rr-dot::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; opacity: .9; }
+        .rr-badge.rr-warn  { background: #FEF2F2; color: #B91C1C; }
+        .rr-badge.rr-amber { background: #FFFBEB; color: #B45309; }
+        .rr-badge.rr-good  { background: #F0FDF4; color: #15803D; }
+        .rr-badge.rr-info  { background: #EFF6FF; color: #1D4ED8; }
+        .rr-badge.rr-neutral { background: #F3F4F6; color: #6B7280; }
+        html.wp-dark .rr-badge.rr-warn  { background: rgba(248,113,113,.12); color: #F87171; }
+        html.wp-dark .rr-badge.rr-amber { background: rgba(251,191,36,.12); color: #FBBF24; }
+        html.wp-dark .rr-badge.rr-good  { background: rgba(74,222,128,.12); color: #4ADE80; }
+        html.wp-dark .rr-badge.rr-info  { background: rgba(96,165,250,.12); color: #60A5FA; }
+        html.wp-dark .rr-badge.rr-neutral { background: #16233B; color: #94A3B8; }
+        /* confidence mini-meter */
+        .rr-conf { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+        .rr-conf .rr-bar { width: 44px; height: 5px; border-radius: 999px; background: #E5E7EB; overflow: hidden; }
+        .rr-conf .rr-bar > i { display: block; height: 100%; border-radius: 999px; }
+        .rr-conf .rr-val { font-size: 12px; color: #6B7280; min-width: 30px; text-align: end; }
+        html.wp-dark .rr-conf .rr-bar { background: #2B3A52; }
+        html.wp-dark .rr-conf .rr-val { color: #94A3B8; }
+        /* one row-action button language */
+        .rr-actions { display: flex; gap: 6px; justify-content: center; white-space: nowrap; }
+        .rr-btn { font-size: 11.5px; font-weight: 500; padding: 5px 10px; border-radius: 7px; border: 1px solid transparent; cursor: pointer; line-height: 1; display: inline-flex; align-items: center; gap: 5px; transition: background .12s ease, border-color .12s ease, filter .12s ease; }
+        .rr-btn.rr-btn-primary { background: #1E3A8A; color: #fff; }
+        .rr-btn.rr-btn-primary:hover { filter: brightness(1.08); }
+        .rr-btn.rr-btn-ghost { background: transparent; color: #6B7280; border-color: #E5E7EB; }
+        .rr-btn.rr-btn-ghost:hover { background: #F9FAFB; color: #111827; }
+        .rr-btn.rr-btn-icon { padding: 5px 8px; }
+        html.wp-dark .rr-btn.rr-btn-primary { background: #2563EB; }
+        html.wp-dark .rr-btn.rr-btn-ghost { color: #94A3B8; border-color: #2B3A52; }
+        html.wp-dark .rr-btn.rr-btn-ghost:hover { background: #16233B; color: #F1F5F9; }
         .confidence-high { background-color: #FEE2E2; color: #991B1B; }
         .confidence-medium { background-color: #FEF3C7; color: #92400E; }
         .confidence-low { background-color: #DCFCE7; color: #166534; }
@@ -1057,22 +1121,22 @@
             </div>
 
             <div class="bg-white rounded-lg shadow overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead id="crossModuleTableHead" class="bg-gray-50">
+                <table class="rr-table min-w-full">
+                    <thead id="crossModuleTableHead">
                         <tr>
-                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase w-10"><input type="checkbox" id="cmoSelectAll" data-on-change="toggleCrossModuleSelectAll" aria-label="Select all visible cross-module clusters" /></th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Pairing</th>
-                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;domain&quot;]" class="cross-module-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;company&quot;]" class="cross-module-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="company">Company <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Modules present</th>
-                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;records&quot;]" class="cross-module-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="records">Records <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;confidence&quot;]" class="cross-module-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="confidence">Confidence <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;pipeline&quot;]" class="cross-module-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="pipeline">Pipeline value <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Recommended action</th>
-                            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Track</th>
+                            <th scope="col" class="rr-num" style="text-align:center;width:2.5rem;"><input type="checkbox" id="cmoSelectAll" data-on-change="toggleCrossModuleSelectAll" aria-label="Select all visible cross-module clusters" /></th>
+                            <th scope="col">Pairing</th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;domain&quot;]" class="cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;company&quot;]" class="cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="company">Company <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col">Modules present</th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;records&quot;]" class="rr-num cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="records">Records <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;confidence&quot;]" class="rr-num cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="confidence">Confidence <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;pipeline&quot;]" class="rr-num cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="pipeline">Pipeline value <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col">Recommended action</th>
+                            <th scope="col" style="text-align:center;">Track</th>
                         </tr>
                     </thead>
-                    <tbody id="crossModuleTable" class="bg-white divide-y divide-gray-200"></tbody>
+                    <tbody id="crossModuleTable"></tbody>
                 </table>
             </div>
             <div id="crossModulePagination" class="flex justify-center items-center gap-3 mt-4"></div>
@@ -2201,7 +2265,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=68"></script>
+    <script src="/js/duplicates-app.js?v=69"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
