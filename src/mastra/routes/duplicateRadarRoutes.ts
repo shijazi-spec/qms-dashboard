@@ -11102,6 +11102,28 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Manually dismiss ONE tagged record from the pending queue — local ledger
+    // disposition (pending_delete → dismissed), no Zoho write.
+    //   POST /api/duplicates/empty-records/dismiss-tagged  { zohoId }
+    path: "/api/duplicates/empty-records/dismiss-tagged",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const body = await c.req.json().catch(() => ({}));
+        const zohoId = String(body?.zohoId ?? body?.zoho_id ?? "").trim();
+        if (!zohoId) return c.json({ error: "zohoId required" }, 400);
+        const { dismissTaggedRecord } = await import("../../utils/emptyRecordsDatabase");
+        await dismissTaggedRecord(zohoId);
+        return c.json({ success: true });
+      } catch (e: any) {
+        logger.error("empty-records/dismiss-tagged failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
     // Admin-gated: manually trigger the deletion-reconcile pass (also runs
     // automatically on every post-sync).  Checks pending_delete rows against
     // live Zoho; stamps ledger 'deleted' + prunes mirror when gone.

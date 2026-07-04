@@ -747,6 +747,21 @@ export async function getTaggedStatus(module?: string): Promise<{
   return { rows, counts };
 }
 
+/** Manually move ONE tagged record from the pending-delete queue to 'dismissed'
+ * — a local ledger disposition only; it does NOT touch the Zoho tag. Used by the
+ * per-row Dismiss button so the operator can drop a record off the pending list
+ * without a Zoho round-trip. Only affects a row that is currently pending. */
+export async function dismissTaggedRecord(zohoId: string): Promise<void> {
+  const id = String(zohoId || "").trim();
+  if (!id) return;
+  await pool.query(
+    `UPDATE empty_delete_ledger
+        SET status = 'dismissed', last_checked_at = NOW(), deleted_at = NULL
+      WHERE zoho_record_id = $1 AND status = 'pending_delete'`,
+    [id],
+  );
+}
+
 /** Check up to 300 pending_delete ledger rows against live Zoho.
  * Records no longer found → stamp as 'deleted' in the ledger + prune from
  * the local duplicate_records mirror.  Records still present → update

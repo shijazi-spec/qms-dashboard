@@ -7794,6 +7794,27 @@
             const f = window._erTaggedFilter || 'all';
             return f === 'all' ? rows : rows.filter(function (r) { return r.status === f; });
         }
+        // Manually dismiss one pending record from the delete queue (local only).
+        async function erDismissTagged(zohoId) {
+            try {
+                const res = await fetch('/api/duplicates/empty-records/dismiss-tagged', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin', body: JSON.stringify({ zohoId: zohoId }),
+                });
+                const j = await res.json();
+                if (!res.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + res.status));
+                const rows = window._erTagged || [];
+                const row = rows.find(function (r) { return r.zohoId === zohoId; });
+                if (row) row.status = 'dismissed';
+                const counts = window._erTaggedCounts || {};
+                counts.pending = Math.max(0, (counts.pending || 0) - 1);
+                counts.dismissed = (counts.dismissed || 0) + 1;
+                _erRenderTaggedHeader();
+                _erRenderTaggedPage();
+            } catch (e) {
+                alert('Dismiss failed: ' + (e && e.message || e));
+            }
+        }
         function erTaggedChangePage(delta) {
             const rows = _erTaggedFilteredRows();
             const pages = Math.max(1, Math.ceil(rows.length / ER_PAGE_SIZE));
@@ -7827,10 +7848,14 @@
                     ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700" title="Delete tag was removed in Zoho — will NOT be deleted by admin">Dismissed</span>'
                     : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_pending')) + '</span>';
                 const taggedAt = r.createdAt ? new Date(r.createdAt).toLocaleString() : '—';
+                // Pending rows get a manual Dismiss (local disposition — no Zoho write).
+                const statusCell = r.status === 'pending_delete'
+                    ? statusChip + ' <button data-on-click="erDismissTagged" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]" class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-300 text-slate-600 hover:bg-slate-100" title="Move to Dismissed without changing Zoho — it will not be deleted by admin">Dismiss</button>'
+                    : statusChip;
                 return '<tr class="border-t border-gray-100">'
                     + '<td class="px-3 py-2">' + link + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.module || '—') + '</td>'
-                    + '<td class="px-3 py-2">' + statusChip + '</td>'
+                    + '<td class="px-3 py-2">' + statusCell + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.taggedBy || '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-500">' + escapeHtml(taggedAt) + '</td>'
                     + '</tr>';
