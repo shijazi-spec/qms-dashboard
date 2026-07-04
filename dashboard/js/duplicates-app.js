@@ -1986,14 +1986,7 @@
                 const el = document.getElementById('aiChip-' + tab + '-' + s);
                 if (!el) return;
                 const isActive = s === status;
-                const palette = {
-                    active:         { on: 'bg-gray-900 text-white',           off: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
-                    tagged_pending: { on: 'bg-amber-600 text-white',          off: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
-                    resolved:       { on: 'bg-emerald-600 text-white',        off: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
-                    dismissed:      { on: 'bg-gray-600 text-white',           off: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
-                    all:            { on: 'bg-gray-700 text-white',           off: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
-                };
-                el.className = 'px-3 py-1 text-xs font-semibold rounded-full ' + (isActive ? palette[s].on : palette[s].off);
+                el.className = 'rr-chip' + (isActive ? ' rr-chip-active' : '');
             });
             // Reload the tab with the new filter. Re-enter loadRecordTab for
             // module tabs; the per-tab cache is invalidated by the param change.
@@ -3523,15 +3516,7 @@
             ['all','resolve','ignore','module_resolved','split'].forEach(function (k) {
                 const el = document.getElementById('manualActChip-' + k);
                 if (!el) return;
-                const isOn = k === filter;
-                const palette = {
-                    all:             { on: 'bg-gray-900 text-white',     off: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
-                    resolve:         { on: 'bg-emerald-600 text-white',  off: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
-                    ignore:          { on: 'bg-gray-700 text-white',     off: 'bg-gray-200 text-gray-700 hover:bg-gray-300' },
-                    module_resolved: { on: 'bg-amber-600 text-white',    off: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
-                    split:           { on: 'bg-violet-600 text-white',   off: 'bg-violet-100 text-violet-700 hover:bg-violet-200' },
-                };
-                el.className = 'px-3 py-1 rounded-full font-semibold ' + (isOn ? palette[k].on : palette[k].off);
+                el.className = 'rr-chip' + (k === filter ? ' rr-chip-active' : '');
             });
             loadManualActions();
         }
@@ -8153,16 +8138,7 @@
             ['pending','applied','dismissed'].forEach(k => {
                 const el = document.getElementById('accountHintsChip-' + k);
                 if (!el) return;
-                if (k === status) {
-                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white';
-                } else {
-                    const palette = {
-                        pending:   'bg-amber-100 text-amber-700 hover:bg-amber-200',
-                        applied:   'bg-emerald-100 text-emerald-700 hover:bg-emerald-200',
-                        dismissed: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                    };
-                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + palette[k];
-                }
+                el.className = 'rr-chip' + (k === status ? ' rr-chip-active' : '');
             });
             const body = document.getElementById('accountHintsTable');
             body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
@@ -8942,17 +8918,7 @@
             ['all','block','review','warn'].forEach(k => {
                 const el = document.getElementById('csOverlapChip-' + k);
                 if (!el) return;
-                if (k === window._csOverlapFilter) {
-                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white';
-                } else {
-                    const palette = {
-                        all:    'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                        block:  'bg-red-100 text-red-700 hover:bg-red-200',
-                        review: 'bg-amber-100 text-amber-700 hover:bg-amber-200',
-                        warn:   'bg-yellow-100 text-yellow-700 hover:bg-yellow-200',
-                    };
-                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + palette[k];
-                }
+                el.className = 'rr-chip' + (k === window._csOverlapFilter ? ' rr-chip-active' : '');
             });
             const body = document.getElementById('csOverlapTable');
             body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
@@ -9938,11 +9904,7 @@
             ['all','critical','warning','info'].forEach(k => {
                 const el = document.getElementById('dealLifeChip-' + k);
                 if (!el) return;
-                if (k === window._dealLifecycleSeverityFilter) {
-                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + (k === 'critical' ? 'bg-red-600 text-white' : k === 'warning' ? 'bg-amber-500 text-white' : k === 'info' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white');
-                } else {
-                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + (k === 'critical' ? 'bg-red-100 text-red-700 hover:bg-red-200' : k === 'warning' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : k === 'info' ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-gray-200 text-gray-700 hover:bg-gray-300');
-                }
+                el.className = 'rr-chip' + (k === window._dealLifecycleSeverityFilter ? ' rr-chip-active' : '');
             });
             loadDealLifecycle();
         }
@@ -10151,17 +10113,7 @@
             ['all','critical','warning','info'].forEach(k => {
                 const el = document.getElementById('csLifeChip-' + k);
                 if (!el) return;
-                if (k === window._csLifecycleFilter) {
-                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white';
-                } else {
-                    const palette = {
-                        all:      'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                        critical: 'bg-red-100 text-red-700 hover:bg-red-200',
-                        warning:  'bg-amber-100 text-amber-700 hover:bg-amber-200',
-                        info:     'bg-blue-100 text-blue-700 hover:bg-blue-200',
-                    };
-                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + palette[k];
-                }
+                el.className = 'rr-chip' + (k === window._csLifecycleFilter ? ' rr-chip-active' : '');
             });
             const body = document.getElementById('csLifecycleTable');
             body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';

@@ -531,7 +531,7 @@
                         <h3 class="text-lg font-semibold">At-a-glance — every tab</h3>
                         <p class="text-xs text-gray-500">One tile per tab below. Colour = verdict (green / amber / red). Click any tile to jump straight to that tab.</p>
                     </div>
-                    <button data-on-click="loadRadarOverview" data-testid="button-refresh-overview" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-200 text-indigo-900 hover:bg-indigo-300">🔄 Refresh</button>
+                    <button data-on-click="loadRadarOverview" data-testid="button-refresh-overview" class="rr-btn rr-btn-primary">🔄 Refresh</button>
                 </div>
                 <div id="radarOverviewGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3" data-testid="grid-radar-overview">
                     <div class="col-span-full text-center text-xs text-gray-400 py-6">Loading per-tab snapshot…</div>
@@ -689,7 +689,7 @@
                         <h5 class="text-md font-medium text-gray-700">Related Clusters</h5>
                         <div class="flex items-center gap-2">
                             <span class="text-xs text-gray-500" title="Tick clusters that are the SAME company, then combine them into one so their Accounts can be merged together. Combining only re-groups the radar records — no Zoho changes. The actual Account merge still happens inside the combined cluster (with Apply in Zoho).">Same company in 2+ clusters? Tick them →</span>
-                            <button type="button" data-on-click="combineSelectedSearchClusters" id="combineClustersBtn" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" title="Combine the ticked clusters into the largest one (re-groups radar records only — no Zoho changes). Then open it to merge the Accounts.">🔗 Combine selected clusters</button>
+                            <button type="button" data-on-click="combineSelectedSearchClusters" id="combineClustersBtn" class="hidden rr-btn rr-btn-ghost" title="Combine the ticked clusters into the largest one (re-groups radar records only — no Zoho changes). Then open it to merge the Accounts.">🔗 Combine selected clusters</button>
                         </div>
                     </div>
                     <div id="searchClustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
@@ -732,7 +732,7 @@
                 <p>These are domains where the radar has <strong>≥2 separate clusters</strong> for the same Zoho domain. It happens when concurrent syncs both miss the existing row and both insert one (no UNIQUE constraint on <code class="bg-blue-100 px-1 rounded">duplicate_clusters.domain</code>). Pick a master per group — the engine reparents every record into it, snapshots the source pre-merge (undo-able), logs to Manual Actions, and deletes the now-empty clusters. Recommended master: the cluster with an <strong>Account</strong> record and the highest record count.</p>
             </div>
             <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
-                <button data-on-click="loadClusterMergeCandidates" id="cmcRefreshBtn" data-testid="button-cmc-refresh" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300">🔄 Refresh</button>
+                <button data-on-click="loadClusterMergeCandidates" id="cmcRefreshBtn" data-testid="button-cmc-refresh" class="rr-btn rr-btn-primary">🔄 Refresh</button>
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                 <div class="rr-kpi">
@@ -783,10 +783,10 @@
                  tabs + restore the "Check all documents" label on the
                  docs-verification action so its purpose is obvious. -->
             <div class="flex justify-end mb-3 gap-2">
-                <button data-on-click="exportDealCompliance" id="dcExportBtn" title="Download a CSV of the deals shown with their document status." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="loadDealCompliance" id="dcRefreshBtn" title="Re-fetch the deals in the selected stages from Zoho." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" title="Fetch each deal's attachments and verify the required documents (financial offer, contract/PO, VAT, CR, National Address)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300">📎 Check all documents</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deal-compliance" title="Open a corrective-action record (CAPA) on a non-compliant deal. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                <button data-on-click="exportDealCompliance" id="dcExportBtn" title="Download a CSV of the deals shown with their document status." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+                <button data-on-click="loadDealCompliance" id="dcRefreshBtn" title="Re-fetch the deals in the selected stages from Zoho." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" title="Fetch each deal's attachments and verify the required documents (financial offer, contract/PO, VAT, CR, National Address)." class="rr-btn rr-btn-primary">📎 Check all documents</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deal-compliance" title="Open a corrective-action record (CAPA) on a non-compliant deal. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
             <!-- In-tab Stage filter: tick the stages to check, then Apply (no need to leave the tab) -->
             <div class="flex items-center gap-2 flex-wrap mb-3 p-2 rounded-lg border border-gray-200 bg-gray-50">
@@ -794,7 +794,7 @@
                 <div id="dcStageFilter" class="flex items-center gap-2 flex-wrap text-xs text-gray-700">
                     <span class="text-gray-400">loading stages…</span>
                 </div>
-                <button data-on-click="loadDealCompliance" title="Re-load the deals for the ticked stages." class="px-3 py-1 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Apply stages</button>
+                <button data-on-click="loadDealCompliance" title="Re-load the deals for the ticked stages." class="rr-btn rr-btn-ghost">Apply stages</button>
             </div>
             <!-- Compliance charts (populate after Run Scan): green = compliant, red = missing docs.
                  Click any segment to filter the table to those deals. -->
@@ -830,22 +830,22 @@
                 <strong>Domain clusters.</strong> Groups of records that share the same company domain (e.g. <code>acme.com</code>) across one or more Zoho modules. Each cluster is a candidate merge: open one to see the underlying Leads / Deals / Contacts / Accounts, decide which record should survive, and take action in Zoho. Filter by module or cluster type to focus on a specific cleanup batch.
             </div>
             <div class="mb-4 flex gap-4 items-center">
-                <select id="clusterFilter" aria-label="Filter by cluster type" data-on-change="loadClusters" data-testid="select-cluster-filter" class="border rounded-lg px-3 py-2">
+                <select id="clusterFilter" aria-label="Filter by cluster type" data-on-change="loadClusters" data-testid="select-cluster-filter" class="rr-select">
                     <option value="">All Similarity</option>
                     <option value="high">Strong (≥90%)</option>
                     <option value="medium">Moderate (60-89%)</option>
                     <option value="low">Weak (<60%)</option>
                 </select>
-                <select id="statusFilter" aria-label="Filter by status" data-on-change="loadClusters" data-testid="select-status-filter" class="border rounded-lg px-3 py-2">
+                <select id="statusFilter" aria-label="Filter by status" data-on-change="loadClusters" data-testid="select-status-filter" class="rr-select">
                     <option value="active" selected>Active</option>
                     <option value="all">All statuses</option>
                     <option value="resolved">Resolved</option>
                     <option value="ignored">Dismissed</option>
                 </select>
-                <select id="layoutFilter" aria-label="Filter by Zoho layout" data-on-change="loadClusters" data-testid="select-layout-filter" class="border rounded-lg px-3 py-2 min-w-[180px]" title="Filter by Zoho layout (Corporate Accounts, Standard, Marketplace, ...)">
+                <select id="layoutFilter" aria-label="Filter by Zoho layout" data-on-change="loadClusters" data-testid="select-layout-filter" class="rr-select min-w-[180px]" title="Filter by Zoho layout (Corporate Accounts, Standard, Marketplace, ...)">
                     <option value="">All Layouts</option>
                 </select>
-                <select id="qualityFilter" aria-label="Filter by data quality flag" data-on-change="applyQualityFilter" data-testid="select-quality-filter" class="border rounded-lg px-3 py-2" title="Filter by the colored badges shown on each cluster card (synthetic, placeholder, mixed). 'Clean' shows clusters with none of those flags.">
+                <select id="qualityFilter" aria-label="Filter by data quality flag" data-on-change="applyQualityFilter" data-testid="select-quality-filter" class="rr-select" title="Filter by the colored badges shown on each cluster card (synthetic, placeholder, mixed). 'Clean' shows clusters with none of those flags.">
                     <option value="">All quality flags</option>
                     <option value="synthetic">🔧 Synthetic only</option>
                     <option value="placeholder">❓ Placeholder only</option>
@@ -856,7 +856,7 @@
                 <span id="qualityFilterHint" class="text-xs text-gray-400"></span>
                 <div class="flex-1"></div>
                 <label class="text-xs text-gray-500 uppercase tracking-wide">Sort by</label>
-                <select id="clusterSort" aria-label="Sort clusters" data-on-change="loadClusters" data-testid="select-cluster-sort" class="border rounded-lg px-3 py-2">
+                <select id="clusterSort" aria-label="Sort clusters" data-on-change="loadClusters" data-testid="select-cluster-sort" class="rr-select">
                     <option value="records">Records</option>
                     <option value="similarity">Similarity %</option>
                     <option value="inflation">Inflation</option>
@@ -866,7 +866,7 @@
                     <option value="status">Status</option>
                 </select>
                 <button id="clusterSortDir" data-on-click="toggleClusterSortDir" data-sort-dir="desc" data-testid="button-cluster-sort-dir" class="border rounded-lg px-3 py-2 text-sm font-mono hover:bg-gray-50" title="Toggle sort direction">↓</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;clusters&quot;]" data-testid="button-open-capa-clusters" title="Open a corrective-action record (CAPA) on one of the duplicate clusters currently shown. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;clusters&quot;]" data-testid="button-open-capa-clusters" title="Open a corrective-action record (CAPA) on one of the duplicate clusters currently shown. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
             <div id="clustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             <div id="clustersPagination" class="flex justify-center gap-3 mt-6"></div>
@@ -887,19 +887,19 @@
                 <strong>Lead duplicates.</strong> Leads in Zoho that share an email, phone, or company domain with another lead — the highest-volume source of duplicate creation. Resolving these prevents two reps from working the same prospect and stops the same company from appearing twice in pipeline reports.
             </div>
             <div class="flex justify-end mb-3 gap-2">
-                <button data-on-click="exportTab" data-args="[&quot;lead&quot;]" data-pass-event="true" data-estimate-url="/api/duplicates/export" id="leadsExportBtn" data-testid="button-export-leads" title="Download a CSV of every Lead duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;leads&quot;]" id="leadsZohoRefreshBtn" title="Pull live values from Zoho for every lead currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;leads&quot;]" data-testid="button-open-capa-leads" title="Open a corrective-action record (CAPA) on one of the lead-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                <button data-on-click="exportTab" data-args="[&quot;lead&quot;]" data-pass-event="true" data-estimate-url="/api/duplicates/export" id="leadsExportBtn" data-testid="button-export-leads" title="Download a CSV of every Lead duplicate currently in the radar (respects the start/end date filters above)." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;leads&quot;]" id="leadsZohoRefreshBtn" title="Pull live values from Zoho for every lead currently shown. Use this when the CRM has been updated but the table still shows old values." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="rr-btn rr-btn-primary ms-2">🔍 Run Scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;leads&quot;]" data-testid="button-open-capa-leads" title="Open a corrective-action record (CAPA) on one of the lead-duplicate groups shown below. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
             <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="leads">
                 <span class="text-xs text-gray-500 me-1">AI status:</span>
-                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;active&quot;]" id="aiChip-leads-active" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-900 text-white" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;tagged_pending&quot;]" id="aiChip-leads-tagged_pending" class="px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200" title="Apply was run — duplicates tagged in Zoho, pending admin delete">🤖 AI-Applied · pending Zoho admin delete</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;resolved&quot;]" id="aiChip-leads-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Marked resolved">✅ Resolved</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;dismissed&quot;]" id="aiChip-leads-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;all&quot;]" id="aiChip-leads-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
-                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;leads&quot;]" id="verifyAllCrm-leads" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-600 text-white hover:bg-emerald-700 ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;active&quot;]" id="aiChip-leads-active" class="rr-chip rr-chip-active" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;tagged_pending&quot;]" id="aiChip-leads-tagged_pending" class="rr-chip" title="Apply was run — duplicates tagged in Zoho, pending admin delete">🤖 AI-Applied · pending Zoho admin delete</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;resolved&quot;]" id="aiChip-leads-resolved" class="rr-chip" title="Marked resolved">✅ Resolved</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;dismissed&quot;]" id="aiChip-leads-dismissed" class="rr-chip" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;all&quot;]" id="aiChip-leads-all" class="rr-chip" title="Every cluster regardless of status">All</button>
+                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;leads&quot;]" id="verifyAllCrm-leads" class="rr-btn rr-btn-ai ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -927,19 +927,19 @@
                 <strong>Deal duplicates.</strong> Deals on the same Account (or same company domain) that look like they describe the same opportunity. Critical to clean up before quarter-end because each duplicate deal inflates pipeline value and skews forecast accuracy.
             </div>
             <div class="flex justify-end mb-3 gap-2">
-                <button data-on-click="exportTab" data-args="[&quot;deal&quot;]" data-pass-event="true" id="dealsExportBtn" data-testid="button-export-deals" title="Download a CSV of every Deal duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;deals&quot;]" id="dealsZohoRefreshBtn" title="Pull live values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deals" title="Open a corrective-action record (CAPA) on one of the deal-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                <button data-on-click="exportTab" data-args="[&quot;deal&quot;]" data-pass-event="true" id="dealsExportBtn" data-testid="button-export-deals" title="Download a CSV of every Deal duplicate currently in the radar (respects the start/end date filters above)." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;deals&quot;]" id="dealsZohoRefreshBtn" title="Pull live values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="rr-btn rr-btn-primary ms-2">🔍 Run Scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deals" title="Open a corrective-action record (CAPA) on one of the deal-duplicate groups shown below. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
             <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="deals">
                 <span class="text-xs text-gray-500 me-1">AI status:</span>
-                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;active&quot;]" id="aiChip-deals-active" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-900 text-white" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;tagged_pending&quot;]" id="aiChip-deals-tagged_pending" class="px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200" title="Apply was run — duplicates tagged in Zoho, pending admin delete">🤖 AI-Applied · pending Zoho admin delete</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;resolved&quot;]" id="aiChip-deals-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Marked resolved">✅ Resolved</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;dismissed&quot;]" id="aiChip-deals-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;all&quot;]" id="aiChip-deals-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
-                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;deals&quot;]" id="verifyAllCrm-deals" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-600 text-white hover:bg-emerald-700 ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;active&quot;]" id="aiChip-deals-active" class="rr-chip rr-chip-active" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;tagged_pending&quot;]" id="aiChip-deals-tagged_pending" class="rr-chip" title="Apply was run — duplicates tagged in Zoho, pending admin delete">🤖 AI-Applied · pending Zoho admin delete</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;resolved&quot;]" id="aiChip-deals-resolved" class="rr-chip" title="Marked resolved">✅ Resolved</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;dismissed&quot;]" id="aiChip-deals-dismissed" class="rr-chip" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;all&quot;]" id="aiChip-deals-all" class="rr-chip" title="Every cluster regardless of status">All</button>
+                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;deals&quot;]" id="verifyAllCrm-deals" class="rr-btn rr-btn-ai ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -966,15 +966,15 @@
                 <strong>Contact duplicates.</strong> Contact records that share an email address, phone, or full name within the same Account. Merging these keeps activity history (calls, emails, meetings) attached to a single person instead of scattered across copies, and prevents duplicate outreach.
             </div>
             <div class="flex justify-end mb-3 gap-2">
-                <button data-on-click="exportTab" data-args="[&quot;contact&quot;]" data-pass-event="true" id="contactsExportBtn" data-testid="button-export-contacts" title="Download a CSV of every Contact duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;contacts&quot;]" data-testid="button-open-capa-contacts" title="Open a corrective-action record (CAPA) on one of the contact-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
-                <button data-on-click="bulkSplitContacts" id="bulkSplitContactsBtn" data-testid="button-bulk-split-contacts" title="One-shot cleanup of historical false-positive Contact clusters (e.g. the 7 SLB employees that were lumped together). Applies the ≥2-attribute rule retroactively. Dry-run first, then confirm." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-violet-200 text-violet-900 hover:bg-violet-300">🧹 Bulk-split bad clusters</button>
-                <button data-on-click="bulkMergeExactContacts" id="bulkMergeExactBtn" data-testid="button-bulk-merge-exact-contacts" title="Bulk-merge contacts where Email AND Phone match 100% — these are the same person. Keeps the most complete record, tags the rest Duplicate-Delete. Shows a preview count first, then asks for the admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-200 text-emerald-900 hover:bg-emerald-300">✅ Auto-merge exact email+phone</button>
-                <button data-on-click="bulkMergeNamePhoneContacts" id="bulkMergeNamePhoneBtn" data-testid="button-bulk-merge-name-phone-contacts" title="Bulk-merge contacts that share the SAME NAME + SAME PHONE — the same person even when emails differ or one is missing. Keeps both emails on the survivor (primary + Secondary_Email); a lone email becomes the primary. Tags the rest Duplicate-Delete. Preview first, then admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-200 text-teal-900 hover:bg-teal-300">✅ Auto-merge same name+phone</button>
-                <button data-on-click="bulkLinkContactsToAccount" id="bulkLinkContactsBtn" data-testid="button-bulk-link-contacts" title="Bulk-LINK the remaining 'chained match' clusters — colleagues at the same company who are NOT duplicates — to their company Account (sets Account_Name). For clusters with one clear account and no genuine duplicates. No tagging, no deletion. Preview first, then admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-200 text-indigo-900 hover:bg-indigo-300">🔗 Bulk-link colleagues → Account</button>
-                <button data-on-click="applyAllSafeMerges" id="applyAllSafeBtn" data-testid="button-apply-all-safe" title="ONE click runs ALL the safe auto-merges in batches behind a single admin password: Accounts (same domain + name) first, then Contacts (exact email+phone, then same name+phone). Uses the same conservative, proven rules as the individual buttons — nothing is deleted by the platform. Stops automatically when there's nothing left to merge." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">⚡ Apply ALL safe merges (accounts + contacts)</button>
+                <button data-on-click="exportTab" data-args="[&quot;contact&quot;]" data-pass-event="true" id="contactsExportBtn" data-testid="button-export-contacts" title="Download a CSV of every Contact duplicate currently in the radar (respects the start/end date filters above)." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="rr-btn rr-btn-primary ms-2">🔍 Run Scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;contacts&quot;]" data-testid="button-open-capa-contacts" title="Open a corrective-action record (CAPA) on one of the contact-duplicate groups shown below. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
+                <button data-on-click="bulkSplitContacts" id="bulkSplitContactsBtn" data-testid="button-bulk-split-contacts" title="One-shot cleanup of historical false-positive Contact clusters (e.g. the 7 SLB employees that were lumped together). Applies the ≥2-attribute rule retroactively. Dry-run first, then confirm." class="rr-btn rr-btn-ai">🧹 Bulk-split bad clusters</button>
+                <button data-on-click="bulkMergeExactContacts" id="bulkMergeExactBtn" data-testid="button-bulk-merge-exact-contacts" title="Bulk-merge contacts where Email AND Phone match 100% — these are the same person. Keeps the most complete record, tags the rest Duplicate-Delete. Shows a preview count first, then asks for the admin password." class="rr-btn rr-btn-ai">✅ Auto-merge exact email+phone</button>
+                <button data-on-click="bulkMergeNamePhoneContacts" id="bulkMergeNamePhoneBtn" data-testid="button-bulk-merge-name-phone-contacts" title="Bulk-merge contacts that share the SAME NAME + SAME PHONE — the same person even when emails differ or one is missing. Keeps both emails on the survivor (primary + Secondary_Email); a lone email becomes the primary. Tags the rest Duplicate-Delete. Preview first, then admin password." class="rr-btn rr-btn-ai">✅ Auto-merge same name+phone</button>
+                <button data-on-click="bulkLinkContactsToAccount" id="bulkLinkContactsBtn" data-testid="button-bulk-link-contacts" title="Bulk-LINK the remaining 'chained match' clusters — colleagues at the same company who are NOT duplicates — to their company Account (sets Account_Name). For clusters with one clear account and no genuine duplicates. No tagging, no deletion. Preview first, then admin password." class="rr-btn rr-btn-ai">🔗 Bulk-link colleagues → Account</button>
+                <button data-on-click="applyAllSafeMerges" id="applyAllSafeBtn" data-testid="button-apply-all-safe" title="ONE click runs ALL the safe auto-merges in batches behind a single admin password: Accounts (same domain + name) first, then Contacts (exact email+phone, then same name+phone). Uses the same conservative, proven rules as the individual buttons — nothing is deleted by the platform. Stops automatically when there's nothing left to merge." class="rr-btn rr-btn-ai">⚡ Apply ALL safe merges (accounts + contacts)</button>
             </div>
             <div id="applyAllSafePanel" class="text-xs mb-2"></div>
             <div id="bulkLinkContactsPanel" class="text-xs mb-2"></div>
@@ -983,12 +983,12 @@
             <div id="bulkMergeNamePhonePanel" class="text-xs mb-2"></div>
             <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="contacts">
                 <span class="text-xs text-gray-500 me-1">AI status:</span>
-                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;active&quot;]" id="aiChip-contacts-active" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-900 text-white" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;tagged_pending&quot;]" id="aiChip-contacts-tagged_pending" class="px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200" title="Apply was run — duplicates tagged in Zoho, pending admin delete">🤖 AI-Applied · pending Zoho admin delete</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;resolved&quot;]" id="aiChip-contacts-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Marked resolved">✅ Resolved</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;dismissed&quot;]" id="aiChip-contacts-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;all&quot;]" id="aiChip-contacts-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
-                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;contacts&quot;]" id="verifyAllCrm-contacts" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-600 text-white hover:bg-emerald-700 ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;active&quot;]" id="aiChip-contacts-active" class="rr-chip rr-chip-active" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;tagged_pending&quot;]" id="aiChip-contacts-tagged_pending" class="rr-chip" title="Apply was run — duplicates tagged in Zoho, pending admin delete">🤖 AI-Applied · pending Zoho admin delete</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;resolved&quot;]" id="aiChip-contacts-resolved" class="rr-chip" title="Marked resolved">✅ Resolved</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;dismissed&quot;]" id="aiChip-contacts-dismissed" class="rr-chip" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;all&quot;]" id="aiChip-contacts-all" class="rr-chip" title="Every cluster regardless of status">All</button>
+                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;contacts&quot;]" id="verifyAllCrm-contacts" class="rr-btn rr-btn-ai ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -1015,12 +1015,12 @@
                 <strong>Account duplicates.</strong> Account records that appear to describe the same company — same domain, same legal name, or close fuzzy-name match. Resolving these is the foundation of clean reporting: once Accounts are unique, related Contacts and Deals roll up correctly under one customer.
             </div>
             <div class="flex justify-end mb-3 gap-2">
-                <button data-on-click="exportTab" data-args="[&quot;account&quot;]" data-pass-event="true" id="accountsExportBtn" data-testid="button-export-accounts" title="Download a CSV of every Account duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;accounts&quot;]" id="accountsZohoRefreshBtn" title="Pull live values from Zoho for every account currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;accounts&quot;]" data-testid="button-open-capa-accounts" title="Open a corrective-action record (CAPA) on one of the account-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
-                <button data-on-click="previewAccountAutoMerge" id="accountAutoMergePreviewBtn" data-testid="button-account-auto-merge-preview" title="DRY-RUN preview (no changes): which accounts would auto-merge by SAME DOMAIN + SAME NAME — Corporate↔Corporate and Partner↔Partner only (never across). Review this before we enable the apply." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-200 text-teal-900 hover:bg-teal-300">🔍 Preview auto-merge (domain+name)</button>
-                <button data-on-click="previewAccountAutoMerge" data-args="[&quot;domain&quot;]" id="accountDomainOnlyPreviewBtn" data-testid="button-account-domain-only-preview" title="LOOSER dry-run (no changes): accounts that share the SAME DOMAIN even when names differ (EN/AR/spelling variants). Skips domains carrying many distinct names (likely shared/agency). Review + override survivors before applying." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-200 text-amber-900 hover:bg-amber-300">🔍 Preview auto-merge (domain only)</button>
+                <button data-on-click="exportTab" data-args="[&quot;account&quot;]" data-pass-event="true" id="accountsExportBtn" data-testid="button-export-accounts" title="Download a CSV of every Account duplicate currently in the radar (respects the start/end date filters above)." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;accounts&quot;]" id="accountsZohoRefreshBtn" title="Pull live values from Zoho for every account currently shown. Use this when the CRM has been updated but the table still shows old values." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="rr-btn rr-btn-primary ms-2">🔍 Run Scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;accounts&quot;]" data-testid="button-open-capa-accounts" title="Open a corrective-action record (CAPA) on one of the account-duplicate groups shown below. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
+                <button data-on-click="previewAccountAutoMerge" id="accountAutoMergePreviewBtn" data-testid="button-account-auto-merge-preview" title="DRY-RUN preview (no changes): which accounts would auto-merge by SAME DOMAIN + SAME NAME — Corporate↔Corporate and Partner↔Partner only (never across). Review this before we enable the apply." class="rr-btn rr-btn-ai">🔍 Preview auto-merge (domain+name)</button>
+                <button data-on-click="previewAccountAutoMerge" data-args="[&quot;domain&quot;]" id="accountDomainOnlyPreviewBtn" data-testid="button-account-domain-only-preview" title="LOOSER dry-run (no changes): accounts that share the SAME DOMAIN even when names differ (EN/AR/spelling variants). Skips domains carrying many distinct names (likely shared/agency). Review + override survivors before applying." class="rr-btn rr-btn-ai">🔍 Preview auto-merge (domain only)</button>
             </div>
             <div id="accountAutoMergePanel" class="text-xs mb-3"></div>
             <!-- AI-status chips — toggle which slice of clusters is in the list.
@@ -1030,12 +1030,12 @@
                  all               = no status filter -->
             <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="accounts">
                 <span class="text-xs text-gray-500 me-1">AI status:</span>
-                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;active&quot;]" id="aiChip-accounts-active" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-900 text-white" title="Untouched active clusters — no Apply has been pressed for them yet">Untouched</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;tagged_pending&quot;]" id="aiChip-accounts-tagged_pending" class="px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200" title="Apply was run on these clusters — the duplicates are tagged Duplicate-Delete in Zoho but the admin has not physically deleted them yet, so they keep re-appearing on the next scan.">🤖 AI-Applied · pending Zoho admin delete</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;resolved&quot;]" id="aiChip-accounts-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Cluster was marked resolved — the radar considers it done">✅ Resolved</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;dismissed&quot;]" id="aiChip-accounts-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — e.g. a Corporate-Accounts and a Marketplace account that are intentionally two separate accounts (Sales B2B/B2C vs Merchants).">🚫 Dismissed</button>
-                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;all&quot;]" id="aiChip-accounts-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
-                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;accounts&quot;]" id="verifyAllCrm-accounts" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-600 text-white hover:bg-emerald-700 ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;active&quot;]" id="aiChip-accounts-active" class="rr-chip rr-chip-active" title="Untouched active clusters — no Apply has been pressed for them yet">Untouched</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;tagged_pending&quot;]" id="aiChip-accounts-tagged_pending" class="rr-chip" title="Apply was run on these clusters — the duplicates are tagged Duplicate-Delete in Zoho but the admin has not physically deleted them yet, so they keep re-appearing on the next scan.">🤖 AI-Applied · pending Zoho admin delete</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;resolved&quot;]" id="aiChip-accounts-resolved" class="rr-chip" title="Cluster was marked resolved — the radar considers it done">✅ Resolved</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;dismissed&quot;]" id="aiChip-accounts-dismissed" class="rr-chip" title="Dismissed as a false positive — e.g. a Corporate-Accounts and a Marketplace account that are intentionally two separate accounts (Sales B2B/B2C vs Merchants).">🚫 Dismissed</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;all&quot;]" id="aiChip-accounts-all" class="rr-chip" title="Every cluster regardless of status">All</button>
+                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;accounts&quot;]" id="verifyAllCrm-accounts" class="rr-btn rr-btn-ai ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -1232,18 +1232,18 @@
             <!-- Controls -->
             <div class="flex flex-wrap items-center gap-2 mb-3">
                 <div class="flex items-center gap-1">
-                    <button data-on-click="filterCsOverlap" data-args="[&quot;all&quot;]" id="csOverlapChip-all" data-testid="cs-overlap-chip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
-                    <button data-on-click="filterCsOverlap" data-args="[&quot;block&quot;]" id="csOverlapChip-block" data-testid="cs-overlap-chip-block" class="px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200">Block</button>
-                    <button data-on-click="filterCsOverlap" data-args="[&quot;review&quot;]" id="csOverlapChip-review" data-testid="cs-overlap-chip-review" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">Review</button>
-                    <button data-on-click="filterCsOverlap" data-args="[&quot;warn&quot;]" id="csOverlapChip-warn" data-testid="cs-overlap-chip-warn" class="px-3 py-1.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200">Warn</button>
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;all&quot;]" id="csOverlapChip-all" data-testid="cs-overlap-chip-all" class="rr-chip rr-chip-active">All</button>
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;block&quot;]" id="csOverlapChip-block" data-testid="cs-overlap-chip-block" class="rr-chip"><span class="rr-chip-dot warn"></span>Block</button>
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;review&quot;]" id="csOverlapChip-review" data-testid="cs-overlap-chip-review" class="rr-chip"><span class="rr-chip-dot amber"></span>Review</button>
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;warn&quot;]" id="csOverlapChip-warn" data-testid="cs-overlap-chip-warn" class="rr-chip"><span class="rr-chip-dot amber"></span>Warn</button>
                 </div>
                 <div class="flex-1"></div>
-                <button data-on-click="exportCsOverlap" id="csOverlapExportBtn" data-testid="button-export-cs-overlap" title="Download a CSV of exactly the CS-overlap clusters shown below, in the current sort order and filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshCsOverlapFromZoho" id="csOverlapZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this CS Overlap view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="rescanCsOverlap" id="csOverlapScanBtn" data-testid="button-cs-overlap-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">
+                <button data-on-click="exportCsOverlap" id="csOverlapExportBtn" data-testid="button-export-cs-overlap" title="Download a CSV of exactly the CS-overlap clusters shown below, in the current sort order and filter." class="rr-btn rr-btn-ghost me-2">⬇ Export CSV</button>
+                <button data-on-click="refreshCsOverlapFromZoho" id="csOverlapZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this CS Overlap view." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="rescanCsOverlap" id="csOverlapScanBtn" data-testid="button-cs-overlap-scan" class="rr-btn rr-btn-primary me-2">
                     🔍 Run Scan
                 </button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;cs-overlap&quot;]" data-testid="button-open-capa-cs-overlap" title="Open a corrective-action record (CAPA) on one of the CS-Overlap clusters below. The CAPA goes to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;cs-overlap&quot;]" data-testid="button-open-capa-cs-overlap" title="Open a corrective-action record (CAPA) on one of the CS-Overlap clusters below. The CAPA goes to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
 
             <!-- Table -->
@@ -1300,19 +1300,19 @@
                     <textarea id="preflightInput" rows="10" placeholder="domain,company_name&#10;anb.com.sa,Arab National Bank&#10;bahri.sa,Bahri&#10;example.gov.sa,Example Authority"
                               class="w-full font-mono text-xs border rounded-lg px-3 py-2" data-testid="preflight-input"></textarea>
                     <div class="flex items-center gap-2 mt-2 flex-wrap">
-                        <button data-on-click="runPreflight" id="preflightRunBtn" data-testid="button-preflight-run" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Check</button>
+                        <button data-on-click="runPreflight" id="preflightRunBtn" data-testid="button-preflight-run" class="rr-btn rr-btn-primary">Check</button>
                         <!-- Excel upload: picks an .xlsx, the server parses it,
                              the rows land in the textarea above so the operator
                              can still inspect / edit before clicking Check. -->
-                        <button data-on-click="triggerPreflightExcelUpload" id="preflightUploadBtn" data-testid="button-preflight-upload" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">📄 Upload Excel</button>
+                        <button data-on-click="triggerPreflightExcelUpload" id="preflightUploadBtn" data-testid="button-preflight-upload" class="rr-btn rr-btn-ghost">📄 Upload Excel</button>
                         <input type="file" id="preflightExcelInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" data-on-change="handlePreflightExcelChosen" data-testid="input-preflight-excel" />
-                        <button data-on-click="loadPreflightSample" id="preflightSampleBtn" data-testid="button-preflight-sample" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Load sample</button>
-                        <button data-on-click="clearPreflight" id="preflightClearBtn" data-testid="button-preflight-clear" class="px-3 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700">Clear</button>
-                        <button data-on-click="downloadPreflightFlaggedRows" id="preflightExportFlaggedBtn" data-testid="button-preflight-export-flagged" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700" title="Download ONLY the flagged rows (Block / Review / Warn / Duplicate) as a native Excel file — Company, Contact, Email, Phone, Verdict, Existing Owner, CS Phase, Churn Date, and the Recommended Action. This is the file to send the Head of Sales.">⚑ Download Rejected Data</button>
-                        <button data-on-click="downloadPreflightPassRowsXlsx" id="preflightExportPassXlsxBtn" data-testid="button-preflight-export-pass-xlsx" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-700 text-white hover:bg-emerald-800" title="Download the PASS (safe-to-import) rows as a native Excel file — same Summary + Findings design as the flagged export, with Company, Contact, Email, Phone columns.">📊 Download PASS Data</button>
+                        <button data-on-click="loadPreflightSample" id="preflightSampleBtn" data-testid="button-preflight-sample" class="rr-btn rr-btn-subtle">Load sample</button>
+                        <button data-on-click="clearPreflight" id="preflightClearBtn" data-testid="button-preflight-clear" class="rr-btn rr-btn-subtle">Clear</button>
+                        <button data-on-click="downloadPreflightFlaggedRows" id="preflightExportFlaggedBtn" data-testid="button-preflight-export-flagged" class="hidden rr-btn rr-btn-ghost" title="Download ONLY the flagged rows (Block / Review / Warn / Duplicate) as a native Excel file — Company, Contact, Email, Phone, Verdict, Existing Owner, CS Phase, Churn Date, and the Recommended Action. This is the file to send the Head of Sales.">⚑ Download Rejected Data</button>
+                        <button data-on-click="downloadPreflightPassRowsXlsx" id="preflightExportPassXlsxBtn" data-testid="button-preflight-export-pass-xlsx" class="hidden rr-btn rr-btn-ghost" title="Download the PASS (safe-to-import) rows as a native Excel file — same Summary + Findings design as the flagged export, with Company, Contact, Email, Phone columns.">📊 Download PASS Data</button>
                         <!-- Executive toolbar — appears after a successful run. -->
-                        <button data-on-click="copyPreflightEmailBody" id="preflightCopyEmailBtn" data-testid="button-preflight-copy-email" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-100 text-blue-900 hover:bg-blue-200" title="Copy a ready-to-paste email body with the run's headline numbers and top reasons.">📋 Copy email body</button>
-                        <button data-on-click="openPushToZohoModal" id="preflightPushBtn" data-testid="button-preflight-push" class="hidden px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700" title="Push the PASS rows into Zoho CRM as new Leads on a Layout you pick. Defense in depth: dry-run by default, only PASS rows ever sent, every push audit-logged.">📤 Push PASS rows to Zoho</button>
+                        <button data-on-click="copyPreflightEmailBody" id="preflightCopyEmailBtn" data-testid="button-preflight-copy-email" class="hidden rr-btn rr-btn-ghost" title="Copy a ready-to-paste email body with the run's headline numbers and top reasons.">📋 Copy email body</button>
+                        <button data-on-click="openPushToZohoModal" id="preflightPushBtn" data-testid="button-preflight-push" class="hidden rr-btn rr-btn-ai" title="Push the PASS rows into Zoho CRM as new Leads on a Layout you pick. Defense in depth: dry-run by default, only PASS rows ever sent, every push audit-logged.">📤 Push PASS rows to Zoho</button>
                         <span id="preflightParsedCount" class="ml-auto text-xs text-gray-500"></span>
                     </div>
                     <p class="text-[11px] text-gray-500 mt-1">
@@ -1404,7 +1404,7 @@
                             <input type="checkbox" id="spDry-1" checked data-testid="checkbox-sp-dry-1" />
                             <span data-i18n="pf_sp_dry">Dry-run</span>
                         </label>
-                        <button data-on-click="erStructuredPush" data-args="[1]" id="spBtn-1" data-testid="button-sp-1" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700"><span data-i18n="pf_sp_push">Push</span></button>
+                        <button data-on-click="erStructuredPush" data-args="[1]" id="spBtn-1" data-testid="button-sp-1" class="rr-btn rr-btn-ai"><span data-i18n="pf_sp_push">Push</span></button>
                         <div id="spResult-1" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
                     </div>
                     <!-- A2 — multi-contact new companies -->
@@ -1425,7 +1425,7 @@
                             <input type="checkbox" id="spDry-2" checked data-testid="checkbox-sp-dry-2" />
                             <span data-i18n="pf_sp_dry">Dry-run</span>
                         </label>
-                        <button data-on-click="erStructuredPush" data-args="[2]" id="spBtn-2" data-testid="button-sp-2" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700"><span data-i18n="pf_sp_push">Push</span></button>
+                        <button data-on-click="erStructuredPush" data-args="[2]" id="spBtn-2" data-testid="button-sp-2" class="rr-btn rr-btn-ai"><span data-i18n="pf_sp_push">Push</span></button>
                         <div id="spResult-2" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
                     </div>
                     <!-- A3 — single-contact new companies → full structure -->
@@ -1446,7 +1446,7 @@
                             <input type="checkbox" id="spDry-3" checked data-testid="checkbox-sp-dry-3" />
                             <span data-i18n="pf_sp_dry">Dry-run</span>
                         </label>
-                        <button data-on-click="erStructuredPush" data-args="[3]" id="spBtn-3" data-testid="button-sp-3" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700"><span data-i18n="pf_sp_push">Push</span></button>
+                        <button data-on-click="erStructuredPush" data-args="[3]" id="spBtn-3" data-testid="button-sp-3" class="rr-btn rr-btn-ai"><span data-i18n="pf_sp_push">Push</span></button>
                         <div id="spResult-3" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
                     </div>
                     <!-- A4 — lead-routed contacts (free-mail / unverifiable) → Leads -->
@@ -1467,7 +1467,7 @@
                             <input type="checkbox" id="spDry-4" checked data-testid="checkbox-sp-dry-4" />
                             <span data-i18n="pf_sp_dry">Dry-run</span>
                         </label>
-                        <button data-on-click="erStructuredPush" data-args="[4]" id="spBtn-4" data-testid="button-sp-4" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700"><span data-i18n="pf_sp_push">Push</span></button>
+                        <button data-on-click="erStructuredPush" data-args="[4]" id="spBtn-4" data-testid="button-sp-4" class="rr-btn rr-btn-ai"><span data-i18n="pf_sp_push">Push</span></button>
                         <div id="spResult-4" class="hidden basis-full text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-48 overflow-y-auto"></div>
                     </div>
                 </div>
@@ -1584,8 +1584,8 @@
                             </label>
 
                             <div class="flex items-center justify-end gap-2 pt-2 border-t">
-                                <button data-on-click="closePushZohoModal" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200" data-testid="button-cancel-push-zoho">Cancel</button>
-                                <button data-on-click="runPushToZoho" id="pushZohoRunBtn" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700" data-testid="button-run-push-zoho">Push to Zoho</button>
+                                <button data-on-click="closePushZohoModal" class="rr-btn rr-btn-subtle" data-testid="button-cancel-push-zoho">Cancel</button>
+                                <button data-on-click="runPushToZoho" id="pushZohoRunBtn" class="rr-btn rr-btn-ai" data-testid="button-run-push-zoho">Push to Zoho</button>
                             </div>
 
                             <div id="pushZohoResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-3 max-h-60 overflow-y-auto"></div>
@@ -1630,16 +1630,16 @@
                 <!-- Filter + scan -->
                 <div class="flex flex-wrap items-center gap-2 mb-3">
                     <div class="flex items-center gap-1">
-                        <button data-on-click="filterAccountHints" data-args="[&quot;pending&quot;]" id="accountHintsChip-pending" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">Pending</button>
-                        <button data-on-click="filterAccountHints" data-args="[&quot;applied&quot;]" id="accountHintsChip-applied" class="px-3 py-1.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Applied</button>
-                        <button data-on-click="filterAccountHints" data-args="[&quot;dismissed&quot;]" id="accountHintsChip-dismissed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">Dismissed</button>
+                        <button data-on-click="filterAccountHints" data-args="[&quot;pending&quot;]" id="accountHintsChip-pending" class="rr-chip rr-chip-active">Pending</button>
+                        <button data-on-click="filterAccountHints" data-args="[&quot;applied&quot;]" id="accountHintsChip-applied" class="rr-chip">Applied</button>
+                        <button data-on-click="filterAccountHints" data-args="[&quot;dismissed&quot;]" id="accountHintsChip-dismissed" class="rr-chip">Dismissed</button>
                     </div>
                     <div class="flex-1"></div>
-                    <button data-on-click="exportAccountHints" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of exactly the Account-Hint rows shown below, in the current order and status filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                    <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400 me-2">🔃 Refresh from Zoho (live)</button>
-                    <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
-                    <button data-on-click="resolveAllAccountHintsWithAi" id="accountHintsAiResolveAllBtn" data-testid="button-account-hints-ai-resolve-all" title="Loop every pending hint with confidence ≥70% and write the suggested Account_Name on each Zoho Deal automatically. Below threshold rows stay pending for manual review." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700 me-2">🤖 Resolve all (≥70%) with AI</button>
-                    <button data-on-click="openCapaPicker" data-args="[&quot;account-hints&quot;]" data-testid="button-open-capa-account-hints" title="Open a corrective-action record (CAPA) on one of the account-hint rows below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                    <button data-on-click="exportAccountHints" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of exactly the Account-Hint rows shown below, in the current order and status filter." class="rr-btn rr-btn-ghost me-2">⬇ Export CSV</button>
+                    <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="rr-btn rr-btn-ghost me-2">🔃 Refresh from Zoho (live)</button>
+                    <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
+                    <button data-on-click="resolveAllAccountHintsWithAi" id="accountHintsAiResolveAllBtn" data-testid="button-account-hints-ai-resolve-all" title="Loop every pending hint with confidence ≥70% and write the suggested Account_Name on each Zoho Deal automatically. Below threshold rows stay pending for manual review." class="rr-btn rr-btn-ai me-2">🤖 Resolve all (≥70%) with AI</button>
+                    <button data-on-click="openCapaPicker" data-args="[&quot;account-hints&quot;]" data-testid="button-open-capa-account-hints" title="Open a corrective-action record (CAPA) on one of the account-hint rows below. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
                 </div>
                 <div id="accountHintsAiResolveAllPanel" class="text-xs mb-2"></div>
 
@@ -1672,7 +1672,7 @@
 
                 <div class="flex flex-wrap items-center gap-2 mb-3">
                     <div class="flex-1"></div>
-                    <button data-on-click="runRecordHintsScan" data-args="[&quot;contact_account&quot;]" id="recordHintsContactAccountScanBtn" data-testid="button-record-hints-contact-account-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
+                    <button data-on-click="runRecordHintsScan" data-args="[&quot;contact_account&quot;]" id="recordHintsContactAccountScanBtn" data-testid="button-record-hints-contact-account-scan" class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
                 </div>
 
                 <div class="bg-white rounded-lg shadow overflow-x-auto">
@@ -1702,7 +1702,7 @@
 
                 <div class="flex flex-wrap items-center gap-2 mb-3">
                     <div class="flex-1"></div>
-                    <button data-on-click="runRecordHintsScan" data-args="[&quot;deal_contact&quot;]" id="recordHintsDealContactScanBtn" data-testid="button-record-hints-deal-contact-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
+                    <button data-on-click="runRecordHintsScan" data-args="[&quot;deal_contact&quot;]" id="recordHintsDealContactScanBtn" data-testid="button-record-hints-deal-contact-scan" class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
                 </div>
 
                 <div class="bg-white rounded-lg shadow overflow-x-auto">
@@ -1730,7 +1730,7 @@
                 <h3 class="text-sm font-bold text-gray-900 mb-2">4. Unaccounted deals — decide <span id="staleDealsBadge" class="hidden inline-block min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white text-center align-middle">0</span></h3>
                 <p class="text-xs text-gray-500 mb-2">Deals parked in a stalled stage (e.g. Unaccounted), compared with the company's deal picture. If the company already has a signed/paid deal, the stalled one is redundant &rarr; close it; otherwise re-engage it. Suggestions only &mdash; nothing writes to Zoho here yet.</p>
                 <div class="mb-2">
-                    <button data-on-click="loadStaleDeals" id="staleDealsScanBtn" data-testid="button-stale-deals-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
+                    <button data-on-click="loadStaleDeals" id="staleDealsScanBtn" data-testid="button-stale-deals-scan" class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
                     <span id="staleDealsSummary" class="text-xs text-gray-500"></span>
                 </div>
                 <div class="overflow-x-auto border border-gray-200 rounded-lg">
@@ -1798,10 +1798,10 @@
             <!-- Filters -->
             <div class="flex flex-wrap items-center gap-2 mb-3">
                 <div class="flex items-center gap-1">
-                    <button data-on-click="filterCsLifecycle" data-args="[&quot;all&quot;]" id="csLifeChip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
-                    <button data-on-click="filterCsLifecycle" data-args="[&quot;critical&quot;]" id="csLifeChip-critical" class="px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200">Critical</button>
-                    <button data-on-click="filterCsLifecycle" data-args="[&quot;warning&quot;]" id="csLifeChip-warning" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">Warning</button>
-                    <button data-on-click="filterCsLifecycle" data-args="[&quot;info&quot;]" id="csLifeChip-info" class="px-3 py-1.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200">Info</button>
+                    <button data-on-click="filterCsLifecycle" data-args="[&quot;all&quot;]" id="csLifeChip-all" class="rr-chip rr-chip-active">All</button>
+                    <button data-on-click="filterCsLifecycle" data-args="[&quot;critical&quot;]" id="csLifeChip-critical" class="rr-chip">Critical</button>
+                    <button data-on-click="filterCsLifecycle" data-args="[&quot;warning&quot;]" id="csLifeChip-warning" class="rr-chip">Warning</button>
+                    <button data-on-click="filterCsLifecycle" data-args="[&quot;info&quot;]" id="csLifeChip-info" class="rr-chip">Info</button>
                 </div>
                 <!--
                     Phase filter (2026-05-30) — client-side dropdown,
@@ -1820,10 +1820,10 @@
                     </select>
                 </div>
                 <div class="flex-1"></div>
-                <button data-on-click="exportCsLifecycle" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of exactly the CS-lifecycle violations shown below (incl. CS detail columns), in the current sort order and filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400 me-2">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;cs-lifecycle&quot;]" data-testid="button-open-capa-cs-lifecycle" title="Open a corrective-action record (CAPA) on one of the deals below. The CAPA goes to the QMS CAPA inbox where Quality investigates and closes it." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                <button data-on-click="exportCsLifecycle" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of exactly the CS-lifecycle violations shown below (incl. CS detail columns), in the current sort order and filter." class="rr-btn rr-btn-ghost me-2">⬇ Export CSV</button>
+                <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="rr-btn rr-btn-ghost me-2">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;cs-lifecycle&quot;]" data-testid="button-open-capa-cs-lifecycle" title="Open a corrective-action record (CAPA) on one of the deals below. The CAPA goes to the QMS CAPA inbox where Quality investigates and closes it." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
 
             <!-- Table -->
@@ -1862,9 +1862,9 @@
 
           <div id="erBulkBar" class="hidden sticky top-0 z-10 bg-white border border-rose-300 rounded-lg shadow p-2 mb-3 flex items-center gap-3 flex-wrap">
             <span id="erBulkCount" class="text-sm font-medium text-gray-700">0 selected</span>
-            <button data-on-click="erTagSelected" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700">🏷 <span data-i18n="duplicates.er_tag_selected">Tag selected Empty-Delete</span></button>
-            <button data-on-click="erDismissSelected" title="Not empty — keep these records and remove them from the cleanup list" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">✕ <span data-i18n="duplicates.er_dismiss_selected">Dismiss selected (keep)</span></button>
-            <button data-on-click="erUndoLast" id="erUndoBtn" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">↩ <span data-i18n="duplicates.er_undo">Undo last batch</span></button>
+            <button data-on-click="erTagSelected" class="rr-btn rr-btn-danger">🏷 <span data-i18n="duplicates.er_tag_selected">Tag selected Empty-Delete</span></button>
+            <button data-on-click="erDismissSelected" title="Not empty — keep these records and remove them from the cleanup list" class="rr-btn rr-btn-ghost">✕ <span data-i18n="duplicates.er_dismiss_selected">Dismiss selected (keep)</span></button>
+            <button data-on-click="erUndoLast" id="erUndoBtn" class="hidden rr-btn rr-btn-ghost">↩ <span data-i18n="duplicates.er_undo">Undo last batch</span></button>
             <span id="erBulkResult" class="text-xs text-gray-600"></span>
           </div>
 
@@ -1872,10 +1872,10 @@
             <div class="flex items-center gap-2 mb-2">
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_deals">Deals</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_deals_sub">empty / test (missing-account deals → Account Hints)</span></span></h3>
               <span id="erCount-deals" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
-              <button data-on-click="erVerifyPage" data-args="[&quot;deals&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-indigo-300 text-indigo-700 hover:bg-indigo-50" title="Live-check the records shown on THIS page against Zoho — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
-              <button id="erAiBtn-deals" data-on-click="erAiApply" data-args="[&quot;deals&quot;]" class="px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button data-on-click="erVerifyPage" data-args="[&quot;deals&quot;]" class="ml-auto rr-btn rr-btn-ghost" title="Live-check the records shown on THIS page against Zoho — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
+              <button id="erAiBtn-deals" data-on-click="erAiApply" data-args="[&quot;deals&quot;]" class="rr-btn rr-btn-ai" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
               <span id="erAiProgress-deals" class="text-xs font-medium text-rose-700" role="status" aria-live="polite"></span>
-              <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
+              <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="rr-btn rr-btn-ghost">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="rr-table min-w-full" data-no-sort>
@@ -1889,10 +1889,10 @@
             <div class="flex items-center gap-2 mb-2">
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_accounts">Accounts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_accounts_sub">empty (check attachments first) / test</span></span></h3>
               <span id="erCount-accounts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
-              <button data-on-click="erVerifyPage" data-args="[&quot;accounts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-indigo-300 text-indigo-700 hover:bg-indigo-50" title="Live-check the records shown on THIS page against Zoho — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
-              <button id="erAiBtn-accounts" data-on-click="erAiApply" data-args="[&quot;accounts&quot;]" class="px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button data-on-click="erVerifyPage" data-args="[&quot;accounts&quot;]" class="ml-auto rr-btn rr-btn-ghost" title="Live-check the records shown on THIS page against Zoho — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
+              <button id="erAiBtn-accounts" data-on-click="erAiApply" data-args="[&quot;accounts&quot;]" class="rr-btn rr-btn-ai" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
               <span id="erAiProgress-accounts" class="text-xs font-medium text-rose-700" role="status" aria-live="polite"></span>
-              <button data-on-click="erReload" data-args="[&quot;accounts&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
+              <button data-on-click="erReload" data-args="[&quot;accounts&quot;]" class="rr-btn rr-btn-ghost">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="rr-table min-w-full" data-no-sort>
@@ -1906,10 +1906,10 @@
             <div class="flex items-center gap-2 mb-2">
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_contacts">Contacts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_contacts_sub">name-only / test</span></span></h3>
               <span id="erCount-contacts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
-              <button data-on-click="erVerifyPage" data-args="[&quot;contacts&quot;]" class="ml-auto px-2 py-1 text-xs rounded border border-indigo-300 text-indigo-700 hover:bg-indigo-50" title="Live-check the records shown on THIS page against Zoho — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
-              <button id="erAiBtn-contacts" data-on-click="erAiApply" data-args="[&quot;contacts&quot;]" class="px-2 py-1 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button data-on-click="erVerifyPage" data-args="[&quot;contacts&quot;]" class="ml-auto rr-btn rr-btn-ghost" title="Live-check the records shown on THIS page against Zoho — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
+              <button id="erAiBtn-contacts" data-on-click="erAiApply" data-args="[&quot;contacts&quot;]" class="rr-btn rr-btn-ai" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
               <span id="erAiProgress-contacts" class="text-xs font-medium text-rose-700" role="status" aria-live="polite"></span>
-              <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
+              <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="rr-btn rr-btn-ghost">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="rr-table min-w-full" data-no-sort>
@@ -1923,7 +1923,7 @@
             <div class="flex items-center gap-2 mb-2">
               <h3 class="text-base font-bold text-gray-900" data-i18n="duplicates.er_tagged_pending">Tagged · pending delete</h3>
               <span id="erTaggedProgress" class="text-xs text-gray-500"></span>
-              <button data-on-click="erRecheckDeletions" class="ml-auto px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50">🔄 <span data-i18n="duplicates.er_recheck">Re-check CRM</span></button>
+              <button data-on-click="erRecheckDeletions" class="ml-auto rr-btn rr-btn-ghost">🔄 <span data-i18n="duplicates.er_recheck">Re-check CRM</span></button>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="rr-table min-w-full">
@@ -1976,10 +1976,10 @@
             <!-- Filters -->
             <div class="flex flex-wrap items-center gap-2 mb-3">
                 <div class="flex items-center gap-1">
-                    <button data-on-click="filterDealLifecycle" data-args="[&quot;all&quot;]" id="dealLifeChip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
-                    <button data-on-click="filterDealLifecycle" data-args="[&quot;critical&quot;]" id="dealLifeChip-critical" class="px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200">Critical</button>
-                    <button data-on-click="filterDealLifecycle" data-args="[&quot;warning&quot;]" id="dealLifeChip-warning" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">Warning</button>
-                    <button data-on-click="filterDealLifecycle" data-args="[&quot;info&quot;]" id="dealLifeChip-info" class="px-3 py-1.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200">Info</button>
+                    <button data-on-click="filterDealLifecycle" data-args="[&quot;all&quot;]" id="dealLifeChip-all" class="rr-chip rr-chip-active">All</button>
+                    <button data-on-click="filterDealLifecycle" data-args="[&quot;critical&quot;]" id="dealLifeChip-critical" class="rr-chip">Critical</button>
+                    <button data-on-click="filterDealLifecycle" data-args="[&quot;warning&quot;]" id="dealLifeChip-warning" class="rr-chip">Warning</button>
+                    <button data-on-click="filterDealLifecycle" data-args="[&quot;info&quot;]" id="dealLifeChip-info" class="rr-chip">Info</button>
                 </div>
                 <div class="flex items-center gap-1 ms-2">
                     <label for="dealLifeStageFilter" class="text-xs font-medium text-gray-600">Stage:</label>
@@ -1988,10 +1988,10 @@
                     </select>
                 </div>
                 <div class="flex-1"></div>
-                <button data-on-click="exportDealLifecycle" id="dealLifeExportBtn" data-testid="button-export-deal-lifecycle" title="Download a CSV of the deal-stage-aging violations currently shown." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshDealLifecycleFromZoho" id="dealLifeZohoRefreshBtn" title="Pull live Stage / Modified_Time values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old aging." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400 me-2">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters and refresh every deal's Stage." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;deal-lifecycle&quot;]" data-testid="button-open-capa-deal-lifecycle" title="Open a corrective-action record (CAPA) on one of the stage-aging breaches." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                <button data-on-click="exportDealLifecycle" id="dealLifeExportBtn" data-testid="button-export-deal-lifecycle" title="Download a CSV of the deal-stage-aging violations currently shown." class="rr-btn rr-btn-ghost me-2">⬇ Export CSV</button>
+                <button data-on-click="refreshDealLifecycleFromZoho" id="dealLifeZohoRefreshBtn" title="Pull live Stage / Modified_Time values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old aging." class="rr-btn rr-btn-ghost me-2">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters and refresh every deal's Stage." class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;deal-lifecycle&quot;]" data-testid="button-open-capa-deal-lifecycle" title="Open a corrective-action record (CAPA) on one of the stage-aging breaches." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
 
             <!-- Table -->
@@ -2035,10 +2035,10 @@
                     <span id="ownersSelectionCount" data-testid="text-owners-selection-count" class="text-xs text-gray-500"></span>
                 </div>
                 <div class="flex">
-                    <button data-on-click="exportOwnersSelected" id="ownersExportBtn" data-testid="button-export-owners" title="Download a CSV of the rows you ticked in the table below. Tick the header checkbox to select every visible row." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                    <button data-on-click="refreshOwnersFromZoho" id="ownersZohoRefreshBtn" title="Reload the per-owner scorecard from the most recent CRM sync. For a full live re-pull of every record from Zoho, use the top-header Sync Now button." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
-                    <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
-                    <button data-on-click="openCapaPicker" data-args="[&quot;owners&quot;]" data-testid="button-open-capa-owners" title="Open a corrective-action record (CAPA) on one of the owners below — typically used to escalate a rep carrying a high duplicate-debt load. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300 ms-2">🚩 Open CAPA</button>
+                    <button data-on-click="exportOwnersSelected" id="ownersExportBtn" data-testid="button-export-owners" title="Download a CSV of the rows you ticked in the table below. Tick the header checkbox to select every visible row." class="rr-btn rr-btn-ghost me-2">⬇ Export CSV</button>
+                    <button data-on-click="refreshOwnersFromZoho" id="ownersZohoRefreshBtn" title="Reload the per-owner scorecard from the most recent CRM sync. For a full live re-pull of every record from Zoho, use the top-header Sync Now button." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
+                    <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="rr-btn rr-btn-primary ms-2">🔍 Run Scan</button>
+                    <button data-on-click="openCapaPicker" data-args="[&quot;owners&quot;]" data-testid="button-open-capa-owners" title="Open a corrective-action record (CAPA) on one of the owners below — typically used to escalate a rep carrying a high duplicate-debt load. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost ms-2">🚩 Open CAPA</button>
                 </div>
             </div>
             <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -2301,7 +2301,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=74"></script>
+    <script src="/js/duplicates-app.js?v=75"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
