@@ -11954,12 +11954,29 @@
         // Backfill Title on already-pushed Leads: matches each loaded row to a
         // Lead BY EMAIL and updates its Title. Requires the TITLED Excel loaded
         // (rows must carry a title). Dry-run by default.
+        // One backfill-titles call for a single module. Uses _pfReadJson so a
+        // transient gateway 500 shows a retry message, not "Unexpected token".
+        async function _erBackfillRun(module, rows, count, offset, dry) {
+            var res = await fetch('/api/duplicates/preflight/backfill-titles', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows: rows, module: module, dry_run: dry, count: count, offset: offset }),
+            });
+            var resp = await _pfReadJson(res);
+            if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
+            return resp;
+        }
+        // Set the Title on already-pushed records that were pushed WITHOUT one.
+        // Target module is chosen in the dropdown: Contacts (for the deal
+        // contacts), Leads, or Both. Matches each titled row by email → phone →
+        // name. Needs the TITLED Excel loaded + a Preflight run first.
         async function erBackfillTitles() {
             var data = window._preflightLastResult;
-            if (!data || !Array.isArray(data.rows)) { rrToast('Load the titled Excel and run a Preflight check first.'); return; }
+            if (!data || !Array.isArray(data.rows)) { rrToast('Load the titled Excel and run a Preflight check first.', 'warn'); return; }
             var rows = data.rows.map(_pfToSPRow);
             var withTitle = rows.filter(function (r) { return String(r.title || '').trim() && (String(r.email || '').trim() || String(r.phone || '').trim() || String(r.contact_name || '').trim()); }).length;
-            if (withTitle === 0) { rrToast('No rows with a Title (plus an email, phone, or name to match on). Load the Excel that has the Title column, then run Preflight.'); return; }
+            if (withTitle === 0) { rrToast('No rows with a Title (plus an email, phone, or name to match on). Load the Excel that HAS the Title column, then run Preflight.', 'warn'); return; }
+            var moduleSel = (document.getElementById('spBackfillModule') || {}).value || 'Contacts';
+            var modules = moduleSel === 'Both' ? ['Contacts', 'Leads'] : [moduleSel];
             var dry = !!(document.getElementById('spBackfillDry') || {}).checked;
             var count = parseInt((document.getElementById('spBackfillNum') || {}).value || '0', 10) || 0;
             var offset = parseInt((document.getElementById('spBackfillOff') || {}).value || '0', 10) || 0;
@@ -11968,28 +11985,28 @@
             var orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = dry ? 'Checking…' : 'Backfilling…'; }
             try {
-                var res = await fetch('/api/duplicates/preflight/backfill-titles', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ rows: rows, module: 'Leads', dry_run: dry, count: count, offset: offset }),
-                });
-                var resp = await res.json();
-                if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
-                if (box) {
-                    box.classList.remove('hidden');
+                var html = '';
+                for (var i = 0; i < modules.length; i++) {
+                    var mod = modules[i];
+                    var resp = await _erBackfillRun(mod, rows, count, offset, dry);
                     if (resp.dry_run) {
-                        box.innerHTML = '<div class="font-semibold text-amber-800">✓ Dry-run complete</div>'
-                            + '<div>' + (resp.candidates || 0) + ' rows checked · <span class="text-emerald-700 font-semibold">' + (resp.would_update || 0) + '</span> matched (' + (resp.matched_by_phone || 0) + ' by phone, ' + (resp.matched_by_name || 0) + ' by name) · ' + (resp.not_found || 0) + ' not found.</div>'
-                            + '<div class="mt-1 text-amber-700">Uncheck Dry-run and click again to apply. Advance <em>from</em> for the next slice.</div>';
+                        html += '<div class="font-semibold text-amber-800">✓ Dry-run · ' + mod + '</div>'
+                            + '<div>' + (resp.candidates || 0) + ' rows checked · <span class="text-emerald-700 font-semibold">' + (resp.would_update || 0) + '</span> matched (' + (resp.matched_by_phone || 0) + ' by phone, ' + (resp.matched_by_name || 0) + ' by name) · ' + (resp.not_found || 0) + ' not found.</div>';
                     } else {
-                        box.innerHTML = '<div class="font-semibold text-emerald-800">✓ Backfill complete</div>'
-                            + '<div>Updated: ' + (resp.updated || 0) + ' (' + (resp.matched_by_phone || 0) + ' by phone, ' + (resp.matched_by_name || 0) + ' by name) · Failed: ' + (resp.failed || 0) + ' · Not found: ' + (resp.not_found || 0) + '</div>'
+                        html += '<div class="font-semibold text-emerald-800">✓ Backfill · ' + mod + '</div>'
+                            + '<div>Updated: <span class="text-emerald-700 font-semibold">' + (resp.updated || 0) + '</span> (' + (resp.matched_by_phone || 0) + ' by phone, ' + (resp.matched_by_name || 0) + ' by name) · Failed: ' + (resp.failed || 0) + ' · Not found: ' + (resp.not_found || 0) + '</div>'
                             + ((resp.error_sample && resp.error_sample.length) ? '<div class="text-red-700 mt-1">' + resp.error_sample.map(function (e) { return escapeHtml(e.code || '') + ' — ' + escapeHtml(e.message || ''); }).join('<br>') + '</div>' : '');
-                        var offEl = document.getElementById('spBackfillOff');
-                        if (offEl && count > 0) offEl.value = String(offset + count);
                     }
                 }
+                if (box) {
+                    box.classList.remove('hidden');
+                    box.innerHTML = html + (dry ? '<div class="mt-1 text-amber-700">Uncheck Dry-run and click again to apply. Advance <em>from</em> for the next slice.</div>' : '');
+                }
+                if (!dry) { var offEl = document.getElementById('spBackfillOff'); if (offEl && count > 0) offEl.value = String(offset + count); }
+                rrToast(dry ? 'Title dry-run done — see matched counts.' : 'Titles backfilled.', 'good');
             } catch (e) {
                 if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Backfill failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
+                rrToast('Backfill failed: ' + (e && e.message || e), 'warn');
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
