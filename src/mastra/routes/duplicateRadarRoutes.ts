@@ -9248,6 +9248,7 @@ export const duplicateRadarRoutes = [
           let reusedAccounts = 0; // accounts found live and reused instead of duplicated
           let existingDealsSkipped = 0; // deals that already exist under the account (idempotent retry)
           let liveClientsRejected = 0; // A1 existing accounts with a signed/paid deal → REJECTED (live client, not pushed)
+          let contactsExistingAsLead = 0; // contact rows that already exist as a Lead → REJECTED (already in CRM)
           let leadsSkippedExisting = 0; // leads already in Zoho (by email/phone) — skipped, not duplicated
           let outcomesSample: any[] = [];
           // Zoho per-record failure reasons (code + message) so the UI can show
@@ -9362,6 +9363,45 @@ export const duplicateRadarRoutes = [
             } catch (_) { /* tagging non-fatal */ }
           } else {
             // --- ACTIONS 1/2/3: Account → Contact → Deal ---
+
+            // Step 0: Contact-path Leads guard. "Ignore anything already in the
+            // CRM" — reject any contact row that already exists as a LEAD (by
+            // email or phone), even one the preflight snapshot missed because it
+            // was created after the last sync. Runs BEFORE account creation so a
+            // company whose contacts are ALL already-leads is dropped entirely
+            // (no orphan account/deal). Rows are recorded in skipped.
+            {
+              const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey } =
+                await import("../../utils/zohoCRM");
+              const allRows = plan.companies.flatMap(co => co.contacts);
+              const emails = allRows.map(r => String(r.email || "").trim()).filter(Boolean);
+              const phones = allRows.map(r => String(r.phone || "").trim()).filter(Boolean);
+              if (emails.length > 0 || phones.length > 0) {
+                const leadByEmail = await findRecordIdsByEmails("Leads", emails);
+                const leadByPhone = await findRecordIdsByPhones("Leads", phones);
+                const isExistingLead = (r: any) => {
+                  const em = String(r.email || "").trim().toLowerCase();
+                  const pk = normalizePhoneKey(r.phone);
+                  return (!!em && leadByEmail.has(em)) || (!!pk && leadByPhone.has(pk));
+                };
+                const keptCompanies: typeof plan.companies = [];
+                for (const co of plan.companies) {
+                  const kept = co.contacts.filter((r: any) => {
+                    if (isExistingLead(r)) {
+                      contactsExistingAsLead++;
+                      plan.skipped.push({ row_index: r.row_index, reason: "already_exists_as_lead" });
+                      return false;
+                    }
+                    return true;
+                  });
+                  if (kept.length > 0) {
+                    co.contacts = kept;
+                    keptCompanies.push(co);
+                  }
+                }
+                plan.companies = keptCompanies;
+              }
+            }
 
             // Step 1: Resolve existing account ids LIVE (idempotent) so a retry
             // NEVER creates a duplicate account. Truth order per company:
@@ -9749,7 +9789,7 @@ export const duplicateRadarRoutes = [
             const desc =
               action === 4
                 ? `Preflight structured push (action 4): created ${created.leads} Leads${leadsSkippedExisting ? `, skipped ${leadsSkippedExisting} already-existing` : ""}${liveClientsRejected ? `, rejected ${liveClientsRejected} live-client` : ""} (${failed.leads} failed). Source: "${source}".`
-                : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals${reusedAccounts ? `, reused ${reusedAccounts} existing account(s)` : ""}${existingContactsLinked ? `, linked ${existingContactsLinked} existing contact(s)` : ""}${liveClientsRejected ? `, rejected ${liveClientsRejected} live-client contact(s)` : ""}${existingDealsSkipped ? `, skipped ${existingDealsSkipped} existing deal(s)` : ""} (${totalFailed} failed). Source: "${source}".`;
+                : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals${reusedAccounts ? `, reused ${reusedAccounts} existing account(s)` : ""}${existingContactsLinked ? `, linked ${existingContactsLinked} existing contact(s)` : ""}${liveClientsRejected ? `, rejected ${liveClientsRejected} live-client contact(s)` : ""}${contactsExistingAsLead ? `, rejected ${contactsExistingAsLead} already-a-lead` : ""}${existingDealsSkipped ? `, skipped ${existingDealsSkipped} existing deal(s)` : ""} (${totalFailed} failed). Source: "${source}".`;
             await logEvent({
               userId: sessionUser?.userId ?? 0,
               userEmail: sessionUser?.email ?? "system",
@@ -9777,6 +9817,7 @@ export const duplicateRadarRoutes = [
             reused_accounts: reusedAccounts,
             existing_deals_skipped: existingDealsSkipped,
             live_clients_rejected: liveClientsRejected,
+            contacts_existing_as_lead: contactsExistingAsLead,
             leads_skipped_existing: leadsSkippedExisting,
             possible_existing_client_count: possibleClientCount,
             skipped_count: plan.skipped.length,

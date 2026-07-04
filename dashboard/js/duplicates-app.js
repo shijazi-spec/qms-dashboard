@@ -11776,6 +11776,7 @@
                             + (resp.reused_accounts ? '<div class="text-indigo-700">Reused ' + resp.reused_accounts + ' existing account(s) — not duplicated.</div>' : '')
                             + (resp.existing_contacts_linked ? '<div class="text-indigo-700">Reused ' + resp.existing_contacts_linked + ' existing contact(s) — not duplicated.</div>' : '')
                             + (resp.live_clients_rejected ? '<div class="text-rose-700">🚫 ' + resp.live_clients_rejected + ' contact(s) REJECTED — company is a live client (active deal, not churned after its renewal). Not pushed.</div>' : '')
+                            + (resp.contacts_existing_as_lead ? '<div class="text-rose-700">🚫 ' + resp.contacts_existing_as_lead + ' contact(s) REJECTED — already exist as a Lead in the CRM. Not pushed.</div>' : '')
                             + (resp.existing_deals_skipped ? '<div class="text-indigo-700">Skipped ' + resp.existing_deals_skipped + ' deal(s) already open under the account — not duplicated.</div>' : '')
                             + (resp.possible_existing_client_count ? '<div class="text-amber-700">⚠ ' + resp.possible_existing_client_count + ' flagged as possible existing client(s) — see each record\'s Description.</div>' : '')
                             + '<div>' + flLine + '</div>'
