@@ -1,11 +1,15 @@
 import { createRedactedPool } from "./redactedPool";
 import { logger } from "./logger";
+import { normalizeSslMode } from "./normalizeDatabaseUrl";
 // Arabic-aware name normalizer (planner only type-imports this file, so this
 // runtime import creates no cycle).
 import { normalizePersonName } from "./duplicateMergePlanner";
 
+// Normalize sslmode directly on the connection string (module-scope pool —
+// see src/utils/normalizeDatabaseUrl.ts for why env-var ordering is unreliable
+// in the production bundle). Idempotent.
 const pool = createRedactedPool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: normalizeSslMode(process.env.DATABASE_URL),
 });
 
 export interface DuplicateCluster {

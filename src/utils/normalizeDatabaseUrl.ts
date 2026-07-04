@@ -26,9 +26,21 @@ import { logger } from "./logger";
 
 const STRICT_MODES = new Set(["require", "prefer", "verify-ca"]);
 
-function normalizeDatabaseUrlSsl(): void {
-  const raw = process.env.DATABASE_URL;
-  if (!raw) return;
+/**
+ * Pure, idempotent transform: given a Postgres connection string, rewrite any
+ * strict `sslmode` (`require` / `prefer` / `verify-ca`) to `no-verify` and
+ * return the result. Returns the input unchanged when there is nothing to do
+ * (no `sslmode`, already `no-verify`, or an explicit `verify-full` / `disable`).
+ *
+ * Apply this DIRECTLY to a connection string at each construction site that
+ * cannot guarantee the `process.env.DATABASE_URL` side-effect below has already
+ * run — most importantly `PostgresStore`, whose failure crash-loops the whole
+ * server. Relying on env-mutation ordering alone is fragile: in the production
+ * bundle a module-scope consumer can read `process.env.DATABASE_URL` before this
+ * module's side-effect executes, reintroducing the verify-full TLS crash.
+ */
+export function normalizeSslMode(raw: string | undefined): string | undefined {
+  if (!raw) return raw;
 
   try {
     const url = new URL(raw);
@@ -36,13 +48,9 @@ function normalizeDatabaseUrlSsl(): void {
     const lowered = mode?.toLowerCase();
     if (lowered && STRICT_MODES.has(lowered)) {
       url.searchParams.set("sslmode", "no-verify");
-      process.env.DATABASE_URL = url.toString();
-      // Mode keyword only — never the connection string (which holds credentials).
-      logger.info(
-        `[DB-SSL] Normalized DATABASE_URL sslmode '${mode}' -> 'no-verify' for TLS compatibility`,
-      );
+      return url.toString();
     }
-    return;
+    return raw;
   } catch {
     // Connection string is not URL-parseable (e.g. a libpq key=value DSN such
     // as "host=... port=5432 sslmode=require dbname=..."). Handle BOTH the
@@ -52,16 +60,24 @@ function normalizeDatabaseUrlSsl(): void {
     // The leading delimiter is captured and preserved; the trailing lookahead
     // anchors on a value boundary so `verify-full` / `required` are never
     // partially matched.
-    const replaced = raw.replace(
+    return raw.replace(
       /(^|[?&\s])(sslmode=)(require|prefer|verify-ca)(?=$|[\s&])/i,
       "$1$2no-verify",
     );
-    if (replaced !== raw) {
-      process.env.DATABASE_URL = replaced;
-      logger.info(
-        "[DB-SSL] Normalized DATABASE_URL sslmode -> 'no-verify' for TLS compatibility",
-      );
-    }
+  }
+}
+
+function normalizeDatabaseUrlSsl(): void {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return;
+
+  const normalized = normalizeSslMode(raw);
+  if (normalized && normalized !== raw) {
+    process.env.DATABASE_URL = normalized;
+    // Mode keyword only — never the connection string (which holds credentials).
+    logger.info(
+      "[DB-SSL] Normalized DATABASE_URL sslmode -> 'no-verify' for TLS compatibility",
+    );
   }
 }
 

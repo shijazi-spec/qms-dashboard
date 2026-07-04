@@ -3,9 +3,24 @@
  * Run: npx tsx tests/normalizeDatabaseUrl.test.ts
  */
 import assert from "node:assert";
+import { normalizeSslMode } from "../src/utils/normalizeDatabaseUrl";
 
 let passed = 0;
 let failed = 0;
+
+function pure(name: string, input: string | undefined, expected: string | undefined) {
+  const actual = normalizeSslMode(input);
+  try {
+    assert.strictEqual(actual, expected);
+    // Idempotency: applying the transform again must not change the result.
+    assert.strictEqual(normalizeSslMode(actual), expected);
+    console.log(`  ✓ [pure] ${name}`);
+    passed++;
+  } catch {
+    console.log(`  ✗ [pure] ${name}\n      input:    ${input}\n      expected: ${expected}\n      actual:   ${actual}`);
+    failed++;
+  }
+}
 
 async function check(name: string, input: string, expected: string) {
   // Re-import the module fresh for each case by resetting the env and using a
@@ -26,6 +41,18 @@ async function check(name: string, input: string, expected: string) {
 
 (async () => {
   console.log("=== normalizeDatabaseUrl — tests ===");
+
+  console.log("-- pure normalizeSslMode --");
+  pure("require -> no-verify", "postgres://u:p@h/db?sslmode=require", "postgres://u:p@h/db?sslmode=no-verify");
+  pure("prefer -> no-verify", "postgres://u:p@h/db?sslmode=prefer", "postgres://u:p@h/db?sslmode=no-verify");
+  pure("verify-ca -> no-verify", "postgres://u:p@h/db?sslmode=verify-ca", "postgres://u:p@h/db?sslmode=no-verify");
+  pure("verify-full untouched", "postgres://u:p@h/db?sslmode=verify-full", "postgres://u:p@h/db?sslmode=verify-full");
+  pure("no-verify untouched (idempotent)", "postgres://u:p@h/db?sslmode=no-verify", "postgres://u:p@h/db?sslmode=no-verify");
+  pure("no sslmode untouched", "postgres://u:p@h/db", "postgres://u:p@h/db");
+  pure("DSN require -> no-verify", "host=h sslmode=require dbname=app", "host=h sslmode=no-verify dbname=app");
+  pure("undefined -> undefined", undefined, undefined);
+  pure("empty -> empty", "", "");
+
 
   await check(
     "sslmode=require -> no-verify",

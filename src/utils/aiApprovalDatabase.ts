@@ -19,7 +19,7 @@
  * that preserves audit-trail integrity for external auditors.
  */
 
-import "./normalizeDatabaseUrl";
+import { normalizeSslMode } from "./normalizeDatabaseUrl";
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
 import {
@@ -31,7 +31,12 @@ import {
 import { logger } from './logger';
 import { wrapPoolForRedaction } from './redactedPool';
 
-const pool = wrapPoolForRedaction(new Pool({ connectionString: process.env.DATABASE_URL }));
+// Normalize sslmode directly on the connection string (module-scope pool —
+// see src/utils/normalizeDatabaseUrl.ts for why env-var ordering is unreliable
+// in the production bundle). Idempotent.
+const pool = wrapPoolForRedaction(
+  new Pool({ connectionString: normalizeSslMode(process.env.DATABASE_URL) }),
+);
 
 export type ApprovalStatus =
   | 'pending'

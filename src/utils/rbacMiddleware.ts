@@ -11,8 +11,16 @@ import {
 export type { UserRole } from "./rbacDatabase";
 
 import { logger } from "./logger";
+import { normalizeSslMode } from "./normalizeDatabaseUrl";
 
-const platformPool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Normalize sslmode DIRECTLY on the connection string (not via the env-var
+// side-effect) because this is a module-scope pool: in the production bundle it
+// can be constructed before the entry-point normalizer runs, which reintroduces
+// the `sslmode=require` -> verify-full TLS failure on every RBAC query. The
+// transform is idempotent. See src/utils/normalizeDatabaseUrl.ts.
+const platformPool = new Pool({
+  connectionString: normalizeSslMode(process.env.DATABASE_URL),
+});
 
 export interface SessionUser {
   userId: number;
