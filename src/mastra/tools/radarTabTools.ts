@@ -452,6 +452,93 @@ export const accountHintsStatusTool = createTool({
   },
 });
 
+// ── Record Hints (Contact→Account, Deal→Contact) ──────────────────────────
+export const recordHintsStatusTool = createTool({
+  id: "record-hints-status",
+  description:
+    "Check the Record Hint tab — cross-module link suggestions the platform infers for records missing a required link: Contacts with a missing/placeholder Account_Name (contact_account, inferred from the Contact's email domain matching an Account) and Deals with a missing/placeholder Contact_Name (deal_contact, inferred from the Deal's linked Account's contacts). Returns the triage queue size (pending/applied/dismissed), the confidence distribution, and the AI-resolve readiness. AI auto-resolve gate is 70 percent by default — below that the row stays pending for manual Applied or Dismiss. Every AI write is attributed to GRQ Assistant on behalf of the calling user and writes Account_Name (contact_account) or Contact_Name (deal_contact) on the record in Zoho. Use when asked how many record hints are pending, how many contact->account or deal->contact hints are ready for one-click resolve, or any Record Hint status question. Omit type to cover both kinds together.",
+  inputSchema: z.object({
+    type: z
+      .enum(["contact_account", "deal_contact"])
+      .optional()
+      .describe(
+        "Narrow to one hint kind. contact_account = Contact missing Account_Name, deal_contact = Deal missing Contact_Name. Omit to cover both.",
+      ),
+    status: z
+      .enum(["pending", "applied", "dismissed"])
+      .optional()
+      .describe(
+        "Which slice to count. pending = open queue (default), applied = AI or operator wrote the link field, dismissed = operator rejected.",
+      ),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    type: z.string().optional(),
+    status: z.string().optional(),
+    summary: z
+      .object({
+        pending: z.number(),
+        applied: z.number(),
+        dismissed: z.number(),
+      })
+      .optional(),
+    aiResolveReady: z.number().optional(), // pending AND confidence >= 70
+    confidenceDistribution: z
+      .object({
+        high: z.number(), // >= 80
+        medium: z.number(), // 60-79
+        low: z.number(), // < 60
+      })
+      .optional(),
+    error: z.string().optional(),
+  }),
+  execute: async ({ context }) => {
+    try {
+      const type = (context as any)?.type as
+        | "contact_account"
+        | "deal_contact"
+        | undefined;
+      const status = ((context as any)?.status as string) || "pending";
+      const { listRecordLinkHints } = await import(
+        "../../utils/recordLinkHints"
+      );
+      // Pull a wide slice so the distribution is meaningful even on
+      // large tenants — the list is capped server-side at 2000.
+      const r: any = await listRecordLinkHints({
+        type,
+        status,
+        limit: 2000,
+      });
+      const hints: Array<{ confidence: number; status: string }> = Array.isArray(r?.hints)
+        ? r.hints
+        : [];
+      const aiResolveReady = hints.filter(
+        (h) => h.status === "pending" && Number(h.confidence || 0) >= 70,
+      ).length;
+      const high = hints.filter((h) => Number(h.confidence || 0) >= 80).length;
+      const medium = hints.filter((h) => {
+        const c = Number(h.confidence || 0);
+        return c >= 60 && c < 80;
+      }).length;
+      const low = hints.filter((h) => Number(h.confidence || 0) < 60).length;
+      return {
+        success: true,
+        type: type || "both",
+        status,
+        summary: {
+          pending: Number(r?.summary?.pending ?? 0),
+          applied: Number(r?.summary?.applied ?? 0),
+          dismissed: Number(r?.summary?.dismissed ?? 0),
+        },
+        aiResolveReady,
+        confidenceDistribution: { high, medium, low },
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || String(e) };
+    }
+  },
+});
+
 // ── Executive Summary ─────────────────────────────────────────────────────
 export const executiveSummaryTool = createTool({
   id: "executive-summary",

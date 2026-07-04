@@ -30,7 +30,7 @@ import { mergeRecordsTool } from "../tools/mergeRecordsTool";
 import { updateRecordFieldTool } from "../tools/updateRecordFieldTool";
 import { csLifecycleStatusTool } from "../tools/csLifecycleStatusTool";
 import { dealStageAgingStatusTool } from "../tools/dealStageAgingStatusTool";
-import { executiveSummaryTool, csOverlapStatusTool, crossModuleOverlapTool, accountHintsStatusTool, dealComplianceStatusTool, agentActivityTool, manualActionAuditTool, ownerAccountabilityTool, preflightCheckTool, clusterMergeCandidatesTool } from "../tools/radarTabTools";
+import { executiveSummaryTool, csOverlapStatusTool, crossModuleOverlapTool, accountHintsStatusTool, recordHintsStatusTool, dealComplianceStatusTool, agentActivityTool, manualActionAuditTool, ownerAccountabilityTool, preflightCheckTool, clusterMergeCandidatesTool } from "../tools/radarTabTools";
 import { emptyRecordsStatusTool } from "../tools/emptyRecordsStatusTool";
 import { withApprovalGate } from "../../utils/withApprovalGate";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
@@ -442,6 +442,7 @@ export const qmsConsultantAgent = new Agent({
     csOverlapStatusTool:              wt(csOverlapStatusTool, AGENT_NAME),       // CS Pipeline Overlap
     crossModuleOverlapTool:           wt(crossModuleOverlapTool, AGENT_NAME),    // Cross-Module Overlap
     accountHintsStatusTool:           wt(accountHintsStatusTool, AGENT_NAME),    // Account Hints
+    recordHintsStatusTool:            wt(recordHintsStatusTool, AGENT_NAME),     // Record Hint (Contact->Account, Deal->Contact)
     dealComplianceStatusTool:         wt(dealComplianceStatusTool, AGENT_NAME),  // Deal Compliance
     agentActivityTool:                wt(agentActivityTool, AGENT_NAME),         // Logs · Agent Activity
     manualActionAuditTool:            wt(manualActionAuditTool, AGENT_NAME),     // Logs · Manual Actions
