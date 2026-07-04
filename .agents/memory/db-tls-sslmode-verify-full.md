@@ -46,10 +46,39 @@ normalize side-effect runs. Symptom: every other DB module boots fine but one
 module fails with an auth/TLS error at boot (e.g. AI-Approval "Bootstrap
 failed: Authentication timed out"), so its page returns a load error while the
 rest of the app works. The page being broken is prod-only because dev's URL has
-no `sslmode`. **Fix pattern:** add `import "./normalizeDatabaseUrl";` as the
-FIRST import (above the `pg`/`Pool` import) of every file that constructs a pool
-at module scope — including shared pool factories/wrappers so their many
-dependents inherit it. Do not assume the entry-point import covers them.
+no `sslmode`.
+
+**Strongest fix = normalize at the callsite, not via env side-effect.** Two hard
+facts drive this:
+1. **pg ignores an explicit `ssl` option when a `connectionString` is present.**
+   Passing `new Pool({ connectionString, ssl: { rejectUnauthorized:false } })`
+   does NOT override — pg keeps the ssl parsed from the connection string. The
+   ONLY thing that works is rewriting the string's `sslmode` itself. (Empirically
+   confirmed: `sslmode=require` → pg builds `ssl:{}` = verify-full AND prints the
+   warning; `sslmode=no-verify` → `ssl:{rejectUnauthorized:false}`, no warning.)
+2. **Side-effect env mutation is bundler-order-fragile (see recurrence above).**
+   The bundle can construct a module-scope pool before the env is rewritten, and
+   a lazy pool still *captures* the un-normalized string at construction and only
+   fails on its first query at request time.
+
+So `normalizeDatabaseUrl.ts` also exports a pure, idempotent
+`normalizeSslMode(raw): string | undefined` (returns `undefined` for undefined
+input to preserve pg's PG*-env fallback). Apply it directly in the pool
+expression: `new Pool({ connectionString: normalizeSslMode(process.env.DATABASE_URL) })`.
+This is immune to import/eval ordering because it's a pure call in the same
+expression. The fatal boot path (`src/mastra/storage/index.ts` → PostgresStore)
+uses this, as do the highest-traffic module-scope pools (`rbacMiddleware`
+platformPool, `aiApprovalDatabase`, `duplicateRadarDatabase`). Importing a
+NAMED export still runs the module's top-level side-effect, so swapping
+`import "./normalizeDatabaseUrl"` → `import { normalizeSslMode } from …` loses
+nothing.
+
+**Still-open follow-up:** dozens of other `src/utils/*` module-scope pools and
+route-handler pools still read raw `process.env.DATABASE_URL`. They're the same
+fragility class; sweep them to callsite `normalizeSslMode(...)` (or a single
+normalized pool factory) to fully close it. Prior partial fix pattern (add
+`import "./normalizeDatabaseUrl";` as the FIRST import of each pool module) is a
+weaker fallback that only fixes intra-module ordering.
 
 **How to apply:** if a managed-DB app crash-loops on TLS after a `pg` bump,
 check whether the prod connection string uses `sslmode=require` and whether the
