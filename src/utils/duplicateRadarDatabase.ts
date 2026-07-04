@@ -1460,6 +1460,36 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_account_inference_confidence ON account_inference_hints(confidence DESC) WHERE status = 'pending'`,
   );
 
+  // Record Hint — generalized cross-module link suggestions (Contact->Account,
+  // Deal->Contact, etc). Mirrors account_inference_hints above but is
+  // link-field agnostic (source_type + link_field describe what's being
+  // suggested) so it can cover more than just deal->account.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS record_link_hints (
+      id SERIAL PRIMARY KEY,
+      source_record_id INT NOT NULL REFERENCES duplicate_records(id) ON DELETE CASCADE,
+      source_type VARCHAR(20) NOT NULL,
+      link_field VARCHAR(40) NOT NULL,
+      suggested_target_record_id INT REFERENCES duplicate_records(id) ON DELETE SET NULL,
+      suggested_target_zoho_id VARCHAR(100),
+      suggested_target_name TEXT,
+      suggested_domain TEXT,
+      evidence_record_id INT,
+      evidence_detail TEXT,
+      confidence INT NOT NULL DEFAULT 0,
+      status VARCHAR(16) NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (source_record_id, link_field, suggested_target_record_id)
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_record_link_hints_status ON record_link_hints (status)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_record_link_hints_type ON record_link_hints (source_type, link_field)`,
+  );
+
   // R2 (per-owner Remediation Packet): cover-sheet text the operator
   // hands to a data-quality owner. Single-row key/value table — keeps the
   // dispute path + escalation contact editable without a code deploy and
