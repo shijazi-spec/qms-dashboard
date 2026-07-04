@@ -8620,9 +8620,27 @@ export const duplicateRadarRoutes = [
           // payload's Title field on push. Optional: a workbook without any
           // of these columns simply produces an empty title (no behavior
           // change for existing uploads).
-          const titleIdx = findCol(
-            "title", "job title", "job_title", "jobtitle", "designation", "position", "role",
+          // Contact job title. First try exact aliases (English + Arabic), then
+          // fall back to ANY header that contains a title-ish word — so a
+          // non-standard Mawsool header ("Job Title (EN)", "Position / Role",
+          // "المسمى الوظيفي", a trailing space, …) still maps instead of
+          // silently dropping every title (which sent leads/contacts to Zoho
+          // with a blank Title and made "Backfill Titles" find nothing).
+          let titleIdx = findCol(
+            "title", "job title", "job_title", "jobtitle", "designation", "position",
+            "role", "job role", "job position", "job designation", "current title",
+            "current position", "job", "المسمى الوظيفي", "المسمى", "الوظيفة", "المنصب",
           );
+          if (titleIdx < 0) {
+            for (let i = 0; i < headers.length; i++) {
+              const h = headers[i];
+              if (
+                (/(^|[^a-z])(title|designation|position)([^a-z]|$)/.test(h) &&
+                  !/lead\s*status|email|company|account|first|last|full\s*name/.test(h)) ||
+                h.includes("المسمى") || h.includes("الوظيف") || h.includes("المنصب")
+              ) { titleIdx = i; break; }
+            }
+          }
 
           if (domainIdx < 0 && emailIdx < 0) {
             return c.json(
@@ -8796,13 +8814,16 @@ export const duplicateRadarRoutes = [
             domainDuplicateGroups.reduce((acc, g) => acc + (g.count - 1), 0);
 
           // Build a CSV the operator can see / re-edit in the textarea.
-          // Includes the dedup signals the engine can now use.
-          const csvLines = ["domain,company_name,contact_name,email,phone"];
+          // Includes the dedup signals the engine can now use. Title MUST be
+          // here — the frontend re-parses this CSV on Check, so a column left
+          // out of the CSV is dropped even though we parsed it above (that's the
+          // bug that pushed leads/contacts with a blank Title).
+          const csvLines = ["domain,company_name,contact_name,title,email,phone"];
           for (const r of rows) {
             const quote = (s: string) =>
               s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
             csvLines.push(
-              `${r.domain},${quote(r.company_name)},${quote(r.contact_name)},${quote(r.email)},${quote(r.phone)}`,
+              `${r.domain},${quote(r.company_name)},${quote(r.contact_name)},${quote(r.title)},${quote(r.email)},${quote(r.phone)}`,
             );
           }
 
