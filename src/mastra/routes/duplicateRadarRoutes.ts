@@ -11182,11 +11182,23 @@ export const duplicateRadarRoutes = [
         const user = await requireDuplicateRadarAccess(c);
         if (!user) return unauthorizedResponse(c);
         const body = await c.req.json().catch(() => ({}));
+        // Bulk path: { zohoIds: [...] } dismisses many in ONE query so a whole
+        // page can be cleared without one request per row (the 429 source).
+        const manyRaw = Array.isArray(body?.zohoIds)
+          ? body.zohoIds
+          : Array.isArray(body?.zoho_ids)
+            ? body.zoho_ids
+            : null;
+        if (manyRaw) {
+          const { dismissTaggedRecords } = await import("../../utils/emptyRecordsDatabase");
+          const dismissed = await dismissTaggedRecords(manyRaw.map((x: any) => String(x)));
+          return c.json({ success: true, dismissed });
+        }
         const zohoId = String(body?.zohoId ?? body?.zoho_id ?? "").trim();
-        if (!zohoId) return c.json({ error: "zohoId required" }, 400);
+        if (!zohoId) return c.json({ error: "zohoId or zohoIds required" }, 400);
         const { dismissTaggedRecord } = await import("../../utils/emptyRecordsDatabase");
         await dismissTaggedRecord(zohoId);
-        return c.json({ success: true });
+        return c.json({ success: true, dismissed: 1 });
       } catch (e: any) {
         logger.error("empty-records/dismiss-tagged failed", e);
         return c.json({ error: "An internal error occurred" }, 500);

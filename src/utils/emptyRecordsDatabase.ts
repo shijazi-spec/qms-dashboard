@@ -762,6 +762,25 @@ export async function dismissTaggedRecord(zohoId: string): Promise<void> {
   );
 }
 
+/** Bulk variant of dismissTaggedRecord — move MANY pending records to
+ * 'dismissed' in ONE query. Used by the "Dismiss selected" button so the
+ * operator can clear a whole page at once instead of firing one request per
+ * row (which trips the API rate limiter → the 429 "Too many requests" error).
+ * Returns how many rows actually moved (only pending_delete rows change). */
+export async function dismissTaggedRecords(zohoIds: string[]): Promise<number> {
+  const ids = Array.from(
+    new Set((zohoIds || []).map((x) => String(x || "").trim()).filter(Boolean)),
+  );
+  if (ids.length === 0) return 0;
+  const res = await pool.query(
+    `UPDATE empty_delete_ledger
+        SET status = 'dismissed', last_checked_at = NOW(), deleted_at = NULL
+      WHERE zoho_record_id = ANY($1::text[]) AND status = 'pending_delete'`,
+    [ids],
+  );
+  return res.rowCount || 0;
+}
+
 /** Check up to 300 pending_delete ledger rows against live Zoho.
  * Records no longer found → stamp as 'deleted' in the ledger + prune from
  * the local duplicate_records mirror.  Records still present → update

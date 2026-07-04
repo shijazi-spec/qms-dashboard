@@ -7831,7 +7831,7 @@
             const body = document.getElementById('erTaggedBody');
             const progress = document.getElementById('erTaggedProgress');
             if (!body) return;
-            body.innerHTML = rrSkeletonRows(5);
+            body.innerHTML = rrSkeletonRows(6);
             let data;
             try {
                 const res = await fetch('/api/duplicates/empty-records/tagged-status', { credentials: 'same-origin' });
@@ -7909,6 +7909,71 @@
             window._erTaggedPage = Math.min(pages - 1, Math.max(0, (window._erTaggedPage || 0) + delta));
             _erRenderTaggedPage();
         }
+        // ── Bulk-dismiss selection for the Tagged·pending table ──────────────
+        // Selecting rows and dismissing them in ONE request avoids the 429
+        // "Too many requests" the per-row Dismiss hits when clicked in a burst.
+        // Selection persists across pages (set of zoho ids).
+        window._erTaggedSel = window._erTaggedSel || new Set();
+        function _erTaggedUpdateBulkBtn() {
+            const n = window._erTaggedSel ? window._erTaggedSel.size : 0;
+            const cnt = document.getElementById('erTaggedSelCount');
+            const btn = document.getElementById('erTaggedBulkDismissBtn');
+            if (cnt) cnt.textContent = n;
+            if (btn) btn.classList.toggle('hidden', n === 0);
+        }
+        function erTaggedToggleRow(zohoId) {
+            const id = String(zohoId);
+            if (!window._erTaggedSel) window._erTaggedSel = new Set();
+            if (window._erTaggedSel.has(id)) window._erTaggedSel.delete(id);
+            else window._erTaggedSel.add(id);
+            _erTaggedUpdateBulkBtn();
+        }
+        function erTaggedSelectAllPage() {
+            const master = document.getElementById('erTaggedSelAll');
+            const checked = master ? !!master.checked : true;
+            if (!window._erTaggedSel) window._erTaggedSel = new Set();
+            document.querySelectorAll('#erTaggedBody input[data-er-tagged-cb]').forEach(function (cb) {
+                cb.checked = checked;
+                const id = cb.getAttribute('data-zoho-id');
+                if (!id) return;
+                if (checked) window._erTaggedSel.add(id); else window._erTaggedSel.delete(id);
+            });
+            _erTaggedUpdateBulkBtn();
+        }
+        async function bulkDismissTagged() {
+            const ids = window._erTaggedSel ? Array.from(window._erTaggedSel) : [];
+            if (ids.length === 0) return;
+            if (!confirm('Dismiss ' + ids.length + ' pending record(s)? They move to Dismissed — no Zoho change, and they will not be deleted by the admin.')) return;
+            const btn = document.getElementById('erTaggedBulkDismissBtn');
+            if (btn) btn.disabled = true;
+            try {
+                // ONE request for the whole selection (this is the 429 fix).
+                const res = await fetch('/api/duplicates/empty-records/dismiss-tagged', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin', body: JSON.stringify({ zohoIds: ids }),
+                });
+                const j = await res.json();
+                if (!res.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + res.status));
+                const sel = window._erTaggedSel;
+                const rows = window._erTagged || [];
+                let moved = 0;
+                rows.forEach(function (r) {
+                    if (sel.has(String(r.zohoId)) && r.status === 'pending_delete') { r.status = 'dismissed'; moved++; }
+                });
+                const counts = window._erTaggedCounts || {};
+                counts.pending = Math.max(0, (counts.pending || 0) - moved);
+                counts.dismissed = (counts.dismissed || 0) + moved;
+                window._erTaggedSel = new Set();
+                _erTaggedUpdateBulkBtn();
+                _erRenderTaggedHeader();
+                _erRenderTaggedPage();
+                rrToast('Dismissed ' + (j.dismissed != null ? j.dismissed : moved) + ' record(s) — moved to Dismissed.', 'good');
+            } catch (e) {
+                rrToast('Bulk dismiss failed: ' + (e && e.message || e), 'warn');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
         function _erRenderTaggedPage() {
             const body = document.getElementById('erTaggedBody');
             if (!body) return;
@@ -7917,7 +7982,7 @@
             const clearPager = function () { const tf = table && table.querySelector('tfoot.er-pager'); if (tf) tf.innerHTML = ''; };
             if (!rows.length) {
                 const f = window._erTaggedFilter || 'all';
-                body.innerHTML = rrEmptyRow(5, { glyph: '🏷', title: (f === 'all' ? 'Nothing tagged yet' : 'No ' + escapeHtml(f === 'pending_delete' ? 'pending' : f) + ' records') });
+                body.innerHTML = rrEmptyRow(6, { glyph: '🏷', title: (f === 'all' ? 'Nothing tagged yet' : 'No ' + escapeHtml(f === 'pending_delete' ? 'pending' : f) + ' records') });
                 clearPager();
                 return;
             }
@@ -7940,7 +8005,13 @@
                 const statusCell = r.status === 'pending_delete'
                     ? '<div class="rr-actions" style="justify-content:flex-start">' + statusChip + '<button data-on-click="erDismissTagged" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]" class="rr-btn rr-btn-ghost" title="Move to Dismissed without changing Zoho — it will not be deleted by admin">Dismiss</button></div>'
                     : statusChip;
+                // Checkbox only for PENDING rows (the only ones Dismiss acts on).
+                const isPending = r.status === 'pending_delete';
+                const checkCell = isPending
+                    ? '<td class="rr-num" style="text-align:center"><input type="checkbox" data-er-tagged-cb data-zoho-id="' + escapeHtml(r.zohoId) + '" data-on-change="erTaggedToggleRow" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]"' + (window._erTaggedSel && window._erTaggedSel.has(String(r.zohoId)) ? ' checked' : '') + ' aria-label="Select for bulk dismiss"></td>'
+                    : '<td class="rr-num rr-muted" style="text-align:center">—</td>';
                 return '<tr>'
+                    + checkCell
                     + '<td class="rr-mono">' + link + '</td>'
                     + '<td class="rr-muted">' + escapeHtml(r.module || '—') + '</td>'
                     + '<td>' + statusCell + '</td>'
@@ -7948,6 +8019,7 @@
                     + '<td class="rr-muted">' + escapeHtml(taggedAt) + '</td>'
                     + '</tr>';
             }).join('');
+            _erTaggedUpdateBulkBtn();
             if (table) {
                 let tf = table.querySelector('tfoot.er-pager');
                 if (rows.length > ER_PAGE_SIZE) {
@@ -7955,7 +8027,7 @@
                     const from = start + 1, to = start + pageRows.length;
                     const prevDis = cur === 0 ? ' opacity-40 pointer-events-none' : ' hover:bg-gray-100';
                     const nextDis = cur >= pages - 1 ? ' opacity-40 pointer-events-none' : ' hover:bg-gray-100';
-                    tf.innerHTML = '<tr class="bg-gray-50"><td colspan="5" class="px-3 py-2">'
+                    tf.innerHTML = '<tr class="bg-gray-50"><td colspan="6" class="px-3 py-2">'
                         + '<div class="flex items-center justify-between text-xs text-gray-600">'
                         + '<span>Showing ' + from.toLocaleString() + '–' + to.toLocaleString() + ' of ' + rows.length.toLocaleString() + '</span>'
                         + '<span class="flex items-center gap-2">'

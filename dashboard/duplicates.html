@@ -2001,11 +2001,14 @@
             <div class="flex items-center gap-2 mb-2">
               <h3 class="text-base font-bold text-gray-900" data-i18n="duplicates.er_tagged_pending">Tagged · pending delete</h3>
               <span id="erTaggedProgress" class="text-xs text-gray-500"></span>
-              <button data-on-click="erRecheckDeletions" class="ml-auto rr-btn rr-btn-ghost">🔄 <span data-i18n="duplicates.er_recheck">Re-check CRM</span></button>
+              <div class="ml-auto flex items-center gap-2">
+                <button id="erTaggedBulkDismissBtn" data-on-click="bulkDismissTagged" class="hidden rr-btn rr-btn-ghost" title="Move every selected pending record to Dismissed in one request (no Zoho change). Avoids the per-row rate limit.">✕ Dismiss selected (<span id="erTaggedSelCount">0</span>)</button>
+                <button data-on-click="erRecheckDeletions" class="rr-btn rr-btn-ghost">🔄 <span data-i18n="duplicates.er_recheck">Re-check CRM</span></button>
+              </div>
             </div>
             <div class="overflow-x-auto border border-gray-200 rounded-lg">
               <table class="rr-table min-w-full">
-                <thead><tr><th scope="col">Record</th><th scope="col">Module</th><th scope="col">Status</th><th scope="col">Tagged by</th><th scope="col">Tagged at</th></tr></thead>
+                <thead><tr><th scope="col" style="width:2.5rem;text-align:center"><input type="checkbox" id="erTaggedSelAll" data-on-change="erTaggedSelectAllPage" aria-label="Select all pending rows on this page"></th><th scope="col">Record</th><th scope="col">Module</th><th scope="col">Status</th><th scope="col">Tagged by</th><th scope="col">Tagged at</th></tr></thead>
                 <tbody id="erTaggedBody"></tbody>
               </table>
             </div>
@@ -2379,7 +2382,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=79"></script>
+    <script src="/js/duplicates-app.js?v=80"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
