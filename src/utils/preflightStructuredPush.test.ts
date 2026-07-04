@@ -152,6 +152,17 @@ assertEq(normalizeCompanyKey("", "Acme.com") === "acme.com", "falls back to doma
   const a4next = buildStructuredPushPlan(4, rows, { count: 1, offset: 1 });
   assertEq(a4next.leads.length === 1 && a4next.leads[0].company === "LeadCo2", "A4 slice: next lead");
 }
+// No company identity (no company name AND no real domain) — even with a
+// corporate email — routes to a LEAD (never dropped, never a new account).
+{
+  const rows = [
+    mk({ row_index: 1, company: "", domain: "", email: "someone@acme.co", phone: "+966500000009" }),
+  ];
+  const a4 = buildStructuredPushPlan(4, rows, {});
+  assertEq(a4.leads.length === 1, "no-company corporate-email contact → lead (not dropped)");
+  const a3 = buildStructuredPushPlan(3, rows, {});
+  assertEq(a3.companies.length === 0, "no-company contact never opens a new account");
+}
 // PASS-gate: non-PASS rows (block / review / duplicate / no-contact) are NEVER
 // pushable — not via A1 (even if they match an existing account), not via A4.
 {

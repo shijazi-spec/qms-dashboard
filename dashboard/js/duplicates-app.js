@@ -11312,8 +11312,10 @@
                 var m = meta[key] || { anchor: null, verified: false, crm: false };
                 var er = _pfRealDomainRoot(r.email);
                 var hasEmail = !!String(r.email || '').trim();
+                var hasIdentity = !!(String(r.company || '').trim() || _pfRealDomainRoot(r.domain));
                 var route, reason;
                 if (m.crm) { route = 'account'; reason = 'crm_matched_company'; }
+                else if (!hasIdentity) { route = 'lead'; reason = 'no_company_identity'; }
                 else if (m.verified) {
                     if (er && er === m.anchor) { route = 'account'; reason = 'email_matches_company'; }
                     else if (er) { route = 'reject'; reason = 'email_contradicts_company'; }

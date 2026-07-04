@@ -9295,6 +9295,33 @@ export const duplicateRadarRoutes = [
               if (pk) seenLeadPhone.add(pk);
               return true;
             });
+
+            // "Make sure the company is not an existing client" — for leads that
+            // carry a real company domain (email or row), live-check Zoho: drop
+            // any whose domain belongs to a LIVE client (existing signed/paid,
+            // not churned-after-renewal). Those are handled by CS, never
+            // cold-contacted as a fresh lead. Bounded to this slice's domains.
+            {
+              const { findAccountIdsByDomains, getLiveClientAccounts } = await import("../../utils/zohoCRM");
+              const { realDomainRoot } = await import("../../utils/preflightStructuredPush");
+              const domOf = (r: any) => realDomainRoot(r.email) || realDomainRoot(r.domain);
+              const domains = Array.from(new Set(freshLeads.map(domOf).filter(Boolean) as string[]));
+              if (domains.length > 0) {
+                const acctByDomain = await findAccountIdsByDomains(domains);
+                const liveSet = await getLiveClientAccounts(Array.from(new Set(acctByDomain.values())));
+                const liveDomains = new Set<string>();
+                for (const [dom, accId] of acctByDomain) if (liveSet.has(accId)) liveDomains.add(dom);
+                if (liveDomains.size > 0) {
+                  const kept = freshLeads.filter((r: any) => {
+                    const d = domOf(r);
+                    if (d && liveDomains.has(d)) { liveClientsRejected++; return false; }
+                    return true;
+                  });
+                  freshLeads.length = 0;
+                  freshLeads.push(...kept);
+                }
+              }
+            }
             const leadPayloads = freshLeads.map((r, i) => {
               const web = websiteFromDomain(r.domain);
               const _nm = splitContactName(r.contact_name || r.company || r.domain);
@@ -9721,7 +9748,7 @@ export const duplicateRadarRoutes = [
             const totalFailed = failed.accounts + failed.contacts + failed.deals + failed.leads;
             const desc =
               action === 4
-                ? `Preflight structured push (action 4): created ${created.leads} Leads${leadsSkippedExisting ? `, skipped ${leadsSkippedExisting} already-existing` : ""} (${failed.leads} failed). Source: "${source}".`
+                ? `Preflight structured push (action 4): created ${created.leads} Leads${leadsSkippedExisting ? `, skipped ${leadsSkippedExisting} already-existing` : ""}${liveClientsRejected ? `, rejected ${liveClientsRejected} live-client` : ""} (${failed.leads} failed). Source: "${source}".`
                 : `Preflight structured push (action ${action}): created ${created.accounts} accounts, ${created.contacts} contacts, ${created.deals} deals${reusedAccounts ? `, reused ${reusedAccounts} existing account(s)` : ""}${existingContactsLinked ? `, linked ${existingContactsLinked} existing contact(s)` : ""}${liveClientsRejected ? `, rejected ${liveClientsRejected} live-client contact(s)` : ""}${existingDealsSkipped ? `, skipped ${existingDealsSkipped} existing deal(s)` : ""} (${totalFailed} failed). Source: "${source}".`;
             await logEvent({
               userId: sessionUser?.userId ?? 0,

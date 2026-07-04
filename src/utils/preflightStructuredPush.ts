@@ -238,10 +238,20 @@ export function routeContactsByDomainConsistency(rows: SPRow[]): RoutedRow[] {
     const emailRoot = realDomainRoot(r.email);      // non-null only for corporate email
     const hasEmail = !!String(r.email || "").trim();
 
+    // A contact has no company IDENTITY when it carries neither a company name
+    // nor a real company domain (identity would only be in the email, if any).
+    const hasCompanyIdentity = !!(String(r.company || "").trim() || realDomainRoot(r.domain));
+
     let route: ContactRoute;
     let reason: string;
     if (crmMatched) {
       route = "account"; reason = "crm_matched_company";
+    } else if (!hasCompanyIdentity) {
+      // No company name AND no company domain — nothing to file an Account under,
+      // and no label for an email to contradict. It becomes a Lead. The lead push
+      // then live-checks the email domain and REJECTS it if that company is an
+      // existing live client (never silently dropped, never a duplicate client).
+      route = "lead"; reason = "no_company_identity";
     } else if (verified) {
       if (emailRoot && emailRoot === anchor) { route = "account"; reason = "email_matches_company"; }
       else if (emailRoot) { route = "reject"; reason = "email_contradicts_company"; }
