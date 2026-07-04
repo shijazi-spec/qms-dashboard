@@ -123,8 +123,8 @@
             <button data-on-click="showTab" data-args="[&quot;deals&quot;]" id="tab-deals" data-testid="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
             <button data-on-click="showTab" data-args="[&quot;contacts&quot;]" id="tab-contacts" data-testid="tab-contacts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Contact Duplicates</button>
             <button data-on-click="showTab" data-args="[&quot;accounts&quot;]" id="tab-accounts" data-testid="tab-accounts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Account Duplicates</button>
-            <button data-on-click="showTab" data-args="[&quot;account-hints&quot;]" id="tab-account-hints" data-testid="tab-account-hints" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Smart account inference — deals missing a real Account_Name get a suggested account based on their contact's email domain. Sales fixes the Zoho record from here.">
-                Account Hints <span id="accountHintsPendingBadge" class="hidden inline-block min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white text-center">0</span>
+            <button data-on-click="showTab" data-args="[&quot;account-hints&quot;]" id="tab-account-hints" data-testid="tab-account-hints" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Record Hint — smart inference across Deal→Account, Contact→Account, and Deal↔Contact. Sales fixes the Zoho record from here.">
+                Record Hint <span id="accountHintsPendingBadge" class="hidden inline-block min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white text-center">0</span>
             </button>
             <button data-on-click="showTab" data-args="[&quot;cross-module&quot;]" id="tab-cross-module" data-testid="tab-cross-module" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Clusters where the same company is represented across multiple Zoho modules (e.g. a Lead + an existing Contact under an Account). Fix is CONVERT or LINK — never merge across modules.">
                 <span class="inline-block w-2 h-2 rounded-full bg-indigo-500"></span>
@@ -1481,65 +1481,131 @@
         <!-- ═══ ACCOUNT HINTS TAB ═══ -->
         <div id="content-account-hints" class="tab-content hidden">
             <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3 text-sm text-emerald-900">
-                <strong>Smart Account Inference.</strong> For deals with a missing or placeholder Account_Name, the radar walks each deal's linked contact, reads the contact's email domain, and surfaces the existing Account that most likely owns the deal. Sales clicks through to Zoho and fixes <code>Account_Name</code> — the next sync auto-reclassifies. Confidence is higher when multiple contacts agree on the domain and the candidate Account has the domain explicitly set on its record.
+                <strong>Record Hint.</strong> Smart inference across three record-linking gaps: a Deal missing its Account, a Contact missing its Account, and a Deal missing its Contact. Each section below infers the missing link from related records (email domain, shared company, etc.) and lets Sales fix the Zoho record from here — the next sync auto-reclassifies.
             </div>
 
-            <!-- Summary -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-amber-500">
-                    <div class="text-xs text-amber-600 uppercase">Pending</div>
-                    <div id="accountHintsSumPending" class="text-2xl font-bold text-amber-700">—</div>
+            <!-- ═══ SECTION 1: Deal → Account (existing Account Hints, unchanged) ═══ -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mb-6">
+                <h3 class="text-sm font-bold text-gray-900 mb-2">1. Deal → Account</h3>
+                <p class="text-xs text-gray-600 mb-3">For deals with a missing or placeholder Account_Name, the radar walks each deal's linked contact, reads the contact's email domain, and surfaces the existing Account that most likely owns the deal. Confidence is higher when multiple contacts agree on the domain and the candidate Account has the domain explicitly set on its record.</p>
+
+                <!-- Summary -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-amber-500">
+                        <div class="text-xs text-amber-600 uppercase">Pending</div>
+                        <div id="accountHintsSumPending" class="text-2xl font-bold text-amber-700">—</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-emerald-500">
+                        <div class="text-xs text-emerald-600 uppercase">Applied</div>
+                        <div id="accountHintsSumApplied" class="text-2xl font-bold text-emerald-700">—</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-gray-400">
+                        <div class="text-xs text-gray-600 uppercase">Dismissed</div>
+                        <div id="accountHintsSumDismissed" class="text-2xl font-bold text-gray-700">—</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-blue-500">
+                        <div class="text-xs text-blue-700 uppercase">Last scan</div>
+                        <div id="accountHintsLastScan" class="text-sm font-medium text-blue-700 mt-1">—</div>
+                    </div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-emerald-500">
-                    <div class="text-xs text-emerald-600 uppercase">Applied</div>
-                    <div id="accountHintsSumApplied" class="text-2xl font-bold text-emerald-700">—</div>
+
+                <!-- Filter + scan -->
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                    <div class="flex items-center gap-1">
+                        <button data-on-click="filterAccountHints" data-args="[&quot;pending&quot;]" id="accountHintsChip-pending" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">Pending</button>
+                        <button data-on-click="filterAccountHints" data-args="[&quot;applied&quot;]" id="accountHintsChip-applied" class="px-3 py-1.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Applied</button>
+                        <button data-on-click="filterAccountHints" data-args="[&quot;dismissed&quot;]" id="accountHintsChip-dismissed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">Dismissed</button>
+                    </div>
+                    <div class="flex-1"></div>
+                    <button data-on-click="exportAccountHints" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of exactly the Account-Hint rows shown below, in the current order and status filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
+                    <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400 me-2">🔃 Refresh from Zoho (live)</button>
+                    <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
+                    <button data-on-click="resolveAllAccountHintsWithAi" id="accountHintsAiResolveAllBtn" data-testid="button-account-hints-ai-resolve-all" title="Loop every pending hint with confidence ≥70% and write the suggested Account_Name on each Zoho Deal automatically. Below threshold rows stay pending for manual review." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700 me-2">🤖 Resolve all (≥70%) with AI</button>
+                    <button data-on-click="openCapaPicker" data-args="[&quot;account-hints&quot;]" data-testid="button-open-capa-account-hints" title="Open a corrective-action record (CAPA) on one of the account-hint rows below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-gray-400">
-                    <div class="text-xs text-gray-600 uppercase">Dismissed</div>
-                    <div id="accountHintsSumDismissed" class="text-2xl font-bold text-gray-700">—</div>
+                <div id="accountHintsAiResolveAllPanel" class="text-xs mb-2"></div>
+
+                <!-- Table -->
+                <div class="bg-white rounded-lg shadow overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead id="accountHintsTableHead" class="bg-gray-50">
+                            <tr>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;deal&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="deal">Deal <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;current&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="current">Current account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;suggested&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="suggested">Suggested account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;domain&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;evidence&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="evidence">Evidence (contact) <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;confidence&quot;]" class="account-hints-sort px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="confidence">Confidence <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="accountHintsTable" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Click <em>Run scan</em> to generate suggestions.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-blue-500">
-                    <div class="text-xs text-blue-700 uppercase">Last scan</div>
-                    <div id="accountHintsLastScan" class="text-sm font-medium text-blue-700 mt-1">—</div>
+                <div id="accountHintsPagination" class="flex justify-center items-center gap-3 mt-4"></div>
+            </div>
+
+            <!-- ═══ SECTION 2: Contact → Account (new) ═══ -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mb-6">
+                <h3 class="text-sm font-bold text-gray-900 mb-2">2. Contact → Account <span id="recordHintsContactAccountPendingBadge" class="hidden inline-block min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white text-center align-middle">0</span></h3>
+                <p class="text-xs text-gray-600 mb-3">For contacts with a missing or placeholder Account_Name, the radar reads the contact's email domain and surfaces the existing Account that most likely owns the contact.</p>
+
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                    <div class="flex-1"></div>
+                    <button data-on-click="runRecordHintsScan" data-args="[&quot;contact_account&quot;]" id="recordHintsContactAccountScanBtn" data-testid="button-record-hints-contact-account-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
+                </div>
+
+                <div class="bg-white rounded-lg shadow overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Source record</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Current account</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Suggested account</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Evidence</th>
+                                <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                                <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordHintsContactAccountBody" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Click <em>Run scan</em> to generate suggestions.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- Filter + scan -->
-            <div class="flex flex-wrap items-center gap-2 mb-3">
-                <div class="flex items-center gap-1">
-                    <button data-on-click="filterAccountHints" data-args="[&quot;pending&quot;]" id="accountHintsChip-pending" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">Pending</button>
-                    <button data-on-click="filterAccountHints" data-args="[&quot;applied&quot;]" id="accountHintsChip-applied" class="px-3 py-1.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Applied</button>
-                    <button data-on-click="filterAccountHints" data-args="[&quot;dismissed&quot;]" id="accountHintsChip-dismissed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">Dismissed</button>
-                </div>
-                <div class="flex-1"></div>
-                <button data-on-click="exportAccountHints" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of exactly the Account-Hint rows shown below, in the current order and status filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400 me-2">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
-                <button data-on-click="resolveAllAccountHintsWithAi" id="accountHintsAiResolveAllBtn" data-testid="button-account-hints-ai-resolve-all" title="Loop every pending hint with confidence ≥70% and write the suggested Account_Name on each Zoho Deal automatically. Below threshold rows stay pending for manual review." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700 me-2">🤖 Resolve all (≥70%) with AI</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;account-hints&quot;]" data-testid="button-open-capa-account-hints" title="Open a corrective-action record (CAPA) on one of the account-hint rows below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
-            </div>
-            <div id="accountHintsAiResolveAllPanel" class="text-xs mb-2"></div>
+            <!-- ═══ SECTION 3: Deal ↔ Contact (new) ═══ -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+                <h3 class="text-sm font-bold text-gray-900 mb-2">3. Deal ↔ Contact <span id="recordHintsDealContactPendingBadge" class="hidden inline-block min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white text-center align-middle">0</span></h3>
+                <p class="text-xs text-gray-600 mb-3">For deals with a missing Contact_Name, the radar surfaces the existing Contact that most likely belongs on the deal, based on the shared Account and related evidence.</p>
 
-            <!-- Table -->
-            <div class="bg-white rounded-lg shadow overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead id="accountHintsTableHead" class="bg-gray-50">
-                        <tr>
-                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;deal&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="deal">Deal <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;current&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="current">Current account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;suggested&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="suggested">Suggested account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;domain&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;evidence&quot;]" class="account-hints-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="evidence">Evidence (contact) <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;confidence&quot;]" class="account-hints-sort px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="confidence">Confidence <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="accountHintsTable" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Click <em>Run scan</em> to generate suggestions.</td></tr>
-                    </tbody>
-                </table>
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                    <div class="flex-1"></div>
+                    <button data-on-click="runRecordHintsScan" data-args="[&quot;deal_contact&quot;]" id="recordHintsDealContactScanBtn" data-testid="button-record-hints-deal-contact-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
+                </div>
+
+                <div class="bg-white rounded-lg shadow overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Source record</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Current contact</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Suggested contact</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Evidence</th>
+                                <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                                <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordHintsDealContactBody" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Click <em>Run scan</em> to generate suggestions.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div id="accountHintsPagination" class="flex justify-center items-center gap-3 mt-4"></div>
         </div>
 
         <!-- ═══ CS LIFECYCLE COMPLIANCE TAB ═══ -->
@@ -2092,7 +2158,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=58"></script>
+    <script src="/js/duplicates-app.js?v=59"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

@@ -6923,7 +6923,13 @@
             if (tab === 'cs-overlap') loadCsOverlap(window._csOverlapFilter || 'all');
             if (tab === 'cs-lifecycle') loadCsLifecycle(window._csLifecycleFilter || 'all');
             if (tab === 'deal-lifecycle') loadDealLifecycle();
-            if (tab === 'account-hints') loadAccountHints();
+            if (tab === 'account-hints') {
+                loadAccountHints();
+                // Record Hint tab now has 2 additional sections (Contact→Account,
+                // Deal↔Contact) alongside the original Deal→Account section above.
+                renderRecordHintsSection('contact_account', 'recordHintsContactAccountBody');
+                renderRecordHintsSection('deal_contact', 'recordHintsDealContactBody');
+            }
             if (tab === 'logs') { loadAgentActivity(); loadManualActions(); }
             if (tab === 'deal-compliance' && !window._loadedTabs.has('deal-compliance')) loadDealCompliance();
             if (tab === 'empty-records' && !window._loadedTabs.has('empty-records')) loadEmptyRecords();
@@ -8396,6 +8402,154 @@
                     return;
                 }
                 await loadAccountHints();
+            } catch (e) {
+                alert('AI resolve failed: ' + (e && e.message ? e.message : e));
+            }
+        }
+
+        // ─── Record Hint — Sections 2 & 3 (Contact→Account, Deal↔Contact) ────
+        // Section 1 (Deal→Account) stays on the original account-hints
+        // endpoints/handlers above, unchanged. These two new sections share
+        // the generic /api/duplicates/record-hints endpoint, distinguished
+        // by `type`. Row markup mirrors renderAccountHints() rows exactly
+        // (source · current · suggested · domain · evidence · confidence ·
+        // actions) so the three sections look and behave identically.
+        window._recordHints = window._recordHints || {};
+
+        const RECORD_HINT_TBODY_BY_TYPE = {
+            contact_account: 'recordHintsContactAccountBody',
+            deal_contact: 'recordHintsDealContactBody',
+        };
+        const RECORD_HINT_BADGE_BY_TYPE = {
+            contact_account: 'recordHintsContactAccountPendingBadge',
+            deal_contact: 'recordHintsDealContactPendingBadge',
+        };
+        const RECORD_HINT_SCAN_BTN_BY_TYPE = {
+            contact_account: 'recordHintsContactAccountScanBtn',
+            deal_contact: 'recordHintsDealContactScanBtn',
+        };
+
+        async function renderRecordHintsSection(type, tbodyId) {
+            const body = document.getElementById(tbodyId);
+            if (!body) return;
+            body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
+            try {
+                const res = await fetch('/api/duplicates/record-hints?type=' + encodeURIComponent(type) + '&status=pending');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                window._recordHints[type] = data;
+
+                const badge = document.getElementById(RECORD_HINT_BADGE_BY_TYPE[type]);
+                const hints = data.hints || [];
+                const pending = hints.filter(h => h.status === 'pending').length;
+                if (badge) {
+                    if (pending > 0) {
+                        badge.textContent = pending;
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                }
+
+                if (hints.length === 0) {
+                    body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No hints in this bucket. Click <em>Run scan</em> to generate fresh suggestions.</td></tr>';
+                    return;
+                }
+
+                body.innerHTML = hints.map(h => {
+                    const sourceCell = h.source_zoho_id
+                        ? zohoLink(h.source_zoho_id, h.source_module || 'Contacts', h.source_name || h.source_zoho_id)
+                        : escapeHtml(h.source_name || '—');
+                    const suggestedCell = h.suggested_zoho_id
+                        ? zohoLink(h.suggested_zoho_id, h.suggested_module || 'Accounts', h.suggested_name || h.suggested_zoho_id)
+                        : escapeHtml(h.suggested_name || '—');
+                    const evidenceCell = h.evidence_zoho_id && h.evidence_label
+                        ? zohoLink(h.evidence_zoho_id, h.evidence_module || 'Contacts', h.evidence_label)
+                        : escapeHtml(h.evidence_label || h.evidence || '—');
+                    const conf = Number(h.confidence || 0);
+                    const confColor = conf >= 80 ? 'text-emerald-700' : conf >= 60 ? 'text-amber-700' : 'text-gray-600';
+                    const aiEligible = h.status === 'pending' && conf >= 70;
+                    const actions = h.status === 'pending'
+                        ? (aiEligible
+                            ? '<button data-on-click="resolveRecordHintWithAi" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="px-2 py-1 rounded bg-purple-600 text-white text-xs hover:bg-purple-700 me-1" title="Write the suggested value on the Zoho record automatically — confidence ≥70%, attributed to GRQ Assistant.">🤖 Resolve with AI</button>'
+                            : '')
+                        + '<button data-on-click="markRecordHintApplied" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="px-2 py-1 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700" title="I fixed the Zoho record — mark applied">Applied</button>'
+                        + ' <button data-on-click="dismissRecordHint" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs hover:bg-gray-300" title="This suggestion is wrong">Dismiss</button>'
+                        : '<span class="text-xs text-gray-400 capitalize">' + escapeHtml(h.status) + '</span>';
+                    return '<tr class="hover:bg-gray-50">'
+                        + '<td class="px-3 py-2 text-xs text-gray-800">' + sourceCell + '</td>'
+                        + '<td class="px-3 py-2 text-xs"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">' + escapeHtml(h.current_value || '— missing —') + '</span></td>'
+                        + '<td class="px-3 py-2 text-xs text-gray-800">' + suggestedCell + '</td>'
+                        + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(h.suggested_domain || '—') + '</td>'
+                        + '<td class="px-3 py-2 text-xs text-gray-700">' + evidenceCell + '</td>'
+                        + '<td class="px-3 py-2 text-xs text-end font-medium ' + confColor + '">' + conf + '%</td>'
+                        + '<td class="px-3 py-2 text-xs text-end whitespace-nowrap">' + actions + '</td>'
+                        + '</tr>';
+                }).join('');
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-red-600">Failed to load: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
+            }
+        }
+
+        async function runRecordHintsScan(onlyType) {
+            const btnId = onlyType ? RECORD_HINT_SCAN_BTN_BY_TYPE[onlyType] : null;
+            const btn = btnId ? document.getElementById(btnId) : null;
+            const original = btn ? btn.textContent : null;
+            if (btn) { btn.disabled = true; btn.textContent = 'Scanning…'; }
+            try {
+                const res = await fetch('/api/duplicates/record-hints/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(onlyType ? { type: onlyType } : {}),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                await res.json().catch(() => null);
+                // Re-render BOTH new sections regardless of which scan button
+                // was clicked — a scan can surface hints for either type, and
+                // both tables should reflect the latest state.
+                await renderRecordHintsSection('contact_account', 'recordHintsContactAccountBody');
+                await renderRecordHintsSection('deal_contact', 'recordHintsDealContactBody');
+            } catch (e) {
+                alert('Scan failed: ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = original; }
+            }
+        }
+
+        async function setRecordHintStatus(id, type, status) {
+            try {
+                const res = await fetch('/api/duplicates/record-hints/' + id + '/status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status }),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                await renderRecordHintsSection(type, RECORD_HINT_TBODY_BY_TYPE[type]);
+            } catch (e) {
+                alert('Update failed: ' + (e && e.message ? e.message : e));
+            }
+        }
+        function markRecordHintApplied(id, type) { return setRecordHintStatus(id, type, 'applied'); }
+        function dismissRecordHint(id, type)     { return setRecordHintStatus(id, type, 'dismissed'); }
+
+        async function resolveRecordHintWithAi(id, type) {
+            try {
+                const res = await fetch('/api/duplicates/record-hints/' + id + '/resolve-with-ai', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const data = await res.json().catch(() => null);
+                if (!res.ok) {
+                    alert('AI resolve failed: ' + ((data && (data.error || data.reason)) || ('HTTP ' + res.status)));
+                    return;
+                }
+                if (data && data.success === false) {
+                    alert(data.reason || data.error || 'AI resolve refused.');
+                    return;
+                }
+                await renderRecordHintsSection(type, RECORD_HINT_TBODY_BY_TYPE[type]);
             } catch (e) {
                 alert('AI resolve failed: ' + (e && e.message ? e.message : e));
             }
