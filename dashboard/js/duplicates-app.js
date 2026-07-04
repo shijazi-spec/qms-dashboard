@@ -8457,15 +8457,21 @@
                 }
 
                 body.innerHTML = hints.map(h => {
+                    // Field names + module derivation follow the /record-hints
+                    // response contract: source_type ('contact'|'deal') and
+                    // link_field ('Account_Name'|'Contact_Name') drive the module;
+                    // names come from source_record_name / suggested_target_name.
+                    const srcModule = h.source_type === 'deal' ? 'Deals' : 'Contacts';
+                    const tgtModule = h.link_field === 'Contact_Name' ? 'Contacts' : 'Accounts';
+                    const sourceName = h.source_record_name || h.source_zoho_id || '—';
+                    const suggestedName = h.suggested_target_name || h.suggested_target_zoho_id || '—';
                     const sourceCell = h.source_zoho_id
-                        ? zohoLink(h.source_zoho_id, h.source_module || 'Contacts', h.source_name || h.source_zoho_id)
-                        : escapeHtml(h.source_name || '—');
-                    const suggestedCell = h.suggested_zoho_id
-                        ? zohoLink(h.suggested_zoho_id, h.suggested_module || 'Accounts', h.suggested_name || h.suggested_zoho_id)
-                        : escapeHtml(h.suggested_name || '—');
-                    const evidenceCell = h.evidence_zoho_id && h.evidence_label
-                        ? zohoLink(h.evidence_zoho_id, h.evidence_module || 'Contacts', h.evidence_label)
-                        : escapeHtml(h.evidence_label || h.evidence || '—');
+                        ? zohoLink(h.source_zoho_id, srcModule, sourceName)
+                        : escapeHtml(sourceName);
+                    const suggestedCell = h.suggested_target_zoho_id
+                        ? zohoLink(h.suggested_target_zoho_id, tgtModule, suggestedName)
+                        : escapeHtml(suggestedName);
+                    const evidenceCell = escapeHtml(h.evidence_detail || '—');
                     const conf = Number(h.confidence || 0);
                     const confColor = conf >= 80 ? 'text-emerald-700' : conf >= 60 ? 'text-amber-700' : 'text-gray-600';
                     const aiEligible = h.status === 'pending' && conf >= 70;
