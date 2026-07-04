@@ -950,10 +950,9 @@
                 <p>Clusters where the same company appears across multiple Zoho modules AND there is something to do <strong>here</strong>. We surface only the cases that have a Zoho action available on this tab:</p>
                 <ul class="list-disc ms-5 mt-1 space-y-0.5">
                     <li><strong>Lead ↔ Active Deal</strong> — close the redundant Lead, Sales is already pursuing it.</li>
-                    <li><strong>Contact ↔ Account · Deal ↔ Account</strong> — LINK by setting <code class="bg-blue-100 px-1 rounded">Account_Name</code>.</li>
-                    <li><strong>Contact ↔ Deal</strong> — LINK by setting <code class="bg-blue-100 px-1 rounded">Contact_Name</code> on the Deal.</li>
+                    <li><strong>3+ modules</strong> — compound case, open the cluster for per-record recommendations.</li>
                 </ul>
-                <p class="mt-1 text-blue-800">Pure Lead ↔ Contact and Lead ↔ Account overlaps are <strong>not</strong> shown — Zoho has no field to link a Lead to anything, so the only action is CLOSE the Lead, which is handled directly in the <em>Leads</em> Duplicates tab. A red <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700 align-middle">Existing client · CS owns</span> badge means a Paid / Agreement Signed deal is in the cluster — route to Customer Success, do not pursue.</p>
+                <p class="mt-1 text-blue-800">Pure Lead ↔ Contact and Lead ↔ Account overlaps are <strong>not</strong> shown — Zoho has no field to link a Lead to anything, so the only action is CLOSE the Lead, which is handled directly in the <em>Leads</em> Duplicates tab. Contact ↔ Account, Contact ↔ Deal, and Deal ↔ Account link gaps now live on the <em>Record Hint</em> tab. A red <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700 align-middle">Existing client · CS owns</span> badge means a Paid / Agreement Signed deal is in the cluster — route to Customer Success, do not pursue.</p>
             </div>
 
             <!-- KPI summary — action-oriented tiles. A cluster can fall in
@@ -1019,9 +1018,6 @@
             <div class="flex flex-wrap gap-2 mb-4" id="cmoChips">
                 <button data-on-click="filterCrossModule" data-args="[&quot;all&quot;]" id="cmoChip-all" data-testid="cmo-chip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
                 <button data-on-click="filterCrossModule" data-args="[&quot;lead_deal&quot;]" id="cmoChip-lead_deal" data-testid="cmo-chip-lead-deal" class="px-3 py-1.5 text-xs font-medium rounded-full bg-rose-100 text-rose-700 hover:bg-rose-200">Lead ↔ Active Deal</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;contact_account&quot;]" id="cmoChip-contact_account" data-testid="cmo-chip-contact-account" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Contact ↔ Account</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;contact_deal&quot;]" id="cmoChip-contact_deal" data-testid="cmo-chip-contact-deal" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Contact ↔ Deal</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;deal_account&quot;]" id="cmoChip-deal_account" data-testid="cmo-chip-deal-account" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Deal ↔ Account</button>
                 <button data-on-click="filterCrossModule" data-args="[&quot;mixed&quot;]" id="cmoChip-mixed" data-testid="cmo-chip-mixed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">3+ modules</button>
                 <button data-on-click="filterCrossModule" data-args="[&quot;existing_clients&quot;]" id="cmoChip-existing_clients" data-testid="cmo-chip-existing-clients" class="px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200">Existing clients · CS</button>
             </div>
@@ -2158,7 +2154,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=59"></script>
+    <script src="/js/duplicates-app.js?v=60"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

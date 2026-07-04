@@ -9006,6 +9006,17 @@ export async function getCrossModuleOverlaps(opts: {
   const visible = realOverlaps.filter((c) => {
     if (!isActionable(c)) return false;
     if (statusOpt === "active" && (c as any).ledger_resolved) return false;
+    // The Record Hint tab now owns the 3 strict 2-module LINKING pairings
+    // (Contact↔Account, Contact↔Deal, Deal↔Account) — a cluster classified
+    // as EXACTLY one of those no longer belongs on Cross-Module. `mixed`
+    // (3+ modules) stays even if it contains one of those relationships,
+    // since it's genuinely a compound cross-module case owned here.
+    if (
+      c.pairing === "contact_account" ||
+      c.pairing === "contact_deal" ||
+      c.pairing === "deal_account"
+    )
+      return false;
     return true;
   });
 
@@ -9018,8 +9029,6 @@ export async function getCrossModuleOverlaps(opts: {
   // counts agree.
   const matchesPairingChip = (c: any, pairing: CrossModulePairing): boolean => {
     const leads = Number(c.total_leads || 0);
-    const contacts = Number(c.total_contacts || 0);
-    const accounts = Number(c.total_accounts || 0);
     const deals = Number(c.total_deals || 0);
     switch (pairing) {
       case "lead_deal":
@@ -9029,21 +9038,20 @@ export async function getCrossModuleOverlaps(opts: {
           !!c.has_active_lead &&
           !!c.has_active_deal
         );
-      case "contact_account":
-        return contacts > 0 && accounts > 0;
-      case "deal_account":
-        return deals > 0 && accounts > 0;
-      case "contact_deal":
-        return contacts > 0 && deals > 0;
       case "mixed":
         return c.pairing === "mixed";
-      // lead_contact / lead_account chips are deprecated under the
-      // refined rules — they have no actionable home on this tab — so
-      // the chip filters never match. The frontend hides those chips
-      // entirely; this just makes the backend safe if an old client
-      // still sends them.
+      // lead_contact / lead_account / contact_account / contact_deal /
+      // deal_account chips are deprecated on this tab — the latter 3 now
+      // live on the Record Hint tab (see the `visible` filter above, which
+      // already drops those pairings from this endpoint's result set), and
+      // lead_contact/lead_account never had a Zoho action here. The chip
+      // filters never match; the frontend hides those chips entirely — this
+      // just makes the backend safe if a stale client still sends them.
       case "lead_contact":
       case "lead_account":
+      case "contact_account":
+      case "contact_deal":
+      case "deal_account":
         return false;
       default:
         return false;

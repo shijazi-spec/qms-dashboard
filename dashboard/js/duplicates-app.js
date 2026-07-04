@@ -390,18 +390,10 @@
         function _cmoClusterMatchesChip(c, key) {
             if (!key || key === 'all') return true;
             const leads = Number(c.total_leads || 0);
-            const contacts = Number(c.total_contacts || 0);
-            const accounts = Number(c.total_accounts || 0);
             const deals = Number(c.total_deals || 0);
             switch (key) {
                 case 'lead_deal':
                     return leads > 0 && deals > 0 && !!c.has_active_lead && !!c.has_active_deal;
-                case 'contact_account':
-                    return contacts > 0 && accounts > 0;
-                case 'deal_account':
-                    return deals > 0 && accounts > 0;
-                case 'contact_deal':
-                    return contacts > 0 && deals > 0;
                 case 'mixed':
                     return c.pairing === 'mixed';
                 case 'existing_clients':

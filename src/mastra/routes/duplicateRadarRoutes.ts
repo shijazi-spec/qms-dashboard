@@ -4516,9 +4516,12 @@ export const duplicateRadarRoutes = [
     // Query params:
     //   limit=N        cap result list, default 200, clamped [1, 1000]
     //   pairing=key    filter to one pairing
-    //                  (lead_contact / lead_account / lead_deal /
-    //                   contact_account / contact_deal /
-    //                   deal_account / mixed)
+    //                  (lead_contact / lead_account / lead_deal / mixed)
+    //                  NOTE: contact_account / contact_deal / deal_account
+    //                  moved to the Record Hint tab (2026-07) — clusters
+    //                  classified as exactly one of those no longer appear
+    //                  in this endpoint's results, so they're no longer
+    //                  accepted as a filter value either.
     path: "/api/duplicates/cross-module-overlaps",
     method: "GET" as const,
     createHandler: async () => {
@@ -4533,13 +4536,16 @@ export const duplicateRadarRoutes = [
           // 200 default silently hid real cross-module overlaps.
           const limit = limitRaw ? parseInt(limitRaw, 10) : 100000;
           const pairingRaw = url.searchParams.get("pairing");
+          // contact_account / contact_deal / deal_account removed from the
+          // whitelist — those linking pairings now live on the Record Hint
+          // tab, and getCrossModuleOverlaps no longer returns clusters
+          // classified as exactly one of them. An unknown/removed value
+          // falls through to `null` (no filter), same as any other
+          // unrecognized pairing string.
           const allowedPairings = new Set([
             "lead_contact",
             "lead_account",
             "lead_deal",
-            "contact_account",
-            "contact_deal",
-            "deal_account",
             "mixed",
           ]);
           const pairing =
@@ -4548,9 +4554,6 @@ export const duplicateRadarRoutes = [
                   | "lead_contact"
                   | "lead_account"
                   | "lead_deal"
-                  | "contact_account"
-                  | "contact_deal"
-                  | "deal_account"
                   | "mixed")
               : null;
 
