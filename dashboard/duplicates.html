@@ -29,6 +29,10 @@
         html.wp-dark .rr-kpi-value { color: #F8FAFC; }
         .rr-kpi-value.rr-warn { color: #B91C1C; }
         html.wp-dark .rr-kpi-value.rr-warn { color: #F87171; }
+        .rr-kpi-value.rr-amber { color: #B45309; }
+        html.wp-dark .rr-kpi-value.rr-amber { color: #FBBF24; }
+        .rr-kpi-value.rr-good { color: #15803D; }
+        html.wp-dark .rr-kpi-value.rr-good { color: #4ADE80; }
         .rr-kpi-sub { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
         html.wp-dark .rr-kpi-sub { color: #64748B; }
         .confidence-high { background-color: #FEE2E2; color: #991B1B; }
@@ -631,22 +635,22 @@
                 <button data-on-click="loadClusterMergeCandidates" id="cmcRefreshBtn" data-testid="button-cmc-refresh" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300">🔄 Refresh</button>
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500">Domains with duplicates</div>
-                    <div id="cmcStatGroups" class="text-2xl font-bold text-rose-700 mt-1" data-testid="text-cmc-groups">—</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Domains with duplicates</div>
+                    <div id="cmcStatGroups" class="rr-kpi-value rr-warn" data-testid="text-cmc-groups">—</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500">Extra clusters</div>
-                    <div id="cmcStatExtra" class="text-2xl font-bold text-amber-700 mt-1" data-testid="text-cmc-extra">—</div>
-                    <div class="text-[10px] text-gray-400">Records to reparent</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Extra clusters</div>
+                    <div id="cmcStatExtra" class="rr-kpi-value rr-amber" data-testid="text-cmc-extra">—</div>
+                    <div class="rr-kpi-sub">Records to reparent</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500">Records affected</div>
-                    <div id="cmcStatRecords" class="text-2xl font-bold text-gray-900 mt-1" data-testid="text-cmc-records">—</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Records affected</div>
+                    <div id="cmcStatRecords" class="rr-kpi-value" data-testid="text-cmc-records">—</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500">Groups truncated?</div>
-                    <div id="cmcStatTrunc" class="text-2xl font-bold text-gray-900 mt-1" data-testid="text-cmc-trunc">—</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Groups truncated?</div>
+                    <div id="cmcStatTrunc" class="rr-kpi-value" data-testid="text-cmc-trunc">—</div>
                     <div class="text-[10px] text-gray-400">Cap is 200 / page</div>
                 </div>
             </div>
@@ -1103,25 +1107,25 @@
             </div>
             <!-- Summary widget -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500 uppercase tracking-wide">ARR Exposure</div>
-                    <div id="csOverlapArrExposure" class="text-2xl font-bold text-gray-900 mt-1">—</div>
-                    <div class="text-xs text-gray-500 mt-1">Total annual revenue at risk</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">ARR exposure</div>
+                    <div id="csOverlapArrExposure" class="rr-kpi-value">—</div>
+                    <div class="rr-kpi-sub">Total annual revenue at risk</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4 border-s-4 border-red-500">
-                    <div class="text-xs text-red-600 uppercase tracking-wide">Block</div>
-                    <div id="csOverlapBlockCount" class="text-2xl font-bold text-red-700 mt-1">—</div>
-                    <div class="text-xs text-gray-500 mt-1">Active customer — do not push as new</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Block</div>
+                    <div id="csOverlapBlockCount" class="rr-kpi-value rr-warn">—</div>
+                    <div class="rr-kpi-sub">Active customer — do not push as new</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4 border-s-4 border-amber-500">
-                    <div class="text-xs text-amber-600 uppercase tracking-wide">Review</div>
-                    <div id="csOverlapReviewCount" class="text-2xl font-bold text-amber-700 mt-1">—</div>
-                    <div class="text-xs text-gray-500 mt-1">Within sector cool-off — CS to confirm</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Review</div>
+                    <div id="csOverlapReviewCount" class="rr-kpi-value rr-amber">—</div>
+                    <div class="rr-kpi-sub">Within sector cool-off — CS to confirm</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4 border-s-4 border-yellow-400">
-                    <div class="text-xs text-yellow-700 uppercase tracking-wide">Warn</div>
-                    <div id="csOverlapWarnCount" class="text-2xl font-bold text-yellow-700 mt-1">—</div>
-                    <div class="text-xs text-gray-500 mt-1">Past cool-off — Sales may re-engage</div>
+                <div class="rr-kpi">
+                    <div class="rr-kpi-label">Warn</div>
+                    <div id="csOverlapWarnCount" class="rr-kpi-value rr-amber">—</div>
+                    <div class="rr-kpi-sub">Past cool-off — Sales may re-engage</div>
                 </div>
             </div>
 
@@ -1231,29 +1235,29 @@
 
                 <!-- Summary -->
                 <div class="grid grid-cols-2 gap-2">
-                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-red-500">
-                        <div class="text-xs text-red-600 uppercase">Block</div>
-                        <div id="preflightSumBlock" class="text-2xl font-bold text-red-700">—</div>
+                    <div class="rr-kpi">
+                        <div class="rr-kpi-label">Block</div>
+                        <div id="preflightSumBlock" class="rr-kpi-value rr-warn">—</div>
                     </div>
-                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-amber-500">
-                        <div class="text-xs text-amber-600 uppercase">Review</div>
-                        <div id="preflightSumReview" class="text-2xl font-bold text-amber-700">—</div>
+                    <div class="rr-kpi">
+                        <div class="rr-kpi-label">Review</div>
+                        <div id="preflightSumReview" class="rr-kpi-value rr-amber">—</div>
                     </div>
-                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-yellow-400">
-                        <div class="text-xs text-yellow-700 uppercase">Warn</div>
-                        <div id="preflightSumWarn" class="text-2xl font-bold text-yellow-700">—</div>
+                    <div class="rr-kpi">
+                        <div class="rr-kpi-label">Warn</div>
+                        <div id="preflightSumWarn" class="rr-kpi-value rr-amber">—</div>
                     </div>
-                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-gray-400">
-                        <div class="text-xs text-gray-600 uppercase">Duplicate</div>
-                        <div id="preflightSumDup" class="text-2xl font-bold text-gray-700">—</div>
+                    <div class="rr-kpi">
+                        <div class="rr-kpi-label">Duplicate</div>
+                        <div id="preflightSumDup" class="rr-kpi-value">—</div>
                     </div>
-                    <div class="col-span-2 bg-white rounded-lg shadow p-3 border-s-4 border-rose-500" title="Contacts with a name but NO email AND NO phone — cannot be reached, rejected from the import.">
-                        <div class="text-xs text-rose-600 uppercase">No email / phone (rejected)</div>
-                        <div id="preflightSumNoContact" class="text-2xl font-bold text-rose-700">—</div>
+                    <div class="rr-kpi col-span-2" title="Contacts with a name but NO email AND NO phone — cannot be reached, rejected from the import.">
+                        <div class="rr-kpi-label">No email / phone (rejected)</div>
+                        <div id="preflightSumNoContact" class="rr-kpi-value rr-warn">—</div>
                     </div>
-                    <div class="col-span-2 bg-white rounded-lg shadow p-3 border-s-4 border-green-500">
-                        <div class="text-xs text-green-700 uppercase">Pass (safe to import)</div>
-                        <div id="preflightSumPass" class="text-2xl font-bold text-green-700">—</div>
+                    <div class="rr-kpi col-span-2">
+                        <div class="rr-kpi-label">Pass (safe to import)</div>
+                        <div id="preflightSumPass" class="rr-kpi-value rr-good">—</div>
                     </div>
                 </div>
             </div>
@@ -1505,21 +1509,21 @@
 
                 <!-- Summary -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-amber-500">
-                        <div class="text-xs text-amber-600 uppercase">Pending</div>
-                        <div id="accountHintsSumPending" class="text-2xl font-bold text-amber-700">—</div>
+                    <div class="rr-kpi">
+                        <div class="rr-kpi-label">Pending</div>
+                        <div id="accountHintsSumPending" class="rr-kpi-value rr-amber">—</div>
                     </div>
-                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-emerald-500">
-                        <div class="text-xs text-emerald-600 uppercase">Applied</div>
-                        <div id="accountHintsSumApplied" class="text-2xl font-bold text-emerald-700">—</div>
+                    <div class="rr-kpi">
+                        <div class="rr-kpi-label">Applied</div>
+                        <div id="accountHintsSumApplied" class="rr-kpi-value rr-good">—</div>
                     </div>
-                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-gray-400">
-                        <div class="text-xs text-gray-600 uppercase">Dismissed</div>
-                        <div id="accountHintsSumDismissed" class="text-2xl font-bold text-gray-700">—</div>
+                    <div class="rr-kpi">
+                        <div class="rr-kpi-label">Dismissed</div>
+                        <div id="accountHintsSumDismissed" class="rr-kpi-value">—</div>
                     </div>
-                    <div class="bg-white rounded-lg shadow p-3 border-s-4 border-blue-500">
-                        <div class="text-xs text-blue-700 uppercase">Last scan</div>
-                        <div id="accountHintsLastScan" class="text-sm font-medium text-blue-700 mt-1">—</div>
+                    <div class="rr-kpi">
+                        <div class="rr-kpi-label">Last scan</div>
+                        <div id="accountHintsLastScan" class="rr-kpi-value" style="font-size:13px;">—</div>
                     </div>
                 </div>
 
