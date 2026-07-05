@@ -8750,7 +8750,7 @@
         async function renderRecordHintsSection(type, tbodyId) {
             const body = document.getElementById(tbodyId);
             if (!body) return;
-            body.innerHTML = rrSkeletonRows(7);
+            body.innerHTML = rrSkeletonRows(8);
             try {
                 const res = await fetch('/api/duplicates/record-hints?type=' + encodeURIComponent(type) + '&status=pending');
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -8770,7 +8770,7 @@
                 }
 
                 if (hints.length === 0) {
-                    body.innerHTML = rrEmptyRow(7, { glyph: '💡', title: 'No hints in this bucket', desc: 'Click <em>Run scan</em> to generate fresh suggestions.' });
+                    body.innerHTML = rrEmptyRow(8, { glyph: '💡', title: 'No hints in this bucket', desc: 'Click <em>Run scan</em> to generate fresh suggestions.' });
                     return;
                 }
 
@@ -8811,9 +8811,15 @@
                     // Domain folded UNDER the suggested account (removes the wide
                     // standalone Domain column) — evidence still shows the match.
                     const domainSub = h.suggested_domain ? '<div class="rr-sub rr-mono">' + escapeHtml(h.suggested_domain) + '</div>' : '';
+                    // Contact email (Sarah 2026-07-06) — check it here without
+                    // opening the record. mailto link; deal sources have no email.
+                    const emailCell = h.source_email
+                        ? '<a href="mailto:' + encodeURIComponent(h.source_email) + '" class="rr-mono text-sky-700 hover:underline" title="' + escapeHtml(h.source_email) + '">' + escapeHtml(h.source_email) + '</a>'
+                        : '<span class="rr-muted">—</span>';
                     return '<tr>'
                         + chkCell
                         + '<td class="rr-primary">' + sourceCell + '</td>'
+                        + '<td>' + emailCell + '</td>'
                         + '<td><span class="rr-badge rr-amber">' + escapeHtml(h.current_value || '— missing —') + '</span></td>'
                         + '<td class="rr-primary">' + suggestedCell + domainSub + '</td>'
                         + '<td class="rr-muted">' + evidenceCell + '</td>'
@@ -8826,7 +8832,7 @@
                 if (_allChk) _allChk.checked = false;
                 if (typeof rhRowSelect === 'function') rhRowSelect(type);
             } catch (e) {
-                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-red-600">Failed to load: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-red-600">Failed to load: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
             }
         }
 

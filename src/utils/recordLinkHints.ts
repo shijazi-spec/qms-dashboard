@@ -383,6 +383,7 @@ export interface RecordLinkHintRow {
   source_type: string;
   source_zoho_id: string | null;
   source_record_name: string | null;
+  source_email: string | null;
   link_field: string;
   current_value: string | null;
   suggested_target_record_id: number | null;
@@ -432,6 +433,7 @@ export async function listRecordLinkHints(opts: {
             h.source_type,
             s.zoho_record_id  AS source_zoho_id,
             s.record_name     AS source_record_name,
+            s.email           AS source_email,
             h.link_field,
             CASE WHEN h.link_field = 'Account_Name' THEN s.account_name
                  ELSE s.contact_name END AS current_value,
