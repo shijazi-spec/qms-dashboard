@@ -10073,7 +10073,12 @@ export const duplicateRadarRoutes = [
                 if (PRODUCTS_FIELD) p.Products = PRODUCTS_FIELD;
                 p.No_of_Employees = PREFLIGHT_EMPLOYEES;
                 if (salesPersonId) p.Sales_Person = { id: salesPersonId };
+                // CS_Member is a REQUIRED user-lookup on the Deal layout. Prefer
+                // the id we resolved from the email; if the user lookup didn't
+                // find it (fetchZohoUsers can miss some user types), fall back to
+                // sending the EMAIL so Zoho resolves the user itself.
                 if (csMemberId) p.CS_Member = { id: csMemberId };
+                else if (PREFLIGHT_CS_MEMBER_EMAIL) p.CS_Member = { email: PREFLIGHT_CS_MEMBER_EMAIL };
                 if (PREFLIGHT_GOV_TYPE) p.Gov_Type = PREFLIGHT_GOV_TYPE;
                 if (firstContactId) {
                   p.Contact_Name = { id: firstContactId };
