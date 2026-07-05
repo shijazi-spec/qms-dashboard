@@ -10109,6 +10109,34 @@ export const duplicateRadarRoutes = [
               const dealPayloads: Record<string, any>[] = [];
               const dealCompanyKeys: string[] = [];
 
+              // LAST-RESORT CS_Member / Sales_Person resolution (Sarah 2026-07-05).
+              // CS_Member is a mandatory user-lookup, but this org's token can't
+              // read the Users API (fetchZohoUsers throws — same failure as
+              // "Check required fields"), so csMemberId is still null here and the
+              // deal would reject MANDATORY_NOT_FOUND CS_Member. Bypass the Users
+              // API entirely: READ one resolved Account (a CRUD read, which works)
+              // and reuse its OWNER's user id — a guaranteed-valid CRM user. This
+              // makes deals create without any manual id or env var.
+              if (!csMemberId || !salesPersonId) {
+                try {
+                  const { fetchZohoRecordById } = await import("../../utils/zohoCRM");
+                  const anyAccId = companiesWithAccount
+                    .map(co => accountIdMap.get(co.companyKey))
+                    .find(Boolean);
+                  if (anyAccId) {
+                    const acc = await fetchZohoRecordById("Accounts", String(anyAccId));
+                    const ownerId = acc?.data?.Owner?.id ? String(acc.data.Owner.id) : "";
+                    if (ownerId) {
+                      if (!csMemberId) csMemberId = ownerId;
+                      if (!salesPersonId) salesPersonId = ownerId;
+                      logger.info(`[preflight push] Resolved CS_Member/Sales_Person from account owner ${ownerId} (Users API unavailable).`);
+                    }
+                  }
+                } catch (e: any) {
+                  logger.warn(`[preflight push] Account-owner CS_Member fallback failed: ${e?.message || e}`);
+                }
+              }
+
               // Deal_Name = the ACTUAL account name (Sarah 2026-07-05: "add the
               // account name in the deal name"). For a reused account the real
               // Zoho name (e.g. "Ctelecoms (Consolidated Telecoms)") often
