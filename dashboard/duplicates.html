@@ -1559,7 +1559,7 @@
                 <div id="spReconcileResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1"></div>
                 <div id="spRejResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-72 overflow-y-auto"></div>
                 <div class="flex items-center flex-wrap gap-2 mt-1">
-                    <span class="text-[11px] text-gray-500">Backfill <strong>data</strong> (Title · Email · Phone · Mobile · Company) onto already-pushed records — fills every field from the Excel so SDRs get complete records (load the Excel &amp; run Preflight first — matches by email → phone → name):</span>
+                    <span class="text-[11px] text-gray-500">Backfill <strong>data</strong> (Title · Email · Phone · Mobile · Company) onto already-pushed records — fills every field from the Excel so SDRs get complete records (load the Excel &amp; run Preflight first — matches by email → phone → name). For <strong>Leads</strong>, the record is also <strong>renamed to the company</strong> (contact person kept in the Description). <strong>A real run sweeps ALL records automatically</strong> — <em>size</em> is just the per-batch page; no need to advance <em>from</em>:</span>
                     <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Which already-pushed records to set the Title on. 'Both' runs Leads then Contacts."><span>on</span>
                         <select id="spBackfillModule" class="text-xs border rounded-lg px-2 py-1.5" data-testid="select-sp-backfill-module" aria-label="Backfill target module">
                             <option value="Contacts">Contacts</option>
@@ -1587,6 +1587,19 @@
                     <button data-on-click="erCreateMissingDeals" id="spDealsBtn" data-testid="button-sp-deals" class="rr-btn rr-btn-ai">📄 Create missing deals</button>
                 </div>
                 <div id="spDealsResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-72 overflow-y-auto"></div>
+
+                <!-- READ-ONLY diagnostic: find leads we pushed that are actually
+                     existing clients (their company matches an Account by fuzzy
+                     name the push's exact match missed). Lists them for review —
+                     NO writes. This is the "Bader Bahati → Riyadh First Health
+                     Cluster" catcher. -->
+                <div class="flex items-center flex-wrap gap-2 mt-1 px-2 py-2 rounded-lg bg-sky-50 border border-sky-100">
+                    <span class="text-[11px] text-sky-900"><strong>Find mislabeled leads</strong> — scans every Lead of a source against existing Accounts (fuzzy company-name match) and lists the ones that are actually existing clients. <strong>Read-only.</strong></span>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Lead_Source to scan (single word)."><span>source</span><input type="text" id="spScanSource" value="Mawsool" class="w-28 text-xs border rounded-lg px-2 py-1.5" data-testid="input-sp-scan-source" aria-label="Scan lead source" /></label>
+                    <button data-on-click="erScanMislabeledLeads" id="spScanBtn" data-testid="button-sp-scan" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-sky-300 text-sky-700 hover:bg-sky-50">🔎 Scan for mislabeled leads</button>
+                </div>
+                <div id="spScanResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-96 overflow-y-auto"></div>
+
                 <p class="text-[11px] text-gray-500 mt-1">Contacts are verified by email domain before filing under an Account: a corporate email at a different company than its label is <strong>rejected</strong>; free-mail / unverifiable contacts go to <strong>Leads</strong> (action 4). Each action pushes in slices — set <em>size</em> per click; <em>from</em> auto-advances after a real push. 0 = all. <strong>Finish an action's slices before re-running Resolve</strong> — re-resolving mid-way can shift the slice window.</p>
             </div>
 
@@ -2403,7 +2416,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=84"></script>
+    <script src="/js/duplicates-app.js?v=87"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

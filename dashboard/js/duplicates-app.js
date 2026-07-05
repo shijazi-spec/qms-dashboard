@@ -11984,8 +11984,14 @@
             var moduleSel = (document.getElementById('spBackfillModule') || {}).value || 'Contacts';
             var modules = moduleSel === 'Both' ? ['Contacts', 'Leads'] : [moduleSel];
             var dry = !!(document.getElementById('spBackfillDry') || {}).checked;
-            var count = parseInt((document.getElementById('spBackfillNum') || {}).value || '0', 10) || 0;
-            var offset = parseInt((document.getElementById('spBackfillOff') || {}).value || '0', 10) || 0;
+            // `size` is the per-slice batch (default 200 to stay under the request
+            // timeout). A REAL run now sweeps EVERY slice automatically from 0 to
+            // the end — no more clicking through offsets, so nobody gets missed.
+            // Dry-run stays a single-slice preview (from the `from` box) for a
+            // quick check.
+            var sliceSize = parseInt((document.getElementById('spBackfillNum') || {}).value || '0', 10) || 0;
+            if (sliceSize <= 0) sliceSize = 200;
+            var startOffset = parseInt((document.getElementById('spBackfillOff') || {}).value || '0', 10) || 0;
             var btn = document.getElementById('spBackfillBtn');
             var box = document.getElementById('spBackfillResult');
             var orig = btn ? btn.innerHTML : '';
@@ -11994,22 +12000,40 @@
                 var html = '';
                 for (var i = 0; i < modules.length; i++) {
                     var mod = modules[i];
-                    var resp = await _erBackfillRun(mod, rows, count, offset, dry);
-                    if (resp.dry_run) {
-                        html += '<div class="font-semibold text-amber-800">✓ Dry-run · ' + mod + '</div>'
+                    if (dry) {
+                        var resp = await _erBackfillRun(mod, rows, sliceSize, startOffset, true);
+                        html += '<div class="font-semibold text-amber-800">✓ Dry-run · ' + mod + ' (slice at ' + startOffset + ')</div>'
                             + '<div>' + (resp.candidates || 0) + ' rows checked · <span class="text-emerald-700 font-semibold">' + (resp.would_update || 0) + '</span> matched (' + (resp.matched_by_phone || 0) + ' by phone, ' + (resp.matched_by_name || 0) + ' by name) · ' + (resp.not_found || 0) + ' not found.</div>';
                     } else {
-                        html += '<div class="font-semibold text-emerald-800">✓ Backfill · ' + mod + '</div>'
-                            + '<div>Updated: <span class="text-emerald-700 font-semibold">' + (resp.updated || 0) + '</span> (' + (resp.matched_by_phone || 0) + ' by phone, ' + (resp.matched_by_name || 0) + ' by name) · Failed: ' + (resp.failed || 0) + ' · Not found: ' + (resp.not_found || 0) + '</div>'
-                            + ((resp.error_sample && resp.error_sample.length) ? '<div class="text-red-700 mt-1">' + resp.error_sample.map(function (e) { return escapeHtml(e.code || '') + ' — ' + escapeHtml(e.message || ''); }).join('<br>') + '</div>' : '');
+                        // Sweep ALL slices from 0 → end so every matchable record
+                        // gets filled in ONE click. Stop when a slice returns fewer
+                        // candidates than the slice size (the last page).
+                        var offset = 0;
+                        var tot = { updated: 0, failed: 0, not_found: 0, by_phone: 0, by_name: 0, scanned: 0 };
+                        var errs = [];
+                        var guard = 0;
+                        while (guard++ < 200) {
+                            if (box) {
+                                box.classList.remove('hidden');
+                                box.innerHTML = html + '<div class="text-gray-600">' + mod + ': backfilling… <strong>' + tot.updated + '</strong> updated so far (scanning from ' + offset + ')…</div>';
+                            }
+                            var r = await _erBackfillRun(mod, rows, sliceSize, offset, false);
+                            tot.updated += (r.updated || 0); tot.failed += (r.failed || 0); tot.not_found += (r.not_found || 0);
+                            tot.by_phone += (r.matched_by_phone || 0); tot.by_name += (r.matched_by_name || 0); tot.scanned += (r.candidates || 0);
+                            if (r.error_sample && r.error_sample.length) errs = errs.concat(r.error_sample);
+                            if ((r.candidates || 0) < sliceSize) break; // last page reached
+                            offset += sliceSize;
+                        }
+                        html += '<div class="font-semibold text-emerald-800">✓ Backfill · ' + mod + ' — ALL records</div>'
+                            + '<div>Updated: <span class="text-emerald-700 font-semibold">' + tot.updated + '</span> (' + tot.by_phone + ' by phone, ' + tot.by_name + ' by name) · Failed: ' + tot.failed + ' · Not found: ' + tot.not_found + ' · Scanned: ' + tot.scanned + '</div>'
+                            + (errs.length ? '<div class="text-red-700 mt-1">' + errs.slice(0, 5).map(function (e) { return escapeHtml(e.code || '') + ' — ' + escapeHtml(e.message || ''); }).join('<br>') + '</div>' : '');
                     }
                 }
                 if (box) {
                     box.classList.remove('hidden');
-                    box.innerHTML = html + (dry ? '<div class="mt-1 text-amber-700">Uncheck Dry-run and click again to apply. Advance <em>from</em> for the next slice.</div>' : '');
+                    box.innerHTML = html + (dry ? '<div class="mt-1 text-amber-700">Uncheck Dry-run and click once — it sweeps ALL records automatically (no need to advance <em>from</em>).</div>' : '');
                 }
-                if (!dry) { var offEl = document.getElementById('spBackfillOff'); if (offEl && count > 0) offEl.value = String(offset + count); }
-                rrToast(dry ? 'Backfill dry-run done — see matched counts.' : 'Data backfilled (title / email / phone / company).', 'good');
+                rrToast(dry ? 'Backfill dry-run done — see matched counts.' : 'Data backfilled across ALL records (title / email / phone / company).', 'good');
             } catch (e) {
                 if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Backfill failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
                 rrToast('Backfill failed: ' + (e && e.message || e), 'warn');
@@ -12176,6 +12200,62 @@
             } catch (e) {
                 if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
                 rrToast('Create missing deals failed: ' + (e && e.message || e), 'warn');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
+        // READ-ONLY scan — lists leads (of a given Lead_Source) whose company
+        // matches an existing Account by fuzzy core name. These are existing
+        // clients the push mislabeled as brand-new Leads (thin row + exact-only
+        // name match missed the account). No writes — just the list to review,
+        // each row deep-linking to the Lead and its matched Account in Zoho.
+        async function erScanMislabeledLeads() {
+            var src = String((document.getElementById('spScanSource') || {}).value || 'Mawsool').trim() || 'Mawsool';
+            var btn = document.getElementById('spScanBtn');
+            var orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Scanning…'; }
+            var box = document.getElementById('spScanResult');
+            try {
+                var res = await fetch('/api/duplicates/preflight/mislabeled-leads-scan', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: src }),
+                });
+                var resp = await _pfReadJson(res);
+                if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
+                if (box) {
+                    box.classList.remove('hidden');
+                    var rows = Array.isArray(resp.rows) ? resp.rows : [];
+                    if (rows.length === 0) {
+                        box.innerHTML = '<div class="font-semibold text-emerald-800">✓ No mislabeled leads found</div>'
+                            + '<div class="text-gray-600">Scanned ' + (resp.total_leads || 0) + ' "' + escapeHtml(src) + '" lead(s); none matched an existing Account.</div>';
+                    } else {
+                        var head = '<div class="font-semibold text-sky-900 mb-1">Found ' + rows.length + ' lead(s) that match an existing client'
+                            + ' <span class="text-gray-500 font-normal">(of ' + (resp.total_leads || 0) + ' "' + escapeHtml(src) + '" leads scanned)</span></div>';
+                        var trs = rows.map(function (r) {
+                            var leadLink = 'https://crm.zoho.com/crm/tab/Leads/' + encodeURIComponent(r.lead_id);
+                            var acctLink = 'https://crm.zoho.com/crm/tab/Accounts/' + encodeURIComponent(r.matched_account_id);
+                            return '<tr class="border-t border-gray-200">'
+                                + '<td class="py-1 pe-2"><a href="' + leadLink + '" target="_blank" class="text-sky-700 hover:underline">' + escapeHtml(r.lead_name || '—') + '</a>'
+                                + (r.email ? '' : ' <span class="text-rose-600" title="lead has no email">✉︎✕</span>') + '</td>'
+                                + '<td class="py-1 pe-2">' + escapeHtml(r.company || '—') + '</td>'
+                                + '<td class="py-1 pe-2">→ <a href="' + acctLink + '" target="_blank" class="text-emerald-700 hover:underline">' + escapeHtml(r.matched_account_name || '—') + '</a>'
+                                + (r.name_differs ? ' <span class="text-amber-600" title="account name differs from the lead\'s company">≈</span>' : '')
+                                + (r.ambiguous ? ' <span class="text-rose-600" title="multiple accounts share this name — verify before linking">?</span>' : '') + '</td>'
+                                + '<td class="py-1 pe-2 text-gray-500">' + escapeHtml(r.matched_via === 'exact_name' ? 'exact' : 'fuzzy') + '</td>'
+                                + '</tr>';
+                        }).join('');
+                        box.innerHTML = head
+                            + '<table class="w-full text-[11px]"><thead><tr class="text-gray-500">'
+                            + '<th class="text-start font-medium pe-2">Lead</th><th class="text-start font-medium pe-2">Company (on lead)</th><th class="text-start font-medium pe-2">Matched existing account</th><th class="text-start font-medium pe-2">Match</th>'
+                            + '</tr></thead><tbody>' + trs + '</tbody></table>'
+                            + '<div class="mt-2 text-[11px] text-amber-700">These are existing clients pushed as new Leads. Tell me how to clean them up (link under the account + open a deal, or tag for removal) and I\'ll wire it.</div>';
+                    }
+                }
+                rrToast('Scan done — ' + (resp.matched || 0) + ' mislabeled lead(s) found.', (resp.matched ? 'warn' : 'good'));
+            } catch (e) {
+                if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
+                rrToast('Scan failed: ' + (e && e.message || e), 'warn');
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }

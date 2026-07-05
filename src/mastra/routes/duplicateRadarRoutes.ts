@@ -9272,6 +9272,19 @@ export const duplicateRadarRoutes = [
               };
               if (PREFLIGHT_SALESPERSON_EMAIL) salesPersonId = findUserId(PREFLIGHT_SALESPERSON_EMAIL);
               if (PREFLIGHT_CS_MEMBER_EMAIL) csMemberId = findUserId(PREFLIGHT_CS_MEMBER_EMAIL);
+              // CS_Member is a REQUIRED user-lookup on the Deal layout, and Zoho's
+              // create API accepts ONLY { id } for a user lookup — an unresolved
+              // { email } comes back as MANDATORY_NOT_FOUND(api_name:"id"). The CS
+              // mailbox (client@walaplus.com) is a shared/portal address, NOT a
+              // licensed CRM user, so it never resolves. Fall back to the sales
+              // person, then to any active CRM user, so the mandatory lookup
+              // ALWAYS carries a real user id and the deal can be created. The CS
+              // team can reassign CS_Member afterwards.
+              if (!csMemberId) csMemberId = salesPersonId || (users[0]?.id ? String(users[0].id) : null);
+              if (!salesPersonId) salesPersonId = csMemberId;
+              if (!csMemberId) {
+                logger.warn("[preflight push] Could not resolve ANY CRM user for CS_Member/Sales_Person — deals will reject if these lookups are mandatory.");
+              }
             } catch { salesPersonId = null; csMemberId = null; }
           }
 
@@ -9633,16 +9646,21 @@ export const duplicateRadarRoutes = [
             }
             const leadPayloads = freshLeads.map((r, i) => {
               const web = websiteFromDomain(r.domain);
-              const _nm = splitContactName(r.contact_name || r.company || r.domain);
+              const company = r.company || r.domain || "(unknown)";
+              // Sarah 2026-07-05: the Lead's ENTITY NAME is the COMPANY, not the
+              // contact person. Last_Name (which forms the lead's display name in
+              // Zoho) = company; First_Name is omitted. The contact person is
+              // preserved in Description + their Title/Email/Phone fields, so no
+              // data is lost.
+              const personName = String(r.contact_name || "").trim();
               const maybeClient = possibleClientOf(r);
               const p: Record<string, any> = {
-                Last_Name: _nm.last || r.company || r.domain || "(unknown)",
-                ...(_nm.first ? { First_Name: _nm.first } : {}),
-                Company: r.company || r.domain || "(unknown)",
+                Last_Name: company,
+                Company: company,
                 Lead_Source: PREFLIGHT_LEAD_SOURCE,
                 Layout: { id: LEAD.layoutId },
                 Lead_Status: LEAD.status,
-                Description: `${maybeClient ? POSSIBLE_CLIENT_NOTE(maybeClient.name) : ""}Imported via QMS Preflight Structured Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
+                Description: `${maybeClient ? POSSIBLE_CLIENT_NOTE(maybeClient.name) : ""}${personName ? `Contact person: ${personName}${r.title ? `, ${r.title}` : ""}. ` : ""}Imported via QMS Preflight Structured Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
               };
               if (r.email) p.Email = r.email;
               if (r.phone) p.Phone = r.phone;
@@ -9735,9 +9753,18 @@ export const duplicateRadarRoutes = [
               const acctByName = await findAccountIdsByNames(plan.companies.map(co => co.companyName));
 
               const resolveLive = (co: any): string | null => {
+                // LIVE ids FIRST. The enriched `matched_account_zoho_id` comes
+                // from the synced account directory (getAccountDirectory) — a
+                // SNAPSHOT that goes stale: when an account is merged or renamed
+                // in Zoho its old id is deprecated, and writing { Account_Name:
+                // { id: <deprecated> } } is rejected as INVALID_DATA (the exact
+                // 47-contact failure we hit). A live domain / exact-name lookup
+                // always returns the SURVIVING id. The stale local id is only a
+                // last-resort fallback for an account a live search can't find
+                // (no domain stored + name variance).
                 const matchedAcc =
                   co.contacts.map((c: any) => c.matched_account_zoho_id).find(Boolean) || null;
-                return matchedAcc || acctByDomain.get(domainKey(co)) || acctByName.get(nameKey(co)) || null;
+                return acctByDomain.get(domainKey(co)) || acctByName.get(nameKey(co)) || matchedAcc || null;
               };
 
               if (action === 1) {
@@ -10073,12 +10100,14 @@ export const duplicateRadarRoutes = [
                 if (PRODUCTS_FIELD) p.Products = PRODUCTS_FIELD;
                 p.No_of_Employees = PREFLIGHT_EMPLOYEES;
                 if (salesPersonId) p.Sales_Person = { id: salesPersonId };
-                // CS_Member is a REQUIRED user-lookup on the Deal layout. Prefer
-                // the id we resolved from the email; if the user lookup didn't
-                // find it (fetchZohoUsers can miss some user types), fall back to
-                // sending the EMAIL so Zoho resolves the user itself.
+                // CS_Member is a REQUIRED user-lookup on the Deal layout. Zoho's
+                // create API accepts ONLY { id } for a user lookup — NEVER
+                // { email } (that returns MANDATORY_NOT_FOUND api_name:"id", the
+                // exact failure we hit). csMemberId is resolved above with a
+                // fallback chain (CS email → sales person → any active user), so
+                // it's a real user id here. If it's still null we OMIT the field
+                // rather than send an unresolvable email that guarantees a reject.
                 if (csMemberId) p.CS_Member = { id: csMemberId };
-                else if (PREFLIGHT_CS_MEMBER_EMAIL) p.CS_Member = { email: PREFLIGHT_CS_MEMBER_EMAIL };
                 if (PREFLIGHT_GOV_TYPE) p.Gov_Type = PREFLIGHT_GOV_TYPE;
                 if (firstContactId) {
                   p.Contact_Name = { id: firstContactId };
@@ -10238,7 +10267,7 @@ export const duplicateRadarRoutes = [
 
           // Pass 1 — resolve by email/phone; note which rows still need a name
           // match, split their name ONCE, and carry every fillable field.
-          type BF = { id: string | null; viaPhone: boolean; first: string; last: string; email: string; phone: string; title: string; company: string };
+          type BF = { id: string | null; viaPhone: boolean; first: string; last: string; email: string; phone: string; title: string; company: string; contactName: string };
           const bf: BF[] = sliced.map(r => {
             let id: string | null = r.email ? (idByEmail.get(r.email.toLowerCase()) || null) : null;
             let viaPhone = false;
@@ -10248,7 +10277,7 @@ export const duplicateRadarRoutes = [
               if (id) viaPhone = true;
             }
             const nm = (!id && r.contact_name) ? splitContactName(r.contact_name) : { first: "", last: "" };
-            return { id, viaPhone, first: nm.first, last: nm.last, email: r.email, phone: r.phone, title: r.title, company: r.company };
+            return { id, viaPhone, first: nm.first, last: nm.last, email: r.email, phone: r.phone, title: r.title, company: r.company, contactName: r.contact_name };
           });
           // Pass 2 — ONE batched name lookup for everything email/phone missed.
           const idByName = await findRecordIdsByFullNames(
@@ -10278,7 +10307,18 @@ export const duplicateRadarRoutes = [
             if (x.title) p.Title = x.title;
             if (x.email) p.Email = x.email;
             if (x.phone) { p.Phone = x.phone; p.Mobile = x.phone; }
-            if (module === "Leads" && x.company) p.Company = x.company;
+            if (module === "Leads" && x.company) {
+              p.Company = x.company;
+              // Sarah 2026-07-05: the Lead's ENTITY NAME must be the COMPANY,
+              // not the contact person. Last_Name drives the lead's display
+              // name in Zoho → set it to the company and CLEAR First_Name. The
+              // contact person is NOT lost — their name goes into Description,
+              // and their Title/Email/Phone stay on the record.
+              p.Last_Name = x.company;
+              p.First_Name = null;
+              const person = String(x.contactName || "").trim();
+              if (person) p.Description = `Contact person: ${person}${x.title ? `, ${x.title}` : ""}. (Mawsool import — lead named by company.)`;
+            }
             if (Object.keys(p).length > 1) updates.push(p);
           }
 
@@ -10308,6 +10348,99 @@ export const duplicateRadarRoutes = [
         } catch (error: any) {
           logger.error("Error in backfill-titles:", error);
           return c.json({ error: "Title backfill failed — " + (error?.message || "unknown") }, 500);
+        }
+      };
+    },
+  },
+  {
+    // READ-ONLY diagnostic — "Find leads that are actually existing clients."
+    // The structured push files a contact under Leads (batch ④) only when it
+    // can't match an existing Account by email-domain, row-domain, or EXACT
+    // company name. A THIN row (no email / no domain) whose company is stored in
+    // Zoho under any name variance — Arabic, a suffix, different punctuation, or
+    // simply not yet in the synced account directory — slips through as a NEW
+    // Lead, i.e. a duplicate of a client we already have (the "Bader Bahati →
+    // Riyadh First Health Cluster" case). This scan re-checks every Lead of a
+    // given Lead_Source against the account directory with FUZZY core-name
+    // matching (what the push's exact match missed) and lists the ones that hit
+    // an existing Account, so the operator can decide to link them. NO writes.
+    path: "/api/duplicates/preflight/mislabeled-leads-scan",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const body = await c.req.json().catch(() => ({}));
+          // Lead_Source to scan (single word so the Zoho criteria stays valid —
+          // criteria search breaks on spaces/parens). Defaults to the Mawsool
+          // import this whole tool exists for.
+          const source = String(body?.source || "Mawsool").trim() || "Mawsool";
+
+          const { fetchAllZohoRecords } = await import("../../utils/zohoCRM");
+          const { getAccountDirectory } = await import("../../utils/duplicateRadarDatabase");
+          const { normalizeCoreName } = await import("../../utils/preflightStructuredPush");
+
+          // 1) LIVE-fetch every Lead of this source in one paginated call.
+          const leads = await fetchAllZohoRecords("Leads", {
+            criteria: `(Lead_Source:equals:${source})`,
+            fields: ["Company", "Last_Name", "First_Name", "Full_Name", "Email", "Phone", "Mobile", "Lead_Status", "Created_Time"],
+          });
+
+          // 2) Load the account directory and build the FUZZY core-name index
+          //    the push never uses for auto-linking (it links on EXACT only).
+          const dir = await getAccountDirectory();
+          const byCore = new Map<string, { zohoId: string; name: string }>();
+          const coreCount = new Map<string, number>();
+          for (const ref of dir.byId.values()) {
+            const core = normalizeCoreName(ref.name);
+            if (core.length < 6) continue; // skip generic / too-short cores
+            coreCount.set(core, (coreCount.get(core) || 0) + 1);
+            if (!byCore.has(core)) byCore.set(core, ref);
+          }
+
+          // 3) For each lead, try EXACT name (what the push tried) then FUZZY
+          //    core name. A hit means this "new" lead is an existing client.
+          const rows: any[] = [];
+          for (const l of leads) {
+            const d = l.data || {};
+            const company = String(d.Company || "").trim();
+            if (!company) continue;
+            const exact = dir.byName.get(company.toLowerCase());
+            const core = normalizeCoreName(company);
+            const fuzzy = core.length >= 6 ? byCore.get(core) : undefined;
+            const match = exact || fuzzy;
+            if (!match) continue;
+            const name =
+              String(d.Full_Name || `${d.First_Name || ""} ${d.Last_Name || ""}`).trim() || "(no name)";
+            rows.push({
+              lead_id: l.id,
+              lead_name: name,
+              company,
+              email: String(d.Email || "").trim() || null,
+              phone: String(d.Phone || d.Mobile || "").trim() || null,
+              lead_status: String(d.Lead_Status || "").trim() || null,
+              matched_account_id: match.zohoId,
+              matched_account_name: match.name,
+              matched_via: exact ? "exact_name" : "fuzzy_core_name",
+              name_differs: match.name.trim().toLowerCase() !== company.toLowerCase(),
+              ambiguous: !exact && !!fuzzy ? (coreCount.get(core) || 1) > 1 : false,
+            });
+          }
+          rows.sort((a, b) => String(a.company).localeCompare(String(b.company)));
+
+          return c.json({
+            success: true,
+            source,
+            total_leads: leads.length,
+            matched: rows.length,
+            rows,
+          });
+        } catch (error: any) {
+          logger.error("Error in mislabeled-leads-scan:", error);
+          return c.json({ error: "Mislabeled-leads scan failed — " + (error?.message || "unknown") }, 500);
         }
       };
     },
