@@ -10063,6 +10063,21 @@ export const duplicateRadarRoutes = [
               const dealPayloads: Record<string, any>[] = [];
               const dealCompanyKeys: string[] = [];
 
+              // Deal_Name = the ACTUAL account name (Sarah 2026-07-05: "add the
+              // account name in the deal name"). For a reused account the real
+              // Zoho name (e.g. "Ctelecoms (Consolidated Telecoms)") often
+              // differs from the Excel company label ("Ctelecoms") — the deal
+              // must be named after the account it sits under. Look the name up
+              // by the resolved account id from the account directory; fall back
+              // to the row's company label when the id isn't in the snapshot.
+              const { getAccountDirectory } = await import("../../utils/duplicateRadarDatabase");
+              const acctDir = await getAccountDirectory();
+              const dealNameFor = (co: any): string => {
+                const accId = accountIdMap.get(co.companyKey) || "";
+                const acctName = accId ? acctDir.byId.get(accId)?.name : "";
+                return String(acctName || co.companyName || co.domain || "(unknown)").trim();
+              };
+
               // Idempotent guard: skip a company whose account already has an
               // OPEN deal of the same name (a retry) so we don't stack dupes.
               // (An old CLOSED/lost deal of the same name does NOT block a new one.)
@@ -10071,7 +10086,7 @@ export const duplicateRadarRoutes = [
                 companiesWithAccount
                   .map(co => ({
                     accountId: accountIdMap.get(co.companyKey) || "",
-                    name: co.companyName || co.domain || "(unknown)",
+                    name: dealNameFor(co),
                   }))
                   .filter(p => p.accountId),
               );
@@ -10083,7 +10098,7 @@ export const duplicateRadarRoutes = [
                 // (Live clients — existing account with a signed/paid deal — were
                 // already rejected in Step 1b, so every A1 company here gets a deal.)
                 if (!accountId) continue;
-                const dealName = co.companyName || co.domain || "(unknown)";
+                const dealName = dealNameFor(co);
                 // Already an OPEN deal of this name under this account → skip (retry).
                 if (existingDealKeys.has(`${accountId}::${dealName.trim().toLowerCase()}`)) {
                   existingDealsSkipped++;
