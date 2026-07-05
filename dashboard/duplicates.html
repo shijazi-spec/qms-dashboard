@@ -1811,14 +1811,21 @@
                     <button data-on-click="runRecordHintsScan" data-args="[&quot;contact_account&quot;]" id="recordHintsContactAccountScanBtn" data-testid="button-record-hints-contact-account-scan" class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
                 </div>
 
+                <div id="rhBulkBar-contact_account" class="hidden items-center flex-wrap gap-2 mb-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100">
+                    <span class="text-xs text-indigo-900"><strong id="rhBulkCount-contact_account">0</strong> selected</span>
+                    <button data-on-click="rhBulkApply" data-args="[&quot;contact_account&quot;]" class="rr-btn rr-btn-ai">🤖 Apply selected with AI</button>
+                    <button data-on-click="rhBulkDismiss" data-args="[&quot;contact_account&quot;]" class="rr-btn rr-btn-danger">Dismiss selected</button>
+                    <span id="rhBulkStatus-contact_account" class="text-[11px] text-gray-500"></span>
+                </div>
+
                 <div class="bg-white rounded-lg shadow overflow-x-auto">
                     <table class="rr-table min-w-full">
                         <thead>
                             <tr>
+                                <th scope="col" class="rr-num" style="width:34px"><input type="checkbox" id="rhAll-contact_account" onchange="rhSelectAll('contact_account')" title="Select all"></th>
                                 <th scope="col">Source record</th>
                                 <th scope="col">Current account</th>
                                 <th scope="col">Suggested account</th>
-                                <th scope="col">Domain</th>
                                 <th scope="col">Evidence</th>
                                 <th scope="col" class="rr-num">Confidence</th>
                                 <th scope="col" class="rr-num">Actions</th>
@@ -1841,14 +1848,21 @@
                     <button data-on-click="runRecordHintsScan" data-args="[&quot;deal_contact&quot;]" id="recordHintsDealContactScanBtn" data-testid="button-record-hints-deal-contact-scan" class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
                 </div>
 
+                <div id="rhBulkBar-deal_contact" class="hidden items-center flex-wrap gap-2 mb-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100">
+                    <span class="text-xs text-indigo-900"><strong id="rhBulkCount-deal_contact">0</strong> selected</span>
+                    <button data-on-click="rhBulkApply" data-args="[&quot;deal_contact&quot;]" class="rr-btn rr-btn-ai">🤖 Apply selected with AI</button>
+                    <button data-on-click="rhBulkDismiss" data-args="[&quot;deal_contact&quot;]" class="rr-btn rr-btn-danger">Dismiss selected</button>
+                    <span id="rhBulkStatus-deal_contact" class="text-[11px] text-gray-500"></span>
+                </div>
+
                 <div class="bg-white rounded-lg shadow overflow-x-auto">
                     <table class="rr-table min-w-full">
                         <thead>
                             <tr>
+                                <th scope="col" class="rr-num" style="width:34px"><input type="checkbox" id="rhAll-deal_contact" onchange="rhSelectAll('deal_contact')" title="Select all"></th>
                                 <th scope="col">Source record</th>
                                 <th scope="col">Current contact</th>
                                 <th scope="col">Suggested contact</th>
-                                <th scope="col">Domain</th>
                                 <th scope="col">Evidence</th>
                                 <th scope="col" class="rr-num">Confidence</th>
                                 <th scope="col" class="rr-num">Actions</th>
@@ -2440,7 +2454,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=89"></script>
+    <script src="/js/duplicates-app.js?v=90"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

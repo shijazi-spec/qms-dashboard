@@ -8763,23 +8763,37 @@
                     const confBarColor = conf >= 80 ? '#15803D' : conf >= 60 ? '#B45309' : '#9CA3AF';
                     const confCell = '<span class="rr-conf"><span class="rr-bar"><i style="width:' + Math.max(0, Math.min(100, conf)) + '%;background:' + confBarColor + '"></i></span><span class="rr-val">' + conf + '%</span></span>';
                     const aiEligible = h.status === 'pending' && conf >= 70;
+                    // Compact ICON actions so the table fits without horizontal
+                    // scroll (Sarah). Bulk apply/dismiss lives in the bar above.
                     const actions = h.status === 'pending'
                         ? (aiEligible
-                            ? '<button data-on-click="resolveRecordHintWithAi" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-primary" title="Write the suggested value on the Zoho record automatically — confidence ≥70%, attributed to GRQ Assistant.">🤖 Resolve with AI</button>'
+                            ? '<button data-on-click="resolveRecordHintWithAi" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ai rr-btn-icon" title="Resolve with AI — write the suggested value on the Zoho record (confidence ≥70%, as GRQ Assistant).">🤖</button>'
                             : '')
-                        + '<button data-on-click="markRecordHintApplied" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost" title="I fixed the Zoho record — mark applied">Applied</button>'
-                        + '<button data-on-click="dismissRecordHint" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost" title="This suggestion is wrong">Dismiss</button>'
+                        + '<button data-on-click="markRecordHintApplied" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost rr-btn-icon" title="I fixed the Zoho record — mark applied">✓</button>'
+                        + '<button data-on-click="dismissRecordHint" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost rr-btn-icon" title="This suggestion is wrong — dismiss">✕</button>'
                         : '<span class="rr-badge rr-neutral" style="text-transform:capitalize">' + escapeHtml(h.status) + '</span>';
+                    // Bulk-select checkbox (pending rows only). data-ai marks the
+                    // ≥70% rows so Apply-with-AI can skip the rest.
+                    const chkCell = h.status === 'pending'
+                        ? '<td class="rr-num"><input type="checkbox" class="rhChk rhChk-' + type + '" data-id="' + h.id + '" data-ai="' + (aiEligible ? '1' : '0') + '" onchange="rhRowSelect(\'' + type + '\')"></td>'
+                        : '<td></td>';
+                    // Domain folded UNDER the suggested account (removes the wide
+                    // standalone Domain column) — evidence still shows the match.
+                    const domainSub = h.suggested_domain ? '<div class="rr-sub rr-mono">' + escapeHtml(h.suggested_domain) + '</div>' : '';
                     return '<tr>'
+                        + chkCell
                         + '<td class="rr-primary">' + sourceCell + '</td>'
                         + '<td><span class="rr-badge rr-amber">' + escapeHtml(h.current_value || '— missing —') + '</span></td>'
-                        + '<td class="rr-primary">' + suggestedCell + '</td>'
-                        + '<td class="rr-mono">' + escapeHtml(h.suggested_domain || '—') + '</td>'
+                        + '<td class="rr-primary">' + suggestedCell + domainSub + '</td>'
                         + '<td class="rr-muted">' + evidenceCell + '</td>'
                         + '<td class="rr-num">' + confCell + '</td>'
                         + '<td class="rr-num"><div class="rr-actions">' + actions + '</div></td>'
                         + '</tr>';
                 }).join('');
+                // Reset selection state after a re-render.
+                const _allChk = document.getElementById('rhAll-' + type);
+                if (_allChk) _allChk.checked = false;
+                if (typeof rhRowSelect === 'function') rhRowSelect(type);
             } catch (e) {
                 body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-red-600">Failed to load: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
             }
@@ -8847,6 +8861,72 @@
             } catch (e) {
                 rrToast('AI resolve failed: ' + (e && e.message ? e.message : e));
             }
+        }
+
+        // ─── Record Hint BULK select + apply/dismiss (Sarah 2026-07-06) ──────
+        function _rhChecked(type) {
+            return Array.prototype.slice.call(document.querySelectorAll('.rhChk-' + type + ':checked'));
+        }
+        // Recompute the selection count and show/hide the bulk bar for a type.
+        function rhRowSelect(type) {
+            const n = _rhChecked(type).length;
+            const bar = document.getElementById('rhBulkBar-' + type);
+            const cnt = document.getElementById('rhBulkCount-' + type);
+            if (cnt) cnt.textContent = n;
+            if (bar) { if (n > 0) { bar.classList.remove('hidden'); bar.classList.add('flex'); } else { bar.classList.add('hidden'); bar.classList.remove('flex'); } }
+        }
+        // Header "select all" checkbox → toggle every row checkbox for the type.
+        function rhSelectAll(type) {
+            const all = document.getElementById('rhAll-' + type);
+            const on = all ? all.checked : false;
+            Array.prototype.slice.call(document.querySelectorAll('.rhChk-' + type)).forEach(function (c) { c.checked = on; });
+            rhRowSelect(type);
+        }
+        // Bulk DISMISS every selected suggestion (marks status=dismissed).
+        async function rhBulkDismiss(type) {
+            const ids = _rhChecked(type).map(function (c) { return c.getAttribute('data-id'); });
+            if (!ids.length) { rrToast('Select some rows first.', 'warn'); return; }
+            if (!confirm('Dismiss ' + ids.length + ' suggestion(s)? They will be marked wrong and removed from the list.')) return;
+            const st = document.getElementById('rhBulkStatus-' + type);
+            let done = 0, fail = 0;
+            for (let i = 0; i < ids.length; i++) {
+                if (st) st.textContent = 'Dismissing ' + (i + 1) + '/' + ids.length + '…';
+                try {
+                    const res = await fetch('/api/duplicates/record-hints/' + ids[i] + '/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'dismissed' }) });
+                    if (res.ok) done++; else fail++;
+                } catch (e) { fail++; }
+            }
+            if (st) st.textContent = '';
+            rrToast('Dismissed ' + done + (fail ? ' · ' + fail + ' failed' : '') + '.', 'good');
+            await renderRecordHintsSection(type, RECORD_HINT_TBODY_BY_TYPE[type]);
+        }
+        // Bulk APPLY WITH AI — only the ≥70% (data-ai=1) rows; skips the rest.
+        // Each write survives a concurrent-sync rate-limit via _pfWithRateRetry.
+        async function rhBulkApply(type) {
+            const checked = _rhChecked(type);
+            const eligible = checked.filter(function (c) { return c.getAttribute('data-ai') === '1'; });
+            const skipped = checked.length - eligible.length;
+            const ids = eligible.map(function (c) { return c.getAttribute('data-id'); });
+            if (!ids.length) { rrToast('None of the selected rows are AI-eligible (need ≥70% confidence).', 'warn'); return; }
+            if (!confirm('Apply ' + ids.length + ' suggestion(s) with AI? This writes the suggested value on each Zoho record.' + (skipped ? '\n(' + skipped + ' below 70% confidence will be skipped.)' : ''))) return;
+            const st = document.getElementById('rhBulkStatus-' + type);
+            let done = 0, fail = 0;
+            for (let i = 0; i < ids.length; i++) {
+                const _id = ids[i];
+                if (st) st.textContent = 'Applying ' + (i + 1) + '/' + ids.length + '…';
+                try {
+                    const d = await _pfWithRateRetry(async function () {
+                        const r = await fetch('/api/duplicates/record-hints/' + _id + '/resolve-with-ai', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                        const jj = await r.json().catch(function () { return null; });
+                        if (!r.ok) throw new Error((jj && (jj.error || jj.reason)) || ('HTTP ' + r.status));
+                        return jj;
+                    }, 5, 30000, function (secs, att) { if (st) st.textContent = 'Rate-limited by sync — waiting ' + secs + 's (retry ' + att + ')…'; });
+                    if (d && d.success === false) fail++; else done++;
+                } catch (e) { fail++; }
+            }
+            if (st) st.textContent = '';
+            rrToast('Applied ' + done + (fail ? ' · ' + fail + ' failed/refused' : '') + ' with AI.', 'good');
+            await renderRecordHintsSection(type, RECORD_HINT_TBODY_BY_TYPE[type]);
         }
 
         // ─── CS-pipeline overlap loaders ─────────────────────────────────────
