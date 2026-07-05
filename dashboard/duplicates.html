@@ -1600,6 +1600,18 @@
                 </div>
                 <div id="spScanResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-96 overflow-y-auto"></div>
 
+                <!-- Dedup Mawsool leads: retried pushes created duplicate leads
+                     for the same company (no email/phone to dedup on). Keeps the
+                     most-complete lead per company, tags the rest Duplicate-Delete
+                     (HITL — admin deletes in Zoho). Dry-run reports the scale. -->
+                <div class="flex items-center flex-wrap gap-2 mt-1 px-2 py-2 rounded-lg bg-rose-50 border border-rose-100">
+                    <span class="text-[11px] text-rose-900"><strong>Dedup leads</strong> — groups every Lead of a source by company, keeps the most-complete one, and tags the rest <strong>Duplicate-Delete</strong> for your admin to remove in Zoho. Dry-run first to see the scale.</span>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Lead_Source to dedup (single word)."><span>source</span><input type="text" id="spDedupSource" value="Mawsool" class="w-28 text-xs border rounded-lg px-2 py-1.5" data-testid="input-sp-dedup-source" aria-label="Dedup lead source" /></label>
+                    <label class="flex items-center gap-1 text-xs text-gray-700"><input type="checkbox" id="spDedupDry" checked data-testid="checkbox-sp-dedup-dry" /><span>Dry-run</span></label>
+                    <button data-on-click="erDedupLeads" id="spDedupBtn" data-testid="button-sp-dedup" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50">🧹 Dedup leads</button>
+                </div>
+                <div id="spDedupResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-96 overflow-y-auto"></div>
+
                 <p class="text-[11px] text-gray-500 mt-1">Contacts are verified by email domain before filing under an Account: a corporate email at a different company than its label is <strong>rejected</strong>; free-mail / unverifiable contacts go to <strong>Leads</strong> (action 4). Each action pushes in slices — set <em>size</em> per click; <em>from</em> auto-advances after a real push. 0 = all. <strong>Finish an action's slices before re-running Resolve</strong> — re-resolving mid-way can shift the slice window.</p>
             </div>
 
@@ -2416,7 +2428,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=87"></script>
+    <script src="/js/duplicates-app.js?v=88"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

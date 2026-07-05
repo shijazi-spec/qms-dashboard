@@ -9608,27 +9608,59 @@ export const duplicateRadarRoutes = [
             // email-dup check can't catch). Runs BEFORE any create — email/phone
             // lookups THROW on a Zoho error, so a failure aborts with zero
             // written rather than duplicating. Intra-batch dedup too.
-            const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey } =
+            const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey, searchZohoRecords } =
               await import("../../utils/zohoCRM");
             const leadEmails = plan.leads.map(r => String(r.email || "").trim()).filter(Boolean);
             const leadPhones = plan.leads.map(r => String(r.phone || "").trim()).filter(Boolean);
             const leadFoundEmail = await findRecordIdsByEmails("Leads", leadEmails);
             const leadFoundPhone = await findRecordIdsByPhones("Leads", leadPhones);
+
+            // ONE LEAD PER COMPANY (Sarah 2026-07-05). Retried pushes duplicated
+            // leads that have NO email AND NO phone (e.g. 7× "Ajialuna") because
+            // email/phone were the ONLY dedup keys and those leads carry neither.
+            // Collapse to a single lead per company: skip a company that already
+            // has a Mawsool lead in Zoho, or that we already created earlier in
+            // THIS batch. The existing-company check is best-effort (company
+            // names with ( ) , can't go in a Zoho criteria, so they fall back to
+            // the email/phone + in-batch checks).
+            const existingLeadCompanies = new Set<string>();
+            {
+              const uniq = Array.from(new Set(plan.leads.map(r => String(r.company || "").trim()).filter(Boolean)));
+              const safe = uniq.filter(nm => !/[(),]/.test(nm));
+              const CHUNK = 8;
+              for (let s = 0; s < safe.length; s += CHUNK) {
+                const chunk = safe.slice(s, s + CHUNK);
+                const criteria = "(" + chunk.map(nm => `(Company:equals:${nm})`).join("or") + `)and(Lead_Source:equals:${PREFLIGHT_LEAD_SOURCE})`;
+                try {
+                  const rows = await searchZohoRecords("Leads", criteria);
+                  for (const row of rows) {
+                    const k = normalizeCompanyName(String(row.data?.Company || ""));
+                    if (k) existingLeadCompanies.add(k);
+                  }
+                } catch { /* best-effort — company dedup is a safety net over email/phone */ }
+              }
+            }
+
             const seenLeadEmail = new Set<string>();
             const seenLeadPhone = new Set<string>();
+            const seenLeadCompany = new Set<string>();
             const freshLeads = plan.leads.filter((r) => {
               const em = String(r.email || "").trim().toLowerCase();
               const pk = normalizePhoneKey(r.phone);
-              // Already in Zoho as a Lead → skip (idempotent retry).
-              if ((em && leadFoundEmail.has(em)) || (pk && leadFoundPhone.has(pk))) {
+              const ck = normalizeCompanyName(String(r.company || r.domain || ""));
+              // Already in Zoho as a Lead → skip (idempotent retry). Match on
+              // email, phone, OR company (one-lead-per-company).
+              if ((em && leadFoundEmail.has(em)) || (pk && leadFoundPhone.has(pk)) || (ck && existingLeadCompanies.has(ck))) {
                 leadsSkippedExisting++;
                 return false;
               }
               // Duplicate within THIS batch → skip the second copy.
               if (em && seenLeadEmail.has(em)) { leadsSkippedExisting++; return false; }
               if (!em && pk && seenLeadPhone.has(pk)) { leadsSkippedExisting++; return false; }
+              if (ck && seenLeadCompany.has(ck)) { leadsSkippedExisting++; return false; }
               if (em) seenLeadEmail.add(em);
               if (pk) seenLeadPhone.add(pk);
+              if (ck) seenLeadCompany.add(ck);
               return true;
             });
 
@@ -10470,6 +10502,110 @@ export const duplicateRadarRoutes = [
         } catch (error: any) {
           logger.error("Error in mislabeled-leads-scan:", error);
           return c.json({ error: "Mislabeled-leads scan failed — " + (error?.message || "unknown") }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Dedup Mawsool LEADS created by repeated pushes. Retried pushes duplicated
+    // leads with NO email/phone (nothing to dedup on) — e.g. 7 copies of
+    // "Ajialuna Educational Company". Groups every Lead of a source by
+    // normalized company, KEEPS the most-complete lead per company, and lists /
+    // tags the rest Duplicate-Delete for the admin to remove in Zoho (HITL —
+    // never hard-deleted).
+    //   Report mode (default): fetch + group, return the duplicate ids + counts.
+    //     No writes.
+    //   Apply mode ({ apply:true, ids:[...] }): tag those ids Duplicate-Delete
+    //     (chunked by 100). The UI sends the report's dup ids back in slices, so
+    //     the heavy fetch happens once and each apply call is fast.
+    path: "/api/duplicates/preflight/dedup-mawsool-leads",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+
+          // ── APPLY MODE — tag the provided duplicate ids (no fetch). ──
+          if (body?.apply === true && Array.isArray(body?.ids) && body.ids.length) {
+            const { addZohoTags } = await import("../../utils/zohoCRM");
+            const ids: string[] = body.ids.map((x: any) => String(x)).filter(Boolean);
+            const TAG = String(body?.tag || "Duplicate-Delete");
+            let tagged = 0;
+            const errs: string[] = [];
+            for (let i = 0; i < ids.length; i += 100) {
+              const chunk = ids.slice(i, i + 100);
+              try { await addZohoTags("Leads", chunk, [TAG]); tagged += chunk.length; }
+              catch (e: any) { errs.push(e?.message || String(e)); }
+            }
+            return c.json({ success: true, apply: true, tagged, failed: ids.length - tagged, errors: errs.slice(0, 3) });
+          }
+
+          // ── REPORT MODE — fetch all source leads and group by company. ──
+          const source = String(body?.source || "Mawsool").trim() || "Mawsool";
+          const { fetchAllZohoRecords } = await import("../../utils/zohoCRM");
+          const { normalizeCompanyName } = await import("../../utils/duplicateRadarDatabase");
+          const leads = await fetchAllZohoRecords("Leads", {
+            criteria: `(Lead_Source:equals:${source})`,
+            fields: ["Company", "Last_Name", "First_Name", "Email", "Phone", "Mobile", "Title", "Lead_Status", "Created_Time"],
+          });
+
+          const groups = new Map<string, any[]>();
+          for (const l of leads) {
+            const key = normalizeCompanyName(String(l.data?.Company || "")) || "";
+            if (!key) continue; // no company name → can't group safely; leave it alone
+            const arr = groups.get(key) || [];
+            arr.push(l);
+            groups.set(key, arr);
+          }
+          // Completeness score — a lead with email/phone/title is richer and is
+          // the one worth keeping; tie broken by OLDEST Created_Time so we keep
+          // the original (and any status history) and tag the later copies.
+          const score = (l: any): number => {
+            const d = l.data || {};
+            return (String(d.Email || "").trim() ? 8 : 0)
+              + (String(d.Phone || d.Mobile || "").trim() ? 4 : 0)
+              + (String(d.Title || "").trim() ? 2 : 0);
+          };
+          const dupIds: string[] = [];
+          const sample: any[] = [];
+          let dupGroups = 0;
+          for (const [, arr] of groups) {
+            if (arr.length < 2) continue;
+            dupGroups++;
+            const sorted = arr.slice().sort((a, b) => {
+              const sc = score(b) - score(a);
+              if (sc !== 0) return sc;
+              return String(a.data?.Created_Time || "").localeCompare(String(b.data?.Created_Time || ""));
+            });
+            const dups = sorted.slice(1);
+            for (const d of dups) if (d.id) dupIds.push(String(d.id));
+            if (sample.length < 50) {
+              sample.push({
+                company: String(sorted[0].data?.Company || ""),
+                copies: arr.length,
+                keep_id: sorted[0].id,
+                dup_count: dups.length,
+              });
+            }
+          }
+          sample.sort((a, b) => b.copies - a.copies);
+
+          return c.json({
+            success: true,
+            source,
+            total_leads: leads.length,
+            companies: groups.size,
+            duplicate_groups: dupGroups,
+            duplicates: dupIds.length,
+            dup_ids: dupIds,
+            sample: sample.slice(0, 50),
+          });
+        } catch (error: any) {
+          logger.error("Error in dedup-mawsool-leads:", error);
+          return c.json({ error: "Dedup failed — " + (error?.message || "unknown") }, 500);
         }
       };
     },

@@ -12261,6 +12261,68 @@
             }
         }
 
+        // Dedup Mawsool leads: retried pushes created duplicate leads per company
+        // (no email/phone to dedup on). Dry-run reports the scale; a real run tags
+        // every duplicate Duplicate-Delete in slices (the heavy fetch runs once in
+        // the report, then ids are tagged 500 at a time). HITL — admin deletes in
+        // Zoho; nothing is auto-deleted.
+        async function erDedupLeads() {
+            var src = String((document.getElementById('spDedupSource') || {}).value || 'Mawsool').trim() || 'Mawsool';
+            var dry = !!(document.getElementById('spDedupDry') || {}).checked;
+            var btn = document.getElementById('spDedupBtn');
+            var orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Scanning…'; }
+            var box = document.getElementById('spDedupResult');
+            try {
+                var res = await fetch('/api/duplicates/preflight/dedup-mawsool-leads', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: src }),
+                });
+                var resp = await _pfReadJson(res);
+                if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
+                var dupIds = Array.isArray(resp.dup_ids) ? resp.dup_ids : [];
+                var head = '<div class="font-semibold text-rose-900">Scanned ' + (resp.total_leads || 0) + ' "' + escapeHtml(src) + '" lead(s) · ' + (resp.companies || 0) + ' companies · '
+                    + '<span class="text-rose-700">' + (resp.duplicate_groups || 0) + '</span> companies have duplicates · <strong>' + dupIds.length + '</strong> duplicate lead(s) to remove.</div>';
+                var samp = Array.isArray(resp.sample) ? resp.sample : [];
+                var rows = samp.slice(0, 25).map(function (g) {
+                    return '<tr class="border-t border-gray-200"><td class="py-1 pe-2">' + escapeHtml(g.company || '—') + '</td>'
+                        + '<td class="py-1 pe-2 text-center">' + (g.copies || 0) + '</td>'
+                        + '<td class="py-1 pe-2 text-center text-rose-700">' + (g.dup_count || 0) + '</td></tr>';
+                }).join('');
+                var table = samp.length ? ('<table class="w-full text-[11px] mt-1"><thead><tr class="text-gray-500"><th class="text-start font-medium pe-2">Company</th><th class="font-medium pe-2">Copies</th><th class="font-medium pe-2">To remove</th></tr></thead><tbody>' + rows + '</tbody></table>') : '';
+                if (box) { box.classList.remove('hidden'); box.innerHTML = head + table; }
+
+                if (dry) {
+                    if (box) box.innerHTML = head + table + '<div class="mt-2 text-amber-700">Uncheck Dry-run and click again to TAG these ' + dupIds.length + ' duplicate(s) Duplicate-Delete for your admin to delete in Zoho.</div>';
+                    rrToast('Dedup dry-run — ' + dupIds.length + ' duplicate(s) found.', dupIds.length ? 'warn' : 'good');
+                } else if (dupIds.length) {
+                    // Tag in slices of 500 (the endpoint chunks by 100 internally).
+                    var tagged = 0, failed = 0;
+                    for (var i = 0; i < dupIds.length; i += 500) {
+                        var slice = dupIds.slice(i, i + 500);
+                        if (btn) btn.innerHTML = 'Tagging ' + Math.min(i + slice.length, dupIds.length) + '/' + dupIds.length + '…';
+                        var ar = await fetch('/api/duplicates/preflight/dedup-mawsool-leads', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ apply: true, ids: slice }),
+                        });
+                        var aresp = await _pfReadJson(ar);
+                        if (!ar.ok) throw new Error(aresp.error || ('HTTP ' + ar.status));
+                        tagged += (aresp.tagged || 0); failed += (aresp.failed || 0);
+                        if (box) box.innerHTML = head + table + '<div class="mt-2 text-emerald-700">Tagged ' + tagged + '/' + dupIds.length + ' Duplicate-Delete…</div>';
+                    }
+                    if (box) box.innerHTML = head + table + '<div class="mt-2 font-semibold text-emerald-800">✓ Tagged ' + tagged + ' duplicate(s) Duplicate-Delete' + (failed ? ' · ' + failed + ' failed' : '') + '.</div><div class="text-gray-600">Your admin can now filter Leads by the Duplicate-Delete tag and delete them in Zoho.</div>';
+                    rrToast('Tagged ' + tagged + ' duplicate lead(s) for removal.', 'good');
+                } else {
+                    rrToast('No duplicate leads found.', 'good');
+                }
+            } catch (e) {
+                if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Dedup failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
+                rrToast('Dedup failed: ' + (e && e.message || e), 'warn');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
         // Action handler — wired via data-on-click="erStructuredPush" data-args="[N]".
         // Parse a fetch Response that SHOULD be JSON but might be a plain-text
         // gateway error ("Internal Server Error" on a timeout). Returns the
