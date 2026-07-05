@@ -7968,14 +7968,19 @@ export async function getDuplicateRecordsByType(
   let statusFilter = "AND dc.status = 'active'";
   let mergeActionFilter = "";
   if (aiStatus === "tagged_pending") {
-    // AI-APPLIED · pending Zoho admin delete — ONLY a genuinely-pending tag, not
-    // yet resolved. Excludes anything already resolved (status or resolve action).
-    statusFilter = "AND dc.status <> 'resolved'";
-    mergeActionFilter = ` AND NOT ${HAS_RESOLVED_ACTION} AND ${HAS_PENDING}`;
+    // AI-APPLIED · pending Zoho admin delete (Sarah 2026-07-06): an apply ran —
+    // records were TAGGED Duplicate-Delete — but the cluster is NOT yet Resolved
+    // (the admin hasn't deleted the tagged records AND Verify-in-CRM / a sync
+    // hasn't confirmed they're gone). This is the "waiting for deletion" queue.
+    // Includes cross-module PARTIAL applies (module_resolved) and auto-merge
+    // pends. "Applied" ≠ "Resolved" until verified.
+    statusFilter = "AND dc.status NOT IN ('resolved','ignored')";
+    mergeActionFilter = ` AND (${HAS_PENDING} OR ${HAS_RESOLVED_ACTION})`;
   } else if (aiStatus === "resolved") {
-    // Resolved = status flipped to 'resolved' OR a ledger resolve/module_resolved
-    // action exists (it was applied/merged — it belongs here, not in AI-Applied).
-    statusFilter = `AND (dc.status = 'resolved' OR ${HAS_RESOLVED_ACTION})`;
+    // Resolved = the cluster STATUS is actually flipped to 'resolved' — Verify-in-
+    // CRM confirmed the Duplicate-Delete records are gone, or the sync reconciled
+    // every module. NOT merely "Apply was clicked" (that stays AI-Applied above).
+    statusFilter = "AND dc.status = 'resolved'";
   } else if (aiStatus === "dismissed") {
     // Dismissed = operator false-positive (status 'ignored') with NO AI action.
     statusFilter = "AND dc.status = 'ignored'";
@@ -8260,14 +8265,16 @@ export async function getDuplicateRecordsByType(
       if (!meta || !grouped[cid]) continue;
       const taggedCount = Number(meta.tagged_records || 0);
       const actionCount = Number(meta.merge_action_count || 0);
-      // SAME lifecycle as the tab filter (getDuplicateRecordsByType): an
-      // auto_merge_pending action = genuinely pending Zoho delete; a resolve /
-      // module_resolved action (or status 'resolved') = already resolved. Keep
-      // these in sync so the per-row badge never disagrees with its tab.
+      // SAME lifecycle as the tab filter (getDuplicateRecordsByType), Sarah
+      // 2026-07-06: RESOLVED only when the cluster STATUS is actually flipped to
+      // 'resolved' (Verify-in-CRM / sync-reconciled). Any apply action
+      // (auto_merge_pending OR resolve/module_resolved) with the status not yet
+      // resolved = AI-Applied · pending Zoho delete. Keeps the per-row badge in
+      // sync with its tab so "Applied" never masquerades as "Resolved".
       const aiState =
-        meta.status === "resolved" || meta.has_resolved
+        meta.status === "resolved"
           ? "resolved"
-          : meta.has_pending
+          : (meta.has_pending || meta.has_resolved)
             ? "tagged_pending_delete"
             : "untouched";
       grouped[cid].cluster.ai_state = aiState;
