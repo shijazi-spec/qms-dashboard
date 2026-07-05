@@ -10212,17 +10212,20 @@ export const duplicateRadarRoutes = [
           const count = typeof body?.count === "number" && body.count > 0 ? Math.floor(body.count) : 0;
           const offset = typeof body?.offset === "number" && body.offset >= 0 ? Math.floor(body.offset) : 0;
 
-          // Candidates: rows that have a title AND a way to match (email, phone,
-          // or name). PHONE is essential — most Mawsool leads are phone-only
-          // (no email), so phone is how we reach them reliably.
+          // Candidates: rows with a way to MATCH an existing record (email,
+          // phone, or name). We now backfill EVERY field the Excel carries —
+          // Title, Email, Phone, Mobile, Company — not just Title, so the SDR
+          // team gets complete records. PHONE is essential — many Mawsool leads
+          // are phone-only, so phone is how we reach + match them.
           const candidates = rowsIn
             .map((r: any) => ({
               email: String(r.email ?? r.input?.email ?? "").trim(),
               phone: String(r.phone ?? r.input?.phone ?? "").trim(),
               title: String(r.title ?? r.input?.title ?? "").trim(),
               contact_name: String(r.contact_name ?? r.input?.contact_name ?? "").trim(),
+              company: String(r.company ?? r.company_name ?? r.input?.company_name ?? "").trim(),
             }))
-            .filter(r => r.title && (r.email || r.phone || r.contact_name));
+            .filter(r => r.email || r.phone || r.contact_name);
           const sliced = count > 0 ? candidates.slice(offset, offset + count) : candidates;
 
           const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey, findRecordIdsByFullNames, fullNameKey, updateZohoRecordsBulk } = await import("../../utils/zohoCRM");
@@ -10234,8 +10237,8 @@ export const duplicateRadarRoutes = [
           const idByPhone = await findRecordIdsByPhones(module, sliced.map(r => r.phone).filter(Boolean));
 
           // Pass 1 — resolve by email/phone; note which rows still need a name
-          // match and split their name ONCE.
-          type BF = { title: string; id: string | null; viaPhone: boolean; first: string; last: string };
+          // match, split their name ONCE, and carry every fillable field.
+          type BF = { id: string | null; viaPhone: boolean; first: string; last: string; email: string; phone: string; title: string; company: string };
           const bf: BF[] = sliced.map(r => {
             let id: string | null = r.email ? (idByEmail.get(r.email.toLowerCase()) || null) : null;
             let viaPhone = false;
@@ -10245,7 +10248,7 @@ export const duplicateRadarRoutes = [
               if (id) viaPhone = true;
             }
             const nm = (!id && r.contact_name) ? splitContactName(r.contact_name) : { first: "", last: "" };
-            return { title: r.title, id, viaPhone, first: nm.first, last: nm.last };
+            return { id, viaPhone, first: nm.first, last: nm.last, email: r.email, phone: r.phone, title: r.title, company: r.company };
           });
           // Pass 2 — ONE batched name lookup for everything email/phone missed.
           const idByName = await findRecordIdsByFullNames(
@@ -10254,7 +10257,7 @@ export const duplicateRadarRoutes = [
           );
 
           const seen = new Set<string>();
-          const updates: Array<{ id: string; Title: string }> = [];
+          const updates: Array<Record<string, any>> = [];
           let notFound = 0;
           let matchedByPhone = 0;
           let matchedByName = 0;
@@ -10268,7 +10271,15 @@ export const duplicateRadarRoutes = [
             if (!id) { notFound++; continue; }
             if (seen.has(id)) continue;
             seen.add(id);
-            updates.push({ id, Title: x.title });
+            // Backfill EVERY field the Excel carries onto the matched record
+            // (Mawsool is the source of truth). Only sets a field the file has a
+            // value for — a blank cell never wipes existing data.
+            const p: Record<string, any> = { id };
+            if (x.title) p.Title = x.title;
+            if (x.email) p.Email = x.email;
+            if (x.phone) { p.Phone = x.phone; p.Mobile = x.phone; }
+            if (module === "Leads" && x.company) p.Company = x.company;
+            if (Object.keys(p).length > 1) updates.push(p);
           }
 
           if (dryRun) {

@@ -11973,8 +11973,14 @@
             var data = window._preflightLastResult;
             if (!data || !Array.isArray(data.rows)) { rrToast('Load the titled Excel and run a Preflight check first.', 'warn'); return; }
             var rows = data.rows.map(_pfToSPRow);
-            var withTitle = rows.filter(function (r) { return String(r.title || '').trim() && (String(r.email || '').trim() || String(r.phone || '').trim() || String(r.contact_name || '').trim()); }).length;
-            if (withTitle === 0) { rrToast('No rows with a Title (plus an email, phone, or name to match on). Load the Excel that HAS the Title column, then run Preflight.', 'warn'); return; }
+            // Need rows that can be MATCHED to a record (email/phone/name) AND
+            // carry at least one field to fill (title/email/phone/company).
+            var fillable = rows.filter(function (r) {
+                var matchable = String(r.email || '').trim() || String(r.phone || '').trim() || String(r.contact_name || '').trim();
+                var hasData = String(r.title || '').trim() || String(r.email || '').trim() || String(r.phone || '').trim() || String(r.company || r.company_name || '').trim();
+                return matchable && hasData;
+            }).length;
+            if (fillable === 0) { rrToast('No rows to backfill — load the Excel (with email/phone/name + the fields to fill) and run Preflight first.', 'warn'); return; }
             var moduleSel = (document.getElementById('spBackfillModule') || {}).value || 'Contacts';
             var modules = moduleSel === 'Both' ? ['Contacts', 'Leads'] : [moduleSel];
             var dry = !!(document.getElementById('spBackfillDry') || {}).checked;
@@ -12003,7 +12009,7 @@
                     box.innerHTML = html + (dry ? '<div class="mt-1 text-amber-700">Uncheck Dry-run and click again to apply. Advance <em>from</em> for the next slice.</div>' : '');
                 }
                 if (!dry) { var offEl = document.getElementById('spBackfillOff'); if (offEl && count > 0) offEl.value = String(offset + count); }
-                rrToast(dry ? 'Title dry-run done — see matched counts.' : 'Titles backfilled.', 'good');
+                rrToast(dry ? 'Backfill dry-run done — see matched counts.' : 'Data backfilled (title / email / phone / company).', 'good');
             } catch (e) {
                 if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-red-700">Backfill failed: ' + escapeHtml(e.message || String(e)) + '</div>'; }
                 rrToast('Backfill failed: ' + (e && e.message || e), 'warn');
