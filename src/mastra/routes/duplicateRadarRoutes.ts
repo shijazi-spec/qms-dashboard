@@ -10133,7 +10133,14 @@ export const duplicateRadarRoutes = [
                     }
                   }
                 } catch (e: any) {
-                  logger.warn(`[preflight push] Account-owner CS_Member fallback failed: ${e?.message || e}`);
+                  const _m = String(e?.message || e);
+                  // If the owner read was RATE-LIMITED (a concurrent sync exhausted
+                  // the shared Zoho quota), propagate it so the whole push returns
+                  // a retryable rate-limit error — instead of silently leaving
+                  // CS_Member empty, which would surface as MANDATORY_NOT_FOUND and
+                  // look like a permanent failure. The UI waits + retries these.
+                  if (/too many requests|rate.?limit|cooling down/i.test(_m)) throw e;
+                  logger.warn(`[preflight push] Account-owner CS_Member fallback failed: ${_m}`);
                 }
               }
 

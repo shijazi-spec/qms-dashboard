@@ -12017,7 +12017,14 @@
                                 box.classList.remove('hidden');
                                 box.innerHTML = html + '<div class="text-gray-600">' + mod + ': backfilling… <strong>' + tot.updated + '</strong> updated so far (scanning from ' + offset + ')…</div>';
                             }
-                            var r = await _erBackfillRun(mod, rows, sliceSize, offset, false);
+                            var _off = offset;
+                            var r = await _pfWithRateRetry(
+                                function () { return _erBackfillRun(mod, rows, sliceSize, _off, false); },
+                                8, 30000,
+                                function (secs, att) {
+                                    if (box) box.innerHTML = html + '<div class="text-amber-700">' + mod + ': Zoho is rate-limited by the running sync — waiting ' + secs + 's then retrying (attempt ' + att + ')… <strong>' + tot.updated + '</strong> updated so far.</div>';
+                                }
+                            );
                             tot.updated += (r.updated || 0); tot.failed += (r.failed || 0); tot.not_found += (r.not_found || 0);
                             tot.by_phone += (r.matched_by_phone || 0); tot.by_name += (r.matched_by_name || 0); tot.scanned += (r.candidates || 0);
                             if (r.error_sample && r.error_sample.length) errs = errs.concat(r.error_sample);
@@ -12161,21 +12168,26 @@
             if (btn) { btn.disabled = true; btn.innerHTML = dryRun ? 'Dry-running…' : 'Creating deals…'; }
             var box = document.getElementById('spDealsResult');
             try {
-                var res = await fetch('/api/duplicates/preflight/structured-push', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 1,
-                        rows: rows,
-                        count: count,
-                        offset: offset,
-                        dry_run: dryRun,
-                        deal_backfill: true,
-                        owner_mode: 'self',
-                        source: 'Preflight Missing-Deals Backfill — ' + new Date().toISOString().slice(0, 10),
-                    }),
+                var resp = await _pfWithRateRetry(async function () {
+                    var res = await fetch('/api/duplicates/preflight/structured-push', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 1,
+                            rows: rows,
+                            count: count,
+                            offset: offset,
+                            dry_run: dryRun,
+                            deal_backfill: true,
+                            owner_mode: 'self',
+                            source: 'Preflight Missing-Deals Backfill — ' + new Date().toISOString().slice(0, 10),
+                        }),
+                    });
+                    var j = await _pfReadJson(res);
+                    if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+                    return j;
+                }, 8, 30000, function (secs, att) {
+                    if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-amber-700">Zoho rate-limited by the running sync — waiting ' + secs + 's then retrying deals (attempt ' + att + ')…</div>'; }
                 });
-                var resp = await _pfReadJson(res);
-                if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
                 if (box) {
                     box.classList.remove('hidden');
                     if (resp.dry_run) {
@@ -12336,6 +12348,33 @@
                 throw new Error('Server error ' + res.status + (snippet ? ' (' + snippet + '…)' : '') + ' — usually a transient timeout on a big list. Click again to retry, or use a smaller slice size.');
             }
         }
+
+        // True when an error looks like a Zoho rate-limit / throttle (a big sync
+        // running concurrently exhausts the shared API quota → "Too many
+        // requests" / "rate-limited" / OAuth cooldown). Used to WAIT + retry
+        // instead of failing, so backfill/deals grind through during a sync.
+        function _pfIsRateLimit(msg) {
+            return /too many requests|rate.?limit|cooling down|\b429\b/i.test(String(msg || ''));
+        }
+        // Run fn(); on a rate-limit error, wait `waitMs` and retry, up to `tries`
+        // times. onWait(secondsLeft, attempt) fires each second so the UI can show
+        // a live countdown. Non-rate-limit errors throw immediately.
+        async function _pfWithRateRetry(fn, tries, waitMs, onWait) {
+            var attempt = 0;
+            while (true) {
+                try { return await fn(); }
+                catch (e) {
+                    var msg = (e && e.message) || String(e);
+                    if (!_pfIsRateLimit(msg) || attempt >= tries) throw e;
+                    attempt++;
+                    var secs = Math.max(1, Math.round(waitMs / 1000));
+                    for (var s = secs; s > 0; s--) {
+                        if (onWait) onWait(s, attempt);
+                        await new Promise(function (r) { setTimeout(r, 1000); });
+                    }
+                }
+            }
+        }
         async function erStructuredPush(action) {
             action = Number(action);
             var data = window._preflightLastResult;
@@ -12357,22 +12396,27 @@
             var resultBox = document.getElementById('spResult-' + action);
 
             try {
-                var res = await fetch('/api/duplicates/preflight/structured-push', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: action,
-                        rows: rows,
-                        count: count,
-                        offset: offset,
-                        deal_percent: _pfDealPercent(),
-                        dry_run: dryRun,
-                        owner_mode: 'self',
-                        source: source,
-                    }),
+                var resp = await _pfWithRateRetry(async function () {
+                    var res = await fetch('/api/duplicates/preflight/structured-push', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: action,
+                            rows: rows,
+                            count: count,
+                            offset: offset,
+                            deal_percent: _pfDealPercent(),
+                            dry_run: dryRun,
+                            owner_mode: 'self',
+                            source: source,
+                        }),
+                    });
+                    var j = await _pfReadJson(res);
+                    if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+                    return j;
+                }, 8, 30000, function (secs, att) {
+                    if (resultBox) { resultBox.classList.remove('hidden'); resultBox.innerHTML = '<div class="text-amber-700">Zoho rate-limited by the running sync — waiting ' + secs + 's then retrying (attempt ' + att + ')…</div>'; }
                 });
-                var resp = await _pfReadJson(res);
-                if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
                 if (resultBox) {
                     resultBox.classList.remove('hidden');
                     if (resp.dry_run) {
