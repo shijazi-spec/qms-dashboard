@@ -1143,7 +1143,24 @@ function isSafeCriteriaValue(v: string): boolean {
  * Mawsool contacts on every retry. */
 export async function findRecordIdsByPhones(module: string, phones: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  const raw = Array.from(new Set(phones.map(p => String(p || "").trim()).filter(Boolean)));
+  // Build search VARIANTS. Zoho `equals` is an EXACT string match, but Zoho
+  // auto-normalizes phones on save ("+966 54 975 5750" → "549755750"), so a
+  // record is almost always stored in a DIFFERENT format than the Excel cell.
+  // Searching only the raw Excel value therefore misses them — the exact reason
+  // the backfill could never fill no-email leads (they can only be matched by
+  // phone). Search the NORMALIZED digit key (what Zoho actually stores), plus a
+  // clean digit-form raw when it differs. A space-laden raw ("+966 54 …") can
+  // never equal a space-free stored value, so it is dropped, not searched.
+  // Results are still keyed by normalizePhoneKey below, so the caller matches
+  // regardless of stored format.
+  const values = new Set<string>();
+  for (const p of phones) {
+    const rawStr = String(p || "").trim();
+    const key = normalizePhoneKey(rawStr);
+    if (key) values.add(key);
+    if (rawStr && !/\s/.test(rawStr) && isSafeCriteriaValue(rawStr) && rawStr !== key) values.add(rawStr);
+  }
+  const raw = Array.from(values);
   const CHUNK = 5;
   for (let s = 0; s < raw.length; s += CHUNK) {
     const chunk = raw.slice(s, s + CHUNK);
