@@ -10220,35 +10220,50 @@ export const duplicateRadarRoutes = [
             .filter(r => r.title && (r.email || r.phone || r.contact_name));
           const sliced = count > 0 ? candidates.slice(offset, offset + count) : candidates;
 
-          const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey, findRecordIdByName, updateZohoRecordsBulk } = await import("../../utils/zohoCRM");
+          const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey, findRecordIdsByFullNames, fullNameKey, updateZohoRecordsBulk } = await import("../../utils/zohoCRM");
           const { splitContactName } = await import("../../utils/preflightStructuredPush");
-          // Match order: EMAIL (batched) → PHONE (batched, reliable for phone-only
-          // leads) → NAME (per-row search, UNIQUE match only so a common name
-          // never gets the wrong title).
+          // Match order: EMAIL (batched) → PHONE (batched) → NAME (BATCHED, unique
+          // match only). Name matching used to be one Zoho search PER ROW, which
+          // timed out large slices; it's now OR-chunked like email/phone.
           const idByEmail = await findRecordIdsByEmails(module, sliced.map(r => r.email).filter(Boolean));
           const idByPhone = await findRecordIdsByPhones(module, sliced.map(r => r.phone).filter(Boolean));
+
+          // Pass 1 — resolve by email/phone; note which rows still need a name
+          // match and split their name ONCE.
+          type BF = { title: string; id: string | null; viaPhone: boolean; first: string; last: string };
+          const bf: BF[] = sliced.map(r => {
+            let id: string | null = r.email ? (idByEmail.get(r.email.toLowerCase()) || null) : null;
+            let viaPhone = false;
+            if (!id && r.phone) {
+              const pk = normalizePhoneKey(r.phone);
+              id = pk ? (idByPhone.get(pk) || null) : null;
+              if (id) viaPhone = true;
+            }
+            const nm = (!id && r.contact_name) ? splitContactName(r.contact_name) : { first: "", last: "" };
+            return { title: r.title, id, viaPhone, first: nm.first, last: nm.last };
+          });
+          // Pass 2 — ONE batched name lookup for everything email/phone missed.
+          const idByName = await findRecordIdsByFullNames(
+            module,
+            bf.filter(x => !x.id && x.last).map(x => ({ first: x.first, last: x.last })),
+          );
 
           const seen = new Set<string>();
           const updates: Array<{ id: string; Title: string }> = [];
           let notFound = 0;
           let matchedByPhone = 0;
           let matchedByName = 0;
-          for (const r of sliced) {
-            let id = r.email ? idByEmail.get(r.email.toLowerCase()) || null : null;
-            if (!id && r.phone) {
-              const pk = normalizePhoneKey(r.phone);
-              id = pk ? idByPhone.get(pk) || null : null;
-              if (id) matchedByPhone++;
-            }
-            if (!id && r.contact_name) {
-              const nm = splitContactName(r.contact_name);
-              id = await findRecordIdByName(module, nm.first, nm.last);
+          for (const x of bf) {
+            let id = x.id;
+            if (x.viaPhone) matchedByPhone++;
+            if (!id && x.last) {
+              id = idByName.get(fullNameKey(x.first, x.last)) || null;
               if (id) matchedByName++;
             }
             if (!id) { notFound++; continue; }
             if (seen.has(id)) continue;
             seen.add(id);
-            updates.push({ id, Title: r.title });
+            updates.push({ id, Title: x.title });
           }
 
           if (dryRun) {

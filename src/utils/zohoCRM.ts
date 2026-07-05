@@ -1069,6 +1069,50 @@ export async function findRecordIdByName(module: string, firstName: string, last
   }
 }
 
+/** BATCHED unique name → id resolver (the fast replacement for calling
+ * findRecordIdByName once per row, which timed out the Title backfill on big
+ * slices). OR-chunks the Last_Name search, then returns a Map keyed by
+ * `${last}|${first}` (lowercased) → id ONLY when exactly one CRM record has that
+ * first+last — same uniqueness guard as findRecordIdByName, but one search per
+ * ~10 names instead of one per row. Best-effort: a bad chunk is skipped. */
+export function fullNameKey(first: string, last: string): string {
+  return `${String(last || "").trim().toLowerCase()}|${String(first || "").trim().toLowerCase()}`;
+}
+export async function findRecordIdsByFullNames(
+  module: string,
+  names: Array<{ first: string; last: string }>,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const lasts = Array.from(new Set(
+    names.map(n => String(n.last || "").trim()).filter(isSafeCriteriaValue),
+  ));
+  if (lasts.length === 0) return out;
+  const idByKey = new Map<string, string>();
+  const countByKey = new Map<string, number>();
+  const CHUNK = 10;
+  for (let s = 0; s < lasts.length; s += CHUNK) {
+    const chunk = lasts.slice(s, s + CHUNK);
+    const criteria = chunk.map(l => `(Last_Name:equals:${l})`).join("or");
+    let rows: ZohoCRMRecord[] | null = null;
+    for (let attempt = 0; attempt < 2 && rows === null; attempt++) {
+      try { rows = await searchZohoRecords(module, criteria); }
+      catch { rows = null; }
+    }
+    if (rows === null) continue; // best-effort — skip a bad chunk, never abort
+    for (const r of rows) {
+      if (!r.id) continue;
+      const k = fullNameKey(String(r.data?.First_Name || ""), String(r.data?.Last_Name || ""));
+      countByKey.set(k, (countByKey.get(k) || 0) + 1);
+      if (!idByKey.has(k)) idByKey.set(k, String(r.id));
+    }
+  }
+  for (const n of names) {
+    const k = fullNameKey(n.first, n.last);
+    if (countByKey.get(k) === 1) out.set(k, idByKey.get(k)!);
+  }
+  return out;
+}
+
 /** Normalize a phone to a comparable key: digits only, with a leading Saudi
  * country code (966 / 00966) or leading zero stripped, so "+966 55…", "0055…",
  * "9665…" and "55…" all collapse to the same local number. Returns "" for
