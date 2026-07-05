@@ -13087,8 +13087,8 @@
         // the dropdown or a chip click changes the value.
         function _syncSegmentChipFromDropdown() {
             const seg = document.getElementById('filterSegment')?.value || 'all';
-            const map = { all: 'segmentChipAll', marketplace: 'segmentChipMarketplace', corporate: 'segmentChipCorporate' };
-            ['segmentChipAll', 'segmentChipMarketplace', 'segmentChipCorporate'].forEach(id => {
+            const map = { all: 'segmentChipAll', marketplace: 'segmentChipMarketplace', walaplus: 'segmentChipWalaplus', corporate: 'segmentChipWalaplus', walaone: 'segmentChipWalaone' };
+            ['segmentChipAll', 'segmentChipMarketplace', 'segmentChipWalaplus', 'segmentChipWalaone'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 if (id === map[seg]) {
@@ -13106,7 +13106,7 @@
         // source of truth), restyles chips, snapshots into this tab's slot,
         // and re-runs the active tab's load path so the change is immediate.
         async function setSegment(newSeg) {
-            if (!['all', 'marketplace', 'corporate'].includes(newSeg)) return;
+            if (!['all', 'marketplace', 'corporate', 'walaplus', 'walaone'].includes(newSeg)) return;
             _filterSetInputValue('filterSegment', newSeg);
             _syncSegmentChipFromDropdown();
             try {

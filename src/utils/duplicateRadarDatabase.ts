@@ -144,7 +144,7 @@ export interface DuplicateFilters {
    * Both segments stay actionable inside the radar — this is for comparison,
    * not for hiding records.
    */
-  segment?: "all" | "marketplace" | "corporate";
+  segment?: "all" | "marketplace" | "corporate" | "walaplus" | "walaone";
 }
 
 /**
@@ -168,6 +168,10 @@ export function buildSegmentPredicate(
     return { condition: null, params: [], needsRecordJoin: false };
   }
   const markers = ["marketplace", "partner accounts"];
+  // Normalized layout name (lowercase, non-alphanumeric stripped) so "WalaOne" /
+  // "Wala One" / "wala-one" all match 'walaone' regardless of the exact stored
+  // string. WalaPlus = Corporate that is NOT WalaOne. (Sarah 2026-07-06.)
+  const NORM = "regexp_replace(LOWER(COALESCE(r.layout_name,'')), '[^a-z0-9]', '', 'g')";
   if (segment === "marketplace") {
     const placeholders = markers
       .map((_, i) => `$${paramOffset + i}`)
@@ -178,11 +182,21 @@ export function buildSegmentPredicate(
       needsRecordJoin: true,
     };
   }
+  if (segment === "walaone") {
+    // WalaOne product — its own Zoho layout. No bind params (literal compare).
+    return {
+      condition: `${NORM} = 'walaone'`,
+      params: [],
+      needsRecordJoin: true,
+    };
+  }
+  // "walaplus" (renamed "corporate") + legacy "corporate" = NOT marketplace AND
+  // NOT WalaOne. NULL/empty layout defaults here so legacy records aren't lost.
   const placeholders = markers
     .map((_, i) => `$${paramOffset + i}`)
     .join(",");
   return {
-    condition: `LOWER(COALESCE(r.layout_name,'')) NOT IN (${placeholders})`,
+    condition: `LOWER(COALESCE(r.layout_name,'')) NOT IN (${placeholders}) AND ${NORM} <> 'walaone'`,
     params: markers,
     needsRecordJoin: true,
   };
@@ -7872,7 +7886,7 @@ export async function getDuplicateRecordsByType(
     confidence_level?: string;
     domain?: string;
     ai_status?: string;
-    segment?: "all" | "marketplace" | "corporate";
+    segment?: "all" | "marketplace" | "corporate" | "walaplus" | "walaone";
     sort?: string;
     dir?: string;
   },

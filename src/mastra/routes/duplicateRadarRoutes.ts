@@ -162,7 +162,7 @@ function parseRecordTabFilters(url: URL): {
   confidence_level?: string;
   domain?: string;
   ai_status?: string;
-  segment?: "all" | "marketplace" | "corporate";
+  segment?: "all" | "marketplace" | "corporate" | "walaplus" | "walaone";
   sort?: string;
   dir?: "asc" | "desc";
 } {
@@ -187,8 +187,8 @@ function parseRecordTabFilters(url: URL): {
   // ai_status above, mirrors DuplicateFilters["segment"] (database.ts:143).
   // Anything else (including absent/"all") means no constraint.
   const rawSegment = (url.searchParams.get("segment") || "").trim();
-  const segment = ["marketplace", "corporate"].includes(rawSegment)
-    ? (rawSegment as "marketplace" | "corporate")
+  const segment = ["marketplace", "corporate", "walaplus", "walaone"].includes(rawSegment)
+    ? (rawSegment as "marketplace" | "corporate" | "walaplus" | "walaone")
     : undefined;
   // Column sort — same contract as /api/duplicates/clusters (sort/dir read
   // here, validated against RECORD_SORT_COLUMNS down in

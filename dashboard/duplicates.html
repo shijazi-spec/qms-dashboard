@@ -429,7 +429,8 @@
             <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden text-sm">
                 <button type="button" data-on-click="setSegment" data-args="[&quot;all&quot;]" data-testid="segment-chip-all" id="segmentChipAll" class="segment-chip px-3 py-1 bg-blue-600 text-white font-medium" title="No filter — show every cluster regardless of layout. Default.">All</button>
                 <button type="button" data-on-click="setSegment" data-args="[&quot;marketplace&quot;]" data-testid="segment-chip-marketplace" id="segmentChipMarketplace" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="Only records on the Marketplace / Partner Accounts layouts (merchant / vendor B2B2C records).">Marketplace</button>
-                <button type="button" data-on-click="setSegment" data-args="[&quot;corporate&quot;]" data-testid="segment-chip-corporate" id="segmentChipCorporate" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="Everything that is NOT marketplace — corporate / direct B2B records (records with no layout default here so legacy data isn't lost).">Corporate</button>
+                <button type="button" data-on-click="setSegment" data-args="[&quot;walaplus&quot;]" data-testid="segment-chip-walaplus" id="segmentChipWalaplus" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="WalaPlus — corporate / direct B2B records that are NOT Marketplace and NOT WalaOne (records with no layout default here so legacy data isn't lost).">WalaPlus</button>
+                <button type="button" data-on-click="setSegment" data-args="[&quot;walaone&quot;]" data-testid="segment-chip-walaone" id="segmentChipWalaone" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="WalaOne — records on the WalaOne product layout only.">WalaOne</button>
             </div>
             <span class="text-[10px] font-normal text-gray-400 ms-1" title="Each tab remembers its segment selection — switching tabs restores that tab's segment.">· per tab</span>
         </div>
@@ -455,7 +456,8 @@
                         <select id="filterSegment" aria-label="Filter by segment (marketplace / corporate)" data-testid="select-filter-segment" class="rr-input">
                             <option value="all">All</option>
                             <option value="marketplace">Marketplace only</option>
-                            <option value="corporate">Corporate only</option>
+                            <option value="walaplus">WalaPlus only</option>
+                            <option value="walaone">WalaOne only</option>
                         </select>
                     </div>
                     <div>
@@ -2454,7 +2456,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=91"></script>
+    <script src="/js/duplicates-app.js?v=92"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
