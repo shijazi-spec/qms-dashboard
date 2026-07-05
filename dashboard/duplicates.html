@@ -35,6 +35,13 @@
         html.wp-dark .rr-kpi-value.rr-good { color: #4ADE80; }
         .rr-kpi-sub { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
         html.wp-dark .rr-kpi-sub { color: #64748B; }
+        /* Rich KPI card — restores the "more visual" headline cards Sarah
+           preferred: white, subtle shadow, a per-card colored accent stripe on
+           the leading edge, and a bold accent-colored value. Accent is set per
+           card via the --rr-accent variable. Dark-mode aware. */
+        .rr-kpi-rich { background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-inline-start: 4px solid var(--rr-accent, #2563EB); border-radius: 10px; }
+        html.wp-dark .rr-kpi-rich { background: #1E293B; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+        .rr-kpi-rich .rr-kpi-value { font-size: 24px; font-weight: 700; color: var(--rr-accent, #111827); }
         /* SaaS phase 3 — shared data-table language (.rr-table). Sticky header,
            breathing rows, severity stripe, standardized badge + confidence meter +
            row-action buttons. Dark-aware. Rolled out tab-by-tab. */
@@ -500,7 +507,7 @@
                 <strong>Executive summary.</strong> Cross-module headline counts for every duplicate the radar is tracking right now — total clusters, records inside those clusters, ARR exposure, and a creation-rate trend so leadership can see whether duplicate hygiene is improving week over week. Use this tab for status reporting; drill into the per-module tabs (Leads, Deals, Contacts, Accounts) to act on individual clusters.
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-                <div class="rr-kpi" title="Active clusters with 2 or more records of the same kind. Singleton clusters (1 record alone) are excluded — they aren't duplicates. This is the number to act on.">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#2563EB" title="Active clusters with 2 or more records of the same kind. Singleton clusters (1 record alone) are excluded — they aren't duplicates. This is the number to act on.">
                     <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.true_duplicates">True Duplicates</div>
                     <div id="totalClusters" data-testid="text-total-clusters" class="rr-kpi-value">-</div>
                     <div class="rr-kpi-sub">clusters</div>
@@ -509,35 +516,35 @@
                         <div id="clustersDelta" data-testid="delta-clusters"></div>
                     </div>
                 </div>
-                <div class="rr-kpi" title="Number of Lead records that should be deleted to deduplicate — every Lead in an active duplicate cluster EXCEPT the chosen survivor. Rate = this count ÷ total Leads in the radar. Matches the 2% KPI target framing.">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#D97706" title="Number of Lead records that should be deleted to deduplicate — every Lead in an active duplicate cluster EXCEPT the chosen survivor. Rate = this count ÷ total Leads in the radar. Matches the 2% KPI target framing.">
                     <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.dup_leads">Dup Leads</div>
-                    <div id="totalLeads" data-testid="text-total-leads" class="rr-kpi-value rr-amber">-</div>
+                    <div id="totalLeads" data-testid="text-total-leads" class="rr-kpi-value">-</div>
                     <div id="leadRate" class="rr-kpi-sub">-% rate</div>
                 </div>
-                <div class="rr-kpi" title="Number of Deal records that should be deleted to deduplicate — every Deal in an active duplicate cluster EXCEPT the survivor. Rate = this count ÷ total Deals.">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#DC2626" title="Number of Deal records that should be deleted to deduplicate — every Deal in an active duplicate cluster EXCEPT the survivor. Rate = this count ÷ total Deals.">
                     <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.dup_deals">Dup Deals</div>
-                    <div id="totalDeals" data-testid="text-total-deals" class="rr-kpi-value rr-warn">-</div>
+                    <div id="totalDeals" data-testid="text-total-deals" class="rr-kpi-value">-</div>
                     <div id="dealRate" class="rr-kpi-sub">-% rate</div>
                 </div>
-                <div class="rr-kpi" title="Contact records that should be deleted to deduplicate — actionable count, excluding the survivor in each cluster.">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#0D9488" title="Contact records that should be deleted to deduplicate — actionable count, excluding the survivor in each cluster.">
                     <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.dup_contacts">Dup Contacts</div>
                     <div id="totalContacts" data-testid="text-total-contacts" class="rr-kpi-value">-</div>
                 </div>
-                <div class="rr-kpi" title="Account records that should be deleted to deduplicate — actionable count, excluding the survivor in each cluster.">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#4F46E5" title="Account records that should be deleted to deduplicate — actionable count, excluding the survivor in each cluster.">
                     <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.dup_accounts">Dup Accounts</div>
                     <div id="totalAccounts" data-testid="text-total-accounts" class="rr-kpi-value">-</div>
                 </div>
-                <div class="rr-kpi" title="True duplicate clusters where confidence_level = 'high' (≥90% match score). These are the safest to auto-resolve.">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#DC2626" title="True duplicate clusters where confidence_level = 'high' (≥90% match score). These are the safest to auto-resolve.">
                     <div class="rr-kpi-label" style="text-transform:none;">Strong</div>
-                    <div id="highConfidence" data-testid="text-high-confidence" class="rr-kpi-value rr-warn">-</div>
+                    <div id="highConfidence" data-testid="text-high-confidence" class="rr-kpi-value">-</div>
                     <div class="rr-kpi-sub">≥90%</div>
                 </div>
-                <div class="rr-kpi" title="True duplicate clusters at 60–89% match — review before acting.">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#CA8A04" title="True duplicate clusters at 60–89% match — review before acting.">
                     <div class="rr-kpi-label" style="text-transform:none;">Moderate</div>
-                    <div id="mediumConfidence" data-testid="text-medium-confidence" class="rr-kpi-value rr-amber">-</div>
+                    <div id="mediumConfidence" data-testid="text-medium-confidence" class="rr-kpi-value">-</div>
                     <div class="rr-kpi-sub">60-89%</div>
                 </div>
-                <div class="rr-kpi" title="Sum of Deal.Amount across the duplicate clusters' non-survivor records — the SAR exposure currently inflating pipeline reporting because the same opportunity is counted multiple times.">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#7C3AED" title="Sum of Deal.Amount across the duplicate clusters' non-survivor records — the SAR exposure currently inflating pipeline reporting because the same opportunity is counted multiple times.">
                     <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.pipeline_inflation">Pipeline Inflation</div>
                     <div id="pipelineInflation" data-testid="text-pipeline-inflation" class="rr-kpi-value">-</div>
                 </div>
