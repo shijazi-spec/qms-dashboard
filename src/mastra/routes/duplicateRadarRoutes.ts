@@ -9263,29 +9263,43 @@ export const duplicateRadarRoutes = [
           let salesPersonId: string | null = null;
           let csMemberId: string | null = null;
           if (!dryRun && action !== 4) {
-            try {
-              const { fetchZohoUsers } = await import("../../utils/zohoCRM");
-              const users = await fetchZohoUsers("ActiveUsers");
-              const findUserId = (email: string): string | null => {
-                const m = users.find(u => String(u.email || "").toLowerCase() === email.toLowerCase());
-                return m?.id ? String(m.id) : null;
-              };
-              if (PREFLIGHT_SALESPERSON_EMAIL) salesPersonId = findUserId(PREFLIGHT_SALESPERSON_EMAIL);
-              if (PREFLIGHT_CS_MEMBER_EMAIL) csMemberId = findUserId(PREFLIGHT_CS_MEMBER_EMAIL);
-              // CS_Member is a REQUIRED user-lookup on the Deal layout, and Zoho's
-              // create API accepts ONLY { id } for a user lookup — an unresolved
-              // { email } comes back as MANDATORY_NOT_FOUND(api_name:"id"). The CS
-              // mailbox (client@walaplus.com) is a shared/portal address, NOT a
-              // licensed CRM user, so it never resolves. Fall back to the sales
-              // person, then to any active CRM user, so the mandatory lookup
-              // ALWAYS carries a real user id and the deal can be created. The CS
-              // team can reassign CS_Member afterwards.
-              if (!csMemberId) csMemberId = salesPersonId || (users[0]?.id ? String(users[0].id) : null);
-              if (!salesPersonId) salesPersonId = csMemberId;
-              if (!csMemberId) {
-                logger.warn("[preflight push] Could not resolve ANY CRM user for CS_Member/Sales_Person — deals will reject if these lookups are mandatory.");
+            // HARDCODED ids take priority and BYPASS the Users API entirely.
+            // CS_Member is a REQUIRED user-lookup on the Deal layout and Zoho's
+            // create API accepts ONLY { id }. Resolving an email→id needs the
+            // Zoho Users API — but this org's CRM token is missing the users-read
+            // scope (the SAME failure that breaks "Check required fields"), so
+            // fetchZohoUsers THROWS, CS_Member is left empty, and every deal
+            // rejects with MANDATORY_NOT_FOUND CS_Member. Set the env secret
+            // PREFLIGHT_CS_MEMBER_ID (a Zoho user id — Setup → Users → open the
+            // user → the number in the URL) to fill it without the Users API.
+            const envCsId = String(process.env.PREFLIGHT_CS_MEMBER_ID || "").trim();
+            const envSpId = String(process.env.PREFLIGHT_SALESPERSON_ID || "").trim();
+            if (envCsId) csMemberId = envCsId;
+            if (envSpId) salesPersonId = envSpId;
+            if (!csMemberId || !salesPersonId) {
+              try {
+                const { fetchZohoUsers } = await import("../../utils/zohoCRM");
+                const users = await fetchZohoUsers("ActiveUsers");
+                const findUserId = (email: string): string | null => {
+                  const m = users.find(u => String(u.email || "").toLowerCase() === email.toLowerCase());
+                  return m?.id ? String(m.id) : null;
+                };
+                if (!salesPersonId && PREFLIGHT_SALESPERSON_EMAIL) salesPersonId = findUserId(PREFLIGHT_SALESPERSON_EMAIL);
+                if (!csMemberId && PREFLIGHT_CS_MEMBER_EMAIL) csMemberId = findUserId(PREFLIGHT_CS_MEMBER_EMAIL);
+                // Fall back to the sales person, then to ANY active CRM user, so
+                // the mandatory lookup always carries a real user id.
+                if (!csMemberId) csMemberId = salesPersonId || (users[0]?.id ? String(users[0].id) : null);
+                if (!salesPersonId) salesPersonId = csMemberId;
+              } catch {
+                // Users API blocked/failing — rely on the env ids above. If none
+                // were set, CS_Member stays empty and the deal will reject; the
+                // operator must set PREFLIGHT_CS_MEMBER_ID or make CS_Member
+                // optional on the Deal layout.
               }
-            } catch { salesPersonId = null; csMemberId = null; }
+              if (!csMemberId) {
+                logger.warn("[preflight push] CS_Member unresolved and PREFLIGHT_CS_MEMBER_ID not set — deals will reject (CS_Member is mandatory + Users API unavailable).");
+              }
+            }
           }
 
           const spRows = rows.map((r: any, idx: number) => ({
