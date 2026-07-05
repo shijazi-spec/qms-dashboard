@@ -21,10 +21,13 @@ export const PREFLIGHT_SALESPERSON_EMAIL = process.env.PREFLIGHT_SALESPERSON_EMA
 // Gov Type picklist — set to "Private" for the whole batch for now.
 export const PREFLIGHT_GOV_TYPE = process.env.PREFLIGHT_GOV_TYPE ?? "Private";
 // CS Member — a plain TEXT (name) field, normally populated from the CS
-// platform, but enforced as mandatory on Deal create here. Stamp a placeholder
-// NAME the CS team can reassign. Sent as a STRING (not a user lookup). Empty
-// string omits it.
-export const PREFLIGHT_CS_MEMBER = process.env.PREFLIGHT_CS_MEMBER ?? "WalaPlus";
+// platform. CS_Member is a USER LOOKUP field — sending a plain string ("WalaPlus")
+// is rejected by Zoho as INVALID_DATA. Provide a USER by EMAIL instead; the push
+// resolves it to a Zoho user id and sends { id }. Sarah 2026-07-05: CS_Member is
+// NOT mandatory, so if the email doesn't resolve to a user the field is simply
+// omitted (no failed deal). Default user: client@walaplus.com.
+export const PREFLIGHT_CS_MEMBER = process.env.PREFLIGHT_CS_MEMBER ?? "WalaPlus"; // legacy (unused for the value)
+export const PREFLIGHT_CS_MEMBER_EMAIL = process.env.PREFLIGHT_CS_MEMBER_EMAIL ?? "client@walaplus.com";
 
 // Lead_Source stamped on EVERY record the push creates (Leads, Contacts, Deals).
 // Ahmad 2026-07-01: all Preflight-pushed records carry Lead_Source = "Mawsool".

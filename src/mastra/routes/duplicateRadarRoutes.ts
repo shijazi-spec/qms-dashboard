@@ -9252,21 +9252,27 @@ export const duplicateRadarRoutes = [
           ).toString().trim();
 
           // Map raw body rows to SPRow shape.
-          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, PREFLIGHT_PRODUCT, PREFLIGHT_EMPLOYEES, PREFLIGHT_SALESPERSON_EMAIL, PREFLIGHT_GOV_TYPE, PREFLIGHT_CS_MEMBER, splitContactName, websiteFromDomain } =
+          const { buildStructuredPushPlan, PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG, PREFLIGHT_DEAL_TAG, PREFLIGHT_PRODUCT, PREFLIGHT_EMPLOYEES, PREFLIGHT_SALESPERSON_EMAIL, PREFLIGHT_GOV_TYPE, PREFLIGHT_CS_MEMBER_EMAIL, splitContactName, websiteFromDomain } =
             await import("../../utils/preflightStructuredPush");
           const PRODUCTS_FIELD = PREFLIGHT_PRODUCT ? [PREFLIGHT_PRODUCT] : null;
 
-          // Resolve the default Sales Person (a Zoho user) by email once, so
-          // Deals can satisfy the required Sales Person field. Null if not found
-          // (the create will then surface MANDATORY_NOT_FOUND so we can adjust).
+          // Resolve the default Sales Person AND CS Member (both Zoho USER lookup
+          // fields) by email once, so Deals carry valid user references. Null if
+          // not found → the field is simply omitted (CS_Member is not mandatory;
+          // sending the old string "WalaPlus" was rejected as INVALID_DATA).
           let salesPersonId: string | null = null;
-          if (!dryRun && action !== 4 && PREFLIGHT_SALESPERSON_EMAIL) {
+          let csMemberId: string | null = null;
+          if (!dryRun && action !== 4) {
             try {
               const { fetchZohoUsers } = await import("../../utils/zohoCRM");
               const users = await fetchZohoUsers("ActiveUsers");
-              const match = users.find(u => String(u.email || "").toLowerCase() === PREFLIGHT_SALESPERSON_EMAIL.toLowerCase());
-              salesPersonId = match?.id ? String(match.id) : null;
-            } catch { salesPersonId = null; }
+              const findUserId = (email: string): string | null => {
+                const m = users.find(u => String(u.email || "").toLowerCase() === email.toLowerCase());
+                return m?.id ? String(m.id) : null;
+              };
+              if (PREFLIGHT_SALESPERSON_EMAIL) salesPersonId = findUserId(PREFLIGHT_SALESPERSON_EMAIL);
+              if (PREFLIGHT_CS_MEMBER_EMAIL) csMemberId = findUserId(PREFLIGHT_CS_MEMBER_EMAIL);
+            } catch { salesPersonId = null; csMemberId = null; }
           }
 
           const spRows = rows.map((r: any, idx: number) => ({
@@ -9431,7 +9437,7 @@ export const duplicateRadarRoutes = [
                     ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
                     No_of_Employees: PREFLIGHT_EMPLOYEES,
                     Sales_Person: { email: PREFLIGHT_SALESPERSON_EMAIL },
-                    ...(PREFLIGHT_CS_MEMBER ? { CS_Member: PREFLIGHT_CS_MEMBER } : {}),
+                    ...(PREFLIGHT_CS_MEMBER_EMAIL ? { CS_Member: { email: PREFLIGHT_CS_MEMBER_EMAIL } } : {}),
                     ...(PREFLIGHT_GOV_TYPE ? { Gov_Type: PREFLIGHT_GOV_TYPE } : {}),
                     Contact_Name: { id: "(would-be-created)" },
                     ...(sampleCo.contacts.length > 1
@@ -9475,7 +9481,7 @@ export const duplicateRadarRoutes = [
                     ...(PRODUCTS_FIELD ? { Products: PRODUCTS_FIELD } : {}),
                     No_of_Employees: PREFLIGHT_EMPLOYEES,
                     Sales_Person: { email: PREFLIGHT_SALESPERSON_EMAIL },
-                    ...(PREFLIGHT_CS_MEMBER ? { CS_Member: PREFLIGHT_CS_MEMBER } : {}),
+                    ...(PREFLIGHT_CS_MEMBER_EMAIL ? { CS_Member: { email: PREFLIGHT_CS_MEMBER_EMAIL } } : {}),
                     ...(PREFLIGHT_GOV_TYPE ? { Gov_Type: PREFLIGHT_GOV_TYPE } : {}),
                     Contact_Name: { id: contactId },
                     ...(co.contacts.length > 1
@@ -10067,7 +10073,7 @@ export const duplicateRadarRoutes = [
                 if (PRODUCTS_FIELD) p.Products = PRODUCTS_FIELD;
                 p.No_of_Employees = PREFLIGHT_EMPLOYEES;
                 if (salesPersonId) p.Sales_Person = { id: salesPersonId };
-                if (PREFLIGHT_CS_MEMBER) p.CS_Member = PREFLIGHT_CS_MEMBER;
+                if (csMemberId) p.CS_Member = { id: csMemberId };
                 if (PREFLIGHT_GOV_TYPE) p.Gov_Type = PREFLIGHT_GOV_TYPE;
                 if (firstContactId) {
                   p.Contact_Name = { id: firstContactId };
