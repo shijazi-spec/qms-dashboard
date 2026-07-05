@@ -1495,6 +1495,21 @@
             const showButtons = totalPages > 1;
             const btnClass = 'rr-pager-btn';
 
+            // First-page quick jump (⏮) — shown on every tab (shared helper),
+            // Sarah 2026-07-06. Only when not already on page 1.
+            if (showButtons && currentPage > 0) {
+                const firstBtn = document.createElement('button');
+                firstBtn.type = 'button';
+                firstBtn.className = btnClass;
+                firstBtn.textContent = '⏮ First';
+                firstBtn.title = 'Jump to the first page';
+                firstBtn.addEventListener('click', () => {
+                    try { callback(0); }
+                    catch (e) { console.error('[renderPagination] first callback threw:', e); }
+                });
+                el.appendChild(firstBtn);
+            }
+
             if (showButtons && currentPage > 0) {
                 const prevBtn = document.createElement('button');
                 prevBtn.type = 'button';
@@ -1545,6 +1560,22 @@
                     catch (e) { console.error('[renderPagination] next callback threw:', e); }
                 });
                 el.appendChild(nextBtn);
+            }
+
+            // Last-page quick jump (⏭) — shown on every tab. Only when not
+            // already on the last page.
+            if (showButtons && currentPage < totalPages - 1) {
+                const lastBtn = document.createElement('button');
+                lastBtn.type = 'button';
+                lastBtn.className = btnClass;
+                lastBtn.textContent = 'Last ⏭';
+                lastBtn.title = 'Jump to the last page';
+                const lastPage = totalPages - 1;
+                lastBtn.addEventListener('click', () => {
+                    try { callback(lastPage); }
+                    catch (e) { console.error('[renderPagination] last callback threw:', e); }
+                });
+                el.appendChild(lastBtn);
             }
         }
 
@@ -5922,7 +5953,7 @@
                 var tab = String(module || '').toLowerCase();
                 if (['leads','deals','contacts','accounts'].includes(tab)) {
                     window._loadedTabs && window._loadedTabs.delete(tab);
-                    loadRecordTab(tab, 0);
+                    loadRecordTab(tab, (typeof recordPages !== 'undefined' && recordPages[tab]) || 0);
                 } else if (tab === 'cross-module' && typeof loadCrossModule === 'function') {
                     loadCrossModule();
                 } else if (typeof refreshData === 'function') { refreshData(); }
@@ -5966,7 +5997,7 @@
                 var tab = String(module || '').toLowerCase();
                 if (['leads','deals','contacts','accounts'].includes(tab)) {
                     window._loadedTabs && window._loadedTabs.delete(tab);
-                    loadRecordTab(tab, 0);
+                    loadRecordTab(tab, (typeof recordPages !== 'undefined' && recordPages[tab]) || 0);
                 } else if (typeof refreshData === 'function') { refreshData(); }
             } catch (e) {
                 rrToast('Bulk verify failed: ' + (e && e.message || e));
@@ -6000,7 +6031,7 @@
                 var tab = String(module || '').toLowerCase();
                 if (['leads','deals','contacts','accounts'].includes(tab)) {
                     window._loadedTabs && window._loadedTabs.delete(tab);
-                    loadRecordTab(tab, 0);
+                    loadRecordTab(tab, (typeof recordPages !== 'undefined' && recordPages[tab]) || 0);
                 } else if (tab === 'cross-module' && typeof loadCrossModule === 'function') {
                     loadCrossModule();
                 } else if (typeof refreshData === 'function') {
@@ -6036,7 +6067,7 @@
                 var tab = String(module || '').toLowerCase();
                 if (['leads','deals','contacts','accounts'].includes(tab)) {
                     window._loadedTabs && window._loadedTabs.delete(tab);
-                    loadRecordTab(tab, 0);
+                    loadRecordTab(tab, (typeof recordPages !== 'undefined' && recordPages[tab]) || 0);
                 } else if (tab === 'cross-module' && typeof loadCrossModule === 'function') {
                     loadCrossModule();
                 } else if (typeof refreshData === 'function') { refreshData(); }
@@ -6108,7 +6139,7 @@
                 var tab = window._currentTab || 'accounts';
                 if (['leads','deals','contacts','accounts'].includes(tab)) {
                     window._loadedTabs && window._loadedTabs.delete(tab);
-                    loadRecordTab(tab, 0);
+                    loadRecordTab(tab, (typeof recordPages !== 'undefined' && recordPages[tab]) || 0);
                 } else if (typeof refreshData === 'function') { refreshData(); }
             } catch (e) {
                 rrToast('Could not re-open selected: ' + (e && e.message || e));
@@ -6139,7 +6170,7 @@
                 var tab = window._currentTab || 'accounts';
                 if (['leads','deals','contacts','accounts'].includes(tab)) {
                     window._loadedTabs && window._loadedTabs.delete(tab);
-                    loadRecordTab(tab, 0);
+                    loadRecordTab(tab, (typeof recordPages !== 'undefined' && recordPages[tab]) || 0);
                 } else if (typeof refreshData === 'function') { refreshData(); }
             } catch (e) {
                 rrToast('Could not dismiss selected: ' + (e && e.message || e));

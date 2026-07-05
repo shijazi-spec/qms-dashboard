@@ -8102,9 +8102,13 @@ export async function getDuplicateRecordsByType(
       ? RECORD_SORT_COLUMNS[options.sort]
       : null;
   const recordSortDir = options?.dir === "asc" ? "ASC" : "DESC";
+  // DEFAULT = MOST-RECENTLY-CREATED cluster first (Sarah 2026-07-06): surface the
+  // newest duplications at the top so fresh dupes are caught first, then older
+  // data. Ordered by the cluster's NEWEST record's created_date DESC. An explicit
+  // column sort still overrides. dc.id ASC = stable pagination tiebreaker.
   const clusterOrderBy = recordSortKey
     ? `ORDER BY ${recordSortKey} ${recordSortDir} NULLS LAST, dc.id ASC`
-    : `ORDER BY dc.confidence_score DESC, dc.id ASC`;
+    : `ORDER BY (SELECT MAX(dr_d.created_date) FROM duplicate_records dr_d WHERE dr_d.cluster_id = dc.id AND dr_d.record_type = $1) DESC NULLS LAST, dc.id ASC`;
 
   const clusterPage = await pool.query(
     `
