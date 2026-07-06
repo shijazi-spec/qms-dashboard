@@ -254,6 +254,7 @@ import {
   getAllClustersByInflation,
   getClustersBySignal,
   findOrCreateClusterByCompany,
+  getSeparationParticipants,
   upsertDealDocCompliance,
   getDealDocCompliance,
   normalizeCompanyName,
@@ -599,9 +600,67 @@ async function processModule(
   // this module's slice (0.5 → 1.0), reported exactly by written/total below.
   if (onProgress) onProgress(0.5);
 
+  // ── FAST-PATH PREFETCH (Sarah 2026-07-06 — sync speedup) ─────────────────
+  // The incremental sync re-pulls every record touched since the last sync.
+  // During a bulk migration that's tens of thousands of rows whose clustering
+  // IDENTITY (company / domain / email / phone / name) did NOT change — only
+  // mutable fields (title, owner, stage…) did. Re-running the ~5-query
+  // findOrCreateClusterByCompany for each is wasted work. Prefetch the already-
+  // stored identity for this batch in ONE chunked query (JOINed to
+  // duplicate_clusters so a dangling cluster_id is never reused); when a
+  // record's identity is unchanged AND it isn't in the separation ledger, reuse
+  // its current cluster — the deterministic clusterer would return that same
+  // cluster — and go straight to the idempotent upsert. Pure optimisation: a
+  // new record, ANY identity change, or a separated record falls through to the
+  // full clusterer, so cluster assignment is byte-for-byte unchanged.
+  const _existingById = new Map<string, any>();
+  let _sepParticipants: Set<string> = new Set();
+  try {
+    _sepParticipants = await getSeparationParticipants();
+  } catch {
+    /* no participants cache → those records simply take the full clusterer */
+  }
+  try {
+    const { pool } = await import("../../utils/duplicateRadarDatabase");
+    const _ids = records.map((r) => r.id).filter((x): x is string => !!x);
+    const PF_CHUNK = 5000;
+    for (let i = 0; i < _ids.length; i += PF_CHUNK) {
+      const slice = _ids.slice(i, i + PF_CHUNK);
+      const ex = await pool.query(
+        `SELECT dr.zoho_record_id AS z, dr.cluster_id, dr.company_name, dr.domain,
+                dr.email, dr.phone, dr.record_name
+           FROM duplicate_records dr
+           JOIN duplicate_clusters dc ON dc.id = dr.cluster_id
+          WHERE dr.zoho_record_id = ANY($1::text[])`,
+        [slice],
+      );
+      for (const row of ex.rows) _existingById.set(row.z, row);
+    }
+  } catch (e) {
+    logger.warn(
+      `[DuplicateRadar] ${moduleName}: fast-path prefetch skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+    );
+    _existingById.clear();
+  }
+  // RAW-equal identity ⟹ normalized-equal ⟹ the clusterer returns the same
+  // cluster. Conservative: a cosmetic-only difference just falls to the slow path.
+  const _identityUnchanged = (stored: any, d: ExtractedRecord): boolean => {
+    if (!stored) return false;
+    const s = (v: any) => (v == null ? "" : String(v));
+    const lc = (v: any) => s(v).toLowerCase();
+    return (
+      s(stored.company_name) === s(d.companyName) &&
+      s(stored.domain) === s(d.domain) &&
+      lc(stored.email) === lc(d.email) &&
+      s(stored.phone) === s(d.phone) &&
+      s(stored.record_name) === s(d.recordName)
+    );
+  };
+
   let written = 0;
   let skipped = 0;
   let droppedNoCompany = 0;
+  let reusedCluster = 0;
   let processedInLoop = 0;
   for (const record of records) {
     try {
@@ -615,23 +674,32 @@ async function processModule(
         continue;
       }
 
-      const cluster = await findOrCreateClusterByCompany(
-        data.companyName,
-        data.domain || undefined,
-        data.phone || undefined,
-        data.email || undefined,
-        // Pass recordType + recordName so contacts route to the strict
-        // ≥2-attribute path; every other module keeps the legacy
-        // company-name clustering behaviour verbatim.
-        recordType,
-        data.recordName,
-        // Zoho id → lets the clusterer honor the separation ledger so a record
-        // the operator split/dismissed apart is never silently re-fused.
-        record.id,
-      );
+      // Fast path: unchanged identity + not separated → reuse current cluster.
+      const _prev = record.id ? _existingById.get(record.id) : null;
+      let _clusterId: number;
+      if (_prev && !_sepParticipants.has(record.id) && _identityUnchanged(_prev, data)) {
+        _clusterId = _prev.cluster_id as number;
+        reusedCluster++;
+      } else {
+        const cluster = await findOrCreateClusterByCompany(
+          data.companyName,
+          data.domain || undefined,
+          data.phone || undefined,
+          data.email || undefined,
+          // Pass recordType + recordName so contacts route to the strict
+          // ≥2-attribute path; every other module keeps the legacy
+          // company-name clustering behaviour verbatim.
+          recordType,
+          data.recordName,
+          // Zoho id → lets the clusterer honor the separation ledger so a record
+          // the operator split/dismissed apart is never silently re-fused.
+          record.id,
+        );
+        _clusterId = cluster.id!;
+      }
 
       await upsertRecord({
-        cluster_id: cluster.id!,
+        cluster_id: _clusterId,
         record_type: recordType,
         zoho_record_id: record.id,
         record_name: data.recordName,
@@ -677,7 +745,7 @@ async function processModule(
       });
 
       written++;
-      clustersUpdated.add(cluster.id!);
+      clustersUpdated.add(_clusterId);
     } catch (recordErr: any) {
       // Schema/connection-class errors mean NO record will succeed — fail
       // the whole scan loudly instead of looping through 5,000 identical
@@ -728,7 +796,7 @@ async function processModule(
   // it fetched vs wrote. A module that dominates the wall-clock (rate-limited
   // fetch or a huge changed-set) shows up here immediately.
   logger.info(
-    `⏱️ [DuplicateRadar] ${moduleName} done in ${((Date.now() - t0) / 1000).toFixed(1)}s — fetched ${records.length}, written ${written}, skipped ${skipped + droppedNoCompany}`,
+    `⏱️ [DuplicateRadar] ${moduleName} done in ${((Date.now() - t0) / 1000).toFixed(1)}s — fetched ${records.length}, written ${written}, skipped ${skipped + droppedNoCompany}, reused-cluster ${reusedCluster}/${written} (fast-path skipped the full clusterer)`,
   );
   // CHIP HONESTY: report the count actually persisted to the database, not
   // the count fetched from Zoho. Previously this passed records.length even

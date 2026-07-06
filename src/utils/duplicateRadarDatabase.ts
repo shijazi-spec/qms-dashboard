@@ -5947,7 +5947,7 @@ let _sepParticipants: Set<string> | null = null;
 let _sepParticipantsAt = 0;
 const SEP_PARTICIPANTS_TTL_MS = 60_000;
 
-async function getSeparationParticipants(): Promise<Set<string>> {
+export async function getSeparationParticipants(): Promise<Set<string>> {
   const now = Date.now();
   if (_sepParticipants && now - _sepParticipantsAt < SEP_PARTICIPANTS_TTL_MS) {
     return _sepParticipants;
