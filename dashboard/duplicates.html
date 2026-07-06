@@ -1811,8 +1811,15 @@
                 <p class="text-xs text-gray-600 mb-3">For contacts with a missing or placeholder Account_Name, the radar reads the contact's email domain and surfaces the existing Account that most likely owns the contact.</p>
 
                 <div class="flex flex-wrap items-center gap-2 mb-3">
+                    <div class="flex items-center gap-1">
+                        <button data-on-click="rhFilterStatus" data-args="[&quot;contact_account&quot;,&quot;pending&quot;]" id="rhChip-contact_account-pending" class="rr-chip rr-sev-amber rr-chip-active">Pending</button>
+                        <button data-on-click="rhFilterStatus" data-args="[&quot;contact_account&quot;,&quot;applied&quot;]" id="rhChip-contact_account-applied" class="rr-chip rr-sev-good">Applied</button>
+                        <button data-on-click="rhFilterStatus" data-args="[&quot;contact_account&quot;,&quot;dismissed&quot;]" id="rhChip-contact_account-dismissed" class="rr-chip">Dismissed</button>
+                    </div>
                     <div class="flex-1"></div>
+                    <button data-on-click="rhExportCsv" data-args="[&quot;contact_account&quot;]" title="Download a CSV of the rows shown below, in the current status view." class="rr-btn rr-btn-ghost me-2">⬇ Export CSV</button>
                     <button data-on-click="runRecordHintsScan" data-args="[&quot;contact_account&quot;]" id="recordHintsContactAccountScanBtn" data-testid="button-record-hints-contact-account-scan" class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
+                    <button data-on-click="rhResolveAll" data-args="[&quot;contact_account&quot;]" id="rhResolveAllBtn-contact_account" title="Loop every pending suggestion with confidence ≥70% and write the suggested Account on each Zoho record automatically. Below-threshold rows stay pending for manual review." class="rr-btn rr-btn-ai">🤖 Resolve all (≥70%) with AI</button>
                 </div>
 
                 <div id="rhBulkBar-contact_account" class="hidden items-center flex-wrap gap-2 mb-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 sticky top-2 z-20 shadow-sm">
@@ -1848,8 +1855,15 @@
                 <p class="text-xs text-gray-600 mb-3">For deals with a missing Contact_Name, the radar surfaces the existing Contact that most likely belongs on the deal, based on the shared Account and related evidence.</p>
 
                 <div class="flex flex-wrap items-center gap-2 mb-3">
+                    <div class="flex items-center gap-1">
+                        <button data-on-click="rhFilterStatus" data-args="[&quot;deal_contact&quot;,&quot;pending&quot;]" id="rhChip-deal_contact-pending" class="rr-chip rr-sev-amber rr-chip-active">Pending</button>
+                        <button data-on-click="rhFilterStatus" data-args="[&quot;deal_contact&quot;,&quot;applied&quot;]" id="rhChip-deal_contact-applied" class="rr-chip rr-sev-good">Applied</button>
+                        <button data-on-click="rhFilterStatus" data-args="[&quot;deal_contact&quot;,&quot;dismissed&quot;]" id="rhChip-deal_contact-dismissed" class="rr-chip">Dismissed</button>
+                    </div>
                     <div class="flex-1"></div>
+                    <button data-on-click="rhExportCsv" data-args="[&quot;deal_contact&quot;]" title="Download a CSV of the rows shown below, in the current status view." class="rr-btn rr-btn-ghost me-2">⬇ Export CSV</button>
                     <button data-on-click="runRecordHintsScan" data-args="[&quot;deal_contact&quot;]" id="recordHintsDealContactScanBtn" data-testid="button-record-hints-deal-contact-scan" class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
+                    <button data-on-click="rhResolveAll" data-args="[&quot;deal_contact&quot;]" id="rhResolveAllBtn-deal_contact" title="Loop every pending suggestion with confidence ≥70% and write the suggested Contact on each Zoho record automatically. Below-threshold rows stay pending for manual review." class="rr-btn rr-btn-ai">🤖 Resolve all (≥70%) with AI</button>
                 </div>
 
                 <div id="rhBulkBar-deal_contact" class="hidden items-center flex-wrap gap-2 mb-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 sticky top-2 z-20 shadow-sm">
@@ -2458,7 +2472,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=99"></script>
+    <script src="/js/duplicates-app.js?v=100"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

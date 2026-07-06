@@ -8768,7 +8768,8 @@
             }
             body.innerHTML = rrSkeletonRows(7);
             try {
-                const res = await fetch('/api/duplicates/record-hints?type=' + encodeURIComponent(type) + '&status=pending');
+                const _rhSt = (window._rhStatus && window._rhStatus[type]) || 'pending';
+                const res = await fetch('/api/duplicates/record-hints?type=' + encodeURIComponent(type) + '&status=' + encodeURIComponent(_rhSt));
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 window._recordHints[type] = data;
@@ -8776,7 +8777,9 @@
                 const badge = document.getElementById(RECORD_HINT_BADGE_BY_TYPE[type]);
                 const hints = data.hints || [];
                 const pending = hints.filter(h => h.status === 'pending').length;
-                if (badge) {
+                // Badge tracks PENDING work — only refresh it while the pending
+                // view is active (the applied/dismissed views would zero it out).
+                if (badge && _rhSt === 'pending') {
                     if (pending > 0) {
                         badge.textContent = pending;
                         badge.classList.remove('hidden');
@@ -8985,6 +8988,58 @@
             if (st) st.textContent = '';
             rrToast('Applied ' + done + (fail ? ' · ' + fail + ' failed/refused' : '') + ' with AI.', 'good');
             await renderRecordHintsSection(type, RECORD_HINT_TBODY_BY_TYPE[type]);
+        }
+
+        // ─── Record Hint TOOLBAR — status sub-tabs + Export + Resolve-all (Sarah 2026-07-06) ──
+        // Brings sections 2 & 3 (Contact→Account, Deal↔Contact) in line with
+        // section 1's toolbar: a Pending/Applied/Dismissed filter, CSV export of
+        // the current view, and a "Resolve all ≥70% with AI" bulk-apply over the
+        // whole pending set (not just the selected rows). Run Scan already existed.
+        window._rhStatus = window._rhStatus || { contact_account: 'pending', deal_contact: 'pending' };
+        function rhFilterStatus(type, status) {
+            window._rhStatus[type] = status;
+            ['pending', 'applied', 'dismissed'].forEach(function (s) {
+                const el = document.getElementById('rhChip-' + type + '-' + s);
+                if (el) el.classList.toggle('rr-chip-active', s === status);
+            });
+            renderRecordHintsSection(type, RECORD_HINT_TBODY_BY_TYPE[type]);
+        }
+        async function rhResolveAll(type) {
+            if (!confirm('Resolve EVERY pending suggestion with confidence ≥70% in this section with AI? This writes the suggested value on each Zoho record.')) return;
+            const btn = document.getElementById('rhResolveAllBtn-' + type);
+            const orig = btn ? btn.textContent : null;
+            if (btn) { btn.disabled = true; btn.textContent = 'Resolving…'; }
+            try {
+                const d = await _pfWithRateRetry(async function () {
+                    const r = await fetch('/api/duplicates/record-hints/resolve-all-with-ai', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: type }) });
+                    const jj = await r.json().catch(function () { return null; });
+                    if (!r.ok) throw new Error((jj && (jj.error || jj.reason)) || ('HTTP ' + r.status));
+                    return jj;
+                }, 5, 30000, function (secs, att) { if (btn) btn.textContent = 'Rate-limited — waiting ' + secs + 's (' + att + ')…'; });
+                const n = (d && (d.applied != null ? d.applied : (d.resolved != null ? d.resolved : d.succeeded))) || 0;
+                const failed = (d && (d.failed != null ? d.failed : d.refused)) || 0;
+                rrToast('Resolved ' + n + (failed ? ' · ' + failed + ' failed/refused' : '') + ' with AI.', 'good');
+            } catch (e) {
+                rrToast('Resolve all failed: ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = orig; }
+                await renderRecordHintsSection(type, RECORD_HINT_TBODY_BY_TYPE[type]);
+            }
+        }
+        function rhExportCsv(type) {
+            const data = (window._recordHints && window._recordHints[type]) || {};
+            const hints = data.hints || [];
+            if (!hints.length) { rrToast('Nothing to export in this view.', 'warn'); return; }
+            const cols = ['source_record_name', 'source_email', 'current_value', 'suggested_target_name', 'suggested_domain', 'confidence', 'status'];
+            const head = ['Source record', 'Email', 'Current value', 'Suggested', 'Domain', 'Confidence', 'Status'];
+            const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+            const lines = [head.map(esc).join(',')].concat(hints.map(function (h) { return cols.map(function (c) { return esc(h[c]); }).join(','); }));
+            const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'record-hints-' + type + '-' + ((window._rhStatus && window._rhStatus[type]) || 'pending') + '.csv';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
         }
 
         // ─── CS-pipeline overlap loaders ─────────────────────────────────────
