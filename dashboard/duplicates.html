@@ -1573,7 +1573,7 @@
                 <div id="spReconcileResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1"></div>
                 <div id="spRejResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-72 overflow-y-auto"></div>
                 <div class="flex items-center flex-wrap gap-2 mt-1">
-                    <span class="text-[11px] text-gray-500">Backfill <strong>data</strong> (Title · Email · Phone · Mobile · Company) onto already-pushed records — fills every field from the Excel so SDRs get complete records (load the Excel &amp; run Preflight first — matches by email → phone → name). For <strong>Leads</strong>, the record is also <strong>renamed to the company</strong> (contact person kept in the Description). <strong>A real run sweeps ALL records automatically</strong> — <em>size</em> is just the per-batch page; no need to advance <em>from</em>:</span>
+                    <span class="text-[11px] text-gray-500">Backfill <strong>data</strong> (Title · Email · Phone · Mobile · Company) onto already-pushed records — fills every field from the Excel so SDRs get complete records (load the Excel &amp; run Preflight first — matches by email → phone → name). For <strong>Leads</strong>, the Lead Name is set to the <strong>contact person</strong> (so SDRs can call by name) and the company goes in the Company field. <strong>A real run sweeps ALL records automatically</strong> — <em>size</em> is just the per-batch page; no need to advance <em>from</em>:</span>
                     <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Which already-pushed records to set the Title on. 'Both' runs Leads then Contacts."><span>on</span>
                         <select id="spBackfillModule" class="text-xs border rounded-lg px-2 py-1.5" data-testid="select-sp-backfill-module" aria-label="Backfill target module">
                             <option value="Contacts">Contacts</option>
@@ -2458,7 +2458,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=97"></script>
+    <script src="/js/duplicates-app.js?v=98"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

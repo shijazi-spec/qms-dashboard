@@ -9696,20 +9696,22 @@ export const duplicateRadarRoutes = [
             const leadPayloads = freshLeads.map((r, i) => {
               const web = websiteFromDomain(r.domain);
               const company = r.company || r.domain || "(unknown)";
-              // Sarah 2026-07-05: the Lead's ENTITY NAME is the COMPANY, not the
-              // contact person. Last_Name (which forms the lead's display name in
-              // Zoho) = company; First_Name is omitted. The contact person is
-              // preserved in Description + their Title/Email/Phone fields, so no
-              // data is lost.
-              const personName = String(r.contact_name || "").trim();
+              // Sarah 2026-07-06 (REVERSES the 07-05 "name = company" rule): the
+              // Lead NAME must be the CONTACT PERSON so SDRs can call the lead by
+              // name. Last_Name/First_Name = the person; the company stays in the
+              // Company field (Zoho shows "Person – Company" at the top). Only
+              // when the row has no person name do we fall back to the company so
+              // Last_Name (required) is never blank.
+              const _nm = splitContactName(r.contact_name || company);
               const maybeClient = possibleClientOf(r);
               const p: Record<string, any> = {
-                Last_Name: company,
+                Last_Name: _nm.last || company,
+                ...(_nm.first ? { First_Name: _nm.first } : {}),
                 Company: company,
                 Lead_Source: PREFLIGHT_LEAD_SOURCE,
                 Layout: { id: LEAD.layoutId },
                 Lead_Status: LEAD.status,
-                Description: `${maybeClient ? POSSIBLE_CLIENT_NOTE(maybeClient.name) : ""}${personName ? `Contact person: ${personName}${r.title ? `, ${r.title}` : ""}. ` : ""}Imported via QMS Preflight Structured Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
+                Description: `${maybeClient ? POSSIBLE_CLIENT_NOTE(maybeClient.name) : ""}Imported via QMS Preflight Structured Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
               };
               if (r.email) p.Email = r.email;
               if (r.phone) p.Phone = r.phone;
@@ -10433,17 +10435,16 @@ export const duplicateRadarRoutes = [
             if (x.title) p.Title = x.title;
             if (x.email) p.Email = x.email;
             if (x.phone) { p.Phone = x.phone; p.Mobile = x.phone; }
-            if (module === "Leads" && x.company) {
-              p.Company = x.company;
-              // Sarah 2026-07-05: the Lead's ENTITY NAME must be the COMPANY,
-              // not the contact person. Last_Name drives the lead's display
-              // name in Zoho → set it to the company and CLEAR First_Name. The
-              // contact person is NOT lost — their name goes into Description,
-              // and their Title/Email/Phone stay on the record.
-              p.Last_Name = x.company;
-              p.First_Name = null;
-              const person = String(x.contactName || "").trim();
-              if (person) p.Description = `Contact person: ${person}${x.title ? `, ${x.title}` : ""}. (Mawsool import — lead named by company.)`;
+            if (module === "Leads") {
+              if (x.company) p.Company = x.company;
+              // Sarah 2026-07-06 (REVERSES 07-05): the Lead NAME must be the
+              // CONTACT PERSON so SDRs can call the lead by name — company stays
+              // in the Company field. Restore the person's name from the Excel
+              // contact_name onto Last_Name / First_Name. Rows with no person
+              // name keep whatever name they had (no blank Last_Name).
+              const nm = splitContactName(String(x.contactName || ""));
+              if (nm.last) p.Last_Name = nm.last;
+              if (nm.first) p.First_Name = nm.first;
             }
             if (Object.keys(p).length > 1) updates.push(p);
           }
