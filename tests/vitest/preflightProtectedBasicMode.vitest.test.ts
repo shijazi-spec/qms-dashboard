@@ -69,4 +69,27 @@ describe("runPreflight BASIC mode — protected-account guard", () => {
     expect(res.rows[0]!.reason).toBe("protected_account");
     expect(res.rows[0]!.verdict).toBe("block");
   });
+
+  // Sarah 2026-07-06 — a phone is MANDATORY: a named contact with no valid phone
+  // is rejected as invalid data (verdict no_contact / reason no_phone), even if
+  // it carries an email. A contact WITH a phone is not rejected on this rule.
+  it("rejects a named contact with NO phone even when it has an email", async () => {
+    const res = await runPreflight({
+      rows: [
+        { company_name: "NoPhone Co", contact_name: "Alice Example", email: "alice@nophoneco.example" },
+        { company_name: "ShortPhone Co", contact_name: "Carol Example", email: "carol@shortphoneco.example", phone: "555" },
+        { company_name: "HasPhone Co", contact_name: "Bob Example", email: "bob@hasphoneco.example", phone: "+966500000001" },
+      ],
+    });
+    const alice = res.rows.find((r) => r.input.company_name === "NoPhone Co");
+    expect(alice?.verdict).toBe("no_contact");
+    expect(alice?.reason).toBe("no_phone");
+    // A phone under 7 digits normalises to null → still rejected as invalid.
+    const carol = res.rows.find((r) => r.input.company_name === "ShortPhone Co");
+    expect(carol?.verdict).toBe("no_contact");
+    // A contact with a valid phone must NOT be rejected on this rule.
+    const bob = res.rows.find((r) => r.input.company_name === "HasPhone Co");
+    expect(bob?.verdict).not.toBe("no_contact");
+    expect(res.summary.no_contact).toBeGreaterThanOrEqual(2);
+  });
 });

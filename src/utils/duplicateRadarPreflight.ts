@@ -96,8 +96,8 @@ export interface PreflightInputRow {
   email?: string | null;
   company_name?: string | null;
   phone?: string | null;
-  /** Person name — when present with NO email AND NO phone, the row is REJECTED
-   *  (verdict no_contact) since the contact can't be reached. */
+  /** Person name — when present with NO valid phone number, the row is REJECTED
+   *  (verdict no_contact) since a phone is mandatory to import a contact. */
   contact_name?: string | null;
   /** Contact job title from the uploaded row — optional, carried through to
    *  the Zoho Contact/Lead payload's Title field on push. */
@@ -435,7 +435,7 @@ const VERDICT_REASONS: Record<PreflightVerdict, string> = {
   review: "cs_termination_within_cooloff",
   warn: "cs_termination_past_cooloff",
   duplicate: "existing_record_no_cs_overlap",
-  no_contact: "no_email_or_phone",
+  no_contact: "no_phone",
   pass: "no_match",
 };
 
@@ -449,7 +449,7 @@ const SUGGESTED_ACTIONS: Record<PreflightVerdict, string> = {
   duplicate:
     "Already present in Leads/Deals as a duplicate. Resolve in radar before importing.",
   no_contact:
-    "No email and no phone — this contact cannot be reached. Do not import.",
+    "No valid phone number — a phone is required to import a contact. Rejected as invalid data.",
   pass: "No overlap detected. Safe to import.",
 };
 
@@ -2918,12 +2918,14 @@ async function runPreflightBasic(input: {
       continue;
     }
 
-    // REJECT a named contact with no way to reach them — has a person name but
-    // NO email AND NO phone (Sarah 2026-06-24). Such a row can't be contacted, so
-    // it must never land in the safe-to-import list. A company-only screening row
-    // (no contact_name) is unaffected. Takes precedence over the domain screen.
+    // REJECT a named contact with NO valid phone number (Sarah 2026-07-06). A
+    // phone is now MANDATORY for import: a row that carries a person name but no
+    // reachable phone — missing, or fewer than 7 digits so it normalises to null
+    // (see resolvePhone) — is invalid data and must never land in the safe-to-
+    // import list, EVEN IF it has an email. A company-only screening row (no
+    // contact_name) is unaffected. Takes precedence over the domain screen.
     const contactName = (r.contact_name || "").toString().trim();
-    if (contactName && !email && !phone) {
+    if (contactName && !phone) {
       summary.no_contact++;
       out.push({
         row_index: i,
@@ -2935,13 +2937,13 @@ async function runPreflightBasic(input: {
         sector: null,
         arr_exposure: null,
         owners: [],
-        reason: "no_email_or_phone",
+        reason: "no_phone",
         suggested_action:
-          "No email and no phone — this contact cannot be reached. Do not import.",
+          "No valid phone number — a phone is required to import a contact. Rejected as invalid data.",
         module_counts: null,
         matched_via: null,
         executive_action:
-          "REJECT — no email and no phone on this contact; they cannot be reached, do not import.",
+          "REJECT — no valid phone number on this contact; a phone is mandatory, so this row is invalid data. Do not import.",
         executive_severity: "medium",
         churn_date: null,
         churn_days: null,
