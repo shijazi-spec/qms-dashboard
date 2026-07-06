@@ -6,6 +6,18 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>Call Intelligence - WalaPlus Quality</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
     <!--
         Chart.js pinned to v4.4 with crossorigin. Was unpinned, which
         is a real risk: when jsdelivr eventually serves a 5.x preview

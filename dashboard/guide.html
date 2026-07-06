@@ -6,6 +6,18 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>WalaPlus Platform User Guide</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
     <style>
         .screenshot {
             border: 2px solid #e2e8f0;

@@ -8,6 +8,18 @@
   <meta name="description" content="WalaPlus QMS accessibility statement — our commitment to WCAG 2.1 AA conformance and how to report accessibility issues." />
   <link rel="stylesheet" href="/css/navigation.css" />
   <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
     .a11y-content h2 { font-size: 1.25rem; font-weight: 700; color: #1e293b; margin-top: 2rem; margin-bottom: 0.75rem; }

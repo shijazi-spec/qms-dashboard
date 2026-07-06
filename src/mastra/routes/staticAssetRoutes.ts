@@ -55,6 +55,16 @@ export const staticAssetRoutes = [
     createHandler: async () =>
       serveStaticText("css/navigation.css", "text/css; charset=utf-8"),
   },
+  {
+    // Semantic-token theme (shadcn-style HSL blocks + hand-written utilities).
+    // See dashboard/css/theme.css for the token definitions and why the
+    // utilities are hand-written (no build:css script → the shipped
+    // tailwind.css can't be regenerated with the new config yet).
+    path: "/css/theme.css",
+    method: "GET" as const,
+    createHandler: async () =>
+      serveStaticText("css/theme.css", "text/css; charset=utf-8"),
+  },
   // Favicon — green-shield SVG matching the login-page badge in the
   // WalaPlus brand emerald. Serves both /favicon.svg (modern browsers,
   // referenced from each page head) and /favicon.ico (safety net for

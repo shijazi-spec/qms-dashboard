@@ -6,6 +6,18 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>COPC Scorecard Migration — WalaPlus QMS</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
     <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">

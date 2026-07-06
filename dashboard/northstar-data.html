@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>North Star KPI — Data Entry</title>
   <link rel="stylesheet" href="/dashboard/tailwind.css" />
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
   <link rel="stylesheet" href="/css/utilities.css" />
   <style>
     label { font-size: .8rem; color:#374151; font-weight:600; }

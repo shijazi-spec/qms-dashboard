@@ -178,6 +178,7 @@ export const ROUTE_MANIFEST = {
 
   staticAssets: [
     '/dashboard/tailwind.css',
+    '/css/theme.css',
     '/css/navigation.css',
     '/css/utilities.css',
     '/css/a11y.css',
