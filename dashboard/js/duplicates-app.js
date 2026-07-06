@@ -8750,6 +8750,22 @@
         async function renderRecordHintsSection(type, tbodyId) {
             const body = document.getElementById(tbodyId);
             if (!body) return;
+            // One-time DELEGATED change handler for the bulk-select checkboxes.
+            // The page dispatches every interaction through data-on-click /
+            // delegation; inline onchange="" attributes on the checkboxes never
+            // fired, so BOTH the header "select all" and the per-row boxes did
+            // nothing (rows never toggled, the bulk bar never un-hid). Mirrors the
+            // empty-records er-cb delegation at loadEmptyRecords(). data-rh-type
+            // carries the section type ('contact_account' | 'deal_contact').
+            if (!window._rhCbBound) {
+                window._rhCbBound = true;
+                document.addEventListener('change', function (e) {
+                    const t = e.target;
+                    if (!t || !t.classList) return;
+                    if (t.classList.contains('rhAllChk')) rhSelectAll(t.getAttribute('data-rh-type'));
+                    else if (t.classList.contains('rhChk')) rhRowSelect(t.getAttribute('data-rh-type'));
+                });
+            }
             body.innerHTML = rrSkeletonRows(7);
             try {
                 const res = await fetch('/api/duplicates/record-hints?type=' + encodeURIComponent(type) + '&status=pending');
@@ -8806,7 +8822,7 @@
                     // Bulk-select checkbox (pending rows only). data-ai marks the
                     // ≥70% rows so Apply-with-AI can skip the rest.
                     const chkCell = h.status === 'pending'
-                        ? '<td class="rr-num"><input type="checkbox" class="rhChk rhChk-' + type + '" data-id="' + h.id + '" data-ai="' + (aiEligible ? '1' : '0') + '" onchange="rhRowSelect(\'' + type + '\')"></td>'
+                        ? '<td class="rr-num"><input type="checkbox" class="rhChk rhChk-' + type + '" data-id="' + h.id + '" data-ai="' + (aiEligible ? '1' : '0') + '" data-rh-type="' + type + '"></td>'
                         : '<td></td>';
                     // Domain folded UNDER the suggested account (removes the wide
                     // standalone Domain column) — evidence still shows the match.

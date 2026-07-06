@@ -1826,7 +1826,7 @@
                     <table class="rr-table min-w-full">
                         <thead>
                             <tr>
-                                <th scope="col" class="rr-num" style="width:34px"><input type="checkbox" id="rhAll-contact_account" onchange="rhSelectAll('contact_account')" title="Select all"></th>
+                                <th scope="col" class="rr-num" style="width:34px"><input type="checkbox" id="rhAll-contact_account" class="rhAllChk" data-rh-type="contact_account" title="Select all"></th>
                                 <th scope="col">Source record</th>
                                 <th scope="col">Email</th>
                                 <th scope="col">Current account</th>
@@ -1863,7 +1863,7 @@
                     <table class="rr-table min-w-full">
                         <thead>
                             <tr>
-                                <th scope="col" class="rr-num" style="width:34px"><input type="checkbox" id="rhAll-deal_contact" onchange="rhSelectAll('deal_contact')" title="Select all"></th>
+                                <th scope="col" class="rr-num" style="width:34px"><input type="checkbox" id="rhAll-deal_contact" class="rhAllChk" data-rh-type="deal_contact" title="Select all"></th>
                                 <th scope="col">Source record</th>
                                 <th scope="col">Email</th>
                                 <th scope="col">Current contact</th>
@@ -2458,7 +2458,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=98"></script>
+    <script src="/js/duplicates-app.js?v=99"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
