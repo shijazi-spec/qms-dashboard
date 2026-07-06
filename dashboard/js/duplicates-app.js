@@ -12353,9 +12353,10 @@
             if (btn) { btn.disabled = true; btn.innerHTML = 'Scanning…'; }
             var box = document.getElementById('spScanResult');
             try {
+                var scanCreatedBy = String((document.getElementById('spScanCreatedBy') || {}).value || '').trim();
                 var res = await fetch('/api/duplicates/preflight/mislabeled-leads-scan', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ source: src }),
+                    body: JSON.stringify({ source: src, created_by: scanCreatedBy }),
                 });
                 var resp = await _pfReadJson(res);
                 if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
@@ -12404,6 +12405,7 @@
         // Zoho; nothing is auto-deleted.
         async function erDedupLeads() {
             var src = String((document.getElementById('spDedupSource') || {}).value || 'Mawsool').trim() || 'Mawsool';
+            var dedupCreatedBy = String((document.getElementById('spDedupCreatedBy') || {}).value || '').trim();
             var dry = !!(document.getElementById('spDedupDry') || {}).checked;
             var btn = document.getElementById('spDedupBtn');
             var orig = btn ? btn.innerHTML : '';
@@ -12412,7 +12414,7 @@
             try {
                 var res = await fetch('/api/duplicates/preflight/dedup-mawsool-leads', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ source: src }),
+                    body: JSON.stringify({ source: src, created_by: dedupCreatedBy }),
                 });
                 var resp = await _pfReadJson(res);
                 if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));

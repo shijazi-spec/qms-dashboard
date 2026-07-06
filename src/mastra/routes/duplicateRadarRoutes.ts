@@ -10497,16 +10497,30 @@ export const duplicateRadarRoutes = [
           // criteria search breaks on spaces/parens). Defaults to the Mawsool
           // import this whole tool exists for.
           const source = String(body?.source || "Mawsool").trim() || "Mawsool";
+          // Scope to leads WE created (Sarah 2026-07-06): the source has ~38k
+          // Mawsool leads but only ~1.6k were pushed by us — the rest belong to
+          // SDRs / older imports and must NOT be touched. When created_by is
+          // given, keep only leads whose Created_By / Owner name-or-email
+          // contains it (case-insensitive). Empty = all (previous behavior).
+          const createdBy = String(body?.created_by || "").trim().toLowerCase();
 
           const { fetchAllZohoRecords } = await import("../../utils/zohoCRM");
           const { getAccountDirectory } = await import("../../utils/duplicateRadarDatabase");
           const { normalizeCoreName } = await import("../../utils/preflightStructuredPush");
 
           // 1) LIVE-fetch every Lead of this source in one paginated call.
-          const leads = await fetchAllZohoRecords("Leads", {
+          const leadsAll = await fetchAllZohoRecords("Leads", {
             criteria: `(Lead_Source:equals:${source})`,
-            fields: ["Company", "Last_Name", "First_Name", "Full_Name", "Email", "Phone", "Mobile", "Lead_Status", "Created_Time"],
+            fields: ["Company", "Last_Name", "First_Name", "Full_Name", "Email", "Phone", "Mobile", "Lead_Status", "Created_Time", "Created_By", "Owner"],
           });
+          const leads = createdBy
+            ? leadsAll.filter(l => {
+                const cb = (l.data as any)?.Created_By || {};
+                const ow = (l.data as any)?.Owner || {};
+                return [cb.name, cb.email, ow.name, ow.email]
+                  .some(x => String(x || "").toLowerCase().includes(createdBy));
+              })
+            : leadsAll;
 
           // 2) Load the account directory and build the FUZZY core-name index
           //    the push never uses for auto-linking (it links on EXACT only).
@@ -10603,12 +10617,24 @@ export const duplicateRadarRoutes = [
 
           // ── REPORT MODE — fetch all source leads and group by company. ──
           const source = String(body?.source || "Mawsool").trim() || "Mawsool";
+          // Scope to leads WE created (Sarah 2026-07-06) — only dedup the ones
+          // pushed by us, identified by Created_By / Owner. The ~36k SDR / older
+          // Mawsool leads must NOT be tagged Duplicate-Delete. Empty = all.
+          const createdBy = String(body?.created_by || "").trim().toLowerCase();
           const { fetchAllZohoRecords } = await import("../../utils/zohoCRM");
           const { normalizeCompanyName } = await import("../../utils/duplicateRadarDatabase");
-          const leads = await fetchAllZohoRecords("Leads", {
+          const leadsAll = await fetchAllZohoRecords("Leads", {
             criteria: `(Lead_Source:equals:${source})`,
-            fields: ["Company", "Last_Name", "First_Name", "Email", "Phone", "Mobile", "Title", "Lead_Status", "Created_Time"],
+            fields: ["Company", "Last_Name", "First_Name", "Email", "Phone", "Mobile", "Title", "Lead_Status", "Created_Time", "Created_By", "Owner"],
           });
+          const leads = createdBy
+            ? leadsAll.filter(l => {
+                const cb = (l.data as any)?.Created_By || {};
+                const ow = (l.data as any)?.Owner || {};
+                return [cb.name, cb.email, ow.name, ow.email]
+                  .some(x => String(x || "").toLowerCase().includes(createdBy));
+              })
+            : leadsAll;
 
           const groups = new Map<string, any[]>();
           for (const l of leads) {

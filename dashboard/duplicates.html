@@ -1610,6 +1610,7 @@
                 <div class="flex items-center flex-wrap gap-2 mt-1 px-2 py-2 rounded-lg bg-sky-50 border border-sky-100">
                     <span class="text-[11px] text-sky-900"><strong>Find mislabeled leads</strong> — scans every Lead of a source against existing Accounts (fuzzy company-name match) and lists the ones that are actually existing clients. <strong>Read-only.</strong></span>
                     <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Lead_Source to scan (single word)."><span>source</span><input type="text" id="spScanSource" value="Mawsool" class="w-28 text-xs border rounded-lg px-2 py-1.5" data-testid="input-sp-scan-source" aria-label="Scan lead source" /></label>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Only scan leads whose Created By / Owner matches this name or email — so you only touch the leads WE pushed, not SDR / older Mawsool leads. Leave blank for all."><span>created by</span><input type="text" id="spScanCreatedBy" placeholder="admin name (optional)" class="w-40 text-xs border rounded-lg px-2 py-1.5" data-testid="input-sp-scan-createdby" aria-label="Scan created-by filter" /></label>
                     <button data-on-click="erScanMislabeledLeads" id="spScanBtn" data-testid="button-sp-scan" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-sky-300 text-sky-700 hover:bg-sky-50">🔎 Scan for mislabeled leads</button>
                 </div>
                 <div id="spScanResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-2 mt-1 max-h-96 overflow-y-auto"></div>
@@ -1621,6 +1622,7 @@
                 <div class="flex items-center flex-wrap gap-2 mt-1 px-2 py-2 rounded-lg bg-rose-50 border border-rose-100">
                     <span class="text-[11px] text-rose-900"><strong>Dedup leads</strong> — groups every Lead of a source by company, keeps the most-complete one, and tags the rest <strong>Duplicate-Delete</strong> for your admin to remove in Zoho. Dry-run first to see the scale.</span>
                     <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Lead_Source to dedup (single word)."><span>source</span><input type="text" id="spDedupSource" value="Mawsool" class="w-28 text-xs border rounded-lg px-2 py-1.5" data-testid="input-sp-dedup-source" aria-label="Dedup lead source" /></label>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-500" title="Only dedup leads whose Created By / Owner matches this name or email — so only the leads WE pushed get tagged Duplicate-Delete, never the SDR / older Mawsool leads. Leave blank for all."><span>created by</span><input type="text" id="spDedupCreatedBy" placeholder="admin name (optional)" class="w-40 text-xs border rounded-lg px-2 py-1.5" data-testid="input-sp-dedup-createdby" aria-label="Dedup created-by filter" /></label>
                     <label class="flex items-center gap-1 text-xs text-gray-700"><input type="checkbox" id="spDedupDry" checked data-testid="checkbox-sp-dedup-dry" /><span>Dry-run</span></label>
                     <button data-on-click="erDedupLeads" id="spDedupBtn" data-testid="button-sp-dedup" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50">🧹 Dedup leads</button>
                 </div>
@@ -2456,7 +2458,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=95"></script>
+    <script src="/js/duplicates-app.js?v=96"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
