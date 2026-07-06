@@ -9582,6 +9582,8 @@ export const duplicateRadarRoutes = [
           let existingContactsLinked = 0; // A1: contacts already in Zoho (reused, not duplicated)
           let reusedAccounts = 0; // accounts found live and reused instead of duplicated
           let existingDealsSkipped = 0; // deals that already exist under the account (idempotent retry)
+          let dealsSkippedNoContact = 0; // company had no resolvable contact → can't set mandatory Contact_Name
+          let dealsSkippedGoneAccount = 0; // account no longer exists in Zoho (merged/deleted) → skip, don't reject
           let liveClientsRejected = 0; // A1 existing accounts with a signed/paid deal → REJECTED (live client, not pushed)
           let contactsExistingAsLead = 0; // contact rows that already exist as a Lead → REJECTED (already in CRM)
           let leadsSkippedExisting = 0; // leads already in Zoho (by email/phone) — skipped, not duplicated
@@ -10172,13 +10174,38 @@ export const duplicateRadarRoutes = [
                   .filter(p => p.accountId),
               );
 
+              // Per-deal edge-case guards (Sarah 2026-07-06). fetchZohoRecordById
+              // is a CRUD read (works even with the Users API blocked) and does
+              // double duty: (a) confirm the account still EXISTS live — a
+              // merged/deleted id would reject with INVALID_DATA Account_Name;
+              // (b) read the account's OWN current Owner to use as CS_Member, so
+              // one slice's deactivated first-account owner can't poison every
+              // deal (INVALID_DATA CS_Member). Imported once, reused per company.
+              const { fetchZohoRecordById: _fetchAcc } = await import("../../utils/zohoCRM");
               for (const co of companiesWithAccount) {
                 const accountId = accountIdMap.get(co.companyKey);
                 const firstContactId = firstContactIdMap.get(co.companyKey);
-                // Only create deal if we have at least an account id.
-                // (Live clients — existing account with a signed/paid deal — were
-                // already rejected in Step 1b, so every A1 company here gets a deal.)
                 if (!accountId) continue;
+                // Contact_Name is MANDATORY on the Deal layout — a company with no
+                // resolvable contact can't get a deal (was MANDATORY_NOT_FOUND
+                // Contact_Name). Skip it instead of rejecting.
+                if (!firstContactId) { dealsSkippedNoContact++; continue; }
+
+                // Verify the account is live + get its owner for CS_Member.
+                let dealCsMember = csMemberId;
+                {
+                  let acc: any = null;
+                  try { acc = await _fetchAcc("Accounts", String(accountId)); }
+                  catch (e: any) {
+                    const _m = String(e?.message || e);
+                    if (/too many requests|rate.?limit|cooling down/i.test(_m)) throw e; // retryable
+                    // other read error → keep the shared csMemberId, proceed
+                  }
+                  if (acc === null) { dealsSkippedGoneAccount++; continue; } // account deleted/merged → skip
+                  const ownerId = acc?.data?.Owner?.id ? String(acc.data.Owner.id) : "";
+                  if (ownerId) dealCsMember = ownerId; // this account's current owner
+                }
+
                 const dealName = dealNameFor(co);
                 // Already an OPEN deal of this name under this account → skip (retry).
                 if (existingDealKeys.has(`${accountId}::${dealName.trim().toLowerCase()}`)) {
@@ -10196,18 +10223,12 @@ export const duplicateRadarRoutes = [
                 if (PRODUCTS_FIELD) p.Products = PRODUCTS_FIELD;
                 p.No_of_Employees = PREFLIGHT_EMPLOYEES;
                 if (salesPersonId) p.Sales_Person = { id: salesPersonId };
-                // CS_Member is a REQUIRED user-lookup on the Deal layout. Zoho's
-                // create API accepts ONLY { id } for a user lookup — NEVER
-                // { email } (that returns MANDATORY_NOT_FOUND api_name:"id", the
-                // exact failure we hit). csMemberId is resolved above with a
-                // fallback chain (CS email → sales person → any active user), so
-                // it's a real user id here. If it's still null we OMIT the field
-                // rather than send an unresolvable email that guarantees a reject.
-                if (csMemberId) p.CS_Member = { id: csMemberId };
+                // CS_Member = this account's own owner (validated by the read
+                // above), falling back to the shared resolved id. Only { id } —
+                // never { email } (that returns MANDATORY_NOT_FOUND api_name:"id").
+                if (dealCsMember) p.CS_Member = { id: dealCsMember };
                 if (PREFLIGHT_GOV_TYPE) p.Gov_Type = PREFLIGHT_GOV_TYPE;
-                if (firstContactId) {
-                  p.Contact_Name = { id: firstContactId };
-                }
+                p.Contact_Name = { id: firstContactId };
                 // A2/A3 open a NEW account — warn if it fuzzy-matches an
                 // existing one (possible duplicate / existing client).
                 const maybeClient = action !== 1
@@ -10296,6 +10317,8 @@ export const duplicateRadarRoutes = [
             existing_contacts_linked: existingContactsLinked,
             reused_accounts: reusedAccounts,
             existing_deals_skipped: existingDealsSkipped,
+            deals_skipped_no_contact: dealsSkippedNoContact,
+            deals_skipped_gone_account: dealsSkippedGoneAccount,
             live_clients_rejected: liveClientsRejected,
             contacts_existing_as_lead: contactsExistingAsLead,
             leads_skipped_existing: leadsSkippedExisting,

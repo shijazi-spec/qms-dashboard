@@ -12319,6 +12319,8 @@
                         box.innerHTML = '<div class="font-semibold text-emerald-800">✓ Deals created</div>'
                             + '<div>Created: <span class="text-emerald-700 font-semibold">' + (cr.deals || 0) + '</span> deal(s) · reused ' + (resp.reused_accounts || 0) + ' account(s) · linked ' + (resp.existing_contacts_linked || 0) + ' existing contact(s) · created ' + (cr.contacts || 0) + ' missing contact(s).</div>'
                             + (resp.existing_deals_skipped ? '<div class="text-gray-600">' + resp.existing_deals_skipped + ' company(ies) skipped — already had an open deal.</div>' : '')
+                            + (resp.deals_skipped_no_contact ? '<div class="text-amber-700">' + resp.deals_skipped_no_contact + ' skipped — no contact to link (Contact_Name is required). Backfill contacts first, then retry.</div>' : '')
+                            + (resp.deals_skipped_gone_account ? '<div class="text-amber-700">' + resp.deals_skipped_gone_account + ' skipped — the account was deleted/merged in Zoho.</div>' : '')
                             + (resp.live_clients_rejected ? '<div class="text-rose-700">' + resp.live_clients_rejected + ' live client(s) skipped.</div>' : '')
                             + ((resp.failed && resp.failed.deals) ? '<div class="text-red-700">' + resp.failed.deals + ' deal(s) failed' + ((resp.error_sample && resp.error_sample.length) ? ' — ' + escapeHtml(resp.error_sample.map(function (e) { return (e.code || '') + ' ' + (e.field || ''); }).join(', ')) : '') + '</div>' : '');
                         var offEl = document.getElementById('spDealsOff');
