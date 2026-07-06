@@ -9584,6 +9584,7 @@ export const duplicateRadarRoutes = [
           let existingDealsSkipped = 0; // deals that already exist under the account (idempotent retry)
           let dealsSkippedNoContact = 0; // company had no resolvable contact → can't set mandatory Contact_Name
           let dealsSkippedGoneAccount = 0; // account no longer exists in Zoho (merged/deleted) → skip, don't reject
+          const dealSkips: Array<{ company: string; reason: string }> = []; // per-company "why no deal" for the UI
           let liveClientsRejected = 0; // A1 existing accounts with a signed/paid deal → REJECTED (live client, not pushed)
           let contactsExistingAsLead = 0; // contact rows that already exist as a Lead → REJECTED (already in CRM)
           let leadsSkippedExisting = 0; // leads already in Zoho (by email/phone) — skipped, not duplicated
@@ -10182,14 +10183,18 @@ export const duplicateRadarRoutes = [
               // one slice's deactivated first-account owner can't poison every
               // deal (INVALID_DATA CS_Member). Imported once, reused per company.
               const { fetchZohoRecordById: _fetchAcc } = await import("../../utils/zohoCRM");
+              // Per-company skip reasons (dealSkips, declared above) so the
+              // operator can see exactly WHY a company (e.g. Ctelecoms) got no
+              // deal — instead of a bare "0 created".
               for (const co of companiesWithAccount) {
                 const accountId = accountIdMap.get(co.companyKey);
                 const firstContactId = firstContactIdMap.get(co.companyKey);
-                if (!accountId) continue;
+                const _label = co.companyName || co.domain || co.companyKey;
+                if (!accountId) { dealSkips.push({ company: _label, reason: "no existing account resolved" }); continue; }
                 // Contact_Name is MANDATORY on the Deal layout — a company with no
                 // resolvable contact can't get a deal (was MANDATORY_NOT_FOUND
                 // Contact_Name). Skip it instead of rejecting.
-                if (!firstContactId) { dealsSkippedNoContact++; continue; }
+                if (!firstContactId) { dealsSkippedNoContact++; dealSkips.push({ company: _label, reason: "no contact to link (Contact_Name required)" }); continue; }
 
                 // Verify the account is live + get its owner for CS_Member.
                 let dealCsMember = csMemberId;
@@ -10201,7 +10206,7 @@ export const duplicateRadarRoutes = [
                     if (/too many requests|rate.?limit|cooling down/i.test(_m)) throw e; // retryable
                     // other read error → keep the shared csMemberId, proceed
                   }
-                  if (acc === null) { dealsSkippedGoneAccount++; continue; } // account deleted/merged → skip
+                  if (acc === null) { dealsSkippedGoneAccount++; dealSkips.push({ company: _label, reason: "account deleted/merged in Zoho" }); continue; } // account gone → skip
                   const ownerId = acc?.data?.Owner?.id ? String(acc.data.Owner.id) : "";
                   if (ownerId) dealCsMember = ownerId; // this account's current owner
                 }
@@ -10210,6 +10215,7 @@ export const duplicateRadarRoutes = [
                 // Already an OPEN deal of this name under this account → skip (retry).
                 if (existingDealKeys.has(`${accountId}::${dealName.trim().toLowerCase()}`)) {
                   existingDealsSkipped++;
+                  dealSkips.push({ company: dealName, reason: "already has an OPEN deal of this name under the account" });
                   continue;
                 }
                 const p: Record<string, any> = {
@@ -10319,6 +10325,7 @@ export const duplicateRadarRoutes = [
             existing_deals_skipped: existingDealsSkipped,
             deals_skipped_no_contact: dealsSkippedNoContact,
             deals_skipped_gone_account: dealsSkippedGoneAccount,
+            deal_skips: dealSkips.slice(0, 25),
             live_clients_rejected: liveClientsRejected,
             contacts_existing_as_lead: contactsExistingAsLead,
             leads_skipped_existing: leadsSkippedExisting,
