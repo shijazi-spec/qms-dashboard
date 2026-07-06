@@ -35,7 +35,6 @@ import {
 export { zohoWritesAllowedInEnv } from "./zohoCRM";
 import {
   captureClusterSnapshot,
-  resolveCluster,
   markPrimaryRecord,
   recordPartialMergeAction,
   recordResolutionLedgerEntry,
@@ -453,33 +452,27 @@ export async function executeMergePlan(
   // when this run is allowed to close it. For cross-module clusters
   // closeCluster is false, so the cluster stays active for the remaining
   // modules' Agentic Resolution sections; Agentic only handles Accounts here.
+  // NEW LIFECYCLE (Sarah 2026-07-06): an apply NEVER flips the cluster to
+  // 'resolved'. It migrates the fields + tags the duplicates Duplicate-Delete
+  // and records the merge action, but the cluster stays ACTIVE — surfacing in
+  // the "AI-Applied · pending Zoho delete" queue. Only Verify-in-CRM (which
+  // confirms the tagged records are actually gone from Zoho) flips it to
+  // 'resolved'. This now holds for SINGLE-module (closeCluster) AND cross-module
+  // (partial) applies alike, so EVERY apply follows Apply → AI-Applied → Verify
+  // → Resolved. Previously the closeCluster branch called resolveCluster() here
+  // and single-module (e.g. Account-only) clusters jumped straight to Resolved,
+  // skipping the AI-Applied queue — the exact "I resolved these and they didn't
+  // move to AI-Applied" bug. recordPartialMergeAction writes a 'module_resolved'
+  // action (status stays active); it also lets subsequent same-cluster plans for
+  // the OTHER modules filter out the just-tagged duplicates (no zombie LINK
+  // SURVIVOR buttons). Best-effort; a logging failure must not abort the Zoho
+  // writes already done.
   const closeCluster = opts.closeCluster !== false;
-  if (!dryRun && closeCluster) {
+  if (!dryRun) {
     try {
       if (typeof plan.masterDbId === "number") {
         await markPrimaryRecord(plan.clusterId, plan.masterDbId);
       }
-      await resolveCluster(
-        plan.clusterId,
-        "resolve",
-        performedBy,
-        typeof plan.masterDbId === "number" ? plan.masterDbId : undefined,
-        `Agentic merge: fields migrated onto ${masterId}; ${dups.length} duplicate(s) tagged ${plan.tagName}.`,
-      );
-      report.clusterResolved = true;
-    } catch (e) {
-      fail("resolve-cluster", e);
-    }
-  } else if (!dryRun && !closeCluster) {
-    report.warnings.push(
-      "Cross-module cluster: duplicate Accounts were migrated & tagged, but the cluster was left OPEN. Finish the other modules (Leads / Deals / Contacts) via their own Agentic Resolution sections — the cluster auto-resolves once the next sync sees every module's duplicates merged or tagged in Zoho.",
-    );
-    // Record the partial merge so subsequent same-cluster plans for the
-    // OTHER modules can filter out the just-tagged duplicates (else the
-    // LINK SURVIVOR TO ACCOUNT picker keeps showing zombie SLB / Slb
-    // buttons next to the real Schlumberger (SLB) survivor). Best-effort;
-    // a logging failure must not abort the Zoho writes already done.
-    try {
       const dupDbIds = (plan.duplicateDbIds || []).filter(
         (n): n is number => typeof n === "number",
       );
@@ -488,10 +481,20 @@ export async function executeMergePlan(
         typeof plan.masterDbId === "number" ? plan.masterDbId : null,
         dupDbIds,
         performedBy,
-        `Module merge (${module}): survivor=${masterId}; ${dups.length} duplicate(s) tagged ${plan.tagName}. Cluster left open for cross-module follow-up.`,
+        closeCluster
+          ? `Agentic merge (${module}): fields migrated onto ${masterId}; ${dups.length} duplicate(s) tagged ${plan.tagName}. AI-Applied — awaiting Zoho admin delete + Verify-in-CRM to resolve.`
+          : `Module merge (${module}): survivor=${masterId}; ${dups.length} duplicate(s) tagged ${plan.tagName}. Cluster left open for cross-module follow-up.`,
       );
+      // clusterResolved reflects "fully resolved in CRM", which an apply no
+      // longer is — it is now AI-Applied, pending Verify-in-CRM.
+      report.clusterResolved = false;
+      if (!closeCluster) {
+        report.warnings.push(
+          "Cross-module cluster: duplicate Accounts were migrated & tagged, but the cluster has other modules still open. Finish the other modules (Leads / Deals / Contacts) via their own Agentic Resolution sections, then Verify-in-CRM.",
+        );
+      }
     } catch (e) {
-      fail("record-partial-merge", e);
+      fail("record-merge-action", e);
     }
   }
 
@@ -506,9 +509,14 @@ export async function executeMergePlan(
       module,
       masterZohoId: masterId,
       duplicateZohoIds: dups,
-      actionType: closeCluster ? "resolve" : "module_resolved",
+      // Apply is ALWAYS pending verification now → 'module_resolved'. The durable
+      // 'resolve' marker is reserved for Verify-in-CRM (resolveCluster), so
+      // restoreLedgerResolvedClusterStatus only re-resolves VERIFIED clusters
+      // after a Rebuild — never applied-but-unverified ones (which must stay in
+      // the AI-Applied queue until their Duplicate-Delete records are gone).
+      actionType: "module_resolved",
       performedBy,
-      notes: `Agentic ${closeCluster ? "merge" : "module merge"} into ${masterId}`,
+      notes: `Agentic ${closeCluster ? "merge" : "module merge"} into ${masterId} — AI-Applied, pending Verify-in-CRM`,
     }).catch(() => {});
   }
 

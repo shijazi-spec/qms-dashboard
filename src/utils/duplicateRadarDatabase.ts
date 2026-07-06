@@ -2030,9 +2030,14 @@ export async function backfillResolutionLedger(): Promise<void> {
        SELECT DISTINCT ON (mm.module, mm.master)
          mm.module,
          mm.master,
-         'resolve',
+         -- APPLIED, not verified (Sarah 2026-07-06): an 'applied' feedback event
+         -- means the duplicates were TAGGED, not confirmed deleted. Recover it as
+         -- 'module_resolved' (AI-Applied/pending) so restoreLedgerResolvedClusterStatus
+         -- does NOT auto-resolve it after a boot/Rebuild. Genuinely-verified clusters
+         -- are recovered as 'resolve' by source-1 (status='resolved') above.
+         'module_resolved',
          f.performed_by,
-         'backfilled from apply feedback log',
+         'backfilled from apply feedback log (AI-Applied, pending verify)',
          COALESCE(f.created_at, NOW())
        FROM duplicate_resolution_feedback f
        JOIN LATERAL (
@@ -2083,10 +2088,13 @@ export interface DuplicateProgressRow {
  * as history. Returns the snapshot it wrote. Best-effort: never throws (a
  * snapshot failure must not abort a scan).
  *
- * Definitions (locked with Sarah 2026-06-17):
- *   open   = clusters with status='active' that contain this module
- *   solved = clusters with status<>'active' that contain this module (closed
- *            for ANY reason — merged, linked, marked-resolved, ignored)
+ * Definitions (locked with Sarah 2026-06-17; refined 2026-07-06):
+ *   open   = clusters with status='active' that contain this module AND have NO
+ *            apply action yet (truly untouched). An applied cluster now stays
+ *            'active' in the AI-Applied queue until Verify-in-CRM resolves it, so
+ *            it must NOT count as "open" — it's handled, awaiting deletion.
+ *   solved = every other cluster containing this module (closed OR AI-Applied —
+ *            merged, linked, marked-resolved, ignored, or tagged-pending-delete)
  *   total  = open + solved (all clusters that contain this module)
  *   merged = distinct durable real merges for this module from the ledger
  */
@@ -2102,7 +2110,12 @@ export async function captureDuplicateProgressSnapshot(): Promise<DuplicateProgr
     const selects = PROGRESS_MODULES.map(
       (o) =>
         `COUNT(*) FILTER (WHERE dc.${o.col} > 0)::int AS ${o.col}_t,
-         COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND dc.status = 'active')::int AS ${o.col}_o`,
+         COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND dc.status = 'active'
+                          AND NOT EXISTS (
+                            SELECT 1 FROM duplicate_merge_actions ma
+                             WHERE ma.cluster_id = dc.id
+                               AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending')
+                          ))::int AS ${o.col}_o`,
     ).join(",\n");
     const r = await pool.query(`SELECT ${selects} FROM duplicate_clusters dc`);
     const row = r.rows[0] || {};
@@ -3790,7 +3803,11 @@ export async function restoreLedgerResolvedClusterStatus(): Promise<{
                                         WHEN 'contact' THEN 'Contacts'
                                         WHEN 'account' THEN 'Accounts'
                                       END
-                      AND lg.action_type IN ('resolve','module_resolved')
+                      -- VERIFIED only (Sarah 2026-07-06): 'resolve' means Verify-in-CRM
+                      -- confirmed the Duplicate-Delete records are gone. 'module_resolved'
+                      -- (an apply that hasn't been verified yet) must NOT auto-resolve — it
+                      -- stays in the AI-Applied queue until Verify moves it to Resolved.
+                      AND lg.action_type = 'resolve'
                   ))                                                            AS resolved_modules
            FROM duplicate_records
           WHERE zoho_record_id IS NOT NULL
