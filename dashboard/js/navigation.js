@@ -468,8 +468,21 @@ const WalaPlusNav = {
   },
   applyTheme(mode) {
     const html = document.documentElement;
-    if (mode === 'dark') html.classList.add('wp-dark');
-    else html.classList.remove('wp-dark');
+    // Add BOTH the standard `dark` class (shadcn/Tailwind darkMode:['class'])
+    // and the legacy `wp-dark` class in one pass so:
+    //   - Tailwind utilities like `dark:bg-card` resolve immediately
+    //   - the theme.css :root/.dark token blocks flip
+    //   - existing CSS selectors written against `html.wp-dark` in
+    //     navigation.css and page-inline <style> blocks keep working
+    // Once every page has moved to the semantic tokens the wp-dark alias
+    // can be retired in one sweep — no rush; the alias costs nothing.
+    if (mode === 'dark') {
+      html.classList.add('dark');
+      html.classList.add('wp-dark');
+    } else {
+      html.classList.remove('dark');
+      html.classList.remove('wp-dark');
+    }
     // Swap icon visibility on the toggle button (if rendered)
     const btn = document.getElementById('wp-theme-toggle');
     if (btn) {
