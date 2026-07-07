@@ -838,7 +838,18 @@ async function runModulesWithConcurrency<T>(
 // and purge them from the duplicate radar. Without this, a manual Zoho merge
 // would leave the losing record visible in the radar forever (Modified_Time
 // filters never return deleted records).
-async function runDeletionDetection(clustersUpdated: Set<number>): Promise<{
+async function runDeletionDetection(
+  clustersUpdated: Set<number>,
+  // Per-module last_sync_at captured BEFORE this scan's fetch ran. CRITICAL
+  // (Sarah 2026-07-07 "deleted data still shows" bug): the fetch calls
+  // upsertSyncState which sets last_sync_at = NOW(), so re-reading it here gave
+  // "now" → the Zoho /deleted feed window became [now, now] = empty and NO
+  // deletion was ever detected. Ghost records (deleted/merged in Zoho) then
+  // lingered in the radar forever — clusters showed records that 404 when
+  // opened in Zoho. Using the PRE-fetch baseline asks Zoho for everything
+  // deleted SINCE the last completed sync, which is the whole point of the pass.
+  baselines: Record<string, string | undefined>,
+): Promise<{
   totalRemoved: number;
   perModule: Record<string, number>;
 }> {
@@ -853,8 +864,7 @@ async function runDeletionDetection(clustersUpdated: Set<number>): Promise<{
 
   for (const m of modules) {
     try {
-      const syncState = await getSyncState(m.name);
-      const since = syncState?.last_sync_at || undefined;
+      const since = baselines[m.name] || undefined;
       // Skip on first ever sync — no baseline to diff against, and the
       // initial fetch will populate the radar from scratch anyway.
       if (!since) {
@@ -1283,7 +1293,7 @@ async function scanZohoCRMForDuplicates(
       percentage: 62,
       message: "Checking Zoho for deletions...",
     });
-    const deletionResult = await runDeletionDetection(clustersUpdated);
+    const deletionResult = await runDeletionDetection(clustersUpdated, baselines);
     if (deletionResult.totalRemoved > 0) {
       logger.info(
         `🗑️ [DuplicateRadar] Deletion-detection removed ${deletionResult.totalRemoved} record(s):`,
