@@ -10251,6 +10251,7 @@ export async function scanCsLifecycleViolations(opts: {
   severity?: CsViolationSeverity;
   code?: CsViolationCode;
   limit?: number;
+  segment?: DuplicateFilters["segment"];
 } = {}): Promise<CsLifecycleScanResult> {
   const t0 = Date.now();
   // Bumped default 2000 → 10000 and cap 5000 → 50000 so the scan covers
@@ -10262,6 +10263,20 @@ export async function scanCsLifecycleViolations(opts: {
   // Deals — orgs with >2k Deals never saw every CS deal evaluated.
   const limit = Math.max(1, Math.min(opts.limit ?? 10000, 50000));
 
+  // Segment chip (WalaPlus / WalaOne / Marketplace) — filter CS deals by their
+  // Zoho Layout with the SAME predicate the radar tabs use, so "CS deals
+  // scanned" + violations reflect only the chosen layout (Sarah 2026-07-07).
+  // Segment bind params come first ($1..$N); the LIMIT is the last placeholder.
+  const params: any[] = [];
+  const seg = buildSegmentPredicate(opts.segment, 1);
+  let segmentCond = "";
+  if (seg.condition) {
+    segmentCond = " AND " + seg.condition;
+    params.push(...seg.params);
+  }
+  params.push(limit);
+  const limitPh = "$" + params.length;
+
   const dealRows = await pool.query(
     `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,
             r.domain, r.modified_date, r.raw_data, r.gov_type
@@ -10269,10 +10284,10 @@ export async function scanCsLifecycleViolations(opts: {
        LEFT JOIN duplicate_clusters dc ON dc.id = r.cluster_id
       WHERE r.zoho_module = 'Deals'
         AND r.cleanup_class IS NULL
-        AND (dc.status IS NULL OR dc.status = 'active')
+        AND (dc.status IS NULL OR dc.status = 'active')${segmentCond}
       ORDER BY r.modified_date DESC NULLS LAST
-      LIMIT $1`,
-    [limit],
+      LIMIT ${limitPh}`,
+    params,
   );
 
   const evaluations: CsLifecycleEvaluation[] = [];

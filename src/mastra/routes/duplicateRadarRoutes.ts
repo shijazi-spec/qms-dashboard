@@ -7528,6 +7528,7 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const severity = url.searchParams.get("severity") || undefined;
           const code = url.searchParams.get("code") || undefined;
+          const segment = url.searchParams.get("segment") || undefined;
           const limit = parseInt(url.searchParams.get("limit") || "2000", 10);
 
           const { scanCsLifecycleViolations } = await import(
@@ -7537,6 +7538,7 @@ export const duplicateRadarRoutes = [
             severity: severity as any,
             code: code as any,
             limit,
+            segment: segment as any,
           });
           return c.json({ success: true, ...result });
         } catch (error: any) {

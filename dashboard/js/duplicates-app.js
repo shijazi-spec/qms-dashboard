@@ -10483,6 +10483,9 @@
 
         async function loadCsLifecycle(severity) {
             window._csLifecycleFilter = severity || 'all';
+            // New load (severity/segment change) → back to page 1, else a stale
+            // page index survives into a smaller result set (Sarah 2026-07-07).
+            window._csLifecyclePage = 0;
             ['all','critical','warning','info'].forEach(k => {
                 const el = document.getElementById('csLifeChip-' + k);
                 if (!el) return;
@@ -10500,6 +10503,10 @@
             // true CS-deal population.
             let url = '/api/duplicates/cs-lifecycle/violations?limit=10000';
             if (window._csLifecycleFilter !== 'all') url += '&severity=' + encodeURIComponent(window._csLifecycleFilter);
+            // Segment chip (WalaPlus / WalaOne / Marketplace) — server-side so
+            // "CS deals scanned" + violations reflect only the chosen layout.
+            const _csSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+            if (_csSeg && _csSeg !== 'all') url += '&segment=' + encodeURIComponent(_csSeg);
             try {
                 const res = await fetch(url);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -10727,6 +10734,10 @@
             if (allViolations.length === 0) {
                 body.innerHTML = rrEmptyRow(8, { glyph: '✓', title: 'No violations detected', desc: 'CS is compliant for the current filter.' });
                 _refreshCsLifecyclePhaseOptions([]);
+                // Reset the pager — otherwise the stale "Page 5 of 6 · N deals"
+                // from the previous filter lingers over an empty table.
+                window._csLifecyclePage = 0;
+                renderPagination('csLifecyclePagination', 0, 1, () => {}, 0, 'deals');
                 return;
             }
             // Each API row is one (deal × violation) pair. Group into one
@@ -10768,6 +10779,7 @@
 
             if (sorted.length === 0) {
                 body.innerHTML = rrEmptyRow(8, { glyph: '🔍', title: 'No CS deals match the active filters', desc: 'Adjust the phase chip or click <em>Clear All Filters</em> in the Advanced Filters panel.' });
+                window._csLifecyclePage = 0;
                 renderPagination('csLifecyclePagination', 0, 1, () => {}, 0, 'deals');
                 return;
             }
@@ -13226,11 +13238,12 @@
         // and re-runs the active tab's load path so the change is immediate.
         async function setSegment(newSeg) {
             if (!['all', 'marketplace', 'corporate', 'walaplus', 'walaone'].includes(newSeg)) return;
-            // Deal Lifecycle filters the SEGMENT server-side (its KPI cards +
-            // rows must reflect only the chosen layout), so a cached re-render
-            // would ignore the change. Drop the cache to force a re-fetch with
-            // the new segment (Sarah 2026-07-07).
+            // Deal Lifecycle AND CS Lifecycle filter the SEGMENT server-side
+            // (their KPI cards + rows must reflect only the chosen layout), so a
+            // cached re-render would ignore the change. Drop the caches to force
+            // a re-fetch with the new segment (Sarah 2026-07-07).
             window._dealLifecycleData = null;
+            window._csLifecycleData = null;
             _filterSetInputValue('filterSegment', newSeg);
             _syncSegmentChipFromDropdown();
             try {
