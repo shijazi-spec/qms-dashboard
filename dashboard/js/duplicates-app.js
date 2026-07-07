@@ -10487,15 +10487,6 @@
             // New load (severity/segment change) → back to page 1, else a stale
             // page index survives into a smaller result set (Sarah 2026-07-07).
             window._csLifecyclePage = 0;
-            // CS Lifecycle is the B2B CS team's corporate book — default the
-            // segment to WalaPlus when nothing specific is chosen, so a bare view
-            // shows B2B corporates only (Sarah 2026-07-07). Explicit
-            // Marketplace/WalaOne still override.
-            const _csSegEl = document.getElementById('filterSegment');
-            if (_csSegEl && (!_csSegEl.value || _csSegEl.value === 'all')) {
-                _csSegEl.value = 'walaplus';
-                if (typeof _syncSegmentChipFromDropdown === 'function') _syncSegmentChipFromDropdown();
-            }
             ['all','critical','warning','info'].forEach(k => {
                 const el = document.getElementById('csLifeChip-' + k);
                 if (!el) return;
@@ -13169,6 +13160,15 @@
         // browser bookmark URL — the underlying API endpoints still accept
         // the same filter params, so a saved deep-link works regardless.
         const _filterStateByTab = {};
+        // CS Lifecycle is the B2B CS team's book, so its DEFAULT segment is
+        // WalaPlus (corporate), not 'all'. Seed only this tab's per-tab slot so
+        // switching TO CS restores WalaPlus — WITHOUT touching the shared chip
+        // for the other tabs (Deal Lifecycle etc. stay fully 'all'-filterable).
+        // The user can still pick another segment while on CS (Sarah 2026-07-07).
+        _filterStateByTab['cs-lifecycle'] = {
+            module: [], owner: [], layout: [], pipeline: [], stage: [],
+            confidence: '', domain: '', dateFrom: '', dateTo: '', segment: 'walaplus',
+        };
         const _filterAwareTabs = new Set([
             'summary', 'clusters', 'leads', 'deals', 'contacts', 'accounts',
             'cross-module', 'cs-overlap', 'cs-lifecycle', 'deal-lifecycle', 'preflight',
