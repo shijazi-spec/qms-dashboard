@@ -10263,12 +10263,16 @@ export async function scanCsLifecycleViolations(opts: {
   // Deals — orgs with >2k Deals never saw every CS deal evaluated.
   const limit = Math.max(1, Math.min(opts.limit ?? 10000, 50000));
 
-  // Segment chip (WalaPlus / WalaOne / Marketplace) — filter CS deals by their
-  // Zoho Layout with the SAME predicate the radar tabs use, so "CS deals
-  // scanned" + violations reflect only the chosen layout (Sarah 2026-07-07).
-  // Segment bind params come first ($1..$N); the LIMIT is the last placeholder.
+  // Segment scope. CS Lifecycle is the B2B CS team's domain, so it DEFAULTS to
+  // the WalaPlus (corporate) layout — a bare "all"/unset segment resolves to
+  // WalaPlus, NOT every layout, because WalaOne / Marketplace are not part of
+  // the CS-B2B book (Sarah 2026-07-07). An explicit Marketplace/WalaOne chip
+  // still overrides for ad-hoc inspection. Same layout_name predicate the radar
+  // tabs use. Segment bind params come first ($1..$N); LIMIT is the last one.
+  const csSegment: DuplicateFilters["segment"] =
+    !opts.segment || opts.segment === "all" ? "walaplus" : opts.segment;
   const params: any[] = [];
-  const seg = buildSegmentPredicate(opts.segment, 1);
+  const seg = buildSegmentPredicate(csSegment, 1);
   let segmentCond = "";
   if (seg.condition) {
     segmentCond = " AND " + seg.condition;

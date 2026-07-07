@@ -10487,6 +10487,15 @@
             // New load (severity/segment change) → back to page 1, else a stale
             // page index survives into a smaller result set (Sarah 2026-07-07).
             window._csLifecyclePage = 0;
+            // CS Lifecycle is the B2B CS team's corporate book — default the
+            // segment to WalaPlus when nothing specific is chosen, so a bare view
+            // shows B2B corporates only (Sarah 2026-07-07). Explicit
+            // Marketplace/WalaOne still override.
+            const _csSegEl = document.getElementById('filterSegment');
+            if (_csSegEl && (!_csSegEl.value || _csSegEl.value === 'all')) {
+                _csSegEl.value = 'walaplus';
+                if (typeof _syncSegmentChipFromDropdown === 'function') _syncSegmentChipFromDropdown();
+            }
             ['all','critical','warning','info'].forEach(k => {
                 const el = document.getElementById('csLifeChip-' + k);
                 if (!el) return;
