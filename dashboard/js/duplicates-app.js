@@ -578,11 +578,12 @@
                 if (c.pairing === 'mixed') sev = 'rr-sev-amber';
                 else if (c.pairing === 'lead_deal') sev = 'rr-sev-warn';
                 if (c.has_client_deal) sev = 'rr-sev-warn';
-                // Confidence mini-meter: width = score, colour = high/med/low band.
+                // Confidence — number only (Sarah 2026-07-07). The mini-meter bar
+                // was dropped to narrow this column so the Cross-Module table fits
+                // without a horizontal scroll. Colour the % by high/med/low band.
                 const confLevel = getConfidenceLevel(c.confidence_score || 0);
                 const confColor = confLevel === 'high' ? '#15803D' : (confLevel === 'medium' ? '#B45309' : '#B91C1C');
-                const confWidth = Math.max(0, Math.min(100, Number(c.confidence_score || 0)));
-                const confCell = '<span class="rr-conf"><span class="rr-bar"><i style="width:' + confWidth + '%;background:' + confColor + '"></i></span><span class="rr-val">' + _fn(c.confidence_score || 0) + '%</span></span>';
+                const confCell = '<span class="rr-conf"><span class="rr-val" style="color:' + confColor + '">' + _fn(c.confidence_score || 0) + '%</span></span>';
                 // Follow-up 3: checkbox cell only when the cluster has a
                 // Lead — leads are what the bulk action closes; a row with
                 // no lead has nothing for the action to do.
