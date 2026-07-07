@@ -2526,15 +2526,31 @@
             </td>`;
         }
 
+        // Which AI-status sub-tab is active for the current module tab. The
+        // per-page renderers re-group by a DIRECT same-signal pair (≥2 of
+        // name/email/phone/id) for the UNTOUCHED view — that drops colleague /
+        // chained-match clusters. But for AI-Applied / Resolved / Dismissed / All
+        // the clusters were ALREADY vetted server-side, and an AI-Applied
+        // cluster's duplicates are TAGGED pending deletion, so they no longer
+        // form a ≥2-signal pair. Re-applying the filter there dropped every one →
+        // "N duplicate groups" over an empty table (Sarah 2026-07-07). So those
+        // views render the SERVER's groups as-is. Returns 'active' by default.
+        function _recordDupView() {
+            return (window._aiStatusByTab && window._currentTab && window._aiStatusByTab[window._currentTab]) || 'active';
+        }
+
         function renderLeadRows(groups) {
             const tbody = document.getElementById('leadsTable');
             // Flatten the page so we can count duplicate names/emails/phones/IDs
             // across every lead currently shown.
             const allLeads = [];
             const clusterMetaById = {};
+            const _serverGroupIdx = [];
             for (const g of groups) {
                 if (g.cluster && g.cluster.id != null) clusterMetaById[g.cluster.id] = g.cluster;
-                for (const r of (g.leads || [])) allLeads.push(r);
+                const _gi = [];
+                for (const r of (g.leads || [])) { _gi.push(allLeads.length); allLeads.push(r); }
+                if (_gi.length) _serverGroupIdx.push(_gi);
             }
 
             // Counts per match-key so each row can show 👤/📧/📞/🆔 badges.
@@ -2589,9 +2605,9 @@
             // Build the render list: only groups with 2+ leads (singletons
             // are not duplicates by any signal). Order by group size desc
             // so the messiest clusters are at the top.
-            const groupList = Object.values(buckets)
-                .filter(idxs => idxs.length >= 2)
-                .sort((a, b) => b.length - a.length);
+            const groupList = (_recordDupView() === 'active')
+                ? Object.values(buckets).filter(idxs => idxs.length >= 2).sort((a, b) => b.length - a.length)
+                : _serverGroupIdx;
 
             // Friendly summary for the group header: shared key + N members
             // + the "primary" lead's name as the human label.
@@ -2703,9 +2719,12 @@
             const tbody = document.getElementById('dealsTable');
             const items = [];
             const clusterMetaById = {};
+            const _serverGroupIdx = [];
             for (const g of groups) {
                 if (g.cluster && g.cluster.id != null) clusterMetaById[g.cluster.id] = g.cluster;
-                for (const r of (g.deals || [])) items.push(r);
+                const _gi = [];
+                for (const r of (g.deals || [])) { _gi.push(items.length); items.push(r); }
+                if (_gi.length) _serverGroupIdx.push(_gi);
             }
 
             const accountIdOf = r => {
@@ -2725,7 +2744,7 @@
                 id: { emoji: '🆔', label: 'CRM ID', color: 'bg-rose-200 text-rose-900 border border-rose-400' },
             };
             const counts = _dupCounts(items, extractors);
-            const groupList = _dupBuckets(items, extractors);
+            const groupList = (_recordDupView() === 'active') ? _dupBuckets(items, extractors) : _serverGroupIdx;
 
             let rows = '';
             groupList.forEach((idxs, gIdx) => {
@@ -2764,9 +2783,12 @@
             const tbody = document.getElementById('contactsTable');
             const items = [];
             const clusterMetaById = {};
+            const _serverGroupIdx = [];
             for (const g of groups) {
                 if (g.cluster && g.cluster.id != null) clusterMetaById[g.cluster.id] = g.cluster;
-                for (const r of (g.contacts || [])) items.push(r);
+                const _gi = [];
+                for (const r of (g.contacts || [])) { _gi.push(items.length); items.push(r); }
+                if (_gi.length) _serverGroupIdx.push(_gi);
             }
 
             const contactPhone = r => r.phone || (r.raw_data && (r.raw_data.Phone || r.raw_data.Mobile || r.raw_data.Home_Phone)) || '';
@@ -2791,7 +2813,9 @@
             // real same-signal pair, and _normName is Arabic-aware, so genuine
             // duplicates (incl. Arabic names that differ by an invisible mark or
             // ة-vs-ه) still group reliably and no real duplicate is dropped.
-            const groupList = _dupBuckets(items, extractors);
+            // Non-Untouched views render the server's already-vetted groups as-is
+            // (see _recordDupView) so AI-Applied clusters aren't dropped.
+            const groupList = (_recordDupView() === 'active') ? _dupBuckets(items, extractors) : _serverGroupIdx;
 
             let rows = '';
             groupList.forEach((idxs, gIdx) => {
@@ -2850,9 +2874,12 @@
             // AI-state badge ("🤖 AI-Applied · N pending Zoho delete" vs
             // "✅ Resolved" vs default).
             const clusterMetaById = {};
+            const _serverGroupIdx = [];
             for (const g of groups) {
                 if (g.cluster && g.cluster.id != null) clusterMetaById[g.cluster.id] = g.cluster;
-                for (const r of (g.accounts || [])) items.push(r);
+                const _gi = [];
+                for (const r of (g.accounts || [])) { _gi.push(items.length); items.push(r); }
+                if (_gi.length) _serverGroupIdx.push(_gi);
             }
             window._clusterMetaByIdForTab = clusterMetaById;
 
@@ -2891,7 +2918,7 @@
                 ...extractors,
                 _cluster: r => (r.cluster_id != null ? 'cid:' + r.cluster_id : ''),
             };
-            const groupList = _dupBuckets(items, bucketExtractors);
+            const groupList = (_recordDupView() === 'active') ? _dupBuckets(items, bucketExtractors) : _serverGroupIdx;
 
             let rows = '';
             groupList.forEach((idxs, gIdx) => {
