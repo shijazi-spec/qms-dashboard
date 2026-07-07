@@ -7487,6 +7487,7 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const severity = url.searchParams.get("severity") || undefined;
           const stage = url.searchParams.get("stage") || undefined;
+          const segment = url.searchParams.get("segment") || undefined;
           const limit = parseInt(url.searchParams.get("limit") || "2000", 10);
 
           const { scanDealStageAgingViolations } = await import(
@@ -7499,6 +7500,7 @@ export const duplicateRadarRoutes = [
             severity: severity as any,
             stage,
             limit,
+            segment: segment as any,
           });
           return c.json({
             success: true,

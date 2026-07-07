@@ -10158,7 +10158,12 @@
                 const stageQ = window._dealLifecycleStageFilter
                     ? ('&stage=' + encodeURIComponent(window._dealLifecycleStageFilter))
                     : '';
-                const res = await fetch('/api/duplicates/deal-stage-aging?limit=10000' + sevQ + stageQ);
+                // Segment chip (WalaPlus / WalaOne / Marketplace) — sent to the
+                // server so BOTH the KPI cards and the rows reflect ONLY deals on
+                // the chosen Zoho Layout, not a mix (Sarah 2026-07-07).
+                const _seg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+                const segQ = (_seg && _seg !== 'all') ? ('&segment=' + encodeURIComponent(_seg)) : '';
+                const res = await fetch('/api/duplicates/deal-stage-aging?limit=10000' + sevQ + stageQ + segQ);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 window._dealLifecycleData = data;
@@ -13221,6 +13226,11 @@
         // and re-runs the active tab's load path so the change is immediate.
         async function setSegment(newSeg) {
             if (!['all', 'marketplace', 'corporate', 'walaplus', 'walaone'].includes(newSeg)) return;
+            // Deal Lifecycle filters the SEGMENT server-side (its KPI cards +
+            // rows must reflect only the chosen layout), so a cached re-render
+            // would ignore the change. Drop the cache to force a re-fetch with
+            // the new segment (Sarah 2026-07-07).
+            window._dealLifecycleData = null;
             _filterSetInputValue('filterSegment', newSeg);
             _syncSegmentChipFromDropdown();
             try {

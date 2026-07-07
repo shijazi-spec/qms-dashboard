@@ -10415,6 +10415,7 @@ export async function scanDealStageAgingViolations(
     severity?: "info" | "warning" | "critical";
     stage?: string;
     limit?: number;
+    segment?: DuplicateFilters["segment"];
   } = {},
 ): Promise<DealStageAgingScanResult> {
   const t0 = Date.now();
@@ -10424,6 +10425,20 @@ export async function scanDealStageAgingViolations(
     "./dealStageAgingCompliance"
   );
 
+  // Segment chip (WalaPlus / WalaOne / Marketplace) — filter deals by their Zoho
+  // Layout, using the SAME predicate the radar tabs use so "WalaPlus" shows only
+  // WalaPlus-layout deals, etc. (Sarah 2026-07-07). Segment bind params come
+  // first ($1..$N); the LIMIT is always the last placeholder.
+  const params: any[] = [];
+  const seg = buildSegmentPredicate(opts.segment, 1);
+  let segmentCond = "";
+  if (seg.condition) {
+    segmentCond = " AND " + seg.condition;
+    params.push(...seg.params);
+  }
+  params.push(limit);
+  const limitPh = "$" + params.length;
+
   const dealRows = await pool.query(
     `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,
             r.modified_date, r.raw_data
@@ -10431,10 +10446,10 @@ export async function scanDealStageAgingViolations(
        LEFT JOIN duplicate_clusters dc ON dc.id = r.cluster_id
       WHERE r.zoho_module = 'Deals'
         AND r.cleanup_class IS NULL
-        AND (dc.status IS NULL OR dc.status = 'active')
+        AND (dc.status IS NULL OR dc.status = 'active')${segmentCond}
       ORDER BY r.modified_date DESC NULLS LAST
-      LIMIT $1`,
-    [limit],
+      LIMIT ${limitPh}`,
+    params,
   );
 
   const evaluations: ReturnType<typeof evaluateDealStageAging>[] = [];
