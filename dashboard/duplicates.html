@@ -874,12 +874,12 @@
             </div>
             <!-- Summary cards (consistent with CS Lifecycle) -->
             <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
-                <div class="rr-kpi"><div class="rr-kpi-label">In scope</div><div id="dcCardScope" class="rr-kpi-value">—</div></div>
-                <div class="rr-kpi"><div class="rr-kpi-label">Compliant</div><div id="dcCardOk" class="rr-kpi-value rr-good">—</div></div>
-                <div class="rr-kpi"><div class="rr-kpi-label">Missing docs</div><div id="dcCardMissing" class="rr-kpi-value rr-warn">—</div></div>
-                <div class="rr-kpi" title="Total deal Amount (SAR) of deals with missing documents"><div class="rr-kpi-label">Amount at risk (SAR)</div><div id="dcCardAtRisk" class="rr-kpi-value rr-warn">—</div></div>
-                <div class="rr-kpi"><div class="rr-kpi-label">Not yet checked</div><div id="dcCardPending" class="rr-kpi-value rr-amber">—</div></div>
-                <div class="rr-kpi"><div class="rr-kpi-label">Scanned (Zoho)</div><div id="dcCardScanned" class="rr-kpi-value">—</div></div>
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#2563EB"><div class="rr-kpi-label">In scope</div><div id="dcCardScope" class="rr-kpi-value">—</div></div>
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#16A34A"><div class="rr-kpi-label">Compliant</div><div id="dcCardOk" class="rr-kpi-value rr-good">—</div></div>
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#DC2626"><div class="rr-kpi-label">Missing docs</div><div id="dcCardMissing" class="rr-kpi-value rr-warn">—</div></div>
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#DC2626" title="Total deal Amount (SAR) of deals with missing documents"><div class="rr-kpi-label">Amount at risk (SAR)</div><div id="dcCardAtRisk" class="rr-kpi-value rr-warn">—</div></div>
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#D97706"><div class="rr-kpi-label">Not yet checked</div><div id="dcCardPending" class="rr-kpi-value rr-amber">—</div></div>
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#4F46E5"><div class="rr-kpi-label">Scanned (Zoho)</div><div id="dcCardScanned" class="rr-kpi-value">—</div></div>
             </div>
             <div id="dealComplianceSummary" class="text-sm text-gray-600 mb-2">—</div>
             <!-- Toolbar — same right-aligned layout as Lead/Deal/Contact/Account
@@ -1438,27 +1438,27 @@
 
                 <!-- Summary -->
                 <div class="grid grid-cols-2 gap-2">
-                    <div class="rr-kpi">
+                    <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#DC2626">
                         <div class="rr-kpi-label">Block</div>
                         <div id="preflightSumBlock" class="rr-kpi-value rr-warn">—</div>
                     </div>
-                    <div class="rr-kpi">
+                    <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#D97706">
                         <div class="rr-kpi-label">Review</div>
                         <div id="preflightSumReview" class="rr-kpi-value rr-amber">—</div>
                     </div>
-                    <div class="rr-kpi">
+                    <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#CA8A04">
                         <div class="rr-kpi-label">Warn</div>
                         <div id="preflightSumWarn" class="rr-kpi-value rr-amber">—</div>
                     </div>
-                    <div class="rr-kpi">
+                    <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#7C3AED">
                         <div class="rr-kpi-label">Duplicate</div>
                         <div id="preflightSumDup" class="rr-kpi-value">—</div>
                     </div>
-                    <div class="rr-kpi col-span-2" title="Contacts with a name but NO valid phone number — a phone is mandatory, so these are rejected as invalid data.">
+                    <div class="rr-kpi rr-kpi-rich col-span-2" style="--rr-accent:#E11D48" title="Contacts with a name but NO valid phone number — a phone is mandatory, so these are rejected as invalid data.">
                         <div class="rr-kpi-label">No phone (rejected)</div>
                         <div id="preflightSumNoContact" class="rr-kpi-value rr-warn">—</div>
                     </div>
-                    <div class="rr-kpi col-span-2">
+                    <div class="rr-kpi rr-kpi-rich col-span-2" style="--rr-accent:#16A34A">
                         <div class="rr-kpi-label">Pass (safe to import)</div>
                         <div id="preflightSumPass" class="rr-kpi-value rr-good">—</div>
                     </div>
@@ -1706,23 +1706,23 @@
 
             <!-- Summary -->
             <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-                <div class="rr-kpi">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#DC2626">
                     <div class="rr-kpi-label">Critical</div>
                     <div id="csLifeSumCritical" class="rr-kpi-value rr-warn">—</div>
                 </div>
-                <div class="rr-kpi">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#D97706">
                     <div class="rr-kpi-label">Warning</div>
                     <div id="csLifeSumWarning" class="rr-kpi-value rr-amber">—</div>
                 </div>
-                <div class="rr-kpi">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#2563EB">
                     <div class="rr-kpi-label">Info</div>
                     <div id="csLifeSumInfo" class="rr-kpi-value">—</div>
                 </div>
-                <div class="rr-kpi">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#4F46E5">
                     <div class="rr-kpi-label">CS deals scanned</div>
                     <div id="csLifeSumDeals" class="rr-kpi-value">—</div>
                 </div>
-                <div class="rr-kpi">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#7C3AED">
                     <div class="rr-kpi-label">Total violations</div>
                     <div id="csLifeSumTotal" class="rr-kpi-value">—</div>
                 </div>
@@ -1879,22 +1879,22 @@
 
             <!-- Summary cards -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                <div class="rr-kpi">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#DC2626">
                     <div class="rr-kpi-label">Critical</div>
                     <div id="dealLifeSumCritical" class="rr-kpi-value rr-warn">—</div>
                     <div class="rr-kpi-sub">Past 1.5× SOP allowance</div>
                 </div>
-                <div class="rr-kpi">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#D97706">
                     <div class="rr-kpi-label">Warning</div>
                     <div id="dealLifeSumWarning" class="rr-kpi-value rr-amber">—</div>
                     <div class="rr-kpi-sub">Crossed SOP threshold</div>
                 </div>
-                <div class="rr-kpi">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#4F46E5">
                     <div class="rr-kpi-label">Deals scanned</div>
                     <div id="dealLifeSumDeals" class="rr-kpi-value">—</div>
                     <div class="rr-kpi-sub">Tracked-stage deals only</div>
                 </div>
-                <div class="rr-kpi">
+                <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#7C3AED">
                     <div class="rr-kpi-label">Total violations</div>
                     <div id="dealLifeSumTotal" class="rr-kpi-value rr-amber">—</div>
                     <div class="rr-kpi-sub">Critical + Warning</div>
