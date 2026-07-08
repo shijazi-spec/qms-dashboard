@@ -186,9 +186,9 @@ export const suggestImprovementsTool = createTool({
 
         const riskResult = await pool.query(
           `SELECT COUNT(*)::int AS open_risks
-           FROM risks
-           WHERE status NOT IN ($1, $2)`,
-          ['closed', 'mitigated']
+           FROM enterprise_risks
+           WHERE status <> $1`,
+          ['closed']
         );
         const openRisks = riskResult.rows[0]?.open_risks ?? 0;
 

@@ -34,6 +34,8 @@ export interface EnterpriseRisk {
   residual_impact?: number;
   residual_likelihood?: number;
   residual_risk_score?: number;
+  risk_appetite?: number;
+  risk_tolerance?: number;
   control_ids?: number[];
   policy_ids?: number[];
   review_frequency?: "monthly" | "quarterly" | "semi_annual" | "annual";
@@ -140,6 +142,8 @@ export async function initRiskTables(): Promise<void> {
       residual_impact INTEGER CHECK (residual_impact >= 1 AND residual_impact <= 5),
       residual_likelihood INTEGER CHECK (residual_likelihood >= 1 AND residual_likelihood <= 5),
       residual_risk_score INTEGER GENERATED ALWAYS AS (COALESCE(residual_impact, impact_score) * COALESCE(residual_likelihood, likelihood_score)) STORED,
+      risk_appetite INTEGER,
+      risk_tolerance INTEGER,
       control_ids INTEGER[],
       policy_ids INTEGER[],
       review_frequency VARCHAR(20) DEFAULT 'quarterly',
@@ -168,6 +172,7 @@ export async function initRiskTables(): Promise<void> {
       assigned_to VARCHAR(255) NOT NULL,
       due_date TIMESTAMP NOT NULL,
       status VARCHAR(20) DEFAULT 'pending',
+      percent_complete INTEGER DEFAULT 0,
       completion_date TIMESTAMP,
       completion_notes TEXT,
       evidence_required BOOLEAN DEFAULT FALSE,
@@ -225,6 +230,21 @@ export async function initRiskTables(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE risk_treatment_actions ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`,
+  );
+  // Risk appetite/tolerance thresholds (per-risk, on the 1-25 risk_score
+  // scale). Used by monitorRisksTool's threshold_breach check so Adam can
+  // report risk-appetite alignment. Nullable — a NULL threshold means
+  // "not configured" and is simply skipped by the breach query.
+  await pool.query(
+    `ALTER TABLE enterprise_risks ADD COLUMN IF NOT EXISTS risk_appetite INTEGER`,
+  );
+  await pool.query(
+    `ALTER TABLE enterprise_risks ADD COLUMN IF NOT EXISTS risk_tolerance INTEGER`,
+  );
+  // Treatment-action progress (0-100). Consumed by the AI background
+  // scanner's low-progress check; defaults to 0 ("not started").
+  await pool.query(
+    `ALTER TABLE risk_treatment_actions ADD COLUMN IF NOT EXISTS percent_complete INTEGER DEFAULT 0`,
   );
   await pool.query(
     `UPDATE enterprise_risks SET public_id = gen_random_uuid() WHERE public_id IS NULL`,
@@ -294,11 +314,11 @@ export async function createRisk(
       identified_by, risk_owner, owner_department,
       impact_score, likelihood_score,
       treatment_strategy, treatment_description, treatment_owner, treatment_deadline,
-      residual_impact, residual_likelihood,
+      residual_impact, residual_likelihood, risk_appetite, risk_tolerance,
       control_ids, policy_ids, review_frequency, next_review_date,
       status, linked_audit_id, linked_incident_id, linked_capa_id,
       ai_detected, ai_recommendations
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
     RETURNING *
   `,
     [
@@ -317,6 +337,8 @@ export async function createRisk(
       risk.treatment_deadline,
       risk.residual_impact,
       risk.residual_likelihood,
+      risk.risk_appetite,
+      risk.risk_tolerance,
       risk.control_ids,
       risk.policy_ids,
       risk.review_frequency || "quarterly",
@@ -390,6 +412,8 @@ export async function updateRisk(
     "treatment_deadline",
     "residual_impact",
     "residual_likelihood",
+    "risk_appetite",
+    "risk_tolerance",
     "control_ids",
     "policy_ids",
     "review_frequency",

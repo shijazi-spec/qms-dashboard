@@ -269,6 +269,16 @@
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_risk_appetite">Risk Appetite (1-25)</label>
+                        <input type="number" name="risk_appetite" min="1" max="25" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Acceptable risk score">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_risk_tolerance">Risk Tolerance (1-25)</label>
+                        <input type="number" name="risk_tolerance" min="1" max="25" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Max tolerable risk score">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_owner">Risk Owner</label>
                         <input type="text" name="risk_owner" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Name of risk owner">
                     </div>
@@ -614,6 +624,10 @@
             
             data.impact_score = parseInt(data.impact_score);
             data.likelihood_score = parseInt(data.likelihood_score);
+            // Optional governance thresholds (1-25 risk-score scale). Blank
+            // stays null so the INTEGER columns aren't fed an empty string.
+            data.risk_appetite = data.risk_appetite ? parseInt(data.risk_appetite) : null;
+            data.risk_tolerance = data.risk_tolerance ? parseInt(data.risk_tolerance) : null;
             data.identified_by = 'User';
 
             try {
@@ -654,7 +668,19 @@
         function renderRiskDetail(data) {
             const risk = data.risk;
             const treatments = data.treatments || [];
-            
+
+            // Breach badge for the appetite/tolerance panel — tolerance breach
+            // (red) outranks appetite breach (amber); otherwise within appetite
+            // (green). Only rendered when a threshold is configured.
+            const _appetiteBadge = (() => {
+                const s = Number(risk.risk_score);
+                if (risk.risk_tolerance != null && s > Number(risk.risk_tolerance))
+                    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">${WalaPlusI18n.t('dyn.risks.exceeds_tolerance')}</span>`;
+                if (risk.risk_appetite != null && s > Number(risk.risk_appetite))
+                    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">${WalaPlusI18n.t('dyn.risks.exceeds_appetite')}</span>`;
+                return `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">${WalaPlusI18n.t('dyn.risks.within_appetite')}</span>`;
+            })();
+
             document.getElementById('riskDetailContent').innerHTML = `
                 <div class="space-y-6">
                     <div class="flex justify-between items-start">
@@ -708,6 +734,18 @@
                             <div class="text-sm">${WalaPlusI18n.t('dyn.risks.impact')}: ${_fn(risk.residual_impact)}/5</div>
                             <div class="text-sm">${WalaPlusI18n.t('dyn.risks.likelihood')}: ${_fn(risk.residual_likelihood)}/5</div>
                             <div class="font-bold">${WalaPlusI18n.t('dyn.risks.score_label')}: ${_fn(risk.residual_risk_score)}</div>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    ${(risk.risk_appetite != null || risk.risk_tolerance != null) ? `
+                    <div class="bg-indigo-50 p-4 rounded-lg">
+                        <h5 class="text-sm font-medium text-indigo-800">${WalaPlusI18n.t('dyn.risks.appetite_alignment')}</h5>
+                        <div class="flex items-center flex-wrap gap-4 mt-2">
+                            <div class="text-sm">${WalaPlusI18n.t('dyn.risks.appetite_label')}: ${risk.risk_appetite != null ? _fn(risk.risk_appetite) : WalaPlusI18n.t('dyn.risks.appetite_not_set')}</div>
+                            <div class="text-sm">${WalaPlusI18n.t('dyn.risks.tolerance_label')}: ${risk.risk_tolerance != null ? _fn(risk.risk_tolerance) : WalaPlusI18n.t('dyn.risks.appetite_not_set')}</div>
+                            <div class="font-bold">${WalaPlusI18n.t('dyn.risks.score_label')}: ${_fn(risk.risk_score)}</div>
+                            ${_appetiteBadge}
                         </div>
                     </div>
                     ` : ''}

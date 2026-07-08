@@ -68,15 +68,24 @@ export const monitorRisksTool = createTool({
     });
 
     try {
+      // Ensure the enterprise_risks schema (incl. the risk_appetite /
+      // risk_tolerance columns this tool reads) exists before querying.
+      // initRiskTables uses CREATE/ALTER ... IF NOT EXISTS, so this is a
+      // cheap idempotent no-op after the first call, and guarantees the
+      // threshold_breach check never hits a missing column on a fresh boot.
+      const { initRiskTables } = await import("../../utils/riskDatabase");
+      await initRiskTables();
+
       let details: Array<{ riskId: number; title: string; score: number; status: string; finding: string }> = [];
 
       switch (context.checkType) {
         case "high_risks": {
           const result = await pool.query(
-            `SELECT id, title, likelihood, impact, status, risk_level
-             FROM risks
-             WHERE (likelihood * impact) >= $1
-             ORDER BY (likelihood * impact) DESC`,
+            `SELECT id, risk_title AS title, likelihood_score AS likelihood,
+                    impact_score AS impact, status, risk_level
+             FROM enterprise_risks
+             WHERE risk_score >= $1
+             ORDER BY risk_score DESC`,
             [threshold]
           );
           details = result.rows.map(r => ({
@@ -91,12 +100,13 @@ export const monitorRisksTool = createTool({
 
         case "escalated": {
           const result = await pool.query(
-            `SELECT id, title, likelihood, impact, status, risk_level
-             FROM risks
+            `SELECT id, risk_title AS title, likelihood_score AS likelihood,
+                    impact_score AS impact, status, risk_level
+             FROM enterprise_risks
              WHERE status = 'escalated' OR risk_level IN ('critical', 'high')
              ORDER BY
                CASE risk_level WHEN 'critical' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,
-               (likelihood * impact) DESC`
+               risk_score DESC`
           );
           details = result.rows.map(r => ({
             riskId: r.id,
@@ -111,9 +121,10 @@ export const monitorRisksTool = createTool({
         case "overdue_treatments": {
           const result = await pool.query(
             `SELECT rta.id, rta.action_title, rta.action_description, rta.due_date, rta.status AS action_status,
-                    r.id AS risk_id, r.title AS risk_title, r.likelihood, r.impact
+                    r.id AS risk_id, r.risk_title AS risk_title,
+                    r.likelihood_score AS likelihood, r.impact_score AS impact
              FROM risk_treatment_actions rta
-             JOIN risks r ON r.id = rta.risk_id
+             JOIN enterprise_risks r ON r.id = rta.risk_id
              WHERE rta.due_date < NOW() AND rta.status NOT IN ('completed', 'cancelled')
              ORDER BY rta.due_date ASC`
           );
@@ -132,12 +143,13 @@ export const monitorRisksTool = createTool({
 
         case "threshold_breach": {
           const result = await pool.query(
-            `SELECT id, title, likelihood, impact, status, risk_level,
+            `SELECT id, risk_title AS title, likelihood_score AS likelihood,
+                    impact_score AS impact, status, risk_level,
                     risk_appetite, risk_tolerance
-             FROM risks
-             WHERE (risk_appetite IS NOT NULL AND (likelihood * impact) > risk_appetite)
-                OR (risk_tolerance IS NOT NULL AND (likelihood * impact) > risk_tolerance)
-             ORDER BY (likelihood * impact) DESC`
+             FROM enterprise_risks
+             WHERE (risk_appetite IS NOT NULL AND risk_score > risk_appetite)
+                OR (risk_tolerance IS NOT NULL AND risk_score > risk_tolerance)
+             ORDER BY risk_score DESC`
           );
           details = result.rows.map(r => {
             const score = r.likelihood * r.impact;

@@ -161,10 +161,10 @@ async function checkIso27001Compliance(): Promise<{ score: number; gaps: Complia
 
   const riskResult = await pool.query(
     `SELECT COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE severity IN ($1, $2))::int AS high_severity
-     FROM risks
-     WHERE status NOT IN ($3, $4)`,
-    ['critical', 'high', 'closed', 'mitigated']
+            COUNT(*) FILTER (WHERE risk_level IN ($1, $2))::int AS high_severity
+     FROM enterprise_risks
+     WHERE status <> 'closed'`,
+    ['critical', 'high']
   );
   const totalRisks = riskResult.rows[0]?.total ?? 0;
   const highSeverity = riskResult.rows[0]?.high_severity ?? 0;
@@ -240,9 +240,9 @@ async function checkNcaCompliance(): Promise<{ score: number; gaps: ComplianceGa
   }
 
   const securityRiskResult = await pool.query(
-    `SELECT COUNT(*)::int AS count FROM risks
-     WHERE category = $1 AND severity IN ($2, $3) AND status NOT IN ($4, $5)`,
-    ['cybersecurity', 'critical', 'high', 'closed', 'mitigated']
+    `SELECT COUNT(*)::int AS count FROM enterprise_risks
+     WHERE risk_category ILIKE $1 AND risk_level IN ($2, $3) AND status <> 'closed'`,
+    ['%security%', 'critical', 'high']
   );
   const securityRisks = securityRiskResult.rows[0]?.count ?? 0;
 

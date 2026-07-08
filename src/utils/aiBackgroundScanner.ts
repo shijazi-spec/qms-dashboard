@@ -146,14 +146,15 @@ async function checkOpenNCsWithoutCAPA(result: ScanResult): Promise<void> {
 }
 
 async function checkHighRisks(result: ScanResult): Promise<void> {
-  if (!(await schemaSupports("risks"))) return;
+  if (!(await schemaSupports("enterprise_risks"))) return;
   const rows = await safeQuery(
     `
-    SELECT id, title, risk_level, likelihood, impact, status
-    FROM risks
-    WHERE (likelihood * impact) >= 15
-      AND status NOT IN ('closed', 'mitigated')
-    ORDER BY (likelihood * impact) DESC
+    SELECT id, risk_title AS title, risk_level,
+           likelihood_score AS likelihood, impact_score AS impact, status
+    FROM enterprise_risks
+    WHERE risk_score >= 15
+      AND status <> 'closed'
+    ORDER BY risk_score DESC
     LIMIT 20
   `,
     [],
@@ -180,13 +181,13 @@ async function checkHighRisks(result: ScanResult): Promise<void> {
 }
 
 async function checkOverdueTreatments(result: ScanResult): Promise<void> {
-  if (!(await schemaSupports("risks"))) return;
+  if (!(await schemaSupports("enterprise_risks"))) return;
   if (!(await schemaSupports("risk_treatment_actions"))) return;
   const rows = await safeQuery(
     `
-    SELECT rta.id, rta.action_description, rta.due_date, rta.status, r.title as risk_title
+    SELECT rta.id, rta.action_description, rta.due_date, rta.status, r.risk_title as risk_title
     FROM risk_treatment_actions rta
-    JOIN risks r ON r.id = rta.risk_id
+    JOIN enterprise_risks r ON r.id = rta.risk_id
     WHERE rta.due_date < NOW()
       AND rta.status NOT IN ('completed', 'cancelled')
     ORDER BY rta.due_date ASC
@@ -446,15 +447,15 @@ async function checkTrainingGaps(result: ScanResult): Promise<void> {
 }
 
 async function checkLowProgressTreatments(result: ScanResult): Promise<void> {
-  if (!(await schemaSupports("risks"))) return;
+  if (!(await schemaSupports("enterprise_risks"))) return;
   if (!(await schemaSupports("risk_treatment_actions"))) return;
   const rows = await safeQuery(
     `
     SELECT rta.id, rta.action_description, rta.due_date, rta.status,
            COALESCE(rta.percent_complete, 0) as percent_complete,
-           r.title as risk_title
+           r.risk_title as risk_title
     FROM risk_treatment_actions rta
-    JOIN risks r ON r.id = rta.risk_id
+    JOIN enterprise_risks r ON r.id = rta.risk_id
     WHERE rta.due_date BETWEEN NOW() AND NOW() + INTERVAL '14 days'
       AND rta.status NOT IN ('completed', 'cancelled')
       AND COALESCE(rta.percent_complete, 0) < 50
