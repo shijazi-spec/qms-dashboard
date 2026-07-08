@@ -628,7 +628,8 @@ async function processModule(
       const slice = _ids.slice(i, i + PF_CHUNK);
       const ex = await pool.query(
         `SELECT dr.zoho_record_id AS z, dr.cluster_id, dr.company_name, dr.domain,
-                dr.email, dr.phone, dr.record_name
+                dr.email, dr.phone, dr.record_name,
+                dr.deal_value, dr.owner_name, dr.owner_email
            FROM duplicate_records dr
            JOIN duplicate_clusters dc ON dc.id = dr.cluster_id
           WHERE dr.zoho_record_id = ANY($1::text[])`,
@@ -656,11 +657,32 @@ async function processModule(
       s(stored.record_name) === s(d.recordName)
     );
   };
+  // Incremental scoring (Sarah 2026-07-08): a re-fetched record with UNCHANGED
+  // identity still lands in the same cluster, but updateClusterStats only moves
+  // the cluster's counts/confidence/owners/inflation when a SCORING-relevant
+  // field changed — deal_value or owner. modified_date alone (the reason the
+  // incremental fetch even returned this record) changes no material stat. So
+  // when identity + these are unchanged we reuse the cluster AND skip re-scoring
+  // it, collapsing the scoring phase from "score every touched cluster" (92k+)
+  // to "score only the ones that actually moved".
+  const _scoringUnchanged = (stored: any, d: ExtractedRecord): boolean => {
+    const num = (v: any) => {
+      const n = parseFloat(String(v));
+      return Number.isFinite(n) ? n : 0;
+    };
+    const s = (v: any) => (v == null ? "" : String(v));
+    return (
+      num(stored.deal_value) === num(d.dealValue) &&
+      s(stored.owner_name) === s(d.ownerName) &&
+      s(stored.owner_email).toLowerCase() === s(d.ownerEmail).toLowerCase()
+    );
+  };
 
   let written = 0;
   let skipped = 0;
   let droppedNoCompany = 0;
   let reusedCluster = 0;
+  let skippedRescore = 0;
   let processedInLoop = 0;
   for (const record of records) {
     try {
@@ -677,9 +699,17 @@ async function processModule(
       // Fast path: unchanged identity + not separated → reuse current cluster.
       const _prev = record.id ? _existingById.get(record.id) : null;
       let _clusterId: number;
+      // Whether this record's write should trigger a cluster re-score. A brand-
+      // new record, a moved/changed record, or a scoring-field change → yes. An
+      // identity- AND scoring-unchanged re-fetch → no (its cluster is untouched).
+      let _rescore = true;
       if (_prev && !_sepParticipants.has(record.id) && _identityUnchanged(_prev, data)) {
         _clusterId = _prev.cluster_id as number;
         reusedCluster++;
+        if (_scoringUnchanged(_prev, data)) {
+          _rescore = false;
+          skippedRescore++;
+        }
       } else {
         const cluster = await findOrCreateClusterByCompany(
           data.companyName,
@@ -696,6 +726,16 @@ async function processModule(
           record.id,
         );
         _clusterId = cluster.id!;
+        // If this record MOVED out of a previous cluster (its identity changed
+        // and it re-clustered elsewhere), the OLD cluster lost a member — queue
+        // it for re-scoring too so its counts/inflation don't go stale.
+        if (
+          _prev &&
+          _prev.cluster_id != null &&
+          Number(_prev.cluster_id) !== _clusterId
+        ) {
+          clustersUpdated.add(Number(_prev.cluster_id));
+        }
       }
 
       await upsertRecord({
@@ -745,7 +785,9 @@ async function processModule(
       });
 
       written++;
-      clustersUpdated.add(_clusterId);
+      // Only queue the cluster for re-scoring when something material changed —
+      // see _rescore above. Unchanged re-fetches leave their cluster's stats as-is.
+      if (_rescore) clustersUpdated.add(_clusterId);
     } catch (recordErr: any) {
       // Schema/connection-class errors mean NO record will succeed — fail
       // the whole scan loudly instead of looping through 5,000 identical
@@ -796,7 +838,7 @@ async function processModule(
   // it fetched vs wrote. A module that dominates the wall-clock (rate-limited
   // fetch or a huge changed-set) shows up here immediately.
   logger.info(
-    `⏱️ [DuplicateRadar] ${moduleName} done in ${((Date.now() - t0) / 1000).toFixed(1)}s — fetched ${records.length}, written ${written}, skipped ${skipped + droppedNoCompany}, reused-cluster ${reusedCluster}/${written} (fast-path skipped the full clusterer)`,
+    `⏱️ [DuplicateRadar] ${moduleName} done in ${((Date.now() - t0) / 1000).toFixed(1)}s — fetched ${records.length}, written ${written}, skipped ${skipped + droppedNoCompany}, reused-cluster ${reusedCluster}/${written} (fast-path skipped the full clusterer), no-rescore ${skippedRescore}/${written} (scoring-phase skip)`,
   );
   // CHIP HONESTY: report the count actually persisted to the database, not
   // the count fetched from Zoho. Previously this passed records.length even
