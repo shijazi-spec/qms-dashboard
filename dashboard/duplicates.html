@@ -684,22 +684,22 @@
                         <div class="chart-container"><canvas id="creationTrendChart" role="img" aria-label="Duplicate creation trend: line chart showing new duplicate records per week" aria-describedby="creationTrendChart-summary"></canvas><table id="creationTrendChart-summary" class="sr-only"><caption>Duplicate Creation Trend</caption><thead><tr><th scope="col">Week</th><th scope="col">New duplicates</th><th scope="col">Duplicate rate</th></tr></thead><tbody></tbody></table></div>
                     </div>
                     <div class="lg:col-span-1 space-y-3">
-                        <div class="rr-kpi" title="How many NEW Zoho records created in the latest week ended up in a duplicate cluster. Lower is better.">
+                        <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#DC2626" title="How many NEW Zoho records created in the latest week ended up in a duplicate cluster. Lower is better.">
                             <div class="rr-kpi-label" style="text-transform:none;">New duplicates this week</div>
                             <div id="trendLatestCount" class="rr-kpi-value" data-testid="text-trend-latest-count">—</div>
                             <div id="trendLatestDelta" class="rr-kpi-sub" data-testid="text-trend-delta">vs previous week: —</div>
                         </div>
-                        <div class="rr-kpi" title="The latest week's duplicate creation rate = new duplicates ÷ all new records that week. Target ≤ 2%. This is the leading indicator — when it drops below 2% your prevention is working.">
+                        <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#2563EB" title="The latest week's duplicate creation rate = new duplicates ÷ all new records that week. Target ≤ 2%. This is the leading indicator — when it drops below 2% your prevention is working.">
                             <div class="rr-kpi-label" style="text-transform:none;">Last week's dup rate</div>
                             <div id="trendLatestRate" class="rr-kpi-value" data-testid="text-trend-latest-rate">—</div>
                             <div id="trendRateVsTarget" class="rr-kpi-sub">Target ≤ 2%</div>
                         </div>
-                        <div class="rr-kpi" title="Total new duplicates created across the whole window selected above. Useful for total volume sanity checks.">
+                        <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#D97706" title="Total new duplicates created across the whole window selected above. Useful for total volume sanity checks.">
                             <div class="rr-kpi-label" style="text-transform:none;">Window total</div>
                             <div id="trendWindowTotal" class="rr-kpi-value" data-testid="text-trend-window-total">—</div>
                             <div class="rr-kpi-sub">New duplicates in window</div>
                         </div>
-                        <div class="rr-kpi" title="Average new duplicates per week over the selected window. The baseline you're trying to beat.">
+                        <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#4F46E5" title="Average new duplicates per week over the selected window. The baseline you're trying to beat.">
                             <div class="rr-kpi-label" style="text-transform:none;">Weekly average (window)</div>
                             <div id="trendWindowAvg" class="rr-kpi-value" data-testid="text-trend-window-avg">—</div>
                             <div id="trendVsAvg" class="rr-kpi-sub">Latest vs avg: —</div>
@@ -732,11 +732,11 @@
                 <h3 class="text-lg font-semibold mb-4" data-i18n="duplicates.sec_hygiene">Data Hygiene KPIs</h3>
                 <p class="text-xs text-gray-500 mb-4">Lead / Deal rates moved to the headline cards above (single source of truth, matching the 2% target). These two tiles are unique to this section.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="rr-kpi" title="Distinct email domains that have more than one open Deal attached. Useful for spotting same-customer pipeline duplication where Account_Name was set inconsistently.">
+                    <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#D97706" title="Distinct email domains that have more than one open Deal attached. Useful for spotting same-customer pipeline duplication where Account_Name was set inconsistently.">
                         <div class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.kpi_multi_deals">Domains with Multiple Deals</div>
                         <div id="kpiMultiDeal" data-testid="text-kpi-multi-deal" class="rr-kpi-value">-</div>
                     </div>
-                    <div class="rr-kpi" title="Active duplicate clusters — same definition as 'True Duplicates' top-left. Singleton clusters (1 record alone) are excluded because they aren't duplicates.">
+                    <div class="rr-kpi rr-kpi-rich" style="--rr-accent:#2563EB" title="Active duplicate clusters — same definition as 'True Duplicates' top-left. Singleton clusters (1 record alone) are excluded because they aren't duplicates.">
                         <div class="rr-kpi-label" style="text-transform:none;">Active Duplicate Clusters</div>
                         <div id="kpiActive" data-testid="text-kpi-active" class="rr-kpi-value">-</div>
                     </div>
