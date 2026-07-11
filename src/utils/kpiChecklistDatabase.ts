@@ -50,6 +50,21 @@ export async function initKPIChecklistTables(): Promise<void> {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_kpi_checklist_kpi ON kpi_checklist_items(kpi_id)`,
   );
+  // Per-BU schedule (start date + deadline) for the per-BU action-plan KPIs, so a
+  // manager can set when each BU's rollout starts and when it's due, and see overdue
+  // BUs. One row per (kpi_id, BU section). No dates until set → nulls are fine.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS kpi_bu_schedule (
+      id SERIAL PRIMARY KEY,
+      kpi_id INTEGER NOT NULL REFERENCES kpi_definitions(id) ON DELETE CASCADE,
+      bu_name VARCHAR(200) NOT NULL,
+      start_date DATE,
+      deadline DATE,
+      updated_by VARCHAR(200),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (kpi_id, bu_name)
+    )
+  `);
   logger.info("✅ [KPIChecklist] kpi_checklist_items table ready");
 
   // Commercial-8 BU naming migration (Sales B2B/B2C, Contact Center).
@@ -394,6 +409,56 @@ export interface ChecklistSection {
   pct: number;
   complete: boolean;
   items: KPIChecklistItem[];
+  start_date?: string | null;
+  deadline?: string | null;
+}
+
+/** Per-BU start date + deadline for a KPI, keyed by BU name. Missing = not set. */
+export async function getBuSchedules(
+  kpiId: number,
+): Promise<Record<string, { start_date: string | null; deadline: string | null }>> {
+  const res = await pool.query(
+    `SELECT bu_name,
+            to_char(start_date, 'YYYY-MM-DD') AS start_date,
+            to_char(deadline,   'YYYY-MM-DD') AS deadline
+       FROM kpi_bu_schedule WHERE kpi_id = $1`,
+    [kpiId],
+  );
+  const out: Record<string, { start_date: string | null; deadline: string | null }> = {};
+  for (const r of res.rows) out[r.bu_name] = { start_date: r.start_date, deadline: r.deadline };
+  return out;
+}
+
+/** Set one BU's start date and/or deadline. Only the fields present in `patch` are
+ *  changed (send an empty string / null to clear that field). */
+export async function setBuSchedule(
+  kpiId: number,
+  buName: string,
+  patch: { start_date?: string | null; deadline?: string | null },
+  updatedBy?: string,
+): Promise<void> {
+  const bu = (buName || "").trim();
+  if (!bu) return;
+  // Make sure the row exists, then update only the field(s) actually sent — so
+  // clearing an input stores NULL and touching one date doesn't wipe the other.
+  await pool.query(
+    `INSERT INTO kpi_bu_schedule (kpi_id, bu_name, updated_by)
+     VALUES ($1, $2, $3) ON CONFLICT (kpi_id, bu_name) DO NOTHING`,
+    [kpiId, bu, updatedBy || "system"],
+  );
+  const sets: string[] = [];
+  const vals: any[] = [];
+  let p = 1;
+  if (patch.start_date !== undefined) { sets.push(`start_date = $${p++}`); vals.push(patch.start_date || null); }
+  if (patch.deadline !== undefined) { sets.push(`deadline = $${p++}`); vals.push(patch.deadline || null); }
+  if (!sets.length) return;
+  sets.push(`updated_by = $${p++}`); vals.push(updatedBy || "system");
+  sets.push(`updated_at = NOW()`);
+  vals.push(kpiId, bu);
+  await pool.query(
+    `UPDATE kpi_bu_schedule SET ${sets.join(", ")} WHERE kpi_id = $${p++} AND bu_name = $${p}`,
+    vals,
+  );
 }
 
 /** Group items by section (BU) with per-section progress, in stable order. */

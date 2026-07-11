@@ -655,10 +655,17 @@ export const kpiRoutes = [
             );
           const kpiId = parseInt(c.req.param("id"));
           const items = await getChecklistItems(kpiId);
-          const { groupChecklistBySection } = await import(
+          const { groupChecklistBySection, getBuSchedules } = await import(
             "../../utils/kpiChecklistDatabase"
           );
           const sections = groupChecklistBySection(items);
+          // Attach each BU's start date + deadline (if set) to its section.
+          const schedules = await getBuSchedules(kpiId);
+          for (const s of sections as any[]) {
+            const sch = s.section ? schedules[s.section] : null;
+            s.start_date = sch?.start_date ?? null;
+            s.deadline = sch?.deadline ?? null;
+          }
           const buComplete = sections.filter(
             (s: any) => s.section && s.complete,
           ).length;
@@ -741,6 +748,40 @@ export const kpiRoutes = [
         } catch (error) {
           safeLogger.error("Error adding checklist BU:", error);
           return c.json({ error: "Failed to add BU" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Set a BU's start date and/or deadline (per-BU schedule).
+    path: "/api/kpis/:id{[0-9]+}/checklist/bu-schedule",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to edit KPI checklist",
+            );
+          const kpiId = parseInt(c.req.param("id"));
+          const body = await c.req.json();
+          const bu = (body?.bu || "").trim();
+          if (!bu) return c.json({ error: "bu is required" }, 400);
+          const patch: { start_date?: string | null; deadline?: string | null } = {};
+          if ("start_date" in (body || {})) patch.start_date = body.start_date;
+          if ("deadline" in (body || {})) patch.deadline = body.deadline;
+          const { setBuSchedule } = await import(
+            "../../utils/kpiChecklistDatabase"
+          );
+          await setBuSchedule(kpiId, bu, patch, user?.email || "system");
+          return c.json({ success: true });
+        } catch (error) {
+          safeLogger.error("Error setting BU schedule:", error);
+          return c.json({ error: "Failed to set BU schedule" }, 500);
         }
       };
     },

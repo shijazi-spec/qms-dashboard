@@ -994,6 +994,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  // Per-BU schedule (start date + deadline) — same governance write roles.
+  {
+    pattern: /^\/api\/kpis\/\d+\/checklist\/bu-schedule$/,
+    methods: ["PUT"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
   {
     pattern: /^\/api\/kpis\/checklist\/\d+$/,
     methods: ["PUT", "DELETE"],
