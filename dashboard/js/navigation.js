@@ -155,15 +155,12 @@ const WalaPlusNav = {
         // Published → Annual Review), versioning, and Type/Category
         // filtering — i.e. everything Documents Library was supposed to.
         { label: 'Integrated QMS', href: '/integrated-qms', icon: 'document-text', id: 'policies' },
-        // Documents Library (URL /qms-docs) was removed from the sidebar
-        // 2026-06-16 per Sarah — it duplicated Integrated QMS without
-        // delivering the promised compliance-mapping wiring (the page's
-        // own subtitle deferred that to "a future release"). The URL
-        // still serves the legacy page for any bookmarks; operators are
-        // now funnelled to Integrated QMS as the single source of truth
-        // for governance documents. If the compliance-mapping feature
-        // ever gets built, fold it into Integrated QMS as a tab rather
-        // than reviving the separate page.
+        // Documents Library (URL /qms-docs) — re-added to the sidebar
+        // 2026-07-11 per Abdulla's request. It was removed 2026-06-16 as a
+        // duplicate of Integrated QMS, but operators still use its
+        // category-card + Bulk Upload staging view, so it's surfaced here
+        // again rather than being reachable only by direct URL.
+        { label: 'Documents Library', href: '/qms-docs', icon: 'folder', id: 'qms-docs' },
         // Document Mapping: AI-assisted workspace for mapping uploaded
         // documents to compliance clauses. Coverage tiles, suggest console,
         // AI-judged findings, and audit-readiness PDFs live here so the
