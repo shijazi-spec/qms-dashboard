@@ -14,6 +14,43 @@
  *   3. Call WalaPlusI18n.applyToDOM() after the module is initialized
  */
 
+/**
+ * Platform-wide rate-limit (429) auto-retry — installed once, covers every
+ * section because i18n.js loads on every page before other scripts fetch.
+ *
+ * The API rate limiter rejects a request BEFORE the handler runs and returns
+ * 429 + a Retry-After header, so retrying is always safe — nothing was created
+ * or mutated. We transparently retry such requests a few times with a short,
+ * capped backoff (the sliding window frees per-second buckets), so no screen
+ * ever surfaces "Too many requests" during normal use. Anything that is NOT a
+ * limiter 429 (no Retry-After — e.g. an app-level cooldown) passes straight
+ * through untouched. Request-object inputs are not retried (their body can only
+ * be read once); the whole codebase calls fetch(url, {..}) so this is a no-op
+ * guard, not a gap.
+ */
+(function () {
+  if (typeof window === 'undefined' || window.__wpFetchRetryInstalled) return;
+  if (typeof window.fetch !== 'function') return;
+  window.__wpFetchRetryInstalled = true;
+  var _origFetch = window.fetch.bind(window);
+  var MAX_RETRIES = 4;
+  window.fetch = function (input, init) {
+    var isRequestObj = (typeof Request !== 'undefined') && (input instanceof Request);
+    var attempt = 0;
+    function tryOnce() {
+      return _origFetch(input, init).then(function (res) {
+        if (res.status !== 429 || attempt >= MAX_RETRIES || isRequestObj) return res;
+        var retryAfter = res.headers && res.headers.get ? res.headers.get('Retry-After') : null;
+        if (!retryAfter) return res; // not a rate-limiter 429 — leave it alone
+        attempt++;
+        var waitMs = Math.min(2000, 300 * attempt + Math.floor(Math.random() * 200));
+        return new Promise(function (resolve) { setTimeout(resolve, waitMs); }).then(tryOnce);
+      });
+    }
+    return tryOnce();
+  };
+})();
+
 (function (global) {
   'use strict';
 
