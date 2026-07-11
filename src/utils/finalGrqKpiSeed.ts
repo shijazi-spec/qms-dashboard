@@ -23,7 +23,9 @@ interface FinalKpi {
   unit: string; // "%" | "days"
   target: number;
   direction: "higher_is_better" | "lower_is_better";
-  frequency: "daily" | "weekly" | "monthly" | "quarterly" | "annual";
+  // "Per Audit Window" is a business cadence (per audit/certification window),
+  // not a fixed calendar period — display-only; recalc still records normally.
+  frequency: "daily" | "weekly" | "monthly" | "quarterly" | "annual" | "Per Audit Window";
   calc_mode: "auto" | "checklist" | "manual" | "bu_coverage";
   north_star?: boolean;
   description: string;
@@ -63,7 +65,7 @@ const FINAL_KPIS: FinalKpi[] = [
 
   // ───────────── GRC — Maram AlHarbi (10) ─────────────
   { code: "GRC-KPI-008", name: "Compliance Coverage Index", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "compliance", unit: "%", target: 90, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures the percentage of identified compliance obligations (clauses/articles) mapped to defined controls, owners, and evidence requirements.", formula: "Mapped Obligations ÷ Total Obligations × 100", data_source: "Compliance Register" },
-  { code: "GRC-KPI-003", name: "Audit / Certification Evidence Readiness", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "audit", unit: "%", target: 95, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: false, description: "Measures the percentage of required evidence items available, approved, and audit-ready within the defined audit/certification window.", formula: "Ready Evidence Items ÷ Required Evidence Items × 100", data_source: "Evidence Repository" },
+  { code: "GRC-KPI-003", name: "Audit / Certification Evidence Readiness", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "audit", unit: "%", target: 95, direction: "higher_is_better", frequency: "Per Audit Window", calc_mode: "auto", north_star: false, description: "Measures the percentage of required evidence items available, approved, and audit-ready within the defined audit/certification window.", formula: "Ready Evidence Items ÷ Required Evidence Items × 100", data_source: "Evidence Repository" },
   { code: "GRC-KPI-005", name: "Risk Treatment On-Time Closure", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "risk", unit: "%", target: 90, direction: "higher_is_better", frequency: "monthly", calc_mode: "auto", north_star: true, description: "Measures the percentage of due risk treatment actions closed within the approved target date.", formula: "Closed On Time ÷ Total Treatments Due × 100", data_source: "Risk Register" },
   { code: "GRC-KPI-002", name: "Certification Milestones On Track", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "compliance", unit: "%", target: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures the percentage of planned certification, regulatory, and compliance roadmap milestones achieved within the approved timeline.", formula: "Achieved Milestones ÷ Planned Milestones × 100", data_source: "Certification Roadmap" },
   { code: "GRC-KPI-012", name: "Regulatory Response Timeliness", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "compliance", unit: "%", target: 90, direction: "higher_is_better", frequency: "monthly", calc_mode: "manual", description: "Measures the percentage of regulatory responses submitted within the defined SLA.", formula: "Responses Within SLA ÷ Total Regulatory Responses × 100", data_source: "Compliance Log" },
