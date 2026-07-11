@@ -387,6 +387,28 @@ export function mappingFingerprint(text: string, regCodes: string[] | null): str
  * projection in place (keyed by source_policy_id) so links are refreshed,
  * not duplicated.
  */
+/**
+ * Map a policy `document_type` to a Documents Library (`qms_uploaded_documents`)
+ * category bucket so the /qms-docs category cards mirror the real type. Any
+ * unrecognised type (incl. the plain 'policy') buckets under 'policies'.
+ * Exported so the Documents Library upload path can pick a document_type that
+ * round-trips to the bucket the user chose.
+ */
+export function qmsCategoryForDocType(docType: string | null | undefined): string {
+  switch (String(docType || "").toLowerCase()) {
+    case "control":
+      return "security_controls";
+    case "sop":
+      return "sops";
+    case "form":
+      return "forms";
+    case "document":
+      return "documents";
+    default:
+      return "policies";
+  }
+}
+
 export async function syncPolicyToMapping(
   policyId: number,
   opts: { semantic?: boolean; force?: boolean } = {},
@@ -395,8 +417,8 @@ export async function syncPolicyToMapping(
 
   const polRes = await pool.query(
     `SELECT id, policy_number, title, description, category, content_text,
-            file_path, file_name, file_size, file_mime_type, created_by,
-            owner_name, linked_regulation_ids
+            document_type, file_path, file_name, file_size, file_mime_type,
+            created_by, owner_name, linked_regulation_ids
        FROM policies
       WHERE id = $1`,
     [policyId],
@@ -410,10 +432,14 @@ export async function syncPolicyToMapping(
   const regCodes = await regulationCodesForPolicy(policy.linked_regulation_ids);
   const fingerprint = mappingFingerprint(text, regCodes);
 
-  // Projection row column values. Integrated QMS documents are all
-  // controlled documents → bucket them under the 'policies' library
-  // category (a valid qms_uploaded_documents category). file_* columns are
-  // NOT NULL, so synthesise placeholders for content-only policies.
+  // Bucket the projected row into the matching Documents Library category so
+  // the /qms-docs category cards reflect the real document type (Forms, SOPs,
+  // Controls, …) instead of lumping everything under 'policies'. Falls back to
+  // 'policies' for the plain 'policy' type or anything unrecognised. Both the
+  // Integrated QMS register and Documents Library uploads flow through here.
+  const projCategory = qmsCategoryForDocType(policy.document_type);
+  // Projection row column values. file_* columns are NOT NULL, so synthesise
+  // placeholders for content-only policies.
   const projTitle = String(policy.title || policy.policy_number || `Policy ${policyId}`).slice(0, 512);
   const projFilePath = String(policy.file_path || `integrated-qms://policy/${policyId}`).slice(0, 1024);
   const projFileName = String(policy.file_name || policy.policy_number || `policy-${policyId}`).slice(0, 512);
@@ -462,13 +488,13 @@ export async function syncPolicyToMapping(
     projectedId = existing.rows[0].id;
     await pool.query(
       `UPDATE qms_uploaded_documents
-          SET category = 'policies', title = $2, file_path = $3, file_name = $4,
+          SET category = $12, title = $2, file_path = $3, file_name = $4,
               file_size = $5, mime_type = $6, regulation_codes = $7,
               extracted_text = $8, extraction_status = $9,
               extracted_at = CURRENT_TIMESTAMP, uploaded_by = $10,
               extracted_hash = $11
         WHERE id = $1`,
-      [projectedId, safeProjTitle, safeProjFilePath, safeProjFileName, projFileSize, projMime, regCodes, safeText || null, status, safeProjUploadedBy, fingerprint],
+      [projectedId, safeProjTitle, safeProjFilePath, safeProjFileName, projFileSize, projMime, regCodes, safeText || null, status, safeProjUploadedBy, fingerprint, projCategory],
     );
   } else {
     const ins = await pool.query(
@@ -476,9 +502,9 @@ export async function syncPolicyToMapping(
          (category, title, file_path, file_name, file_size, mime_type,
           regulation_codes, uploaded_by, source_policy_id,
           extracted_text, extraction_status, extracted_at, extracted_hash)
-       VALUES ('policies', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, $11)
+       VALUES ($12, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, $11)
        RETURNING id`,
-      [safeProjTitle, safeProjFilePath, safeProjFileName, projFileSize, projMime, regCodes, safeProjUploadedBy, policyId, safeText || null, status, fingerprint],
+      [safeProjTitle, safeProjFilePath, safeProjFileName, projFileSize, projMime, regCodes, safeProjUploadedBy, policyId, safeText || null, status, fingerprint, projCategory],
     );
     projectedId = ins.rows[0].id;
   }

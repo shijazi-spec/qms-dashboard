@@ -37,6 +37,10 @@ export interface QmsUploadedDocument {
   regulation_codes: string[] | null;
   uploaded_by: string;
   uploaded_at: string;
+  // Set when the row is a projection of an Integrated QMS policy (incl. every
+  // Documents Library upload, which is now stored as a policy). NULL for plain
+  // legacy library rows. Drives download-module + delete provenance.
+  source_policy_id?: number | null;
   // Phase 2.1 — text extraction columns (added via ALTER on init)
   extracted_text?: string | null;
   extraction_status?: QmsDocExtractionStatus | null;

@@ -48,6 +48,112 @@ async function gate(c: any, allowed: string[]) {
   return { error: null, user };
 }
 
+// Documents Library uploads are stored as POLICIES (the single source of
+// truth) and the existing policy→mapping bridge projects them back into
+// `qms_uploaded_documents`, so one upload shows in BOTH the Integrated QMS
+// register and the Documents Library / Document Mapping. This maps each
+// library category bucket to the policy document_type + category + a
+// policy_number prefix. `qmsCategoryForDocType` in the bridge is the reverse
+// map, so the projected row lands back in the same bucket the user picked.
+const CATEGORY_TO_POLICY: Record<
+  string,
+  { document_type: string; category: string; prefix: string }
+> = {
+  documents: { document_type: "document", category: "governance", prefix: "LIB-DOC" },
+  policies: { document_type: "policy", category: "governance", prefix: "LIB-POL" },
+  forms: { document_type: "form", category: "operational", prefix: "LIB-FRM" },
+  security_controls: { document_type: "control", category: "security", prefix: "LIB-CTL" },
+  sops: { document_type: "sop", category: "operational", prefix: "LIB-SOP" },
+};
+
+/** Next sequential policy_number for a Documents Library prefix (e.g. LIB-CTL-003). */
+async function nextLibraryPolicyNumber(prefix: string): Promise<string> {
+  const { sharedPool } = await import("../../utils/sharedPool");
+  const r = await sharedPool.query(
+    `SELECT policy_number FROM policies WHERE policy_number LIKE $1`,
+    [`${prefix}-%`],
+  );
+  let max = 0;
+  for (const row of r.rows) {
+    const m = /-(\d+)$/.exec(String(row.policy_number || ""));
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `${prefix}-${String(max + 1).padStart(3, "0")}`;
+}
+
+/** Resolve regulation CODES (e.g. "ISO-27001") to numeric regulation ids for linked_regulation_ids. */
+async function resolveRegulationIds(codes: string[] | null): Promise<number[] | null> {
+  if (!codes || codes.length === 0) return null;
+  try {
+    const { sharedPool } = await import("../../utils/sharedPool");
+    const r = await sharedPool.query(
+      `SELECT id FROM regulations WHERE UPPER(regulation_code) = ANY($1::text[])`,
+      [codes.map((c) => c.toUpperCase())],
+    );
+    const ids = r.rows.map((x: any) => Number(x.id)).filter(Number.isFinite);
+    return ids.length ? ids : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Create a policy from a Documents Library upload (file already saved under the
+ * 'policies' module) and project it into the mapping pool. Returns the new
+ * policy id. Retries on a policy_number collision.
+ */
+async function createPolicyFromUpload(opts: {
+  category: string;
+  title: string;
+  filePath: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  notes: string | null;
+  regulationCodes: string[] | null;
+  uploadedBy: string;
+}): Promise<number> {
+  const map = CATEGORY_TO_POLICY[opts.category] || CATEGORY_TO_POLICY.documents;
+  const { createPolicy } = await import("../../utils/policyDatabase");
+  const { syncPolicyToMapping } = await import("../../utils/policyMappingBridge");
+  const linkedIds = await resolveRegulationIds(opts.regulationCodes);
+  let lastErr: any;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    let num = await nextLibraryPolicyNumber(map.prefix);
+    if (attempt > 0) num = `${num}-${Math.floor(Math.random() * 9000 + 1000)}`;
+    try {
+      const created = await createPolicy({
+        policy_number: num,
+        title: opts.title,
+        category: map.category as any,
+        document_type: map.document_type as any,
+        description: opts.notes || undefined,
+        file_path: opts.filePath,
+        file_name: opts.fileName,
+        file_size: opts.fileSize,
+        file_mime_type: opts.mimeType,
+        created_by: opts.uploadedBy,
+        linked_regulation_ids: linkedIds || undefined,
+      } as any);
+      const pid = Number((created as any).id);
+      // Project into qms_uploaded_documents so it shows in Documents Library
+      // + Document Mapping. Best-effort — the policy already exists in the
+      // register either way.
+      try {
+        await syncPolicyToMapping(pid, { semantic: false });
+      } catch (e) {
+        safeLogger.warn("⚠️ [QmsDocs] bridge sync after upload failed", { e });
+      }
+      return pid;
+    } catch (e: any) {
+      lastErr = e;
+      const msg = String(e?.message || "").toLowerCase();
+      if (!(msg.includes("duplicate") || msg.includes("unique"))) throw e;
+    }
+  }
+  throw lastErr;
+}
+
 export const qmsDocsRoutes = [
   {
     path: "/api/qms-docs",
@@ -88,7 +194,7 @@ export const qmsDocsRoutes = [
           const g = await gate(c, WRITE_ROLES);
           if (g.error) return g.error;
 
-          const { initQmsDocsTable, createDocument, isValidCategory } =
+          const { initQmsDocsTable, isValidCategory } =
             await import("../../utils/qmsDocsDatabase");
           const { validateFile, saveUploadedFile } =
             await import("../../utils/fileUpload");
@@ -128,22 +234,26 @@ export const qmsDocsRoutes = [
           if (!validation.valid)
             return c.json({ error: validation.error }, 400);
 
+          // Store under the 'policies' module so /api/policies/:id/(download|view)
+          // and the mapping-pool download both resolve the same blob.
           const buffer = Buffer.from(await file.arrayBuffer());
-          const fileInfo = await saveUploadedFile(buffer, file.name, file.type, 'qms-docs');
+          const fileInfo = await saveUploadedFile(buffer, file.name, file.type, 'policies');
 
-          const row = await createDocument({
-            category: category as any,
+          // Create as a policy (single source of truth); the bridge projects it
+          // into the mapping pool so it shows in Documents Library too.
+          const policyId = await createPolicyFromUpload({
+            category,
             title,
-            file_path: fileInfo.filePath,
-            file_name: fileInfo.fileName,
-            file_size: fileInfo.fileSize,
-            mime_type: fileInfo.mimeType,
+            filePath: fileInfo.filePath,
+            fileName: fileInfo.fileName,
+            fileSize: fileInfo.fileSize,
+            mimeType: fileInfo.mimeType,
             notes,
-            regulation_codes,
-            uploaded_by: g.user!.email || String(g.user!.id ?? "") || "unknown",
+            regulationCodes: regulation_codes,
+            uploadedBy: g.user!.email || String(g.user!.id ?? "") || "unknown",
           });
 
-          return c.json({ success: true, document: row });
+          return c.json({ success: true, policy_id: policyId });
         } catch (error) {
           safeLogger.error("❌ [QmsDocs] upload error:", error);
           return c.json({ error: "Failed to upload document" }, 500);
@@ -160,7 +270,7 @@ export const qmsDocsRoutes = [
           const g = await gate(c, WRITE_ROLES);
           if (g.error) return g.error;
 
-          const { initQmsDocsTable, createDocument, isValidCategory } =
+          const { initQmsDocsTable, isValidCategory } =
             await import("../../utils/qmsDocsDatabase");
           const { validateFile, saveUploadedFile } =
             await import("../../utils/fileUpload");
@@ -243,20 +353,20 @@ export const qmsDocsRoutes = [
                 buffer,
                 file.name,
                 file.type,
-                'qms-docs',
+                'policies',
               );
-              const row = await createDocument({
-                category: category as any,
+              const policyId = await createPolicyFromUpload({
+                category,
                 title: file.name.replace(/\.[^.]+$/, ""),
-                file_path: fileInfo.filePath,
-                file_name: fileInfo.fileName,
-                file_size: fileInfo.fileSize,
-                mime_type: fileInfo.mimeType,
+                filePath: fileInfo.filePath,
+                fileName: fileInfo.fileName,
+                fileSize: fileInfo.fileSize,
+                mimeType: fileInfo.mimeType,
                 notes,
-                regulation_codes,
-                uploaded_by: g.user!.email || String(g.user!.id ?? "") || "unknown",
+                regulationCodes: regulation_codes,
+                uploadedBy: g.user!.email || String(g.user!.id ?? "") || "unknown",
               });
-              uploaded.push(row);
+              uploaded.push({ policy_id: policyId, title: file.name.replace(/\.[^.]+$/, "") });
             } catch (err: any) {
               failed.push({ name: file.name, error: err?.message || "upload failed" });
             }
@@ -295,10 +405,13 @@ export const qmsDocsRoutes = [
           const doc = await getDocumentById(id);
           if (!doc) return c.json({ error: "Document not found" }, 404);
 
-          // Scoped read: refuse to return any blob that isn't stored under
-          // /data/documents/qms-docs/. Legacy un-prefixed rows have been
-          // migrated/deleted, so allowLegacy is no longer needed.
-          const fileBlob = getUploadedFileForModule(doc.file_path, 'qms-docs');
+          // Scoped read. Rows projected from a policy (source_policy_id set —
+          // incl. everything uploaded via Documents Library, which is now
+          // stored as a policy) live under /data/documents/policies/; plain
+          // legacy library rows live under /data/documents/qms-docs/. Pick the
+          // module by provenance so both resolve.
+          const module = doc.source_policy_id ? "policies" : "qms-docs";
+          const fileBlob = getUploadedFileForModule(doc.file_path, module);
           if (!fileBlob) return c.json({ error: "File missing on disk" }, 404);
 
           c.header("Content-Type", doc.mime_type || "application/octet-stream");
@@ -344,7 +457,21 @@ export const qmsDocsRoutes = [
           const existing = await getDocumentById(id);
           if (!existing) return c.json({ error: "Document not found" }, 404);
 
-          await deleteDocument(id);
+          if (existing.source_policy_id) {
+            // Projected policy row: delete the underlying POLICY (single source
+            // of truth) + its mapping projection, else the bridge would simply
+            // re-create this row on the next sync. removePolicyMapping deletes
+            // the qms_uploaded_documents projection; deletePolicy removes the
+            // register entry.
+            const { removePolicyMapping } = await import(
+              "../../utils/policyMappingBridge"
+            );
+            const { deletePolicy } = await import("../../utils/policyDatabase");
+            await removePolicyMapping(existing.source_policy_id);
+            await deletePolicy(existing.source_policy_id);
+          } else {
+            await deleteDocument(id);
+          }
           // Best-effort file cleanup — failure to remove the on-disk blob is
           // logged but does NOT fail the request, since the DB row (the
           // source of truth for what is "in the library") is already gone.
