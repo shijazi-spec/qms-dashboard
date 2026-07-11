@@ -110,6 +110,27 @@ export function getZohoRateLimitState(): { rateLimited: boolean; cooldownMsRemai
   };
 }
 
+// ── Interactive-activity auto-yield (Sarah 2026-07-12) ─────────────────────
+// Zoho enforces ONE rate limit for the whole org, so a running background sync
+// (thousands of GETs) starves an operator's Apply/merge/backfill writes — they
+// 429 and "retry every minute" forever. We stamp the clock whenever an
+// interactive Zoho WRITE happens; the background page fetcher
+// (fetchAllZohoRecords) then PAUSES for a few seconds between page batches so
+// the operator's write gets the rate-limit headroom. When the operator is idle
+// the sync runs full speed. Env-tunable; set either to 0 to disable.
+let _lastInteractiveZohoAt = 0;
+export function markInteractiveZohoActivity(): void {
+  _lastInteractiveZohoAt = Date.now();
+}
+export function interactiveYieldMs(): number {
+  const w = Number(process.env.ZOHO_INTERACTIVE_YIELD_WINDOW_MS);
+  const p = Number(process.env.ZOHO_INTERACTIVE_YIELD_PAUSE_MS);
+  const windowMs = Number.isFinite(w) && w >= 0 ? w : 20_000;
+  const pauseMs = Number.isFinite(p) && p >= 0 ? p : 4_000;
+  if (windowMs === 0 || pauseMs === 0) return 0;
+  return Date.now() - _lastInteractiveZohoAt < windowMs ? pauseMs : 0;
+}
+
 /**
  * Hard environment gate for duplicate-radar LIVE Zoho writes (apply, undo,
  * bulk-close, …). Dev and prod run on SEPARATE databases but SHARE the same
@@ -574,7 +595,14 @@ export async function fetchAllZohoRecords(
         /* progress reporting must never break the fetch */
       }
     }
-    if (hasMore) await sleep(150);
+    if (hasMore) {
+      // Auto-yield to the operator: if an interactive Zoho WRITE happened in the
+      // last few seconds, pause this background paging so their action gets the
+      // org's rate limit instead of losing every retry to the sync. Falls back
+      // to the normal 150ms breather when nobody is actively working.
+      const yieldMs = interactiveYieldMs();
+      await sleep(yieldMs > 0 ? yieldMs : 150);
+    }
   }
 
   if (allRecords.length > maxRecords) allRecords.length = maxRecords;
@@ -1368,6 +1396,7 @@ export async function updateZohoRecordsBulk(
   module: string,
   records: Array<Record<string, any>>,
 ): Promise<BulkCreateOutcome[]> {
+  markInteractiveZohoActivity();
   if (records.length === 0) return [];
   const BATCH = 100;
   const outcomes: BulkCreateOutcome[] = [];
@@ -1868,6 +1897,7 @@ export async function updateZohoRecordNotes(
   recordId: string,
   noteContent: string
 ): Promise<boolean> {
+  markInteractiveZohoActivity();
   logger.info(`📝 [ZohoCRM] Adding note to ${module}/${recordId}`);
   
   return makeZohoRequest(
@@ -1906,6 +1936,7 @@ export async function updateZohoRecord(
   recordId: string,
   updates: Record<string, any>
 ): Promise<any> {
+  markInteractiveZohoActivity();
   logger.info(`📝 [ZohoCRM] Updating ${module}/${recordId}`, { updatedFields: Object.keys(updates) });
   
   return makeZohoRequest(
@@ -1956,6 +1987,7 @@ export async function createZohoRecord(
   module: string,
   recordData: Record<string, any>
 ): Promise<any> {
+  markInteractiveZohoActivity();
   logger.info(`➕ [ZohoCRM] Creating record in ${module}`, { fields: Object.keys(recordData) });
 
   return makeZohoRequest(
@@ -2023,6 +2055,7 @@ export async function createZohoRecordsBulk(
   module: string,
   records: Array<Record<string, any>>,
 ): Promise<BulkCreateOutcome[]> {
+  markInteractiveZohoActivity();
   if (records.length === 0) return [];
   const BATCH = 100;
   const outcomes: BulkCreateOutcome[] = [];
@@ -2225,6 +2258,7 @@ export async function deleteZohoRecord(
   module: string,
   recordId: string
 ): Promise<boolean> {
+  markInteractiveZohoActivity();
   logger.info(`🗑️ [ZohoCRM] Deleting ${module}/${recordId}`);
   
   return makeZohoRequest(
@@ -2263,6 +2297,7 @@ export async function addZohoTags(
   recordIds: string[],
   tagNames: string[],
 ): Promise<any> {
+  markInteractiveZohoActivity();
   const ids = recordIds.filter(Boolean).join(',');
   const tags = tagNames.filter(Boolean).map(encodeURIComponent).join(',');
   logger.info(`🏷️ [ZohoCRM] Adding tags [${tagNames.join(', ')}] to ${recordIds.length} ${module} record(s)`);
@@ -2338,6 +2373,7 @@ export async function removeZohoTags(
   recordIds: string[],
   tagNames: string[],
 ): Promise<any> {
+  markInteractiveZohoActivity();
   const ids = recordIds.filter(Boolean).join(',');
   const tags = tagNames.filter(Boolean).map(encodeURIComponent).join(',');
   logger.info(`🏷️ [ZohoCRM] Removing tags [${tagNames.join(', ')}] from ${recordIds.length} ${module} record(s)`);
