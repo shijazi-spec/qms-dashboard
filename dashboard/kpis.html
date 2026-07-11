@@ -996,6 +996,32 @@
         const _esc = (s) => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
         const _slug = (s) => (s || '').replace(/[^a-z0-9]+/gi, '_');
         const _collapsedBUs = new Set();
+        const _collapsedStages = new Set();
+        function _renderStages(s) {
+            const order = [], map = {};
+            (s.items || []).forEach(it => { const st = it.stage || 'Steps'; if (!map[st]) { map[st] = []; order.push(st); } map[st].push(it); });
+            return order.map((st, i) => {
+                const items = map[st];
+                const done = items.filter(i => i.is_done).length, total = items.length;
+                const pct = total ? Math.round(done / total * 100) : 0;
+                const key = s.section + '::' + st;
+                const open = !_collapsedStages.has(key);
+                const col = pct >= 100 ? 'text-emerald-600' : pct > 0 ? 'text-amber-600' : 'text-gray-400';
+                return `<div class="border rounded ml-1">
+                    <div class="flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-gray-50" data-on-click="toggleStage" data-args="[&quot;${_esc(key)}&quot;]">
+                        <span class="text-gray-400 text-[10px]">${open ? '▾' : '▸'}</span>
+                        <span class="text-sm text-gray-800 flex-1">${i + 1}. ${_esc(st)}</span>
+                        <span class="text-[11px] text-gray-500">${done}/${total}</span>
+                        <span class="text-[11px] font-semibold ${col} w-9 text-end">${pct}%</span>
+                    </div>
+                    ${open ? `<div class="px-2 pb-2 space-y-1">${items.map(_itemRow).join('')}</div>` : ''}
+                </div>`;
+            }).join('');
+        }
+        function toggleStage(key) {
+            if (_collapsedStages.has(key)) _collapsedStages.delete(key); else _collapsedStages.add(key);
+            loadChecklist();
+        }
         function _itemRow(it) {
             return `
                 <div class="flex items-center gap-2 border rounded px-2 py-1.5">
@@ -1021,7 +1047,7 @@
 
                 if (sectioned) {
                     document.getElementById('checklistProgress').innerHTML =
-                        `Framework completion: <span class="text-gray-900">${prog.pct}%</span> &middot; ${buSummary.complete} of ${buSummary.total} BUs complete`;
+                        `KPI: <span class="text-gray-900 font-semibold">${buSummary.total ? Math.round(buSummary.complete / buSummary.total * 100) : 0}%</span> &middot; ${buSummary.complete} of ${buSummary.total} BUs complete <span class="text-gray-400">(a BU counts only at 100%)</span> &middot; <span class="text-gray-400">sub-steps ${prog.pct}%</span>`;
                     wrap.innerHTML = sections.filter(s => s.section).map(s => {
                         const open = !_collapsedBUs.has(s.section);
                         return `
@@ -1033,12 +1059,8 @@
                                 <div class="w-24 h-2 bg-gray-100 rounded overflow-hidden"><div class="h-2 ${_barColor(s.pct)}" data-style="width:${s.pct}%"></div></div>
                                 <span class="text-xs font-semibold text-gray-700 w-9 text-end">${s.pct}%</span>
                             </div>
-                            ${open ? `<div class="px-3 pb-3 space-y-1.5">
-                                ${s.items.map(_itemRow).join('')}
-                                <div class="flex gap-2 pt-1">
-                                    <input type="text" id="addItem-${_slug(s.section)}" placeholder="Add action item…" class="border rounded px-2 py-1 text-xs flex-1" />
-                                    <button data-on-click="addChecklistItem" data-args="[&quot;${_esc(s.section)}&quot;]" class="text-xs bg-amber-600 text-white px-2 py-1 rounded hover:bg-amber-700">+ Item</button>
-                                </div>
+                            ${open ? `<div class="px-3 pb-3 space-y-2">
+                                ${_renderStages(s)}
                             </div>` : ''}
                         </div>`;
                     }).join('');
