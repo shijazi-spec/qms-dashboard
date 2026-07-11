@@ -59,6 +59,14 @@
         .rr-kpi-rich { background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-inline-start: 4px solid var(--rr-accent, #2563EB); border-radius: 10px; }
         html.wp-dark .rr-kpi-rich { background: #1E293B; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
         .rr-kpi-rich .rr-kpi-value { font-size: 24px; font-weight: 700; color: var(--rr-accent, #111827); }
+        /* Sync Activity card text was hard-coded dark grey, so it read as "black
+           data" — fine on white but near-invisible on the dark card in dark mode.
+           Colour it to the card's sky accent + a dark-mode-readable shade (Sarah
+           2026-07-11). */
+        #lastSyncDate { color: #0369A1; }
+        html.wp-dark #lastSyncDate { color: #7DD3FC; }
+        #lastScanDate { color: #334155; }
+        html.wp-dark #lastScanDate { color: #CBD5E1; }
         /* SaaS phase 3 — shared data-table language (.rr-table). Sticky header,
            breathing rows, severity stripe, standardized badge + confidence meter +
            row-action buttons. Dark-aware. Rolled out tab-by-tab. */
