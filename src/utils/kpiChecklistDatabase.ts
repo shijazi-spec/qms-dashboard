@@ -155,6 +155,38 @@ export async function actionPlanCompleteRate(
 }
 
 /**
+ * The same binary rate reconstructed "as of" a past date, from the platform's own
+ * tick timestamps: a BU counts as complete only if EVERY item is done AND was last
+ * updated on/before `asOf`. This lets us honestly backfill Q1/Q2 values from when
+ * work was actually recorded in the platform (items ticked later don't count early).
+ * Note: reflects when items were marked here — offline work done earlier but only
+ * ticked recently will show in the later quarter (the admin can set a past value).
+ */
+export async function actionPlanCompleteRateAsOf(
+  kpiCode: string,
+  asOf: Date,
+): Promise<{ value: number; complete: number; total: number } | null> {
+  const kpi = await getKPIByCode(kpiCode);
+  if (!kpi?.id) return null;
+  const total = FRAMEWORK_BUSINESS_UNITS.length;
+  if (total === 0) return null;
+  const res = await pool.query(
+    `SELECT section,
+            COUNT(*)::int AS n,
+            COUNT(*) FILTER (WHERE is_done AND updated_at <= $3)::int AS done
+       FROM kpi_checklist_items
+      WHERE kpi_id = $1 AND section = ANY($2::text[])
+      GROUP BY section`,
+    [kpi.id, FRAMEWORK_BUSINESS_UNITS, asOf],
+  );
+  let complete = 0;
+  for (const r of res.rows) {
+    if (Number(r.n) > 0 && Number(r.n) === Number(r.done)) complete++;
+  }
+  return { value: Math.round((complete / total) * 1000) / 10, complete, total };
+}
+
+/**
  * The Business Units the Quality governance framework is rolled out across
  * (Quality Plan 2026 → BU Coverage Plan). Editable in the UI afterwards.
  */

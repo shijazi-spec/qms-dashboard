@@ -325,6 +325,18 @@ export const kpiRoutes = [
           const body = await c.req.json();
           const value = await recordKPIValue({ ...body, kpi_id: kpiId });
 
+          // Refresh the roll-up North Star composites from their components, so a
+          // manual value change is reflected "from the upper data" immediately
+          // (they aggregate each owner's KPIs; e.g. Legal Governance Score).
+          try {
+            const { recordRollupComposites } = await import(
+              "../../utils/kpiAutoCalc"
+            );
+            await recordRollupComposites();
+          } catch (e) {
+            safeLogger.error("Composite refresh after value record failed:", e);
+          }
+
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
             await logEvent({

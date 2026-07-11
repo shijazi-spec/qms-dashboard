@@ -192,10 +192,66 @@ export async function runKPIAutoCalc(
     logger.error(`[KPIAutoCalc] composite step failed: ${(e as Error).message}`);
   }
 
+  // 5) Backfill past quarters (Q1/Q2…) for the checklist KPIs from the platform's
+  //    own tick timestamps, so the per-quarter tabs show what was actually recorded
+  //    in each quarter — not just the current one.
+  try {
+    const bf = await backfillChecklistQuarters();
+    for (const b of bf) {
+      recorded++;
+      details.push({ code: `${b.code} (Q${b.quarter})`, value: b.value });
+    }
+  } catch (e) {
+    logger.error(`[KPIAutoCalc] quarter backfill failed: ${(e as Error).message}`);
+  }
+
   logger.info(
     `📊 [KPIAutoCalc] Recorded ${recorded} live KPI value(s), skipped ${skipped} (no data/manual).`,
   );
   return { recorded, skipped, details };
+}
+
+/**
+ * Reconstruct past-quarter values for the per-BU checklist KPIs (Readiness, Pilot)
+ * from tick timestamps. Records a value for a *completed* quarter only when real
+ * completion existed by that quarter's end (value > 0) — otherwise the quarter is
+ * left blank for an admin to set manually, rather than stamping a misleading 0 over
+ * a quarter whose work was done offline and ticked later. The current quarter is
+ * handled by the live monthly record (steps 1/3), so we only backfill prior ones.
+ */
+async function backfillChecklistQuarters(): Promise<
+  Array<{ code: string; quarter: number; value: number }>
+> {
+  const { actionPlanCompleteRateAsOf } = await import("./kpiChecklistDatabase");
+  const out: Array<{ code: string; quarter: number; value: number }> = [];
+  const now = new Date();
+  const year = now.getFullYear();
+  const curQ = Math.floor(now.getMonth() / 3) + 1;
+  const codes = ["QM-KPI-015", "QM-KPI-008"];
+  for (const code of codes) {
+    const def = await getKPIByCode(code);
+    if (!def?.id || !def.is_active) continue;
+    for (let qtr = 1; qtr < curQ; qtr++) {
+      const qStart = new Date(year, (qtr - 1) * 3, 1);
+      const qEnd = new Date(year, qtr * 3, 0); // last calendar day of the quarter
+      const asOf = new Date(year, qtr * 3, 0, 23, 59, 59);
+      const r = await actionPlanCompleteRateAsOf(code, asOf);
+      if (!r || r.value <= 0) continue; // nothing recorded by then → leave blank
+      try {
+        await recordKPIValue({
+          kpi_id: def.id,
+          period_start: qStart,
+          period_end: qEnd,
+          actual_value: r.value,
+          calculated_by: "system_auto",
+        });
+        out.push({ code, quarter: qtr, value: r.value });
+      } catch {
+        /* skip a quarter that fails to record */
+      }
+    }
+  }
+  return out;
 }
 
 /** Achievement % of a KPI vs its target (direction-aware), clamped 0–100. */
@@ -219,7 +275,7 @@ const COMPOSITE_CODES = ["GRQ-KPI-01", "GRQ-KPI-04", "SPEC-KPI-01", "LEG-KPI-01"
  * have data, so they reflect what's measured rather than being dragged to 0 by
  * empty registers. Each is EMPTY until at least one component has a value.
  */
-async function recordRollupComposites(): Promise<
+export async function recordRollupComposites(): Promise<
   Array<{ code: string; value?: number; reason?: string }>
 > {
   const rows = await pool.query(

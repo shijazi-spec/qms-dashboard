@@ -662,6 +662,9 @@
             const sort = document.getElementById('kpiSort')?.value || '';
             if (sort === 'name_asc') list = [...list].sort((a, b) => (a.kpi_name || '').localeCompare(b.kpi_name || ''));
             else if (sort === 'name_desc') list = [...list].sort((a, b) => (b.kpi_name || '').localeCompare(a.kpi_name || ''));
+            // Always pin North Star KPIs to the top for each role (stable — keeps the
+            // chosen sort order within the starred and non-starred groups).
+            list = [...list].sort((a, b) => (b.is_north_star ? 1 : 0) - (a.is_north_star ? 1 : 0));
             renderKPIList(list);
         }
 
@@ -905,17 +908,33 @@
         });
 
         function openRecordValueModal(kpiId) {
-            const value = prompt(WalaPlusI18n.t('dyn.kpis.prompt_value'));
-            if (value !== null) {
-                recordValue(kpiId, parseFloat(value));
+            const raw = prompt(WalaPlusI18n.t('dyn.kpis.prompt_value'));
+            if (raw === null) return; // cancelled
+            // Accept "50", "50%", "50 %" — strip a trailing % and spaces before parsing.
+            const cleaned = String(raw).replace('%', '').trim();
+            const value = parseFloat(cleaned);
+            if (!isFinite(value)) {
+                alert('Please enter a number (e.g. 50). "' + raw + '" is not a valid value.');
+                return;
             }
+            // Record the value against the quarter currently being viewed, so entering
+            // a number while looking at Q2 lands in Q2 (not always "this month").
+            recordValue(kpiId, value);
         }
 
         async function recordValue(kpiId, value) {
-            const now = new Date();
-            const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-            
+            // Stamp the period to the selected quarter tab (or the current month for "Latest").
+            let periodStart, periodEnd;
+            const q = (typeof _selectedQuarter !== 'undefined') ? _selectedQuarter : 0;
+            const yr = (typeof _kpiYear !== 'undefined' && _kpiYear) ? _kpiYear : new Date().getFullYear();
+            if (q >= 1 && q <= 4) {
+                periodStart = new Date(yr, (q - 1) * 3, 1);
+                periodEnd = new Date(yr, q * 3, 0); // last day of the quarter
+            } else {
+                const now = new Date();
+                periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            }
             try {
                 const res = await fetch(`/api/kpis/${kpiId}/values`, {
                     method: 'POST',
@@ -926,15 +945,19 @@
                         period_end: periodEnd.toISOString().split('T')[0]
                     })
                 });
-                
                 if (res.ok) {
                     closeDetailModal();
                     loadKPIs();
                 } else {
-                    alert(WalaPlusI18n.t('dyn.kpis.failed_record_value'));
+                    // Surface the real reason instead of a generic failure (e.g. permission).
+                    let reason = '';
+                    try { reason = (await res.json()).error || ''; } catch {}
+                    if (res.status === 403) reason = 'You don’t have permission to record KPI values. Ask an admin/quality manager to grant KPI write access.';
+                    alert((WalaPlusI18n.t('dyn.kpis.failed_record_value') || 'Failed to record value') + (reason ? '\n\n' + reason : ''));
                 }
             } catch (error) {
                 console.error('Error recording value:', error);
+                alert('Network error while recording the value. Please try again.');
             }
         }
 
