@@ -1194,6 +1194,8 @@
                                 <span class="text-xs text-gray-500">${s.done}/${s.total}</span>
                                 <div class="w-24 h-2 bg-gray-100 rounded overflow-hidden"><div class="h-2 ${_barColor(s.pct)}" data-style="width:${s.pct}%"></div></div>
                                 <span class="text-xs font-semibold text-gray-700 w-9 text-end">${s.pct}%</span>
+                                <button data-on-click="renameBuPrompt" data-args="[&quot;${_esc(s.section)}&quot;]" class="text-gray-400 hover:text-indigo-600 px-1" title="Rename BU">✏️</button>
+                                <button data-on-click="removeBuConfirm" data-args="[&quot;${_esc(s.section)}&quot;]" class="text-gray-400 hover:text-red-600 px-1" title="Remove BU">🗑️</button>
                             </div>
                             ${open ? `<div class="px-3 pb-3 space-y-2">
                                 ${_buScheduleRow(s)}
@@ -1242,6 +1244,29 @@
                 if (res.ok) { input.value = ''; await loadChecklist(); }
                 else { const d = await res.json().catch(()=>({})); alert(d.error || 'Failed to add BU.'); }
             } catch (e) { console.error('Add BU error:', e); }
+        }
+        async function renameBuPrompt(bu) {
+            const to = prompt('Rename BU "' + bu + '" to:', bu);
+            if (to === null) return;
+            const name = to.trim();
+            if (!name || name === bu) return;
+            await _buAdminCall('PUT', `/api/kpis/${_checklistKpiId}/checklist/bu/rename`, { from: bu, to: name }, 'rename');
+        }
+        async function removeBuConfirm(bu) {
+            if (!confirm('Remove BU "' + bu + '" and ALL its checklist items and dates? This cannot be undone.')) return;
+            await _buAdminCall('DELETE', `/api/kpis/${_checklistKpiId}/checklist/bu`, { bu }, 'remove');
+        }
+        async function _buAdminCall(method, url, body, label) {
+            if (_checklistKpiId == null) return;
+            try {
+                const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                if (res.ok) { await loadChecklist(); }
+                else {
+                    let reason = ''; try { reason = (await res.json()).error || ''; } catch {}
+                    if (res.status === 403) reason = 'You don’t have permission to edit BUs.';
+                    alert('Failed to ' + label + ' BU' + (reason ? '\n\n' + reason : ''));
+                }
+            } catch (e) { console.error(label + ' BU error:', e); alert('Network error while trying to ' + label + ' the BU.'); }
         }
 
         // ===== BU Coverage modal (per-BU completion % + due date) =====

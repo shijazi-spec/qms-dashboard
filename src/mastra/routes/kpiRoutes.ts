@@ -734,17 +734,14 @@ export const kpiRoutes = [
           const bu = (body?.name || "").trim();
           if (!bu) return c.json({ error: "BU name is required" }, 400);
           const by = user?.email || "system";
-          const { BU_FRAMEWORK_ACTION_PLAN } = await import(
+          const { addBuWithPlan } = await import(
             "../../utils/kpiChecklistDatabase"
           );
-          // Optional custom action plan; otherwise the standard framework steps.
-          const plan: string[] =
-            Array.isArray(body?.action_plan) && body.action_plan.length
-              ? body.action_plan
-              : BU_FRAMEWORK_ACTION_PLAN;
-          for (const step of plan) await addChecklistItem(kpiId, step, by, bu);
+          // Seed the new BU with this KPI's own action plan (Readiness / Pilot).
+          const r = await addBuWithPlan(kpiId, bu, by);
+          if (r.existed) return c.json({ error: "That BU already exists" }, 409);
           await recordChecklistKPIValue(kpiId);
-          return c.json({ success: true, bu, items: plan.length });
+          return c.json({ success: true, bu, items: r.items });
         } catch (error) {
           safeLogger.error("Error adding checklist BU:", error);
           return c.json({ error: "Failed to add BU" }, 500);
@@ -782,6 +779,67 @@ export const kpiRoutes = [
         } catch (error) {
           safeLogger.error("Error setting BU schedule:", error);
           return c.json({ error: "Failed to set BU schedule" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Rename a BU (section) across its checklist + schedule.
+    path: "/api/kpis/:id{[0-9]+}/checklist/bu/rename",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to edit KPI checklist",
+            );
+          const kpiId = parseInt(c.req.param("id"));
+          const body = await c.req.json();
+          const from = (body?.from || "").trim();
+          const to = (body?.to || "").trim();
+          if (!from || !to) return c.json({ error: "from and to are required" }, 400);
+          const { renameBu } = await import("../../utils/kpiChecklistDatabase");
+          await renameBu(kpiId, from, to);
+          await recordChecklistKPIValue(kpiId);
+          return c.json({ success: true });
+        } catch (error) {
+          safeLogger.error("Error renaming BU:", error);
+          return c.json({ error: "Failed to rename BU" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Remove a BU (section) entirely — its checklist items + schedule.
+    path: "/api/kpis/:id{[0-9]+}/checklist/bu",
+    method: "DELETE" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to edit KPI checklist",
+            );
+          const kpiId = parseInt(c.req.param("id"));
+          const body = await c.req.json().catch(() => ({}));
+          const bu = (body?.bu || "").trim();
+          if (!bu) return c.json({ error: "bu is required" }, 400);
+          const { removeBu } = await import("../../utils/kpiChecklistDatabase");
+          await removeBu(kpiId, bu);
+          await recordChecklistKPIValue(kpiId);
+          return c.json({ success: true });
+        } catch (error) {
+          safeLogger.error("Error removing BU:", error);
+          return c.json({ error: "Failed to remove BU" }, 500);
         }
       };
     },

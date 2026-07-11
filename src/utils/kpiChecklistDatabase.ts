@@ -101,6 +101,85 @@ export const PILOT_PLAN: ActionPlan = [
   ["Action planning", ["Action plan agreed with stakeholders", "CAPA / closure requests issued to owners"]],
 ];
 
+/** Which action plan a per-BU KPI uses when a new BU is added. */
+const PLAN_BY_CODE: Record<string, ActionPlan> = {
+  "QM-KPI-015": READINESS_PLAN,
+  "QM-KPI-008": PILOT_PLAN,
+};
+
+/** Add a Business Unit to a KPI's checklist, pre-filled with that KPI's action
+ *  plan (Readiness / Pilot). No-op if the BU already exists. */
+export async function addBuWithPlan(
+  kpiId: number,
+  buName: string,
+  updatedBy?: string,
+): Promise<{ items: number; existed: boolean }> {
+  const bu = (buName || "").trim();
+  if (!bu) return { items: 0, existed: false };
+  const exists = await pool.query(
+    `SELECT 1 FROM kpi_checklist_items WHERE kpi_id = $1 AND section = $2 LIMIT 1`,
+    [kpiId, bu],
+  );
+  if (exists.rows.length) return { items: 0, existed: true };
+  const kpi = await getKPIById(kpiId);
+  const plan = (kpi?.kpi_code && PLAN_BY_CODE[kpi.kpi_code]) || READINESS_PLAN;
+  let n = 0;
+  for (const [stage, steps] of plan) {
+    for (const step of steps) {
+      await pool.query(
+        `INSERT INTO kpi_checklist_items (kpi_id, section, stage, item_text, updated_by)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [kpiId, bu, stage, step, updatedBy || "system"],
+      );
+      n++;
+    }
+  }
+  return { items: n, existed: false };
+}
+
+/** Rename a BU across the checklist AND its schedule. If the target name already
+ *  exists its items are merged (kept) and the source is folded into it. */
+export async function renameBu(
+  kpiId: number,
+  from: string,
+  to: string,
+): Promise<void> {
+  const f = (from || "").trim();
+  const t = (to || "").trim();
+  if (!f || !t || f === t) return;
+  await pool.query(
+    `UPDATE kpi_checklist_items SET section = $3, updated_at = NOW()
+      WHERE kpi_id = $1 AND section = $2`,
+    [kpiId, f, t],
+  );
+  // Move the schedule row only if the target doesn't already have one; else drop
+  // the stale source row (keep the target's dates).
+  await pool.query(
+    `UPDATE kpi_bu_schedule SET bu_name = $3, updated_at = NOW()
+      WHERE kpi_id = $1 AND bu_name = $2
+        AND NOT EXISTS (SELECT 1 FROM kpi_bu_schedule WHERE kpi_id = $1 AND bu_name = $3)`,
+    [kpiId, f, t],
+  );
+  await pool.query(
+    `DELETE FROM kpi_bu_schedule WHERE kpi_id = $1 AND bu_name = $2`,
+    [kpiId, f],
+  );
+}
+
+/** Remove a BU entirely (its checklist items + schedule). */
+export async function removeBu(kpiId: number, bu: string): Promise<void> {
+  const b = (bu || "").trim();
+  if (!b) return;
+  await pool.query(
+    `DELETE FROM kpi_checklist_items WHERE kpi_id = $1 AND section = $2`,
+    [kpiId, b],
+  );
+  await pool.query(
+    `DELETE FROM kpi_bu_schedule WHERE kpi_id = $1 AND bu_name = $2`,
+    [kpiId, b],
+  );
+}
+
 /**
  * Seed a KPI's per-BU action-plan checklist (stage + sub-steps per BU). Per-BU and
  * idempotent: rebuilds a BU only when its items don't match the current plan AND no
@@ -151,17 +230,19 @@ export async function actionPlanCompleteRate(
 ): Promise<{ value: number; complete: number; total: number } | null> {
   const kpi = await getKPIByCode(kpiCode);
   if (!kpi?.id) return null;
-  const total = FRAMEWORK_BUSINESS_UNITS.length;
-  if (total === 0) return null;
+  // Denominator = the BUs ACTUALLY in this KPI's checklist (so adding/removing a
+  // BU changes the rate), not a fixed list.
   const res = await pool.query(
     `SELECT section,
             COUNT(*)::int AS n,
             COUNT(*) FILTER (WHERE is_done)::int AS done
        FROM kpi_checklist_items
-      WHERE kpi_id = $1 AND section = ANY($2::text[])
+      WHERE kpi_id = $1 AND COALESCE(TRIM(section), '') <> ''
       GROUP BY section`,
-    [kpi.id, FRAMEWORK_BUSINESS_UNITS],
+    [kpi.id],
   );
+  const total = res.rows.length;
+  if (total === 0) return null;
   let complete = 0;
   for (const r of res.rows) {
     if (Number(r.n) > 0 && Number(r.n) === Number(r.done)) complete++;
@@ -183,17 +264,17 @@ export async function actionPlanCompleteRateAsOf(
 ): Promise<{ value: number; complete: number; total: number } | null> {
   const kpi = await getKPIByCode(kpiCode);
   if (!kpi?.id) return null;
-  const total = FRAMEWORK_BUSINESS_UNITS.length;
-  if (total === 0) return null;
   const res = await pool.query(
     `SELECT section,
             COUNT(*)::int AS n,
-            COUNT(*) FILTER (WHERE is_done AND updated_at <= $3)::int AS done
+            COUNT(*) FILTER (WHERE is_done AND updated_at <= $2)::int AS done
        FROM kpi_checklist_items
-      WHERE kpi_id = $1 AND section = ANY($2::text[])
+      WHERE kpi_id = $1 AND COALESCE(TRIM(section), '') <> ''
       GROUP BY section`,
-    [kpi.id, FRAMEWORK_BUSINESS_UNITS, asOf],
+    [kpi.id, asOf],
   );
+  const total = res.rows.length;
+  if (total === 0) return null;
   let complete = 0;
   for (const r of res.rows) {
     if (Number(r.n) > 0 && Number(r.n) === Number(r.done)) complete++;

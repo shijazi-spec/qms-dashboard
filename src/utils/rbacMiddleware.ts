@@ -1000,6 +1000,17 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["PUT"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  // Rename a BU (PUT) and remove a BU (DELETE) — same governance write roles.
+  {
+    pattern: /^\/api\/kpis\/\d+\/checklist\/bu\/rename$/,
+    methods: ["PUT"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
+  {
+    pattern: /^\/api\/kpis\/\d+\/checklist\/bu$/,
+    methods: ["DELETE"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
   {
     pattern: /^\/api\/kpis\/checklist\/\d+$/,
     methods: ["PUT", "DELETE"],
