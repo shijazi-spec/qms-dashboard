@@ -133,6 +133,15 @@
         </div>
 
         <div class="bg-white rounded-xl shadow">
+            <div class="px-4 pt-3 pb-2 border-b flex items-center gap-2 flex-wrap">
+                <span class="text-xs text-gray-500 me-1">View by quarter:</span>
+                <button data-on-click="selectQuarter" data-args="[0]" data-qtab="latest" class="px-3 py-1 text-sm rounded bg-indigo-600 text-white">Latest</button>
+                <button data-on-click="selectQuarter" data-args="[1]" data-qtab="1" class="px-3 py-1 text-sm rounded border text-gray-600 hover:bg-gray-50">Q1</button>
+                <button data-on-click="selectQuarter" data-args="[2]" data-qtab="2" class="px-3 py-1 text-sm rounded border text-gray-600 hover:bg-gray-50">Q2</button>
+                <button data-on-click="selectQuarter" data-args="[3]" data-qtab="3" class="px-3 py-1 text-sm rounded border text-gray-600 hover:bg-gray-50">Q3</button>
+                <button data-on-click="selectQuarter" data-args="[4]" data-qtab="4" class="px-3 py-1 text-sm rounded border text-gray-600 hover:bg-gray-50">Q4</button>
+                <span class="text-xs text-gray-400 ms-2" id="quarterHint"></span>
+            </div>
             <div class="p-4 border-b flex justify-between items-center">
                 <h2 class="font-semibold text-gray-900" data-i18n="kpis.kpi_catalog">KPI Catalog</h2>
                 <div class="flex gap-2 items-center flex-wrap">
@@ -413,10 +422,25 @@
         let charts = {};
 
         let _autoRecalcTried = false;
+        let _selectedQuarter = null; // null = latest; 1..4 = that quarter
+        const _kpiYear = new Date().getFullYear();
+        function selectQuarter(q) {
+            _selectedQuarter = (!q) ? null : q;
+            document.querySelectorAll('[data-qtab]').forEach(b => {
+                const t = b.getAttribute('data-qtab');
+                const on = (t === String(_selectedQuarter)) || (_selectedQuarter === null && t === 'latest');
+                b.className = 'px-3 py-1 text-sm rounded ' + (on ? 'bg-indigo-600 text-white' : 'border text-gray-600 hover:bg-gray-50');
+            });
+            const hint = document.getElementById('quarterHint');
+            if (hint) hint.textContent = _selectedQuarter ? `Showing Q${_selectedQuarter} ${_kpiYear} values (— if none recorded that quarter)` : '';
+            loadKPIs();
+        }
         async function loadKPIs() {
             const owner = document.getElementById('ownerFilter').value;
-            const url = owner ? `/api/kpis?owner=${owner}` : '/api/kpis/summary';
-            
+            const qp = _selectedQuarter ? `quarter=${_selectedQuarter}&year=${_kpiYear}` : '';
+            let url = owner ? `/api/kpis?owner=${owner}` : '/api/kpis/summary';
+            if (qp) url += (url.includes('?') ? '&' : '?') + qp;
+
             try {
                 const res = await fetch(url);
                 const data = await res.json();
@@ -445,7 +469,7 @@
                 // period — the scheduled job's 24h stale-gate may not have fired yet),
                 // run the engine once silently and reload so real numbers appear without
                 // the user having to find/click "Recalculate".
-                if (!_autoRecalcTried) {
+                if (!_autoRecalcTried && !_selectedQuarter) {
                     const anyValue = (allKPIs || []).some(k => k.latestValue !== null && k.latestValue !== undefined);
                     if (!anyValue) {
                         _autoRecalcTried = true;

@@ -12,6 +12,7 @@ import {
   updateKPIDefinition,
   recordKPIValue,
   getLatestKPIValue,
+  getLatestKPIValueForQuarter,
   getKPIHistory,
   getKPIDashboardSummary,
   createExecutiveReport,
@@ -124,19 +125,26 @@ export const kpiRoutes = [
               "Insufficient permissions for KPI data",
             );
           const ownerType = c.req.query("owner");
+          // Optional ?quarter=1..4&year=YYYY → show that quarter's recorded value.
+          const qn = parseInt(c.req.query("quarter") || "");
+          const yr = parseInt(c.req.query("year") || "");
+          const q = qn >= 1 && qn <= 4 ? { quarter: qn, year: yr || new Date().getFullYear() } : null;
           let kpis;
           if (ownerType) {
             kpis = await getKPIsByOwner(ownerType);
           } else {
             kpis = await getAllKPIDefinitions();
           }
-          // Attach the latest recorded value to each KPI so owner-filtered cards
-          // show real numbers + RAG status (parity with /api/kpis/summary, which
-          // the "All" view uses). The card expects latestValue = the numeric
-          // actual_value and a separate status, not the raw kpi_values row.
+          // Attach the recorded value to each KPI so owner-filtered cards show real
+          // numbers + RAG status (parity with /api/kpis/summary). latestValue = the
+          // numeric actual_value; status is separate. Quarter-scoped when ?quarter set.
           kpis = await Promise.all(
             (kpis as any[]).map(async (k) => {
-              const lv = k?.id ? await getLatestKPIValue(k.id) : null;
+              const lv = k?.id
+                ? q
+                  ? await getLatestKPIValueForQuarter(k.id, q.year, q.quarter)
+                  : await getLatestKPIValue(k.id)
+                : null;
               return {
                 ...k,
                 latestValue: lv ? lv.actual_value : null,
@@ -168,7 +176,10 @@ export const kpiRoutes = [
               c,
               "Insufficient permissions for KPI data",
             );
-          const summary = await getKPIDashboardSummary();
+          const qn = parseInt(c.req.query("quarter") || "");
+          const yr = parseInt(c.req.query("year") || "");
+          const q = qn >= 1 && qn <= 4 ? { quarter: qn, year: yr || new Date().getFullYear() } : undefined;
+          const summary = await getKPIDashboardSummary(q);
           return c.json(summary);
         } catch (error) {
           safeLogger.error("Error fetching KPI summary:", error);

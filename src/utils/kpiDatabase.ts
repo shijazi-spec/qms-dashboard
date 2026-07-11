@@ -1844,6 +1844,27 @@ export async function getLatestKPIValue(
   return result.rows[0] || null;
 }
 
+/**
+ * Latest recorded value whose period falls in a given quarter (1-4) of a year —
+ * powers the Q1/Q2/Q3/Q4 tabs on /kpis. Returns null if nothing was recorded in
+ * that quarter (so the card shows "--" for quarters before the platform tracked it).
+ */
+export async function getLatestKPIValueForQuarter(
+  kpiId: number,
+  year: number,
+  quarter: number,
+): Promise<KPIValue | null> {
+  const qStart = new Date(Date.UTC(year, (quarter - 1) * 3, 1));
+  const qEnd = new Date(Date.UTC(year, quarter * 3, 1));
+  const result = await pool.query(
+    `SELECT * FROM kpi_values
+      WHERE kpi_id = $1 AND period_end >= $2 AND period_end < $3
+      ORDER BY period_end DESC, id DESC LIMIT 1`,
+    [kpiId, qStart, qEnd],
+  );
+  return result.rows[0] || null;
+}
+
 export async function getKPIHistory(
   kpiId: number,
   limit: number = 12,
@@ -1855,7 +1876,9 @@ export async function getKPIHistory(
   return result.rows;
 }
 
-export async function getKPIDashboardSummary(): Promise<any> {
+export async function getKPIDashboardSummary(
+  quarter?: { year: number; quarter: number },
+): Promise<any> {
   const kpis = await getAllKPIDefinitions();
   const summary: any = {
     total: kpis.length,
@@ -1871,7 +1894,9 @@ export async function getKPIDashboardSummary(): Promise<any> {
     if (!summary.byCategory[kpi.category]) summary.byCategory[kpi.category] = 0;
     summary.byCategory[kpi.category]++;
 
-    const latestValue = await getLatestKPIValue(kpi.id!);
+    const latestValue = quarter
+      ? await getLatestKPIValueForQuarter(kpi.id!, quarter.year, quarter.quarter)
+      : await getLatestKPIValue(kpi.id!);
     if (latestValue && latestValue.status) {
       summary.byStatus[latestValue.status]++;
       summary.kpiDetails.push({
