@@ -104,7 +104,13 @@ export async function seedActionPlan(kpiCode: string, plan: ActionPlan): Promise
     const have = new Set(cur.rows.map((r: any) => r.item_text));
     const matches = cur.rows.length === expected.length && expected.every((s) => have.has(s));
     if (matches) continue;
-    if (cur.rows.length > 0 && cur.rows.some((r: any) => r.is_done)) continue; // don't disturb ticks
+    // A BU whose items don't overlap the current plan at all is on a stale/legacy
+    // plan (e.g. the old 9-phase list) — rebuild it even if ticked, because those
+    // ticks belong to a different structure. Only preserve ticks that live on the
+    // *current* plan (partial progress), so we never wipe real in-progress work.
+    const expectedSet = new Set(expected);
+    const onCurrentPlan = cur.rows.some((r: any) => expectedSet.has(r.item_text));
+    if (cur.rows.length > 0 && cur.rows.some((r: any) => r.is_done) && onCurrentPlan) continue;
     await pool.query(`DELETE FROM kpi_checklist_items WHERE kpi_id = $1 AND section = $2`, [kpi.id, bu]);
     for (const [stage, steps] of plan) {
       for (const step of steps) {

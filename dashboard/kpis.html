@@ -1044,7 +1044,7 @@
         }
         function toggleStage(key) {
             if (_collapsedStages.has(key)) _collapsedStages.delete(key); else _collapsedStages.add(key);
-            loadChecklist();
+            _renderChecklist();
         }
         function _itemRow(it) {
             return `
@@ -1055,17 +1055,45 @@
                 </div>`;
         }
         function _barColor(pct) { return pct >= 100 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-gray-400'; }
+        let _checklistData = null;
         async function loadChecklist() {
             if (_checklistKpiId == null) return;
             try {
                 const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist`);
-                const data = await res.json();
+                _checklistData = await res.json();
+                _renderChecklist();
+            } catch (e) {
+                console.error('Load checklist error:', e);
+            }
+        }
+        // Recompute per-BU + overall totals locally so ticks reflect instantly (no round-trip).
+        function _recomputeChecklist() {
+            const d = _checklistData; if (!d) return;
+            (d.sections || []).forEach(s => {
+                const its = s.items || [];
+                s.total = its.length;
+                s.done = its.filter(i => i.is_done).length;
+                s.pct = s.total ? Math.round(s.done / s.total * 100) : 0;
+                s.complete = s.total > 0 && s.done === s.total;
+            });
+            const bus = (d.sections || []).filter(s => s.section);
+            d.bu_summary = { complete: bus.filter(s => s.complete).length, total: bus.length };
+            const all = (d.sections || []).flatMap(s => s.items || []);
+            const done = all.filter(i => i.is_done).length;
+            d.progress = { total: all.length, done, pct: all.length ? Math.round(done / all.length * 100) : 0 };
+        }
+        function _renderChecklist() {
+            const data = _checklistData;
+            if (!data) return;
+            try {
                 const items = data.items || [];
                 const prog = data.progress || { total: 0, done: 0, pct: 0 };
                 const sections = data.sections || [];
                 const buSummary = data.bu_summary || { complete: 0, total: 0 };
                 const sectioned = sections.some(s => s.section);
                 const wrap = document.getElementById('checklistItems');
+                const scroller = wrap.closest('.overflow-y-auto') || wrap.parentElement;
+                const sTop = scroller ? scroller.scrollTop : 0;
                 document.getElementById('checklistAddBu').classList.toggle('hidden', !sectioned);
                 document.getElementById('checklistFlatAdd').classList.toggle('hidden', sectioned);
 
@@ -1090,19 +1118,18 @@
                     }).join('');
                 } else {
                     document.getElementById('checklistProgress').textContent = `${prog.done} / ${prog.total} done — ${prog.pct}%`;
-                    if (!items.length) {
-                        wrap.innerHTML = '<p class="text-sm text-gray-500">No items yet. Add the completion checkpoints for this KPI.</p>';
-                        return;
-                    }
-                    wrap.innerHTML = items.map(_itemRow).join('');
+                    wrap.innerHTML = items.length
+                        ? items.map(_itemRow).join('')
+                        : '<p class="text-sm text-gray-500">No items yet. Add the completion checkpoints for this KPI.</p>';
                 }
+                if (scroller) scroller.scrollTop = sTop;
             } catch (e) {
-                console.error('Load checklist error:', e);
+                console.error('Render checklist error:', e);
             }
         }
         function toggleBuSection(section) {
             if (_collapsedBUs.has(section)) _collapsedBUs.delete(section); else _collapsedBUs.add(section);
-            loadChecklist();
+            _renderChecklist();
         }
         async function addChecklistItem(section) {
             // section provided → per-BU input; otherwise the flat input.
@@ -1221,13 +1248,24 @@
             } catch (e) { console.error('Save BU coverage error:', e); }
         }
         async function toggleChecklistItem(itemId, isDone) {
+            // Optimistic: flip locally + re-render instantly, then persist in the
+            // background. This lets the user mark many boxes in a row without each
+            // click racing a full re-fetch (the cause of "couldn't complete marking").
+            let hit = false;
+            (_checklistData?.sections || []).forEach(s =>
+                (s.items || []).forEach(it => { if (it.id === itemId) { it.is_done = isDone; hit = true; } }));
+            (_checklistData?.items || []).forEach(it => { if (it.id === itemId) it.is_done = isDone; });
+            if (hit) { _recomputeChecklist(); _renderChecklist(); }
             try {
                 const res = await fetch(`/api/kpis/checklist/${itemId}`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ is_done: isDone })
                 });
-                if (res.ok) await loadChecklist();
-            } catch (e) { console.error('Toggle checklist item error:', e); }
+                if (!res.ok) await loadChecklist(); // save failed — revert to server truth
+            } catch (e) {
+                console.error('Toggle checklist item error:', e);
+                await loadChecklist();
+            }
         }
         async function deleteChecklistItem(itemId) {
             try {
