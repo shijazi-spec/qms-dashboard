@@ -108,7 +108,11 @@ const BASE_URL = process.env.RATE_LIMIT_TEST_URL || `http://localhost:${PORT}`;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const DATABASE_URL = process.env.DATABASE_URL;
 
-const WRITE_LIMIT = 10;
+// Mirror the source default (rateLimiter.ts) and its env override.
+const WRITE_LIMIT = (() => {
+  const raw = parseInt(process.env.RATE_LIMIT_WRITE_PER_MIN ?? "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 60;
+})();
 const READ_LIMIT = 100;
 const AUTH_LIMIT = 5;
 const N_PER_USER = WRITE_LIMIT + 5;

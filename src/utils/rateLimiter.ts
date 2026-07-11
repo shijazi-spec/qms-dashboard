@@ -19,7 +19,15 @@ function getPool(): InstanceType<typeof Pool> {
 const WINDOW_MS = 60 * 1000;
 const SUB_BUCKET_MS = 1000;
 const READ_LIMIT = 100;
-const WRITE_LIMIT = 10;
+// Authenticated per-user write budget/minute. 10 was far too tight for normal
+// interactive editing (ticking a checklist, quick edits) and produced constant
+// "Too many requests" 429s during legitimate work. Bumped to 60 (≈1/sec) — still
+// per-authenticated-user so abuse stays bounded to one operator's own data.
+// Override with RATE_LIMIT_WRITE_PER_MIN if a deployment needs to tune it.
+const WRITE_LIMIT = (() => {
+  const raw = parseInt(process.env.RATE_LIMIT_WRITE_PER_MIN ?? "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 60;
+})();
 const AUTH_LIMIT = 5;
 const EXPORT_LIMIT = 10;
 const AUDIO_LIMIT = 20;

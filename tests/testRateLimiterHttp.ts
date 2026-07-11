@@ -92,7 +92,12 @@ const PORT = process.env.PORT || '5000';
 const BASE_URL = process.env.RATE_LIMIT_TEST_URL || `http://localhost:${PORT}`;
 const ADMIN_KEY = process.env.ADMIN_API_KEY;
 
-const WRITE_LIMIT = 10;
+// Mirror the source default (rateLimiter.ts) and its env override so the test
+// stays in lockstep when the write budget is tuned.
+const WRITE_LIMIT = (() => {
+  const raw = parseInt(process.env.RATE_LIMIT_WRITE_PER_MIN ?? "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 60;
+})();
 const AUTH_LIMIT = 5;
 const READ_LIMIT = 100;
 const EXPORT_LIMIT = 10;
@@ -190,7 +195,7 @@ async function testAuditTriggerWriteLimit(): Promise<boolean> {
     body: JSON.stringify({}),
   };
 
-  const N = 20;
+  const N = WRITE_LIMIT + 10; // must exceed the limit to force at least one 429
   console.log(`[HttpRateLimitTest] Firing ${N} concurrent POSTs with XFF=${xff}`);
   const results = await fireConcurrent(url, init, N);
   const { passed, blocked } = summarize('/api/audit/trigger', results);

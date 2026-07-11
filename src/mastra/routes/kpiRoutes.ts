@@ -896,6 +896,67 @@ export const kpiRoutes = [
     },
   },
   {
+    // Batch tick/untick — lets the UI flush a burst of checkbox changes in ONE
+    // request instead of one-per-click (which tripped the write rate limit).
+    path: "/api/kpis/checklist/batch",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to edit KPI checklist",
+            );
+          const body = await c.req.json().catch(() => ({}));
+          const updates: Array<{ id: number; is_done: boolean }> = Array.isArray(
+            body?.updates,
+          )
+            ? body.updates
+            : [];
+          if (!updates.length) return c.json({ error: "updates required" }, 400);
+          if (updates.length > 500)
+            return c.json({ error: "too many updates in one batch" }, 400);
+          const by = user?.email || "system";
+          const kpiIds = new Set<number>();
+          let applied = 0;
+          for (const u of updates) {
+            const id = parseInt(String(u?.id), 10);
+            if (!Number.isFinite(id)) continue;
+            const item = await updateChecklistItem(id, { is_done: !!u.is_done }, by);
+            if (item) {
+              kpiIds.add(item.kpi_id);
+              applied++;
+            }
+          }
+          // Recompute each affected KPI once, and sync BU coverage if the framework
+          // checklist changed (same single-source logic as the per-item route).
+          for (const kpiId of kpiIds) {
+            await recordChecklistKPIValue(kpiId);
+            try {
+              const fw = await getKPIByCode("QM-KPI-015");
+              if (fw?.id === kpiId) {
+                const { syncBuCoverageFromChecklist } = await import(
+                  "../../utils/kpiBuCoverageDatabase"
+                );
+                await syncBuCoverageFromChecklist();
+              }
+            } catch (e) {
+              safeLogger.error("[KpiRoutes] BU coverage sync after batch failed", e);
+            }
+          }
+          return c.json({ success: true, applied });
+        } catch (error) {
+          safeLogger.error("Error batch-updating checklist:", error);
+          return c.json({ error: "Failed to update checklist" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/kpis/checklist/:itemId{[0-9]+}",
     method: "DELETE" as const,
     createHandler: async () => {

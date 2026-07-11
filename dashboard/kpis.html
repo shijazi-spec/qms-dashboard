@@ -1050,6 +1050,7 @@
         }
         async function saveBuSchedule(bu, field, value) {
             if (_checklistKpiId == null || !bu || !field) return;
+            await flushTicks();
             // Update local model first so the badge refreshes instantly.
             (_checklistData?.sections || []).forEach(s => { if (s.section === bu) s[field] = value || null; });
             _renderChecklist();
@@ -1069,7 +1070,8 @@
                 await loadChecklist();
             }
         }
-        function closeChecklistModal() {
+        async function closeChecklistModal() {
+            await flushTicks(); // don't lose pending marks on close
             document.getElementById('checklistModal').classList.add('hidden');
             _checklistKpiId = null;
             // Refresh the list so the recomputed value/RAG shows.
@@ -1223,6 +1225,7 @@
             const input = section ? document.getElementById('addItem-' + _slug(section)) : document.getElementById('newChecklistItem');
             const text = (input && input.value || '').trim();
             if (!text || _checklistKpiId == null) return;
+            await flushTicks();
             try {
                 const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1236,6 +1239,7 @@
             const input = document.getElementById('newChecklistBu');
             const name = (input.value || '').trim();
             if (!name || _checklistKpiId == null) return;
+            await flushTicks();
             try {
                 const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist/bu`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1258,6 +1262,7 @@
         }
         async function _buAdminCall(method, url, body, label) {
             if (_checklistKpiId == null) return;
+            await flushTicks(); // persist any pending checkbox marks first
             try {
                 const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                 if (res.ok) { await loadChecklist(); }
@@ -1357,27 +1362,45 @@
                 await loadBuCoverage();
             } catch (e) { console.error('Save BU coverage error:', e); }
         }
-        async function toggleChecklistItem(itemId, isDone) {
-            // Optimistic: flip locally + re-render instantly, then persist in the
-            // background. This lets the user mark many boxes in a row without each
-            // click racing a full re-fetch (the cause of "couldn't complete marking").
+        // Pending checkbox changes, flushed as ONE batch request shortly after the
+        // user stops clicking — so marking a whole BU is a single write, not 19
+        // (which tripped the rate limiter with "Too many requests").
+        const _pendingTicks = new Map();
+        let _tickFlushTimer = null;
+        function toggleChecklistItem(itemId, isDone) {
+            // Optimistic: flip locally + re-render instantly (feels immediate).
             let hit = false;
             (_checklistData?.sections || []).forEach(s =>
                 (s.items || []).forEach(it => { if (it.id === itemId) { it.is_done = isDone; hit = true; } }));
             (_checklistData?.items || []).forEach(it => { if (it.id === itemId) it.is_done = isDone; });
             if (hit) { _recomputeChecklist(); _renderChecklist(); }
+            _pendingTicks.set(itemId, isDone);
+            if (_tickFlushTimer) clearTimeout(_tickFlushTimer);
+            _tickFlushTimer = setTimeout(flushTicks, 600);
+        }
+        async function flushTicks() {
+            if (_tickFlushTimer) { clearTimeout(_tickFlushTimer); _tickFlushTimer = null; }
+            if (!_pendingTicks.size) return;
+            const updates = [..._pendingTicks.entries()].map(([id, is_done]) => ({ id, is_done }));
+            _pendingTicks.clear();
             try {
-                const res = await fetch(`/api/kpis/checklist/${itemId}`, {
+                const res = await fetch('/api/kpis/checklist/batch', {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ is_done: isDone })
+                    body: JSON.stringify({ updates })
                 });
-                if (!res.ok) await loadChecklist(); // save failed — revert to server truth
+                if (!res.ok) {
+                    let reason = ''; try { reason = (await res.json()).error || ''; } catch {}
+                    if (res.status === 429) reason = 'Please wait a moment — too many changes at once.';
+                    if (reason) console.warn('Batch tick save:', reason);
+                    await loadChecklist(); // revert to server truth
+                }
             } catch (e) {
-                console.error('Toggle checklist item error:', e);
+                console.error('Flush ticks error:', e);
                 await loadChecklist();
             }
         }
         async function deleteChecklistItem(itemId) {
+            await flushTicks();
             try {
                 const res = await fetch(`/api/kpis/checklist/${itemId}`, { method: 'DELETE' });
                 if (res.ok) await loadChecklist();
