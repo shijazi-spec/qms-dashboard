@@ -335,21 +335,20 @@ async function calcProcessQualityFramework() {
 }
 
 /**
- * QM-KPI-015 — Process & Quality Framework Completion = BUs with a PUBLISHED
- * framework ÷ the 8 required (commercial depts + QMS), matching the Leadership
- * Platform. Binary per BU: a BU counts once its "Process Releasing" phase is
- * ticked. Same value the /kpis page records (via frameworkPublishedRate).
+ * QM-KPI-015 — BU Framework Readiness Rate = BUs that completed the full 7-stage
+ * Readiness action plan ("Ready for Pilot") ÷ the 8 planned BUs. Binary per BU;
+ * same value the /kpis page records.
  */
 async function calcFrameworkChecklistCompletion() {
-  const { frameworkPublishedRate } = await import("./kpiChecklistDatabase");
-  const r = await frameworkPublishedRate();
+  const { actionPlanCompleteRate } = await import("./kpiChecklistDatabase");
+  const r = await actionPlanCompleteRate("QM-KPI-015");
   if (!r) {
     return { value: 0, dataAvailable: false, reason: "no_framework_checklist_yet" };
   }
   return {
     value: r.value,
     dataAvailable: true,
-    details: { frameworks_published: r.published, frameworks_required: r.total },
+    details: { bus_ready_for_pilot: r.complete, bus_planned: r.total },
   };
 }
 
@@ -404,38 +403,17 @@ async function calcBuCoverageRate() {
     );
   }
 
-  // Prefer the per-BU coverage tracker (avg completion %, with partial credit) so
-  // /kpis and the leadership platform show the SAME value. Falls back to the
-  // published-policy proxy below only if the tracker has no data.
-  try {
-    const { buCoverageRateForFeed } = await import("./kpiBuCoverageDatabase");
-    const tracked = await buCoverageRateForFeed();
-    if (tracked !== null) {
-      return { value: tracked, dataAvailable: true, details: { source: "bu_coverage_tracker" } };
-    }
-  } catch {
-    /* tracker not ready — use the policy proxy */
-  }
-
-  const r = await pool.query(`
-    SELECT
-      (SELECT COUNT(*)::int FROM business_units WHERE is_active) AS total,
-      (
-        SELECT COUNT(DISTINCT bu.id)::int
-        FROM business_units bu
-        JOIN policies p
-          ON lower(trim(p.owner_department)) = lower(trim(bu.bu_name))
-         AND p.status = 'published'
-        WHERE bu.is_active
-      ) AS covered
-  `);
-  const total = r.rows[0]?.total ?? 0;
-  const covered = r.rows[0]?.covered ?? 0;
-  if (total <= 0) return { value: 0, dataAvailable: false };
+  // QM-KPI-008 = BU Pilot Validation Completion Rate: BUs that completed the full
+  // 5-stage Pilot Validation plan ÷ the 8 planned BUs (binary; same value /kpis
+  // records). (business_units seeding above is kept — calcRiskAssessmentCoverage
+  // relies on it.)
+  const { actionPlanCompleteRate } = await import("./kpiChecklistDatabase");
+  const rate = await actionPlanCompleteRate("QM-KPI-008");
+  if (!rate) return { value: 0, dataAvailable: false, reason: "no_pilot_checklist_yet" };
   return {
-    value: Math.round((covered / total) * 1000) / 10,
+    value: rate.value,
     dataAvailable: true,
-    details: { total_business_units: total, covered_business_units: covered },
+    details: { bus_pilot_validated: rate.complete, bus_planned: rate.total },
   };
 }
 

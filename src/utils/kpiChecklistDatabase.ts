@@ -16,6 +16,8 @@ export interface KPIChecklistItem {
   kpi_id: number;
   /** Optional group header (e.g. a Business Unit). Flat checklists leave it blank. */
   section?: string | null;
+  /** Optional stage within a section (the action-plan stage the sub-step belongs to). */
+  stage?: string | null;
   item_text: string;
   is_done: boolean;
   note?: string | null;
@@ -30,6 +32,7 @@ export async function initKPIChecklistTables(): Promise<void> {
       id SERIAL PRIMARY KEY,
       kpi_id INTEGER NOT NULL REFERENCES kpi_definitions(id) ON DELETE CASCADE,
       section VARCHAR(150),
+      stage VARCHAR(200),
       item_text TEXT NOT NULL,
       is_done BOOLEAN DEFAULT false,
       note TEXT,
@@ -42,20 +45,107 @@ export async function initKPIChecklistTables(): Promise<void> {
     `ALTER TABLE kpi_checklist_items ADD COLUMN IF NOT EXISTS section VARCHAR(150)`,
   );
   await pool.query(
+    `ALTER TABLE kpi_checklist_items ADD COLUMN IF NOT EXISTS stage VARCHAR(200)`,
+  );
+  await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_kpi_checklist_kpi ON kpi_checklist_items(kpi_id)`,
   );
   logger.info("✅ [KPIChecklist] kpi_checklist_items table ready");
 
-  // One-time migration to the commercial-8 BU list (rename Sales→Sales B2B +
-  // Customer Support→Contact Center, add Sales B2C, drop non-commercial BUs).
+  // Commercial-8 BU naming migration (Sales B2B/B2C, Contact Center).
   await migrateToCommercialBUs();
-  // Seed the BU Framework Completion KPI (QM-KPI-015) with the Business Units +
-  // their standard framework action plan, so it opens ready-to-use. Idempotent.
-  await seedBuFrameworkChecklist();
-  // Pre-fill the agreed FY2026 baseline (Sales/SDR done, Marketplace ~35%) on
-  // still-untouched phases, so BU Coverage (which is derived from this checklist)
-  // reads correctly out of the box. Idempotent + never overrides a human tick.
-  await backfillInitialFrameworkProgress();
+  // Seed the two per-BU action-plan checklists (New_GRQ Final KPIs, 2026-06-30):
+  //   QM-KPI-015 BU Framework Readiness = 7-stage readiness plan
+  //   QM-KPI-008 BU Pilot Validation    = 5-stage pilot plan
+  await seedActionPlan("QM-KPI-015", READINESS_PLAN);
+  await seedActionPlan("QM-KPI-008", PILOT_PLAN);
+}
+
+/** Stage → sub-steps. An action plan is a list of these; each BU gets the whole plan. */
+export type ActionPlan = Array<[string, string[]]>;
+
+/** BU Framework Readiness (QM-KPI-015) — 7 stages, 19 sub-steps. A BU is "Ready for
+ *  Pilot" when every sub-step is done. */
+export const READINESS_PLAN: ActionPlan = [
+  ["Stakeholder alignment", ["Kickoff meeting completed", "1:1 meetings with BU leaders and relevant parties completed"]],
+  ["Process discovery and mapping", ["Current process reviewed", "Flowchart / process map drafted", "Required sub-processes identified"]],
+  ["Process profile drafting", ["Process profile drafted", "Roles, stages, interfaces and timelines defined"]],
+  ["Cross-functional review and revision", ["Review with BU stakeholders completed", "Review with related functions completed", "Comments consolidated and updated"]],
+  ["Forms / templates / system alignment", ["Related forms reviewed or updated", "System / platform alignment checked", "Needed supporting documents finalized"]],
+  ["Approval and release", ["Final BU / business owner approval obtained", "Controlled version released", "Announcement issued to concerned parties"]],
+  ["Training and pilot readiness", ["Training material prepared", "Pilot team trained", "Pilot scope and readiness confirmed"]],
+];
+
+/** BU Pilot Validation (QM-KPI-008) — 5 stages, 13 sub-steps. A BU is "Pilot
+ *  validated" when every sub-step is done. */
+export const PILOT_PLAN: ActionPlan = [
+  ["Pilot authorization", ["Pilot window agreed", "BU confirms readiness to start pilot"]],
+  ["Audit planning", ["Audit schedule prepared", "Schedule shared with stakeholders", "Audit checklist prepared against the approved process"]],
+  ["Pilot / audit execution", ["Internal pilot audit conducted", "Evidence collected", "Actual practice checked against released process"]],
+  ["Reporting", ["Audit report prepared", "Gap summary prepared", "Nonconformities / observations communicated"]],
+  ["Action planning", ["Action plan agreed with stakeholders", "CAPA / closure requests issued to owners"]],
+];
+
+/**
+ * Seed a KPI's per-BU action-plan checklist (stage + sub-steps per BU). Per-BU and
+ * idempotent: rebuilds a BU only when its items don't match the current plan AND no
+ * sub-step is ticked (never disturbs progress). Adds new BUs without touching others.
+ */
+export async function seedActionPlan(kpiCode: string, plan: ActionPlan): Promise<void> {
+  const kpi = await getKPIByCode(kpiCode);
+  if (!kpi?.id) return;
+  const expected = plan.flatMap(([, steps]) => steps);
+  let added = 0;
+  for (const bu of FRAMEWORK_BUSINESS_UNITS) {
+    const cur = await pool.query(
+      `SELECT item_text, is_done FROM kpi_checklist_items WHERE kpi_id = $1 AND section = $2`,
+      [kpi.id, bu],
+    );
+    const have = new Set(cur.rows.map((r: any) => r.item_text));
+    const matches = cur.rows.length === expected.length && expected.every((s) => have.has(s));
+    if (matches) continue;
+    if (cur.rows.length > 0 && cur.rows.some((r: any) => r.is_done)) continue; // don't disturb ticks
+    await pool.query(`DELETE FROM kpi_checklist_items WHERE kpi_id = $1 AND section = $2`, [kpi.id, bu]);
+    for (const [stage, steps] of plan) {
+      for (const step of steps) {
+        await pool.query(
+          `INSERT INTO kpi_checklist_items (kpi_id, section, stage, item_text, updated_by)
+           VALUES ($1, $2, $3, $4, 'system')`,
+          [kpi.id, bu, stage, step],
+        );
+      }
+    }
+    added++;
+  }
+  if (added > 0) logger.info(`🌱 [KPIChecklist] Seeded ${kpiCode} action plan for ${added} BU(s)`);
+}
+
+/**
+ * Binary rate for a per-BU action-plan KPI = # BUs whose checklist is 100% done ÷
+ * total planned BUs (the commercial 8). Matches the Excel formula. Returns null if
+ * no BUs configured. Used by both QM-KPI-015 (Readiness) and QM-KPI-008 (Pilot).
+ */
+export async function actionPlanCompleteRate(
+  kpiCode: string,
+): Promise<{ value: number; complete: number; total: number } | null> {
+  const kpi = await getKPIByCode(kpiCode);
+  if (!kpi?.id) return null;
+  const total = FRAMEWORK_BUSINESS_UNITS.length;
+  if (total === 0) return null;
+  const res = await pool.query(
+    `SELECT section,
+            COUNT(*)::int AS n,
+            COUNT(*) FILTER (WHERE is_done)::int AS done
+       FROM kpi_checklist_items
+      WHERE kpi_id = $1 AND section = ANY($2::text[])
+      GROUP BY section`,
+    [kpi.id, FRAMEWORK_BUSINESS_UNITS],
+  );
+  let complete = 0;
+  for (const r of res.rows) {
+    if (Number(r.n) > 0 && Number(r.n) === Number(r.done)) complete++;
+  }
+  return { value: Math.round((complete / total) * 1000) / 10, complete, total };
 }
 
 /**
@@ -399,11 +489,10 @@ export async function recordChecklistKPIValue(
   const kpi = await getKPIById(kpiId);
   if (!kpi) return null;
   let pct: number | null;
-  if (kpi.kpi_code === "QM-KPI-015") {
-    // Framework Completion = BUs with a PUBLISHED framework ÷ the commercial 8
-    // (binary per BU — matches the Leadership Platform). Ticking the "Process
-    // Releasing" phase for a BU flips it to published.
-    const r = await frameworkPublishedRate();
+  if (kpi.kpi_code === "QM-KPI-015" || kpi.kpi_code === "QM-KPI-008") {
+    // Binary action-plan KPIs: # BUs whose full checklist is done ÷ the commercial 8
+    // (QM-KPI-015 = Readiness plan, QM-KPI-008 = Pilot Validation plan).
+    const r = await actionPlanCompleteRate(kpi.kpi_code);
     pct = r ? r.value : null;
   } else {
     const items = await getChecklistItems(kpiId);
