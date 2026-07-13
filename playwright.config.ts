@@ -6,6 +6,15 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 // back to whatever Playwright finds in its own browser cache otherwise.
 const replitChromium = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 
+// Chromium writes crash dumps to ~/.config/chromium/Crash Reports on every
+// renderer/GPU crash during headless test runs. Left unchecked this grew to
+// 4.4 GB and pushed the deployment image over its 8 GiB limit (publish
+// failure, July 2026). These flags disable the crash reporter entirely.
+const CHROMIUM_NO_CRASH_DUMP_ARGS = [
+  '--disable-crash-reporter',
+  '--disable-breakpad',
+];
+
 // Firefox + WebKit projects are scoped to the streaming-download smoke test
 // only — every other Playwright spec stays Chromium-only because the rest of
 // the suite (CSP / a11y / i18n) doesn't need cross-browser coverage. The
@@ -38,7 +47,10 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        ...(replitChromium ? { launchOptions: { executablePath: replitChromium } } : {}),
+        launchOptions: {
+          args: CHROMIUM_NO_CRASH_DUMP_ARGS,
+          ...(replitChromium ? { executablePath: replitChromium } : {}),
+        },
       },
     },
     {

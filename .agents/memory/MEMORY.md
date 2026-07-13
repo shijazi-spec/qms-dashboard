@@ -16,3 +16,4 @@
 - [Mastra build dynamic-import externals](mastra-build-dynamic-import-externals.md) — a pkg the app `await import()`s that's only transitive (e.g. pg-query-stream) must be BOTH in bundler.externals AND a direct dep, or prod prune breaks the build/runtime
 - [Stale-deploy static asset cache](stale-deploy-static-asset-cache.md) — "deployed serves OLD JS/CSS" is usually browser cache of validator-less assets, not a stale build; curl the live asset, don't trust commit-vs-build timestamps
 - [Preflight basic vs full dual-path](preflight-rule-mode-dual-path.md) — prod runs BASIC mode; a verdict rule added only to the full classifier silently never fires — wire it into the basic runner too
+- [Deploy image over 8 GiB](deploy-image-size-chromium-crash-dumps.md) — publish can fail AFTER a green build; hidden workspace caches (Chromium crash dumps) count toward the image; du-sweep hidden dirs
