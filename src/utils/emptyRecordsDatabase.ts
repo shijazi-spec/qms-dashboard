@@ -988,6 +988,108 @@ export async function reconcileDeletedRecords(
   return { checked, pruned };
 }
 
+/**
+ * COMPREHENSIVE deletion sweep (Sarah 2026-07-13): purge EVERYTHING deleted in
+ * Zoho — any module, any type — so the WEEKLY automatic-audit / Slack brief
+ * reflects clean data. Runs once, right before postWeeklyExecBrief (Sunday),
+ * not just monthly. Two passes:
+ *   1) Zoho's /deleted feed for every module over a WIDE window (default 180
+ *      days, RADAR_WEEKLY_DELETION_LOOKBACK_DAYS) — bulk-paginated and cheap;
+ *      catches everything still in the recycle bin regardless of which 6h sync
+ *      missed it. removeRecordsByZohoIds is idempotent.
+ *   2) A large live-verify of active-cluster records across all modules — the
+ *      only signal for records HARD-purged from the recycle bin (gone from the
+ *      /deleted feed), which the bounded per-sync sweep may not have reached.
+ * The platform NEVER deletes in Zoho — it only prunes its own mirror of
+ * already-gone records. Env: RADAR_WEEKLY_DELETION_LOOKBACK_DAYS (180),
+ * RADAR_WEEKLY_GHOST_VERIFY (5000); either =0 disables that pass.
+ */
+export async function runComprehensiveDeletionSweep(
+  opts: { verifyLimit?: number } = {},
+): Promise<{
+  feedRemoved: number;
+  verified: number;
+  verifiedPruned: number;
+  perModuleFeed: Record<string, number>;
+}> {
+  const { fetchDeletedZohoRecords } = await import("./zohoCRM");
+  const { removeRecordsByZohoIds, cleanupSingletonClusters } = await import(
+    "./duplicateRadarDatabase"
+  );
+  const modules = ["Leads", "Deals", "Contacts", "Accounts"];
+  const lookbackDays = parseInt(
+    process.env.RADAR_WEEKLY_DELETION_LOOKBACK_DAYS || "180",
+    10,
+  );
+  const since =
+    lookbackDays > 0
+      ? new Date(Date.now() - lookbackDays * 86400000).toISOString()
+      : undefined;
+
+  const perModuleFeed: Record<string, number> = {};
+  let feedRemoved = 0;
+  for (const m of modules) {
+    try {
+      const deleted = await fetchDeletedZohoRecords(m, {
+        type: "all",
+        modifiedSince: since,
+      });
+      const ids = deleted.map((d: any) => d.id).filter(Boolean);
+      if (ids.length) {
+        const { removedCount } = await removeRecordsByZohoIds(ids, {
+          module: m,
+        });
+        perModuleFeed[m] = removedCount;
+        feedRemoved += removedCount;
+      } else {
+        perModuleFeed[m] = 0;
+      }
+    } catch (e: any) {
+      logger.warn(
+        `[comprehensive-deletion-sweep] ${m} /deleted feed failed (non-fatal): ${e?.message || e}`,
+      );
+      perModuleFeed[m] = 0;
+    }
+  }
+
+  // Pass 2: live-verify active-cluster records to catch hard-purged ghosts.
+  let verified = 0;
+  let verifiedPruned = 0;
+  try {
+    const verifyLimit =
+      opts.verifyLimit ??
+      parseInt(process.env.RADAR_WEEKLY_GHOST_VERIFY || "5000", 10);
+    if (verifyLimit > 0) {
+      const r = await reconcileDeletedRecords({
+        limit: verifyLimit,
+        activeClustersOnly: true,
+      });
+      verified = r.checked;
+      verifiedPruned = r.pruned;
+    }
+  } catch (e: any) {
+    logger.warn(
+      `[comprehensive-deletion-sweep] live-verify failed (non-fatal): ${e?.message || e}`,
+    );
+  }
+
+  // Feed-removed records can leave singleton clusters behind (pass 2 only
+  // cleans singletons when IT pruned) — clean up once here if anything went.
+  if (feedRemoved > 0) {
+    try {
+      if (typeof cleanupSingletonClusters === "function")
+        await cleanupSingletonClusters();
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  logger.info(
+    `🧹 [comprehensive-deletion-sweep] feed-removed ${feedRemoved}, live-verified ${verified} (pruned ${verifiedPruned})`,
+  );
+  return { feedRemoved, verified, verifiedPruned, perModuleFeed };
+}
+
 // Contacts: name-only (no email/phone/account/deal) OR test-name.
 export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
   const q = await pool.query(

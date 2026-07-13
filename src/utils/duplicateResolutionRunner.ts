@@ -582,6 +582,27 @@ export async function postWeeklyExecBrief(
   // A MANUAL "send now" passes recordSnapshot:false so ad-hoc sends (e.g. for a
   // meeting) don't pollute the week-over-week math, which must stay Sunday-anchored.
   const recordSnapshot = opts.recordSnapshot !== false;
+  // Comprehensive ghost purge BEFORE the audit is computed (Sarah 2026-07-13:
+  // "checked before we send the automatic-audits / Slack heads-up"). Removes
+  // ALL data deleted in Zoho — any module, any type — so the weekly brief and
+  // #automatic-audits reflect clean numbers, not lingering ghosts. Non-fatal:
+  // a sweep failure must never block the brief. Disable via env RADAR_WEEKLY_
+  // DELETION_SWEEP=false.
+  if (process.env.RADAR_WEEKLY_DELETION_SWEEP !== "false") {
+    try {
+      const { runComprehensiveDeletionSweep } = await import(
+        "./emptyRecordsDatabase"
+      );
+      const sweep = await runComprehensiveDeletionSweep();
+      logger.info(
+        `[exec-brief] pre-brief deletion sweep: feed-removed ${sweep.feedRemoved}, live-pruned ${sweep.verifiedPruned}`,
+      );
+    } catch (e) {
+      logger.warn("[exec-brief] pre-brief deletion sweep failed (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
   const { brief, metrics } = await buildExecutiveBriefText({ withTrend: true });
   if (recordSnapshot) {
     // Snapshot AFTER building (build reads the PRIOR snapshot for the delta).
