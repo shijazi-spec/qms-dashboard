@@ -904,14 +904,37 @@ async function runDeletionDetection(
   const perModule: Record<string, number> = {};
   let totalRemoved = 0;
 
+  // Self-healing lookback floor (Sarah 2026-07-13 "deleted deals still show
+  // after sync, many times"): a narrow [last_sync, now] window silently MISSES
+  // deletions whenever a sync is skipped by the single-flight guard, fails
+  // transiently, or the deletion lands just outside the window — the ghost then
+  // lingers forever (the modified-since fetch never returns deleted records).
+  // Widen `since` to at least N days ago so every sweep re-asks Zoho for
+  // everything deleted recently and RECOVERS earlier misses. removeRecordsByZohoIds
+  // is idempotent, so re-seeing an already-pruned id is a harmless no-op. The
+  // /deleted feed is bulk-paginated (cheap), not per-record. 0 disables the floor.
+  const lookbackDays = parseInt(
+    process.env.RADAR_DELETION_LOOKBACK_DAYS || "30",
+    10,
+  );
+  const lookbackFloorIso =
+    lookbackDays > 0
+      ? new Date(Date.now() - lookbackDays * 86400000).toISOString()
+      : null;
+
   for (const m of modules) {
     try {
-      const since = baselines[m.name] || undefined;
+      const baseline = baselines[m.name] || undefined;
       // Skip on first ever sync — no baseline to diff against, and the
       // initial fetch will populate the radar from scratch anyway.
-      if (!since) {
+      if (!baseline) {
         perModule[m.name] = 0;
         continue;
+      }
+      // Never SHRINK an already-wide window: use the earlier of (baseline, floor).
+      let since = baseline;
+      if (lookbackFloorIso && new Date(lookbackFloorIso) < new Date(baseline)) {
+        since = lookbackFloorIso;
       }
       const deleted = await fetchDeletedZohoRecords(m.name, {
         type: "all",
@@ -1427,6 +1450,41 @@ async function scanZohoCRMForDuplicates(
     await (await import("../../utils/emptyRecordsDatabase"))
       .reconcileEmptyDeleteDeletions()
       .catch(() => {});
+
+    // Auto-prune ghosts in VISIBLE clusters (Sarah 2026-07-13 "deleted deals
+    // still appear in Cross-Module after sync"). runDeletionDetection above only
+    // catches deletions Zoho still lists in its /deleted feed; a record that was
+    // HARD-purged (recycle bin emptied) or missed by every window lingers in its
+    // active cluster until someone manually clicks "Verify & prune deleted",
+    // which rotates across all ~160k records and rarely reaches it. Here we
+    // live-verify a bounded batch drawn ONLY from open clusters (the small set
+    // actually shown on the tabs), oldest-verified first, and prune whatever
+    // 404s — so a ghost a user would open is gone within a sync or two, no manual
+    // click. Bounded + env-tunable; RADAR_POST_SYNC_GHOST_VERIFY=0 disables.
+    try {
+      const ghostVerifyLimit = parseInt(
+        process.env.RADAR_POST_SYNC_GHOST_VERIFY || "300",
+        10,
+      );
+      if (ghostVerifyLimit > 0) {
+        const { reconcileDeletedRecords } = await import(
+          "../../utils/emptyRecordsDatabase"
+        );
+        const gv = await reconcileDeletedRecords({
+          limit: ghostVerifyLimit,
+          activeClustersOnly: true,
+        });
+        if (gv.pruned > 0) {
+          logger.info(
+            `🧹 [DuplicateRadar] Post-sync ghost sweep: checked ${gv.checked}, pruned ${gv.pruned} deleted record(s) from active clusters.`,
+          );
+        }
+      }
+    } catch (e: any) {
+      logger.warn(
+        `⚠️ [DuplicateRadar] Post-sync ghost sweep skipped (non-fatal): ${e?.message || e}`,
+      );
+    }
 
     // Persist per-record cleanup_class (empty/test/junk/orphaned/tagged) from
     // the synced snapshot — snapshot-only, no live Zoho calls — so later reads

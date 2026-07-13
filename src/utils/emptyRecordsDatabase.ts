@@ -906,18 +906,26 @@ export async function reconcileEmptyDeleteDeletions(
  * whole table; bounded batch + small concurrency to stay polite with Zoho.
  * Best-effort: individual fetch errors are swallowed. */
 export async function reconcileDeletedRecords(
-  opts: { module?: string; limit?: number } = {},
+  opts: { module?: string; limit?: number; activeClustersOnly?: boolean } = {},
 ): Promise<{ checked: number; pruned: number }> {
   const { fetchZohoRecordById } = await import("./zohoCRM");
   const mod = opts.module || null;
   const limit = Math.min(2000, Math.max(1, Math.floor(opts.limit ?? 300)));
 
+  // activeClustersOnly (Sarah 2026-07-13): restrict the live-verify to records
+  // that belong to an OPEN cluster still shown on the tabs (a few thousand),
+  // instead of rotating across all ~160k records. Ghosts in VISIBLE clusters —
+  // the ones users actually open and hit a 404 on — then self-prune within a
+  // sync or two, oldest-verified first. Used by the post-sync auto sweep.
+  const activeOnly = opts.activeClustersOnly === true;
   const batch = await pool.query<{ zoho_record_id: string; record_type: string | null; zoho_module: string | null }>(
-    `SELECT zoho_record_id, record_type, zoho_module
-       FROM duplicate_records
-      WHERE zoho_record_id IS NOT NULL AND zoho_record_id <> ''
-        AND ($1::text IS NULL OR record_type = $1)
-      ORDER BY last_verified_at ASC NULLS FIRST
+    `SELECT dr.zoho_record_id, dr.record_type, dr.zoho_module
+       FROM duplicate_records dr
+       ${activeOnly ? "JOIN duplicate_clusters dc ON dc.id = dr.cluster_id" : ""}
+      WHERE dr.zoho_record_id IS NOT NULL AND dr.zoho_record_id <> ''
+        AND ($1::text IS NULL OR dr.record_type = $1)
+        ${activeOnly ? "AND COALESCE(dc.status, 'active') NOT IN ('resolved', 'ignored', 'dismissed') AND dc.total_records > 1" : ""}
+      ORDER BY dr.last_verified_at ASC NULLS FIRST
       LIMIT $2`,
     [mod, limit],
   );
