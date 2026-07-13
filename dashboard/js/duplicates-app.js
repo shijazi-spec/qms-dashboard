@@ -10321,7 +10321,17 @@
                 const slaLabel = v.unit === 'business_days'
                     ? (v.sla_units + ' BD')
                     : (v.sla_units + ' days');
-                const dealCell = (r.deal_name ? '<div class="rr-primary">' + escapeHtml(r.deal_name) + '</div>' : '')
+                // Deal name links straight to the Zoho deal (Sarah 2026-07-14:
+                // open the deal from here to review before acting). Guards against
+                // synthetic ids so a test/placeholder row stays plain text.
+                const _dealZid = String(r.zoho_record_id || '').trim();
+                const _dealOpenable = _dealZid && !_dealZid.startsWith('test_') && !_dealZid.startsWith('LEAD_');
+                const dealNameHtml = r.deal_name
+                    ? (_dealOpenable
+                        ? '<a href="https://crm.zoho.com/crm/org766568398/tab/Deals/' + encodeURIComponent(_dealZid) + '" target="_blank" rel="noopener" class="rr-primary text-blue-600 hover:underline" title="Open this deal in Zoho CRM to review before acting">' + escapeHtml(r.deal_name) + ' <span class="text-xs">↗</span></a>'
+                        : '<div class="rr-primary">' + escapeHtml(r.deal_name) + '</div>')
+                    : '';
+                const dealCell = dealNameHtml
                     + (r.account_name ? '<div class="rr-sub">' + escapeHtml(r.account_name) + '</div>' : '');
                 const ownerCell = (r.owner_name ? '<div>' + escapeHtml(r.owner_name) + '</div>' : '<span class="text-gray-400">—</span>')
                     + (r.owner_email ? '<div class="rr-sub" style="font-family:ui-monospace,Menlo,Consolas,monospace">' + escapeHtml(r.owner_email) + '</div>' : '');
