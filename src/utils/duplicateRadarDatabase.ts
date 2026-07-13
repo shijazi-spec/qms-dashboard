@@ -1848,6 +1848,15 @@ function buildClusterFilterClause(
          AND ${cond}
     )`;
   }
+  // Hide placeholder / junk-name clusters (Sarah 2026-07-14): لايوجد / "not
+  // provided" / N/A / _placeholder etc. are CS name-quality noise, not real
+  // duplicates — their home is the Empty/Junk tab. Filter on company_name
+  // membership in the placeholder set + the quarantine domain. EMPTY names are
+  // NOT hidden here (a real domain-keyed cluster can legitimately carry a blank
+  // company name).
+  clause += ` AND domain <> '${PLACEHOLDER_CLUSTER_DOMAIN}'
+    AND LOWER(BTRIM(COALESCE(company_name,''))) <> ALL($${paramIndex++}::text[])`;
+  params.push(PLACEHOLDER_COMPANY_NAMES_LOWER_ARR);
   return { clause, params, nextIndex: paramIndex };
 }
 
@@ -4362,6 +4371,66 @@ export async function findSameDomainClusterDuplicates(opts: {
       has_account: Number(row.total_accounts) > 0,
     });
   }
+  // Drop domain-groups whose clusters were INTENTIONALLY separated (Sarah
+  // 2026-07-14). When an operator Split/Dismissed two clusters, their records
+  // are logged in duplicate_separation_ledger as keep-apart pairs — re-suggesting
+  // a merge is exactly the "already decided, don't resurface" false positive we
+  // removed on Cross-Module. A group survives only if it still has at least ONE
+  // pair of clusters that is NOT separated (a genuinely mergeable pair); a group
+  // that collapses to a single mergeable cluster is dropped too.
+  const allGroups = Array.from(byDomain.values());
+  const allClusterIds = allGroups.flatMap((g) => g.clusters.map((c) => c.id));
+  if (allClusterIds.length > 0) {
+    try {
+      const recQ = await pool.query<{
+        cluster_id: number;
+        zoho_record_id: string;
+      }>(
+        `SELECT cluster_id, zoho_record_id FROM duplicate_records
+          WHERE cluster_id = ANY($1::int[])
+            AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''`,
+        [allClusterIds],
+      );
+      const clusterOfZid = new Map<string, number>();
+      for (const r of recQ.rows) {
+        clusterOfZid.set(String(r.zoho_record_id), Number(r.cluster_id));
+      }
+      const sepQ = await pool.query<{
+        zoho_id_low: string;
+        zoho_id_high: string;
+      }>(`SELECT zoho_id_low, zoho_id_high FROM duplicate_separation_ledger`);
+      const separatedPairs = new Set<string>();
+      for (const p of sepQ.rows) {
+        const a = clusterOfZid.get(String(p.zoho_id_low));
+        const b = clusterOfZid.get(String(p.zoho_id_high));
+        if (a != null && b != null && a !== b) {
+          separatedPairs.add(a < b ? `${a}|${b}` : `${b}|${a}`);
+        }
+      }
+      if (separatedPairs.size > 0) {
+        for (const g of allGroups) {
+          const ids = g.clusters.map((c) => c.id);
+          let hasMergeablePair = false;
+          for (let i = 0; i < ids.length && !hasMergeablePair; i++) {
+            for (let j = i + 1; j < ids.length; j++) {
+              const key =
+                ids[i] < ids[j] ? `${ids[i]}|${ids[j]}` : `${ids[j]}|${ids[i]}`;
+              if (!separatedPairs.has(key)) {
+                hasMergeablePair = true;
+                break;
+              }
+            }
+          }
+          if (!hasMergeablePair) byDomain.delete(g.domain);
+        }
+      }
+    } catch (e) {
+      logger.warn(
+        `[cluster-merge] separation-ledger filter skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
   return {
     total_groups: byDomain.size,
     truncated,
@@ -5520,7 +5589,15 @@ const PLACEHOLDER_COMPANY_NAMES = new Set<string>([
   // Arabic
   "لا يوجد", "لايوجد", "غير معروف", "غير محدد", "تجريبي",
   "لا شيء", "بدون اسم", "اختبار", "غير متوفر", "غير متاح",
+  "لا يوجد حاليا", "لا يوجد حالياً", "غير موجود",
 ]);
+
+// Lowercased array form for SQL `<> ALL(...)` filters (Domain Clusters hides
+// placeholder-named clusters). Arabic is case-invariant, English entries are
+// already lowercase, so LOWER(name) compares cleanly against this list.
+const PLACEHOLDER_COMPANY_NAMES_LOWER_ARR: string[] = Array.from(
+  PLACEHOLDER_COMPANY_NAMES,
+).map((s) => s.toLowerCase());
 
 const PLACEHOLDER_CLUSTER_DOMAIN = "_placeholder.cluster";
 
@@ -9594,6 +9671,15 @@ export async function getFilteredClusters(
   let params: any[] = [filters.status || "active"];
   let paramIdx = 2;
 
+  // Hide placeholder / junk-name clusters (Sarah 2026-07-14) — same as the
+  // direct Domain Clusters load (buildClusterFilterClause) so the Advanced-Filter
+  // path stays consistent.
+  whereConditions.push(`c.domain <> '${PLACEHOLDER_CLUSTER_DOMAIN}'`);
+  whereConditions.push(
+    `LOWER(BTRIM(COALESCE(c.company_name,''))) <> ALL($${paramIdx++}::text[])`,
+  );
+  params.push(PLACEHOLDER_COMPANY_NAMES_LOWER_ARR);
+
   if (filters.confidence_level) {
     whereConditions.push(`c.confidence_level = $${paramIdx++}`);
     params.push(filters.confidence_level);
@@ -9694,6 +9780,14 @@ export async function getFilteredSummary(
   let whereConditions = ["c.status = 'active'"];
   let params: any[] = [];
   let paramIdx = 1;
+
+  // Hide placeholder / junk-name clusters (Sarah 2026-07-14) — keep the summary
+  // KPIs consistent with the filtered cluster list.
+  whereConditions.push(`c.domain <> '${PLACEHOLDER_CLUSTER_DOMAIN}'`);
+  whereConditions.push(
+    `LOWER(BTRIM(COALESCE(c.company_name,''))) <> ALL($${paramIdx++}::text[])`,
+  );
+  params.push(PLACEHOLDER_COMPANY_NAMES_LOWER_ARR);
 
   let joinNeeded = false;
   let recordConditions: string[] = [];
