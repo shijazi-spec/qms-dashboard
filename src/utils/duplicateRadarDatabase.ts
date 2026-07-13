@@ -1929,7 +1929,16 @@ export async function getAllClusters(filters?: {
                   'protonmail.com','proton.me','yandex.com','zoho.com',
                   'gmx.com','gmx.net','qq.com','163.com','126.com'
                 )
-            ) AS domain_count
+            ) AS domain_count,
+            -- sibling_cluster_count: how many ACTIVE clusters share this exact
+            -- domain (Sarah 2026-07-14 cross-link). >1 ⇒ this company was split
+            -- into multiple cluster rows → show an "also split → Cluster Merge"
+            -- badge on the card. Cheap: hits the domain btree index.
+            (SELECT COUNT(*) FROM duplicate_clusters sc
+              WHERE sc.domain = duplicate_clusters.domain
+                AND sc.domain IS NOT NULL AND sc.domain <> ''
+                AND sc.status = 'active'
+            ) AS sibling_cluster_count
        FROM duplicate_clusters
       WHERE 1=1` + clause;
 

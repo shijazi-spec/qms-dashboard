@@ -643,6 +643,7 @@ export type StaleDealHint = {
   ownerName: string | null;
   createdTime: string | null;
   layout: string | null;
+  hasSignedDeal: boolean;
   disposition: "close" | "reengage" | "review";
   reason: string;
 };
@@ -673,8 +674,17 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
   );
   if (dealsRes.rows.length === 0) return [];
 
+  // Does the SAME company already have a signed/paid deal? (Sarah 2026-07-14:
+  // "check if there's an agreement-signed/paid deal for the same account name
+  // or email, to decide faster.") We match on BOTH the internal Account id AND
+  // the normalized account NAME — so a stalled deal whose Account_Name.id is
+  // blank or differs still gets caught when the company name has a signed deal.
+  const nameKeyOf = (n: string | null | undefined) =>
+    String(n || "").trim().toLowerCase();
   const acctIds = Array.from(new Set(dealsRes.rows.map(r => r.account_zoho_id).filter(Boolean) as string[]));
+  const acctNames = Array.from(new Set(dealsRes.rows.map(r => nameKeyOf(r.account_name)).filter(Boolean)));
   const signedAccts = new Set<string>();
+  const signedNames = new Set<string>();
   if (acctIds.length > 0) {
     const sr = await pool.query<{ acc: string }>(
       `SELECT DISTINCT raw_data->'Account_Name'->>'id' AS acc
@@ -686,19 +696,37 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
     );
     for (const r of sr.rows) if (r.acc) signedAccts.add(r.acc);
   }
+  if (acctNames.length > 0) {
+    const nr = await pool.query<{ nm: string }>(
+      `SELECT DISTINCT LOWER(BTRIM(account_name)) AS nm
+         FROM duplicate_records
+        WHERE record_type = 'deal'
+          AND account_name IS NOT NULL AND BTRIM(account_name) <> ''
+          AND LOWER(BTRIM(account_name)) = ANY($1::text[])
+          AND LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage', '')) = ANY($2::text[])`,
+      [acctNames, SIGNED_DEAL_STAGES],
+    );
+    for (const r of nr.rows) if (r.nm) signedNames.add(r.nm);
+  }
 
   return dealsRes.rows.map((r) => {
+    const nameKey = nameKeyOf(r.account_name);
+    const hasSignedDeal =
+      (!!r.account_zoho_id && signedAccts.has(r.account_zoho_id)) ||
+      (!!nameKey && signedNames.has(nameKey));
+    const hasAccount = !!r.account_zoho_id || !!nameKey;
     let disposition: "close" | "reengage" | "review";
     let reason: string;
-    if (!r.account_zoho_id) {
-      disposition = "review";
-      reason = "No account linked — decide manually.";
-    } else if (signedAccts.has(r.account_zoho_id)) {
+    if (hasSignedDeal) {
       disposition = "close";
-      reason = "This company already has a signed/paid deal — the stalled deal is redundant.";
-    } else {
+      reason =
+        "This company already has an Agreement-Signed / Paid deal (matched by account name or id) — the stalled deal is redundant.";
+    } else if (hasAccount) {
       disposition = "reengage";
       reason = "No live signed/paid deal for this company — move this deal forward.";
+    } else {
+      disposition = "review";
+      reason = "No account linked — decide manually.";
     }
     return {
       dealZohoId: r.zoho_record_id,
@@ -709,6 +737,7 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
       ownerName: r.owner_name || null,
       createdTime: r.created_time || null,
       layout: r.layout || null,
+      hasSignedDeal,
       disposition,
       reason,
     };

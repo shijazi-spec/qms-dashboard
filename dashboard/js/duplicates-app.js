@@ -1438,6 +1438,14 @@
             if (isMixed) {
                 flags.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="' + Number(c.domain_count) + ' distinct corporate domains inside this cluster — usually two unrelated companies sharing a name fragment. Open the cluster and use Split by domain.">⚠ mixed (' + Number(c.domain_count) + ')</span>');
             }
+            // Cross-link (Sarah 2026-07-14, Option A): this company is split across
+            // 2+ cluster ROWS → offer a jump to the Cluster Merge tab. Its own
+            // data-on-click wins over the card's (closest ancestor) so it doesn't
+            // open the cluster modal.
+            const splitN = Number(c.sibling_cluster_count || 0);
+            if (splitN > 1 && !isPlaceholder) {
+                flags.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 cursor-pointer hover:bg-orange-200" data-on-click="jumpToClusterMerge" data-args="[&quot;' + escapeHtml(String(c.domain)) + '&quot;]" title="This company is split across ' + splitN + ' cluster rows — merge them into one in the Cluster Merge tab.">⚠ also split (' + splitN + ') → Cluster Merge</span>');
+            }
             return flags.length ? '<div class="flex flex-wrap gap-1 mb-2">' + flags.join('') + '</div>' : '';
         }
 
@@ -8836,7 +8844,9 @@
                         + '<td class="rr-muted" style="white-space:nowrap">' + createdCell + '</td>'
                         + '<td class="rr-muted">' + layoutCell + '</td>'
                         + '<td><span class="rr-badge rr-amber">' + escapeHtml(d.stage || '—') + '</span></td>'
-                        + '<td>' + dispPill(d.disposition) + ' <span class="rr-muted">' + escapeHtml(d.reason || '') + '</span>' + actions + '</td>'
+                        + '<td>'
+                        + (d.hasSignedDeal ? '<span class="rr-badge rr-warn rr-dot" title="This company already has an Agreement Signed / Paid deal (matched by account name or id) — closing the stalled deal is the safe call.">✔ Signed/Paid on file</span><br>' : '')
+                        + dispPill(d.disposition) + ' <span class="rr-muted">' + escapeHtml(d.reason || '') + '</span>' + actions + '</td>'
                         + '</tr>';
                 }).join('');
             } catch (e) {
@@ -9295,7 +9305,7 @@
                         + '</tr>';
                 }).join('');
                 return ''
-                    + '<div class="bg-white rounded-lg shadow border border-gray-200" data-cmc-group="' + gi + '">'
+                    + '<div class="bg-white rounded-lg shadow border border-gray-200" data-cmc-group="' + gi + '" data-cm-domain="' + escapeHtml(String(g.domain || '')) + '">'
                     +   '<div class="flex flex-wrap items-center gap-2 px-4 py-3 border-b bg-gray-50">'
                     +     '<span class="font-mono text-sm text-gray-900 break-all">' + escapeHtml(g.domain) + '</span>'
                     +     '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-700">' + _fn(g.cluster_count) + ' clusters</span>'
@@ -9322,6 +9332,37 @@
                     +   '</div>'
                     + '</div>';
             }).join('');
+            // If we arrived here via a Domain Clusters "also split → Cluster Merge"
+            // badge, scroll to that domain's group and flash it (Sarah 2026-07-14).
+            if (window._cmcHighlightDomain) {
+                const dom = window._cmcHighlightDomain;
+                window._cmcHighlightDomain = null;
+                setTimeout(function () {
+                    const el = host.querySelector('[data-cm-domain="' + (window.CSS && CSS.escape ? CSS.escape(dom) : dom.replace(/"/g, '\\"')) + '"]');
+                    if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        el.style.transition = 'box-shadow .3s';
+                        el.style.boxShadow = '0 0 0 3px #F59E0B';
+                        setTimeout(function () { el.style.boxShadow = ''; }, 2200);
+                    }
+                }, 150);
+            }
+        }
+
+        // Domain Clusters "⚠ also split → Cluster Merge" badge → open the Cluster
+        // Merge tab and jump to this company's split group (Sarah 2026-07-14, Option A).
+        function jumpToClusterMerge(domain, event) {
+            if (event && event.stopPropagation) event.stopPropagation();
+            window._cmcHighlightDomain = String(domain || '');
+            if (typeof showTab === 'function') showTab('merge-candidates');
+            // showTab lazy-loads the tab the first time; if already loaded, re-render
+            // from cache so the highlight runs. loadClusterMergeCandidates re-fetches.
+            if (window._loadedTabs && window._loadedTabs.has('merge-candidates') && _cmcData) {
+                _cmcRenderGroups(_cmcData);
+            } else if (typeof loadClusterMergeCandidates === 'function') {
+                loadClusterMergeCandidates();
+                if (window._loadedTabs) window._loadedTabs.add('merge-candidates');
+            }
         }
 
         function _cmcOnMasterChange(groupIdx, clusterId, event) {
