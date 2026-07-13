@@ -6230,6 +6230,20 @@ export async function findOrCreateClusterByCompany(
   // B4: Try pg_trgm similarity() first, fallback to limited Levenshtein.
   // Threshold raised to 0.6 — at 0.4, unrelated Arabic LLCs sharing only the
   // boilerplate "شركة ... المحدودة" were being clustered together.
+  // Name-only fuse floor (Sarah 2026-07-13 "Shell + شركة العالمية fused —
+  // no overlap"). When NO corporate domain corroborates the match, a mere
+  // 0.6 trgm on boilerplate Arabic tokens (شركة / مؤسسة / المحدودة /
+  // للخدمات / العالمية) fused genuinely different firms into one synthetic
+  // cluster. Require a STRONG name match to fuse purely on the name; a
+  // corporate domain still lets 0.6 through (the domain corroborates).
+  // Env-tunable; 0.85 default. Only affects NEW clustering — existing
+  // mixed clusters need a Rebuild (or per-cluster "Split by domain").
+  const nameOnlyMinSim = parseFloat(
+    process.env.DUPLICATE_RADAR_NAME_ONLY_MIN_SIM || "0.85",
+  );
+  const haveCorporateDomain = !!(
+    effectiveDomain && isCorporateDomain(effectiveDomain)
+  );
   if (!placeholder && normalizedName && normalizedName.length > 2) {
     try {
       // Pull the top few candidates so the domain guard can skip a bad
@@ -6252,11 +6266,14 @@ export async function findOrCreateClusterByCompany(
         // / typo'd domain on one of the records.
         if (
           candidate.sim < 0.85 &&
-          effectiveDomain &&
-          isCorporateDomain(effectiveDomain) &&
+          haveCorporateDomain &&
           (await clusterHasConflictingDomain(candidate.id, effectiveDomain))
         ) {
           continue; // try next-best candidate
+        }
+        // No corporate domain to corroborate → demand a strong name match.
+        if (!haveCorporateDomain && candidate.sim < nameOnlyMinSim) {
+          continue;
         }
         if (!(await notSeparatedFrom(candidate))) continue;
         return candidate;
@@ -6294,10 +6311,14 @@ export async function findOrCreateClusterByCompany(
             // overrides the domain mismatch.
             if (
               similarity < 95 &&
-              effectiveDomain &&
-              isCorporateDomain(effectiveDomain) &&
+              haveCorporateDomain &&
               (await clusterHasConflictingDomain(cluster.id, effectiveDomain))
             ) {
+              continue;
+            }
+            // Mirror the trgm name-only floor (as a percentage): with no
+            // corporate domain to corroborate, demand a strong name match.
+            if (!haveCorporateDomain && similarity < nameOnlyMinSim * 100) {
               continue;
             }
             if (!(await notSeparatedFrom(cluster))) continue;
@@ -9053,18 +9074,36 @@ export async function getCrossModuleOverlaps(opts: {
   // 'active' callers only) — these are clusters where the survivor records
   // are all in the resolution ledger, meaning a prior Mark Handled click
   // is being re-displayed because the 6h sync re-clustered.
+  // Live-conflict-only rule (Sarah 2026-07-13 "this cluster has no overlap").
+  // The old rule flipped a cluster to actionable on bare CO-PRESENCE of
+  // contact+account / deal+account / contact+deal — but a Contact and its
+  // Account (or a Deal under its Account) for ONE company is the NORMAL CRM
+  // hierarchy, not an overlap, and those 2-module LINK gaps moved to the Record
+  // Hint tab anyway. It also ignored lifecycle, so a Closed Lost deal + a Not
+  // Qualified lead (both DEAD) still counted. Result: legit account hierarchies
+  // sprinkled with dead records showed as "3+ modules compound cases".
+  //
+  // A cross-module cluster is now actionable ONLY on a genuine LIVE conflict —
+  // dead records never create work here (has_active_* already exclude Closed
+  // Lost/Lost/Dropped deals and Not Qualified/Junk/Lost/Converted leads):
+  //   1. An ACTIVE lead is still being worked while the same company already
+  //      exists as a real account / contact / active deal → CLOSE the redundant
+  //      lead (wasted prospecting on an already-converted company).
+  //   2. An existing-CLIENT deal (Paid / Agreement Signed / Closed Won / …)
+  //      coexists with an active Sales deal or an active lead → CS conflict,
+  //      route to Customer Success.
+  // A plain Account + Contacts + Deals hierarchy with no active stray lead and
+  // no client-vs-sales conflict is a legitimate hierarchy → hidden.
   const isActionable = (c: any): boolean => {
-    const leads = Number(c.total_leads || 0);
     const contacts = Number(c.total_contacts || 0);
     const accounts = Number(c.total_accounts || 0);
-    const deals = Number(c.total_deals || 0);
-    const activeLead = !!c.has_active_lead;
+    const activeLead = !!c.has_active_lead; // already implies total_leads > 0
     const activeDeal = !!c.has_active_deal;
-    const leadVsActiveDeal = leads > 0 && deals > 0 && activeLead && activeDeal;
-    const contactAccount = contacts > 0 && accounts > 0;
-    const dealAccount = deals > 0 && accounts > 0;
-    const contactDeal = contacts > 0 && deals > 0;
-    return leadVsActiveDeal || contactAccount || dealAccount || contactDeal;
+    const clientDeal = !!c.has_client_deal;
+    const activeLeadVsPresence =
+      activeLead && (accounts > 0 || contacts > 0 || activeDeal || clientDeal);
+    const csConflict = clientDeal && (activeDeal || activeLead);
+    return activeLeadVsPresence || csConflict;
   };
   const visible = realOverlaps.filter((c) => {
     if (!isActionable(c)) return false;
