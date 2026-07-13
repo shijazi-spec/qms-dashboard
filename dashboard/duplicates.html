@@ -1272,14 +1272,17 @@
                 <button data-on-click="filterCrossModule" data-args="[&quot;existing_clients&quot;]" id="cmoChip-existing_clients" data-testid="cmo-chip-existing-clients" class="rr-chip rr-sev-warn"><span class="rr-chip-dot warn"></span>Existing clients · CS</button>
             </div>
 
-            <!-- Follow-up 3: bulk-close action bar. Visible only when 1+
-                 lead-bearing rows are checked. -->
+            <!-- Bulk action bar. Visible whenever 1+ rows are checked (Sarah
+                 2026-07-13: select-all + Dismiss/Resolve without scrolling). -->
             <div id="cmoBulkActionBar" class="hidden rr-bulkbar mb-3">
                 <div class="text-xs">
-                    <span id="cmoSelectedCount" class="rr-bulkbar-sel">0</span> cluster<span id="cmoSelectedPlural">s</span> selected. Bulk action will set <code>Lead_Status = "Lost Lead"</code> in Zoho for every Lead record in these clusters, then mark each cluster Resolved.
+                    <span id="cmoSelectedCount" class="rr-bulkbar-sel">0</span> cluster<span id="cmoSelectedPlural">s</span> selected. <strong>Mark Resolved</strong> / <strong>Dismiss</strong> set the radar status only — no Zoho changes, reversible (Re-open). <strong>Close lead records</strong> sets <code>Lead_Status = "Lost Lead"</code> in Zoho for every Lead in the selected clusters, then resolves them.
                 </div>
-                <div class="flex items-center gap-2">
-                    <button data-on-click="bulkCloseLeadsDryRun" data-testid="button-cmo-bulk-dry-run" class="rr-btn rr-btn-ghost">Dry run</button>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button data-on-click="bulkCrossModuleResolve" data-testid="button-cmo-bulk-resolve" class="rr-btn rr-btn-primary">✓ Mark Resolved</button>
+                    <button data-on-click="bulkCrossModuleDismiss" data-testid="button-cmo-bulk-dismiss" class="rr-btn rr-btn-ghost">🚫 Dismiss</button>
+                    <span class="text-gray-300">·</span>
+                    <button data-on-click="bulkCloseLeadsDryRun" data-testid="button-cmo-bulk-dry-run" class="rr-btn rr-btn-ghost">Dry run (leads)</button>
                     <button data-on-click="bulkCloseLeadsExecute" data-testid="button-cmo-bulk-execute" class="rr-btn rr-btn-danger">Close lead records in Zoho</button>
                 </div>
             </div>
@@ -2260,7 +2263,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=108"></script>
+    <script src="/js/duplicates-app.js?v=109"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

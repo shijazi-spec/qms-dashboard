@@ -1474,9 +1474,9 @@ async function scanZohoCRMForDuplicates(
           limit: ghostVerifyLimit,
           activeClustersOnly: true,
         });
-        if (gv.pruned > 0) {
+        if (gv.pruned > 0 || gv.converted > 0) {
           logger.info(
-            `🧹 [DuplicateRadar] Post-sync ghost sweep: checked ${gv.checked}, pruned ${gv.pruned} deleted record(s) from active clusters.`,
+            `🧹 [DuplicateRadar] Post-sync ghost sweep: checked ${gv.checked}, pruned ${gv.pruned} deleted + marked ${gv.converted} converted lead(s) in active clusters.`,
           );
         }
       }

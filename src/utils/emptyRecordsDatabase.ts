@@ -907,7 +907,7 @@ export async function reconcileEmptyDeleteDeletions(
  * Best-effort: individual fetch errors are swallowed. */
 export async function reconcileDeletedRecords(
   opts: { module?: string; limit?: number; activeClustersOnly?: boolean } = {},
-): Promise<{ checked: number; pruned: number }> {
+): Promise<{ checked: number; pruned: number; converted: number }> {
   const { fetchZohoRecordById } = await import("./zohoCRM");
   const mod = opts.module || null;
   const limit = Math.min(2000, Math.max(1, Math.floor(opts.limit ?? 300)));
@@ -941,6 +941,7 @@ export async function reconcileDeletedRecords(
 
   let checked = 0;
   let pruned = 0;
+  let converted = 0;
   const CONCURRENCY = 4;
   for (let i = 0; i < batch.rows.length; i += CONCURRENCY) {
     const chunk = batch.rows.slice(i, i + CONCURRENCY);
@@ -963,6 +964,29 @@ export async function reconcileDeletedRecords(
         if (!rec) {
           await pruneGhostRecords([id]); // 204/404 — gone from Zoho
           pruned++;
+        } else if (
+          module === "Leads" &&
+          rec.data &&
+          ((rec.data as any).$converted === true ||
+            (rec.data as any).$converted === "true")
+        ) {
+          // Converted lead (Sarah 2026-07-13): it has ALREADY become an
+          // Account / Contact / Deal, so it is NOT a live "redundant lead to
+          // close" — yet our mirror still shows its old Lead_Status (e.g. "New
+          // Lead"), so it kept surfacing on Lead↔Active-Deal / cross-module.
+          // Mark it Converted locally so isActiveLead and the cross-module
+          // has_active_lead (which reads raw_data->>'Lead_Status') both drop it
+          // and the cluster stops showing. jsonb_set patches the stored raw_data
+          // too so the aggregation query sees it without waiting for a re-sync.
+          await pool.query(
+            `UPDATE duplicate_records
+                SET status = 'Converted',
+                    raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{Lead_Status}', '"Converted"'::jsonb, true),
+                    last_verified_at = NOW()
+              WHERE zoho_record_id = $1`,
+            [id],
+          );
+          converted++;
         } else {
           await pool.query(
             `UPDATE duplicate_records SET last_verified_at = NOW() WHERE zoho_record_id = $1`,
@@ -985,7 +1009,7 @@ export async function reconcileDeletedRecords(
     } catch { /* best-effort */ }
   }
 
-  return { checked, pruned };
+  return { checked, pruned, converted };
 }
 
 /**
@@ -1010,6 +1034,7 @@ export async function runComprehensiveDeletionSweep(
   feedRemoved: number;
   verified: number;
   verifiedPruned: number;
+  verifiedConverted: number;
   perModuleFeed: Record<string, number>;
 }> {
   const { fetchDeletedZohoRecords } = await import("./zohoCRM");
@@ -1052,9 +1077,11 @@ export async function runComprehensiveDeletionSweep(
     }
   }
 
-  // Pass 2: live-verify active-cluster records to catch hard-purged ghosts.
+  // Pass 2: live-verify active-cluster records to catch hard-purged ghosts
+  // (pruned) AND converted leads (marked dead so they drop off the tabs).
   let verified = 0;
   let verifiedPruned = 0;
+  let verifiedConverted = 0;
   try {
     const verifyLimit =
       opts.verifyLimit ??
@@ -1066,6 +1093,7 @@ export async function runComprehensiveDeletionSweep(
       });
       verified = r.checked;
       verifiedPruned = r.pruned;
+      verifiedConverted = r.converted;
     }
   } catch (e: any) {
     logger.warn(
@@ -1085,9 +1113,15 @@ export async function runComprehensiveDeletionSweep(
   }
 
   logger.info(
-    `🧹 [comprehensive-deletion-sweep] feed-removed ${feedRemoved}, live-verified ${verified} (pruned ${verifiedPruned})`,
+    `🧹 [comprehensive-deletion-sweep] feed-removed ${feedRemoved}, live-verified ${verified} (pruned ${verifiedPruned}, converted-leads ${verifiedConverted})`,
   );
-  return { feedRemoved, verified, verifiedPruned, perModuleFeed };
+  return {
+    feedRemoved,
+    verified,
+    verifiedPruned,
+    verifiedConverted,
+    perModuleFeed,
+  };
 }
 
 // Contacts: name-only (no email/phone/account/deal) OR test-name.

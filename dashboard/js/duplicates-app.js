@@ -590,11 +590,12 @@
                 // Follow-up 3: checkbox cell only when the cluster has a
                 // Lead — leads are what the bulk action closes; a row with
                 // no lead has nothing for the action to do.
-                const hasLead = (c.total_leads || 0) > 0;
+                // Checkbox on EVERY row (Sarah 2026-07-13) so any cluster can be
+                // selected for bulk Dismiss / Mark Resolved. "Close lead records"
+                // still only acts on clusters that contain a Lead (the backend
+                // skips lead-less clusters), but selection itself is universal.
                 const checked = crossModuleSelected.has(c.id) ? 'checked' : '';
-                const checkboxCell = hasLead
-                    ? `<td class="rr-num" style="text-align:center"><input type="checkbox" data-on-change="toggleCrossModuleRowSelection" data-args="[${c.id}]" data-cmo-row="${c.id}" ${checked} aria-label="Select cluster ${c.id} for bulk-close" /></td>`
-                    : '<td class="rr-num rr-muted" style="text-align:center" title="No Lead records — nothing to bulk-close">—</td>';
+                const checkboxCell = `<td class="rr-num" style="text-align:center"><input type="checkbox" data-on-change="toggleCrossModuleRowSelection" data-args="[${c.id}]" data-cmo-row="${c.id}" ${checked} aria-label="Select cluster ${c.id}" /></td>`;
                 // The row stays clickable to open the cluster modal, but
                 // the checkbox uses stopPropagation in toggleCrossModuleRowSelection
                 // so clicking it doesn't also open the modal.
@@ -677,11 +678,11 @@
         function toggleCrossModuleSelectAll(event) {
             const cb = (event && event.target) || document.getElementById('cmoSelectAll');
             const checked = !!(cb && cb.checked);
-            // Apply only to currently-visible (post-filter) rows that have a Lead.
-            const visible = (crossModuleClusters || []).filter(c => {
-                if (!_cmoClusterMatchesChip(c, crossModuleFilter)) return false;
-                return (c.total_leads || 0) > 0;
-            });
+            // Select ALL currently-visible (post-filter) rows — every cluster is
+            // selectable now (Sarah 2026-07-13), not just lead-bearing ones.
+            const visible = (crossModuleClusters || []).filter(c =>
+                _cmoClusterMatchesChip(c, crossModuleFilter)
+            );
             for (const c of visible) {
                 if (checked) crossModuleSelected.add(c.id);
                 else crossModuleSelected.delete(c.id);
@@ -700,6 +701,45 @@
             if (n > 0) bar.classList.remove('hidden');
             else bar.classList.add('hidden');
         }
+
+        // Bulk Dismiss / Mark-Resolved for the selected clusters (Sarah
+        // 2026-07-13 "let me select all in the page to dismiss / act faster").
+        // Mirrors the per-row Track buttons: Dismiss → /resolve action=ignore;
+        // Mark Resolved → /cross-module-handled. No Zoho changes — radar status
+        // only, reversible (Re-open). Prompts for the admin key at most once.
+        async function bulkCrossModuleStatus(action) {
+            const ids = Array.from(crossModuleSelected);
+            if (ids.length === 0) return;
+            const isDismiss = action === 'ignore';
+            const verb = isDismiss ? 'Dismiss' : 'Mark Resolved';
+            if (!confirm(verb + ' ' + ids.length + ' selected cluster' + (ids.length === 1 ? '' : 's') + '?\n\nNo Zoho changes — this only sets the radar status. Reversible via Re-open.')) return;
+            const urlFor = (id) => isDismiss
+                ? '/api/duplicates/clusters/' + id + '/resolve'
+                : '/api/duplicates/clusters/' + id + '/cross-module-handled';
+            const body = isDismiss
+                ? JSON.stringify({ action: 'ignore', notes: 'Bulk-dismissed from Cross-Module (false positive / intentional).' })
+                : JSON.stringify({ notes: 'Bulk cross-module overlap handled — marked resolved from the Cross-Module tab.' });
+            let adminKey = null;
+            let ok = 0, fail = 0;
+            const hdrs = () => Object.assign({ 'Content-Type': 'application/json' }, adminKey ? { 'x-admin-key': adminKey } : {});
+            for (const id of ids) {
+                try {
+                    let res = await fetch(urlFor(id), { method: 'POST', credentials: 'same-origin', headers: hdrs(), body });
+                    if ((res.status === 401 || res.status === 403) && !adminKey) {
+                        adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                        if (!adminKey) break;
+                        res = await fetch(urlFor(id), { method: 'POST', credentials: 'same-origin', headers: hdrs(), body });
+                    }
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data && data.success) ok++; else fail++;
+                } catch (e) { fail++; }
+            }
+            crossModuleSelected.clear();
+            rrToast(verb + ': ' + ok + ' done' + (fail ? ', ' + fail + ' failed' : '') + '.');
+            loadCrossModule();
+        }
+        window.bulkCrossModuleDismiss = function () { return bulkCrossModuleStatus('ignore'); };
+        window.bulkCrossModuleResolve = function () { return bulkCrossModuleStatus('resolve'); };
 
         async function bulkCloseLeadsDryRun() {
             await runBulkCloseLeads({ dryRun: true });
