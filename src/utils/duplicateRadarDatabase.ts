@@ -168,16 +168,23 @@ export function buildSegmentPredicate(
     return { condition: null, params: [], needsRecordJoin: false };
   }
   const markers = ["marketplace", "partner accounts"];
-  // Normalized layout name (lowercase, non-alphanumeric stripped) so "WalaOne" /
-  // "Wala One" / "wala-one" all match 'walaone' regardless of the exact stored
-  // string. WalaPlus = Corporate that is NOT WalaOne. (Sarah 2026-07-06.)
-  const NORM = "regexp_replace(LOWER(COALESCE(r.layout_name,'')), '[^a-z0-9]', '', 'g')";
+  // Layout source (Sarah 2026-07-14): a Marketplace-layout deal was leaking into
+  // the WalaPlus segment because its `layout_name` COLUMN was blank — and blank
+  // layouts default into WalaPlus. Fall back to the synced raw_data Layout (Zoho
+  // returns Layout as {id,name} under `Layout` and/or the system `$layout`; some
+  // records only carry the plain string) so a record whose column wasn't
+  // populated STILL segments by its true layout instead of defaulting to WalaPlus.
+  const LAYOUT =
+    "LOWER(COALESCE(NULLIF(r.layout_name,''), r.raw_data#>>'{Layout,name}', r.raw_data#>>'{$layout,name}', r.raw_data->>'Layout', ''))";
+  // Normalized layout (non-alphanumeric stripped) so "WalaOne" / "Wala One" /
+  // "wala-one" all match 'walaone'. WalaPlus = Corporate that is NOT WalaOne.
+  const NORM = `regexp_replace(${LAYOUT}, '[^a-z0-9]', '', 'g')`;
   if (segment === "marketplace") {
     const placeholders = markers
       .map((_, i) => `$${paramOffset + i}`)
       .join(",");
     return {
-      condition: `LOWER(COALESCE(r.layout_name,'')) IN (${placeholders})`,
+      condition: `${LAYOUT} IN (${placeholders})`,
       params: markers,
       needsRecordJoin: true,
     };
@@ -196,7 +203,7 @@ export function buildSegmentPredicate(
     .map((_, i) => `$${paramOffset + i}`)
     .join(",");
   return {
-    condition: `LOWER(COALESCE(r.layout_name,'')) NOT IN (${placeholders}) AND ${NORM} <> 'walaone'`,
+    condition: `${LAYOUT} NOT IN (${placeholders}) AND ${NORM} <> 'walaone'`,
     params: markers,
     needsRecordJoin: true,
   };
