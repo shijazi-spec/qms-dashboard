@@ -448,19 +448,32 @@ export async function listRecordLinkHints(opts: {
             h.created_at,
             h.updated_at
        FROM record_link_hints h
-       LEFT JOIN duplicate_records s ON s.id = h.source_record_id
+       -- INNER JOIN (Sarah 2026-07-14): if the SOURCE record was pruned as a
+       -- deleted-in-Zoho ghost, the hint can never apply — drop it instead of
+       -- showing a half-empty "refused to merge" row. Same for a pruned target.
+       INNER JOIN duplicate_records s ON s.id = h.source_record_id
       WHERE h.status = $1
         ${linkFieldClause}
+        AND (
+          h.suggested_target_record_id IS NULL
+          OR EXISTS (
+            SELECT 1 FROM duplicate_records t
+             WHERE t.id = h.suggested_target_record_id
+          )
+        )
       ORDER BY h.confidence DESC, h.updated_at DESC
       LIMIT ${limitParam}`,
     params,
   );
 
+  // Summary counts stay consistent with the list: only hints whose SOURCE record
+  // still exists (a deleted-ghost source is not an actionable hint).
   const summaryRes = await pool.query(
-    `SELECT status, COUNT(*)::int AS n
-       FROM record_link_hints
-      ${linkField ? "WHERE link_field = $1" : ""}
-      GROUP BY status`,
+    `SELECT h.status, COUNT(*)::int AS n
+       FROM record_link_hints h
+       INNER JOIN duplicate_records s ON s.id = h.source_record_id
+      ${linkField ? "WHERE h.link_field = $1" : ""}
+      GROUP BY h.status`,
     linkField ? [linkField] : [],
   );
   const summary = { pending: 0, dismissed: 0, applied: 0 };
@@ -523,6 +536,24 @@ export async function aiResolveRecordLinkHint(
       [linkField]: { id: targetZohoId },
     });
   } catch (e: any) {
+    // Source record deleted in Zoho (Sarah 2026-07-14: "one of both is already
+    // deleted — it shouldn't be here"). The link can never apply, so auto-dismiss
+    // the hint and prune the ghost from the mirror so it stops resurfacing,
+    // instead of leaving it stuck as "AI refused to merge".
+    const { isZohoGhostError, pruneGhostRecords } = await import(
+      "./emptyRecordsDatabase"
+    );
+    if (isZohoGhostError(e)) {
+      await pool.query(
+        `UPDATE record_link_hints SET status = 'dismissed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [id],
+      );
+      await pruneGhostRecords([sourceZohoId]).catch(() => {});
+      logger.info(
+        `[recordLinkHints] hint #${id} auto-dismissed — source ${sourceModule} ${sourceZohoId} is deleted in Zoho (ghost).`,
+      );
+      return { applied: false, confidence, reason: "source_deleted" };
+    }
     return { applied: false, confidence, reason: e?.message || String(e) };
   }
 

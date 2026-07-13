@@ -7395,7 +7395,7 @@
                 var docArgs = escapeHtml(JSON.stringify([String(d.id), String(d.stage)]));
                 return '<tr class="align-top" data-deal-id="' + escapeHtml(String(d.id)) + '" data-deal-stage="' + escapeHtml(String(d.stage)) + '" data-deal-owner="' + escapeHtml(String(d.owner || '—')) + '">' +
                     '<td class="rr-lead rr-primary">' +
-                        '<a href="https://crm.zoho.com/crm/org766568398/tab/Potentials/' + encodeURIComponent(String(d.id)) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit" title="Open this deal in Zoho CRM">' + escapeHtml(d.name) + '</a>' +
+                        '<a href="https://crm.zoho.com/crm/org766568398/tab/Deals/' + encodeURIComponent(String(d.id)) + '" target="_blank" rel="noopener" class="rr-primary text-blue-600 hover:underline" title="Open this deal in Zoho CRM to review before acting">' + escapeHtml(d.name) + ' <span class="text-xs">↗</span></a>' +
                         (d.accountName ? '<div class="rr-sub">' + escapeHtml(d.accountName) + '</div>' : '') + '</td>' +
                     '<td><span class="rr-badge rr-neutral">' + escapeHtml(d.stage) + '</span></td>' +
                     '<td class="rr-muted">' + escapeHtml(d.owner) + '</td>' +

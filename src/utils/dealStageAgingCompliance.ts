@@ -85,6 +85,21 @@ function suggestedActionFor(stage: string, severity: StageAgingSeverity): string
   return `Deal in ${stage} has crossed the SOP SLA threshold. Confirm the next action with the deal owner so it doesn't slip into the critical band.`;
 }
 
+// Stages OWNED by the Record Hint tab (Section 4 — "Unaccounted deals: close
+// vs re-engage"), NOT the Sales-SOP stage-aging watch. Same env the Record Hint
+// scanner reads (recordLinkHints.ts STALE_DEAL_STAGES) so the two agree. A deal
+// in one of these stages is skipped here so it does NOT double-appear as a Deals
+// Lifecycle violation (Sarah 2026-07-14).
+const RECORD_HINT_STALE_STAGES_LOWER: ReadonlySet<string> = new Set(
+  (process.env.RECORD_HINT_STALE_STAGES || "Unaccounted")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+);
+function isRecordHintStaleStage(stage: string): boolean {
+  return RECORD_HINT_STALE_STAGES_LOWER.has(stage.trim().toLowerCase());
+}
+
 export function evaluateDealStageAging(
   input: DealStageAgingInput,
   now: Date = new Date(),
@@ -110,6 +125,19 @@ export function evaluateDealStageAging(
     return {
       is_tracked_stage: false,
       is_terminal: true,
+      current_stage: stage,
+      aging_calendar_days: null,
+      aging_units: null,
+      unit: null,
+      violation: null,
+    };
+  }
+  // Record-Hint-owned stalled stage (Unaccounted, …) → not a Deals Lifecycle
+  // violation. It's triaged on the Record Hint tab's "Unaccounted deals" section.
+  if (isRecordHintStaleStage(stage)) {
+    return {
+      is_tracked_stage: false,
+      is_terminal: false,
       current_stage: stage,
       aging_calendar_days: null,
       aging_units: null,
