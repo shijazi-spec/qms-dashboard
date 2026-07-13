@@ -10187,9 +10187,16 @@ export async function scanClusterForCsOverlap(
     `SELECT id, zoho_module, raw_data, gov_type
        FROM duplicate_records
        WHERE cluster_id = $1
-         AND zoho_module = 'Deals'`,
+         AND zoho_module = 'Deals'
+         AND cleanup_class IS NULL`,
     [clusterId],
   );
+  // cleanup_class IS NULL (Sarah 2026-07-14): exclude empty/test/junk/orphaned/
+  // tagged + ghost deals from the overlap classification — same records the tab
+  // and modal already hide. A hidden junk/ghost deal (often stage-less) was
+  // being counted as a phantom "open sales deal", so a cluster with only a real
+  // Agreement-Signed/Paid deal (a normal signed customer, NO open sales deal)
+  // was wrongly flagged BLOCK and its ARR double-counted.
 
   // Build the cluster-level deal list: every Deal record's Stage + CS section
   // + ARR. The new classifier (Sarah Hijazi 2026-06-11) needs the WHOLE set

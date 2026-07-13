@@ -708,8 +708,16 @@ export function classifyClusterOverlap(
   for (const d of deals) {
     if (stageInSet(d.stage, cfg.handoffStages)) {
       handoffDeals.push(d);
-    } else if (!stageInSet(d.stage, cfg.closedStages)) {
-      // Anything not in the closed-stage set is "still in the sales motion".
+    } else if (
+      d.stage &&
+      String(d.stage).trim() !== "" &&
+      !stageInSet(d.stage, cfg.closedStages)
+    ) {
+      // A deal with a REAL open stage (not handoff, not closed) is "still in the
+      // sales motion". A stage-less deal (blank / unreadable Stage — typically a
+      // ghost or incomplete record) is NOT a genuine open opportunity, so it must
+      // NOT manufacture an open-sales-vs-handoff overlap on its own (Sarah
+      // 2026-07-14). Empty/null stage → ignored here.
       openSalesDeals.push(d);
     }
     // Deals in closedStages but not handoffStages (e.g. "Closed Lost")
