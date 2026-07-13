@@ -8796,7 +8796,7 @@
                     : '';
                 if (badge) { if (deals.length) { badge.textContent = deals.length; badge.classList.remove('hidden'); } else badge.classList.add('hidden'); }
                 if (deals.length === 0) {
-                    body.innerHTML = rrEmptyRow(4, { glyph: '✓', title: 'No stalled deals found', desc: 'Nothing parked in an unaccounted stage right now.' });
+                    body.innerHTML = rrEmptyRow(7, { glyph: '✓', title: 'No stalled deals found', desc: 'Nothing parked in an unaccounted stage right now.' });
                     return;
                 }
                 const dispPill = function (d) {
@@ -8810,21 +8810,37 @@
                     return 'rr-sev-info';
                 };
                 body.innerHTML = deals.map(function (d) {
-                    const dealLink = '<a href="' + erZohoUrl('deals', d.dealZohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(d.dealName) + '</a>';
+                    const dealZid = escapeHtml(String(d.dealZohoId));
+                    const dealLink = '<a href="' + erZohoUrl('deals', d.dealZohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in Zoho CRM to review before acting">' + escapeHtml(d.dealName) + ' <span class="text-xs">↗</span></a>';
                     const acctCell = d.accountName ? escapeHtml(d.accountName) : '<span class="text-gray-400">— none —</span>';
+                    const ownerCell = d.ownerName ? escapeHtml(d.ownerName) : '<span class="text-gray-400">—</span>';
+                    const createdCell = d.createdTime ? escapeHtml(formatDate(d.createdTime)) : '<span class="text-gray-400">—</span>';
+                    const layoutCell = d.layout ? escapeHtml(d.layout) : '<span class="text-gray-400">—</span>';
+                    // Actions mirror the other Record Hint sections: 🤖 = apply the
+                    // AI-suggested disposition, explicit Close / Re-engage overrides,
+                    // ✗ = dismiss (not a stale issue — hides it, no Zoho change).
+                    const suggested = d.disposition === 'close' ? 'close' : d.disposition === 'reengage' ? 'reengage' : null;
+                    const aiBtn = suggested
+                        ? '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;' + suggested + '&quot;]" title="AI-apply the suggested action (' + suggested + ') in Zoho." class="rr-btn rr-btn-icon" style="color:#7C3AED">🤖</button>'
+                        : '';
                     const actions = '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">'
-                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + escapeHtml(d.dealZohoId) + '&quot;,&quot;close&quot;]" title="Set this deal\'s Stage to Closed Lost in Zoho." class="rr-btn rr-btn-ghost">Close</button>'
-                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + escapeHtml(d.dealZohoId) + '&quot;,&quot;reengage&quot;]" title="Move this deal\'s Stage forward into the active pipeline in Zoho." class="rr-btn rr-btn-ghost">Re-engage</button>'
+                        + aiBtn
+                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;close&quot;]" title="Close — set this deal\'s Stage to Closed Lost in Zoho." class="rr-btn rr-btn-ghost">Close</button>'
+                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;reengage&quot;]" title="Re-engage — move this deal\'s Stage forward into the active pipeline in Zoho." class="rr-btn rr-btn-ghost">Re-engage</button>'
+                        + '<button data-on-click="dismissStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Dismiss — this is not a stale issue. Hides it from this list. No Zoho change." class="rr-btn rr-btn-ghost rr-btn-icon">✕</button>'
                         + '</div></div>';
                     return '<tr class="' + dispSev(d.disposition) + '" style="vertical-align:top">'
                         + '<td class="rr-lead rr-primary">' + dealLink + '</td>'
                         + '<td class="rr-muted">' + acctCell + '</td>'
+                        + '<td class="rr-muted">' + ownerCell + '</td>'
+                        + '<td class="rr-muted" style="white-space:nowrap">' + createdCell + '</td>'
+                        + '<td class="rr-muted">' + layoutCell + '</td>'
                         + '<td><span class="rr-badge rr-amber">' + escapeHtml(d.stage || '—') + '</span></td>'
                         + '<td>' + dispPill(d.disposition) + ' <span class="rr-muted">' + escapeHtml(d.reason || '') + '</span>' + actions + '</td>'
                         + '</tr>';
                 }).join('');
             } catch (e) {
-                body.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-sm text-amber-700">Error: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
+                body.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-sm text-amber-700">Error: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
@@ -8843,6 +8859,20 @@
                 loadStaleDeals(); // re-scan — the deal is now re-staged and drops off
             } catch (e) {
                 rrToast('Apply failed: ' + (e && e.message || e));
+            }
+        }
+
+        // ✗ "wrong / not stale" — dismiss a stalled-deal suggestion. Hides it from
+        // §4 (persisted in stale_deal_dismissals). No Zoho change (Sarah 2026-07-14).
+        async function dismissStaleDeal(dealZohoId) {
+            if (!confirm('Dismiss this deal from the Unaccounted list?\n\nUse this when it is NOT a real stale issue. It stops appearing here. No Zoho change is made.')) return;
+            try {
+                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/dismiss', { dealZohoId: dealZohoId });
+                if (!j) return; // cancelled at the admin-key prompt
+                if (!j.success) { rrToast('Dismiss failed: ' + (j.error || 'unknown')); return; }
+                loadStaleDeals();
+            } catch (e) {
+                rrToast('Dismiss failed: ' + (e && e.message || e));
             }
         }
 

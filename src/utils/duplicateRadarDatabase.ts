@@ -1522,6 +1522,18 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_record_link_hints_type ON record_link_hints (source_type, link_field)`,
   );
 
+  // Record Hint §4 "Unaccounted deals — decide": the operator's ✗ "dismiss"
+  // (Sarah 2026-07-14 — a stalled deal judged NOT a real issue). scanStaleDeals
+  // excludes ids listed here so they stop resurfacing. No Zoho write — local
+  // triage only.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS stale_deal_dismissals (
+      deal_zoho_id VARCHAR(100) PRIMARY KEY,
+      dismissed_by TEXT,
+      dismissed_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   // R2 (per-owner Remediation Packet): cover-sheet text the operator
   // hands to a data-quality owner. Single-row key/value table — keeps the
   // dispute path + escalation contact editable without a code deploy and

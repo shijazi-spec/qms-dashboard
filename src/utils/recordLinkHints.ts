@@ -640,6 +640,9 @@ export type StaleDealHint = {
   stage: string;
   accountZohoId: string | null;
   accountName: string | null;
+  ownerName: string | null;
+  createdTime: string | null;
+  layout: string | null;
   disposition: "close" | "reengage" | "review";
   reason: string;
 };
@@ -651,14 +654,19 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
   const dealsRes = await pool.query<{
     zoho_record_id: string; record_name: string | null; stage: string | null;
     account_zoho_id: string | null; account_name: string | null;
+    owner_name: string | null; created_time: string | null; layout: string | null;
   }>(
     `SELECT zoho_record_id, record_name,
             COALESCE(NULLIF(stage,''), raw_data->>'Stage') AS stage,
             raw_data->'Account_Name'->>'id' AS account_zoho_id,
-            account_name
+            account_name,
+            COALESCE(NULLIF(owner_name,''), raw_data->'Owner'->>'name') AS owner_name,
+            COALESCE(created_date::text, raw_data->>'Created_Time') AS created_time,
+            COALESCE(NULLIF(layout_name,''), raw_data#>>'{Layout,name}', raw_data#>>'{$layout,name}') AS layout
        FROM duplicate_records
       WHERE record_type = 'deal'
         AND LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage', '')) = ANY($1::text[])
+        AND zoho_record_id NOT IN (SELECT deal_zoho_id FROM stale_deal_dismissals)
       ORDER BY id
       LIMIT $2`,
     [STALE_DEAL_STAGES, limit],
@@ -698,10 +706,31 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
       stage: r.stage || "",
       accountZohoId: r.account_zoho_id || null,
       accountName: r.account_name || null,
+      ownerName: r.owner_name || null,
+      createdTime: r.created_time || null,
+      layout: r.layout || null,
       disposition,
       reason,
     };
   });
+}
+
+/** Dismiss a stalled-deal suggestion (Sarah 2026-07-14: "wrong" button). Records
+ * the deal id in stale_deal_dismissals so scanStaleDeals stops surfacing it. No
+ * Zoho write — the deal is untouched; the operator just judged it not stale. */
+export async function dismissStaleDeal(
+  dealZohoId: string,
+  by: string | null,
+): Promise<{ dismissed: boolean }> {
+  const id = String(dealZohoId || "").trim();
+  if (!id) return { dismissed: false };
+  await pool.query(
+    `INSERT INTO stale_deal_dismissals (deal_zoho_id, dismissed_by, dismissed_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+     ON CONFLICT (deal_zoho_id) DO UPDATE SET dismissed_by = EXCLUDED.dismissed_by, dismissed_at = CURRENT_TIMESTAMP`,
+    [id, by || null],
+  );
+  return { dismissed: true };
 }
 
 const CLOSE_STAGE = process.env.RECORD_HINT_CLOSE_STAGE || "Closed Lost";
