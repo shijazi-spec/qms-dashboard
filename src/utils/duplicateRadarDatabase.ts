@@ -1829,6 +1829,10 @@ const CLUSTER_SORT_COLUMNS: Record<string, string> = {
   status:     "status",
   inflation:  "estimated_pipeline_value",
   updated:    "updated_at",
+  // Sarah: newest duplicates first. latest_activity_date =
+  // MAX(COALESCE(modified_date, created_date)) of the cluster's records,
+  // so freshly created/touched dupes sort to the top of Domain Clusters.
+  recent:     "latest_activity_date",
 };
 
 export async function getAllClusters(filters?: {

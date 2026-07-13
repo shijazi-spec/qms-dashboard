@@ -1272,7 +1272,7 @@
             const conf = document.getElementById('clusterFilter').value;
             const status = document.getElementById('statusFilter').value;
             const layout = document.getElementById('layoutFilter')?.value || '';
-            const sort = document.getElementById('clusterSort')?.value || 'records';
+            const sort = document.getElementById('clusterSort')?.value || 'recent';
             const dirBtn = document.getElementById('clusterSortDir');
             const dir = (dirBtn && dirBtn.getAttribute('data-sort-dir')) || 'desc';
             const range = getDateRange();
@@ -2348,9 +2348,31 @@
             return counts;
         }
 
+        // ── Newest-first ordering (every module tab) ───────────────────
+        // Sarah: each tab must list the NEWEST duplicates first (by real CRM
+        // creation time) so fresh dupes are caught first, newest → oldest,
+        // down to the last match. A record's time = Zoho Created_Time, falling
+        // back to our stored created_date / created_at; epoch ms, 0 when
+        // unknown so undated rows sink. A group ranks by its NEWEST member,
+        // mirroring the server's recency pagination (getDuplicateRecordsByType
+        // ORDER BY MAX(created_date) DESC) so within-page order matches too.
+        function _recCreatedTs(r) {
+            const raw = (r && r.raw_data) ? r.raw_data : {};
+            const ts = raw.Created_Time || (r && r.created_date) || (r && r.created_at) || null;
+            const t = ts ? Date.parse(ts) : NaN;
+            return isNaN(t) ? 0 : t;
+        }
+        function _groupNewestTs(items, idxs) {
+            let m = 0;
+            for (const i of idxs) { const t = _recCreatedTs(items[i]); if (t > m) m = t; }
+            return m;
+        }
+        function _groupsByRecency(items, groupList) {
+            return (groupList || []).slice().sort((a, b) => _groupNewestTs(items, b) - _groupNewestTs(items, a));
+        }
+
         // Union-find groups: any two items sharing ANY one extractor value
-        // collapse into the same bucket. Returns groups of size >= 2,
-        // sorted by size desc.
+        // collapse into the same bucket. Returns groups of size >= 2.
         function _dupBuckets(items, extractors) {
             const parent = items.map((_, i) => i);
             const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
@@ -2604,11 +2626,11 @@
             });
 
             // Build the render list: only groups with 2+ leads (singletons
-            // are not duplicates by any signal). Order by group size desc
-            // so the messiest clusters are at the top.
-            const groupList = (_recordDupView() === 'active')
-                ? Object.values(buckets).filter(idxs => idxs.length >= 2).sort((a, b) => b.length - a.length)
-                : _serverGroupIdx;
+            // are not duplicates by any signal). Newest duplicates first (by
+            // each group's most-recent lead) so fresh dupes surface at the top.
+            const groupList = _groupsByRecency(allLeads, (_recordDupView() === 'active')
+                ? Object.values(buckets).filter(idxs => idxs.length >= 2)
+                : _serverGroupIdx);
 
             // Friendly summary for the group header: shared key + N members
             // + the "primary" lead's name as the human label.
@@ -2745,7 +2767,7 @@
                 id: { emoji: '🆔', label: 'CRM ID', color: 'bg-rose-200 text-rose-900 border border-rose-400' },
             };
             const counts = _dupCounts(items, extractors);
-            const groupList = (_recordDupView() === 'active') ? _dupBuckets(items, extractors) : _serverGroupIdx;
+            const groupList = _groupsByRecency(items, (_recordDupView() === 'active') ? _dupBuckets(items, extractors) : _serverGroupIdx);
 
             let rows = '';
             groupList.forEach((idxs, gIdx) => {
@@ -2816,7 +2838,7 @@
             // ة-vs-ه) still group reliably and no real duplicate is dropped.
             // Non-Untouched views render the server's already-vetted groups as-is
             // (see _recordDupView) so AI-Applied clusters aren't dropped.
-            const groupList = (_recordDupView() === 'active') ? _dupBuckets(items, extractors) : _serverGroupIdx;
+            const groupList = _groupsByRecency(items, (_recordDupView() === 'active') ? _dupBuckets(items, extractors) : _serverGroupIdx);
 
             let rows = '';
             groupList.forEach((idxs, gIdx) => {
@@ -2919,7 +2941,7 @@
                 ...extractors,
                 _cluster: r => (r.cluster_id != null ? 'cid:' + r.cluster_id : ''),
             };
-            const groupList = (_recordDupView() === 'active') ? _dupBuckets(items, bucketExtractors) : _serverGroupIdx;
+            const groupList = _groupsByRecency(items, (_recordDupView() === 'active') ? _dupBuckets(items, bucketExtractors) : _serverGroupIdx);
 
             let rows = '';
             groupList.forEach((idxs, gIdx) => {

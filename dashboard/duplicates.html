@@ -984,6 +984,7 @@
                 <div class="flex-1"></div>
                 <label class="text-xs text-gray-500 uppercase tracking-wide">Sort by</label>
                 <select id="clusterSort" aria-label="Sort clusters" data-on-change="loadClusters" data-testid="select-cluster-sort" class="rr-select">
+                    <option value="recent">Newest</option>
                     <option value="records">Records</option>
                     <option value="similarity">Similarity %</option>
                     <option value="inflation">Inflation</option>
@@ -2260,7 +2261,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=106"></script>
+    <script src="/js/duplicates-app.js?v=107"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
