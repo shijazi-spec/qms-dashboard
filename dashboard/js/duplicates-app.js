@@ -196,7 +196,10 @@
                 // client-side, so loading everything is fine. status drives the
                 // Open / Resolved / Dismissed / All filter.
                 const _cmStatus = window._crossModuleStatusFilter || 'active';
-                const res = await fetch('/api/duplicates/cross-module-overlaps?limit=100000&status=' + encodeURIComponent(_cmStatus), { credentials: 'same-origin' });
+                // Segment chip (Marketplace / WalaPlus / WalaOne) — server-side.
+                const _cmSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+                const _cmSegQ = (_cmSeg && _cmSeg !== 'all') ? ('&segment=' + encodeURIComponent(_cmSeg)) : '';
+                const res = await fetch('/api/duplicates/cross-module-overlaps?limit=100000&status=' + encodeURIComponent(_cmStatus) + _cmSegQ, { credentials: 'same-origin' });
                 if (!res.ok) {
                     let body = '';
                     try { body = (await res.text()).slice(0, 200); } catch (_) {}
@@ -604,7 +607,10 @@
                     + '<td class="rr-num rr-strong cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + _fn(c.total_records || 0) + '</td>'
                     + '<td class="rr-num cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + confCell + '</td>'
                     + '<td class="rr-num rr-strong cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + formatCurrency(Number(c.estimated_pipeline_value || 0)) + '</td>'
-                    + '<td class="rr-muted cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(meta.action) + '</td>'
+                    // Recommended-Action column removed (Sarah 2026-07-13): it forced a
+                    // horizontal scroll to reach the Resolve/Dismiss buttons. The action
+                    // is already stated in the tab description and per-pairing chip, and
+                    // the full text still opens in the cluster modal + CSV export.
                     + _crossModuleTrackCell(c)
                     + '</tr>';
             }).join('');
@@ -1282,6 +1288,9 @@
             if (layout) url += `&layouts=${encodeURIComponent(layout)}`;
             if (range.from) url += `&start_date=${range.from}`;
             if (range.to) url += `&end_date=${range.to}`;
+            // Segment chip (Marketplace / WalaPlus / WalaOne) — server-side.
+            const _dcSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+            if (_dcSeg && _dcSeg !== 'all') url += `&segment=${encodeURIComponent(_dcSeg)}`;
 
             // Supersede earlier in-flight loads (paginate / filter change).
             const loadId = window._clustersLoadId = (window._clustersLoadId || 0) + 1;
@@ -13069,8 +13078,16 @@
                 const isMarketplace = vals.some(v =>
                     v === 'marketplace' || v === 'partner accounts'
                 );
+                // WalaOne = its own layout (normalise so "Wala One"/"wala-one"
+                // all match). WalaPlus (= legacy "corporate") = NOT marketplace
+                // AND NOT walaone; rows with no layout default to WalaPlus so
+                // legacy data isn't hidden. Mirrors server buildSegmentPredicate.
+                const isWalaOne = vals.some(v =>
+                    String(v).replace(/[^a-z0-9]/g, '') === 'walaone'
+                );
                 if (s.segment === 'marketplace' && !isMarketplace) return false;
-                if (s.segment === 'corporate' && isMarketplace) return false;
+                if (s.segment === 'walaone' && !isWalaOne) return false;
+                if ((s.segment === 'walaplus' || s.segment === 'corporate') && (isMarketplace || isWalaOne)) return false;
             }
             // Pipeline — multi-select.
             if (s.pipelines && s.pipelines.length > 0) {
@@ -13276,6 +13293,13 @@
             // a re-fetch with the new segment (Sarah 2026-07-07).
             window._dealLifecycleData = null;
             window._csLifecycleData = null;
+            window._csOverlapData = null;
+            // Cross-Module now filters the SEGMENT server-side too (Sarah
+            // 2026-07-13) — drop its cache so applyAdvancedFilters re-fetches
+            // with the new segment instead of re-rendering the stale set.
+            crossModuleClusters = [];
+            // Domain Clusters reads the segment server-side via loadClusters —
+            // it re-fetches on every call, so no cache to clear there.
             _filterSetInputValue('filterSegment', newSeg);
             _syncSegmentChipFromDropdown();
             try {

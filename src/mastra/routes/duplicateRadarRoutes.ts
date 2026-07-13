@@ -3801,6 +3801,15 @@ export const duplicateRadarRoutes = [
           const sort = url.searchParams.get("sort") || undefined;
           const dir = url.searchParams.get("dir") || undefined;
 
+          // Segment chip (Marketplace / WalaPlus / WalaOne) — Sarah 2026-07-13.
+          const rawSegment = (url.searchParams.get("segment") || "").trim();
+          const segment: DuplicateFilters["segment"] =
+            ["marketplace", "corporate", "walaplus", "walaone"].includes(
+              rawSegment,
+            )
+              ? (rawSegment as DuplicateFilters["segment"])
+              : undefined;
+
           const filters = {
             status: status || undefined,
             confidence_level: confidence_level || undefined,
@@ -3809,6 +3818,7 @@ export const duplicateRadarRoutes = [
             hide_hierarchies: !include_hierarchies,
             layouts,
             owner_email,
+            segment,
           };
 
           const [clusters, total] = await Promise.all([
@@ -4766,6 +4776,15 @@ export const duplicateRadarRoutes = [
             ? statusRaw
             : "active") as "active" | "resolved" | "ignored" | "handled" | "all";
 
+          // Segment chip (Marketplace / WalaPlus / WalaOne) — Sarah 2026-07-13.
+          const rawSegment = (url.searchParams.get("segment") || "").trim();
+          const segment: DuplicateFilters["segment"] =
+            ["marketplace", "corporate", "walaplus", "walaone"].includes(
+              rawSegment,
+            )
+              ? (rawSegment as DuplicateFilters["segment"])
+              : undefined;
+
           const { getCrossModuleOverlaps } = await import(
             "../../utils/duplicateRadarDatabase"
           );
@@ -4773,6 +4792,7 @@ export const duplicateRadarRoutes = [
             limit: Number.isFinite(limit) ? limit : 200,
             pairing,
             status,
+            segment,
           });
           return c.json({ success: true, ...result });
         } catch (error: any) {
@@ -6807,10 +6827,12 @@ export const duplicateRadarRoutes = [
             : Math.min(Math.max(rawLimit, 1), 100);
           const offset = isNaN(rawOffset) ? 0 : Math.max(rawOffset, 0);
 
-          const rawSegment = url.searchParams.get("segment");
+          const rawSegment = (url.searchParams.get("segment") || "").trim();
           const segment: DuplicateFilters["segment"] =
-            rawSegment === "marketplace" || rawSegment === "corporate"
-              ? rawSegment
+            ["marketplace", "corporate", "walaplus", "walaone"].includes(
+              rawSegment,
+            )
+              ? (rawSegment as DuplicateFilters["segment"])
               : undefined;
 
           const filters: DuplicateFilters = {
@@ -6867,10 +6889,12 @@ export const duplicateRadarRoutes = [
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
-          const rawSegment = url.searchParams.get("segment");
+          const rawSegment = (url.searchParams.get("segment") || "").trim();
           const segment: DuplicateFilters["segment"] =
-            rawSegment === "marketplace" || rawSegment === "corporate"
-              ? rawSegment
+            ["marketplace", "corporate", "walaplus", "walaone"].includes(
+              rawSegment,
+            )
+              ? (rawSegment as DuplicateFilters["segment"])
               : undefined;
 
           const filters: DuplicateFilters = {

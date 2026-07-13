@@ -1757,6 +1757,8 @@ function buildClusterFilterClause(
          * opens a modal listing the clusters they're carrying.
          */
         owner_email?: string;
+        /** Marketplace / WalaPlus / WalaOne product segment. */
+        segment?: DuplicateFilters["segment"];
       }
     | undefined,
   startIndex: number,
@@ -1816,6 +1818,29 @@ function buildClusterFilterClause(
     )`;
     params.push(filters.owner_email.trim());
   }
+  // Segment chip (Marketplace / WalaPlus / WalaOne) — Sarah 2026-07-13: keep
+  // clusters that have at least one record in the chosen product layout. Mirrors
+  // buildSegmentPredicate's layout semantics, inlined with the dr alias (all
+  // literal, no bind params) so it composes with the EXISTS filters above.
+  if (filters?.segment && filters.segment !== "all") {
+    const LAYOUT = "LOWER(COALESCE(dr.layout_name,''))";
+    const NORM =
+      "regexp_replace(LOWER(COALESCE(dr.layout_name,'')), '[^a-z0-9]', '', 'g')";
+    let cond: string;
+    if (filters.segment === "marketplace") {
+      cond = `${LAYOUT} IN ('marketplace','partner accounts')`;
+    } else if (filters.segment === "walaone") {
+      cond = `${NORM} = 'walaone'`;
+    } else {
+      // walaplus / corporate = NOT marketplace AND NOT walaone.
+      cond = `${LAYOUT} NOT IN ('marketplace','partner accounts') AND ${NORM} <> 'walaone'`;
+    }
+    clause += ` AND EXISTS (
+      SELECT 1 FROM duplicate_records dr
+       WHERE dr.cluster_id = duplicate_clusters.id
+         AND ${cond}
+    )`;
+  }
   return { clause, params, nextIndex: paramIndex };
 }
 
@@ -1847,6 +1872,7 @@ export async function getAllClusters(filters?: {
   owner_email?: string;
   sort?: string;
   dir?: string;
+  segment?: DuplicateFilters["segment"];
 }): Promise<Array<DuplicateCluster & { domain_count?: number }>> {
   const { clause, params, nextIndex } = buildClusterFilterClause(filters, 1);
   let paramIndex = nextIndex;
@@ -1925,6 +1951,7 @@ export async function getClusterCount(filters?: {
   hide_hierarchies?: boolean;
   layouts?: string[];
   owner_email?: string;
+  segment?: DuplicateFilters["segment"];
 }): Promise<number> {
   const { clause, params } = buildClusterFilterClause(filters, 1);
   const query =
@@ -8857,6 +8884,10 @@ export async function getCrossModuleOverlaps(opts: {
    *  (module-scoped: cross_module_handled_at IS NOT NULL, cluster itself
    *  still 'active' — see markCrossModuleHandled), or 'all'. */
   status?: "active" | "resolved" | "ignored" | "handled" | "all";
+  /** Marketplace / WalaPlus / WalaOne segment chip. Filters clusters by the
+   *  layouts present on their member records (c.layouts). undefined/'all' = no
+   *  filter. Mirrors buildSegmentPredicate's layout semantics. */
+  segment?: DuplicateFilters["segment"];
 } = {}): Promise<CrossModuleOverlapsResponse> {
   const CROSS_MODULE_MAX = 100000;
   const limit = Math.min(
@@ -9099,14 +9130,54 @@ export async function getCrossModuleOverlaps(opts: {
     const accounts = Number(c.total_accounts || 0);
     const activeLead = !!c.has_active_lead; // already implies total_leads > 0
     const activeDeal = !!c.has_active_deal;
-    const clientDeal = !!c.has_client_deal;
-    const activeLeadVsPresence =
-      activeLead && (accounts > 0 || contacts > 0 || activeDeal || clientDeal);
-    const csConflict = clientDeal && (activeDeal || activeLead);
-    return activeLeadVsPresence || csConflict;
+    // Real cross-module redundancy = an ACTIVE lead still being worked while the
+    // SAME company already exists as a contact / account / active deal → CLOSE
+    // the redundant lead. A normal Account + Contact + Deal hierarchy — even
+    // with a Paid / Agreement Signed (client) deal — is a SUCCESS STORY, not an
+    // overlap → hidden (Sarah 2026-07-13: "one account, one deal under it, one
+    // contact, no cross-module here"). NOTE a client deal is ALSO an active deal
+    // (Paid ∉ the dead-stage set), so an earlier `clientDeal && activeDeal`
+    // branch fired on a lone Paid deal and wrongly surfaced pure customers.
+    // CS-vs-Sales conflicts (an OPEN sales deal alongside a client deal, no
+    // lead) are owned by the CS Pipeline Overlap tab, not this one.
+    return activeLead && (contacts > 0 || accounts > 0 || activeDeal);
   };
+  // Segment chip (Marketplace / WalaPlus / WalaOne) — Sarah 2026-07-13: the chip
+  // never reached this tab. Filter by the layouts present on the cluster's member
+  // records (c.layouts, aggregated above). Marketplace = a Marketplace/Partner
+  // Accounts layout present; WalaOne = a WalaOne layout present; WalaPlus = a
+  // corporate layout present (neither of those) OR no layout at all (legacy
+  // default). Mirrors the server buildSegmentPredicate layout semantics.
+  const _segNorm = (v: any) =>
+    String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const segMatch = (c: any): boolean => {
+    const seg = opts.segment;
+    if (!seg || seg === "all") return true;
+    const layouts: string[] = Array.isArray(c.layouts) ? c.layouts : [];
+    const isMkt = layouts.some((v) => {
+      const lo = String(v ?? "").toLowerCase().trim();
+      return lo === "marketplace" || lo === "partner accounts";
+    });
+    const isW1 = layouts.some((v) => _segNorm(v) === "walaone");
+    if (seg === "marketplace") return isMkt;
+    if (seg === "walaone") return isW1;
+    // walaplus / corporate: a corporate record present, or no layout at all.
+    return (
+      layouts.length === 0 ||
+      layouts.some((v) => {
+        const lo = String(v ?? "").toLowerCase().trim();
+        return (
+          lo !== "marketplace" &&
+          lo !== "partner accounts" &&
+          _segNorm(v) !== "walaone"
+        );
+      })
+    );
+  };
+
   const visible = realOverlaps.filter((c) => {
     if (!isActionable(c)) return false;
+    if (!segMatch(c)) return false;
     if (statusOpt === "active" && (c as any).ledger_resolved) return false;
     // The Record Hint tab now owns the 3 strict 2-module LINKING pairings
     // (Contact↔Account, Contact↔Deal, Deal↔Account) — a cluster classified
