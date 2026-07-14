@@ -2384,6 +2384,47 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
     }
   }
 
+  // ── DOAM clients synced into the platform's client directory (Sarah
+  // 2026-07-14) ──────────────────────────────────────────────────────────────
+  // DOAM = government entities subscribed to WalaPlus via the HR ministry;
+  // contracts auto-renew yearly, so they may NOT be in the CRM as deals and the
+  // deal-derived directory above misses them. Injecting them here makes the
+  // WHOLE platform's client-awareness (every consumer of getCsClientDirectory —
+  // Preflight Rule 2, the directory stats + coverage audit, and any future
+  // caller) treat them as existing WalaPlus clients, so they never surface as
+  // prospects to communicate. Matched by gov domain (incl. sub-domain via the
+  // deal path) + gov name (EN and AR). GAP-FILL only: a real CRM client entry
+  // for the same domain/name always wins. Active → block; inactive → churned-
+  // today so it lands in REVIEW within the government cool-off. Env PREFLIGHT_DOAM
+  // =false disables (mirrors the standalone Preflight DOAM check).
+  if (process.env.PREFLIGHT_DOAM !== "false") {
+    const todayIso = new Date(todayMs).toISOString().slice(0, 10);
+    for (const d of DOAM_CLIENTS) {
+      const status: CsClientStatus = {
+        active: d.active,
+        churnDate: d.active ? null : todayIso,
+        churnDays: d.active ? null : 0,
+        sector: "government",
+        csOwner: null,
+        companyName: d.en || d.ar || null,
+        phase: d.active ? "DOAM (auto-renew)" : "DOAM (inactive)",
+        lifecycleState: d.active ? "renewal" : "termination_recent",
+        accountZohoId: null,
+      };
+      const dom = normalizeDomain(d.domain || "");
+      if (dom && !byDomain.has(dom)) byDomain.set(dom, status);
+      for (const nm of [
+        normalizeCompanyName(d.en || ""),
+        normalizeCompanyName(d.ar || ""),
+      ]) {
+        if (nm && nm.length >= 3 && !byName.has(nm)) {
+          byName.set(nm, status);
+          indexName(nm);
+        }
+      }
+    }
+  }
+
   _csDirCache = { byName, byDomain, tokenIndex, builtAt: todayMs };
   return _csDirCache;
 }
