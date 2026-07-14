@@ -2183,6 +2183,49 @@
             if (typeof _renderDupBulkBar === 'function') _renderDupBulkBar();
         }
 
+        // Render a record-tab payload (leads/deals/contacts/accounts) into its
+        // table + pagination. Extracted so both the instant mirror render and
+        // the background verified refresh below reuse the exact same path.
+        function _renderRecordTabData(type, page, data) {
+            const groups = data.groups || [];
+            const pages  = data.pages  || 1;
+            const total  = data.total_duplicate_groups;
+            let shown;
+            if (type === 'leads')        shown = renderLeadRows(groups);
+            else if (type === 'deals')   shown = renderDealRows(groups);
+            else if (type === 'contacts') shown = renderContactRows(groups);
+            else if (type === 'accounts') shown = renderAccountRows(groups);
+            // On a single page, trust the COUNT THE TABLE ACTUALLY RENDERED
+            // over the server's raw cluster count — the client drops
+            // colleague/chained-match clusters, so the server total can read
+            // "5 duplicate groups" while the table shows none. Multi-page
+            // tabs keep the server total (other pages still have groups).
+            const footerTotal = (typeof shown === 'number' && pages <= 1) ? shown : total;
+            renderPagination(type + 'Pagination', page, pages, (p) => loadRecordTab(type, p), footerTotal, 'duplicate groups');
+            window._loadedTabs.add(type);
+        }
+
+        // Background live-verify for a record tab (Sarah 2026-07-15): re-request
+        // the SAME page with ?verify=1 so the server live-checks this page's
+        // records against Zoho, prunes any already-deleted ghosts + marks
+        // converted leads, and returns the corrected set. If the load hasn't been
+        // superseded (loadId still current) we re-render in place — so the four
+        // inline lists self-clean on open exactly like the cluster preview modal.
+        // Best-effort: any failure leaves the instant mirror render standing.
+        async function _bgVerifyRecordTab(type, page, baseUrl, loadId, loadKey) {
+            try {
+                const vurl = baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + 'verify=1';
+                const res = await fetch(vurl, { credentials: 'same-origin' });
+                if (!res.ok) return;
+                if (loadId !== window[loadKey]) return; // a newer load superseded us
+                const data = await res.json();
+                if (loadId !== window[loadKey]) return;
+                _renderRecordTabData(type, page, data);
+            } catch (_) {
+                /* best-effort — the mirror render stands */
+            }
+        }
+
         async function loadRecordTab(type, page = 0) {
             recordPages[type] = page;
             // Per-tab Advanced Filters: the same filter selections (owner,
@@ -2245,22 +2288,12 @@
                     const data = await res.json();
                     if (loadId !== window[loadKey]) return;
 
-                    const groups = data.groups || [];
-                    const pages  = data.pages  || 1;
-                    const total  = data.total_duplicate_groups;
-                    let shown;
-                    if (type === 'leads')        shown = renderLeadRows(groups);
-                    else if (type === 'deals')   shown = renderDealRows(groups);
-                    else if (type === 'contacts') shown = renderContactRows(groups);
-                    else if (type === 'accounts') shown = renderAccountRows(groups);
-                    // On a single page, trust the COUNT THE TABLE ACTUALLY RENDERED
-                    // over the server's raw cluster count — the client drops
-                    // colleague/chained-match clusters, so the server total can read
-                    // "5 duplicate groups" while the table shows none. Multi-page
-                    // tabs keep the server total (other pages still have groups).
-                    const footerTotal = (typeof shown === 'number' && pages <= 1) ? shown : total;
-                    renderPagination(type + 'Pagination', page, pages, (p) => loadRecordTab(type, p), footerTotal, 'duplicate groups');
-                    window._loadedTabs.add(type);
+                    // Instant render from the mirror…
+                    _renderRecordTabData(type, page, data);
+                    // …then silently live-verify THIS page's records against Zoho
+                    // and refresh in place if a ghost was pruned (Sarah 2026-07-15).
+                    // Non-blocking so the list never hangs on live CRM calls.
+                    _bgVerifyRecordTab(type, page, url, loadId, loadKey);
                     return;
                 } catch (e) {
                     if (loadId !== window[loadKey]) return;

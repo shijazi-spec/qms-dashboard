@@ -214,6 +214,69 @@ function parseRecordTabFilters(url: URL): {
   };
 }
 
+// Shared loader for the four record-tab endpoints (leads/deals/contacts/
+// accounts). On-open live-verify (Sarah 2026-07-15): the inline record lists
+// draw straight from the mirror, so a record already DELETED in Zoho could
+// still show a row until a sweep reached it — same class of ghost the cluster
+// preview had. When the tab requests ?verify=1 we live-check the records in
+// the clusters shown on THIS page against Zoho, prune the ghosts + mark
+// converted leads, recompute those clusters' stats, then re-read — so the list
+// only shows records that still exist in the CRM. Bounded to the visible page's
+// clusters + a hard record cap so it can't hammer Zoho; failure is non-fatal
+// (the list still renders from the mirror).
+async function loadRecordTabWithVerify(
+  recordType: "lead" | "deal" | "contact" | "account",
+  url: URL,
+): Promise<{ limit: number; offset: number; result: { groups: any[]; total: number } }> {
+  const limit = parseInt(url.searchParams.get("limit") || "50");
+  const offset = parseInt(url.searchParams.get("offset") || "0");
+  const filters = parseRecordTabFilters(url);
+  let result = await getDuplicateRecordsByType(recordType, {
+    limit,
+    offset,
+    ...filters,
+  });
+  if (url.searchParams.get("verify") === "1" && result.groups.length > 0) {
+    try {
+      const cids = result.groups
+        .map((g: any) => Number(g.id))
+        .filter((n: number) => Number.isFinite(n));
+      if (cids.length > 0) {
+        const { reconcileDeletedRecords } = await import(
+          "../../utils/emptyRecordsDatabase"
+        );
+        const rc = await reconcileDeletedRecords({
+          module: recordType,
+          clusterIds: cids,
+          limit: 150,
+        });
+        if (rc.pruned > 0 || rc.converted > 0) {
+          try {
+            const { updateClusterStats } = await import(
+              "../../utils/duplicateRadarDatabase"
+            );
+            await Promise.all(
+              cids.map((id: number) => updateClusterStats(id).catch(() => {})),
+            );
+          } catch {
+            /* best-effort stats refresh */
+          }
+          result = await getDuplicateRecordsByType(recordType, {
+            limit,
+            offset,
+            ...filters,
+          });
+        }
+      }
+    } catch (e: any) {
+      logger.warn(
+        `[record-tab ${recordType}] on-open verify failed (non-fatal): ${e?.message || e}`,
+      );
+    }
+  }
+  return { limit, offset, result };
+}
+
 import {
   initDuplicateRadarTables,
   getAllClusters,
@@ -5851,13 +5914,10 @@ export const duplicateRadarRoutes = [
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
-          const limit = parseInt(url.searchParams.get("limit") || "50");
-          const offset = parseInt(url.searchParams.get("offset") || "0");
-          const result = await getDuplicateRecordsByType("lead", {
-            limit,
-            offset,
-            ...parseRecordTabFilters(url),
-          });
+          const { limit, offset, result } = await loadRecordTabWithVerify(
+            "lead",
+            url,
+          );
           return c.json({
             total_duplicate_groups: result.total,
             groups: result.groups,
@@ -5882,13 +5942,10 @@ export const duplicateRadarRoutes = [
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
-          const limit = parseInt(url.searchParams.get("limit") || "50");
-          const offset = parseInt(url.searchParams.get("offset") || "0");
-          const result = await getDuplicateRecordsByType("deal", {
-            limit,
-            offset,
-            ...parseRecordTabFilters(url),
-          });
+          const { limit, offset, result } = await loadRecordTabWithVerify(
+            "deal",
+            url,
+          );
           return c.json({
             total_duplicate_groups: result.total,
             groups: result.groups,
@@ -5914,13 +5971,10 @@ export const duplicateRadarRoutes = [
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
-          const limit = parseInt(url.searchParams.get("limit") || "50");
-          const offset = parseInt(url.searchParams.get("offset") || "0");
-          const result = await getDuplicateRecordsByType("contact", {
-            limit,
-            offset,
-            ...parseRecordTabFilters(url),
-          });
+          const { limit, offset, result } = await loadRecordTabWithVerify(
+            "contact",
+            url,
+          );
           return c.json({
             total_duplicate_groups: result.total,
             groups: result.groups,
@@ -5945,13 +5999,10 @@ export const duplicateRadarRoutes = [
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
-          const limit = parseInt(url.searchParams.get("limit") || "50");
-          const offset = parseInt(url.searchParams.get("offset") || "0");
-          const result = await getDuplicateRecordsByType("account", {
-            limit,
-            offset,
-            ...parseRecordTabFilters(url),
-          });
+          const { limit, offset, result } = await loadRecordTabWithVerify(
+            "account",
+            url,
+          );
           return c.json({
             total_duplicate_groups: result.total,
             groups: result.groups,
