@@ -22,6 +22,7 @@ import {
   normalizeCompanyName,
   isPlaceholderName,
 } from "./duplicateRadarDatabase";
+import { DOAM_CLIENTS, type DoamClient } from "./doamClients";
 import { logger } from "./logger";
 
 /**
@@ -518,6 +519,53 @@ export function phoneIsForeign(raw: string | null | undefined): boolean {
   }
   if (digits.startsWith("966")) return false; // explicit KSA country code
   return intl; // explicit non-966 international code → foreign / out of scope
+}
+
+// ─── DOAM client directory (Sarah 2026-07-14) ───────────────────────────────
+// DOAM = government entities subscribed to WalaPlus THROUGH the HR ministry
+// (دوم); their contracts auto-renew yearly. They may NOT be in the CRM as
+// customer deals, so the CS-client screen misses them — yet cold-contacting
+// them is wrong. Matched by their gov DOMAIN (exact or a sub-domain, e.g.
+// hospital.moh.gov.sa → moh.gov.sa) or exact gov NAME (EN or AR). Source list
+// in doamClients.ts (regenerate from the xlsx). Active → BLOCK; inactive →
+// REVIEW.
+let _doamMaps: { byDomain: Map<string, DoamClient>; byName: Map<string, DoamClient> } | null = null;
+function getDoamMaps() {
+  if (_doamMaps) return _doamMaps;
+  const byDomain = new Map<string, DoamClient>();
+  const byName = new Map<string, DoamClient>();
+  for (const d of DOAM_CLIENTS) {
+    const dom = normalizeDomain(d.domain || "");
+    if (dom) byDomain.set(dom, d);
+    const en = normalizeCompanyName(d.en || "");
+    if (en && en.length >= 3) byName.set(en, d);
+    const ar = normalizeCompanyName(d.ar || "");
+    if (ar && ar.length >= 2) byName.set(ar, d);
+  }
+  _doamMaps = { byDomain, byName };
+  return _doamMaps;
+}
+
+export function matchDoamClient(input: {
+  domain?: string | null;
+  company_name?: string | null;
+}): { client: DoamClient; via: "domain" | "company_name" } | null {
+  const { byDomain, byName } = getDoamMaps();
+  const dom = normalizeDomain(String(input.domain || ""));
+  if (dom) {
+    const hit = byDomain.get(dom);
+    if (hit) return { client: hit, via: "domain" };
+    // sub-domain of a DOAM gov domain (e.g. a hospital under moh.gov.sa)
+    for (const [dd, entry] of byDomain) {
+      if (dom.endsWith("." + dd)) return { client: entry, via: "domain" };
+    }
+  }
+  const nm = normalizeCompanyName(String(input.company_name || ""));
+  if (nm && nm.length >= 3) {
+    const hit = byName.get(nm);
+    if (hit) return { client: hit, via: "company_name" };
+  }
+  return null;
 }
 
 /**
@@ -2943,6 +2991,48 @@ async function runPreflightBasic(input: {
         crm_links: null,
       });
       continue;
+    }
+
+    // REJECT DOAM clients (Sarah 2026-07-14). Government entities subscribed to
+    // WalaPlus via the HR ministry (DOAM), contracts auto-renew yearly — they may
+    // NOT exist in the CRM as customer deals, so the CS-client screen misses them.
+    // Matched by gov domain (incl. sub-domain) or exact gov name. Runs BEFORE the
+    // phone/client screens so the "Doam Client" reason wins. Active → BLOCK;
+    // inactive → REVIEW. Env-disable: PREFLIGHT_DOAM=false.
+    if (process.env.PREFLIGHT_DOAM !== "false") {
+      const doam = matchDoamClient({ domain, company_name: r.company_name });
+      if (doam) {
+        const isActive = doam.client.active;
+        if (isActive) summary.block++;
+        else summary.review++;
+        out.push({
+          row_index: i,
+          ref: r.ref ?? null,
+          input: { domain, company_name: r.company_name ?? null },
+          verdict: isActive ? "block" : "review",
+          cluster_id: null,
+          lifecycle_state: null,
+          sector: null,
+          arr_exposure: null,
+          owners: [],
+          reason: isActive ? "doam_client" : "doam_client_inactive",
+          suggested_action: isActive
+            ? `DOAM client "${doam.client.en}" — subscribed to WalaPlus via the HR gov (contract auto-renews yearly). Do NOT cold-contact / import. Route to CS / Account owner.`
+            : `DOAM client "${doam.client.en}" but currently INACTIVE on DOAM — verify subscription status with CS / HR gov before any outreach.`,
+          module_counts: null,
+          matched_via: doam.via,
+          executive_action: isActive
+            ? `REJECT — Doam Client (active): "${doam.client.en}" is subscribed via the HR gov (auto-renewing). Do not import or cold-contact.`
+            : `REVIEW — Doam Client (inactive): "${doam.client.en}" — verify the DOAM subscription before any outreach.`,
+          executive_severity: isActive ? "high" : "medium",
+          churn_date: null,
+          churn_days: null,
+          cs_owner: null,
+          cs_phase: null,
+          crm_links: null,
+        });
+        continue;
+      }
     }
 
     // REJECT any CONTACT row with NO valid phone number (Sarah 2026-07-06,
