@@ -554,6 +554,9 @@
             if (window._crossModulePage >= crossModuleTotalPages) window._crossModulePage = 0;
             const crossModulePageStart = window._crossModulePage * RADAR_PAGE_SIZE;
             const crossModuleSlice = sortedList.slice(crossModulePageStart, crossModulePageStart + RADAR_PAGE_SIZE);
+            // Ids on the CURRENT page — the header "select all" acts on THESE only
+            // (Sarah 2026-07-15), never all 900+ clusters across every page.
+            window._crossModulePageIds = crossModuleSlice.map(c => c.id);
             renderPagination('crossModulePagination', window._crossModulePage, crossModuleTotalPages,
                 (p) => { window._crossModulePage = p; renderCrossModuleTable(); },
                 sortedList.length, 'clusters');
@@ -615,6 +618,12 @@
                     + _crossModuleTrackCell(c)
                     + '</tr>';
             }).join('');
+            // Header "select all" reflects THIS page: checked only when every row
+            // on the current page is selected (so paging updates the box).
+            const _cmoAll = document.getElementById('cmoSelectAll');
+            if (_cmoAll) {
+                _cmoAll.checked = crossModuleSlice.length > 0 && crossModuleSlice.every(c => crossModuleSelected.has(c.id));
+            }
             updateCrossModuleBulkBar();
         }
 
@@ -678,14 +687,13 @@
         function toggleCrossModuleSelectAll(event) {
             const cb = (event && event.target) || document.getElementById('cmoSelectAll');
             const checked = !!(cb && cb.checked);
-            // Select ALL currently-visible (post-filter) rows — every cluster is
-            // selectable now (Sarah 2026-07-13), not just lead-bearing ones.
-            const visible = (crossModuleClusters || []).filter(c =>
-                _cmoClusterMatchesChip(c, crossModuleFilter)
-            );
-            for (const c of visible) {
-                if (checked) crossModuleSelected.add(c.id);
-                else crossModuleSelected.delete(c.id);
+            // Select ONLY the rows on the CURRENT page (Sarah 2026-07-15), not
+            // every cluster across all pages. The page's ids are captured in
+            // renderCrossModuleTable as window._crossModulePageIds.
+            const pageIds = Array.isArray(window._crossModulePageIds) ? window._crossModulePageIds : [];
+            for (const id of pageIds) {
+                if (checked) crossModuleSelected.add(id);
+                else crossModuleSelected.delete(id);
             }
             renderCrossModuleTable();
         }
