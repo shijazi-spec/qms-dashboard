@@ -3853,11 +3853,46 @@ export const duplicateRadarRoutes = [
 
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
-          const cluster = await getClusterById(id);
+          let cluster = await getClusterById(id);
           if (!cluster) {
             return c.json({ error: "Cluster not found" }, 404);
           }
-          const records = await getRecordsByClusterId(id);
+          // Live-verify on OPEN (Sarah 2026-07-15): the preview was showing
+          // records already DELETED in Zoho (e.g. ARGAS) because they sit in the
+          // mirror until a sweep reaches them. When the modal passes ?verify=1 we
+          // live-check THIS cluster's records against Zoho, prune the ghosts +
+          // mark converted leads, recompute the cluster's stats, and re-read — so
+          // the preview only ever shows records that still exist in the CRM.
+          const doVerify = new URL(c.req.url).searchParams.get("verify") === "1";
+          let records = await getRecordsByClusterId(id);
+          if (doVerify && records.length > 0) {
+            try {
+              const { reconcileDeletedRecords } = await import(
+                "../../utils/emptyRecordsDatabase"
+              );
+              const rc = await reconcileDeletedRecords({
+                clusterIds: [id],
+                limit: 100,
+              });
+              if (rc.pruned > 0 || rc.converted > 0) {
+                try {
+                  const { updateClusterStats } = await import(
+                    "../../utils/duplicateRadarDatabase"
+                  );
+                  await updateClusterStats(id);
+                } catch {
+                  /* best-effort */
+                }
+                const fresh = await getClusterById(id);
+                if (fresh) cluster = fresh; // may be null if pruned to a singleton
+                records = await getRecordsByClusterId(id);
+              }
+            } catch (e: any) {
+              logger.warn(
+                `[cluster-detail] on-open verify failed (non-fatal): ${e?.message || e}`,
+              );
+            }
+          }
           const recommendations = generateSmartRecommendations(records);
           const meta = getClusterRecordTypeMeta(records);
           // Surface "mixed signal" — a cluster containing 2+ distinct

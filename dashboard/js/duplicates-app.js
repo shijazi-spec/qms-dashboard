@@ -3811,7 +3811,10 @@
             // surfaces inside the modal instead of leaving it stuck on "Loading…".
             let data, res;
             try {
-                res = await fetch(`/api/duplicates/clusters/${id}`);
+                // ?verify=1 → the server live-checks this cluster's records against
+                // Zoho and prunes any already deleted BEFORE returning, so the
+                // preview never shows a ghost record (Sarah 2026-07-15, ARGAS).
+                res = await fetch(`/api/duplicates/clusters/${id}?verify=1`);
             } catch (e) {
                 document.getElementById('modalContent').innerHTML =
                     `<div class="text-center py-8 text-red-600 text-sm">Failed to reach server: ${escapeHtml(String(e && e.message || e))}</div>`;
