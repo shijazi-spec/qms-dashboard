@@ -496,6 +496,31 @@ export function resolvePhone(row: PreflightInputRow): string | null {
 }
 
 /**
+ * KSA-scope phone check (Sarah 2026-07-14). Preflight screens Saudi-market
+ * imports, so a contact reachable only on a FOREIGN number is OUT OF SCOPE.
+ * Returns true when the raw phone carries an EXPLICIT non-966 international code
+ * (a leading "+" or "00" followed by a country code other than 966 — e.g. +34
+ * Spain, +44 UK, +1). A +966 / 966 number, OR a bare LOCAL number with no
+ * country code (assumed Saudi), is NOT foreign — we only reject on an explicit
+ * foreign code so a Saudi local typed without a country code is never
+ * false-rejected. Env `PREFLIGHT_REQUIRE_KSA_PHONE=false` disables the gate.
+ */
+export function phoneIsForeign(raw: string | null | undefined): boolean {
+  const s = String(raw ?? "").trim();
+  if (!s) return false;
+  const hadPlus = s.startsWith("+");
+  let digits = s.replace(/\D/g, "");
+  if (!digits) return false;
+  let intl = hadPlus;
+  if (digits.startsWith("00")) {
+    intl = true;
+    digits = digits.slice(2);
+  }
+  if (digits.startsWith("966")) return false; // explicit KSA country code
+  return intl; // explicit non-966 international code → foreign / out of scope
+}
+
+/**
  * Normalized company name for the fuzzy-match fallback path.
  *
  * Sarah 2026-06-17 — char floor lowered from 5 to 3 so well-known
@@ -2949,6 +2974,44 @@ async function runPreflightBasic(input: {
         matched_via: null,
         executive_action:
           "REJECT — no valid phone number on this contact; a phone is mandatory, so this row is invalid data. Do not import.",
+        executive_severity: "medium",
+        churn_date: null,
+        churn_days: null,
+        cs_owner: null,
+        cs_phase: null,
+        crm_links: null,
+      });
+      continue;
+    }
+
+    // REJECT a FOREIGN (non-KSA) phone as OUT OF SCOPE (Sarah 2026-07-14).
+    // Preflight vets Saudi-market imports; a contact whose only number carries an
+    // explicit non-966 international code (+34 Spain, +44 UK, …) is out of scope.
+    // A +966 / bare Saudi local number stays in scope. Runs on the RAW phone so
+    // the country code is visible (resolvePhone strips it). Env-disable with
+    // PREFLIGHT_REQUIRE_KSA_PHONE=false.
+    if (
+      process.env.PREFLIGHT_REQUIRE_KSA_PHONE !== "false" &&
+      phoneIsForeign(r.phone)
+    ) {
+      summary.no_contact++;
+      out.push({
+        row_index: i,
+        ref: r.ref ?? null,
+        input: { domain, company_name: r.company_name ?? null },
+        verdict: "no_contact",
+        cluster_id: null,
+        lifecycle_state: null,
+        sector: null,
+        arr_exposure: null,
+        owners: [],
+        reason: "phone_out_of_scope",
+        suggested_action:
+          "Phone number is not a Saudi (KSA / +966) number — out of scope. Rejected.",
+        module_counts: null,
+        matched_via: null,
+        executive_action:
+          "REJECT — out of scope: the contact's only phone is a non-KSA (+966) international number, outside the Saudi-market import scope.",
         executive_severity: "medium",
         churn_date: null,
         churn_days: null,
