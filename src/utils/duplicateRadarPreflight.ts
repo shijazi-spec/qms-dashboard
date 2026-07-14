@@ -96,8 +96,10 @@ export interface PreflightInputRow {
   email?: string | null;
   company_name?: string | null;
   phone?: string | null;
-  /** Person name — when present with NO valid phone number, the row is REJECTED
-   *  (verdict no_contact) since a phone is mandatory to import a contact. */
+  /** Person name. Any CONTACT row (one with a name OR an email) that has NO valid
+   *  phone number is REJECTED (verdict no_contact) — a phone is mandatory to
+   *  import a contact. Only a pure company-only screening row (no name AND no
+   *  email) is exempt. */
   contact_name?: string | null;
   /** Contact job title from the uploaded row — optional, carried through to
    *  the Zoho Contact/Lead payload's Title field on push. */
@@ -2918,14 +2920,17 @@ async function runPreflightBasic(input: {
       continue;
     }
 
-    // REJECT a named contact with NO valid phone number (Sarah 2026-07-06). A
-    // phone is now MANDATORY for import: a row that carries a person name but no
-    // reachable phone — missing, or fewer than 7 digits so it normalises to null
-    // (see resolvePhone) — is invalid data and must never land in the safe-to-
-    // import list, EVEN IF it has an email. A company-only screening row (no
-    // contact_name) is unaffected. Takes precedence over the domain screen.
+    // REJECT any CONTACT row with NO valid phone number (Sarah 2026-07-06,
+    // broadened 2026-07-14: "reject all data with no phone"). A phone is
+    // MANDATORY for import: a row carrying a person name OR an email — but no
+    // reachable phone (missing, or fewer than 7 digits so resolvePhone
+    // normalises it to null) — is invalid data and must never land in the
+    // safe-to-import list, EVEN IF it has an email. The ONLY row exempt is a
+    // pure company-only SCREENING lookup (no contact_name AND no email — just a
+    // company/domain being checked against the CRM), which legitimately carries
+    // no phone. Takes precedence over the domain screen.
     const contactName = (r.contact_name || "").toString().trim();
-    if (contactName && !phone) {
+    if ((contactName || email) && !phone) {
       summary.no_contact++;
       out.push({
         row_index: i,
