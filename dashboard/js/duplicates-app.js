@@ -328,17 +328,25 @@
         async function reconcileDeletedRecords() {
             const btn = document.getElementById('cmoReconcileDeletedBtn');
             const orig = btn ? btn.innerHTML : '';
-            if (btn) { btn.disabled = true; btn.innerHTML = '🧹 Starting…'; }
+            if (btn) { btn.disabled = true; btn.innerHTML = '🧹 Verifying…'; }
             try {
-                // DEFINITIVE clean (Sarah 2026-07-15): checks EVERY record against
-                // live Zoho and prunes all deleted ones — not a rotating batch.
-                // Runs in the background (full id-fetch takes minutes).
-                const j = await erAdminPost('/api/duplicates/reconcile-deleted-full', {});
+                // 1) IMMEDIATE, observable pass over the clusters loaded on THIS tab:
+                //    live-check their records against Zoho and prune the deleted ones
+                //    now, with a real count (Sarah 2026-07-15) — so you can SEE it work.
+                const visibleIds = (crossModuleClusters || []).map(function (c) { return c.id; }).filter(function (v) { return v != null; });
+                const j = await erAdminPost('/api/duplicates/reconcile-deleted', { clusterIds: visibleIds, limit: 400 });
                 if (!j) return; // cancelled at the admin-key prompt
-                if (!j.success) { rrToast('Reconcile failed: ' + (j.error || 'unknown')); return; }
-                rrToast('🧹 Full deletion reconcile started in the background.\n\nIt checks every record against live Zoho and prunes ALL deleted ones. This takes a few minutes — the tabs clear as it finishes. Click Refresh shortly.');
+                if (!j.success) { rrToast('Verify failed: ' + (j.error || 'unknown')); return; }
+                // 2) Also kick off the DEFINITIVE full reconcile (all modules, every
+                //    tab, background) so records outside this view get cleaned too.
+                //    Reuses the cached admin key — no second prompt.
+                erAdminPost('/api/duplicates/reconcile-deleted-full', {}).catch(function () {});
+                rrToast('🧹 Checked ' + (j.checked || 0) + ' record(s) in the visible clusters — pruned ' + (j.pruned || 0) + ' deleted'
+                    + (j.converted ? ' + ' + j.converted + ' converted lead(s)' : '') + '.\n\n'
+                    + 'A full background reconcile (ALL tabs/modules) is also running to clear the rest — click Refresh in a few minutes.');
+                if (typeof loadCrossModule === 'function') loadCrossModule();
             } catch (e) {
-                rrToast('Reconcile failed: ' + (e && e.message || e));
+                rrToast('Verify failed: ' + (e && e.message || e));
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }

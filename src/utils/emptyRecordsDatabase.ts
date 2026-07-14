@@ -906,7 +906,12 @@ export async function reconcileEmptyDeleteDeletions(
  * whole table; bounded batch + small concurrency to stay polite with Zoho.
  * Best-effort: individual fetch errors are swallowed. */
 export async function reconcileDeletedRecords(
-  opts: { module?: string; limit?: number; activeClustersOnly?: boolean } = {},
+  opts: {
+    module?: string;
+    limit?: number;
+    activeClustersOnly?: boolean;
+    clusterIds?: number[];
+  } = {},
 ): Promise<{ checked: number; pruned: number; converted: number }> {
   const { fetchZohoRecordById } = await import("./zohoCRM");
   const mod = opts.module || null;
@@ -918,16 +923,24 @@ export async function reconcileDeletedRecords(
   // the ones users actually open and hit a 404 on — then self-prune within a
   // sync or two, oldest-verified first. Used by the post-sync auto sweep.
   const activeOnly = opts.activeClustersOnly === true;
+  // clusterIds (Sarah 2026-07-15): scope the verify to SPECIFIC clusters — the
+  // ones the operator is looking at right now — so the "Verify & prune deleted"
+  // button gives an IMMEDIATE, observable result on the visible rows instead of
+  // a rotating slice of all 160k. Params: $1=module, $2=limit, $3=clusterIds[].
+  const cids = Array.isArray(opts.clusterIds)
+    ? opts.clusterIds.map(Number).filter((n) => Number.isFinite(n))
+    : null;
   const batch = await pool.query<{ zoho_record_id: string; record_type: string | null; zoho_module: string | null }>(
     `SELECT dr.zoho_record_id, dr.record_type, dr.zoho_module
        FROM duplicate_records dr
        ${activeOnly ? "JOIN duplicate_clusters dc ON dc.id = dr.cluster_id" : ""}
       WHERE dr.zoho_record_id IS NOT NULL AND dr.zoho_record_id <> ''
         AND ($1::text IS NULL OR dr.record_type = $1)
+        ${cids && cids.length ? "AND dr.cluster_id = ANY($3::int[])" : ""}
         ${activeOnly ? "AND COALESCE(dc.status, 'active') NOT IN ('resolved', 'ignored', 'dismissed') AND dc.total_records > 1" : ""}
       ORDER BY dr.last_verified_at ASC NULLS FIRST
       LIMIT $2`,
-    [mod, limit],
+    cids && cids.length ? [mod, limit, cids] : [mod, limit],
   );
 
   const moduleOf = (rt: string | null | undefined, zm: string | null | undefined): string => {

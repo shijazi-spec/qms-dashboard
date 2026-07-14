@@ -11973,8 +11973,11 @@ export const duplicateRadarRoutes = [
         const body = await c.req.json().catch(() => ({}));
         const module = body?.module ? String(body.module) : undefined;
         const limit = typeof body?.limit === "number" ? body.limit : undefined;
+        const clusterIds = Array.isArray(body?.clusterIds)
+          ? body.clusterIds.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n))
+          : undefined;
         const { reconcileDeletedRecords } = await import("../../utils/emptyRecordsDatabase");
-        const r = await reconcileDeletedRecords({ module, limit });
+        const r = await reconcileDeletedRecords({ module, limit, clusterIds });
         return c.json({ success: true, ...r });
       } catch (e: any) {
         logger.error("reconcile-deleted failed", e);
