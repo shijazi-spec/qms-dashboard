@@ -9231,21 +9231,21 @@ export async function getCrossModuleOverlaps(opts: {
   // A plain Account + Contacts + Deals hierarchy with no active stray lead and
   // no client-vs-sales conflict is a legitimate hierarchy → hidden.
   const isActionable = (c: any): boolean => {
-    const contacts = Number(c.total_contacts || 0);
-    const accounts = Number(c.total_accounts || 0);
-    const activeLead = !!c.has_active_lead; // already implies total_leads > 0
-    const activeDeal = !!c.has_active_deal;
-    // Real cross-module redundancy = an ACTIVE lead still being worked while the
-    // SAME company already exists as a contact / account / active deal → CLOSE
-    // the redundant lead. A normal Account + Contact + Deal hierarchy — even
-    // with a Paid / Agreement Signed (client) deal — is a SUCCESS STORY, not an
-    // overlap → hidden (Sarah 2026-07-13: "one account, one deal under it, one
-    // contact, no cross-module here"). NOTE a client deal is ALSO an active deal
-    // (Paid ∉ the dead-stage set), so an earlier `clientDeal && activeDeal`
-    // branch fired on a lone Paid deal and wrongly surfaced pure customers.
-    // CS-vs-Sales conflicts (an OPEN sales deal alongside a client deal, no
-    // lead) are owned by the CS Pipeline Overlap tab, not this one.
-    return activeLead && (contacts > 0 || accounts > 0 || activeDeal);
+    const activeLead = !!c.has_active_lead; // implies total_leads > 0
+    const activeDeal = !!c.has_active_deal; // implies total_deals > 0
+    // A cross-module ALERT is ONLY a genuine LEAD ↔ DEAL conflict (Sarah
+    // 2026-07-15): an ACTIVE lead AND an ACTIVE deal for the same company
+    // coexisting — Sales is prospecting via a lead while a live deal already
+    // exists → CLOSE the redundant lead. Contacts/Accounts are NEVER the
+    // conflict; they're the expected hierarchy. So these are NOT cross-module:
+    //   • Lead + Contact + Account, no deal   → an unconverted prospect + its
+    //     records (nothing to reconcile until there's a deal to conflict with);
+    //   • Deal + Contact + Account, no lead    → a normal account hierarchy /
+    //     success story;
+    //   • Contact + Account (± Deal), no active lead → normal hierarchy.
+    // 2-module link gaps live on the Record Hint tab; open-sales-vs-client-deal
+    // CS conflicts live on the CS Pipeline Overlap tab.
+    return activeLead && activeDeal;
   };
   // Segment chip (Marketplace / WalaPlus / WalaOne) — Sarah 2026-07-13: the chip
   // never reached this tab. Filter by the layouts present on the cluster's member
