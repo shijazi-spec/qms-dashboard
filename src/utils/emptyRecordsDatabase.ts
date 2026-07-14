@@ -1035,6 +1035,7 @@ export async function runComprehensiveDeletionSweep(
   verified: number;
   verifiedPruned: number;
   verifiedConverted: number;
+  idsetPruned: number;
   perModuleFeed: Record<string, number>;
 }> {
   const { fetchDeletedZohoRecords } = await import("./zohoCRM");
@@ -1112,16 +1113,144 @@ export async function runComprehensiveDeletionSweep(
     }
   }
 
+  // THE definitive layer (Sarah 2026-07-15): full id-set reconciliation. The
+  // /deleted feed above misses HARD-deleted records (recycle bin emptied) and
+  // deletions older than its window; per-record live-verify only rotates a slice.
+  // This diffs our whole mirror against Zoho's LIVE id set and prunes anything
+  // absent — the ONLY method that catches every deletion deterministically.
+  let idsetPruned = 0;
+  try {
+    const idset = await reconcileAllDeletedByIdSet();
+    idsetPruned = Object.values(idset).reduce((a, r) => a + (r.pruned || 0), 0);
+  } catch (e: any) {
+    logger.warn(
+      `[comprehensive-deletion-sweep] id-set reconcile failed (non-fatal): ${e?.message || e}`,
+    );
+  }
+
   logger.info(
-    `🧹 [comprehensive-deletion-sweep] feed-removed ${feedRemoved}, live-verified ${verified} (pruned ${verifiedPruned}, converted-leads ${verifiedConverted})`,
+    `🧹 [comprehensive-deletion-sweep] feed-removed ${feedRemoved}, live-verified ${verified} (pruned ${verifiedPruned}, converted-leads ${verifiedConverted}), id-set-pruned ${idsetPruned}`,
   );
   return {
     feedRemoved,
     verified,
     verifiedPruned,
     verifiedConverted,
+    idsetPruned,
     perModuleFeed,
   };
+}
+
+/**
+ * DEFINITIVE deletion detector (Sarah 2026-07-15). Incremental sync never
+ * returns deletions, the /deleted feed can't see HARD-deleted or long-ago
+ * deletions, and per-record verify only rotates a slice — so ghosts survive.
+ * This fetches Zoho's COMPLETE live id set for a module (id-only, cheap) and
+ * prunes every record in our mirror whose id is NOT in it. Catches deletions,
+ * merges, and converted leads (converted leads leave the Leads list) in one
+ * deterministic pass, regardless of when/how they left Zoho.
+ *
+ * SAFETY (critical): pruning-by-absence is only safe when the live fetch is
+ * COMPLETE. A partial/rate-limited/failed fetch would otherwise nuke live
+ * records. Guards: (1) a thrown fetch → abort; (2) an EMPTY live set → abort;
+ * (3) if the diff would prune more than RADAR_IDSET_MAX_PRUNE_FRAC (default 40%)
+ * of our records for that module → abort + error-log (a legit mass-delete that
+ * large is rare; a truncated fetch is the likely cause). Matches our rows by
+ * zoho_module OR (null zoho_module AND record_type) so legacy rows are covered.
+ */
+export async function reconcileDeletedByIdSet(
+  module: "Leads" | "Deals" | "Contacts" | "Accounts",
+): Promise<{ liveIds: number; ourIds: number; pruned: number; aborted: boolean }> {
+  const { fetchAllZohoRecords } = await import("./zohoCRM");
+  let live: Array<{ id?: string }>;
+  try {
+    live = (await fetchAllZohoRecords(module, { fields: ["id"] })) as any[];
+  } catch (e: any) {
+    logger.warn(
+      `[id-set-reconcile] ${module} live id fetch FAILED — abort (no prune): ${e?.message || e}`,
+    );
+    return { liveIds: 0, ourIds: 0, pruned: 0, aborted: true };
+  }
+  const liveSet = new Set(
+    (live || []).map((r) => String(r?.id ?? "")).filter(Boolean),
+  );
+  if (liveSet.size === 0) {
+    logger.warn(
+      `[id-set-reconcile] ${module}: 0 live ids returned — ABORT (never prune a whole module on an empty fetch).`,
+    );
+    return { liveIds: 0, ourIds: 0, pruned: 0, aborted: true };
+  }
+  const rt =
+    module === "Leads"
+      ? "lead"
+      : module === "Deals"
+        ? "deal"
+        : module === "Contacts"
+          ? "contact"
+          : "account";
+  const ours = await pool.query<{ zoho_record_id: string }>(
+    `SELECT zoho_record_id FROM duplicate_records
+      WHERE zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+        AND (zoho_module = $1 OR (zoho_module IS NULL AND record_type = $2))`,
+    [module, rt],
+  );
+  const ghosts = ours.rows
+    .map((r) => String(r.zoho_record_id))
+    .filter((id) => !liveSet.has(id));
+  const maxFrac = parseFloat(process.env.RADAR_IDSET_MAX_PRUNE_FRAC || "0.4");
+  if (ours.rows.length > 200 && ghosts.length > ours.rows.length * maxFrac) {
+    logger.error(
+      `[id-set-reconcile] ${module}: would prune ${ghosts.length}/${ours.rows.length} (> ${Math.round(maxFrac * 100)}%) — ABORT as a likely incomplete Zoho fetch (live=${liveSet.size}). Override with RADAR_IDSET_MAX_PRUNE_FRAC.`,
+    );
+    return {
+      liveIds: liveSet.size,
+      ourIds: ours.rows.length,
+      pruned: 0,
+      aborted: true,
+    };
+  }
+  let pruned = 0;
+  const CHUNK = 500;
+  for (let i = 0; i < ghosts.length; i += CHUNK) {
+    await pruneGhostRecords(ghosts.slice(i, i + CHUNK));
+    pruned += Math.min(CHUNK, ghosts.length - i);
+  }
+  if (pruned > 0) {
+    try {
+      const db: any = await import("./duplicateRadarDatabase");
+      if (typeof db.cleanupSingletonClusters === "function")
+        await db.cleanupSingletonClusters();
+    } catch {
+      /* best-effort */
+    }
+  }
+  logger.info(
+    `🧹 [id-set-reconcile] ${module}: live=${liveSet.size}, ours=${ours.rows.length}, pruned=${pruned}`,
+  );
+  return { liveIds: liveSet.size, ourIds: ours.rows.length, pruned, aborted: false };
+}
+
+/** Run the id-set reconcile across all four modules (sequential — one heavy
+ * Zoho id-fetch at a time). Returns per-module { ourIds, pruned, aborted }. */
+export async function reconcileAllDeletedByIdSet(): Promise<
+  Record<string, { ourIds: number; pruned: number; aborted: boolean }>
+> {
+  const out: Record<string, { ourIds: number; pruned: number; aborted: boolean }> = {};
+  for (const m of ["Leads", "Deals", "Contacts", "Accounts"] as const) {
+    try {
+      const r = await reconcileDeletedByIdSet(m);
+      out[m] = { ourIds: r.ourIds, pruned: r.pruned, aborted: r.aborted };
+    } catch (e: any) {
+      out[m] = { ourIds: 0, pruned: 0, aborted: true };
+      logger.warn(`[id-set-reconcile] ${m} failed: ${e?.message || e}`);
+    }
+  }
+  logger.info(
+    `🧹 [id-set-reconcile] ALL modules done: ${Object.entries(out)
+      .map(([m, r]) => `${m}=${r.aborted ? "ABORT" : r.pruned}`)
+      .join(", ")}`,
+  );
+  return out;
 }
 
 // Contacts: name-only (no email/phone/account/deal) OR test-name.

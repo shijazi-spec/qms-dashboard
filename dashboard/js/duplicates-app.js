@@ -328,15 +328,17 @@
         async function reconcileDeletedRecords() {
             const btn = document.getElementById('cmoReconcileDeletedBtn');
             const orig = btn ? btn.innerHTML : '';
-            if (btn) { btn.disabled = true; btn.innerHTML = '🧹 Verifying…'; }
+            if (btn) { btn.disabled = true; btn.innerHTML = '🧹 Starting…'; }
             try {
-                const j = await erAdminPost('/api/duplicates/reconcile-deleted', { limit: 300 });
+                // DEFINITIVE clean (Sarah 2026-07-15): checks EVERY record against
+                // live Zoho and prunes all deleted ones — not a rotating batch.
+                // Runs in the background (full id-fetch takes minutes).
+                const j = await erAdminPost('/api/duplicates/reconcile-deleted-full', {});
                 if (!j) return; // cancelled at the admin-key prompt
-                if (!j.success) { rrToast('Verify failed: ' + (j.error || 'unknown')); return; }
-                rrToast('Verified ' + (j.checked || 0) + ' record(s) · pruned ' + (j.pruned || 0) + ' that were deleted in Zoho.\n\nRuns in batches (oldest-checked first) — click again to sweep more of the CRM.');
-                if (typeof loadCrossModule === 'function') loadCrossModule();
+                if (!j.success) { rrToast('Reconcile failed: ' + (j.error || 'unknown')); return; }
+                rrToast('🧹 Full deletion reconcile started in the background.\n\nIt checks every record against live Zoho and prunes ALL deleted ones. This takes a few minutes — the tabs clear as it finishes. Click Refresh shortly.');
             } catch (e) {
-                rrToast('Verify failed: ' + (e && e.message || e));
+                rrToast('Reconcile failed: ' + (e && e.message || e));
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }

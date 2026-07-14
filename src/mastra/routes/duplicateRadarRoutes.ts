@@ -945,10 +945,12 @@ async function runDeletionDetection(
         continue;
       }
       const ids = deleted.map((d) => d.id).filter(Boolean);
-      const { removedCount, affectedClusterIds } = await removeRecordsByZohoIds(
-        ids,
-        { module: m.name },
-      );
+      // Remove by zoho_record_id ALONE (no module filter): Zoho ids are globally
+      // unique, and the /deleted feed already scoped these to this module — but
+      // the module filter silently MISSED ghost rows whose zoho_module column is
+      // NULL (legacy rows) or mismatched, leaving them lingering. (Sarah 2026-07-15)
+      const { removedCount, affectedClusterIds } =
+        await removeRecordsByZohoIds(ids);
       affectedClusterIds.forEach((id) => clustersUpdated.add(id));
       perModule[m.name] = removedCount;
       totalRemoved += removedCount;
@@ -11976,6 +11978,45 @@ export const duplicateRadarRoutes = [
         return c.json({ success: true, ...r });
       } catch (e: any) {
         logger.error("reconcile-deleted failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    // Admin-gated: DEFINITIVE deletion reconcile (Sarah 2026-07-15). Diffs the
+    // WHOLE mirror against Zoho's live id set and prunes every record no longer
+    // in Zoho — catches HARD-deleted / long-ago / null-module ghosts the /deleted
+    // feed and the rotating verify miss. Fetches all ids per module, so it runs
+    // as a fire-and-forget BACKGROUND job (returns immediately; watch the logs
+    // for [id-set-reconcile]). Safety-capped (won't mass-prune on a partial fetch).
+    // POST /api/duplicates/reconcile-deleted-full
+    path: "/api/duplicates/reconcile-deleted-full",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const { reconcileAllDeletedByIdSet } = await import(
+          "../../utils/emptyRecordsDatabase"
+        );
+        // Fire-and-forget — the full id fetch takes minutes; don't hold the request.
+        void reconcileAllDeletedByIdSet()
+          .then((res) =>
+            logger.info("[reconcile-deleted-full] complete", res),
+          )
+          .catch((e) =>
+            logger.error("[reconcile-deleted-full] failed", e),
+          );
+        return c.json({
+          success: true,
+          started: true,
+          message:
+            "Full deletion reconcile started in the background — it checks every record against live Zoho and prunes all deleted ones. This takes a few minutes; the tabs clear as it finishes.",
+        });
+      } catch (e: any) {
+        logger.error("reconcile-deleted-full failed", e);
         return c.json({ error: "An internal error occurred" }, 500);
       }
     },
