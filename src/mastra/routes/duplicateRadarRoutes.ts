@@ -12174,7 +12174,13 @@ export const duplicateRadarRoutes = [
         return c.json({ success: true, ...r });
       } catch (e: any) {
         logger.error("empty-records/ai-apply failed", e);
-        return c.json({ error: "An internal error occurred" }, 500);
+        // Admin-gated debug tool: surface the REAL error so the operator can see
+        // WHAT failed (Sarah 2026-07-15 — the opaque "internal error" was
+        // undiagnosable). Zoho rate-limit/timeout during an active sync is the
+        // usual cause; the message makes that visible instead of hiding it.
+        const detail =
+          e instanceof Error ? e.message : String(e || "unknown error");
+        return c.json({ error: detail.slice(0, 400) }, 500);
       }
     },
   },
@@ -12210,7 +12216,9 @@ export const duplicateRadarRoutes = [
         return c.json({ success: true, ...r });
       } catch (e: any) {
         logger.error("empty-records/verify-page failed", e);
-        return c.json({ error: "An internal error occurred" }, 500);
+        const detail =
+          e instanceof Error ? e.message : String(e || "unknown error");
+        return c.json({ error: detail.slice(0, 400) }, 500);
       }
     },
   },
