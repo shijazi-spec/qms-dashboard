@@ -197,9 +197,10 @@ export function buildSegmentPredicate(
     };
   }
   if (segment === "walaone") {
-    // WalaOne product — its own Zoho layout. No bind params (literal compare).
+    // WalaOne product — layout CONTAINS "walaone" (substring, so "WalaOne",
+    // "Wala One", "WalaOne Corporate" all match). No bind params (literal).
     return {
-      condition: `${NORM} = 'walaone'`,
+      condition: `${NORM} LIKE '%walaone%'`,
       params: [],
       needsRecordJoin: true,
     };
@@ -207,10 +208,53 @@ export function buildSegmentPredicate(
   // "walaplus" (renamed "corporate") + legacy "corporate" = NOT marketplace AND
   // NOT WalaOne. NULL/empty layout defaults here so legacy records aren't lost.
   return {
-    condition: `NOT (${mktMatch(paramOffset)}) AND ${NORM} <> 'walaone'`,
+    condition: `NOT (${mktMatch(paramOffset)}) AND ${NORM} NOT LIKE '%walaone%'`,
     params: markers,
     needsRecordJoin: true,
   };
+}
+
+/**
+ * The JS mirror of `buildSegmentPredicate`'s layout semantics, for filtering an
+ * already-fetched array of records (e.g. the cluster preview modal) by segment
+ * WITHOUT another query. Reads the record's layout from `layout_name` with the
+ * same raw_data Layout fallback, normalizes it (lowercase, alphanumeric-only),
+ * and classifies: contains "marketplace"/"partneraccounts" → marketplace;
+ * contains "walaone" → walaone; else → walaplus (the corporate default, incl.
+ * blank layout). Keep in lockstep with buildSegmentPredicate.
+ */
+export function readRecordLayout(rec: any): string {
+  const r = rec || {};
+  const raw = (r.raw_data as any) || {};
+  const col = r.layout_name != null ? String(r.layout_name).trim() : "";
+  if (col) return col;
+  if (raw.Layout && typeof raw.Layout === "object" && raw.Layout.name)
+    return String(raw.Layout.name);
+  if (raw.$layout && typeof raw.$layout === "object" && raw.$layout.name)
+    return String(raw.$layout.name);
+  if (typeof raw.Layout === "string") return raw.Layout;
+  return "";
+}
+export function classifyLayoutSegment(
+  layoutRaw: string | null | undefined,
+): "marketplace" | "walaone" | "walaplus" {
+  const norm = String(layoutRaw ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  if (norm.includes("marketplace") || norm.includes("partneraccounts"))
+    return "marketplace";
+  if (norm.includes("walaone")) return "walaone";
+  return "walaplus";
+}
+export function recordMatchesSegment(
+  rec: any,
+  segment: string | null | undefined,
+): boolean {
+  if (!segment || segment === "all") return true;
+  const seg = classifyLayoutSegment(readRecordLayout(rec));
+  // "corporate" is the legacy alias for "walaplus".
+  if (segment === "corporate") return seg === "walaplus";
+  return seg === segment;
 }
 
 export interface MergeAction {
@@ -1858,10 +1902,10 @@ function buildClusterFilterClause(
     if (filters.segment === "marketplace") {
       cond = MKT;
     } else if (filters.segment === "walaone") {
-      cond = `${NORM} = 'walaone'`;
+      cond = `${NORM} LIKE '%walaone%'`;
     } else {
       // walaplus / corporate = NOT marketplace AND NOT walaone.
-      cond = `NOT ${MKT} AND ${NORM} <> 'walaone'`;
+      cond = `NOT ${MKT} AND ${NORM} NOT LIKE '%walaone%'`;
     }
     clause += ` AND EXISTS (
       SELECT 1 FROM duplicate_records dr
@@ -9278,13 +9322,13 @@ export async function getCrossModuleOverlaps(opts: {
       return n.includes("marketplace") || n.includes("partneraccounts");
     };
     const isMkt = layouts.some(_isMktLayout);
-    const isW1 = layouts.some((v) => _segNorm(v) === "walaone");
+    const isW1 = layouts.some((v) => _segNorm(v).includes("walaone"));
     if (seg === "marketplace") return isMkt;
     if (seg === "walaone") return isW1;
     // walaplus / corporate: a corporate record present, or no layout at all.
     return (
       layouts.length === 0 ||
-      layouts.some((v) => !_isMktLayout(v) && _segNorm(v) !== "walaone")
+      layouts.some((v) => !_isMktLayout(v) && !_segNorm(v).includes("walaone"))
     );
   };
 

@@ -3956,6 +3956,24 @@ export const duplicateRadarRoutes = [
               );
             }
           }
+          // Segment scoping of the PREVIEW (Sarah 2026-07-15): when the operator
+          // is working a specific segment (WalaPlus / Marketplace / WalaOne) and
+          // opens a cluster, the preview must show ONLY that segment's records —
+          // "when I check the segment I separate the data I need to check". `all`
+          // shows everything. Same layout semantics as buildSegmentPredicate.
+          const rawSeg = (new URL(c.req.url).searchParams.get("segment") || "").trim();
+          if (rawSeg && rawSeg !== "all") {
+            const { recordMatchesSegment } = await import(
+              "../../utils/duplicateRadarDatabase"
+            );
+            const filtered = records.filter((r: any) =>
+              recordMatchesSegment(r, rawSeg),
+            );
+            // Only apply if it leaves something — a cluster opened from a
+            // segment-filtered tab always has ≥1 record in that segment, but
+            // guard against an empty preview if the layout data is sparse.
+            if (filtered.length > 0) records = filtered;
+          }
           const recommendations = generateSmartRecommendations(records);
           const meta = getClusterRecordTypeMeta(records);
           // Surface "mixed signal" — a cluster containing 2+ distinct
@@ -3972,6 +3990,7 @@ export const duplicateRadarRoutes = [
             is_cross_module: meta.is_cross_module,
             record_types: meta.record_types,
             mixed_signal: mixed,
+            segment_applied: rawSeg && rawSeg !== "all" ? rawSeg : null,
           });
         } catch (error: any) {
           logger.error("Error fetching cluster:", error);

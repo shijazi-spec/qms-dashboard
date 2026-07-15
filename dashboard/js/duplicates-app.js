@@ -3885,7 +3885,13 @@
                 // ?verify=1 → the server live-checks this cluster's records against
                 // Zoho and prunes any already deleted BEFORE returning, so the
                 // preview never shows a ghost record (Sarah 2026-07-15, ARGAS).
-                res = await fetch(`/api/duplicates/clusters/${id}?verify=1`);
+                // &segment=<seg> → the preview shows ONLY the active segment's
+                // records (WalaPlus / Marketplace / WalaOne); "all" shows every
+                // record. So opening a cluster from a segment-filtered tab keeps
+                // the same slice you were reviewing (Sarah 2026-07-15).
+                const _seg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+                const _segQ = (_seg && _seg !== 'all') ? ('&segment=' + encodeURIComponent(_seg)) : '';
+                res = await fetch(`/api/duplicates/clusters/${id}?verify=1${_segQ}`);
             } catch (e) {
                 document.getElementById('modalContent').innerHTML =
                     `<div class="text-center py-8 text-red-600 text-sm">Failed to reach server: ${escapeHtml(String(e && e.message || e))}</div>`;
