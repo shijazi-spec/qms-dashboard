@@ -8906,6 +8906,9 @@
             const badge = document.getElementById('staleDealsBadge');
             const btn = document.getElementById('staleDealsScanBtn');
             if (!body) return;
+            // Mark §4 as opened so a later segment flip re-runs it (only sections
+            // the operator has actually loaded get auto-refreshed).
+            window._staleDealsLoaded = true;
             const orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = '🔍 Scanning…'; }
             body.innerHTML = rrSkeletonRows(4);
@@ -13642,8 +13645,16 @@
                 return;
             }
             if (activeTab === 'account-hints') {
-                if (window._accountHintsData) renderAccountHints(window._accountHintsData);
-                else await loadAccountHints();
+                // Re-run EVERY Record Hint section so a segment flip re-filters
+                // all of them (Sarah 2026-07-15): §1 Deal→Account, §2
+                // Contact→Account, §3 Deal↔Contact, and §4 Unaccounted deals.
+                // Each loader reads #filterSegment. §4 only re-runs if the
+                // operator has opened it at least once (nothing to "re-run"
+                // otherwise). §1's cache was cleared in setSegment so it re-fetches.
+                await loadAccountHints();
+                renderRecordHintsSection('contact_account', 'recordHintsContactAccountBody');
+                renderRecordHintsSection('deal_contact', 'recordHintsDealContactBody');
+                if (window._staleDealsLoaded && typeof loadStaleDeals === 'function') loadStaleDeals();
                 return;
             }
             if (activeTab === 'merge-candidates') {
