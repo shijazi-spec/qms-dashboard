@@ -360,8 +360,12 @@
                     </svg>
                     Sync Now
                 </button>
+                <button data-on-click="verifyPruneDeletedGlobal" id="globalPruneDeletedBtn" data-testid="button-global-prune-deleted" title="Clean deleted data on EVERY tab. Incremental sync doesn't report deletions, so records removed/merged/converted in Zoho can linger in the mirror (clusters, record hints, lists). This live-checks the visible open clusters against Zoho right now AND launches the platform-wide id-set reconcile in the background (a few minutes) that prunes ALL deleted records everywhere. The platform never deletes anything in Zoho — it only drops its own copy of records already gone. Safety-capped. Requires admin key." class="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-medium flex items-center gap-2">
+                    🧹 Verify &amp; prune deleted
+                </button>
             </div>
         </div>
+        <div id="globalPruneResult" class="text-xs text-gray-600 mb-3 min-h-[1rem]"></div>
 
         <div class="flex gap-2 mb-4 flex-wrap">
             <button data-on-click="showTab" data-args="[&quot;summary&quot;]" id="tab-summary" data-testid="tab-summary" class="tab-active px-4 py-2 rounded-lg font-medium text-sm">Executive Summary</button>
@@ -2266,7 +2270,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=118"></script>
+    <script src="/js/duplicates-app.js?v=119"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

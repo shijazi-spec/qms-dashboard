@@ -352,6 +352,44 @@
             }
         }
 
+        // GLOBAL "🧹 Verify & prune deleted" (Sarah 2026-07-15): the same
+        // definitive clean as the Cross-Module button, but available on EVERY
+        // tab from the persistent header. Deleted/merged/converted records that
+        // incremental sync can't report linger in the mirror and surface in any
+        // tab (clusters, record hints, the record lists). This does an IMMEDIATE
+        // pass over ALL open/visible clusters (observable pruned count) AND
+        // launches the platform-wide id-set reconcile in the background, then
+        // refreshes whatever tab is active so pruned rows disappear now. The
+        // platform never deletes in Zoho — it only drops its own copy of records
+        // already gone.
+        async function verifyPruneDeletedGlobal() {
+            const btn = document.getElementById('globalPruneDeletedBtn');
+            const out = document.getElementById('globalPruneResult');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '🧹 Verifying…'; }
+            if (out) out.textContent = 'Live-checking open clusters against Zoho…';
+            try {
+                // 1) Immediate pass over EVERY open/visible cluster (all modules).
+                const j = await erAdminPost('/api/duplicates/reconcile-deleted', { activeClustersOnly: true, limit: 500 });
+                if (!j) { if (out) out.textContent = 'Cancelled.'; return; }
+                if (!j.success) { if (out) out.textContent = 'Verify failed: ' + (j.error || 'unknown'); rrToast('Verify failed: ' + (j.error || 'unknown')); return; }
+                // 2) Definitive platform-wide reconcile in the background.
+                erAdminPost('/api/duplicates/reconcile-deleted-full', {}).catch(function () {});
+                const msg = '🧹 Checked ' + (j.checked || 0) + ' record(s) across open clusters — pruned ' + (j.pruned || 0) + ' deleted'
+                    + (j.converted ? ' + ' + j.converted + ' converted lead(s)' : '') + '. '
+                    + 'A full background reconcile (ALL tabs/modules) is also running — this view refreshes now and will keep clearing over the next few minutes.';
+                if (out) out.textContent = msg;
+                rrToast(msg);
+                // 3) Refresh the active tab so pruned rows drop immediately.
+                if (typeof refreshData === 'function') { try { await refreshData(); } catch (_) {} }
+            } catch (e) {
+                if (out) out.textContent = 'Verify failed: ' + (e && e.message || e);
+                rrToast('Verify failed: ' + (e && e.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
         // Mark a cross-module overlap as HANDLED. This is MODULE-SCOPED (bug
         // #4 fix): it only acknowledges the cross-module relationship (e.g.
         // Lead<->Account) — it does NOT resolve the whole cluster, so a

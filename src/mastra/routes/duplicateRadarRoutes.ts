@@ -12062,8 +12062,19 @@ export const duplicateRadarRoutes = [
         const clusterIds = Array.isArray(body?.clusterIds)
           ? body.clusterIds.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n))
           : undefined;
+        // activeClustersOnly (Sarah 2026-07-15): the global "Verify & prune
+        // deleted" button (available on every tab) has no single cluster in
+        // view, so it asks for an immediate pass over ALL open/visible clusters
+        // — prunes the ghosts users actually see now, while the background
+        // full id-set reconcile handles the long tail.
+        const activeClustersOnly = body?.activeClustersOnly === true;
         const { reconcileDeletedRecords } = await import("../../utils/emptyRecordsDatabase");
-        const r = await reconcileDeletedRecords({ module, limit, clusterIds });
+        const r = await reconcileDeletedRecords({
+          module,
+          limit,
+          clusterIds,
+          activeClustersOnly,
+        });
         return c.json({ success: true, ...r });
       } catch (e: any) {
         logger.error("reconcile-deleted failed", e);
