@@ -7925,11 +7925,24 @@
             const pageRows = rows.slice(cur * ER_PAGE_SIZE, cur * ER_PAGE_SIZE + ER_PAGE_SIZE);
             const ids = pageRows.map(function (r) { return String(r.zohoId); });
             if (!ids.length) return;
-            const result = document.getElementById('erBulkResult');
-            if (result) result.textContent = 'Verifying ' + ids.length + ' ' + module + ' against Zoho… (live deals/contacts check)';
-            const j = await erAdminPost('/api/duplicates/empty-records/verify-page', { module: module, zohoIds: ids });
-            if (!j) { if (result) result.textContent = 'Cancelled.'; return; }
-            if (!j.success) { if (result) result.textContent = 'Error: ' + (j.error || 'failed'); return; }
+            // Write status to the ALWAYS-VISIBLE per-section progress span next to
+            // the button — NOT #erBulkResult, which lives inside #erBulkBar and is
+            // hidden until rows are selected (Sarah 2026-07-15: the button looked
+            // "not working" because its feedback went to a hidden element). Fall
+            // back to erBulkResult only if the section span is missing.
+            const result = document.getElementById('erAiProgress-' + kind)
+                || document.getElementById('erBulkResult');
+            const setStatus = function (t) { if (result) result.textContent = t; };
+            setStatus('Verifying ' + ids.length + ' ' + module + ' against Zoho… (live check — may pause while a sync is running)');
+            let j;
+            try {
+                j = await erAdminPost('/api/duplicates/empty-records/verify-page', { module: module, zohoIds: ids });
+            } catch (e) {
+                setStatus('Error: ' + String(e && e.message || e) + ' — if a sync is running, try again once it finishes.');
+                return;
+            }
+            if (!j) { setStatus('Cancelled.'); return; }
+            if (!j.success) { setStatus('Error: ' + (j.error || 'failed') + (/* sync hint */ ' (a running sync can block live checks — retry after it completes)')); return; }
             // Confirmed-empty accounts → enable their checkbox (delete-eligible).
             if (kind === 'accounts') {
                 (j.empty || []).forEach(function (id) {
@@ -7947,7 +7960,7 @@
             let msg = '✓ Verified ' + ids.length + ': ' + (j.empty || []).length + ' confirmed empty · ' + (j.keep || []).length + ' had deals/contacts (removed)';
             if ((j.ghosts || []).length) msg += ' · ' + j.ghosts.length + ' already deleted (pruned)';
             if ((j.tagged || []).length) msg += ' · ' + j.tagged.length + ' already tagged → moved to "Tagged · pending delete"';
-            if (result) result.textContent = msg;
+            setStatus(msg);
             // Already-tagged records were recorded in the ledger server-side; refresh
             // the Tagged · pending delete section so they show up there now.
             if ((j.tagged || []).length) erLoadTaggedStatus();
