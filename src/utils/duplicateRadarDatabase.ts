@@ -138,8 +138,10 @@ export interface DuplicateFilters {
   /**
    * Marketplace / Corporate segmentation. UI exposes this as a 3-way chip
    * + matching dropdown in Advanced Filters. Server maps it to layout_name:
-   *   "marketplace" → LOWER(layout_name) IN ('marketplace','partner accounts')
-   *   "corporate"   → NOT IN that set (incl. NULL/empty = treat as corporate)
+   *   "marketplace" → layout CONTAINS 'marketplace' or 'partner account'
+   *                    (e.g. "Doam Marketplace"), read from layout_name with a
+   *                    raw_data Layout fallback
+   *   "corporate"   → NOT marketplace (incl. NULL/empty = treat as corporate)
    *   "all" / undef → no constraint (current behavior)
    * Both segments stay actionable inside the radar — this is for comparison,
    * not for hiding records.
@@ -167,7 +169,13 @@ export function buildSegmentPredicate(
   if (!segment || segment === "all") {
     return { condition: null, params: [], needsRecordJoin: false };
   }
-  const markers = ["marketplace", "partner accounts"];
+  // Marketplace layouts are matched by SUBSTRING, not exact name (Sarah
+  // 2026-07-15): the real Zoho layouts are "Doam Marketplace", "Marketplace",
+  // "Partner Accounts", etc. — an exact `IN ('marketplace','partner accounts')`
+  // let "Doam Marketplace" fall through into WalaPlus. Match any layout that
+  // CONTAINS "marketplace" (normalized) or "partneraccounts". Patterns compare
+  // against NORM (below), which is already lowercased + alphanumeric-only.
+  const markers = ["%marketplace%", "%partneraccounts%"];
   // Layout source (Sarah 2026-07-14): a Marketplace-layout deal was leaking into
   // the WalaPlus segment because its `layout_name` COLUMN was blank — and blank
   // layouts default into WalaPlus. Fall back to the synced raw_data Layout (Zoho
@@ -177,14 +185,13 @@ export function buildSegmentPredicate(
   const LAYOUT =
     "LOWER(COALESCE(NULLIF(r.layout_name,''), r.raw_data#>>'{Layout,name}', r.raw_data#>>'{$layout,name}', r.raw_data->>'Layout', ''))";
   // Normalized layout (non-alphanumeric stripped) so "WalaOne" / "Wala One" /
-  // "wala-one" all match 'walaone'. WalaPlus = Corporate that is NOT WalaOne.
+  // "wala-one" all match 'walaone' and "Doam Marketplace" matches '%marketplace%'.
   const NORM = `regexp_replace(${LAYOUT}, '[^a-z0-9]', '', 'g')`;
+  const mktMatch = (offset: number) =>
+    markers.map((_, i) => `${NORM} LIKE $${offset + i}`).join(" OR ");
   if (segment === "marketplace") {
-    const placeholders = markers
-      .map((_, i) => `$${paramOffset + i}`)
-      .join(",");
     return {
-      condition: `${LAYOUT} IN (${placeholders})`,
+      condition: `(${mktMatch(paramOffset)})`,
       params: markers,
       needsRecordJoin: true,
     };
@@ -199,11 +206,8 @@ export function buildSegmentPredicate(
   }
   // "walaplus" (renamed "corporate") + legacy "corporate" = NOT marketplace AND
   // NOT WalaOne. NULL/empty layout defaults here so legacy records aren't lost.
-  const placeholders = markers
-    .map((_, i) => `$${paramOffset + i}`)
-    .join(",");
   return {
-    condition: `${LAYOUT} NOT IN (${placeholders}) AND ${NORM} <> 'walaone'`,
+    condition: `NOT (${mktMatch(paramOffset)}) AND ${NORM} <> 'walaone'`,
     params: markers,
     needsRecordJoin: true,
   };
@@ -1842,17 +1846,22 @@ function buildClusterFilterClause(
   // buildSegmentPredicate's layout semantics, inlined with the dr alias (all
   // literal, no bind params) so it composes with the EXISTS filters above.
   if (filters?.segment && filters.segment !== "all") {
-    const LAYOUT = "LOWER(COALESCE(dr.layout_name,''))";
-    const NORM =
-      "regexp_replace(LOWER(COALESCE(dr.layout_name,'')), '[^a-z0-9]', '', 'g')";
+    // Same layout source + substring marketplace match as buildSegmentPredicate
+    // (Sarah 2026-07-15): fall back to raw_data Layout when the column is blank,
+    // and treat any layout CONTAINING "marketplace" (e.g. "Doam Marketplace") as
+    // marketplace — not just the exact 'marketplace' name.
+    const LAYOUT =
+      "LOWER(COALESCE(NULLIF(dr.layout_name,''), dr.raw_data#>>'{Layout,name}', dr.raw_data#>>'{$layout,name}', dr.raw_data->>'Layout', ''))";
+    const NORM = `regexp_replace(${LAYOUT}, '[^a-z0-9]', '', 'g')`;
+    const MKT = `(${NORM} LIKE '%marketplace%' OR ${NORM} LIKE '%partneraccounts%')`;
     let cond: string;
     if (filters.segment === "marketplace") {
-      cond = `${LAYOUT} IN ('marketplace','partner accounts')`;
+      cond = MKT;
     } else if (filters.segment === "walaone") {
       cond = `${NORM} = 'walaone'`;
     } else {
       // walaplus / corporate = NOT marketplace AND NOT walaone.
-      cond = `${LAYOUT} NOT IN ('marketplace','partner accounts') AND ${NORM} <> 'walaone'`;
+      cond = `NOT ${MKT} AND ${NORM} <> 'walaone'`;
     }
     clause += ` AND EXISTS (
       SELECT 1 FROM duplicate_records dr
@@ -2458,7 +2467,8 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
         AND phone_normalized IS NOT NULL
         AND length(phone_normalized) >= 7
         AND phone_normalized !~ '^(.)\\1+$'
-        AND LOWER(COALESCE(layout_name, '')) NOT IN ('marketplace', 'partner accounts')`,
+        AND LOWER(COALESCE(layout_name, '')) NOT LIKE '%marketplace%'
+        AND LOWER(COALESCE(layout_name, '')) NOT LIKE '%partner account%'`,
   );
 
   // Skip contacts already merged away (tagged Duplicate-Delete, pending admin
@@ -2872,7 +2882,8 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
           (phone_normalized IS NOT NULL AND length(phone_normalized) >= 7)
           OR (mobile_normalized IS NOT NULL AND length(mobile_normalized) >= 7)
         )
-        AND LOWER(COALESCE(layout_name, '')) NOT IN ('marketplace', 'partner accounts')`,
+        AND LOWER(COALESCE(layout_name, '')) NOT LIKE '%marketplace%'
+        AND LOWER(COALESCE(layout_name, '')) NOT LIKE '%partner account%'`,
   );
 
   // Skip contacts already merged away (pending admin delete) so the batched
@@ -9259,24 +9270,21 @@ export async function getCrossModuleOverlaps(opts: {
     const seg = opts.segment;
     if (!seg || seg === "all") return true;
     const layouts: string[] = Array.isArray(c.layouts) ? c.layouts : [];
-    const isMkt = layouts.some((v) => {
-      const lo = String(v ?? "").toLowerCase().trim();
-      return lo === "marketplace" || lo === "partner accounts";
-    });
+    // Marketplace = layout CONTAINS "marketplace" (e.g. "Doam Marketplace") or
+    // "partneraccounts" — substring, not exact (Sarah 2026-07-15). Mirrors the
+    // SQL buildSegmentPredicate so this JS path segments identically.
+    const _isMktLayout = (v: any) => {
+      const n = _segNorm(v);
+      return n.includes("marketplace") || n.includes("partneraccounts");
+    };
+    const isMkt = layouts.some(_isMktLayout);
     const isW1 = layouts.some((v) => _segNorm(v) === "walaone");
     if (seg === "marketplace") return isMkt;
     if (seg === "walaone") return isW1;
     // walaplus / corporate: a corporate record present, or no layout at all.
     return (
       layouts.length === 0 ||
-      layouts.some((v) => {
-        const lo = String(v ?? "").toLowerCase().trim();
-        return (
-          lo !== "marketplace" &&
-          lo !== "partner accounts" &&
-          _segNorm(v) !== "walaone"
-        );
-      })
+      layouts.some((v) => !_isMktLayout(v) && _segNorm(v) !== "walaone")
     );
   };
 
