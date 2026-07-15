@@ -7470,6 +7470,9 @@
             body.innerHTML = rrSkeletonRows(7);
             var stages = _dcSelectedStages();
             var url = '/api/duplicates/deal-compliance' + (stages.length ? ('?stages=' + encodeURIComponent(stages.join(','))) : '');
+            // Segment chip (Marketplace / WalaPlus / WalaOne) — filter deals by Layout.
+            var _dcSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+            if (_dcSeg && _dcSeg !== 'all') url += (url.indexOf('?') >= 0 ? '&' : '?') + 'segment=' + encodeURIComponent(_dcSeg);
             var data;
             try {
                 var res = await fetch(url, { credentials: 'same-origin' });
@@ -8545,7 +8548,9 @@
             const MAX_RETRIES = 5;
             for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
                 try {
-                    const res = await fetch('/api/duplicates/account-hints?status=' + encodeURIComponent(status));
+                    const _ahSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+                    const _ahSegQ = (_ahSeg && _ahSeg !== 'all') ? ('&segment=' + encodeURIComponent(_ahSeg)) : '';
+                    const res = await fetch('/api/duplicates/account-hints?status=' + encodeURIComponent(status) + _ahSegQ);
                     if (loadId !== window._accountHintsLoadId) return; // superseded
                     if (res.status === 429 && attempt < MAX_RETRIES) {
                         // Honor Retry-After (seconds) when present, else back off
@@ -8905,7 +8910,9 @@
             if (btn) { btn.disabled = true; btn.innerHTML = '🔍 Scanning…'; }
             body.innerHTML = rrSkeletonRows(4);
             try {
-                const res = await fetch('/api/duplicates/record-hints/stale-deals', { credentials: 'same-origin' });
+                const _sdSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+                const _sdSegQ = (_sdSeg && _sdSeg !== 'all') ? ('?segment=' + encodeURIComponent(_sdSeg)) : '';
+                const res = await fetch('/api/duplicates/record-hints/stale-deals' + _sdSegQ, { credentials: 'same-origin' });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
                 const deals = data.deals || [];
@@ -9019,7 +9026,9 @@
             body.innerHTML = rrSkeletonRows(7);
             try {
                 const _rhSt = (window._rhStatus && window._rhStatus[type]) || 'pending';
-                const res = await fetch('/api/duplicates/record-hints?type=' + encodeURIComponent(type) + '&status=' + encodeURIComponent(_rhSt));
+                const _rhSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+                const _rhSegQ = (_rhSeg && _rhSeg !== 'all') ? ('&segment=' + encodeURIComponent(_rhSeg)) : '';
+                const res = await fetch('/api/duplicates/record-hints?type=' + encodeURIComponent(type) + '&status=' + encodeURIComponent(_rhSt) + _rhSegQ);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 window._recordHints[type] = data;
@@ -9341,7 +9350,10 @@
             const host = document.getElementById('cmcGroups');
             if (host) host.innerHTML = '<div class="text-center text-sm text-gray-500 py-8">Scanning duplicate_clusters for same-domain duplicates…</div>';
             try {
-                const res = await fetch('/api/duplicates/cluster-merge-candidates?limit=200', { credentials: 'same-origin' });
+                // Segment chip (Marketplace / WalaPlus / WalaOne) — server-side layout filter.
+                const _cmcSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+                const _cmcSegQ = (_cmcSeg && _cmcSeg !== 'all') ? ('&segment=' + encodeURIComponent(_cmcSeg)) : '';
+                const res = await fetch('/api/duplicates/cluster-merge-candidates?limit=200' + _cmcSegQ, { credentials: 'same-origin' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 _cmcData = data;
@@ -9547,6 +9559,9 @@
 
             let url = '/api/duplicates/cs-overlap/clusters?limit=500';
             if (window._csOverlapFilter !== 'all') url += '&verdict=' + encodeURIComponent(window._csOverlapFilter);
+            // Segment chip (Marketplace / WalaPlus / WalaOne) — server-side layout filter.
+            const _csoSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+            if (_csoSeg && _csoSeg !== 'all') url += '&segment=' + encodeURIComponent(_csoSeg);
             try {
                 const res = await fetch(url);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -13530,6 +13545,11 @@
             // 2026-07-13) — drop its cache so applyAdvancedFilters re-fetches
             // with the new segment instead of re-rendering the stale set.
             crossModuleClusters = [];
+            // Record Hint (§1 account hints) + Cluster Merge cache the last
+            // payload and re-render it; drop those so they re-fetch with the new
+            // segment instead of showing the stale slice (Sarah 2026-07-15).
+            window._accountHintsData = null;
+            window._cmcData = null;
             // Domain Clusters reads the segment server-side via loadClusters —
             // it re-fetches on every call, so no cache to clear there.
             _filterSetInputValue('filterSegment', newSeg);
@@ -13624,6 +13644,10 @@
             if (activeTab === 'account-hints') {
                 if (window._accountHintsData) renderAccountHints(window._accountHintsData);
                 else await loadAccountHints();
+                return;
+            }
+            if (activeTab === 'merge-candidates') {
+                await loadClusterMergeCandidates(); // reads the segment server-side
                 return;
             }
             if (activeTab === 'owners') {

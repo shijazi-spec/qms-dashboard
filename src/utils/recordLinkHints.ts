@@ -408,6 +408,7 @@ export async function listRecordLinkHints(opts: {
   type?: RecordLinkHintType;
   status?: string;
   limit?: number;
+  segment?: string;
 }): Promise<{
   hints: RecordLinkHintRow[];
   summary: { pending: number; dismissed: number; applied: number };
@@ -423,6 +424,18 @@ export async function listRecordLinkHints(opts: {
   if (linkField) {
     params.push(linkField);
     linkFieldClause = `AND h.link_field = $${params.length}`;
+  }
+  // Segment chip (Sarah 2026-07-15): filter hints to the SOURCE record's Zoho
+  // Layout (aliased `s`), same predicate as every tab (buildSegmentPredicate
+  // emits an `r.` alias — swap it to `s.`).
+  let segClause = "";
+  if (opts.segment && opts.segment !== "all") {
+    const { buildSegmentPredicate } = await import("./duplicateRadarDatabase");
+    const seg = buildSegmentPredicate(opts.segment as any, params.length + 1);
+    if (seg.condition) {
+      segClause = ` AND ${seg.condition.replace(/\br\./g, "s.")}`;
+      params.push(...seg.params);
+    }
   }
   params.push(limit);
   const limitParam = `$${params.length}`;
@@ -460,7 +473,7 @@ export async function listRecordLinkHints(opts: {
             SELECT 1 FROM duplicate_records t
              WHERE t.id = h.suggested_target_record_id
           )
-        )
+        )${segClause}
       ORDER BY h.confidence DESC, h.updated_at DESC
       LIMIT ${limitParam}`,
     params,

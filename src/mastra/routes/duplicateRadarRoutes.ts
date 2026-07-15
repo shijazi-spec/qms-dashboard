@@ -3534,9 +3534,27 @@ export const duplicateRadarRoutes = [
             new Set(allDeals.map((r: any) => (r.data?.Stage || "").trim()).filter(Boolean)),
           ).sort();
 
-          const deals = allDeals.filter((r: any) =>
+          let deals = allDeals.filter((r: any) =>
             wantedLower.has(String(r.data?.Stage || "").trim().toLowerCase()),
           );
+          // Segment chip (Sarah 2026-07-15): filter the live Zoho deals to the
+          // chosen product by their Layout — Zoho returns Layout as {id,name}.
+          // Same classification as buildSegmentPredicate (substring, corporate=walaplus).
+          const dcSegment = (c.req.query("segment") || "").trim();
+          if (dcSegment && dcSegment !== "all") {
+            const { classifyLayoutSegment } = await import(
+              "../../utils/duplicateRadarDatabase"
+            );
+            const want = dcSegment === "corporate" ? "walaplus" : dcSegment;
+            deals = deals.filter((r: any) => {
+              const d = r.data || {};
+              const layout =
+                (d.Layout && (d.Layout.name || (typeof d.Layout === "string" ? d.Layout : ""))) ||
+                (d.$layout && d.$layout.name) ||
+                "";
+              return classifyLayoutSegment(String(layout)) === want;
+            });
+          }
           const rows = deals.map((rec: any) => {
             const d = rec.data || {};
             const stage = d.Stage || "";
@@ -7156,6 +7174,28 @@ export const duplicateRadarRoutes = [
             params.push(verdict);
             conds.push(`cs_overlap_verdict = $${params.length}`);
           }
+          // Segment chip (Sarah 2026-07-15): restrict to clusters holding ≥1
+          // record on the chosen Zoho Layout, same predicate as every other tab.
+          const csoSegment = url.searchParams.get("segment") || undefined;
+          const { buildSegmentPredicate: _bspCso } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          let csoSumSegSql = "";
+          const csoSumSegParams: any[] = [];
+          if (csoSegment && csoSegment !== "all") {
+            const segMain = _bspCso(csoSegment as any, params.length + 1);
+            if (segMain.condition) {
+              conds.push(
+                `EXISTS (SELECT 1 FROM duplicate_records r WHERE r.cluster_id = duplicate_clusters.id AND ${segMain.condition})`,
+              );
+              params.push(...segMain.params);
+            }
+            const segSum = _bspCso(csoSegment as any, 1);
+            if (segSum.condition) {
+              csoSumSegSql = ` AND EXISTS (SELECT 1 FROM duplicate_records r WHERE r.cluster_id = duplicate_clusters.id AND ${segSum.condition})`;
+              csoSumSegParams.push(...segSum.params);
+            }
+          }
           const where = conds.join(" AND ");
 
           const sql = `SELECT id, domain, company_name, company_name_arabic,
@@ -7190,8 +7230,9 @@ export const duplicateRadarRoutes = [
                 AND EXISTS (
                   SELECT 1 FROM duplicate_records dr2
                    WHERE dr2.cluster_id = duplicate_clusters.id AND dr2.cleanup_class IS NULL
-                )
+                )${csoSumSegSql}
               GROUP BY cs_overlap_verdict`,
+            csoSumSegParams,
           );
           const summary: Record<string, { count: number; arr: number }> = {};
           let totalArr = 0;
@@ -8244,11 +8285,12 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const status = url.searchParams.get("status") || undefined;
           const limit = parseInt(url.searchParams.get("limit") || "500", 10);
+          const segment = url.searchParams.get("segment") || undefined;
 
           const { listAccountInferenceHints } = await import(
             "../../utils/accountInference"
           );
-          const result = await listAccountInferenceHints({ status, limit });
+          const result = await listAccountInferenceHints({ status, limit, segment });
           return c.json({ success: true, ...result });
         } catch (error: any) {
           logger.error("Error listing account-hints:", error);
@@ -8430,8 +8472,20 @@ export const duplicateRadarRoutes = [
         const user = await requireDuplicateRadarAccess(c);
         if (!user) return unauthorizedResponse(c);
         const limit = Number(c.req.query("limit")) || undefined;
+        const segment = c.req.query("segment") || undefined;
         const { scanStaleDeals } = await import("../../utils/recordLinkHints");
-        const deals = await scanStaleDeals({ limit });
+        let deals = await scanStaleDeals({ limit });
+        // Segment chip (Sarah 2026-07-15): filter to the deal's Zoho Layout —
+        // scanStaleDeals already returns `layout`. Same classification as tabs.
+        if (segment && segment !== "all") {
+          const { classifyLayoutSegment } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const want = segment === "corporate" ? "walaplus" : segment;
+          deals = deals.filter(
+            (d) => classifyLayoutSegment(String(d.layout || "")) === want,
+          );
+        }
         const summary = {
           total: deals.length,
           close: deals.filter(d => d.disposition === "close").length,
@@ -8511,11 +8565,12 @@ export const duplicateRadarRoutes = [
           const status = c.req.query("status") || undefined;
           const limitRaw = c.req.query("limit");
           const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+          const segment = c.req.query("segment") || undefined;
 
           const { listRecordLinkHints } = await import(
             "../../utils/recordLinkHints"
           );
-          const result = await listRecordLinkHints({ type, status, limit });
+          const result = await listRecordLinkHints({ type, status, limit, segment });
           return c.json({ success: true, ...result });
         } catch (error: any) {
           logger.error("Error listing record-hints:", error);
@@ -11629,10 +11684,14 @@ export const duplicateRadarRoutes = [
           if (!user) return unauthorizedResponse(c);
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get("limit") || "200", 10);
+          const cmSegment = url.searchParams.get("segment") || undefined;
           const { findSameDomainClusterDuplicates } = await import(
             "../../utils/duplicateRadarDatabase"
           );
-          const r = await findSameDomainClusterDuplicates({ limit });
+          const r = await findSameDomainClusterDuplicates({
+            limit,
+            segment: cmSegment as any,
+          });
           return c.json({ success: true, ...r });
         } catch (error: any) {
           logger.error("Error fetching cluster merge candidates:", error);

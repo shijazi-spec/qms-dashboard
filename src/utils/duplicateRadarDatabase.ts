@@ -4350,12 +4350,27 @@ export interface SameDomainClusterGroup {
  */
 export async function findSameDomainClusterDuplicates(opts: {
   limit?: number;
+  segment?: DuplicateFilters["segment"];
 } = {}): Promise<{
   total_groups: number;
   truncated: boolean;
   groups: SameDomainClusterGroup[];
 }> {
   const limit = Math.min(500, Math.max(1, opts.limit ?? 200));
+
+  // Segment chip (Sarah 2026-07-15): only surface domains that have ≥1 cluster
+  // holding a record on the chosen Zoho Layout — same predicate as every tab.
+  // $1 = limit+1, so segment bind params start at $2.
+  const cmParams: any[] = [limit + 1];
+  let cmSegExists = "";
+  const cmSeg = buildSegmentPredicate(opts.segment, 2);
+  if (cmSeg.condition) {
+    cmSegExists = `        AND EXISTS (
+          SELECT 1 FROM duplicate_records r
+           WHERE r.cluster_id = duplicate_clusters.id AND ${cmSeg.condition}
+        )\n`;
+    cmParams.push(...cmSeg.params);
+  }
 
   // PASS 1 — pick the offending domains. Hits the existing
   // idx_duplicate_clusters_domain btree so it's cheap even on 20k rows.
@@ -4379,11 +4394,11 @@ export async function findSameDomainClusterDuplicates(opts: {
           SELECT 1 FROM duplicate_records dr2
            WHERE dr2.cluster_id = duplicate_clusters.id AND dr2.cleanup_class IS NULL
         )
-      GROUP BY domain
+${cmSegExists}      GROUP BY domain
      HAVING COUNT(*) > 1
       ORDER BY SUM(total_records) DESC, domain ASC
       LIMIT $1`,
-    [limit + 1],
+    cmParams,
   );
 
   const truncated = groupsQ.rows.length > limit;

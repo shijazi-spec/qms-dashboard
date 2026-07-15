@@ -382,6 +382,7 @@ export interface HintRow {
 export async function listAccountInferenceHints(opts: {
   status?: string;
   limit?: number;
+  segment?: string;
 }): Promise<{
   hints: HintRow[];
   summary: { pending: number; dismissed: number; applied: number };
@@ -390,6 +391,22 @@ export async function listAccountInferenceHints(opts: {
   const status = opts.status && ["pending", "dismissed", "applied"].includes(opts.status)
     ? opts.status
     : "pending";
+  // Segment chip (Sarah 2026-07-15): filter hints to the source DEAL's Zoho
+  // Layout (aliased `d` here), same predicate as every tab. buildSegmentPredicate
+  // emits an `r.` alias — swap it to `d.`. $1=status, segment binds start at $2,
+  // LIMIT is the last placeholder.
+  const params: any[] = [status];
+  let segCond = "";
+  if (opts.segment && opts.segment !== "all") {
+    const { buildSegmentPredicate } = await import("./duplicateRadarDatabase");
+    const seg = buildSegmentPredicate(opts.segment as any, params.length + 1);
+    if (seg.condition) {
+      segCond = ` AND ${seg.condition.replace(/\br\./g, "d.")}`;
+      params.push(...seg.params);
+    }
+  }
+  params.push(limit);
+  const limitPh = `$${params.length}`;
   const rows = await pool.query(
     `SELECT h.id,
             h.deal_record_id,
@@ -417,10 +434,10 @@ export async function listAccountInferenceHints(opts: {
         -- KEEP 'orphaned' deals — Account Hints is their intended home for
         -- linking to the right Account. d may be NULL if the source deal
         -- record was since removed, so don't drop those rows here.
-        AND (d.cleanup_class IS NULL OR d.cleanup_class = 'orphaned')
+        AND (d.cleanup_class IS NULL OR d.cleanup_class = 'orphaned')${segCond}
       ORDER BY h.confidence DESC, h.updated_at DESC
-      LIMIT $2`,
-    [status, limit],
+      LIMIT ${limitPh}`,
+    params,
   );
   const summaryRes = await pool.query(
     `SELECT status, COUNT(*)::int AS n
