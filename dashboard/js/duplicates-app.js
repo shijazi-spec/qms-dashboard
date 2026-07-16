@@ -8980,11 +8980,16 @@
                     const aiBtn = suggested
                         ? '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;' + suggested + '&quot;]" title="AI-apply the suggested action (' + suggested + ') in Zoho." class="rr-btn rr-btn-icon" style="color:#7C3AED">🤖</button>'
                         : '';
+                    // Consistent action set (mirrors the Cross-Module row: a green
+                    // ✓ Resolved for "I handled it in Zoho" + a Dismiss for false
+                    // positives). 🤖 / Close / Re-engage WRITE to Zoho; ✓ Resolved
+                    // and ✗ Dismiss are radar-only (no Zoho change).
                     const actions = '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">'
                         + aiBtn
                         + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;close&quot;]" title="Close — set this deal\'s Stage to Closed Lost in Zoho." class="rr-btn rr-btn-ghost">Close</button>'
                         + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;reengage&quot;]" title="Re-engage — move this deal\'s Stage forward into the active pipeline in Zoho." class="rr-btn rr-btn-ghost">Re-engage</button>'
-                        + '<button data-on-click="dismissStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Dismiss — this is not a stale issue. Hides it from this list. No Zoho change." class="rr-btn rr-btn-ghost rr-btn-icon">✕</button>'
+                        + '<button data-on-click="resolveStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Resolved — I already fixed this deal MANUALLY in Zoho. Records it as resolved (not dismissed) and removes it from this list. No Zoho change." class="rr-btn rr-btn-primary">✓ Resolve</button>'
+                        + '<button data-on-click="dismissStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Dismiss — this is not a stale issue (false positive). Hides it from this list. No Zoho change." class="rr-btn rr-btn-ghost rr-btn-icon">✕</button>'
                         + '</div></div>';
                     return '<tr class="' + dispSev(d.disposition) + '" style="vertical-align:top">'
                         + '<td class="rr-lead rr-primary">' + dealLink + '</td>'
@@ -9032,6 +9037,21 @@
                 loadStaleDeals();
             } catch (e) {
                 rrToast('Dismiss failed: ' + (e && e.message || e));
+            }
+        }
+
+        // ✓ Resolved — the operator already fixed the deal MANUALLY in Zoho and
+        // wants it recorded as resolved (not dismissed). Radar-only; no Zoho write.
+        async function resolveStaleDeal(dealZohoId) {
+            if (!confirm('Mark this deal as Resolved?\n\nUse this when you have already handled it MANUALLY in Zoho (e.g. re-staged, linked, or closed it yourself). It is recorded as resolved and removed from this list. No Zoho change is made here.')) return;
+            try {
+                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/resolve', { dealZohoId: dealZohoId });
+                if (!j) return; // cancelled at the admin-key prompt
+                if (!j.success) { rrToast('Resolve failed: ' + (j.error || 'unknown')); return; }
+                rrToast('✓ Marked resolved.');
+                loadStaleDeals();
+            } catch (e) {
+                rrToast('Resolve failed: ' + (e && e.message || e));
             }
         }
 

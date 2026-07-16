@@ -1578,9 +1578,18 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     CREATE TABLE IF NOT EXISTS stale_deal_dismissals (
       deal_zoho_id VARCHAR(100) PRIMARY KEY,
       dismissed_by TEXT,
-      dismissed_at TIMESTAMPTZ DEFAULT NOW()
+      dismissed_at TIMESTAMPTZ DEFAULT NOW(),
+      -- 'dismissed' = operator judged it not a real stale issue (false positive);
+      -- 'resolved'  = operator already handled the deal MANUALLY in Zoho and wants
+      -- it recorded as resolved, not dismissed (Sarah 2026-07-16). Both drop the
+      -- deal off the Unaccounted list; the value is for audit/labelling.
+      disposition TEXT NOT NULL DEFAULT 'dismissed'
     )
   `);
+  // Schema-parity migration for tables that predate the disposition column.
+  await pool.query(
+    `ALTER TABLE stale_deal_dismissals ADD COLUMN IF NOT EXISTS disposition TEXT NOT NULL DEFAULT 'dismissed'`,
+  );
 
   // R2 (per-owner Remediation Packet): cover-sheet text the operator
   // hands to a data-quality owner. Single-row key/value table — keeps the

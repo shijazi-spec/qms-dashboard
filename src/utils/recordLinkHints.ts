@@ -757,22 +757,36 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
   });
 }
 
-/** Dismiss a stalled-deal suggestion (Sarah 2026-07-14: "wrong" button). Records
- * the deal id in stale_deal_dismissals so scanStaleDeals stops surfacing it. No
- * Zoho write — the deal is untouched; the operator just judged it not stale. */
+/** Drop a stalled-deal suggestion off the Unaccounted list with a disposition:
+ *   'dismissed' — not a real stale issue / false positive (Sarah 2026-07-14).
+ *   'resolved'  — the operator already handled the deal MANUALLY in Zoho and
+ *                 wants it recorded as resolved, not dismissed (Sarah 2026-07-16).
+ * Records the deal id in stale_deal_dismissals so scanStaleDeals stops surfacing
+ * it. No Zoho write — the deal is untouched; only the radar's own state changes. */
 export async function dismissStaleDeal(
   dealZohoId: string,
   by: string | null,
-): Promise<{ dismissed: boolean }> {
+  disposition: "dismissed" | "resolved" = "dismissed",
+): Promise<{ dismissed: boolean; disposition: string }> {
   const id = String(dealZohoId || "").trim();
-  if (!id) return { dismissed: false };
+  if (!id) return { dismissed: false, disposition };
+  const disp = disposition === "resolved" ? "resolved" : "dismissed";
   await pool.query(
-    `INSERT INTO stale_deal_dismissals (deal_zoho_id, dismissed_by, dismissed_at)
-       VALUES ($1, $2, CURRENT_TIMESTAMP)
-     ON CONFLICT (deal_zoho_id) DO UPDATE SET dismissed_by = EXCLUDED.dismissed_by, dismissed_at = CURRENT_TIMESTAMP`,
-    [id, by || null],
+    `INSERT INTO stale_deal_dismissals (deal_zoho_id, dismissed_by, dismissed_at, disposition)
+       VALUES ($1, $2, CURRENT_TIMESTAMP, $3)
+     ON CONFLICT (deal_zoho_id) DO UPDATE SET dismissed_by = EXCLUDED.dismissed_by, dismissed_at = CURRENT_TIMESTAMP, disposition = EXCLUDED.disposition`,
+    [id, by || null, disp],
   );
-  return { dismissed: true };
+  return { dismissed: true, disposition: disp };
+}
+
+/** Mark a stalled deal RESOLVED — the operator fixed it manually in Zoho.
+ * Thin wrapper over dismissStaleDeal with disposition='resolved'. */
+export async function resolveStaleDeal(
+  dealZohoId: string,
+  by: string | null,
+): Promise<{ dismissed: boolean; disposition: string }> {
+  return dismissStaleDeal(dealZohoId, by, "resolved");
 }
 
 const CLOSE_STAGE = process.env.RECORD_HINT_CLOSE_STAGE || "Closed Lost";

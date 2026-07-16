@@ -8551,6 +8551,30 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    //   POST /api/duplicates/record-hints/stale-deals/resolve { dealZohoId }
+    //   Operator ✓ "Resolved — I already handled this deal MANUALLY in Zoho".
+    //   Records it as resolved (not dismissed) and drops it off §4. No Zoho write.
+    path: "/api/duplicates/record-hints/stale-deals/resolve",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const dealZohoId = String(body?.dealZohoId ?? "").trim();
+        if (!dealZohoId) return c.json({ error: "dealZohoId required" }, 400);
+        const { resolveStaleDeal } = await import("../../utils/recordLinkHints");
+        const r = await resolveStaleDeal(dealZohoId, su.email || "admin");
+        return c.json({ success: r.dismissed, ...r });
+      } catch (e: any) {
+        logger.error("record-hints/stale-deals/resolve failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
     //   ?status=pending|dismissed|applied (default pending)
     //   ?limit=N (default 500, max 2000)
     path: "/api/duplicates/record-hints",
