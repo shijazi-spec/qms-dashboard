@@ -8928,6 +8928,69 @@
 
         // Record Hint section 4 — stalled/Unaccounted deals with a suggested
         // disposition. Read-only (suggestions only); apply is a later HITL step.
+        // §4 view switch: Open (needs a decision) vs the handled buckets
+        // (Closed / Re-engaged / Resolved / Dismissed) so the operator can review
+        // how many were closed / resolved (Sarah 2026-07-16).
+        function setStaleDealsView(view) {
+            window._staleDealsView = view || 'open';
+            loadStaleDeals();
+        }
+        // Paint the view-chip counts + active highlight.
+        function _sdRenderChipCounts(activeView, openCount, counts) {
+            const map = {
+                open: (activeView === 'open') ? openCount : null, // only known when Open is loaded
+                closed: counts.closed || 0,
+                reengaged: counts.reengaged || 0,
+                resolved: counts.resolved || 0,
+                dismissed: counts.dismissed || 0,
+            };
+            ['open', 'closed', 'reengaged', 'resolved', 'dismissed'].forEach(function (k) {
+                const chip = document.getElementById('sdView-' + k);
+                if (chip) chip.classList.toggle('rr-chip-active', k === activeView);
+                const cnt = document.getElementById('sdCount-' + k);
+                if (cnt) cnt.textContent = (map[k] == null) ? '' : ('(' + map[k] + ')');
+            });
+        }
+        // A row in a handled bucket — disposition badge + who/when + Reopen.
+        function _sdHandledRow(d) {
+            const dealZid = escapeHtml(String(d.dealZohoId));
+            const dealLink = '<a href="' + erZohoUrl('deals', d.dealZohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in Zoho CRM">' + escapeHtml(d.dealName) + ' <span class="text-xs">↗</span></a>';
+            const acctCell = d.accountName ? escapeHtml(d.accountName) : '<span class="text-gray-400">— none —</span>';
+            const ownerCell = d.ownerName ? escapeHtml(d.ownerName) : '<span class="text-gray-400">—</span>';
+            const createdCell = d.createdTime ? escapeHtml(formatDate(d.createdTime)) : '<span class="text-gray-400">—</span>';
+            const layoutCell = d.layout ? escapeHtml(d.layout) : '<span class="text-gray-400">—</span>';
+            const dispBadge = {
+                closed: '<span class="rr-badge rr-warn rr-dot">Closed</span>',
+                reengaged: '<span class="rr-badge rr-good rr-dot">Re-engaged</span>',
+                resolved: '<span class="rr-badge rr-good rr-dot">Resolved</span>',
+                dismissed: '<span class="rr-badge rr-neutral">Dismissed</span>',
+            }[d.disposition] || ('<span class="rr-badge rr-neutral">' + escapeHtml(d.disposition || '—') + '</span>');
+            const whoWhen = ((d.by ? escapeHtml(d.by) : '') + (d.at ? (' · ' + escapeHtml(formatDate(d.at))) : '')).trim();
+            const reopenBtn = '<button data-on-click="reopenStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Re-open — send this deal back to the Open list (removes the radar record; no Zoho change)." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>';
+            return '<tr style="vertical-align:top">'
+                + '<td class="rr-lead rr-primary">' + dealLink + '</td>'
+                + '<td class="rr-muted">' + acctCell + '</td>'
+                + '<td class="rr-muted">' + ownerCell + '</td>'
+                + '<td class="rr-muted" style="white-space:nowrap">' + createdCell + '</td>'
+                + '<td class="rr-muted">' + layoutCell + '</td>'
+                + '<td><span class="rr-badge rr-amber">' + escapeHtml(d.stage || '—') + '</span></td>'
+                + '<td>' + dispBadge + (whoWhen ? ' <span class="rr-muted text-xs">' + whoWhen + '</span>' : '')
+                + '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">' + reopenBtn + '</div></div></td>'
+                + '</tr>';
+        }
+        // ↩ Re-open a handled stale deal back to the Open list. No Zoho change.
+        async function reopenStaleDeal(dealZohoId) {
+            try {
+                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/reopen', { dealZohoId: dealZohoId });
+                if (!j) return;
+                if (!j.success) { rrToast('Re-open failed: ' + (j.error || 'unknown')); return; }
+                rrToast('🔓 Re-opened.');
+                loadStaleDeals();
+            } catch (e) {
+                rrToast('Re-open failed: ' + (e && e.message || e));
+            }
+        }
+
         async function loadStaleDeals() {
             const body = document.getElementById('staleDealsBody');
             const summaryEl = document.getElementById('staleDealsSummary');
@@ -8941,19 +9004,34 @@
             if (btn) { btn.disabled = true; btn.innerHTML = '🔍 Scanning…'; }
             body.innerHTML = rrSkeletonRows(4);
             try {
+                const view = window._staleDealsView || 'open';
                 const _sdSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
-                const _sdSegQ = (_sdSeg && _sdSeg !== 'all') ? ('?segment=' + encodeURIComponent(_sdSeg)) : '';
-                const res = await fetch('/api/duplicates/record-hints/stale-deals' + _sdSegQ, { credentials: 'same-origin' });
+                const params = new URLSearchParams();
+                params.set('view', view);
+                if (_sdSeg && _sdSeg !== 'all') params.set('segment', _sdSeg);
+                const res = await fetch('/api/duplicates/record-hints/stale-deals?' + params.toString(), { credentials: 'same-origin' });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
                 const deals = data.deals || [];
                 const s = data.summary || {};
-                if (summaryEl) summaryEl.textContent = deals.length
-                    ? ((s.total || 0) + ' stalled · ' + (s.close || 0) + ' to close · ' + (s.reengage || 0) + ' to re-engage · ' + (s.review || 0) + ' review')
-                    : '';
-                if (badge) { if (deals.length) { badge.textContent = deals.length; badge.classList.remove('hidden'); } else badge.classList.add('hidden'); }
+                // View-chip counts + active state (Open uses the live scan count;
+                // the handled buckets use dispositionCounts from the server).
+                _sdRenderChipCounts(view, deals.length, data.dispositionCounts || {});
+                if (summaryEl) summaryEl.textContent = view === 'open'
+                    ? (deals.length ? ((s.total || 0) + ' stalled · ' + (s.close || 0) + ' to close · ' + (s.reengage || 0) + ' to re-engage · ' + (s.review || 0) + ' review') : '')
+                    : (deals.length + ' ' + view);
+                if (badge) { if (view === 'open' && deals.length) { badge.textContent = deals.length; badge.classList.remove('hidden'); } else badge.classList.add('hidden'); }
                 if (deals.length === 0) {
-                    body.innerHTML = rrEmptyRow(7, { glyph: '✓', title: 'No stalled deals found', desc: 'Nothing parked in an unaccounted stage right now.' });
+                    body.innerHTML = rrEmptyRow(7, view === 'open'
+                        ? { glyph: '✓', title: 'No stalled deals found', desc: 'Nothing parked in an unaccounted stage right now.' }
+                        : { glyph: '—', title: 'Nothing in this bucket', desc: 'No deals marked "' + escapeHtml(view) + '" yet.' });
+                    return;
+                }
+                // Handled buckets (Closed / Re-engaged / Resolved / Dismissed):
+                // already actioned, so show the disposition + who/when + a Reopen
+                // instead of the Close/Re-engage/Resolve/Dismiss actions.
+                if (view !== 'open') {
+                    body.innerHTML = deals.map(function (d) { return _sdHandledRow(d); }).join('');
                     return;
                 }
                 const dispPill = function (d) {

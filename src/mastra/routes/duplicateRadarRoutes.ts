@@ -8473,26 +8473,67 @@ export const duplicateRadarRoutes = [
         if (!user) return unauthorizedResponse(c);
         const limit = Number(c.req.query("limit")) || undefined;
         const segment = c.req.query("segment") || undefined;
-        const { scanStaleDeals } = await import("../../utils/recordLinkHints");
-        let deals = await scanStaleDeals({ limit });
-        // Segment chip (Sarah 2026-07-15): filter to the deal's Zoho Layout —
-        // scanStaleDeals already returns `layout`. Same classification as tabs.
-        if (segment && segment !== "all") {
-          const { classifyLayoutSegment } = await import(
-            "../../utils/duplicateRadarDatabase"
-          );
-          const want = segment === "corporate" ? "walaplus" : segment;
-          deals = deals.filter(
-            (d) => classifyLayoutSegment(String(d.layout || "")) === want,
-          );
+        // view: 'open' (default) = stalled deals still needing a decision;
+        // 'closed' | 'reengaged' | 'resolved' | 'dismissed' | 'handled' = the
+        // deals the operator already actioned, so they can review "how many
+        // closed / resolved" (Sarah 2026-07-16).
+        const view = (c.req.query("view") || "open").trim().toLowerCase();
+        const { scanStaleDeals, listHandledStaleDeals } = await import(
+          "../../utils/recordLinkHints"
+        );
+        const { classifyLayoutSegment } = await import(
+          "../../utils/duplicateRadarDatabase"
+        );
+        const wantSeg =
+          segment && segment !== "all"
+            ? segment === "corporate"
+              ? "walaplus"
+              : segment
+            : null;
+        const bySegment = (arr: any[]) =>
+          wantSeg
+            ? arr.filter(
+                (d) => classifyLayoutSegment(String(d.layout || "")) === wantSeg,
+              )
+            : arr;
+
+        if (view === "open") {
+          let deals = bySegment(await scanStaleDeals({ limit }));
+          const summary = {
+            total: deals.length,
+            close: deals.filter((d) => d.disposition === "close").length,
+            reengage: deals.filter((d) => d.disposition === "reengage").length,
+            review: deals.filter((d) => d.disposition === "review").length,
+          };
+          // Handled-bucket counts so the Closed/Resolved/… tabs show a number.
+          const { counts } = await listHandledStaleDeals({
+            disposition: "all",
+            limit: 1,
+          });
+          return c.json({
+            success: true,
+            view: "open",
+            deals,
+            summary,
+            dispositionCounts: counts,
+          });
         }
-        const summary = {
-          total: deals.length,
-          close: deals.filter(d => d.disposition === "close").length,
-          reengage: deals.filter(d => d.disposition === "reengage").length,
-          review: deals.filter(d => d.disposition === "review").length,
-        };
-        return c.json({ success: true, deals, summary });
+
+        // Handled views.
+        const disp = ["closed", "reengaged", "resolved", "dismissed"].includes(
+          view,
+        )
+          ? view
+          : "all";
+        const handled = await listHandledStaleDeals({ disposition: disp, limit });
+        const deals = bySegment(handled.deals);
+        return c.json({
+          success: true,
+          view,
+          deals,
+          summary: { total: deals.length },
+          dispositionCounts: handled.counts,
+        });
       } catch (e: any) {
         logger.error("record-hints/stale-deals failed", e);
         return c.json({ error: "An internal error occurred" }, 500);
@@ -8519,7 +8560,7 @@ export const duplicateRadarRoutes = [
           return c.json({ error: "dealZohoId and action (close|reengage) required" }, 400);
         }
         const { applyStaleDealDisposition } = await import("../../utils/recordLinkHints");
-        const r = await applyStaleDealDisposition(dealZohoId, action);
+        const r = await applyStaleDealDisposition(dealZohoId, action, su.email || "admin");
         return c.json({ success: r.applied, ...r });
       } catch (e: any) {
         logger.error("record-hints/stale-deals/apply failed", e);
@@ -8570,6 +8611,29 @@ export const duplicateRadarRoutes = [
         return c.json({ success: r.dismissed, ...r });
       } catch (e: any) {
         logger.error("record-hints/stale-deals/resolve failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
+    //   POST /api/duplicates/record-hints/stale-deals/reopen { dealZohoId }
+    //   Un-handle: bring a Closed/Resolved/Dismissed deal back to the Open list.
+    path: "/api/duplicates/record-hints/stale-deals/reopen",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const dealZohoId = String(body?.dealZohoId ?? "").trim();
+        if (!dealZohoId) return c.json({ error: "dealZohoId required" }, 400);
+        const { reopenStaleDeal } = await import("../../utils/recordLinkHints");
+        const r = await reopenStaleDeal(dealZohoId);
+        return c.json({ success: r.reopened, ...r });
+      } catch (e: any) {
+        logger.error("record-hints/stale-deals/reopen failed", e);
         return c.json({ error: "An internal error occurred" }, 500);
       }
     },

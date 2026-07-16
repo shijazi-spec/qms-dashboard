@@ -789,6 +789,20 @@ export async function resolveStaleDeal(
   return dismissStaleDeal(dealZohoId, by, "resolved");
 }
 
+/** Re-open a handled stalled deal — removes its stale_deal_dismissals record so
+ * it returns to the Open list on the next scan (if it is still stalled). No Zoho
+ * write. Reverses a Close/Re-engage's radar STATE only, not the Zoho stage. */
+export async function reopenStaleDeal(
+  dealZohoId: string,
+): Promise<{ reopened: boolean }> {
+  const id = String(dealZohoId || "").trim();
+  if (!id) return { reopened: false };
+  await pool.query(`DELETE FROM stale_deal_dismissals WHERE deal_zoho_id = $1`, [
+    id,
+  ]);
+  return { reopened: true };
+}
+
 const CLOSE_STAGE = process.env.RECORD_HINT_CLOSE_STAGE || "Closed Lost";
 const REENGAGE_STAGE = process.env.RECORD_HINT_REENGAGE_STAGE || "New Deal";
 
@@ -799,6 +813,7 @@ const REENGAGE_STAGE = process.env.RECORD_HINT_REENGAGE_STAGE || "New Deal";
 export async function applyStaleDealDisposition(
   dealZohoId: string,
   action: "close" | "reengage",
+  by: string | null = null,
 ): Promise<{ applied: boolean; stage: string; reason?: string }> {
   const id = String(dealZohoId || "").trim();
   if (!id) return { applied: false, stage: "", reason: "missing_deal_id" };
@@ -814,6 +829,93 @@ export async function applyStaleDealDisposition(
       [id, stage],
     );
   } catch { /* best-effort mirror refresh */ }
+  // Record the disposition (Sarah 2026-07-16) so the operator can review how many
+  // were Closed / Re-engaged in §4's handled tabs — not just have them vanish.
+  try {
+    const disp = action === "close" ? "closed" : "reengaged";
+    await pool.query(
+      `INSERT INTO stale_deal_dismissals (deal_zoho_id, dismissed_by, dismissed_at, disposition)
+         VALUES ($1, $2, CURRENT_TIMESTAMP, $3)
+       ON CONFLICT (deal_zoho_id) DO UPDATE SET dismissed_by = EXCLUDED.dismissed_by, dismissed_at = CURRENT_TIMESTAMP, disposition = EXCLUDED.disposition`,
+      [id, by || null, disp],
+    );
+  } catch { /* best-effort — the Zoho write already succeeded */ }
   logger.info(`[recordLinkHints] stale-deal ${action} → ${id} Stage=${stage}`);
   return { applied: true, stage };
+}
+
+/** List the stalled deals the operator has already HANDLED, joined back to the
+ * mirror for display. `disposition` filters to one bucket (closed / reengaged /
+ * resolved / dismissed); omit for all handled. Also returns per-bucket counts so
+ * §4 can show "how many closed / resolved" at a glance (Sarah 2026-07-16). */
+export async function listHandledStaleDeals(opts: {
+  disposition?: string;
+  limit?: number;
+}): Promise<{
+  deals: Array<{
+    dealZohoId: string;
+    dealName: string;
+    accountName: string | null;
+    ownerName: string | null;
+    createdTime: string | null;
+    layout: string | null;
+    stage: string | null;
+    disposition: string;
+    by: string | null;
+    at: string | null;
+  }>;
+  counts: Record<string, number>;
+}> {
+  const limit = Math.min(3000, Math.max(1, Math.floor(opts.limit ?? 500)));
+  const disp = opts.disposition && opts.disposition !== "all" ? opts.disposition : null;
+  const rows = await pool.query<{
+    deal_zoho_id: string;
+    record_name: string | null;
+    account_name: string | null;
+    owner_name: string | null;
+    created_time: string | null;
+    layout: string | null;
+    stage: string | null;
+    disposition: string;
+    dismissed_by: string | null;
+    dismissed_at: string | null;
+  }>(
+    `SELECT sdd.deal_zoho_id,
+            dr.record_name,
+            COALESCE(dr.account_name, dr.raw_data->'Account_Name'->>'name') AS account_name,
+            COALESCE(NULLIF(dr.owner_name,''), dr.raw_data->'Owner'->>'name') AS owner_name,
+            COALESCE(dr.created_date::text, dr.raw_data->>'Created_Time') AS created_time,
+            COALESCE(NULLIF(dr.layout_name,''), dr.raw_data#>>'{Layout,name}', dr.raw_data#>>'{$layout,name}') AS layout,
+            COALESCE(NULLIF(dr.stage,''), dr.raw_data->>'Stage') AS stage,
+            sdd.disposition,
+            sdd.dismissed_by,
+            sdd.dismissed_at::text AS dismissed_at
+       FROM stale_deal_dismissals sdd
+       LEFT JOIN duplicate_records dr
+              ON dr.zoho_record_id = sdd.deal_zoho_id AND dr.record_type = 'deal'
+      WHERE ($1::text IS NULL OR sdd.disposition = $1)
+      ORDER BY sdd.dismissed_at DESC NULLS LAST
+      LIMIT $2`,
+    [disp, limit],
+  );
+  const countRows = await pool.query<{ disposition: string; n: number }>(
+    `SELECT disposition, COUNT(*)::int AS n FROM stale_deal_dismissals GROUP BY disposition`,
+  );
+  const counts: Record<string, number> = {};
+  for (const r of countRows.rows) counts[r.disposition] = r.n;
+  return {
+    deals: rows.rows.map((r) => ({
+      dealZohoId: r.deal_zoho_id,
+      dealName: r.record_name || r.deal_zoho_id,
+      accountName: r.account_name,
+      ownerName: r.owner_name,
+      createdTime: r.created_time,
+      layout: r.layout,
+      stage: r.stage,
+      disposition: r.disposition,
+      by: r.dismissed_by,
+      at: r.dismissed_at,
+    })),
+    counts,
+  };
 }

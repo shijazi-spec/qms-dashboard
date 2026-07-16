@@ -1696,6 +1696,15 @@
                     <button data-on-click="loadStaleDeals" id="staleDealsScanBtn" data-testid="button-stale-deals-scan" class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
                     <span id="staleDealsSummary" class="text-xs text-gray-500"></span>
                 </div>
+                <!-- View chips: Open needs-a-decision vs the buckets the operator
+                     already actioned (so they can review "how many closed / resolved"). -->
+                <div class="mb-2 flex flex-wrap gap-1" id="staleDealsViewChips">
+                    <button data-on-click="setStaleDealsView" data-args="[&quot;open&quot;]" id="sdView-open" class="rr-chip rr-chip-active" title="Stalled deals still needing a decision">Open <span id="sdCount-open" class="rr-chip-count"></span></button>
+                    <button data-on-click="setStaleDealsView" data-args="[&quot;closed&quot;]" id="sdView-closed" class="rr-chip" title="Deals you closed (Stage set to Closed Lost in Zoho)">Closed <span id="sdCount-closed" class="rr-chip-count"></span></button>
+                    <button data-on-click="setStaleDealsView" data-args="[&quot;reengaged&quot;]" id="sdView-reengaged" class="rr-chip" title="Deals you re-engaged (moved forward in Zoho)">Re-engaged <span id="sdCount-reengaged" class="rr-chip-count"></span></button>
+                    <button data-on-click="setStaleDealsView" data-args="[&quot;resolved&quot;]" id="sdView-resolved" class="rr-chip" title="Deals you handled manually in Zoho and marked Resolved">Resolved <span id="sdCount-resolved" class="rr-chip-count"></span></button>
+                    <button data-on-click="setStaleDealsView" data-args="[&quot;dismissed&quot;]" id="sdView-dismissed" class="rr-chip" title="Deals you dismissed as not a real stale issue">Dismissed <span id="sdCount-dismissed" class="rr-chip-count"></span></button>
+                </div>
                 <div class="overflow-x-auto border border-gray-200 rounded-lg">
                     <table class="rr-table min-w-full">
                         <thead>
@@ -2270,7 +2279,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=126"></script>
+    <script src="/js/duplicates-app.js?v=127"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
