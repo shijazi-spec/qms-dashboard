@@ -4524,17 +4524,16 @@
             st.selected = (data.plan.records || []).filter(r => r.included && r.zohoId).map(r => r.zohoId);
             st.planRecords = data.plan.records || []; // for the Split action (zohoId → dbId)
             panel.innerHTML = __renderMergePlan(data.plan);
-            // Middle-column lazy fill — three flavours:
+            // Middle-column lazy fill:
             //   Contacts → "Account" column reads from the planner; no fetch.
             //   Accounts → "Deals" count column → /deal-counts (more useful
             //              survivor signal than 📎 attachments).
-            //   Leads / Deals → 📎 attachments (as before).
+            //   Deals    → Stage (from the plan, synchronous).
+            //   Leads    → Lead Status (from the plan, synchronous — Sarah
+            //              2026-07-16, replaced the 📎 attachments column).
+            // Only Accounts still needs an async fetch.
             if (data.plan.module === 'Accounts') {
                 loadAccountDealCounts(data.plan.clusterId);
-            } else if (data.plan.module === 'Leads') {
-                // Deals now show the Stage (from the plan, synchronously) instead
-                // of attachments, so only Leads still fetch the 📎 chips.
-                loadAttachmentChips(data.plan.module, data.plan.clusterId);
             }
             // Reparent preview — Accounts/Contacts merges repoint child
             // Deals/Contacts onto the survivor. Fetch the count separately
@@ -5948,6 +5947,11 @@
                     // Deal Stage — the key signal when merging deals (don't merge
                     // away an open/won deal). Shown in place of attachments.
                     midCell = '<td class="px-3 py-2" title="Deal Stage in Zoho">' + (r.stage ? '<span class="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-xs">' + esc(r.stage) + '</span>' : '<span class="text-gray-300">—</span>') + '</td>';
+                } else if (plan.module === 'Leads') {
+                    // Lead Status — the key signal when merging leads (don't merge
+                    // a Converted / qualified lead away). Shown in place of
+                    // attachments (Sarah 2026-07-16, mirrors the Deals Stage cell).
+                    midCell = '<td class="px-3 py-2" title="Lead Status in Zoho">' + (r.leadStatus ? '<span class="inline-block px-2 py-0.5 rounded bg-purple-100 text-purple-800 text-xs">' + esc(r.leadStatus) + '</span>' : '<span class="text-gray-300">—</span>') + '</td>';
                 } else {
                     midCell = '<td class="px-3 py-2 text-center">' + (r.zohoId ? '<span id="att-' + esc(plan.module) + '-' + esc(r.zohoId) + '" class="text-xs text-gray-400" title="Attachments on this record">…</span>' : '<span class="text-gray-300">—</span>') + '</td>';
                 }
@@ -6080,7 +6084,9 @@
                             ? '<th scope="col" class="px-3 py-2 text-center" title="Number of Deals linked to each Account in Zoho. Stronger survivor signal than attachment counts — the Account with the bigger Deals book is usually the one to keep.">Deals</th>'
                             : plan.module === 'Deals'
                                 ? '<th scope="col" class="px-3 py-2 text-start" title="Deal Stage in Zoho — check each deal\'s stage before merging an open/won deal away">Stage</th>'
-                                : '<th scope="col" class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th>'
+                                : plan.module === 'Leads'
+                                    ? '<th scope="col" class="px-3 py-2 text-start" title="Zoho Lead_Status — check each lead\'s status before merging (e.g. don\'t merge a Converted lead away)">Lead Status</th>'
+                                    : '<th scope="col" class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th>'
                 ) + '<th scope="col" class="px-3 py-2 text-end">Complete</th><th scope="col" class="px-3 py-2 text-start">Owner</th><th scope="col" class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
                 (linkOnlyMode
                     ? ''

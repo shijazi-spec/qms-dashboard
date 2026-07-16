@@ -144,6 +144,10 @@ export interface MergePlanRecordSummary {
    *  attachments chip — the stage is the more useful merge-decision signal for
    *  Deals (don't merge away an open/won deal). Null for non-Deal records. */
   stage: string | null;
+  /** Zoho Lead_Status. Surfaced in the Leads merge/preview table in place of the
+   *  attachments chip — status is the key merge signal for Leads (don't merge a
+   *  Converted lead away). Null for non-Lead records. */
+  leadStatus: string | null;
   hasZohoId: boolean;
 }
 
@@ -355,6 +359,17 @@ function accountNameOf(r: DuplicateRecord): string | null {
   const v = normalize(rawVal(r, "Account_Name"));
   if (v !== null) return String(v);
   return r.account_name || null;
+}
+
+// Zoho Lead_Status (picklist string). Surfaced in the Leads merge/preview table
+// in place of the 📎 attachments chip — the lead's status (Converted / Junk /
+// Contacted / …) is the more useful merge-decision signal for Leads. Falls back
+// to the denormalised `stage` column some syncs write Lead_Status into. Null for
+// non-Lead records.
+function leadStatusOf(r: DuplicateRecord): string | null {
+  const v = normalize(rawVal(r, "Lead_Status"));
+  if (v !== null) return String(v);
+  return (r as any).lead_status || r.stage || null;
 }
 
 function sameScalar(
@@ -1009,6 +1024,7 @@ export function buildMergePlan(
     layout: layoutOf(r),
     accountName: accountNameOf(r),
     stage: r.stage ?? null,
+    leadStatus: leadStatusOf(r),
     hasZohoId: !!r.zoho_record_id,
   }));
 
