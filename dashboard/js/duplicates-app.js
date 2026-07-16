@@ -3957,12 +3957,34 @@
         // module present in the cluster.
         async function loadClusterDetailAttachmentChips(clusterId, records) {
             try {
-                const MOD = { lead: 'Leads', deal: 'Deals', contact: 'Contacts', account: 'Accounts' };
+                const modal = document.getElementById('modalContent');
+                if (!modal) return;
+                // Leads (Sarah 2026-07-16): show the Lead Status next to the Zoho
+                // link INSTEAD of a 📎 attachment chip — status (Converted / Junk /
+                // …) is the merge signal for leads, not file count. Rendered
+                // synchronously from raw_data; no fetch needed.
+                (records || []).forEach(function (r) {
+                    if (String(r.record_type || '').toLowerCase() !== 'lead') return;
+                    const zid = r.zoho_record_id;
+                    if (!zid) return;
+                    const raw = r.raw_data || {};
+                    const status = raw.Lead_Status || r.status || r.stage || '';
+                    if (!status) return;
+                    modal.querySelectorAll('a[data-testid="link-zoho-' + zid + '"]').forEach(function (a) {
+                        if (a.nextSibling && a.nextSibling.classList && a.nextSibling.classList.contains('leadstatus-chip')) return;
+                        const chip = document.createElement('span');
+                        chip.className = 'leadstatus-chip ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800';
+                        chip.title = 'Lead Status in Zoho';
+                        chip.textContent = String(status);
+                        a.insertAdjacentElement('afterend', chip);
+                    });
+                });
+                // Attachment chips for the OTHER modules (Leads excluded above).
+                const MOD = { deal: 'Deals', contact: 'Contacts', account: 'Accounts' };
                 const modules = Array.from(new Set((records || [])
                     .map(r => MOD[String(r.record_type || '').toLowerCase()])
                     .filter(Boolean)));
-                const modal = document.getElementById('modalContent');
-                if (!modal || !modules.length) return;
+                if (!modules.length) return;
                 for (const module of modules) {
                     let counts = {};
                     try {
