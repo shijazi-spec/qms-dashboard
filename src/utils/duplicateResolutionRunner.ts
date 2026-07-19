@@ -343,12 +343,42 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
     } catch {
       /* breakdown is best-effort */
     }
+    // Error reasons (Sarah 2026-07-19): "errors N" alone is undiagnosable. Group
+    // the failed items by module + a normalised message and show the top few with
+    // counts, so every run explains WHY it errored instead of just how many.
+    let errorText = "";
+    if (summary.errors > 0) {
+      const groups = new Map<string, { n: number; sample: string }>();
+      for (const it of summary.items) {
+        if (it.action !== "error") continue;
+        const msg = (it.detail || (it.reasons && it.reasons.join("; ")) || "unknown error")
+          .toString()
+          .replace(/#?\d+/g, "#")          // fold ids so "cluster #123" groups
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 160);
+        const key = `${it.module}: ${msg}`;
+        const g = groups.get(key) || { n: 0, sample: `${it.module} — ${(it.detail || "").toString().slice(0, 200)}` };
+        g.n++;
+        groups.set(key, g);
+      }
+      const top = [...groups.entries()]
+        .sort((a, b) => b[1].n - a[1].n)
+        .slice(0, 3)
+        .map(([key, g]) => `›  (${g.n}×) ${key}`);
+      if (top.length) {
+        errorText =
+          `\n\n*Top error reasons (${summary.errors} total):*\n${top.join("\n")}` +
+          (groups.size > 3 ? `\n›  …+${groups.size - 3} more reason(s)` : "");
+      }
+    }
     const text =
       `${icon} *Autonomous Resolution — ${summary.mode} run* ` +
       (summary.writesAllowed ? "" : "(shadow: no Zoho writes) ") +
       `\nScanned ${summary.clustersScanned} · applied ${summary.applied} · ` +
       `queued ${summary.queued} · errors ${summary.errors}` +
       (summary.queued > 0 ? `\n${summary.queued} item(s) need your call.` : "") +
+      errorText +
       breakdownText +
       `\n${resolutionScreenLink()}`;
 
@@ -765,7 +795,11 @@ export async function buildRadarTabStatus(): Promise<string> {
       .filter((b) => b.total > 0)
       .map((b) => `${b.module} ${n(b.rest)} left/${n(b.applied)} merged`)
       .join(" · ");
-    if (ml) parts.push(`›  *Records per module (raw count — incl. non-duplicates):* ${ml}`);
+    // These are CLUSTER counts (remaining vs durably merged), the same figures
+    // as the "By module" breakdown — NOT record counts. Labelled accordingly
+    // (Sarah 2026-07-19: the old "Records per module (raw count)" label was
+    // wrong and made leadership read them as record totals).
+    if (ml) parts.push(`›  *Clusters per module (remaining / merged):* ${ml}`);
   } catch { /* skip */ }
   // Per-tab PROGRESS burndown (Sarah 2026-06-17) — total / solved / left per
   // module with the day-over-day change, from the daily snapshot table. This is
