@@ -740,13 +740,19 @@ export async function buildRadarTabStatus(): Promise<string> {
   try {
     bd = await getModuleResolutionBreakdown();
   } catch { /* skip */ }
-  const totalMerged = bd.reduce((a, b) => a + (b.applied || 0), 0);
   // Executive Summary / Cross-Module — overall clusters + SAR exposure.
   try {
     const agg = await getClusterSummary();
     if (agg) {
+      // "merged so far" MUST be the DISTINCT resolved-cluster count
+      // (agg.resolvedCount — ledger-durable, one row per cluster), NOT the sum of
+      // the per-module `applied` counts. Summing double-counts every cross-module
+      // cluster (it's counted under each module it touches), which inflated the
+      // headline to ~4,300 when the true distinct figure is ~1,600 and made the
+      // digest contradict its own "do not add these up" rule and the weekly brief
+      // (Sarah 2026-07-19).
       parts.push(
-        `›  *Scanned (context — NOT all duplicates):* ${n(agg.totalClusters)} record groups incl. singletons · ~SAR ${n(agg.estimatedPipelineInflation)} exposure at risk · ${n(totalMerged)} merged so far`,
+        `›  *Scanned (context — NOT all duplicates):* ${n(agg.totalClusters)} record groups incl. singletons · ~SAR ${n(agg.estimatedPipelineInflation)} exposure at risk · ${n(agg.resolvedCount)} merged so far`,
       );
     }
   } catch { /* skip */ }
