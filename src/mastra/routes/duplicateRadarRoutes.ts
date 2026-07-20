@@ -11952,9 +11952,27 @@ export const duplicateRadarRoutes = [
         if (!["Deals", "Accounts", "Contacts"].includes(module))
           return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
         if (!id) return c.json({ error: "record id required" }, 400);
-        const { checkRecordEmptiness } = await import("../../utils/emptyRecordsDatabase");
+        const { checkRecordEmptiness, pruneGhostRecords } = await import(
+          "../../utils/emptyRecordsDatabase"
+        );
         const r = await checkRecordEmptiness(module as "Deals" | "Accounts" | "Contacts", id);
-        return c.json(r);
+        // GHOST (already deleted in Zoho) → PRUNE our mirror copy here (Sarah
+        // 2026-07-19). The UI removed the row locally on `ghost`, but nothing was
+        // persisted, so the very next Refresh re-fetched it from the mirror and it
+        // "came back". Pruning makes the removal durable. We only delete OUR copy
+        // of a record Zoho no longer has — the platform never deletes in Zoho.
+        let pruned = false;
+        if (r.ghost) {
+          try {
+            await pruneGhostRecords([String(id)]);
+            pruned = true;
+          } catch (pe: any) {
+            logger.warn(
+              `[check-empty] ghost prune failed (non-fatal) for ${module} ${id}: ${pe?.message || pe}`,
+            );
+          }
+        }
+        return c.json({ ...r, pruned });
       } catch (e: any) {
         logger.error("empty-records check-empty failed", e);
         return c.json({ error: `check failed: ${e?.message || e}` }, 502);

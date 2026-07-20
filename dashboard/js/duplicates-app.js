@@ -8024,7 +8024,16 @@
                 if (cell) cell.innerHTML = '<span class="text-xs text-amber-700">err: ' + escapeHtml(msg) + '</span>';
                 return;
             }
-            if (data.ghost) { _erRemoveLocal(kind, [String(id)]); return; } // deleted in Zoho
+            if (data.ghost) {
+                // Deleted in Zoho. The server prunes our mirror copy on this same
+                // call (check-empty → pruned:true), so the removal is DURABLE —
+                // it no longer reappears on the next Refresh (Sarah 2026-07-19).
+                _erRemoveLocal(kind, [String(id)]);
+                rrToast(data.pruned
+                    ? '🧹 Already deleted in Zoho — removed from the list for good.'
+                    : '🧹 Already deleted in Zoho — removed. (Mirror prune did not confirm; it may reappear until the next sweep.)');
+                return;
+            }
             if (data.tagged) {
                 // Already tagged in Zoho (mirror was stale). Don't leave it sitting
                 // here as "keep" — record it properly (Empty-Delete → ledger so it
