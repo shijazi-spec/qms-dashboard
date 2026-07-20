@@ -43,8 +43,6 @@ const CANONICAL_TO_FEED: Record<string, string> = {
   "GRC-KPI-003": "GRC-KPI-003", // Audit Evidence Readiness ← Audit & Cert Readiness
   "GRC-KPI-008": "GRC-KPI-008", // Compliance Coverage Index
   "GRC-KPI-011": "GRC-KPI-016", // Policy Review Compliance
-  "GRC-KPI-020": "GRC-KPI-020", // Overdue Risk Reviews (internal register currency)
-  "GRC-KPI-021": "GRC-KPI-021", // Overdue Vendor Reassessments (third-party currency)
 };
 
 export interface KPIAutoCalcResult {

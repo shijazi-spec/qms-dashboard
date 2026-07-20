@@ -686,63 +686,6 @@ async function calcVendorFindingsClosure() {
   return { value: Math.round((closed / total) * 1000) / 10, dataAvailable: true, details: { total_findings: total, closed_findings: closed } };
 }
 
-/** GRC-KPI-020 — Overdue Risk Reviews: live risks past their next review date
- *  ÷ live risks. LOWER is better. Records with no review date set are reported
- *  separately in details (a gap, but not strictly "overdue"). */
-async function calcOverdueRiskReviews() {
-  try {
-    const r = await pool.query(`
-      SELECT COUNT(*)::int AS total,
-             COUNT(*) FILTER (WHERE next_review_date IS NOT NULL AND next_review_date < NOW())::int AS overdue,
-             COUNT(*) FILTER (WHERE next_review_date IS NULL)::int AS no_review_date
-        FROM enterprise_risks
-       WHERE LOWER(COALESCE(TRIM(status), '')) NOT IN ('closed', 'archived', 'rejected', 'cancelled')
-    `);
-    const row = r.rows[0] ?? {};
-    const total = Number(row.total ?? 0);
-    if (total <= 0) return { value: 0, dataAvailable: false, reason: "no_live_risks" };
-    const overdue = Number(row.overdue ?? 0);
-    return {
-      value: Math.round((overdue / total) * 1000) / 10,
-      dataAvailable: true,
-      details: { live_risks: total, overdue_reviews: overdue, no_review_date_set: Number(row.no_review_date ?? 0) },
-    };
-  } catch (err) {
-    logger.error(`[LeadershipFeed] overdue risk reviews failed: ${(err as Error).message}`);
-    return { value: 0, dataAvailable: false, reason: "risk_table_unavailable" };
-  }
-}
-
-/** GRC-KPI-021 — Overdue Vendor Reassessments: active vendors past their next
- *  assessment date ÷ active vendors. LOWER is better. */
-async function calcOverdueVendorReassessments() {
-  try {
-    const r = await pool.query(`
-      SELECT COUNT(*)::int AS total,
-             COUNT(*) FILTER (WHERE next_assessment_date IS NOT NULL AND next_assessment_date < NOW())::int AS overdue,
-             COUNT(*) FILTER (WHERE next_assessment_date IS NULL)::int AS no_next_date,
-             COUNT(*) FILTER (WHERE last_assessment_date IS NULL)::int AS never_assessed
-        FROM vendors
-       WHERE LOWER(COALESCE(TRIM(status), '')) NOT IN ('inactive', 'terminated', 'archived')
-    `);
-    const row = r.rows[0] ?? {};
-    const total = Number(row.total ?? 0);
-    if (total <= 0) return { value: 0, dataAvailable: false, reason: "no_active_vendors" };
-    const overdue = Number(row.overdue ?? 0);
-    return {
-      value: Math.round((overdue / total) * 1000) / 10,
-      dataAvailable: true,
-      details: {
-        active_vendors: total, overdue_reassessments: overdue,
-        no_next_date_set: Number(row.no_next_date ?? 0), never_assessed: Number(row.never_assessed ?? 0),
-      },
-    };
-  } catch (err) {
-    logger.error(`[LeadershipFeed] overdue vendor reassessments failed: ${(err as Error).message}`);
-    return { value: 0, dataAvailable: false, reason: "vendor_table_unavailable" };
-  }
-}
-
 const FEED_KPIS: FeedKpiConfig[] = [
   {
     code: "QM-KPI-002",
@@ -911,8 +854,6 @@ const FEED_KPIS: FeedKpiConfig[] = [
   { code: "GRC-KPI-014", name: "Regulatory Response Timeliness", unit: "days", target: 5, green: 5, amber: 8, direction: "lower_is_better", calc: makeCaptureCalc("GRC-KPI-014", "days") },
   { code: "GRC-KPI-015", name: "Security Incident Governance Closure Time", unit: "days", target: 30, green: 30, amber: 45, direction: "lower_is_better", calc: makeCaptureCalc("GRC-KPI-015", "days") },
   { code: "GRC-KPI-016", name: "Policy Review Compliance", unit: "%", target: 95, green: 95, amber: 80, direction: "higher_is_better", calc: calcPolicyReviewCompliance },
-  { code: "GRC-KPI-020", name: "Overdue Risk Reviews", unit: "%", target: 10, green: 10, amber: 15, direction: "lower_is_better", calc: calcOverdueRiskReviews },
-  { code: "GRC-KPI-021", name: "Overdue Vendor Reassessments", unit: "%", target: 10, green: 10, amber: 15, direction: "lower_is_better", calc: calcOverdueVendorReassessments },
 ];
 
 /**
@@ -1187,8 +1128,6 @@ const KPI_ENTRY: Record<string, { where: string; route: string }> = {
   "GRC-KPI-014": { where: "Capture form: Enter KPI Data → metric GRC-KPI-014 (avg days to respond).", route: "/leadership-kpis/data" },
   "GRC-KPI-015": { where: "Capture form: Enter KPI Data → metric GRC-KPI-015 (avg days to close incidents).", route: "/leadership-kpis/data" },
   "GRC-KPI-016": { where: "QMS → Policies: keep each policy's review date current (not overdue).", route: "/policies" },
-  "GRC-KPI-020": { where: "QMS → Risks: set/refresh each live risk's next review date so none are past due.", route: "/risks" },
-  "GRC-KPI-021": { where: "QMS → Vendors: schedule the next assessment date for each active vendor.", route: "/vendors" },
 };
 
 export interface KpiDefinitionOut extends KpiDetail {

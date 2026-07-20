@@ -630,6 +630,7 @@
                                     <span>${WalaPlusI18n.t('dyn.kpis.owner_label', { name: ownerLabel })}</span>
                                     <span>${WalaPlusI18n.t('dyn.kpis.category_label', { name: _kpiCategoryLabel(kpi.category, kpi.category) })}</span>
                                     <span>${WalaPlusI18n.t('dyn.kpis.frequency_label', { name: kpi.frequency })}</span>
+                                    ${(kpi.weight !== null && kpi.weight !== undefined && Number(kpi.weight) > 0) ? `<span title="Weightage — this KPI's share of its owner's scorecard">Weight: ${Number(kpi.weight)}%</span>` : ''}
                                     ${hasNavMap ? `<span class="text-cyan-600 font-medium">📋 ${WalaPlusI18n.t('dyn.kpis.has_steps')}</span>` : ''}
                                 </div>
                             </div>
