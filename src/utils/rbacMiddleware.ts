@@ -982,6 +982,18 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  // Quality <-> GRC Handoff Tracker — deliberately narrow (the KPI it feeds
+  // must only ever measure Quality<->GRC work).
+  {
+    pattern: /^\/api\/handoff-tasks$/,
+    methods: ["GET", "POST"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
+  },
+  {
+    pattern: /^\/api\/handoff-tasks\/\d+\/(accept|reject|done|resend)$/,
+    methods: ["PUT"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
+  },
   // KPI checklist read — governance roles + executive + viewer.
   {
     pattern: /^\/api\/kpis\/\d+\/checklist$/,

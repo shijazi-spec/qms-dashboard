@@ -173,6 +173,33 @@ export async function runKPIAutoCalc(
     logger.error(`[KPIAutoCalc] checklist step failed: ${(e as Error).message}`);
   }
 
+  // 3b) Quality <-> GRC Handoff Effectiveness (GRQ-KPI-02) from the Handoff
+  //     Tracker. Every task assigned between Quality and GRC IS a handoff, so
+  //     this KPI no longer needs manual entry.
+  try {
+    const { calcHandoffEffectiveness } = await import("./handoffTasksDatabase");
+    const def = await getKPIByCode("GRQ-KPI-02");
+    if (def?.id && def.is_active) {
+      const r = await calcHandoffEffectiveness();
+      if (r.dataAvailable) {
+        await recordKPIValue({
+          kpi_id: def.id,
+          period_start: periodStart,
+          period_end: periodEnd,
+          actual_value: r.value,
+          calculated_by: "system_auto",
+        });
+        recorded++;
+        details.push({ code: "GRQ-KPI-02", value: r.value });
+      } else {
+        skipped++;
+        details.push({ code: "GRQ-KPI-02", reason: r.reason || "no handoffs due" });
+      }
+    }
+  } catch (e) {
+    logger.error(`[KPIAutoCalc] handoff-effectiveness step failed: ${(e as Error).message}`);
+  }
+
   // 4) Roll-up composite scores — computed LAST, from the component KPIs' freshly
   //    recorded values (achievement % vs target). EMPTY until components have data.
   try {
