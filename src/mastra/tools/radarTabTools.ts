@@ -19,7 +19,7 @@ import { z } from "zod";
 export const manualActionAuditTool = createTool({
   id: "manual-action-audit",
   description:
-    "Pull the most recent rows from the operator-driven cluster audit trail (the Manual Actions sub-table on the Logs tab — duplicate_merge_actions). Captures every Mark Resolved / Mark Dismissed / Bulk-split contacts / partial-apply (module_resolved for cross-module clusters) decision an operator makes on the dashboard. Returns inspected count + byActionType counts (resolve / ignore / module_resolved / split / merge) + topPerformers (who took the most actions in the window) + total records affected + the latest 20 events with cluster id, cluster company/domain, action type, records affected, performed_by, and notes. Pair this with agentActivityTool for the complete audit picture per cluster — agentActivityTool covers the autonomous resolver, this tool covers everything human-driven. Optional filters: actionType (narrow to one type) and performedByLike (substring match on email/name). Read-only.",
+    "Operator-driven audit trail (duplicate_merge_actions): every Mark Resolved, Mark Dismissed, cross-module partial apply, bulk-split and manual merge, with per-operator totals and recent events. Use for who marked what resolved, what manual actions happened, or an operators recent dispositions. Read-only.",
   inputSchema: z.object({
     limit: z
       .number()
@@ -161,7 +161,7 @@ export const manualActionAuditTool = createTool({
 export const agentActivityTool = createTool({
   id: "agent-activity",
   description:
-    "Pull the most recent rows from the autonomous Duplicate Resolution audit trail (the Agent Activity sub-table on the Logs tab). Every preview / dry-run / apply the agent or an operator performed lands in duplicate_resolution_feedback: cluster id, event type (preview | dry_run | applied), proposed survivor Zoho id, actually-chosen survivor (and whether the operator overrode the agent's pick), field migrations, duplicates tagged, related records reparented, error count, who performed it, and when. The tool aggregates the last N events into headline counters (by event type + by performed_by — agent vs human) and returns the latest events in full. Use when asked what the AI did today, how many applies happened this week, did the agent or a human override the survivor most often, show me the last 10 resolutions, or any agent-activity audit question. Read-only.",
+    "Audit trail of every duplicate-cluster preview / dry-run / apply, by the autonomous agent or an operator, including the agent-vs-human split, survivor-override rate and error totals. Use for what did the AI do, how many applies this week, or the last cluster resolutions. Read-only.",
   inputSchema: z.object({
     limit: z
       .number()
@@ -300,7 +300,7 @@ export const agentActivityTool = createTool({
 export const dealComplianceStatusTool = createTool({
   id: "deal-compliance-status",
   description:
-    "Check the Deal Compliance tab — Sales SOP 7.5.10 attachments-verification on Deals in the closing stages. The matcher reads Zoho attachment file names and looks for: financial offer (Arabic عرض مالي) for Proposal stage; proposal + contract/PO + VAT certificate + Commercial Registration + National Address for Agreement Signed and Paid (Paid is the Agreement-Signed stage re-labelled for backdated/migrated deals — same five docs). Default stages in scope: Proposal, Agreement Signed, Paid. Returns counts of compliant vs missing-docs deals across the cached scans, plus the breakdown by stage so the user knows which closing stage is the biggest gap. Read-only. Use when asked how many deals are missing documents, which closing stage has the worst compliance, what the Sales SOP attachment gap looks like, or for a Deal Compliance snapshot. Field-level data-entry compliance is on the Quality Dashboard audit (a separate engine) — this tool only covers ATTACHMENTS.",
+    "Sales SOP 7.5.10 ATTACHMENT compliance on Deals in closing stages (Proposal / Agreement Signed / Paid): compliant vs missing-docs counts, per-stage breakdown, and the most-missing document types. Read-only; reports on scans already run from the dashboard.",
   inputSchema: z.object({}),
   outputSchema: z.object({
     success: z.boolean(),
@@ -382,7 +382,7 @@ export const dealComplianceStatusTool = createTool({
 export const accountHintsStatusTool = createTool({
   id: "account-hints-status",
   description:
-    "Check the Account Hints tab — Deals in Zoho with missing or placeholder Account_Name where the platform has walked Deal → linked Contact → Contact's email domain → matching Account and inferred which Account to set. Returns the triage queue size, the confidence distribution, and the AI-resolve readiness. Confidence formula (40 base + 25 if two-plus contacts agree + 10 if one contact agrees + 25 if the Account has an explicit domain field + 10 if the Account has any related records, capped at 100). AI auto-resolve gate is 70 percent by default — below that the row stays pending for manual Applied or Dismiss. Every AI write is attributed to GRQ Assistant on behalf of the calling user and writes Account_Name on the Deal in Zoho. Use when asked how many account hints are pending, how many high-confidence hints are ready for one-click resolve, what the inference algorithm does, or any Account Hints status question.",
+    "Account Hints triage queue: Deals with a missing or placeholder Account_Name plus the inferred Account and a confidence score (AI auto-resolve gate 70 percent). Use for how many hints are pending or AI-resolve-ready, or how the confidence is scored.",
   inputSchema: z.object({
     status: z
       .enum(["pending", "applied", "dismissed"])
@@ -456,7 +456,7 @@ export const accountHintsStatusTool = createTool({
 export const recordHintsStatusTool = createTool({
   id: "record-hints-status",
   description:
-    "Check the Record Hint tab — cross-module link suggestions the platform infers for records missing a required link: Contacts with a missing/placeholder Account_Name (contact_account, inferred from the Contact's email domain matching an Account) and Deals with a missing/placeholder Contact_Name (deal_contact, inferred from the Deal's linked Account's contacts). Returns the triage queue size (pending/applied/dismissed), the confidence distribution, and the AI-resolve readiness. AI auto-resolve gate is 70 percent by default — below that the row stays pending for manual Applied or Dismiss. Every AI write is attributed to GRQ Assistant on behalf of the calling user and writes Account_Name (contact_account) or Contact_Name (deal_contact) on the record in Zoho. Use when asked how many record hints are pending, how many contact->account or deal->contact hints are ready for one-click resolve, or any Record Hint status question. Omit type to cover both kinds together.",
+    "Record Hint queue — cross-module LINK suggestions: contact_account (set Account_Name) and deal_contact (set Contact_Name), with pending / applied / dismissed counts and AI-resolve readiness. Use for any Record Hint question, and whenever someone wants to LINK a stray Contact or Deal.",
   inputSchema: z.object({
     type: z
       .enum(["contact_account", "deal_contact"])
@@ -543,7 +543,7 @@ export const recordHintsStatusTool = createTool({
 export const executiveSummaryTool = createTool({
   id: "executive-summary",
   description:
-    "Return the platform-wide Duplicate Radar KPIs Sarah's leadership team watches on the Executive Summary tab. Covers total active clusters, per-module duplicate counts (leads/deals/contacts/accounts), strong vs moderate confidence tiers, pipeline inflation in SAR, the SDR-KPI-09 duplicate-lead rate vs the 2% target, resolution rate (resolved+ignored over total), and the last sync info. Use when asked 'what's the current duplicate rate', 'how many active clusters do we have', 'what's the pipeline inflation', 'are we hitting the 2% KPI target', or for a top-level health snapshot. Read-only, reuses the dashboard's /api/duplicates/summary engine.",
+    "Platform-wide duplicate health: active clusters, per-module duplicate counts, confidence tiers, SAR pipeline inflation, duplicate rate vs the 2 percent KPI, resolution rate and last sync. Use for top-level or executive questions.",
   inputSchema: z.object({}),
   outputSchema: z.object({
     success: z.boolean(),
@@ -614,7 +614,7 @@ export const executiveSummaryTool = createTool({
 export const crossModuleOverlapTool = createTool({
   id: "cross-module-overlap-status",
   description:
-    "Check the Cross-Module Overlap tab — duplicate clusters where the same company shows up in 2+ Zoho modules at once AND there's an action available on this tab. Refined rules (Sarah 2026-06-16): pure Lead↔Contact and Lead↔Account clusters are HIDDEN — Zoho has no field to link a Lead to anything, so the only action is CLOSE the Lead and that's the Leads Duplicates tab's job. The remaining buckets are: Lead↔Active Deal (close the redundant Lead — active = Lead not in Junk/Lost/Bogus/Disqualified/Not Qualified/Converted AND Deal not in Closed Lost/Lost/Dropped/Cancelled), Contact↔Account / Deal↔Account (LINK via Account_Name), Contact↔Deal (LINK via Contact_Name), 3+ modules (compound). 'Existing client' = a Paid / Agreement Signed / Closed Won / Agreement Sent / Awaiting PO / Client Activated / Transferred to CS deal in the cluster — those are CS-owned, route to Customer Success. Contact alone is NOT customer evidence. Use when asked how many overlaps are open, Lead↔Active Deal count, existing-client / CS-owned count, cross-module ARR exposure, etc.",
+    "Cross-Module Overlap counts: clusters where an ACTIVE lead and an ACTIVE deal coexist for one company (close the redundant lead), plus the 3-plus-module and CS-owned buckets and ARR exposure. Pass status active | resolved | ignored | all.",
   inputSchema: z.object({
     status: z
       .enum(["active", "resolved", "ignored", "all"])
@@ -663,7 +663,7 @@ export const crossModuleOverlapTool = createTool({
 export const csOverlapStatusTool = createTool({
   id: "cs-pipeline-overlap-status",
   description:
-    "Check the CS Pipeline Overlap tab — how many duplicate clusters have an OPEN Sales Deal coexisting with a Paid or Agreement-Signed handoff Deal on the same customer (cluster-level rule, rewritten 2026-06-11). Verdicts: BLOCK (open + handoff coexist; cool-off not elapsed yet — sales must stop), REVIEW (legacy), WARN (overlap exists but the handoff Deal's churn is past the sector cool-off — 180d Private / 365d Government — sales may re-engage after notifying CS). Use when asked about CS pipeline overlap, sales-vs-CS cannibalisation, or BLOCK/WARN counts.",
+    "CS Pipeline Overlap: clusters where an OPEN sales deal coexists with a Paid or Agreement-Signed handoff deal on the same customer, graded BLOCK / WARN / REVIEW by the churn cool-off. Use for sales-vs-CS cannibalisation or BLOCK/WARN counts.",
   inputSchema: z.object({}),
   outputSchema: z.object({
     success: z.boolean(),
@@ -694,7 +694,7 @@ export const csOverlapStatusTool = createTool({
 export const clusterMergeCandidatesTool = createTool({
   id: "cluster-merge-candidates",
   description:
-    "Find the domains that have ≥2 active clusters in the Duplicate Radar — usually Account clusters that ended up split because of the missing UNIQUE constraint on duplicate_clusters.domain (concurrent syncs race). Returns total_groups + truncated flag + the top groups with their cluster ids, company names, record totals, module mix, and which cluster has an Account record (recommended master). Use when asked 'how many split account clusters are there', 'which domain has the worst cluster split', 'show me cluster merge candidates', or to answer Sarah's 'I found a second cluster for the same account' question. Read-only — the operator performs the merge from the Cluster Merge tab (POST /api/duplicates/clusters/merge-into).",
+    "Domains split across 2 or more clusters (a sync race), with the recommended master cluster. Use for I found a second cluster for the same account, or split-cluster questions. Read-only — the operator merges from the Cluster Merge tab.",
   inputSchema: z.object({
     limit: z
       .number()
@@ -731,7 +731,7 @@ export const clusterMergeCandidatesTool = createTool({
 export const ownerAccountabilityTool = createTool({
   id: "owner-accountability",
   description:
-    "Check the Owner Accountability tab — per-owner duplicate scorecard. For each rep returns: team, total records owned, duplicate records, duplicate rate %, RAG status (green ≤2% · amber 2–5% · red >5% per SDR-KPI-09), clusters involved, high-confidence duplicates, and estimated waste value (deal SAR sitting on duplicates). Reps tagged on multiple mailboxes are consolidated under their canonical email (OWNER_EMAIL_ALIASES). Use when asked who is the worst offender, who is RED on the duplicate KPI, which rep has the most waste value, or duplicates by owner. Returns the top owners ranked by duplicate count.",
+    "Per-owner duplicate scorecard: duplicates owned, duplicate rate, RAG status (green under 2 percent, amber 2-5, red over 5), clusters involved and estimated SAR waste. Use for who is RED, worst offenders, or duplicates by owner.",
   inputSchema: z.object({
     limit: z.number().optional().describe("How many top owners to return (default 10, max 50)"),
   }),
@@ -774,7 +774,7 @@ export const ownerAccountabilityTool = createTool({
 export const preflightCheckTool = createTool({
   id: "preflight-check",
   description:
-    "Run the Preflight Check — given a company domain / email / company name / phone, return the verdict on whether a NEW record should be created or it would duplicate / hit a live CS customer. Verdicts: pass (safe to create), duplicate (already in CRM, no active CS overlap), warn (overlap but past the sector cool-off — Sales may re-engage after notifying CS), review (legacy — within cool-off), block (active CS customer, do not push). The fallback chain (added 2026-06-11) tries domain/email-domain first, then normalized phone (≥7 digits) against duplicate_records, then fuzzy company-name (pg_trgm similarity ≥ 0.6) against active clusters — so a phone-only or company-only lookup now finds an existing match. The output `matchedVia` field tells you which path matched. Single-record calls automatically refresh the CS overlap verdict before answering so the result reflects the latest Zoho CS section, not yesterday's cron. Use when asked should we create / add this lead, is this already in the CRM, or to vet a new lead/deal before creation.",
+    "Pre-create verdict for a domain / email / company / phone: duplicate | block | review | pass. BASIC mode runs the contact-duplicate rule then the existing-client check; protected and DOAM accounts and the mandatory-KSA-phone gate run first. Use to vet a new lead or import before creating it.",
   inputSchema: z.object({
     domain: z.string().optional(),
     email: z.string().optional(),
