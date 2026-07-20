@@ -264,7 +264,7 @@ function achievementPct(
   return Math.max(0, Math.min(100, a));
 }
 
-const COMPOSITE_CODES = ["GRQ-KPI-01", "GRQ-KPI-04", "SPEC-KPI-01", "LEG-KPI-01"];
+const COMPOSITE_CODES = ["GRQ-KPI-01", "SPEC-KPI-01", "LEG-KPI-01"];
 
 /**
  * Compute and record the 4 roll-up composites from their component KPIs'
@@ -300,9 +300,13 @@ export async function recordRollupComposites(): Promise<
         : achievementPct(r.actual_value, r.target_value, r.threshold_direction);
     byCode[r.kpi_code] = ach;
     if (ach === null || COMPOSITE_CODES.includes(r.kpi_code)) continue;
-    // A missing/zero weight falls back to 1 so the KPI still counts rather than
-    // silently vanishing from its owner's score.
-    const w = Number(r.weight) > 0 ? Number(r.weight) : 1;
+    // Weight semantics: an explicit 0 means "deliberately excluded from the
+    // roll-ups" (e.g. GRQ Health Score's own line, which IS the roll-up). A
+    // MISSING weight falls back to 1 so a KPI still counts rather than silently
+    // vanishing from its owner's score.
+    const rawW = r.weight === null || r.weight === undefined ? null : Number(r.weight);
+    if (rawW === 0) continue;
+    const w = rawW === null || !Number.isFinite(rawW) || rawW < 0 ? 1 : rawW;
     if (r.owner_type === "shared") {
       // Shared/cross-functional KPIs are the 5% that tops Quality and GRC up from
       // 95% to 100% on the approved sheet, so they count toward BOTH scorecards.
@@ -333,7 +337,6 @@ export async function recordRollupComposites(): Promise<
 
   const targets: Record<string, number | null> = {
     "GRQ-KPI-01": weighted([[q, 35], [g, 35], [s, 15], [l, 15]]),
-    "GRQ-KPI-04": weighted([[q, 50], [g, 50]]),
     "SPEC-KPI-01": s,
     "LEG-KPI-01": l,
   };
