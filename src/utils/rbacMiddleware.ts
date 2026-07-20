@@ -982,6 +982,18 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  // Tech Requests board (internal side). The assignee response path is public
+  // + token-gated and is listed in PUBLIC_PATHS instead.
+  {
+    pattern: /^\/api\/tech-requests$/,
+    methods: ["GET", "POST"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "quality_specialist"],
+  },
+  {
+    pattern: /^\/api\/tech-requests\/\d+\/status$/,
+    methods: ["PUT"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "quality_specialist"],
+  },
   // Quality <-> GRC Handoff Tracker — deliberately narrow (the KPI it feeds
   // must only ever measure Quality<->GRC work).
   {

@@ -134,6 +134,13 @@ function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter
 //     `/test/slack` (opens DMs / posts to Slack) stays behind auth.
 //   - `/api/telemetry/pageview` — no such route exists in the codebase.
 export const PUBLIC_PATHS = [
+  // ---- Tech Requests: assignee response (token-gated, no login) ----
+  // Assignees are usually OUTSIDE the org and have no platform account. Both
+  // entries are guarded by a 256-bit unguessable token in the URL, and the GET
+  // only renders a confirmation page — the mutation is the POST.
+  '/r/',                            // GET: confirmation page for one request
+  '/api/tech-requests/respond/',    // POST: records that assignee's response
+
   // ---- Auth flow (login, OIDC callback, logout) ----
   '/login',                         // login page (rendered before sign-in)
   '/api/login',                     // POST: legacy email/password login

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Tech Requests - WalaPlus Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.5"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('tech-requests');
+        });
+    </script>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="mb-5">
+            <h1 class="text-2xl font-bold text-gray-900">Tech Requests</h1>
+            <p class="text-sm text-gray-600 mt-1">
+                Requests raised on behalf of clients. The assignee gets the full request by email and
+                responds with one click &mdash; their answer updates the status here automatically.
+            </p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-4 mb-6">
+            <h2 class="font-semibold text-gray-900 mb-3">Raise a request</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <select id="trProduct" class="border rounded px-3 py-2 text-sm">
+                    <option value="WalaOne">WalaOne</option>
+                    <option value="WalaPlus">WalaPlus</option>
+                    <option value="GRQ">GRQ</option>
+                </select>
+                <input id="trClient" type="text" placeholder="Client name" class="border rounded px-3 py-2 text-sm" />
+                <input id="trContact" type="email" placeholder="Client contact email (optional)" class="border rounded px-3 py-2 text-sm" />
+                <textarea id="trText" rows="2" placeholder="What is requested?" class="border rounded px-3 py-2 text-sm md:col-span-3"></textarea>
+                <input id="trAssigneeName" type="text" placeholder="Assign to (name)" class="border rounded px-3 py-2 text-sm" />
+                <input id="trAssigneeEmail" type="email" placeholder="Assignee email" class="border rounded px-3 py-2 text-sm" />
+                <label class="text-sm text-gray-600 flex items-center gap-2">Needed by
+                    <input id="trDue" type="date" class="border rounded px-2 py-1 text-sm" />
+                </label>
+            </div>
+            <div class="flex items-center gap-3 mt-3">
+                <button data-on-click="createRequest" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Send request</button>
+                <p id="trMsg" class="text-xs"></p>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="flex items-center gap-3 px-4 py-3 border-b">
+                <h2 class="font-semibold text-gray-900">Requests</h2>
+                <span id="trCounts" class="text-xs text-gray-500"></span>
+                <div class="flex-1"></div>
+                <select id="trFilter" class="border rounded px-2 py-1 text-xs">
+                    <option value="open">Open only</option>
+                    <option value="all">All</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="WalaOne">WalaOne</option>
+                    <option value="WalaPlus">WalaPlus</option>
+                    <option value="GRQ">GRQ</option>
+                </select>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-700">
+                        <tr>
+                            <th class="text-start px-3 py-2 font-semibold">Product</th>
+                            <th class="text-start px-3 py-2 font-semibold">Client</th>
+                            <th class="text-start px-3 py-2 font-semibold">What was requested</th>
+                            <th class="text-start px-3 py-2 font-semibold">Owner</th>
+                            <th class="text-start px-3 py-2 font-semibold">Requested</th>
+                            <th class="text-start px-3 py-2 font-semibold">Follow-up</th>
+                            <th class="text-start px-3 py-2 font-semibold">Overdue</th>
+                            <th class="text-start px-3 py-2 font-semibold">Status</th>
+                            <th class="text-start px-3 py-2 font-semibold">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trRows" class="divide-y"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let _rows = [];
+        const _esc = (s) => String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const _d = (v) => v ? String(v).slice(0, 10) : '—';
+
+        const PRODUCT_CLS = {
+            WalaOne: 'bg-sky-100 text-sky-800',
+            WalaPlus: 'bg-indigo-100 text-indigo-800',
+            GRQ: 'bg-purple-100 text-purple-800'
+        };
+        const STATUS = {
+            sent: ['Sent', 'bg-blue-100 text-blue-700'],
+            accepted: ['In progress', 'bg-amber-100 text-amber-700'],
+            info_needed: ['Needs info', 'bg-orange-100 text-orange-700'],
+            done: ['Done', 'bg-emerald-100 text-emerald-700']
+        };
+
+        /** Days past the "needed by" date — the sheet's Overdue column. */
+        function _overdueDays(r) {
+            if (!r.due_date || r.status === 'done') return 0;
+            const due = new Date(String(r.due_date).slice(0, 10));
+            const today = new Date(new Date().toISOString().split('T')[0]);
+            return Math.max(0, Math.round((today - due) / 86400000));
+        }
+
+        function _row(r) {
+            const od = _overdueDays(r);
+            const [label, cls] = STATUS[r.status] || ['—', 'bg-gray-100 text-gray-600'];
+            const pcls = PRODUCT_CLS[r.product] || 'bg-gray-100 text-gray-700';
+            const done = r.status === 'done';
+            return `<tr class="${od ? 'bg-red-50' : ''}">
+                <td class="px-3 py-2 whitespace-nowrap">${r.product ? `<span class="text-xs px-2 py-0.5 rounded ${pcls}">${_esc(r.product)}</span>` : '—'}</td>
+                <td class="px-3 py-2 text-xs text-gray-800 whitespace-nowrap">${_esc(r.client_name || '—')}</td>
+                <td class="px-3 py-2">
+                    <div class="text-gray-900">${_esc(r.request_text)}</div>
+                    ${r.response_note ? `<div class="text-xs text-emerald-700 mt-0.5">Reply: ${_esc(r.response_note)}</div>` : ''}
+                </td>
+                <td class="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">${_esc(r.assignee_name || r.assignee_email)}</td>
+                <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${_d(r.created_at)}</td>
+                <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${_d(r.follow_up_at)}</td>
+                <td class="px-3 py-2 whitespace-nowrap">${od ? `<span class="text-xs font-semibold text-red-700">${od} day${od === 1 ? '' : 's'}</span>` : '<span class="text-xs text-gray-400">—</span>'}</td>
+                <td class="px-3 py-2 whitespace-nowrap"><span class="text-xs px-2 py-0.5 rounded ${cls}">${label}</span></td>
+                <td class="px-3 py-2 whitespace-nowrap">
+                    ${done ? '<span class="text-xs text-gray-400">—</span>'
+                           : `<button data-on-click="setStatus" data-args="[${r.id},&quot;done&quot;]" class="text-xs px-2 py-1 rounded bg-emerald-600 text-white">Mark done</button>`}
+                </td>
+            </tr>`;
+        }
+
+        function renderTable() {
+            const f = document.getElementById('trFilter').value;
+            let rows = _rows;
+            if (f === 'open') rows = rows.filter(r => r.status !== 'done');
+            else if (f === 'overdue') rows = rows.filter(r => _overdueDays(r) > 0);
+            else if (['WalaOne', 'WalaPlus', 'GRQ'].includes(f)) rows = rows.filter(r => r.product === f);
+            document.getElementById('trRows').innerHTML = rows.length
+                ? rows.map(_row).join('')
+                : '<tr><td colspan="9" class="px-3 py-6 text-center text-sm text-gray-500">Nothing to show.</td></tr>';
+            const open = _rows.filter(r => r.status !== 'done').length;
+            const od = _rows.filter(r => _overdueDays(r) > 0).length;
+            document.getElementById('trCounts').textContent = `${open} open${od ? ` · ${od} overdue` : ''}`;
+        }
+
+        async function loadRequests() {
+            try {
+                const res = await fetch('/api/tech-requests');
+                if (!res.ok) {
+                    document.getElementById('trRows').innerHTML =
+                        '<tr><td colspan="9" class="px-3 py-6 text-center text-sm text-red-600">You don’t have access to Tech Requests.</td></tr>';
+                    return;
+                }
+                const data = await res.json();
+                _rows = data.requests || [];
+                renderTable();
+            } catch (e) {
+                console.error('Load tech requests error:', e);
+            }
+        }
+
+        async function createRequest() {
+            const msg = document.getElementById('trMsg');
+            const payload = {
+                product: document.getElementById('trProduct').value,
+                client_name: document.getElementById('trClient').value,
+                contact_email: document.getElementById('trContact').value,
+                request_text: document.getElementById('trText').value,
+                assignee_name: document.getElementById('trAssigneeName').value,
+                assignee_email: document.getElementById('trAssigneeEmail').value,
+                due_date: document.getElementById('trDue').value || null
+            };
+            if (!payload.request_text.trim()) {
+                msg.textContent = 'Please describe what is requested.'; msg.className = 'text-xs text-red-600'; return;
+            }
+            try {
+                const res = await fetch('/api/tech-requests', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const d = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    ['trClient', 'trContact', 'trText', 'trAssigneeName', 'trAssigneeEmail', 'trDue']
+                        .forEach(id => { document.getElementById(id).value = ''; });
+                    msg.textContent = 'Sent — the assignee has been emailed.';
+                    msg.className = 'text-xs text-emerald-700';
+                    await loadRequests();
+                } else {
+                    msg.textContent = d.error || 'Failed to send.'; msg.className = 'text-xs text-red-600';
+                }
+            } catch (e) {
+                console.error('Create tech request error:', e);
+                msg.textContent = 'Network error.'; msg.className = 'text-xs text-red-600';
+            }
+        }
+
+        async function setStatus(id, status) {
+            try {
+                const res = await fetch(`/api/tech-requests/${id}/status`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+                if (!res.ok) {
+                    const d = await res.json().catch(() => ({}));
+                    alert(d.error || 'Failed to update.');
+                }
+                await loadRequests();
+            } catch (e) {
+                console.error('Set status error:', e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const f = document.getElementById('trFilter');
+            if (f) f.addEventListener('change', renderTable);
+            loadRequests();
+        });
+    </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>
