@@ -36,6 +36,63 @@ const SLACK_ADAM_ROLE = process.env.SLACK_ADAM_ROLE || "head_of_operations_quali
 // Address-by-name trigger: "Adam" (the agent's name) or "GRQ", optionally greeted.
 const NAME_TRIGGER = /(^|\s)(hey\s+|hi\s+|hello\s+)?@?(adam|grq)(\s+assistant)?\b/i;
 
+/**
+ * Provider rate-limit handling (Sarah 2026-07-20).
+ *
+ * Adam's request is large (big system prompt + many tool schemas), so on a low
+ * TPM tier a single call can trip OpenAI's per-minute token cap and the raw
+ * provider error was being posted straight into the channel — including the
+ * OpenAI ORG ID. We now (a) retry after the delay the provider suggests, and
+ * (b) never echo the raw provider text.
+ */
+function isRateLimitError(e: any): boolean {
+  const s = `${e?.message || ""} ${e?.status || ""} ${e?.statusCode || ""} ${e?.code || ""}`;
+  return /rate[ _-]?limit|429|tokens per min|\bTPM\b/i.test(s);
+}
+
+/** Seconds the provider asked us to wait ("Please try again in 11.064s"). */
+function suggestedRetrySeconds(e: any): number {
+  const m = /try again in ([\d.]+)\s*s/i.exec(String(e?.message || ""));
+  const secs = m ? parseFloat(m[1]) : NaN;
+  if (Number.isFinite(secs) && secs > 0) return Math.min(secs, 30);
+  return 12; // sensible default for a per-minute token cap
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Run the agent, retrying transient provider rate limits with the delay the
+ * provider suggests (+ a small buffer). Throws the last error if it never
+ * succeeds so the caller can post a sanitized message.
+ */
+async function generateWithRateLimitRetry<T>(
+  run: () => Promise<T>,
+  maxAttempts = 3,
+): Promise<T> {
+  let lastErr: any;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await run();
+    } catch (e: any) {
+      lastErr = e;
+      if (!isRateLimitError(e) || attempt === maxAttempts) throw e;
+      await sleep(Math.round(suggestedRetrySeconds(e) * 1000) + 750);
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Operator-facing error text. NEVER include the raw provider message — it can
+ * carry the OpenAI org id / account internals into a chat channel.
+ */
+function friendlyAgentError(e: any): string {
+  if (isRateLimitError(e)) {
+    return "I'm hitting the AI rate limit right now (too many tokens per minute). Give me about a minute and ask again — if it keeps happening the model's per-minute limit needs raising.";
+  }
+  return "Sorry — I couldn't answer that just now. Please try again in a moment.";
+}
+
 /** Best-effort text extraction across Mastra's several result shapes. */
 async function extractAgentText(res: any): Promise<string> {
   if (!res) return "";
@@ -104,26 +161,28 @@ export function registerGrqAssistantSlackRoutes(): ApiRoute[] {
           // withAgentUserContext threads a role into the tool layer so Adam's
           // RBAC-gated platform-data tools actually return data (mirrors what
           // the web /api/consultant/chat route does for a logged-in user).
-          const res = await withAgentUserContext(
-            {
-              user: {
-                userId: null,
-                email: `slack-${slackUser}`,
-                role: SLACK_ADAM_ROLE,
-                autoApproveTier: "never",
-              },
-              threadId: convThreadId,
-            },
-            () =>
-              agent.generate([{ role: "user", content: q }], {
+          const res = await generateWithRateLimitRetry(() =>
+            withAgentUserContext(
+              {
+                user: {
+                  userId: null,
+                  email: `slack-${slackUser}`,
+                  role: SLACK_ADAM_ROLE,
+                  autoApproveTier: "never",
+                },
                 threadId: convThreadId,
-                resourceId: convResourceId,
-                maxSteps: 6,
-              }),
+              },
+              () =>
+                agent.generate([{ role: "user", content: q }], {
+                  threadId: convThreadId,
+                  resourceId: convResourceId,
+                  maxSteps: 6,
+                }),
+            ),
           );
           reply = (await extractAgentText(res)).trim();
         } catch (e: any) {
-          reply = `Sorry — I hit an error answering that: ${e?.message || String(e)}`;
+          reply = friendlyAgentError(e);
         }
         if (!reply) reply = "I didn't catch that — could you rephrase?";
 
