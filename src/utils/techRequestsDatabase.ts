@@ -48,12 +48,16 @@ export async function initTechRequestTables(): Promise<void> {
       response_note TEXT,
       responded_at TIMESTAMP,
       follow_up_at TIMESTAMP,
+      last_reminder_at TIMESTAMP,
       action_token VARCHAR(80) NOT NULL,
       created_by VARCHAR(200),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  await pool.query(
+    `ALTER TABLE tech_requests ADD COLUMN IF NOT EXISTS last_reminder_at TIMESTAMP`,
+  );
   await pool.query(
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_tech_requests_token ON tech_requests(action_token)`,
   );

@@ -48,10 +48,14 @@ export async function initHandoffTaskTables(): Promise<void> {
       rejected_at TIMESTAMP,
       reject_reason TEXT,
       rework_count INTEGER DEFAULT 0,
+      last_reminder_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  await pool.query(
+    `ALTER TABLE handoff_tasks ADD COLUMN IF NOT EXISTS last_reminder_at TIMESTAMP`,
+  );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_handoff_tasks_assigned ON handoff_tasks(assigned_to)`,
   );

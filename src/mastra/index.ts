@@ -557,6 +557,17 @@ export const mastra = new Mastra({
         { name: "ResolutionDigest", fn: () => runResolutionDigestIfDue() },
         // Weekly leadership exec brief (Sunday 06:00 KSA). No-ops otherwise.
         { name: "ExecBriefWeekly", fn: () => runWeeklyExecBriefIfDue() },
+        // Daily overdue reminders (Handoff Tracker + Tech Requests). Window-gated
+        // to 07:00-09:59 KSA; per-row 20h stamp stops the 45-min loop re-sending.
+        {
+          name: "OverdueReminders",
+          fn: async () => {
+            const { runOverdueRemindersIfDue } = await import(
+              "../utils/overdueReminders"
+            );
+            return runOverdueRemindersIfDue();
+          },
+        },
       ];
       for (const h of helpers) {
         try {
