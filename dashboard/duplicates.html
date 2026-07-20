@@ -1794,6 +1794,21 @@
                         <option value="">All phases</option>
                     </select>
                 </div>
+                <!--
+                    CS Owner filter (Sarah 2026-07-20) — the ADVANCED-FILTERS
+                    Owner picker lists RECORD owners (sales reps), so a CS owner
+                    who owns no records never appears there. This dropdown is
+                    populated from the CS roster the platform now derives
+                    (/api/duplicates/cs-lifecycle/owners) and filters the table
+                    on the deal's "CS Owner Name". "Unassigned" isolates the
+                    missing_cs_owner gap.
+                -->
+                <div class="flex items-center gap-1 ms-2">
+                    <label for="csLifeOwnerFilter" class="text-xs font-medium text-gray-600">CS Owner:</label>
+                    <select id="csLifeOwnerFilter" data-on-change="onCsLifecycleOwnerChange" title="Filter by the deal's CS Owner Name. Populated from the live CS roster." class="text-xs rounded-full border border-gray-300 bg-white px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                        <option value="">All CS owners</option>
+                    </select>
+                </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportCsLifecycle" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of exactly the CS-lifecycle violations shown below (incl. CS detail columns), in the current sort order and filter." class="rr-btn rr-btn-ghost me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="rr-btn rr-btn-ghost me-2">🔃 Refresh from Zoho (live)</button>
@@ -2279,7 +2294,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=128"></script>
+    <script src="/js/duplicates-app.js?v=129"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

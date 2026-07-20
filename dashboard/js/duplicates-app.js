@@ -11135,6 +11135,49 @@
             if (data) renderCsLifecycle(data);
         }
 
+        // ── CS Owner filter (Sarah 2026-07-20) ───────────────────────────────
+        // The Advanced-Filters Owner picker lists RECORD owners (sales reps), so
+        // a CS owner who owns no records never appears there. This dropdown is
+        // fed by the CS roster the platform derives from the deals'
+        // "CS Owner Name" field (/api/duplicates/cs-lifecycle/owners), with an
+        // "Unassigned" entry that isolates the missing_cs_owner gap.
+        const CS_OWNER_UNASSIGNED = '__unassigned__';
+        async function _refreshCsLifecycleOwnerOptions() {
+            const sel = document.getElementById('csLifeOwnerFilter');
+            if (!sel) return;
+            let payload = null;
+            try {
+                const seg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+                const q = (seg && seg !== 'all') ? ('?segment=' + encodeURIComponent(seg)) : '';
+                const res = await fetch('/api/duplicates/cs-lifecycle/owners' + q, { credentials: 'same-origin' });
+                if (!res.ok) return;
+                payload = await res.json();
+            } catch (_) { return; /* keep whatever options are there */ }
+            if (!payload || !payload.success) return;
+            const owners = payload.owners || [];
+            const current = window._csLifecycleOwnerFilter || '';
+            const opts = ['<option value="">All CS owners</option>'];
+            if (payload.dealsWithoutOwner > 0) {
+                opts.push('<option value="' + CS_OWNER_UNASSIGNED + '"' + (current === CS_OWNER_UNASSIGNED ? ' selected' : '') + '>— Unassigned (' + payload.dealsWithoutOwner + ') —</option>');
+            }
+            owners.forEach(function (o) {
+                opts.push('<option value="' + escAttr(o.owner) + '"' + (current === o.owner ? ' selected' : '') + '>' + escapeHtml(o.owner) + ' (' + (o.deals || 0) + ')</option>');
+            });
+            sel.innerHTML = opts.join('');
+            // Drop a stale selection that no longer exists in the roster.
+            const stillPresent = !current
+                || current === CS_OWNER_UNASSIGNED
+                || owners.some(function (o) { return o.owner === current; });
+            if (!stillPresent) { window._csLifecycleOwnerFilter = ''; sel.value = ''; }
+        }
+        function onCsLifecycleOwnerChange() {
+            const sel = document.getElementById('csLifeOwnerFilter');
+            window._csLifecycleOwnerFilter = sel ? (sel.value || '') : '';
+            window._csLifecyclePage = 0; // back to page 1 under the new filter
+            const data = window._csLifecycleData;
+            if (data) renderCsLifecycle(data);
+        }
+
         function renderCsLifecycle(data) {
             window._csLifecycleData = data;
             const s = (data.summary && data.summary.by_severity) || {};
@@ -11151,6 +11194,7 @@
             if (allViolations.length === 0) {
                 body.innerHTML = rrEmptyRow(8, { glyph: '✓', title: 'No violations detected', desc: 'CS is compliant for the current filter.' });
                 _refreshCsLifecyclePhaseOptions([]);
+                _refreshCsLifecycleOwnerOptions(); // roster is independent of the rows
                 // Reset the pager — otherwise the stale "Page 5 of 6 · N deals"
                 // from the previous filter lingers over an empty table.
                 window._csLifecyclePage = 0;
@@ -11167,11 +11211,24 @@
             // the entire dataset (not just what survives the filter), and
             // a selection like "Adoption" still narrows what we paint.
             _refreshCsLifecyclePhaseOptions(groups);
+            // CS Owner options come from the derived roster endpoint (not the
+            // rows), so an owner with deals outside the current violation set
+            // still appears. Fire-and-forget — it only repaints the <select>.
+            _refreshCsLifecycleOwnerOptions();
             const phaseSel = window._csLifecyclePhaseFilter || '';
             const phaseSelNorm = _normCsPhase(phaseSel);
             let filtered = phaseSel
                 ? groups.filter(g => _normCsPhase(g.current_phase) === phaseSelNorm)
                 : groups;
+
+            // CS Owner dropdown — exact match on the deal's CS Owner Name, or
+            // the "Unassigned" bucket (no CS owner set = the missing_cs_owner gap).
+            const ownerSel = window._csLifecycleOwnerFilter || '';
+            if (ownerSel) {
+                filtered = ownerSel === CS_OWNER_UNASSIGNED
+                    ? filtered.filter(g => !String(g.cs_owner_name || '').trim())
+                    : filtered.filter(g => String(g.cs_owner_name || '').trim() === ownerSel);
+            }
 
             // Advanced Filter — applied client-side here since
             // /api/duplicates/cs-lifecycle/violations doesn't accept
