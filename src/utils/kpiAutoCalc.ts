@@ -38,13 +38,11 @@ const CANONICAL_TO_FEED: Record<string, string> = {
   // QM-KPI-009 Repeat Findings → manual (feed calc was a capture table, not findings).
   // QM-KPI-006 Handoff SLA → calcHandoffSlaCompliance (% within SLA), NOT the days-based feed calc.
   // GRC (Maram)
-  "GRC-KPI-009": "GRC-KPI-010", // High-Risk Items with Treatment Plan
   "GRC-KPI-010": "GRC-KPI-009", // Risk Assessment Coverage (BUs)
   "GRC-KPI-005": "GRC-KPI-005", // Risk Treatment On-Time Closure ← CAPA closure
   "GRC-KPI-003": "GRC-KPI-003", // Audit Evidence Readiness ← Audit & Cert Readiness
   "GRC-KPI-008": "GRC-KPI-008", // Compliance Coverage Index
   "GRC-KPI-011": "GRC-KPI-016", // Policy Review Compliance
-  "GRC-KPI-006": "GRC-KPI-013", // High-Risk Vendor Findings Closure
 };
 
 export interface KPIAutoCalcResult {
