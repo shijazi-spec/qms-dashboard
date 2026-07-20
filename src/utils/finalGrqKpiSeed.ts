@@ -90,7 +90,6 @@ const FINAL_KPIS: FinalKpi[] = [
   // ───────────── Shared — GRQ Team (3) ─────────────
   { code: "GRQ-KPI-01", name: "GRQ Health Score", owner_type: "shared", owner_name: "GRQ Team", category: "governance", unit: "%", target: 90, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures the overall operational health and performance of the Governance, Risk, Quality and Legal functions through a consolidated achievement score.", formula: "Quality×35% + GRC×35% + GRQ Specialist×15% + Legal×15%", data_source: "KPI Dashboard" },
   { code: "GRQ-KPI-02", name: "Quality ↔ GRC Handoff Effectiveness", owner_type: "shared", owner_name: "GRQ Team", category: "governance", unit: "%", target: 95, direction: "higher_is_better", frequency: "monthly", calc_mode: "manual", description: "Measures the percentage of handoffs between Quality and GRC submitted on time, correctly logged, accepted, and transferred into the required workflow without rework or delay.", formula: "Successful Handoffs ÷ Total Handoffs × 100", data_source: "Handoff Emails" },
-  { code: "GRQ-KPI-03", name: "Governance Maturity Score", owner_type: "shared", owner_name: "GRQ Team", category: "governance", unit: "%", target: 85, direction: "higher_is_better", frequency: "annual", calc_mode: "manual", description: "Measures maturity of governance practices against the assessment model.", formula: "Assessment Score ÷ Maximum Score × 100", data_source: "Governance Maturity Assessment" },
 ];
 
 const FINAL_CODES = FINAL_KPIS.map((k) => k.code);
