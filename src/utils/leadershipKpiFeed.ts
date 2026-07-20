@@ -551,19 +551,83 @@ async function calcAuditCycleTime() {
   return { value: Math.round(Number(avg) * 10) / 10, dataAvailable: true, details: { completed_audits: done } };
 }
 
-/** GRC-KPI-009 — Risk Assessment Coverage: BUs with >=1 risk / total BUs. (BU registry seeded by QM-KPI-008.) */
+/** GRC-KPI-009 (canonical GRC-KPI-010) — Risk Register Quality Index: INTERNAL
+ *  (processes/BUs — enterprise risk register) + EXTERNAL (vendor assessments),
+ *  averaged 50/50. A record counts only if owned + scored + review current +
+ *  status valid. Replaces the old 'does this BU have any risk?' coverage count. */
 async function calcRiskAssessmentCoverage() {
-  const r = await pool.query(`
-    SELECT
-      (SELECT COUNT(*)::int FROM business_units WHERE is_active) AS total,
-      (SELECT COUNT(DISTINCT bu.id)::int FROM business_units bu
-         JOIN enterprise_risks er ON lower(trim(er.owner_department)) = lower(trim(bu.bu_name))
-         WHERE bu.is_active) AS assessed
-  `);
-  const total = r.rows[0]?.total ?? 0;
-  const assessed = r.rows[0]?.assessed ?? 0;
-  if (total <= 0) return { value: 0, dataAvailable: false };
-  return { value: Math.round((assessed / total) * 1000) / 10, dataAvailable: true, details: { total_bus: total, assessed_bus: assessed } };
+  // Two halves, averaged 50/50 (renormalised if one side has no records so an
+  // empty vendor list can't halve the score). A record counts only if it passes
+  // ALL FOUR checks: owned, scored, review current, status valid.
+  try {
+    const internal = await pool.query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE
+              COALESCE(TRIM(risk_owner), '') <> ''
+          AND COALESCE(TRIM(owner_department), '') <> ''
+          AND risk_score IS NOT NULL
+          AND COALESCE(TRIM(risk_level), '') <> ''
+          AND next_review_date IS NOT NULL AND next_review_date >= NOW()
+          AND COALESCE(TRIM(status), '') <> ''
+        )::int AS valid,
+        COUNT(*) FILTER (WHERE COALESCE(TRIM(risk_owner),'') <> '' AND COALESCE(TRIM(owner_department),'') <> '')::int AS owned,
+        COUNT(*) FILTER (WHERE risk_score IS NOT NULL AND COALESCE(TRIM(risk_level),'') <> '')::int AS scored,
+        COUNT(*) FILTER (WHERE next_review_date IS NOT NULL AND next_review_date >= NOW())::int AS review_current,
+        COUNT(*) FILTER (WHERE COALESCE(TRIM(status),'') <> '')::int AS status_valid
+      FROM enterprise_risks
+      WHERE LOWER(COALESCE(TRIM(status), '')) NOT IN ('closed', 'archived', 'rejected', 'cancelled')
+    `);
+    const external = await pool.query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE
+              COALESCE(TRIM(owner_name), '') <> ''
+          AND COALESCE(TRIM(owner_department), '') <> ''
+          AND (overall_risk_score IS NOT NULL OR COALESCE(TRIM(overall_risk_level), '') <> '')
+          AND next_assessment_date IS NOT NULL AND next_assessment_date >= NOW()
+          AND last_assessment_date IS NOT NULL
+        )::int AS valid,
+        COUNT(*) FILTER (WHERE COALESCE(TRIM(owner_name),'') <> '' AND COALESCE(TRIM(owner_department),'') <> '')::int AS owned,
+        COUNT(*) FILTER (WHERE overall_risk_score IS NOT NULL OR COALESCE(TRIM(overall_risk_level),'') <> '')::int AS scored,
+        COUNT(*) FILTER (WHERE next_assessment_date IS NOT NULL AND next_assessment_date >= NOW())::int AS review_current,
+        COUNT(*) FILTER (WHERE last_assessment_date IS NOT NULL)::int AS status_valid
+      FROM vendors
+      WHERE LOWER(COALESCE(TRIM(status), '')) NOT IN ('inactive', 'terminated', 'archived')
+    `);
+    const i = internal.rows[0] ?? {};
+    const e = external.rows[0] ?? {};
+    const iTotal = Number(i.total ?? 0), eTotal = Number(e.total ?? 0);
+    if (iTotal <= 0 && eTotal <= 0) {
+      return { value: 0, dataAvailable: false, reason: "no_risk_or_vendor_records" };
+    }
+    const pct = (v: any, t: number) => (t > 0 ? (Number(v ?? 0) / t) * 100 : null);
+    const iPct = pct(i.valid, iTotal);
+    const ePct = pct(e.valid, eTotal);
+    // 50/50, renormalised over the halves that actually have records.
+    const halves = [iPct, ePct].filter((x): x is number => x !== null);
+    const value = Math.round((halves.reduce((a, b) => a + b, 0) / halves.length) * 10) / 10;
+    return {
+      value,
+      dataAvailable: true,
+      details: {
+        internal: {
+          scope: "processes / BUs (enterprise risk register, live records)",
+          total: iTotal, valid: Number(i.valid ?? 0), pct: iPct === null ? null : Math.round(iPct * 10) / 10,
+          failing: { not_owned: iTotal - Number(i.owned ?? 0), not_scored: iTotal - Number(i.scored ?? 0), review_overdue_or_unset: iTotal - Number(i.review_current ?? 0), status_blank: iTotal - Number(i.status_valid ?? 0) },
+        },
+        external: {
+          scope: "vendors (third-party assessments, active vendors)",
+          total: eTotal, valid: Number(e.valid ?? 0), pct: ePct === null ? null : Math.round(ePct * 10) / 10,
+          failing: { not_owned: eTotal - Number(e.owned ?? 0), not_scored: eTotal - Number(e.scored ?? 0), reassessment_overdue_or_unset: eTotal - Number(e.review_current ?? 0), never_assessed: eTotal - Number(e.status_valid ?? 0) },
+        },
+        weighting: halves.length === 2 ? "50/50 internal/external" : "single half (other has no records)",
+      },
+    };
+  } catch (err) {
+    logger.error(`[LeadershipFeed] risk register quality index failed: ${(err as Error).message}`);
+    return { value: 0, dataAvailable: false, reason: "risk_or_vendor_table_unavailable" };
+  }
 }
 
 /** GRC-KPI-010 — High-Risk Items with Treatment Plan: high/critical risks with >=1 treatment / total. */
@@ -784,7 +848,7 @@ const FEED_KPIS: FeedKpiConfig[] = [
   { code: "QM-KPI-012", name: "Automation Coverage (Quality Workflows)", unit: "%", target: 30, green: 30, amber: 20, direction: "higher_is_better", calc: makeCaptureCalc("QM-KPI-012", "ratio") },
   { code: "QM-KPI-013", name: "Manual Effort Reduction", unit: "%", target: 30, green: 30, amber: 20, direction: "higher_is_better", calc: makeCaptureCalc("QM-KPI-013", "reduction") },
   { code: "QM-KPI-014", name: "Operational Waste Reduction (Rework)", unit: "%", target: 20, green: 20, amber: 10, direction: "higher_is_better", calc: makeCaptureCalc("QM-KPI-014", "reduction") },
-  { code: "GRC-KPI-009", name: "Risk Assessment Coverage (BUs)", unit: "%", target: 100, green: 95, amber: 80, direction: "higher_is_better", calc: calcRiskAssessmentCoverage },
+  { code: "GRC-KPI-009", name: "Risk Register Quality Index (Internal + External)", unit: "%", target: 95, green: 95, amber: 81, direction: "higher_is_better", calc: calcRiskAssessmentCoverage },
   { code: "GRC-KPI-011", name: "TPRA Coverage Rate (Critical Vendors)", unit: "%", target: 95, green: 95, amber: 80, direction: "higher_is_better", calc: calcTpraCoverage },
   { code: "GRC-KPI-012", name: "Client/Partner Security Assessment SLA", unit: "%", target: 90, green: 90, amber: 75, direction: "higher_is_better", calc: makeCaptureCalc("GRC-KPI-012", "ratio") },
   { code: "GRC-KPI-014", name: "Regulatory Response Timeliness", unit: "days", target: 5, green: 5, amber: 8, direction: "lower_is_better", calc: makeCaptureCalc("GRC-KPI-014", "days") },
