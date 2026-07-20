@@ -278,7 +278,7 @@ export async function recordRollupComposites(): Promise<
 > {
   const rows = await pool.query(
     `SELECT d.kpi_code, d.owner_type, d.target_value, d.threshold_direction, d.is_active,
-            v.actual_value
+            d.weight, v.actual_value
        FROM kpi_definitions d
        LEFT JOIN LATERAL (
          SELECT actual_value FROM kpi_values vv WHERE vv.kpi_id = d.id
@@ -287,8 +287,11 @@ export async function recordRollupComposites(): Promise<
       WHERE d.is_active = true`,
   );
 
-  // achievements grouped by owner_type (composites excluded)
-  const byOwner: Record<string, number[]> = {};
+  // Achievements grouped by owner_type (composites excluded), each carrying its
+  // WEIGHTAGE from the approved KPI sheet so an owner's score reflects what the
+  // business actually weights — e.g. Audit Execution (30%) counts six times as
+  // much as Repeat Findings (5%), instead of every KPI counting equally.
+  const byOwner: Record<string, Array<{ ach: number; w: number }>> = {};
   const byCode: Record<string, number | null> = {};
   for (const r of rows.rows) {
     const ach =
@@ -297,10 +300,18 @@ export async function recordRollupComposites(): Promise<
         : achievementPct(r.actual_value, r.target_value, r.threshold_direction);
     byCode[r.kpi_code] = ach;
     if (ach === null || COMPOSITE_CODES.includes(r.kpi_code)) continue;
-    (byOwner[r.owner_type] ??= []).push(ach);
+    // A missing/zero weight falls back to 1 so the KPI still counts rather than
+    // silently vanishing from its owner's score.
+    const w = Number(r.weight) > 0 ? Number(r.weight) : 1;
+    (byOwner[r.owner_type] ??= []).push({ ach, w });
   }
-  const avg = (xs?: number[]): number | null =>
-    xs && xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  /** Weighted mean of an owner's KPIs: Σ(achievement × weight) ÷ Σ(weight). */
+  const avg = (xs?: Array<{ ach: number; w: number }>): number | null => {
+    if (!xs || !xs.length) return null;
+    const den = xs.reduce((a, x) => a + x.w, 0);
+    if (den <= 0) return null;
+    return xs.reduce((a, x) => a + x.ach * x.w, 0) / den;
+  };
   const q = avg(byOwner["quality_manager"]);
   const g = avg(byOwner["grc_manager"]);
   const s = avg(byOwner["grq_specialist"]);
