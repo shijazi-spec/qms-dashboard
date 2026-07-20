@@ -303,6 +303,13 @@ export async function recordRollupComposites(): Promise<
     // A missing/zero weight falls back to 1 so the KPI still counts rather than
     // silently vanishing from its owner's score.
     const w = Number(r.weight) > 0 ? Number(r.weight) : 1;
+    if (r.owner_type === "shared") {
+      // Shared/cross-functional KPIs are the 5% that tops Quality and GRC up from
+      // 95% to 100% on the approved sheet, so they count toward BOTH scorecards.
+      // (Specialist 50/50 and Legal 25x4 already total 100% on their own.)
+      (byOwner["quality_manager"] ??= []).push({ ach, w });
+      (byOwner["grc_manager"] ??= []).push({ ach, w });
+    }
     (byOwner[r.owner_type] ??= []).push({ ach, w });
   }
   /** Weighted mean of an owner's KPIs: Σ(achievement × weight) ÷ Σ(weight). */
