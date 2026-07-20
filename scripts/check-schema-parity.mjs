@@ -87,11 +87,35 @@ function listSourceFiles(dir) {
 // Returns Map<tableName, Set<columnName>>.
 function collectCreateTableColumns(source) {
   const tables = new Map();
-  const createRe = /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*?)\);/gi;
+  // Find the opening of each CREATE TABLE, then scan forward with a paren-depth
+  // counter, SKIPPING `--` line comments. A naive /\(([\s\S]*?)\);/ capture
+  // truncates the body at the first ");" — which a comment like
+  // "-- 'dismissed' = ... (false positive);" produces, silently hiding every
+  // column declared after it (that false-flagged stale_deal_dismissals.disposition).
+  const startRe = /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/gi;
   let m;
-  while ((m = createRe.exec(source)) !== null) {
+  while ((m = startRe.exec(source)) !== null) {
     const tableName = m[1];
-    const body = m[2];
+    let i = startRe.lastIndex; // first char after the opening paren
+    let depth = 1;
+    let body = "";
+    while (i < source.length && depth > 0) {
+      const ch = source[i];
+      if (ch === "-" && source[i + 1] === "-") {
+        const nl = source.indexOf("\n", i);
+        i = nl === -1 ? source.length : nl; // skip the comment, keep the newline
+        continue;
+      }
+      if (ch === "(") depth++;
+      else if (ch === ")") {
+        depth--;
+        if (depth === 0) { i++; break; }
+      }
+      body += ch;
+      i++;
+    }
+    startRe.lastIndex = i; // continue scanning after this table
+    if (depth !== 0) continue; // unbalanced / malformed — skip rather than guess
     const columns = new Set();
     // Each column is the first identifier on a line (or after a comma).
     // Strip line comments first so a -- comment in the body doesn't trip us.
