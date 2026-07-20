@@ -7831,6 +7831,35 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // CS OWNER ROSTER (Sarah 2026-07-20) — the distinct "CS Owner Name" values
+    // across Deal records, with per-owner deal/account counts, plus how many CS
+    // deals have no owner. Nothing in the platform listed the CS team before
+    // this; the name only existed per-deal in Zoho.
+    //   GET /api/duplicates/cs-lifecycle/owners?segment=&limit=
+    path: "/api/duplicates/cs-lifecycle/owners",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const segment = url.searchParams.get("segment") || undefined;
+          const limitRaw = url.searchParams.get("limit");
+          const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+          const { getCsOwners } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const result = await getCsOwners({ segment: segment as any, limit });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error fetching CS owners:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Force-refresh one or more Deals directly from Zoho's single-record API
     // (real-time, not subject to the bulk-read eventual-consistency lag that
     // can cause CS Lifecycle violations to show stale Phase / Company_Domain

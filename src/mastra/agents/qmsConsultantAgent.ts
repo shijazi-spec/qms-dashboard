@@ -29,6 +29,7 @@ import { untagRecordsTool } from "../tools/untagRecordsTool";
 import { mergeRecordsTool } from "../tools/mergeRecordsTool";
 import { updateRecordFieldTool } from "../tools/updateRecordFieldTool";
 import { csLifecycleStatusTool } from "../tools/csLifecycleStatusTool";
+import { csOwnersTool } from "../tools/csOwnersTool";
 import { dealStageAgingStatusTool } from "../tools/dealStageAgingStatusTool";
 import { executiveSummaryTool, csOverlapStatusTool, crossModuleOverlapTool, accountHintsStatusTool, recordHintsStatusTool, dealComplianceStatusTool, agentActivityTool, manualActionAuditTool, ownerAccountabilityTool, preflightCheckTool, clusterMergeCandidatesTool } from "../tools/radarTabTools";
 import { emptyRecordsStatusTool } from "../tools/emptyRecordsStatusTool";
@@ -149,7 +150,7 @@ Use suggestImprovementsTool to analyze quality trends and recommend process impr
 22. **manageChecklistTool**: Create, view, or delete structured compliance checklists. When a user asks you to create a checklist (e.g., "Create an ISO 9001 Clause 10.2 checklist"), build the items with appropriate check_types (count_check, existence_check, threshold_check, or manual) and module_to_query fields so they can be auto-verified. Available modules: nonconformances, capas, risks, policies, compliance, kpis, training, vendors, audits.
 
 ### CS Lifecycle Tool
-27. **csLifecycleStatusTool**: The Duplicate Radar's **CS Lifecycle tab** tracks Customer Success deals through their lifecycle phases — **onboarding → adoption → renewal → termination** — and checks CS data-hygiene rules. Use this tool whenever the user asks about the **CS Lifecycle tab**, the **CS team's deals**, **how many deals are in the renewal stage**, upcoming/overdue renewals, or CS data hygiene. It returns the count of CS deals **by phase** (so you can answer "X deals are in the renewal stage"), the total CS deals, and the hygiene-violation counts. NOTE: these CS-lifecycle data-quality checks are NOT the autonomous duplicate-resolver's "learning rules" (a different system) — don't confuse the two.
+27. **csLifecycleStatusTool**: The Duplicate Radar's **CS Lifecycle tab** tracks Customer Success deals through their lifecycle phases — **onboarding → adoption → renewal → termination** — and checks CS data-hygiene rules. Use this tool whenever the user asks about the **CS Lifecycle tab**, the **CS team's deals**, **how many deals are in the renewal stage**, upcoming/overdue renewals, or CS data hygiene. It returns the count of CS deals **by phase** (so you can answer "X deals are in the renewal stage"), the total CS deals, and the hygiene-violation counts. NOTE: these CS-lifecycle data-quality checks are NOT the autonomous duplicate-resolver's "learning rules" (a different system) — don't confuse the two. For WHO the CS owners ARE (the people/names, each one's deal + account count, and how many CS deals are unassigned) use **csOwnersTool** — this tool returns counts only, never names. There is no separate CS roster in the platform: the owner is the "CS Owner Name" field on each Zoho deal, so csOwnersTool derives the team from the live data.
 
    **The current CS Lifecycle rule set (12 rules) — know these so you can explain WHY a deal is flagged:**
    - **CRITICAL** (3): **phase_churn_desync** (a Churn Date is set but the phase isn't Termination — re-engagement aware), **missing_cs_owner** (an active CS deal with no CS owner — nobody accountable), and **renewal_overdue once it passes ~a quarter** (Renewal Date over **90 days** overdue, env CS_LIFECYCLE_RENEWAL_OVERDUE_CRITICAL_DAYS, while still in an active phase → the renewal has lapsed, the deal should be **moved to Termination/Churn**).
@@ -430,6 +431,9 @@ export const qmsConsultantAgent = new Agent({
     // "How many deals are in the renewal stage?" / CS Lifecycle tab status —
     // deals by lifecycle phase + CS data-hygiene violations. Read-only.
     csLifecycleStatusTool:            wt(csLifecycleStatusTool, AGENT_NAME),
+    // "Who are the CS owners?" — the CS team roster derived from the per-deal
+    // "CS Owner Name" field, with each owner's deal/account count. Read-only.
+    csOwnersTool:                     wt(csOwnersTool, AGENT_NAME),
     // "How many deals are stuck in Proposal past SLA?" / Deals Lifecycle tab —
     // Sales SOP stage-aging violations, breakdown by stage and owner. Read-only.
     dealStageAgingStatusTool:         wt(dealStageAgingStatusTool, AGENT_NAME),

@@ -10566,6 +10566,97 @@ export interface CsLifecycleScanResult {
  * the scan is cheap enough to recompute on demand (data is bounded to deals
  * the radar already indexes).
  */
+/**
+ * CS OWNER ROSTER (Sarah 2026-07-20). The platform stores no CS team list — the
+ * owner lives per-deal in Zoho's "CS Owner Name" field, so nothing could answer
+ * "who are the CS owners?" (Adam included). This derives the roster from the
+ * data: the DISTINCT CS Owner Name values across Deal records, with how many
+ * deals/accounts each owns, plus how many CS deals have NO owner (the
+ * missing_cs_owner gap). Tolerates Zoho's key variants and the lookup-object
+ * shape ({name}) exactly like duplicateRadarCsOverlap's extractor.
+ */
+export interface CsOwnerRow {
+  owner: string;
+  deals: number;
+  accounts: number;
+}
+export async function getCsOwners(
+  opts: { segment?: DuplicateFilters["segment"]; limit?: number } = {},
+): Promise<{
+  owners: CsOwnerRow[];
+  totalOwners: number;
+  totalCsDeals: number;
+  dealsWithoutOwner: number;
+}> {
+  const limit = Math.max(1, Math.min(opts.limit ?? 200, 1000));
+  // Zoho key variants — hardcoded constants (no injection surface). A lookup
+  // field arrives as {name}; a picklist/text arrives as a bare string.
+  const OWNER_KEYS = [
+    "CS_Owner_Name",
+    "CS_Owner",
+    "CS_Owner1",
+    "CSOwnerName",
+    "cs_owner_name",
+    "CS Owner Name",
+  ];
+  const PHASE_KEYS = ["Phase", "phase", "CS_Phase", "Customer_Phase"];
+  const jsonText = (key: string) =>
+    `CASE WHEN jsonb_typeof(r.raw_data->'${key}') = 'object' THEN NULLIF(BTRIM(r.raw_data->'${key}'->>'name'),'')` +
+    ` WHEN jsonb_typeof(r.raw_data->'${key}') = 'string' THEN NULLIF(BTRIM(r.raw_data->>'${key}'),'') ELSE NULL END`;
+  const ownerExpr = `COALESCE(${OWNER_KEYS.map(jsonText).join(", ")})`;
+  const phaseExpr = `COALESCE(${PHASE_KEYS.map(jsonText).join(", ")})`;
+
+  const params: any[] = [];
+  const seg = buildSegmentPredicate(opts.segment, 1);
+  let segmentCond = "";
+  if (seg.condition) {
+    segmentCond = ` AND ${seg.condition}`;
+    params.push(...seg.params);
+  }
+  const baseCte = `
+    WITH cs AS (
+      SELECT ${ownerExpr} AS owner,
+             ${phaseExpr} AS phase,
+             r.account_name
+        FROM duplicate_records r
+       WHERE r.record_type = 'deal'
+         AND r.cleanup_class IS NULL${segmentCond}
+    )`;
+
+  const ownersQ = await pool.query<{ owner: string; deals: string; accounts: string }>(
+    `${baseCte}
+     SELECT owner,
+            COUNT(*)::text AS deals,
+            COUNT(DISTINCT NULLIF(BTRIM(account_name), ''))::text AS accounts
+       FROM cs
+      WHERE owner IS NOT NULL
+      GROUP BY owner
+      ORDER BY COUNT(*) DESC, owner ASC
+      LIMIT $${params.length + 1}`,
+    [...params, limit],
+  );
+  // "CS deals" for the no-owner gap = deals that carry a CS Phase (i.e. are on
+  // the CS pipeline). Counting every Deal would drown the number in sales deals.
+  const gapQ = await pool.query<{ with_owner: string; without_owner: string }>(
+    `${baseCte}
+     SELECT COUNT(*) FILTER (WHERE owner IS NOT NULL)::text AS with_owner,
+            COUNT(*) FILTER (WHERE owner IS NULL AND phase IS NOT NULL)::text AS without_owner
+       FROM cs`,
+    params,
+  );
+  const owners: CsOwnerRow[] = ownersQ.rows.map((r) => ({
+    owner: r.owner,
+    deals: parseInt(r.deals) || 0,
+    accounts: parseInt(r.accounts) || 0,
+  }));
+  return {
+    owners,
+    totalOwners: owners.length,
+    totalCsDeals: parseInt(gapQ.rows[0]?.with_owner || "0") || 0,
+    dealsWithoutOwner: parseInt(gapQ.rows[0]?.without_owner || "0") || 0,
+  };
+}
+
 export async function scanCsLifecycleViolations(opts: {
   severity?: CsViolationSeverity;
   code?: CsViolationCode;
