@@ -19,7 +19,7 @@ export const csOwnersTool = createTool({
   id: "cs-owners",
 
   description:
-    "List the Customer Success (CS) owners — the actual PEOPLE on the CS team — with how many deals and accounts each one owns, plus how many CS deals have no owner assigned. Names are derived from the 'CS Owner Name' field on Zoho deals (the platform keeps no separate CS roster). Use whenever the user asks who the CS owners/CS team are, who owns a CS book, who has the most CS deals, or how many CS deals are unassigned.",
+    "List the Customer Success (CS) team — the maintained roster of CS members (name + WalaPlus email) cross-referenced with live Zoho data: how many deals and accounts each one owns, which roster members carry NO deals, which owner names on deals are NOT on the roster (typo / ex-employee / non-CS person), and how many CS deals have no owner at all. Use whenever the user asks who the CS owners or CS team are, who owns a CS book, who has the most CS deals, who is unassigned, or whether a CS Owner name in the CRM is valid.",
 
   inputSchema: z.object({
     segment: z
@@ -31,6 +31,7 @@ export const csOwnersTool = createTool({
 
   outputSchema: z.object({
     success: z.boolean(),
+    rosterSize: z.number(),
     totalOwners: z.number(),
     totalCsDeals: z.number(),
     dealsWithoutOwner: z.number(),
@@ -39,8 +40,14 @@ export const csOwnersTool = createTool({
         owner: z.string(),
         deals: z.number(),
         accounts: z.number(),
+        onRoster: z.boolean(),
+        email: z.string().nullable(),
       }),
     ),
+    rosterWithoutDeals: z.array(
+      z.object({ name: z.string(), email: z.string() }),
+    ),
+    offRosterNames: z.array(z.string()),
     error: z.string().optional(),
   }),
 
@@ -62,18 +69,30 @@ export const csOwnersTool = createTool({
       });
       return {
         success: true,
+        rosterSize: r.roster_size,
         totalOwners: r.totalOwners,
         totalCsDeals: r.totalCsDeals,
         dealsWithoutOwner: r.dealsWithoutOwner,
-        owners: r.owners,
+        owners: r.owners.map((o) => ({
+          owner: o.owner,
+          deals: o.deals,
+          accounts: o.accounts,
+          onRoster: o.on_roster,
+          email: o.email,
+        })),
+        rosterWithoutDeals: r.roster_without_deals,
+        offRosterNames: r.off_roster_names,
       };
     } catch (e: any) {
       return {
         success: false,
+        rosterSize: 0,
         totalOwners: 0,
         totalCsDeals: 0,
         dealsWithoutOwner: 0,
         owners: [],
+        rosterWithoutDeals: [],
+        offRosterNames: [],
         error: e?.message || String(e),
       };
     }

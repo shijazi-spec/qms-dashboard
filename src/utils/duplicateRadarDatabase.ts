@@ -10579,6 +10579,10 @@ export interface CsOwnerRow {
   owner: string;
   deals: number;
   accounts: number;
+  /** True when this name resolves to a member of the maintained CS roster. */
+  on_roster: boolean;
+  /** Roster mailbox when matched — the stable identity behind the display name. */
+  email: string | null;
 }
 export async function getCsOwners(
   opts: { segment?: DuplicateFilters["segment"]; limit?: number } = {},
@@ -10587,6 +10591,12 @@ export async function getCsOwners(
   totalOwners: number;
   totalCsDeals: number;
   dealsWithoutOwner: number;
+  /** Roster members carrying NO deals — nobody assigned / new joiner. */
+  roster_without_deals: Array<{ name: string; email: string }>;
+  /** Names found on deals that are NOT on the roster — typo / ex-employee / non-CS person. */
+  off_roster_names: string[];
+  /** Size of the maintained roster (independent of the deal data). */
+  roster_size: number;
 }> {
   const limit = Math.max(1, Math.min(opts.limit ?? 200, 1000));
   // Zoho key variants — hardcoded constants (no injection surface). A lookup
@@ -10644,16 +10654,38 @@ export async function getCsOwners(
        FROM cs`,
     params,
   );
-  const owners: CsOwnerRow[] = ownersQ.rows.map((r) => ({
-    owner: r.owner,
-    deals: parseInt(r.deals) || 0,
-    accounts: parseInt(r.accounts) || 0,
-  }));
+  // Cross-reference the derived names against the MAINTAINED roster. The two
+  // answer different questions — the roster is who is ON the team, the query is
+  // who actually carries deals — and the mismatch in either direction is the
+  // useful signal (Sarah 2026-07-21).
+  const { getCsTeamMembers, matchCsTeamMember } = await import("./csTeamMembers");
+  const roster = getCsTeamMembers();
+  const seenEmails = new Set<string>();
+  const offRoster: string[] = [];
+  const owners: CsOwnerRow[] = ownersQ.rows.map((r) => {
+    const member = matchCsTeamMember(r.owner);
+    if (member) seenEmails.add(member.email.toLowerCase());
+    else if (r.owner) offRoster.push(r.owner);
+    return {
+      owner: r.owner,
+      deals: parseInt(r.deals) || 0,
+      accounts: parseInt(r.accounts) || 0,
+      on_roster: !!member,
+      email: member ? member.email : null,
+    };
+  });
+  const rosterWithoutDeals = roster
+    .filter((m) => !seenEmails.has(m.email.toLowerCase()))
+    .map((m) => ({ name: m.name, email: m.email }));
+
   return {
     owners,
     totalOwners: owners.length,
     totalCsDeals: parseInt(gapQ.rows[0]?.with_owner || "0") || 0,
     dealsWithoutOwner: parseInt(gapQ.rows[0]?.without_owner || "0") || 0,
+    roster_without_deals: rosterWithoutDeals,
+    off_roster_names: offRoster,
+    roster_size: roster.length,
   };
 }
 
