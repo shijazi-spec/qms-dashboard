@@ -1676,6 +1676,42 @@ export function basicPreflightVerdict(input: {
 }
 
 /**
+ * RULE 3 — ACTIVE OPEN SALES DEAL (Sarah 2026-07-21).
+ *
+ * The company is already being worked in the pipeline (New Deal / Contacted /
+ * Not Attend Meeting / Meeting / Proposal / On Hold / Agreement Sent). That is
+ * NOT a duplicate contact and NOT an existing client, so Rules 1 and 2 both let
+ * it through — but importing on top of a live opportunity puts two reps on the
+ * same company. REVIEW, not block: the Head of Sales decides whether the new
+ * contact strengthens the open deal or should wait.
+ */
+export function activeDealPreflightVerdict(input: {
+  dealName: string;
+  owner: string | null;
+  stage: string;
+}): {
+  verdict: PreflightVerdict;
+  reason: string;
+  suggested_action: string;
+  executive_action: string;
+  executive_severity: PreflightResultRow["executive_severity"];
+} {
+  const ownerTxt = input.owner ? ` owned by ${input.owner}` : "";
+  const stageTxt = input.stage ? ` (stage: ${input.stage})` : "";
+  return {
+    verdict: "review",
+    reason: "active_deal",
+    suggested_action:
+      `This company already has an ACTIVE deal in the sales pipeline — "${input.dealName}"${stageTxt}${ownerTxt}. ` +
+      "Do not import blindly: coordinate with the deal owner so two reps don't work the same company. " +
+      "Head of Sales to decide whether this contact joins the open deal or the row waits.",
+    executive_action:
+      `REVIEW — open deal in progress${ownerTxt}${stageTxt}. Coordinate with the owner before importing.`,
+    executive_severity: "medium",
+  };
+}
+
+/**
  * RULE 2 (v2) — existing-client verdict (Ahmad 2026-06-22).
  *
  * Runs ONLY when Rule 1 (email/phone) found no contact duplicate. Given the
@@ -2045,6 +2081,136 @@ function _csMergeStatus(prev: CsClientStatus | undefined, next: CsClientStatus):
 
 let _csDirCache: CsClientDirectory | null = null;
 const CS_DIR_TTL_MS = 60_000;
+
+/**
+ * OPEN-DEAL DIRECTORY (Sarah 2026-07-21).
+ *
+ * The BASIC rule ladder screened for duplicate contacts (Rule 1) and existing
+ * CLIENTS (Rule 2 — signed/paid or churned), but nothing checked whether the
+ * company already has an ACTIVE deal in the SALES pipeline. Result: a company
+ * being actively worked ("New Deal / Contacted / Not Attend Meeting / Meeting /
+ * Proposal / On Hold / Agreement Sent") came back PASS, so a rep could import a
+ * lead on top of a colleague's live opportunity. In the 500-Mawsool PASS export
+ * the "Existing Active Deal" column was populated on 0 of 171 rows.
+ *
+ * "Active" here uses the SAME semantics as the full-mode ladder: a non-empty
+ * stage that is neither a CUSTOMER stage (Paid / Agreement Signed — those are
+ * the CS block) nor a dead one (lost / dropped / cancelled). So tenant-custom
+ * open stages are covered without hard-coding the seven stage names.
+ *
+ * Indexed by domain and by normalized company name, inheriting the parent
+ * Account's domain/name the way the CS directory does, so an Arabic-only deal
+ * name still resolves. Cached with the same TTL as the CS directory.
+ */
+interface OpenDealMatch {
+  zohoId: string;
+  dealName: string;
+  owner: string | null;
+  stage: string;
+}
+interface OpenDealDirectory {
+  byDomain: Map<string, OpenDealMatch>;
+  byName: Map<string, OpenDealMatch>;
+  builtAt: number;
+  count: number;
+}
+let _openDealDirCache: OpenDealDirectory | null = null;
+
+async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
+  const now = Date.now();
+  if (_openDealDirCache && now - _openDealDirCache.builtAt < CS_DIR_TTL_MS) {
+    return _openDealDirCache;
+  }
+  const byDomain = new Map<string, OpenDealMatch>();
+  const byName = new Map<string, OpenDealMatch>();
+
+  // Parent-account lookup so a deal with no domain of its own can inherit one.
+  const accountById = new Map<string, { domain: string | null; norm: string | null }>();
+  try {
+    const acct =
+      (
+        await queryWithTimeout<any>(
+          `SELECT zoho_record_id, LOWER(domain) AS domain, record_name, company_name
+             FROM duplicate_records
+            WHERE record_type = 'account'
+            LIMIT 200000`,
+          [],
+          undefined,
+          PREFLIGHT_DIR_TIMEOUT_MS,
+        )
+      )?.rows ?? [];
+    for (const a of acct) {
+      const zid = (a.zoho_record_id || "").toString().trim();
+      if (!zid) continue;
+      const raw = (a.company_name || a.record_name || "").toString();
+      accountById.set(zid, {
+        domain: (a.domain || "").toString().trim().toLowerCase() || null,
+        norm: raw && !isPlaceholderName(raw) ? normalizeCompanyName(raw) : null,
+      });
+    }
+  } catch {
+    /* account inheritance is best-effort */
+  }
+
+  const rows =
+    (
+      await queryWithTimeout<any>(
+        `SELECT zoho_record_id, record_name, account_name, company_name, owner_name,
+                LOWER(domain) AS domain,
+                raw_data->'Account_Name'->>'id' AS account_zoho_id,
+                LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) AS stage
+           FROM duplicate_records
+          WHERE record_type = 'deal'
+            AND cleanup_class IS NULL
+            AND COALESCE(NULLIF(stage,''), raw_data->>'Stage','') <> ''
+          LIMIT 200000`,
+        [],
+        undefined,
+        PREFLIGHT_DIR_TIMEOUT_MS,
+      )
+    )?.rows ?? [];
+
+  let count = 0;
+  for (const d of rows) {
+    const stage = (d.stage || "").toString().trim();
+    // OPEN = has a stage, and is neither a customer stage nor a dead one.
+    if (!stage || PF_CUSTOMER_STAGES.has(stage) || PF_DEAD_STAGE_RE.test(stage)) continue;
+    const zohoId = (d.zoho_record_id || "").toString().trim();
+    if (!zohoId) continue;
+    const match: OpenDealMatch = {
+      zohoId,
+      dealName: (d.record_name || "").toString().trim() || zohoId,
+      owner: (d.owner_name || "").toString().trim() || null,
+      stage,
+    };
+    count++;
+    const parent = accountById.get((d.account_zoho_id || "").toString().trim());
+    // Domains: the deal's own, then its Account's.
+    for (const dm of [d.domain, parent?.domain]) {
+      const dom = (dm || "").toString().trim().toLowerCase();
+      // First writer wins — deals arrive newest-first-ish; any open deal is
+      // enough to warrant a review, so we don't need the "best" one.
+      if (dom && !byDomain.has(dom)) byDomain.set(dom, match);
+    }
+    // Names: account name, company name, deal name, then the Account's name.
+    for (const raw of [d.account_name, d.company_name, d.record_name]) {
+      const s = (raw || "").toString().trim();
+      if (!s || isPlaceholderName(s)) continue;
+      const norm = normalizeCompanyName(s);
+      // Same guards as the CS directory: long enough AND carrying a distinctive
+      // (non-generic) token, so "National Trading" can't fuse onto a stranger.
+      if (norm.length >= 4 && _csDistinctiveTokens(norm).length > 0 && !byName.has(norm)) {
+        byName.set(norm, match);
+      }
+    }
+    if (parent?.norm && parent.norm.length >= 4 && _csDistinctiveTokens(parent.norm).length > 0) {
+      if (!byName.has(parent.norm)) byName.set(parent.norm, match);
+    }
+  }
+
+  _openDealDirCache = { byDomain, byName, builtAt: now, count };
+  return _openDealDirCache;
+}
 
 /**
  * Drop the cached CS-client directory so the very next preflight rebuilds it
@@ -2971,6 +3137,22 @@ async function runPreflightBasic(input: {
   // name-containment → fuzzy (see the CsClientDirectory helpers above).
   const todayMs = Date.now();
   const csDir = await getCsClientDirectory(todayMs);
+  // Rule 3 needs the open-pipeline picture. Built once per run (cached 60s),
+  // same shape/guards as the CS directory. Best-effort: if it fails we simply
+  // skip Rule 3 rather than failing the whole preflight.
+  let openDealDir: OpenDealDirectory = {
+    byDomain: new Map(),
+    byName: new Map(),
+    builtAt: Date.now(),
+    count: 0,
+  };
+  try {
+    openDealDir = await getOpenDealDirectory();
+  } catch (e: any) {
+    logger.warn(
+      `[preflight] open-deal directory unavailable, Rule 3 skipped: ${e?.message || e}`,
+    );
+  }
 
   const moduleOf = (rt: string | null | undefined): "Leads" | "Deals" | "Contacts" | "Accounts" => {
     const t = (rt || "").toLowerCase();
@@ -3225,6 +3407,28 @@ async function runPreflightBasic(input: {
         csMatchVia = null;
       }
     }
+
+    // ── RULE 3 — ACTIVE OPEN SALES DEAL (Sarah 2026-07-21) ────────────────
+    // A company already being worked in the pipeline must NOT come back as a
+    // clean PASS — a rep would import a lead on top of a colleague's live
+    // opportunity. Only UPGRADES a row that survived Rules 1 & 2 (pass/warn);
+    // a duplicate/block/no_contact verdict is already stronger and stays put.
+    // Surfaces the deal link + its owner so the Head of Sales can arbitrate.
+    let openDeal: OpenDealMatch | null = null;
+    if (v.verdict === "pass" || v.verdict === "warn") {
+      const nmR3 = nameByRow.get(i);
+      openDeal =
+        (domain ? openDealDir.byDomain.get(domain) : undefined) ??
+        (nmR3 ? openDealDir.byName.get(nmR3) : undefined) ??
+        null;
+      if (openDeal) {
+        v = activeDealPreflightVerdict({
+          dealName: openDeal.dealName,
+          owner: openDeal.owner,
+          stage: openDeal.stage,
+        });
+      }
+    }
     summary[v.verdict]++;
 
     const owners: string[] = [];
@@ -3269,6 +3473,28 @@ async function runPreflightBasic(input: {
       csPhaseOut = csStatus.phase;
       matchedAccountZohoIdOut = csStatus.accountZohoId;
       if (csStatus.lifecycleState) lifecycleOut = csStatus.lifecycleState;
+    }
+
+    // RULE 3 — attach the live deal + its owner so "Existing Active Deal" and
+    // "Existing Owner(s)" are populated for the Head of Sales review. Runs
+    // AFTER the branches above because a churned-client row (Rule 2 warn) can
+    // ALSO have a fresh open deal — we keep the CS owner and add the deal owner.
+    if (openDeal) {
+      if (openDeal.owner && !owners.includes(openDeal.owner)) owners.push(openDeal.owner);
+      const dealLink = {
+        url: buildZohoRecordUrl("Deals", openDeal.zohoId),
+        label: openDeal.dealName,
+      };
+      crmLinks = {
+        active_lead: crmLinks?.active_lead ?? null,
+        active_deal: dealLink,
+        client_deal: crmLinks?.client_deal ?? null,
+        account: crmLinks?.account ?? null,
+      };
+      if (!matchedViaOut) {
+        matchedViaOut =
+          domain && openDealDir.byDomain.has(domain) ? "domain" : "company_name";
+      }
     }
 
     // Remember any client this row resolved to, keyed by its company name, so a
