@@ -2155,14 +2155,36 @@ async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
   const rows =
     (
       await queryWithTimeout<any>(
-        `SELECT zoho_record_id, record_name, account_name, company_name, owner_name,
-                LOWER(domain) AS domain,
-                raw_data->'Account_Name'->>'id' AS account_zoho_id,
-                LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) AS stage
-           FROM duplicate_records
-          WHERE record_type = 'deal'
-            AND cleanup_class IS NULL
-            AND COALESCE(NULLIF(stage,''), raw_data->>'Stage','') <> ''
+        // CORPORATE ONLY (Sarah 2026-07-21). Preflight vets CORPORATE/B2B
+        // imports; Marketplace / Partner-Accounts deals are out of scope. The
+        // first run flagged 7 rows on stage "Partner Active" and 1 on "Welcome
+        // Communications" — both Marketplace-pipeline stages — because this
+        // query had no scope filter. Layout is matched by SUBSTRING (not the
+        // exact MERCHANT_LAYOUT_NAMES list) so tenant layouts like "Doam
+        // Marketplace" are excluded too, and it falls back to raw_data when the
+        // layout_name column is blank — the same two traps fixed in the radar's
+        // segment predicate.
+        `WITH d AS (
+           SELECT zoho_record_id, record_name, account_name, company_name, owner_name,
+                  LOWER(domain) AS domain,
+                  raw_data->'Account_Name'->>'id' AS account_zoho_id,
+                  LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) AS stage,
+                  regexp_replace(
+                    LOWER(COALESCE(NULLIF(layout_name,''),
+                                   raw_data#>>'{Layout,name}',
+                                   raw_data#>>'{$layout,name}',
+                                   raw_data->>'Layout', '')),
+                    '[^a-z0-9]', '', 'g') AS layout_norm
+             FROM duplicate_records
+            WHERE record_type = 'deal'
+              AND cleanup_class IS NULL
+              AND COALESCE(NULLIF(stage,''), raw_data->>'Stage','') <> ''
+         )
+         SELECT zoho_record_id, record_name, account_name, company_name, owner_name,
+                domain, account_zoho_id, stage
+           FROM d
+          WHERE layout_norm NOT LIKE '%marketplace%'
+            AND layout_norm NOT LIKE '%partneraccount%'
           LIMIT 200000`,
         [],
         undefined,
