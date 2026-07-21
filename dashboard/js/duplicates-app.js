@@ -6908,7 +6908,12 @@
             const data = window._csLifecycleData;
             const violations = (data && data.violations) || [];
             if (!violations.length) { rrToast('Nothing to export for the current filter.'); return; }
-            const groups = groupCsLifecycleByDeal(violations);
+            // Export EXACTLY what the table shows (Sarah 2026-07-21). This used
+            // to export every violation regardless of the phase / CS Owner /
+            // Advanced filters, contradicting the button's own tooltip. Same
+            // shared filter chain the renderer uses, then the same sort.
+            const groups = _csLifecycleApplyFilters(groupCsLifecycleByDeal(violations));
+            if (!groups.length) { rrToast('Nothing to export — no rows match the active filters.'); return; }
             const sorted = sortCsLifecycleRows(groups, window._csLifecycleSort.key, window._csLifecycleSort.dir);
             // CSV keeps BOTH Health and ExtID (Admin) — the dashboard UI
             // replaced Health with ExtID per operator request, but losing
@@ -11178,6 +11183,48 @@
             if (data) renderCsLifecycle(data);
         }
 
+        // THE single CS-Lifecycle filter chain — phase dropdown, CS Owner
+        // dropdown, then the Advanced Filters panel. Shared by the table render
+        // AND the CSV export so the two can never drift (Sarah 2026-07-21: the
+        // export ignored every filter despite promising "the current filter").
+        // Severity is NOT applied here — it's a server-side query param, so
+        // window._csLifecycleData already reflects the active severity chip.
+        function _csLifecycleApplyFilters(groups) {
+            const phaseSel = window._csLifecyclePhaseFilter || '';
+            const phaseSelNorm = _normCsPhase(phaseSel);
+            let filtered = phaseSel
+                ? (groups || []).filter(g => _normCsPhase(g.current_phase) === phaseSelNorm)
+                : (groups || []);
+
+            // CS Owner dropdown — exact match on the deal's CS Owner Name, or
+            // the "Unassigned" bucket (no CS owner set = the missing_cs_owner gap).
+            const ownerSel = window._csLifecycleOwnerFilter || '';
+            if (ownerSel) {
+                filtered = ownerSel === CS_OWNER_UNASSIGNED
+                    ? filtered.filter(g => !String(g.cs_owner_name || '').trim())
+                    : filtered.filter(g => String(g.cs_owner_name || '').trim() === ownerSel);
+            }
+
+            // Advanced Filter — applied client-side since
+            // /api/duplicates/cs-lifecycle/violations doesn't accept
+            // owner/domain/date params. Owner matches against cs_owner_name;
+            // domain against the company domain; date range against any of
+            // customer_since / renewal_date / churn_date (deal is "in
+            // window" if any lifecycle date sits inside the range).
+            return filtered.filter(g => rowMatchesAdvancedFilter(g, {
+                ownerField:    'cs_owner_name',
+                domainField:   'domain',
+                dateFields:    ['customer_since', 'renewal_date', 'churn_date'],
+                // 2026-06-08 — wire Layout / Stage / Pipeline filters
+                // explicitly. Backend now surfaces these from the underlying
+                // Zoho Deal's raw_data; groupCsLifecycleByDeal propagates
+                // them onto each group.
+                layoutField:   'layout',
+                stageField:    'stage',
+                pipelineField: 'pipeline',
+            }));
+        }
+
         function renderCsLifecycle(data) {
             window._csLifecycleData = data;
             const s = (data.summary && data.summary.by_severity) || {};
@@ -11215,39 +11262,7 @@
             // rows), so an owner with deals outside the current violation set
             // still appears. Fire-and-forget — it only repaints the <select>.
             _refreshCsLifecycleOwnerOptions();
-            const phaseSel = window._csLifecyclePhaseFilter || '';
-            const phaseSelNorm = _normCsPhase(phaseSel);
-            let filtered = phaseSel
-                ? groups.filter(g => _normCsPhase(g.current_phase) === phaseSelNorm)
-                : groups;
-
-            // CS Owner dropdown — exact match on the deal's CS Owner Name, or
-            // the "Unassigned" bucket (no CS owner set = the missing_cs_owner gap).
-            const ownerSel = window._csLifecycleOwnerFilter || '';
-            if (ownerSel) {
-                filtered = ownerSel === CS_OWNER_UNASSIGNED
-                    ? filtered.filter(g => !String(g.cs_owner_name || '').trim())
-                    : filtered.filter(g => String(g.cs_owner_name || '').trim() === ownerSel);
-            }
-
-            // Advanced Filter — applied client-side here since
-            // /api/duplicates/cs-lifecycle/violations doesn't accept
-            // owner/domain/date params. Owner matches against cs_owner_name;
-            // domain against the company domain; date range against any of
-            // customer_since / renewal_date / churn_date (deal is "in
-            // window" if any lifecycle date sits inside the range).
-            filtered = filtered.filter(g => rowMatchesAdvancedFilter(g, {
-                ownerField:    'cs_owner_name',
-                domainField:   'domain',
-                dateFields:    ['customer_since', 'renewal_date', 'churn_date'],
-                // 2026-06-08 — wire Layout / Stage / Pipeline filters
-                // explicitly. Backend now surfaces these from the underlying
-                // Zoho Deal's raw_data; groupCsLifecycleByDeal propagates
-                // them onto each group.
-                layoutField:   'layout',
-                stageField:    'stage',
-                pipelineField: 'pipeline',
-            }));
+            const filtered = _csLifecycleApplyFilters(groups);
 
             const sorted = sortCsLifecycleRows(filtered, window._csLifecycleSort.key, window._csLifecycleSort.dir);
 
