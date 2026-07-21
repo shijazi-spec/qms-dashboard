@@ -7831,6 +7831,32 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // DEAL STAGE AUDIT (Sarah 2026-07-21) — READ-ONLY. Every distinct Zoho Deal
+    // Stage value with counts, a corporate/marketplace split and the pipelines
+    // it appears on, plus suspected near-duplicate values (e.g. "Hold" vs
+    // "On Hold"). Writes nothing: re-staging records and removing a dead
+    // picklist option are manual Zoho steps, in that order.
+    //   GET /api/duplicates/deal-stage-audit
+    path: "/api/duplicates/deal-stage-audit",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const { getDealStageAudit } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const result = await getDealStageAudit();
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error building deal stage audit:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // CS OWNER ROSTER (Sarah 2026-07-20) — the distinct "CS Owner Name" values
     // across Deal records, with per-owner deal/account counts, plus how many CS
     // deals have no owner. Nothing in the platform listed the CS team before

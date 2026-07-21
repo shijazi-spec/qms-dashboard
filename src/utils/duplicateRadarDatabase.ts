@@ -10689,6 +10689,116 @@ export async function getCsOwners(
   };
 }
 
+/**
+ * DEAL STAGE AUDIT — READ-ONLY (Sarah 2026-07-21).
+ *
+ * A preflight run surfaced deals on BOTH "On Hold" and "Hold", i.e. the Zoho
+ * Stage picklist carries near-duplicate values. That sample covered only 41
+ * rows, so it could not show the real scale. This lists EVERY distinct Stage
+ * value across all Deal records with its deal count, a corporate/marketplace
+ * split (odd stages like "Partner Active" / "Welcome Communications" belong to
+ * the Marketplace + CS pipelines, not corporate sales) and the pipelines each
+ * stage appears on — so the true variant picture is visible before anyone edits
+ * the picklist.
+ *
+ * Writes NOTHING. Re-staging records and removing a dead picklist option are
+ * deliberate manual steps in Zoho — and in that order, since deleting an option
+ * still in use orphans those deals.
+ */
+export interface DealStageAuditRow {
+  stage: string;
+  deals: number;
+  corporate: number;
+  marketplace: number;
+  pipelines: string[];
+}
+export async function getDealStageAudit(): Promise<{
+  stages: DealStageAuditRow[];
+  suspected_variants: Array<{ group: string[]; note: string }>;
+  total_deals: number;
+  distinct_stages: number;
+}> {
+  const LAYOUT_NORM =
+    "regexp_replace(LOWER(COALESCE(NULLIF(layout_name,''), raw_data#>>'{Layout,name}', raw_data#>>'{$layout,name}', raw_data->>'Layout','')), '[^a-z0-9]', '', 'g')";
+  const IS_MKT = `(${LAYOUT_NORM} LIKE '%marketplace%' OR ${LAYOUT_NORM} LIKE '%partneraccount%')`;
+  const q = await pool.query<{
+    stage: string;
+    deals: string;
+    corporate: string;
+    marketplace: string;
+    pipelines: string[] | null;
+  }>(
+    `WITH d AS (
+       SELECT COALESCE(NULLIF(BTRIM(stage),''), BTRIM(raw_data->>'Stage')) AS stage_raw,
+              ${IS_MKT} AS is_mkt,
+              COALESCE(NULLIF(BTRIM(pipeline),''), BTRIM(raw_data->>'Pipeline')) AS pipeline
+         FROM duplicate_records
+        WHERE record_type = 'deal'
+          AND cleanup_class IS NULL
+     )
+     SELECT stage_raw AS stage,
+            COUNT(*)::text AS deals,
+            COUNT(*) FILTER (WHERE NOT is_mkt)::text AS corporate,
+            COUNT(*) FILTER (WHERE is_mkt)::text AS marketplace,
+            (ARRAY_AGG(DISTINCT pipeline) FILTER (WHERE pipeline IS NOT NULL AND pipeline <> ''))[1:6] AS pipelines
+       FROM d
+      WHERE stage_raw IS NOT NULL AND stage_raw <> ''
+      GROUP BY stage_raw
+      ORDER BY COUNT(*) DESC, stage_raw ASC`,
+  );
+  const stages: DealStageAuditRow[] = q.rows.map((r) => ({
+    stage: r.stage,
+    deals: parseInt(r.deals) || 0,
+    corporate: parseInt(r.corporate) || 0,
+    marketplace: parseInt(r.marketplace) || 0,
+    pipelines: Array.isArray(r.pipelines) ? r.pipelines.filter(Boolean) : [],
+  }));
+
+  // Variant detection. Two flavours, both reported so the operator can judge:
+  //   (1) SAME normalised form  — differs only by case/spacing/punctuation
+  //       ("On Hold" vs "on-hold"). Almost certainly the same stage.
+  //   (2) One normalised form CONTAINED in another ("hold" inside "onhold").
+  //       A strong hint, not proof — flagged for human review, never merged.
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const byNorm = new Map<string, string[]>();
+  for (const s of stages) {
+    const k = norm(s.stage);
+    if (!k) continue;
+    const arr = byNorm.get(k) || [];
+    arr.push(s.stage);
+    byNorm.set(k, arr);
+  }
+  const variants: Array<{ group: string[]; note: string }> = [];
+  for (const [, names] of byNorm) {
+    if (names.length > 1) {
+      variants.push({
+        group: names,
+        note: "Identical once case/spacing/punctuation is ignored — same stage stored two ways.",
+      });
+    }
+  }
+  const keys = [...byNorm.keys()];
+  for (let a = 0; a < keys.length; a++) {
+    for (let b = 0; b < keys.length; b++) {
+      const ka = keys[a]!;
+      const kb = keys[b]!;
+      if (a === b || ka.length >= kb.length) continue;
+      if (kb.includes(ka)) {
+        variants.push({
+          group: [...(byNorm.get(ka) || []), ...(byNorm.get(kb) || [])],
+          note: `"${byNorm.get(ka)![0]}" is contained in "${byNorm.get(kb)![0]}" — likely the same stage; confirm before consolidating.`,
+        });
+      }
+    }
+  }
+  return {
+    stages,
+    suspected_variants: variants,
+    total_deals: stages.reduce((a, s) => a + s.deals, 0),
+    distinct_stages: stages.length,
+  };
+}
+
 export async function scanCsLifecycleViolations(opts: {
   severity?: CsViolationSeverity;
   code?: CsViolationCode;
