@@ -489,11 +489,41 @@ export function resolveDomain(row: PreflightInputRow): string | null {
  * findOrCreateClusterByCompany — anything shorter than 7 digits is too
  * generic to use as identity and is dropped silently.
  */
+/**
+ * Enrichment-vendor placeholders (Apollo, ZoomInfo, …) that mean "we have no
+ * value" but arrive as LITERAL TEXT in the phone/email cells — e.g. Apollo
+ * writes "Not available (N/A)" into Mobile Phone and "Not available" into
+ * Business Email. Treated as EMPTY everywhere so a placeholder can never
+ * masquerade as a real phone/email and slip a row through (Sarah 2026-07-22).
+ */
+const PF_PLACEHOLDER_RE =
+  /^\s*(n\/?a|na|not\s*available(\s*\(n\/?a\))?|none|null|unknown|-+|—|\.+)\s*$/i;
+export function stripPlaceholder(s: string | null | undefined): string {
+  const v = String(s ?? "").trim();
+  return PF_PLACEHOLDER_RE.test(v) ? "" : v;
+}
+
 export function resolvePhone(row: PreflightInputRow): string | null {
-  const raw = (row.phone ?? "").trim();
+  const raw = stripPlaceholder(row.phone);
   if (!raw) return null;
   const normalized = normalizePhone(raw);
   return normalized && normalized.length >= 7 ? normalized : null;
+}
+
+/**
+ * A phone is IN SCOPE (a KSA number) when it normalises to a reachable number
+ * (>=7 digits) AND does not carry an explicit non-966 international code. So
+ * +966 and bare Saudi local numbers pass; a foreign (+44/+1/…) number, a
+ * placeholder, or a missing number does NOT. Sarah 2026-07-22: "it shall have
+ * only the numbers that in KSA … if there is no KSA number it shall be rejected
+ * as out of scope."
+ */
+export function isKsaPhone(raw: string | null | undefined): boolean {
+  const cleaned = stripPlaceholder(raw);
+  if (!cleaned) return false;
+  const normalized = normalizePhone(cleaned);
+  if (!normalized || normalized.length < 7) return false;
+  return !phoneIsForeign(cleaned);
 }
 
 /**
@@ -3075,7 +3105,7 @@ async function runPreflightBasic(input: {
   const nameSet = new Set<string>();
   for (let i = 0; i < examineCount; i++) {
     const r = rows[i]!;
-    const email = (r.email || "").trim().toLowerCase();
+    const email = stripPlaceholder(r.email).toLowerCase();
     if (email && email.includes("@")) {
       emailByRow.set(i, email);
       emailSet.add(email);
@@ -3280,55 +3310,32 @@ async function runPreflightBasic(input: {
       }
     }
 
-    // REJECT any CONTACT row with NO valid phone number (Sarah 2026-07-06,
-    // broadened 2026-07-14: "reject all data with no phone"). A phone is
-    // MANDATORY for import: a row carrying a person name OR an email — but no
-    // reachable phone (missing, or fewer than 7 digits so resolvePhone
-    // normalises it to null) — is invalid data and must never land in the
-    // safe-to-import list, EVEN IF it has an email. The ONLY row exempt is a
-    // pure company-only SCREENING lookup (no contact_name AND no email — just a
-    // company/domain being checked against the CRM), which legitimately carries
-    // no phone. Takes precedence over the domain screen.
-    const contactName = (r.contact_name || "").toString().trim();
-    if ((contactName || email) && !phone) {
-      summary.no_contact++;
-      out.push({
-        row_index: i,
-        ref: r.ref ?? null,
-        input: { domain, company_name: r.company_name ?? null },
-        verdict: "no_contact",
-        cluster_id: null,
-        lifecycle_state: null,
-        sector: null,
-        arr_exposure: null,
-        owners: [],
-        reason: "no_phone",
-        suggested_action:
-          "No valid phone number — a phone is required to import a contact. Rejected as invalid data.",
-        module_counts: null,
-        matched_via: null,
-        executive_action:
-          "REJECT — no valid phone number on this contact; a phone is mandatory, so this row is invalid data. Do not import.",
-        executive_severity: "medium",
-        churn_date: null,
-        churn_days: null,
-        cs_owner: null,
-        cs_phase: null,
-        crm_links: null,
-      });
-      continue;
-    }
-
-    // REJECT a FOREIGN (non-KSA) phone as OUT OF SCOPE (Sarah 2026-07-14).
-    // Preflight vets Saudi-market imports; a contact whose only number carries an
-    // explicit non-966 international code (+34 Spain, +44 UK, …) is out of scope.
-    // A +966 / bare Saudi local number stays in scope. Runs on the RAW phone so
-    // the country code is visible (resolvePhone strips it). Env-disable with
+    // ── A KSA PHONE IS MANDATORY FOR EVERY CONTACT ROW ────────────────────
+    // (Sarah 2026-07-06 / 14, made authoritative 2026-07-22: "it shall have
+    // only the numbers that in KSA … if there is no KSA number it shall be
+    // rejected as out of scope.")
+    //
+    // A row carrying a person NAME or an EMAIL is a contact to be imported, so
+    // it MUST be reachable on a Saudi (+966 / bare Saudi local) number. Any
+    // other case is OUT OF SCOPE and rejected — it must never reach the
+    // safe-to-import list:
+    //   · no reachable number (missing, a placeholder like "Not available
+    //     (N/A)", or < 7 digits)          → reason no_phone
+    //   · a number that is not KSA (an explicit non-966 international code)
+    //                                       → reason phone_out_of_scope
+    // The ONLY exemption is a pure company/domain SCREENING lookup (no name AND
+    // no email), which legitimately carries no phone. The KSA requirement is a
+    // single gate now (was two) so an empty email can never let a named,
+    // phone-less contact slip through. Env-disable with
     // PREFLIGHT_REQUIRE_KSA_PHONE=false.
-    if (
-      process.env.PREFLIGHT_REQUIRE_KSA_PHONE !== "false" &&
-      phoneIsForeign(r.phone)
-    ) {
+    const contactName = (r.contact_name || "").toString().trim();
+    const isContactRow = !!(contactName || email);
+    const ksaGateOn = process.env.PREFLIGHT_REQUIRE_KSA_PHONE !== "false";
+    if (isContactRow && ksaGateOn && !isKsaPhone(r.phone)) {
+      // Distinguish "no number at all" from "a number, but foreign" so the
+      // export tells the operator which — both are out of scope.
+      const hasNumber = !!phone; // resolvePhone accepted >=7 digits
+      const reasonCode = hasNumber ? "phone_out_of_scope" : "no_phone";
       summary.no_contact++;
       out.push({
         row_index: i,
@@ -3340,13 +3347,15 @@ async function runPreflightBasic(input: {
         sector: null,
         arr_exposure: null,
         owners: [],
-        reason: "phone_out_of_scope",
-        suggested_action:
-          "Phone number is not a Saudi (KSA / +966) number — out of scope. Rejected.",
+        reason: reasonCode,
+        suggested_action: hasNumber
+          ? "Phone is not a Saudi (KSA / +966) number — out of scope. Rejected."
+          : "No KSA (+966) phone number — a Saudi phone is mandatory to import a contact. Out of scope; rejected.",
         module_counts: null,
         matched_via: null,
-        executive_action:
-          "REJECT — out of scope: the contact's only phone is a non-KSA (+966) international number, outside the Saudi-market import scope.",
+        executive_action: hasNumber
+          ? "REJECT — out of scope: the contact's only phone is a non-KSA (+966) international number, outside the Saudi-market import scope."
+          : "REJECT — out of scope: no KSA (+966) phone on this contact. A Saudi phone is mandatory, so this row cannot be imported.",
         executive_severity: "medium",
         churn_date: null,
         churn_days: null,
