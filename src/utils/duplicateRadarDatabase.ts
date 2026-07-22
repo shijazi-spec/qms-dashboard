@@ -8327,6 +8327,60 @@ export async function getDuplicateRecordsByType(
           HAVING COUNT(*) >= 2
         )
       )`;
+  } else if (recordType === "lead") {
+    // GENUINE-DUPLICATE gate for LEADS (Sarah 2026-07-22). The Leads tab was the
+    // ONE record tab with no server-side filter: it counted every cluster holding
+    // >=2 leads — including COLLEAGUES who share only their company's domain — so
+    // the footer read "5,158 duplicate groups / 258 pages" while the client, which
+    // re-groups leads by a DIRECT identity signal (name / email / phone / Zoho id,
+    // matching renderLeadRows' union-find), rendered just 1 real duplicate on the
+    // page. (Contacts already had this gate; Accounts don't need one — their
+    // renderer keeps a per-cluster fallback bucket so fuzzy-name clusters never
+    // drop.) A cluster now counts as a lead-duplicate only when >=2 of its leads
+    // DIRECTLY share email, OR phone, OR mobile, OR a normalised name, OR the same
+    // Zoho record id (a repeated id = an indexer/sync twin, still worth surfacing).
+    genuineDupFilter = `
+      AND (
+        EXISTS (
+          SELECT 1 FROM duplicate_records le
+           WHERE le.cluster_id = dc.id AND le.record_type = 'lead'
+             AND le.email IS NOT NULL AND btrim(le.email) <> ''
+           GROUP BY lower(btrim(le.email))
+          HAVING COUNT(*) >= 2
+        )
+        OR EXISTS (
+          SELECT 1 FROM duplicate_records lp
+           WHERE lp.cluster_id = dc.id AND lp.record_type = 'lead'
+             AND lp.phone_normalized IS NOT NULL AND length(lp.phone_normalized) >= 7
+           GROUP BY lp.phone_normalized
+          HAVING COUNT(*) >= 2
+        )
+        OR EXISTS (
+          SELECT 1 FROM duplicate_records lmob
+           WHERE lmob.cluster_id = dc.id AND lmob.record_type = 'lead'
+             AND lmob.mobile_normalized IS NOT NULL AND length(lmob.mobile_normalized) >= 7
+           GROUP BY lmob.mobile_normalized
+          HAVING COUNT(*) >= 2
+        )
+        OR EXISTS (
+          SELECT 1 FROM duplicate_records ln
+           WHERE ln.cluster_id = dc.id AND ln.record_type = 'lead'
+             AND ln.record_name IS NOT NULL AND btrim(ln.record_name) <> ''
+           -- Arabic-aware, matching the frontend _normName (ة→ه, ى→ي, آأإ→ا,
+           -- drop tatweel) — same expression as the contacts gate above.
+           GROUP BY lower(regexp_replace(
+                      translate(btrim(ln.record_name), 'ةىأإآـ', 'هيااا'),
+                      '\\s+', ' ', 'g'))
+          HAVING COUNT(*) >= 2
+        )
+        OR EXISTS (
+          SELECT 1 FROM duplicate_records li
+           WHERE li.cluster_id = dc.id AND li.record_type = 'lead'
+             AND li.zoho_record_id IS NOT NULL AND btrim(li.zoho_record_id) <> ''
+           GROUP BY li.zoho_record_id
+          HAVING COUNT(*) >= 2
+        )
+      )`;
   }
 
   // ── Paginate by CLUSTER, not by record. ────────────────────────────────
