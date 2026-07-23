@@ -9205,6 +9205,12 @@ export const duplicateRadarRoutes = [
           // for cross-Zoho matching instead of falling back to domain-only.
           const mobileIdx = findCol("mobile_phone", "mobile phone", "mobile", "cell", "cell phone");
           const corporatePhoneIdx = findCol("corporate_phone", "corporate phone", "phone", "work phone", "office phone");
+          // Secondary phone fields (Sarah 2026-07-23): Apollo/enrichment rows
+          // often carry a foreign MOBILE but a Saudi number in "Second Phone" /
+          // "Other Numbers". Preflight must consider ALL of them so a lead
+          // reachable on a KSA number isn't wrongly dropped as out-of-scope.
+          const secondPhoneIdx = findCol("second_phone", "second phone", "phone 2", "phone2", "alt phone", "alternate phone", "home phone", "home_phone");
+          const otherNumbersIdx = findCol("other_numbers_1", "other numbers 1", "other numbers", "other number", "other phone", "additional phone");
           // Contact (person) name — used to REJECT a named contact that has no
           // email AND no phone (can't be contacted, so don't import). Distinct
           // from company_name so company-only screening rows aren't rejected.
@@ -9266,6 +9272,11 @@ export const duplicateRadarRoutes = [
           }
           const rows: ParsedRow[] = [];
           let skippedRows = 0;
+          // KSA-preference phone selection + placeholder stripping (Sarah
+          // 2026-07-23). Imported once (not per row).
+          const { isKsaPhone, stripPlaceholder } = await import(
+            "../../utils/duplicateRadarPreflight"
+          );
           for (let i = headerRowIdx + 1; i <= lastRow; i++) {
             try {
               const r = ws.getRow(i);
@@ -9299,19 +9310,32 @@ export const duplicateRadarRoutes = [
               if (companyIdx >= 0) {
                 companyName = cellToString(rv[companyIdx + 1]).trim();
               }
-              let mobile = "";
-              if (mobileIdx >= 0) {
-                // Excel sometimes stores phones with a leading apostrophe to
-                // force text format (e.g., "'+966 11 464 1611") — strip it.
-                mobile = cellToString(rv[mobileIdx + 1]).replace(/^'/, "").trim();
-              }
-              let corporatePhone = "";
-              if (corporatePhoneIdx >= 0) {
-                corporatePhone = cellToString(rv[corporatePhoneIdx + 1]).replace(/^'/, "").trim();
-              }
-              // Combined phone for preflight matching — mobile preferred,
-              // corporate as fallback.
-              const phone = mobile || corporatePhone;
+              // Read EVERY phone field (strip Excel's leading text-marker
+              // apostrophe). Apollo labels the value with its source, e.g.
+              // "+966112946300 (work_hq)" — the label is stripped downstream by
+              // normalizePhone/isKsaPhone (both digit-only), so it's harmless here.
+              const readPhoneCell = (idx: number) =>
+                idx >= 0 ? cellToString(rv[idx + 1]).replace(/^'/, "").trim() : "";
+              const mobile = readPhoneCell(mobileIdx);
+              const corporatePhone = readPhoneCell(corporatePhoneIdx);
+              const secondPhone = readPhoneCell(secondPhoneIdx);
+              const otherNumbers = readPhoneCell(otherNumbersIdx);
+              // Choose the phone Preflight screens on: PREFER a Saudi (+966 / bare
+              // local) number found in ANY field so a lead whose mobile is foreign
+              // but whose Second/Other number is KSA stays in scope and is
+              // contacted on the KSA number (Sarah 2026-07-23). If NO field holds
+              // a KSA number, keep the first real number (foreign → the KSA gate
+              // then rejects it as out of scope, which is correct). Placeholders
+              // ("Not available (N/A)") fold to empty.
+              const _pfClean = (s: string) =>
+                stripPlaceholder(s).trim();
+              const phoneCandidates = [mobile, corporatePhone, secondPhone, otherNumbers]
+                .map(_pfClean)
+                .filter(Boolean);
+              const phone =
+                phoneCandidates.find((p) => isKsaPhone(p)) ||
+                phoneCandidates[0] ||
+                "";
 
               let contactName = "";
               if (contactIdx >= 0) {
