@@ -5077,6 +5077,38 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // DUPLICATE SPIKE ROOT-CAUSE (Sarah 2026-07-23) — the trend shows WHEN
+    // duplicates rise; this shows WHY. New duplicate records in the recent
+    // window vs the prior equal window, broken down by source / owner / module,
+    // sorted by biggest increase. Read-only.
+    //   GET /api/duplicates/spike-breakdown?weeks=3&segment=
+    path: "/api/duplicates/spike-breakdown",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const admin = await requireDuplicateRadarAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const weeksRaw = url.searchParams.get("weeks");
+          const weeks = weeksRaw ? parseInt(weeksRaw, 10) : 3;
+          const segment = url.searchParams.get("segment") || undefined;
+          const { getDuplicateSpikeBreakdown } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const result = await getDuplicateSpikeBreakdown({
+            weeks: Number.isFinite(weeks) ? weeks : 3,
+            segment: segment as any,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error fetching spike breakdown:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/logs",
     method: "GET" as const,
     createHandler: async () => {

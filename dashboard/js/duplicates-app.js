@@ -150,6 +150,7 @@
             // R4: load creation-rate trend chart (independent of the rest;
             // a transient failure here shouldn't blank the dashboard).
             loadCreationTrend();
+            loadSpikeRootCause(); // WHY the trend is moving — by source/owner/module
             // R6: load cross-module overlap counts so the tab badge + KPI
             // cards reflect current state on every refresh.
             loadCrossModule();
@@ -983,6 +984,57 @@
             } catch (e) {
                 console.error('creation-trend load failed:', e);
             }
+        }
+
+        // Spike root-cause (Sarah 2026-07-23): the trend shows WHEN duplicates
+        // rise; this shows WHY. New duplicates in the recent window vs the prior
+        // equal window, by source / owner / module, sorted by biggest increase.
+        async function loadSpikeRootCause() {
+            const sel = document.getElementById('spikeWeeks');
+            const weeks = sel ? (Number(sel.value) || 3) : 3;
+            const seg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
+            const segQ = (seg && seg !== 'all') ? ('&segment=' + encodeURIComponent(seg)) : '';
+            const headline = document.getElementById('spikeHeadline');
+            ['spikeBySource','spikeByOwner','spikeByModule'].forEach(function (id) {
+                const el = document.getElementById(id); if (el) el.innerHTML = '<div class="text-xs text-gray-400">…</div>';
+            });
+            let data;
+            try {
+                const res = await fetch('/api/duplicates/spike-breakdown?weeks=' + weeks + segQ, { credentials: 'same-origin' });
+                data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                if (headline) headline.textContent = 'Could not load: ' + (e && e.message || e);
+                return;
+            }
+            const recent = data.recent_total || 0, prior = data.prior_total || 0, delta = data.delta_total || 0;
+            const pct = prior > 0 ? Math.round((delta / prior) * 100) : (recent > 0 ? 100 : 0);
+            const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '■');
+            const tone = delta > 0 ? 'text-red-700' : (delta < 0 ? 'text-green-700' : 'text-gray-600');
+            if (headline) {
+                headline.innerHTML = '<span class="' + tone + ' font-semibold">' + arrow + ' ' + _fn(recent) + '</span> new duplicates in the last ' + data.window_weeks
+                    + ' week(s) vs ' + _fn(prior) + ' in the prior ' + data.window_weeks + ' — '
+                    + '<span class="' + tone + ' font-semibold">' + (delta >= 0 ? '+' : '') + _fn(delta) + (prior > 0 ? ' (' + (pct >= 0 ? '+' : '') + pct + '%)' : '') + '</span>. '
+                    + 'The rows below, sorted by biggest increase, are the pain areas.';
+            }
+            const renderList = function (id, rows) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (!rows || !rows.length) { el.innerHTML = '<div class="text-xs text-gray-400">— none —</div>'; return; }
+                el.innerHTML = rows.map(function (r) {
+                    const up = r.delta > 0, dn = r.delta < 0;
+                    const badge = up ? '<span class="text-red-700 font-semibold">▲ +' + _fn(r.delta) + '</span>'
+                        : dn ? '<span class="text-green-700 font-semibold">▼ ' + _fn(r.delta) + '</span>'
+                        : '<span class="text-gray-400">■ 0</span>';
+                    return '<div class="flex items-center justify-between gap-2 text-sm border-b border-gray-100 py-1">'
+                        + '<span class="truncate" title="' + escapeHtml(r.label) + '">' + escapeHtml(r.label) + '</span>'
+                        + '<span class="whitespace-nowrap text-xs text-gray-500">' + _fn(r.recent) + ' <span class="text-gray-300">/ ' + _fn(r.prior) + '</span> &nbsp;' + badge + '</span>'
+                        + '</div>';
+                }).join('');
+            };
+            renderList('spikeBySource', data.by_source);
+            renderList('spikeByOwner', data.by_owner);
+            renderList('spikeByModule', data.by_module);
         }
 
         function reloadCreationTrend() { loadCreationTrend(); }

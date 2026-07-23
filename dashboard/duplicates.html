@@ -735,6 +735,42 @@
                 </div>
             </div>
 
+            <!-- Spike root-cause (Sarah 2026-07-23): the trend shows WHEN
+                 duplicates rise; this shows WHY — new duplicates in the recent
+                 window vs the prior equal window, by source / owner / module,
+                 sorted by the biggest increase. The top row of each list is the
+                 pain area. -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6" id="spikeRootCauseCard">
+                <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                    <h3 class="text-lg font-semibold">Where are the new duplicates coming from?</h3>
+                    <div class="flex items-center gap-2">
+                        <label for="spikeWeeks" class="text-xs font-medium text-gray-600">Window:</label>
+                        <select id="spikeWeeks" data-on-change="loadSpikeRootCause" class="text-xs rounded-full border border-gray-300 bg-white px-2 py-1">
+                            <option value="3" selected>Last 3 weeks vs prior 3</option>
+                            <option value="2">Last 2 weeks vs prior 2</option>
+                            <option value="4">Last 4 weeks vs prior 4</option>
+                            <option value="1">Last week vs prior</option>
+                        </select>
+                    </div>
+                </div>
+                <p id="spikeHeadline" class="text-sm text-gray-500 mb-3">Loading…</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">By source (Lead Source)</div>
+                        <div id="spikeBySource" class="space-y-1"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">By owner</div>
+                        <div id="spikeByOwner" class="space-y-1"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">By module</div>
+                        <div id="spikeByModule" class="space-y-1"></div>
+                    </div>
+                </div>
+                <p class="text-[11px] text-gray-400 mt-3">“Recent” vs the prior window of equal length. ▲ = more new duplicates than the prior window (the leak); ▼ = fewer. A “new duplicate” is a record created in-window that landed in a real duplicate cluster — the same measure as the trend above.</p>
+            </div>
+
             <!-- D4: Top signals + Top clusters by inflation -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-lg shadow p-6">
@@ -2294,7 +2330,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=130"></script>
+    <script src="/js/duplicates-app.js?v=131"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

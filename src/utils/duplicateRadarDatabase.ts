@@ -7468,6 +7468,97 @@ export interface DuplicateCreationTrendBucket {
   duplicate_rate_pct: number; // 0-100, rounded to 1 decimal
 }
 
+/**
+ * DUPLICATE SPIKE ROOT-CAUSE (Sarah 2026-07-23). The Creation-Trend chart shows
+ * WHEN duplicates are rising, but not WHY. This attributes the rise: it counts
+ * NEW duplicate records (created in-window AND part of a real duplicate cluster —
+ * the same definition the trend uses) in the RECENT window vs the immediately
+ * PRIOR window of equal length, broken down three ways — by Lead SOURCE, by
+ * OWNER, and by MODULE — and sorts each by the biggest INCREASE. The top of each
+ * list is the pain area: the channel / person / record-type that is leaking the
+ * most new duplicates into Zoho. Read-only.
+ */
+export interface SpikeBreakdownRow {
+  label: string;
+  recent: number;
+  prior: number;
+  delta: number;
+}
+export async function getDuplicateSpikeBreakdown(opts: {
+  weeks?: number;
+  segment?: DuplicateFilters["segment"];
+  top?: number;
+} = {}): Promise<{
+  window_weeks: number;
+  recent_total: number;
+  prior_total: number;
+  delta_total: number;
+  by_source: SpikeBreakdownRow[];
+  by_owner: SpikeBreakdownRow[];
+  by_module: SpikeBreakdownRow[];
+}> {
+  const weeks = Math.min(26, Math.max(1, Math.floor(Number(opts.weeks ?? 3) || 3)));
+  const top = Math.min(50, Math.max(3, Math.floor(Number(opts.top ?? 12) || 12)));
+
+  const params: any[] = [];
+  const seg = buildSegmentPredicate(opts.segment, 1);
+  let segCond = "";
+  if (seg.condition) {
+    // buildSegmentPredicate emits an `r.` alias; dr IS that record alias here.
+    segCond = ` AND ${seg.condition.replace(/\br\./g, "dr.")}`;
+    params.push(...seg.params);
+  }
+
+  // recent = [now - weeks, now]; prior = [now - 2*weeks, now - weeks].
+  // A record counts once, bucketed by which window its created_date falls in.
+  const runDim = async (dimSql: string): Promise<SpikeBreakdownRow[]> => {
+    const q = await pool.query<{ label: string; recent: string; prior: string }>(
+      `SELECT ${dimSql} AS label,
+              COUNT(*) FILTER (WHERE dr.created_date >= NOW() - INTERVAL '${weeks} weeks')::int AS recent,
+              COUNT(*) FILTER (WHERE dr.created_date >= NOW() - INTERVAL '${weeks * 2} weeks'
+                                 AND dr.created_date <  NOW() - INTERVAL '${weeks} weeks')::int AS prior
+         FROM duplicate_records dr
+         JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+        WHERE dc.total_records > 1
+          AND dr.created_date >= NOW() - INTERVAL '${weeks * 2} weeks'
+          AND dr.created_date <= NOW()${segCond}
+        GROUP BY ${dimSql}`,
+      params,
+    );
+    return q.rows
+      .map((r) => {
+        const recent = parseInt(r.recent) || 0;
+        const prior = parseInt(r.prior) || 0;
+        return { label: r.label, recent, prior, delta: recent - prior };
+      })
+      .filter((r) => r.recent > 0 || r.prior > 0)
+      .sort((a, b) => b.delta - a.delta || b.recent - a.recent)
+      .slice(0, top);
+  };
+
+  const [by_source, by_owner, by_module] = await Promise.all([
+    runDim("COALESCE(NULLIF(TRIM(dr.source), ''), 'Unknown')"),
+    runDim("COALESCE(NULLIF(TRIM(dr.owner_name), ''), 'Unassigned')"),
+    runDim("INITCAP(dr.record_type)"),
+  ]);
+
+  const sum = (rows: SpikeBreakdownRow[], k: "recent" | "prior") =>
+    rows.reduce((a, r) => a + r[k], 0);
+  // Module totals cover every record exactly once, so use them for the headline.
+  const recent_total = sum(by_module, "recent");
+  const prior_total = sum(by_module, "prior");
+
+  return {
+    window_weeks: weeks,
+    recent_total,
+    prior_total,
+    delta_total: recent_total - prior_total,
+    by_source,
+    by_owner,
+    by_module,
+  };
+}
+
 export async function getDuplicateCreationTrend(opts: {
   weeks?: number;
   granularity?: "week" | "day";

@@ -31,6 +31,7 @@ import { updateRecordFieldTool } from "../tools/updateRecordFieldTool";
 import { csLifecycleStatusTool } from "../tools/csLifecycleStatusTool";
 import { csOwnersTool } from "../tools/csOwnersTool";
 import { dealStageAuditTool } from "../tools/dealStageAuditTool";
+import { duplicateSpikeTool } from "../tools/duplicateSpikeTool";
 import { dealStageAgingStatusTool } from "../tools/dealStageAgingStatusTool";
 import { executiveSummaryTool, csOverlapStatusTool, crossModuleOverlapTool, accountHintsStatusTool, recordHintsStatusTool, dealComplianceStatusTool, agentActivityTool, manualActionAuditTool, ownerAccountabilityTool, preflightCheckTool, clusterMergeCandidatesTool } from "../tools/radarTabTools";
 import { emptyRecordsStatusTool } from "../tools/emptyRecordsStatusTool";
@@ -438,6 +439,9 @@ export const qmsConsultantAgent = new Agent({
     // "Which deal stages exist / does the picklist have duplicates?" — read-only
     // audit of every Zoho Deal Stage value + suspected near-duplicates.
     dealStageAuditTool:               wt(dealStageAuditTool, AGENT_NAME),
+    // "Why did duplicates spike / where is the leak?" — new duplicates in the
+    // recent window vs prior, by source / owner / module. Read-only.
+    duplicateSpikeTool:               wt(duplicateSpikeTool, AGENT_NAME),
     // "How many deals are stuck in Proposal past SLA?" / Deals Lifecycle tab —
     // Sales SOP stage-aging violations, breakdown by stage and owner. Read-only.
     dealStageAgingStatusTool:         wt(dealStageAgingStatusTool, AGENT_NAME),
