@@ -10353,6 +10353,38 @@
         }
         async function downloadPreflightFlaggedRows() { return _exportPreflightXlsx('flagged'); }
         async function downloadPreflightPassRowsXlsx() { return _exportPreflightXlsx('pass'); }
+        // Download the do-not-cold-contact suppression list: every existing
+        // corporate client domain with NO churn. Independent of the uploaded
+        // file — reads the live CRM mirror via the server. fresh=1 rebuilds the
+        // client directory so the list is authoritative at click time.
+        async function downloadActiveClientDomains() {
+            const btn = document.getElementById('preflightActiveClientDomainsBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Collecting…'; }
+            try {
+                const res = await fetch('/api/duplicates/preflight/active-client-domains?format=csv&fresh=1', {
+                    headers: { 'Accept': 'text/csv' },
+                });
+                if (!res.ok) {
+                    let msg = 'HTTP ' + res.status;
+                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+                    throw new Error(msg);
+                }
+                const blob = await res.blob();
+                const stamp = new Date().toISOString().slice(0, 10);
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'active-client-domains_' + stamp + '.csv';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+                if (typeof rrToast === 'function') rrToast('Active-client domains downloaded (no-churn corporate clients).');
+            } catch (e) {
+                if (typeof rrToast === 'function') rrToast('Active-client domains export failed: ' + (e.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
 
         function clearPreflight() {
             document.getElementById('preflightInput').value = '';

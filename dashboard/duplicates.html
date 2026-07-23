@@ -1480,6 +1480,7 @@
                         <input type="file" id="preflightExcelInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" data-on-change="handlePreflightExcelChosen" data-testid="input-preflight-excel" />
                         <button data-on-click="loadPreflightSample" id="preflightSampleBtn" data-testid="button-preflight-sample" class="rr-btn rr-btn-subtle">Load sample</button>
                         <button data-on-click="clearPreflight" id="preflightClearBtn" data-testid="button-preflight-clear" class="rr-btn rr-btn-subtle">Clear</button>
+                        <button data-on-click="downloadActiveClientDomains" id="preflightActiveClientDomainsBtn" data-testid="button-active-client-domains" class="rr-btn rr-btn-subtle" title="Download the domains of ALL existing corporate clients with NO churn — the do-not-cold-contact suppression list. Independent of the file above; reads the live CRM mirror.">⬇ Active-client domains</button>
                         <button data-on-click="downloadPreflightFlaggedRows" id="preflightExportFlaggedBtn" data-testid="button-preflight-export-flagged" class="hidden rr-btn rr-btn-ghost" title="Download ONLY the flagged rows (Block / Review / Warn / Duplicate) as a native Excel file — Company, Contact, Email, Phone, Verdict, Existing Owner, CS Phase, Churn Date, and the Recommended Action. This is the file to send the Head of Sales.">⚑ Download Rejected Data</button>
                         <button data-on-click="downloadPreflightPassRowsXlsx" id="preflightExportPassXlsxBtn" data-testid="button-preflight-export-pass-xlsx" class="hidden rr-btn rr-btn-ghost" title="Download the PASS (safe-to-import) rows as a native Excel file — same Summary + Findings design as the flagged export, with Company, Contact, Email, Phone columns.">📊 Download PASS Data</button>
                         <!-- Executive toolbar — appears after a successful run. -->
@@ -2343,7 +2344,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=133"></script>
+    <script src="/js/duplicates-app.js?v=134"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

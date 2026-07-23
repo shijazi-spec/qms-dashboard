@@ -2994,6 +2994,38 @@ export async function getCsClientDirectoryStats(): Promise<{
 }
 
 /**
+ * All CORPORATE existing-client domains with NO churn (Sarah 2026-07-23).
+ *
+ * Reads the CS client directory — which is ALREADY corporate-scoped: its
+ * client-deal query excludes Marketplace / WalaOne / Partner-Accounts layouts
+ * (see getCsClientDirectory), so no merchant/app clients leak in — and returns
+ * the domains whose status is ACTIVE, i.e. a customer-stage deal (Agreement
+ * Signed / Paid) or a live CS phase with NO churn date and not terminated
+ * (`active === !churned`). Deduped, lowercased, sorted. Intended as a
+ * do-not-cold-contact suppression list for outreach / import screening.
+ *
+ * `fresh` forces a directory rebuild so the list reflects the DB right now
+ * (the caller is an explicit on-demand action, not a hot path).
+ */
+export async function listActiveClientDomains(opts?: {
+  fresh?: boolean;
+}): Promise<{ domains: string[]; total: number; built_at_iso: string }> {
+  if (opts?.fresh) _csDirCache = null;
+  const dir = await getCsClientDirectory(Date.now());
+  const set = new Set<string>();
+  for (const [dom, st] of dir.byDomain.entries()) {
+    const d = (dom || "").toString().trim().toLowerCase();
+    if (d && st?.active) set.add(d);
+  }
+  const domains = Array.from(set).sort();
+  return {
+    domains,
+    total: domains.length,
+    built_at_iso: new Date(dir.builtAt).toISOString(),
+  };
+}
+
+/**
  * Match an inbound normalized company name to a client by NAME CONTAINMENT —
  * every token of a client's name appears in the inbound name (e.g. client
  * "samref" ⊆ inbound "samref saudi aramco mobil refinery"). Returns the matched

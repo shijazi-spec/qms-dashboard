@@ -12564,6 +12564,57 @@ export const duplicateRadarRoutes = [
       }
     },
   },
+  {
+    // All CORPORATE existing-client domains with NO churn (Sarah 2026-07-23) —
+    // a do-not-cold-contact suppression list. Reads the corporate-scoped CS
+    // client directory and returns the ACTIVE (no-churn) domains.
+    //   ?format=json (default) | csv | txt
+    //   ?fresh=1  rebuild the directory from the DB first (slower, authoritative)
+    path: "/api/duplicates/preflight/active-client-domains",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const format = String(c.req.query("format") || "json").toLowerCase();
+          const fresh = ["1", "true", "yes"].includes(
+            String(c.req.query("fresh") || "").toLowerCase(),
+          );
+          const { listActiveClientDomains } = await import(
+            "../../utils/duplicateRadarPreflight"
+          );
+          const { domains, total, built_at_iso } = await listActiveClientDomains(
+            { fresh },
+          );
+          if (format === "csv" || format === "txt") {
+            const stamp = built_at_iso.slice(0, 10);
+            const body =
+              format === "csv"
+                ? "domain\n" + domains.map((d) => `"${d.replace(/"/g, '""')}"`).join("\n")
+                : domains.join("\n");
+            return new Response(body, {
+              status: 200,
+              headers: {
+                "Content-Type":
+                  format === "csv"
+                    ? "text/csv; charset=utf-8"
+                    : "text/plain; charset=utf-8",
+                "Content-Disposition": `attachment; filename="active-client-domains_${stamp}.${format}"`,
+                "Cache-Control": "no-store",
+              },
+            });
+          }
+          return c.json({ success: true, total, built_at_iso, domains });
+        } catch (e: any) {
+          logger.error("preflight/active-client-domains failed", e);
+          const detail =
+            e instanceof Error ? e.message : String(e || "unknown error");
+          return c.json({ error: detail.slice(0, 400) }, 500);
+        }
+      };
+    },
+  },
 ];
 
 export default duplicateRadarRoutes;
