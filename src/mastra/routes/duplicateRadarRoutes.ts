@@ -12369,22 +12369,38 @@ export const duplicateRadarRoutes = [
           await import("../../utils/rbacMiddleware");
         const su = await requireAdminOrKey(c);
         if (!su) return unauth(c);
-        const { reconcileAllDeletedByIdSet } = await import(
+        const { reconcileAllDeletedByIdSet, sweepDeletedByFeed } = await import(
           "../../utils/emptyRecordsDatabase"
         );
-        // Fire-and-forget — the full id fetch takes minutes; don't hold the request.
-        void reconcileAllDeletedByIdSet()
-          .then((res) =>
-            logger.info("[reconcile-deleted-full] complete", res),
-          )
-          .catch((e) =>
-            logger.error("[reconcile-deleted-full] failed", e),
-          );
+        // Fire-and-forget — takes a few minutes; don't hold the request.
+        // TWO passes (Sarah 2026-07-23):
+        //   1) sweepDeletedByFeed — asks Zoho's /deleted feed DIRECTLY which
+        //      records it removed (authoritative, bulk-paginated) and prunes
+        //      exactly those. This CATCHES bulk "uploaded then removed" batches
+        //      the id-set reconcile can't, because it never needs a complete live
+        //      id set and so never hits the 40% safety abort.
+        //   2) reconcileAllDeletedByIdSet — the id-set diff, as a backstop for
+        //      anything the /deleted feed's lookback missed (aborts safely if it
+        //      can't fetch a complete live set).
+        void (async () => {
+          try {
+            const feed = await sweepDeletedByFeed({ lookbackDays: 90 });
+            logger.info("[reconcile-deleted-full] feed sweep complete", feed);
+          } catch (e) {
+            logger.error("[reconcile-deleted-full] feed sweep failed", e);
+          }
+          try {
+            const idset = await reconcileAllDeletedByIdSet();
+            logger.info("[reconcile-deleted-full] id-set complete", idset);
+          } catch (e) {
+            logger.error("[reconcile-deleted-full] id-set failed", e);
+          }
+        })();
         return c.json({
           success: true,
           started: true,
           message:
-            "Full deletion reconcile started in the background — it checks every record against live Zoho and prunes all deleted ones. This takes a few minutes; the tabs clear as it finishes.",
+            "Deep clean started — first asks Zoho's deleted-records feed exactly what was removed (catches bulk deletions), then reconciles the full id set as a backstop. Runs in the background (a few minutes); the tabs clear as it finishes.",
         });
       } catch (e: any) {
         logger.error("reconcile-deleted-full failed", e);

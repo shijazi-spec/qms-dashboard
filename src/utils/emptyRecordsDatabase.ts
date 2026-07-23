@@ -1266,6 +1266,92 @@ export async function reconcileAllDeletedByIdSet(): Promise<
   return out;
 }
 
+/**
+ * AUTHORITATIVE DELETION SWEEP via Zoho's /deleted feed (Sarah 2026-07-23).
+ *
+ * WHY: the id-set reconcile ABORTS whenever it can't fetch the COMPLETE live id
+ * set for a module (Zoho pagination limits on 38k+ leads / 70k contacts, or a
+ * running sync) — the 40% safety guard fires, so a bulk "uploaded then removed"
+ * batch (e.g. 1,193 Mawsool leads) is NEVER pruned and lingers as fake
+ * duplicates + inflation + stuck "pending delete" rows. The "Verify & prune
+ * deleted" button therefore couldn't catch it.
+ *
+ * This asks Zoho DIRECTLY which records it deleted (the /deleted?type=all feed —
+ * bulk-paginated, cheap, and AUTHORITATIVE: Zoho is telling us these are gone),
+ * over a wide lookback, and prunes exactly those ids from the mirror + the
+ * empty-delete ledger. No id-set to fetch, so no incomplete-fetch abort — this
+ * catches bulk deletions the id-set reconcile can't. Idempotent (re-seeing an
+ * already-pruned id is a no-op).
+ */
+export async function sweepDeletedByFeed(opts: { lookbackDays?: number } = {}): Promise<{
+  totalPruned: number;
+  perModule: Record<string, { deletedInZoho: number; pruned: number }>;
+}> {
+  const lookbackDays = Math.min(
+    365,
+    Math.max(1, Math.floor(Number(opts.lookbackDays ?? 90) || 90)),
+  );
+  const since = new Date(Date.now() - lookbackDays * 86400000).toISOString();
+  const { fetchDeletedZohoRecords } = await import("./zohoCRM");
+  const { removeRecordsByZohoIds } = await import("./duplicateRadarDatabase");
+  const perModule: Record<string, { deletedInZoho: number; pruned: number }> = {};
+  let totalPruned = 0;
+
+  for (const module of ["Leads", "Deals", "Contacts", "Accounts"] as const) {
+    try {
+      const deleted = await fetchDeletedZohoRecords(module, {
+        type: "all",
+        modifiedSince: since,
+      });
+      const ids = (deleted || []).map((d) => String(d?.id ?? "")).filter(Boolean);
+      if (ids.length === 0) {
+        perModule[module] = { deletedInZoho: 0, pruned: 0 };
+        continue;
+      }
+      // Prune the mirror copies (by id alone — the feed already scoped them to
+      // this module, and a NULL zoho_module must not shield a ghost).
+      let pruned = 0;
+      const CHUNK = 500;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const slice = ids.slice(i, i + CHUNK);
+        try {
+          const { removedCount } = await removeRecordsByZohoIds(slice);
+          pruned += removedCount || 0;
+        } catch {
+          /* fall back to the ghost-pruner (also clears the empty-delete ledger) */
+          await pruneGhostRecords(slice).catch(() => {});
+        }
+        // Always clear these ids from the empty-delete ledger so a record the
+        // admin actually deleted stops showing as "Tagged · pending delete".
+        await pool
+          .query(`DELETE FROM empty_delete_ledger WHERE zoho_record_id = ANY($1::text[])`, [slice])
+          .catch(() => {});
+      }
+      perModule[module] = { deletedInZoho: ids.length, pruned };
+      totalPruned += pruned;
+    } catch (e: any) {
+      logger.warn(`[deletion-feed-sweep] ${module} failed (non-fatal): ${e?.message || e}`);
+      perModule[module] = { deletedInZoho: 0, pruned: 0 };
+    }
+  }
+  // Drop clusters left with a single record after the prune.
+  if (totalPruned > 0) {
+    try {
+      const db: any = await import("./duplicateRadarDatabase");
+      if (typeof db.cleanupSingletonClusters === "function")
+        await db.cleanupSingletonClusters();
+    } catch {
+      /* best-effort */
+    }
+  }
+  logger.info(
+    `🧹 [deletion-feed-sweep] lookback=${lookbackDays}d, pruned=${totalPruned}: ${Object.entries(perModule)
+      .map(([m, r]) => `${m}=${r.pruned}/${r.deletedInZoho}`)
+      .join(", ")}`,
+  );
+  return { totalPruned, perModule };
+}
+
 // Contacts: name-only (no email/phone/account/deal) OR test-name.
 export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
   const q = await pool.query(
