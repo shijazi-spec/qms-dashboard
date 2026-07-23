@@ -3663,7 +3663,7 @@ async function runPreflightBasic(input: {
     } else if (r.verdict === "block") {
       bump(
         r.reason === "protected_account"
-          ? "Protected / do-not-contact account (Aramco group, Tree, Syarah, …)"
+          ? "Protected / do-not-contact account — already a current account"
           : "Existing active client — do not cold-contact, route to owner",
       );
     } else if (r.verdict === "review") {
