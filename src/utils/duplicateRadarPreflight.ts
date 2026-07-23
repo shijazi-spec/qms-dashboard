@@ -511,19 +511,41 @@ export function resolvePhone(row: PreflightInputRow): string | null {
 }
 
 /**
- * A phone is IN SCOPE (a KSA number) when it normalises to a reachable number
- * (>=7 digits) AND does not carry an explicit non-966 international code. So
- * +966 and bare Saudi local numbers pass; a foreign (+44/+1/…) number, a
- * placeholder, or a missing number does NOT. Sarah 2026-07-22: "it shall have
- * only the numbers that in KSA … if there is no KSA number it shall be rejected
- * as out of scope."
+ * A phone is IN SCOPE only when it is a KSA number. Three gates:
+ *   1. An explicit non-966 international code (+44 / +1 / 0020 …) → out of scope.
+ *   2. An explicit +966 / 00966 / 966 code → definitively Saudi (accepts any
+ *      valid subscriber number, incl. 9200 unified-access numbers).
+ *   3. A BARE local number (no country code) → Saudi ONLY if it matches the
+ *      Saudi national number shape: a 9-digit national significant number
+ *      starting 5 (mobile) or 1 (landline area codes 11-17), after dropping the
+ *      trunk 0. This is what rejects a foreign LOCAL without a code — e.g. an
+ *      Egyptian mobile "012XXXXXXXX" is 11 digits (10-digit NSN) so it fails,
+ *      while a Saudi "05XXXXXXXX" is 10 digits (9-digit NSN) so it passes.
+ *
+ * NOTE: we parse the digit string directly rather than via normalizePhone(),
+ * whose .slice(-9) discards the length signal that separates an 11-digit
+ * Egyptian mobile from a 10-digit Saudi one. Sarah 2026-07-22/23: "it shall
+ * have only the numbers that in KSA … with the country code of KSA only, if
+ * there is no KSA numbers too, it shall be rejected as out of scope."
  */
 export function isKsaPhone(raw: string | null | undefined): boolean {
   const cleaned = stripPlaceholder(raw);
   if (!cleaned) return false;
-  const normalized = normalizePhone(cleaned);
-  if (!normalized || normalized.length < 7) return false;
-  return !phoneIsForeign(cleaned);
+  // Gate 1: explicit non-966 international code → out of scope.
+  if (phoneIsForeign(cleaned)) return false;
+  let digits = cleaned.replace(/\D/g, "");
+  if (!digits) return false;
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  // Gate 2: explicit KSA country code → definitively Saudi.
+  if (digits.startsWith("966")) {
+    const nsn = digits.slice(3).replace(/^0+/, "");
+    return nsn.length >= 7;
+  }
+  // Gate 3: bare local → must match a Saudi national number (9-digit NSN
+  // beginning 1 or 5). A foreign local without a code (e.g. Egyptian 11-digit
+  // or bare US 11-digit) has the wrong length/prefix and is rejected.
+  const nsn = digits.replace(/^0+/, "");
+  return /^[15]\d{8}$/.test(nsn);
 }
 
 /**
