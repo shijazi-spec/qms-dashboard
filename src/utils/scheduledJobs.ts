@@ -271,6 +271,47 @@ export async function runKPIAutoCalcIfStale(
   return { ran: true, ageHours, result };
 }
 
+// DELETION-FEED SWEEP — sync-INDEPENDENT schedule (Sarah 2026-07-23).
+// The post-sync sweep only runs when a sync COMPLETES, and the recurring
+// stuck/3h syncs mean it often doesn't. This runs the SAME authoritative
+// /deleted-feed prune on the 45-min housekeeping loop, gated to ~every 3h, so
+// records removed in Zoho are pruned from the mirror + the pending-delete ledger
+// regardless of sync state. In-memory last-run stamp: a restart just triggers
+// one extra run, which is harmless (the sweep is idempotent).
+let _lastDeletionFeedSweepMs = 0;
+export async function runDeletionFeedSweepIfStale(
+  maxAgeHours = Number(process.env.RADAR_DELETION_SWEEP_INTERVAL_HOURS || 3),
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  if (process.env.RADAR_DELETION_SWEEP_SCHEDULE === "false") {
+    return { ran: false, ageHours: 0 };
+  }
+  const ageHours =
+    _lastDeletionFeedSweepMs === 0
+      ? Infinity
+      : (Date.now() - _lastDeletionFeedSweepMs) / 3600000;
+  if (ageHours < maxAgeHours) {
+    return { ran: false, ageHours };
+  }
+  logger.info(
+    `[DeletionFeedSweep Fallback] Last sweep ${ageHours === Infinity ? "never" : ageHours.toFixed(1) + "h ago"} (>= ${maxAgeHours}h); running.`,
+  );
+  try {
+    const { sweepDeletedByFeed } = await import("./emptyRecordsDatabase");
+    const days = parseInt(
+      process.env.RADAR_POSTSYNC_SWEEP_LOOKBACK_DAYS || "30",
+      10,
+    );
+    const result = await sweepDeletedByFeed({ lookbackDays: days });
+    _lastDeletionFeedSweepMs = Date.now();
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    logger.error("[DeletionFeedSweep Fallback] failed:", err);
+    // Stamp anyway so a persistent failure doesn't hammer Zoho every 45 min.
+    _lastDeletionFeedSweepMs = Date.now();
+    return { ran: false, ageHours };
+  }
+}
+
 /**
  * Returns hours since the last successful Quality Audit.
  */

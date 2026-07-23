@@ -536,6 +536,7 @@ export const mastra = new Mastra({
         runQualityAuditIfStale,
         runKPIAutoCalcIfStale,
         runCsOverlapScanIfStale,
+        runDeletionFeedSweepIfStale,
         runAutonomousResolutionIfStale,
         runResolutionDigestIfDue,
         runWeeklyExecBriefIfDue,
@@ -550,6 +551,10 @@ export const mastra = new Mastra({
         { name: "QualityAudit", fn: () => runQualityAuditIfStale() },
         { name: "KPIAutoCalc", fn: () => runKPIAutoCalcIfStale() },
         { name: "CsOverlapScan", fn: () => runCsOverlapScanIfStale() },
+        // Deletion-feed sweep — sync-independent (~every 3h). Prunes records
+        // Zoho deleted from the mirror + pending-delete ledger, so stuck syncs
+        // no longer leave deleted data lingering (Sarah 2026-07-23).
+        { name: "DeletionFeedSweep", fn: () => runDeletionFeedSweepIfStale() },
         // Autonomous Duplicate Resolution — 6h fallback. Internally gated by
         // AUTONOMOUS_RESOLUTION_ENABLED/_MODE (default shadow → no Zoho writes).
         { name: "AutonomousResolution", fn: () => runAutonomousResolutionIfStale() },
