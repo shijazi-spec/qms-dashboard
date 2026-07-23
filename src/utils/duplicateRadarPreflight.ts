@@ -3328,13 +3328,19 @@ async function runPreflightBasic(input: {
     // single gate now (was two) so an empty email can never let a named,
     // phone-less contact slip through. Env-disable with
     // PREFLIGHT_REQUIRE_KSA_PHONE=false.
+    // The parser (parse-excel) already chose r.phone by PREFERRING a KSA number
+    // across ALL phone fields (Mobile / Second / Other), so a lead reachable on a
+    // Saudi number in any field arrives here with that number selected.
     const contactName = (r.contact_name || "").toString().trim();
     const isContactRow = !!(contactName || email);
     const ksaGateOn = process.env.PREFLIGHT_REQUIRE_KSA_PHONE !== "false";
-    if (isContactRow && ksaGateOn && !isKsaPhone(r.phone)) {
-      // Distinguish "no number at all" from "a number, but foreign" so the
-      // export tells the operator which — both are out of scope.
-      const hasNumber = !!phone; // resolvePhone accepted >=7 digits
+    const hasNumber = !!phone; // resolvePhone accepted >=7 digits somewhere
+    // A NO-phone contact is invalid data and is ALWAYS rejected (you can't import
+    // someone you can't call), independent of the KSA env flag. A row that HAS a
+    // number but no KSA one is OUT OF SCOPE only while the KSA gate is on
+    // (PREFLIGHT_REQUIRE_KSA_PHONE=false opts out of KSA screening, not the
+    // phone-mandatory rule).
+    if (isContactRow && !isKsaPhone(r.phone) && (!hasNumber || ksaGateOn)) {
       const reasonCode = hasNumber ? "phone_out_of_scope" : "no_phone";
       summary.no_contact++;
       out.push({
