@@ -6460,14 +6460,36 @@ export async function findOrCreateClusterByCompany(
       // Pull the top few candidates so the domain guard can skip a bad
       // top hit (e.g. "alsuwaidi industrial services") and still pick a
       // legitimate sibling further down the list.
-      const trgmResult = await pool.query(
-        `SELECT *, similarity(company_name_normalized, $1) as sim
-         FROM duplicate_clusters
-         WHERE company_name_normalized IS NOT NULL AND company_name_normalized != ''
-           AND similarity(company_name_normalized, $1) >= 0.6
-         ORDER BY sim DESC LIMIT 5`,
-        [normalizedName],
-      );
+      // PERF (Sarah 2026-07-23 — "syncs stall for hours"): the `%` operator is
+      // what makes this use the GIN trgm index (idx_clusters_company_trgm).
+      // `similarity(col,$1) >= 0.6` ALONE is a FILTER — Postgres seq-scans EVERY
+      // cluster computing similarity for EACH record, i.e. O(clusters × records)
+      // — so a bulk upload (all-new records) or a rebuild took hours in the
+      // per-record clusterer. `col % $1` pre-filters via the index; the `>= 0.6`
+      // filter then keeps exactly the same rows.
+      //
+      // `%` uses the SESSION's pg_trgm.similarity_threshold, which other code
+      // (preflight: set_limit 0.7 / 0.55) may have changed on a pooled
+      // connection — a leftover 0.7 would make `%` MISS genuine 0.6–0.7 matches
+      // and wrongly split clusters. So pin the threshold to 0.6 on the SAME
+      // dedicated client that runs the query. Falls back (catch below) to the
+      // Levenshtein scan if the client/trgm path errors.
+      const _trgmClient = await pool.connect();
+      let trgmResult: any;
+      try {
+        await _trgmClient.query(`SELECT set_limit(0.6)`);
+        trgmResult = await _trgmClient.query(
+          `SELECT *, similarity(company_name_normalized, $1) as sim
+           FROM duplicate_clusters
+           WHERE company_name_normalized IS NOT NULL AND company_name_normalized != ''
+             AND company_name_normalized % $1
+             AND similarity(company_name_normalized, $1) >= 0.6
+           ORDER BY sim DESC LIMIT 5`,
+          [normalizedName],
+        );
+      } finally {
+        _trgmClient.release();
+      }
       for (const candidate of trgmResult.rows) {
         if (!(candidate.sim >= 0.6)) continue;
         // Calibrated domain guard: skip the candidate only when both the
