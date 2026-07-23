@@ -1035,6 +1035,35 @@
             renderList('spikeBySource', data.by_source);
             renderList('spikeByOwner', data.by_owner);
             renderList('spikeByModule', data.by_module);
+
+            // Provenance — is the rise a real NEW leak (created in Zoho this
+            // window) or re-detection of OLD records only recently synced?
+            const prov = data.provenance || {};
+            const pEl = document.getElementById('spikeProvenance');
+            if (pEl) {
+                const newN = prov.created_in_window || 0;
+                const oldN = prov.created_before_window || 0;
+                const newSar = prov.exposure_new_sar || 0;
+                const oldSar = prov.exposure_old_sar || 0;
+                const back = prov.back_detected || 0;
+                const caveat = prov.synced_view_unreliable
+                    ? '<div class="text-[11px] text-amber-700 mt-1">⚠ A full mirror rebuild landed inside this window (records last synced ' + escapeHtml(prov.last_synced || '—') + '), so the “synced/back-detected” figure is unreliable right now — trust the created-in-Zoho split above.</div>'
+                    : '';
+                pEl.innerHTML =
+                    '<div class="rounded-lg border border-red-200 bg-red-50 p-3">'
+                        + '<div class="text-xs font-semibold text-red-800 uppercase tracking-wide">Real new leak — created in Zoho this window</div>'
+                        + '<div class="text-2xl font-bold text-red-700 mt-1">' + _fn(newN) + ' <span class="text-sm font-medium text-red-600">records</span></div>'
+                        + '<div class="text-xs text-red-700 mt-0.5">' + formatCurrency(newSar) + ' of duplicate deal value</div>'
+                        + '<div class="text-[11px] text-gray-500 mt-1">Records actually born in Zoho in the last ' + (data.window_weeks||0) + ' week(s). This is the leak to stop at source.</div>'
+                    + '</div>'
+                    + '<div class="rounded-lg border border-gray-200 bg-gray-50 p-3">'
+                        + '<div class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Pre-existing — older records</div>'
+                        + '<div class="text-2xl font-bold text-gray-700 mt-1">' + _fn(oldN) + ' <span class="text-sm font-medium text-gray-500">records</span></div>'
+                        + '<div class="text-xs text-gray-600 mt-0.5">' + formatCurrency(oldSar) + ' of duplicate deal value</div>'
+                        + '<div class="text-[11px] text-gray-500 mt-1">Created in Zoho BEFORE this window' + (back ? ' · ' + _fn(back) + ' only recently synced/detected' : '') + '. A rising inflation number driven by these is DETECTION improving, not a new leak.</div>'
+                        + caveat
+                    + '</div>';
+            }
         }
 
         function reloadCreationTrend() { loadCreationTrend(); }

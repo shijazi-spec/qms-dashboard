@@ -44,6 +44,19 @@ export const duplicateSpikeTool = createTool({
     byModule: z.array(
       z.object({ label: z.string(), recent: z.number(), prior: z.number(), delta: z.number() }),
     ),
+    // Provenance: is the rise a real NEW leak (created in Zoho this window) or
+    // re-detection of OLD records? createdInWindow/exposureNewSar are reliable
+    // (by Zoho Created_Time); the synced-date figures come with a caveat flag.
+    provenance: z.object({
+      createdInWindow: z.number(),
+      createdBeforeWindow: z.number(),
+      exposureNewSar: z.number(),
+      exposureOldSar: z.number(),
+      firstSyncedInWindow: z.number(),
+      backDetected: z.number(),
+      lastSynced: z.string().nullable(),
+      syncedViewUnreliable: z.boolean(),
+    }),
     error: z.string().optional(),
   }),
 
@@ -72,6 +85,16 @@ export const duplicateSpikeTool = createTool({
         bySource: r.by_source,
         byOwner: r.by_owner,
         byModule: r.by_module,
+        provenance: {
+          createdInWindow: r.provenance.created_in_window,
+          createdBeforeWindow: r.provenance.created_before_window,
+          exposureNewSar: r.provenance.exposure_new_sar,
+          exposureOldSar: r.provenance.exposure_old_sar,
+          firstSyncedInWindow: r.provenance.first_synced_in_window,
+          backDetected: r.provenance.back_detected,
+          lastSynced: r.provenance.last_synced,
+          syncedViewUnreliable: r.provenance.synced_view_unreliable,
+        },
       };
     } catch (e: any) {
       return {
@@ -83,6 +106,16 @@ export const duplicateSpikeTool = createTool({
         bySource: [],
         byOwner: [],
         byModule: [],
+        provenance: {
+          createdInWindow: 0,
+          createdBeforeWindow: 0,
+          exposureNewSar: 0,
+          exposureOldSar: 0,
+          firstSyncedInWindow: 0,
+          backDetected: 0,
+          lastSynced: null,
+          syncedViewUnreliable: false,
+        },
         error: e?.message || String(e),
       };
     }

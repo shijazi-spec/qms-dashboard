@@ -7496,6 +7496,16 @@ export async function getDuplicateSpikeBreakdown(opts: {
   by_source: SpikeBreakdownRow[];
   by_owner: SpikeBreakdownRow[];
   by_module: SpikeBreakdownRow[];
+  provenance: {
+    created_in_window: number;
+    created_before_window: number;
+    exposure_new_sar: number;
+    exposure_old_sar: number;
+    first_synced_in_window: number;
+    back_detected: number;
+    last_synced: string | null;
+    synced_view_unreliable: boolean;
+  };
 }> {
   const weeks = Math.min(26, Math.max(1, Math.floor(Number(opts.weeks ?? 3) || 3)));
   const top = Math.min(50, Math.max(3, Math.floor(Number(opts.top ?? 12) || 12)));
@@ -7548,6 +7558,52 @@ export async function getDuplicateSpikeBreakdown(opts: {
   const recent_total = sum(by_module, "recent");
   const prior_total = sum(by_module, "prior");
 
+  // PROVENANCE — new-in-Zoho vs pre-existing (Sarah 2026-07-23). Answers "did
+  // inflation rise from a real NEW leak, or from re-detecting OLD records?".
+  //   · created_date  = when the record was born in ZOHO (100% reliable).
+  //   · created_at    = when OUR mirror first inserted it (SYNCED date). Caveat:
+  //                     a FULL rebuild re-inserts every row, resetting created_at,
+  //                     so when a rebuild falls inside the window these read high.
+  // Computed over the CURRENT live duplicate exposure (active clusters,
+  // total_records > 1) so it explains the snapshot the SAR/inflation card shows.
+  const provQ = await pool.query<{
+    created_in_window: string;
+    created_before_window: string;
+    exposure_new_sar: string;
+    exposure_old_sar: string;
+    first_synced_in_window: string;
+    back_detected: string;
+    last_synced: string | null;
+  }>(
+    `SELECT
+       COUNT(*) FILTER (WHERE dr.created_date >= NOW() - INTERVAL '${weeks} weeks')::int AS created_in_window,
+       COUNT(*) FILTER (WHERE dr.created_date <  NOW() - INTERVAL '${weeks} weeks' OR dr.created_date IS NULL)::int AS created_before_window,
+       COALESCE(SUM(COALESCE(dr.deal_value,0)) FILTER (WHERE dr.record_type = 'deal' AND dr.created_date >= NOW() - INTERVAL '${weeks} weeks'), 0)::float AS exposure_new_sar,
+       COALESCE(SUM(COALESCE(dr.deal_value,0)) FILTER (WHERE dr.record_type = 'deal' AND (dr.created_date <  NOW() - INTERVAL '${weeks} weeks' OR dr.created_date IS NULL)), 0)::float AS exposure_old_sar,
+       COUNT(*) FILTER (WHERE dr.created_at >= NOW() - INTERVAL '${weeks} weeks')::int AS first_synced_in_window,
+       COUNT(*) FILTER (WHERE dr.created_at >= NOW() - INTERVAL '${weeks} weeks' AND (dr.created_date < NOW() - INTERVAL '${weeks} weeks' OR dr.created_date IS NULL))::int AS back_detected,
+       TO_CHAR(MAX(dr.created_at), 'YYYY-MM-DD') AS last_synced
+       FROM duplicate_records dr
+       JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+      WHERE dc.status = 'active' AND dc.total_records > 1${segCond}`,
+    params,
+  );
+  const pr = provQ.rows[0];
+  // Was a mirror rebuild likely inside the window? If the OLDEST created_at is
+  // itself inside the window, every row was re-inserted recently → the synced
+  // view is unreliable. Cheap proxy: min(created_at) within the window.
+  const rebuildQ = await pool.query<{ min_synced: string | null }>(
+    `SELECT TO_CHAR(MIN(dr.created_at), 'YYYY-MM-DD') AS min_synced
+       FROM duplicate_records dr
+       JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+      WHERE dc.status = 'active' AND dc.total_records > 1${segCond}`,
+    params,
+  );
+  const minSynced = rebuildQ.rows[0]?.min_synced || null;
+  const rebuildInWindow =
+    !!minSynced &&
+    Date.parse(minSynced) >= Date.now() - weeks * 7 * 86400000;
+
   return {
     window_weeks: weeks,
     recent_total,
@@ -7556,6 +7612,16 @@ export async function getDuplicateSpikeBreakdown(opts: {
     by_source,
     by_owner,
     by_module,
+    provenance: {
+      created_in_window: parseInt(pr?.created_in_window || "0") || 0,
+      created_before_window: parseInt(pr?.created_before_window || "0") || 0,
+      exposure_new_sar: Number(pr?.exposure_new_sar || 0) || 0,
+      exposure_old_sar: Number(pr?.exposure_old_sar || 0) || 0,
+      first_synced_in_window: parseInt(pr?.first_synced_in_window || "0") || 0,
+      back_detected: parseInt(pr?.back_detected || "0") || 0,
+      last_synced: pr?.last_synced || null,
+      synced_view_unreliable: rebuildInWindow,
+    },
   };
 }
 
