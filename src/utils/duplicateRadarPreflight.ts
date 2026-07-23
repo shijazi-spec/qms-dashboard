@@ -3661,11 +3661,10 @@ async function runPreflightBasic(input: {
     if (r.verdict === "duplicate") {
       bump("Duplicate contact (email / phone) already in CRM");
     } else if (r.verdict === "block") {
-      bump(
-        r.reason === "protected_account"
-          ? "Protected / do-not-contact account — already a current account"
-          : "Existing active client — do not cold-contact, route to owner",
-      );
+      // Protected / do-not-contact accounts are also current accounts already,
+      // so they fold into the same "existing active client" block bucket
+      // (Sarah 2026-07-23) — no separate protected-account card.
+      bump("Existing active client — do not cold-contact, route to owner");
     } else if (r.verdict === "review") {
       bump(
         r.reason === "possible_existing_client_fuzzy_name"
