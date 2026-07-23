@@ -940,6 +940,13 @@ const WalaPlusNav = {
           body, body.wp-rail-collapsed { padding-left: 0 !important; padding-right: 0 !important; }
         }
         .wp-topstrip { position: fixed; top: 0; left: 0; right: 0; height: 48px; z-index: 30; }
+        /* Every button in the top strip is an inline-flex box with its content
+           centered, so icon-only buttons (theme toggle 🌙, assistant 🤖, bell)
+           line up on the SAME vertical centre as the taller Refresh button
+           instead of sitting on the text baseline (the "flying moon"). Scoped
+           to .wp-topstrip so the rail's own buttons are untouched. This ships in
+           the shared nav, so the fix applies on EVERY page at once. */
+        .wp-topstrip button { display: inline-flex; align-items: center; justify-content: center; }
         /* Critical tooltip-hiding rule injected here so the rail never double-renders
            its label on pages that don't load /css/navigation.css. The full hover
            polish (colors, arrow, focus) still lives in navigation.css. */
