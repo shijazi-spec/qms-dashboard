@@ -1435,6 +1435,37 @@ async function scanZohoCRMForDuplicates(
       });
     }
 
+    // AUTOMATIC deletion-feed sweep after every completed sync (Sarah 2026-07-23:
+    // "schedule it after each sync"). runDeletionDetection above prunes on a
+    // narrow [last_sync, now] window and does NOT clear the empty-delete ledger;
+    // this wider, ledger-clearing pass is the same one the "Verify & prune
+    // deleted" button runs, so bulk "uploaded then removed" batches are caught
+    // and the "Tagged · pending delete" rows for admin-deleted records resolve
+    // — without anyone clicking. Fire-and-forget so it never extends the sync;
+    // idempotent, so overlapping with the button run is harmless. Lookback is
+    // env-tunable (default 30d for the frequent auto-run vs 90d on the button).
+    if (process.env.RADAR_POSTSYNC_DELETION_SWEEP !== "false") {
+      const sweepDays = parseInt(
+        process.env.RADAR_POSTSYNC_SWEEP_LOOKBACK_DAYS || "30",
+        10,
+      );
+      void import("../../utils/emptyRecordsDatabase")
+        .then(({ sweepDeletedByFeed }) =>
+          sweepDeletedByFeed({ lookbackDays: sweepDays }),
+        )
+        .then((r) =>
+          logger.info(
+            `🧹 [post-sync deletion sweep] pruned ${r.totalPruned}`,
+            r.perModule,
+          ),
+        )
+        .catch((e) =>
+          logger.warn(
+            `[post-sync deletion sweep] failed (non-fatal): ${e?.message || e}`,
+          ),
+        );
+    }
+
     // Cleanup stale records (legacy, mostly a no-op now) and orphan clusters
     if (scanMode !== "full") {
       scanState.progress = "Cleaning up orphan clusters...";
