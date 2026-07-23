@@ -1502,6 +1502,17 @@
                         <input type="checkbox" id="preflightRefreshOverlap" data-testid="checkbox-preflight-refresh-overlap" />
                         <span>Refresh CS verdict from Zoho before classifying (slower, but reflects deals promoted to Paid in the last 6 hours)</span>
                     </label>
+                    <!-- Sarah 2026-07-23 — surface the reachable KSA number in the
+                         export Phone column. A lead's Mobile can be foreign while
+                         the KSA number that made it PASS sits in Second Phone /
+                         Other Numbers; the sales team should see THAT number. When
+                         on, the PASS/Rejected export's Phone column uses the KSA
+                         number found in any phone field (same preference the gate
+                         uses), falling back to the first number if none is KSA. -->
+                    <label class="flex items-center gap-2 mt-2 text-xs text-gray-700" title="In the exported file, put the Saudi (+966 / local) number found in ANY phone field — Mobile, Second Phone, Other Numbers — into the Phone column, so the sales team calls the reachable KSA number instead of a foreign Mobile. If no KSA number exists, the first number is kept.">
+                        <input type="checkbox" id="preflightExportKsaPhone" data-testid="checkbox-preflight-export-ksa-phone" checked />
+                        <span>In exports, use the KSA number found in Second&nbsp;Phone / Other&nbsp;Numbers as the contact Phone</span>
+                    </label>
                 </div>
 
                 <!-- Summary -->
@@ -2332,7 +2343,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=132"></script>
+    <script src="/js/duplicates-app.js?v=133"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

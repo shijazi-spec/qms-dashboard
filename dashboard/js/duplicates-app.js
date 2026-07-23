@@ -10180,6 +10180,37 @@
         // as a native .xlsx for the Head of Sales. 2026-06-17 — switched from
         // a client-built CSV to the server's native-xlsx endpoint: the manual
         // CSV→Excel conversion was shifting cells and dropping the header row.
+        // KSA-phone helpers for the export (mirror src/utils/duplicateRadarPreflight.ts
+        // stripPlaceholder + isKsaPhone EXACTLY, so the exported Phone column
+        // matches the number the server gate screened on). Keep in sync with the
+        // server if that logic changes.
+        const _PF_PLACEHOLDER_RE = /^\s*(n\/?a|na|not\s*available(\s*\(n\/?a\))?|none|null|unknown|-+|—|\.+)\s*$/i;
+        function _pfStripPlaceholder(s) {
+            const v = String(s == null ? '' : s).trim();
+            return _PF_PLACEHOLDER_RE.test(v) ? '' : v;
+        }
+        function _pfIsKsaPhone(raw) {
+            const cleaned = _pfStripPlaceholder(raw);
+            if (!cleaned) return false;
+            const hadPlus = cleaned.startsWith('+');
+            let digits = cleaned.replace(/\D/g, '');
+            if (!digits) return false;
+            // Gate 1: explicit non-966 international code → foreign / out of scope.
+            let intl = hadPlus;
+            let fd = digits;
+            if (fd.startsWith('00')) { intl = true; fd = fd.slice(2); }
+            const isForeign = fd.startsWith('966') ? false : intl;
+            if (isForeign) return false;
+            // Gate 2: explicit KSA country code → Saudi (any real subscriber).
+            if (digits.startsWith('00')) digits = digits.slice(2);
+            if (digits.startsWith('966')) {
+                const nsn = digits.slice(3).replace(/^0+/, '');
+                return nsn.length >= 7;
+            }
+            // Gate 3: bare local → Saudi only if a 9-digit NSN starting 5 or 1.
+            const nsn = digits.replace(/^0+/, '');
+            return /^[15]\d{8}$/.test(nsn);
+        }
         // We merge the uploaded file's Contact / Email / Phone columns (keyed
         // by row_index) and let the server emit a proper workbook with the
         // Churn Date column already present — no conversion step, no shifts.
@@ -10232,6 +10263,16 @@
                 rows: slimRows,
             };
             // Contacts only for the subset's rows (keyed by row_index).
+            // When the "use KSA number in exports" toggle is on, the Phone we
+            // hand to the sales team is the reachable Saudi number found in ANY
+            // phone field (Mobile / Second Phone / Other Numbers), mirroring the
+            // preference the preflight gate itself uses — so a lead whose Mobile
+            // is foreign but whose Second/Other number is KSA is exported on that
+            // KSA number, not the un-callable foreign one.
+            const useKsaPhoneInExport = (() => {
+                const el = document.getElementById('preflightExportKsaPhone');
+                return el ? !!el.checked : true;
+            })();
             const contacts = {};
             if (preflightLastUpload && Array.isArray(preflightLastUpload.originalRows)) {
                 const pick = (obj, keys) => {
@@ -10247,10 +10288,21 @@
                     o = o || {};
                     const name = pick(o, ['fullname','name','contactname'])
                         || [pick(o, ['firstname']), pick(o, ['lastname'])].filter(Boolean).join(' ').trim();
+                    const rawMobile = pick(o, ['phone','mobile','mobilephone','phonenumber']);
+                    let phone = rawMobile;
+                    if (useKsaPhoneInExport) {
+                        const candidates = [
+                            rawMobile,
+                            pick(o, ['corporatephone','companyphone','workphone']),
+                            pick(o, ['secondphone','altphone','alternatephone','homephone']),
+                            pick(o, ['othernumbers','othernumber','otherphone','additionalphone']),
+                        ].map(v => _pfStripPlaceholder(v)).filter(Boolean);
+                        phone = candidates.find(_pfIsKsaPhone) || candidates[0] || rawMobile;
+                    }
                     contacts[idx] = {
                         name: name,
                         email: pick(o, ['email','emailaddress']),
-                        phone: pick(o, ['phone','mobile','mobilephone','phonenumber']),
+                        phone: phone,
                     };
                 });
             }
