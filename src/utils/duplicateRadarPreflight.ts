@@ -2993,6 +2993,20 @@ export async function getCsClientDirectoryStats(): Promise<{
   };
 }
 
+// Explicit corrections for known-bad domains that the generic rules can't
+// safely infer (Sarah 2026-07-26) — e.g. a missing dot. Keyed by the cleaned
+// host (lowercased, no scheme/www/path); value is the correct host, which then
+// flows through the normal registrable-domain reduction. Extend via env
+// CLIENT_DOMAIN_CORRECTIONS as "bad=good,bad2=good2".
+//   sa.eycom → sa.ey.com (EY Saudi; reduces to ey.com and merges with it).
+const CLIENT_DOMAIN_CORRECTIONS: Record<string, string> = (() => {
+  const m: Record<string, string> = { "sa.eycom": "sa.ey.com" };
+  for (const pair of (process.env.CLIENT_DOMAIN_CORRECTIONS || "").split(",")) {
+    const [bad, good] = pair.split("=").map((s) => s.trim().toLowerCase());
+    if (bad && good) m[bad] = good;
+  }
+  return m;
+})();
 // Consumer free-mail providers — never a corporate client's own domain. Matched
 // on the second-level label so gmail.com AND a corrupted gmail.comhh both drop.
 const CLIENT_DOMAIN_FREEMAIL_SLD = new Set([
@@ -3027,6 +3041,7 @@ export function normalizeClientDomain(raw: string | null | undefined): string | 
   if (s.includes("@")) s = s.slice(s.indexOf("@") + 1); // userinfo / stray email
   s = s.split(/[/?#]/)[0].split(":")[0]; // path / query / fragment / port
   s = s.replace(/^www\./, "").replace(/\.+$/, "").trim();
+  if (CLIENT_DOMAIN_CORRECTIONS[s]) s = CLIENT_DOMAIN_CORRECTIONS[s]; // fix known typos
   if (!s || /\s/.test(s)) return null;
   const labels = s.split(".");
   if (labels.length < 2) return null;
