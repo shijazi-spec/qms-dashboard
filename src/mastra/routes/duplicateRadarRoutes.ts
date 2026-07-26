@@ -12581,6 +12581,11 @@ export const duplicateRadarRoutes = [
           const fresh = ["1", "true", "yes"].includes(
             String(c.req.query("fresh") || "").toLowerCase(),
           );
+          // ?doam=0 → CRM-active only (no DOAM overlay) for a clean ClientHub
+          // reconciliation, since ClientHub doesn't track the DOAM channel.
+          const includeDoam = !["0", "false", "no"].includes(
+            String(c.req.query("doam") || "").toLowerCase(),
+          );
           const { listActiveClientDomains } = await import(
             "../../utils/duplicateRadarPreflight"
           );
@@ -12593,7 +12598,7 @@ export const duplicateRadarRoutes = [
             doam_added,
             built_at_iso,
             criteria,
-          } = await listActiveClientDomains({ fresh });
+          } = await listActiveClientDomains({ fresh, includeDoam });
           if (format === "csv" || format === "txt") {
             const stamp = built_at_iso.slice(0, 10);
             const body =
