@@ -6,10 +6,12 @@ import { z } from "zod";
  *
  * "Collect all the domains of existing clients with no churn." Reads the
  * corporate-scoped CS client directory (listActiveClientDomains) and returns
- * the domains whose status is ACTIVE — a customer-stage deal (Agreement Signed
- * / Paid) or a live CS phase with NO churn date. Marketplace / WalaOne /
+ * the domains of clients in the ADOPTION or RENEWAL CS phase with NO churn date
+ * (Sarah 2026-07-26): Adoption = finished onboarding, now a paying customer;
+ * Renewal = renewed after a year. Onboarding, churned/terminated, and paid
+ * deals with no recognised phase are EXCLUDED. Marketplace / WalaOne /
  * Partner-Accounts layouts are already excluded by the directory, so this is a
- * clean corporate do-not-cold-contact suppression list.
+ * clean corporate list of established, retained clients.
  *
  * Read-only; same engine as GET /api/duplicates/preflight/active-client-domains
  * so the numbers always match the Preflight tab's download.
@@ -18,7 +20,7 @@ export const activeClientDomainsTool = createTool({
   id: "active-client-domains",
 
   description:
-    "List the DOMAINS of existing corporate clients with NO churn — companies with a customer-stage deal (Agreement Signed / Paid) or a live CS phase and no churn date. This is the do-not-cold-contact suppression list (Marketplace / WalaOne / merchant layouts are excluded). Use whenever the user asks to collect / list / export the domains of current clients, active clients, no-churn clients, or a suppression / exclusion list for outreach or imports. Returns the total count and the sorted domains; for very large lists a preview is returned with a note to use the Preflight tab download or GET /api/duplicates/preflight/active-client-domains?format=csv for the full file.",
+    "List the DOMAINS of established corporate clients in the ADOPTION or RENEWAL CS phase with NO churn date — clients who finished onboarding and became paying customers (Adoption) or renewed after a year (Renewal). Onboarding-phase, churned/terminated, and paid deals with no recognised phase are excluded. Marketplace / WalaOne / merchant layouts are excluded. Use whenever the user asks to collect / list / export the domains of current clients, active clients, adoption/renewal clients, no-churn clients, or a suppression / exclusion list for outreach or imports. Returns the total count and the sorted domains; for very large lists a preview is returned with a note to use the Preflight tab download or GET /api/duplicates/preflight/active-client-domains?format=csv for the full file.",
 
   inputSchema: z.object({
     fresh: z
