@@ -12591,11 +12591,13 @@ export const duplicateRadarRoutes = [
           );
           const {
             domains,
+            rows,
             total,
+            walaplus_count,
+            doam_count,
             qualifying_deals,
             missing_company_domain,
             dropped_junk,
-            doam_added,
             built_at_iso,
             criteria,
           } = await listActiveClientDomains({ fresh, includeDoam });
@@ -12603,7 +12605,10 @@ export const duplicateRadarRoutes = [
             const stamp = built_at_iso.slice(0, 10);
             const body =
               format === "csv"
-                ? "domain\n" + domains.map((d) => `"${d.replace(/"/g, '""')}"`).join("\n")
+                ? "domain,product\n" +
+                  rows
+                    .map((r) => `"${r.domain.replace(/"/g, '""')}",${r.product}`)
+                    .join("\n")
                 : domains.join("\n");
             return new Response(body, {
               status: 200,
@@ -12620,12 +12625,14 @@ export const duplicateRadarRoutes = [
           return c.json({
             success: true,
             total,
+            walaplus_count,
+            doam_count,
             qualifying_deals,
             missing_company_domain,
             dropped_junk,
-            doam_added,
             criteria,
             built_at_iso,
+            rows,
             domains,
           });
         } catch (e: any) {

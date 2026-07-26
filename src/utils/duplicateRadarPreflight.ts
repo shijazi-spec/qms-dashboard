@@ -3092,11 +3092,13 @@ export async function listActiveClientDomains(opts?: {
   includeDoam?: boolean;
 }): Promise<{
   domains: string[];
+  rows: Array<{ domain: string; product: "WalaPlus" | "DOAM" }>;
   total: number;
+  walaplus_count: number;
+  doam_count: number;
   qualifying_deals: number;
   missing_company_domain: number;
   dropped_junk: number;
-  doam_added: number;
   built_at_iso: string;
   criteria: string;
 }> {
@@ -3208,31 +3210,46 @@ export async function listActiveClientDomains(opts?: {
     else droppedJunk++;
   }
 
-  // Merge ACTIVE DOAM (HR-ministry) client domains — a separate overlay that may
-  // not surface as CRM deals. Deduped by the Set; count only the NEW ones.
-  let doamAdded = 0;
-  if (opts?.includeDoam !== false) {
+  // `set` now holds the WalaPlus (CRM phase-based) domains.
+  const walaSet = set;
+  // ACTIVE DOAM (HR-ministry) client domains — a separate PRODUCT. Overlaps
+  // (a domain that is both a CRM client and a DOAM entity) are labelled DOAM
+  // (Sarah 2026-07-26: DOAM wins). When includeDoam is false the DOAM product
+  // is omitted entirely (WalaPlus-only list, e.g. for a clean ClientHub diff).
+  const includeDoam = opts?.includeDoam !== false;
+  const doamSet = new Set<string>();
+  if (includeDoam) {
     for (const d of DOAM_CLIENTS) {
       if (!d.active) continue;
       const clean = normalizeClientDomain(d.domain);
-      if (clean && !set.has(clean)) {
-        set.add(clean);
-        doamAdded++;
-      }
+      if (clean) doamSet.add(clean);
     }
   }
+  const all = new Set<string>(walaSet);
+  for (const d of doamSet) all.add(d);
+  const rows = Array.from(all)
+    .sort()
+    .map((domain) => ({
+      domain,
+      product: (doamSet.has(domain) ? "DOAM" : "WalaPlus") as
+        | "WalaPlus"
+        | "DOAM",
+    }));
+  const walaplusCount = rows.filter((r) => r.product === "WalaPlus").length;
+  const doamCount = rows.filter((r) => r.product === "DOAM").length;
 
-  const domains = Array.from(set).sort();
   return {
-    domains,
-    total: domains.length,
+    domains: rows.map((r) => r.domain),
+    rows,
+    total: rows.length,
+    walaplus_count: walaplusCount,
+    doam_count: doamCount,
     qualifying_deals: qualifying,
     missing_company_domain: missingCompanyDomain,
     dropped_junk: droppedJunk,
-    doam_added: doamAdded,
     built_at_iso: new Date().toISOString(),
     criteria:
-      "Phase in (New Deal, Onboarding, Adoption, Renewal) AND NOT Termination AND (Churn Date empty OR Renewal Date > Churn Date); domain = CS-section Company_Domain; corporate scope; + active DOAM",
+      "WalaPlus = CRM Deal Phase in (New Deal, Onboarding, Adoption, Renewal) AND NOT Termination AND (Churn Date empty OR Renewal Date > Churn Date), domain = CS-section Company_Domain, corporate scope. DOAM = active DOAM entities; overlaps labelled DOAM.",
   };
 }
 
