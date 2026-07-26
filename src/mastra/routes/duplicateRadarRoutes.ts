@@ -12630,6 +12630,79 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  {
+    // GROUND-TRUTH: for a list of domains, does the CRM have an Agreement
+    // Signed / Paid deal? Returns every deal + stage per domain (Sarah
+    // 2026-07-26). POST { domains: string[] } | ?format=csv for a flat export.
+    path: "/api/duplicates/preflight/domain-deal-stages",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          // Accept an array, or a newline/comma-separated string.
+          let domains: string[] = [];
+          if (Array.isArray(body?.domains)) {
+            domains = body.domains.map((x: any) => String(x));
+          } else if (typeof body?.domains === "string") {
+            domains = body.domains.split(/[\s,;]+/);
+          }
+          domains = domains.map((d) => d.trim()).filter(Boolean).slice(0, 2000);
+          if (!domains.length) {
+            return c.json({ error: "Provide domains: string[] or a delimited string." }, 400);
+          }
+          const { checkDomainsForClientDeals } = await import(
+            "../../utils/duplicateRadarPreflight"
+          );
+          const { checked_at_iso, results } =
+            await checkDomainsForClientDeals(domains);
+          const format = String(c.req.query("format") || "json").toLowerCase();
+          if (format === "csv") {
+            const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+            const rows = [
+              "domain,in_crm,has_signed_or_paid,stages,deal_count,deal_names",
+            ];
+            for (const r of results) {
+              rows.push(
+                [
+                  esc(r.input),
+                  r.in_crm ? "yes" : "no",
+                  r.has_signed_or_paid ? "yes" : "no",
+                  esc(r.stages.join(" | ")),
+                  r.deals.length,
+                  esc(r.deals.map((d) => `${d.name} (${d.stage})`).join(" | ")),
+                ].join(","),
+              );
+            }
+            return new Response(rows.join("\n"), {
+              status: 200,
+              headers: {
+                "Content-Type": "text/csv; charset=utf-8",
+                "Content-Disposition": `attachment; filename="domain-deal-stages_${checked_at_iso.slice(0, 10)}.csv"`,
+                "Cache-Control": "no-store",
+              },
+            });
+          }
+          const summary = {
+            total: results.length,
+            with_signed_or_paid: results.filter((r) => r.has_signed_or_paid).length,
+            in_crm_other_stage: results.filter(
+              (r) => r.in_crm && !r.has_signed_or_paid,
+            ).length,
+            not_in_crm: results.filter((r) => !r.in_crm).length,
+          };
+          return c.json({ success: true, checked_at_iso, summary, results });
+        } catch (e: any) {
+          logger.error("preflight/domain-deal-stages failed", e);
+          const detail =
+            e instanceof Error ? e.message : String(e || "unknown error");
+          return c.json({ error: detail.slice(0, 400) }, 500);
+        }
+      };
+    },
+  },
 ];
 
 export default duplicateRadarRoutes;

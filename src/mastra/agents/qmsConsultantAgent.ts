@@ -31,6 +31,7 @@ import { updateRecordFieldTool } from "../tools/updateRecordFieldTool";
 import { csLifecycleStatusTool } from "../tools/csLifecycleStatusTool";
 import { csOwnersTool } from "../tools/csOwnersTool";
 import { activeClientDomainsTool } from "../tools/activeClientDomainsTool";
+import { domainDealStagesTool } from "../tools/domainDealStagesTool";
 import { dealStageAuditTool } from "../tools/dealStageAuditTool";
 import { duplicateSpikeTool } from "../tools/duplicateSpikeTool";
 import { dealStageAgingStatusTool } from "../tools/dealStageAgingStatusTool";
@@ -440,6 +441,9 @@ export const qmsConsultantAgent = new Agent({
     // "Collect the domains of existing clients with no churn" — the corporate
     // do-not-cold-contact suppression list (active, no-churn client domains).
     activeClientDomainsTool:          wt(activeClientDomainsTool, AGENT_NAME),
+    // "Do these domains have an Agreement Signed / Paid deal?" — ground-truth
+    // per-domain deal + stage lookup from the CRM. Read-only.
+    domainDealStagesTool:             wt(domainDealStagesTool, AGENT_NAME),
     // "Which deal stages exist / does the picklist have duplicates?" — read-only
     // audit of every Zoho Deal Stage value + suspected near-duplicates.
     dealStageAuditTool:               wt(dealStageAuditTool, AGENT_NAME),

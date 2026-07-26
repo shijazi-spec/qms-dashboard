@@ -3156,6 +3156,182 @@ export async function listActiveClientDomains(opts?: {
 }
 
 /**
+ * GROUND-TRUTH LOOKUP (Sarah 2026-07-26). For a list of domains, return every
+ * Deal the CRM holds for each domain and its Stage, and flag whether any is at
+ * a customer stage (Agreement Signed / Paid). Read-only — no phase logic, no
+ * layout scope: it just answers "what deals exist for this domain, and are any
+ * signed/paid?" so CS and the CRM can be reconciled row by row.
+ *
+ * Matching is form-agnostic: each input and every deal domain (deal own domain,
+ * Company_Domain field, and the linked Account's domain) are reduced to their
+ * registrable form (normalizeClientDomain), so `ceda.cm.gov.sa`, `cm.gov.sa`
+ * and an account on `cm.gov.sa` all resolve to the same client.
+ */
+export async function checkDomainsForClientDeals(
+  inputDomains: string[],
+): Promise<{
+  checked_at_iso: string;
+  results: Array<{
+    input: string;
+    registrable: string | null;
+    in_crm: boolean;
+    has_signed_or_paid: boolean;
+    stages: string[];
+    deals: Array<{
+      name: string;
+      stage: string;
+      owner: string | null;
+      churn_date: string | null;
+      layout: string | null;
+    }>;
+  }>;
+}> {
+  const nowIso = new Date().toISOString();
+  const inputs = Array.from(
+    new Set(
+      inputDomains.map((d) => String(d || "").trim().toLowerCase()).filter(Boolean),
+    ),
+  );
+  if (!inputs.length) return { checked_at_iso: nowIso, results: [] };
+
+  const regToInputs = new Map<string, string[]>();
+  const inputReg = new Map<string, string | null>();
+  const candidateSet = new Set<string>();
+  for (const inp of inputs) {
+    candidateSet.add(inp);
+    const reg = normalizeClientDomain(inp);
+    inputReg.set(inp, reg);
+    if (reg) {
+      candidateSet.add(reg);
+      const arr = regToInputs.get(reg) || [];
+      arr.push(inp);
+      regToInputs.set(reg, arr);
+    }
+  }
+  const candidates = Array.from(candidateSet);
+
+  const DEAL_COLS = `account_name, company_name,
+            LOWER(domain) AS domain,
+            LOWER(NULLIF(raw_data->>'Company_Domain','')) AS cs_domain,
+            raw_data->'Account_Name'->>'id' AS account_id,
+            owner_name,
+            NULLIF(raw_data->>'Churn_Date','') AS churn_date,
+            COALESCE(NULLIF(layout_name,''), raw_data->'Layout'->>'name') AS layout,
+            COALESCE(NULLIF(stage,''), raw_data->>'Stage','') AS stage`;
+
+  // 1) Deals matching directly by deal domain OR Company_Domain.
+  const dealsQ = await queryWithTimeout<any>(
+    `SELECT ${DEAL_COLS}
+       FROM duplicate_records
+      WHERE record_type = 'deal'
+        AND (LOWER(domain) = ANY($1::text[])
+             OR LOWER(NULLIF(raw_data->>'Company_Domain','')) = ANY($1::text[]))
+      LIMIT 20000`,
+    [candidates],
+    undefined,
+    PREFLIGHT_DIR_TIMEOUT_MS,
+  );
+
+  // 2) Accounts on those domains → catch deals whose domain lives on the Account.
+  const acctQ = await queryWithTimeout<any>(
+    `SELECT zoho_record_id, LOWER(domain) AS domain
+       FROM duplicate_records
+      WHERE record_type = 'account' AND LOWER(domain) = ANY($1::text[])
+      LIMIT 20000`,
+    [candidates],
+    undefined,
+    PREFLIGHT_DIR_TIMEOUT_MS,
+  );
+  const acctDomainById = new Map<string, string>();
+  for (const a of acctQ?.rows ?? []) {
+    const id = (a.zoho_record_id || "").toString().trim();
+    if (id) acctDomainById.set(id, (a.domain || "").toString().trim().toLowerCase());
+  }
+  let acctDealRows: any[] = [];
+  const acctIds = Array.from(acctDomainById.keys());
+  if (acctIds.length) {
+    const q2 = await queryWithTimeout<any>(
+      `SELECT ${DEAL_COLS}
+         FROM duplicate_records
+        WHERE record_type = 'deal' AND raw_data->'Account_Name'->>'id' = ANY($1::text[])
+        LIMIT 20000`,
+      [acctIds],
+      undefined,
+      PREFLIGHT_DIR_TIMEOUT_MS,
+    );
+    acctDealRows = q2?.rows ?? [];
+  }
+
+  const custStages = new Set(PF_BASIC_CUSTOMER_STAGES.map((s) => s.toLowerCase()));
+  const byInput = new Map<string, any[]>();
+  for (const inp of inputs) byInput.set(inp, []);
+  const seen = new Set<string>();
+
+  const assign = (rows: any[]) => {
+    for (const d of rows) {
+      const acctDom = d.account_id
+        ? acctDomainById.get((d.account_id || "").toString().trim())
+        : null;
+      const dealDoms = [d.domain, d.cs_domain, acctDom]
+        .map((x) => (x || "").toString().trim().toLowerCase())
+        .filter(Boolean);
+      const dealKeys = new Set<string>();
+      for (const dd of dealDoms) {
+        dealKeys.add(dd);
+        const r = normalizeClientDomain(dd);
+        if (r) dealKeys.add(r);
+      }
+      const matchedInputs = new Set<string>();
+      for (const [reg, inpList] of regToInputs.entries()) {
+        if (dealKeys.has(reg)) inpList.forEach((i) => matchedInputs.add(i));
+      }
+      for (const inp of inputs) if (dealKeys.has(inp)) matchedInputs.add(inp);
+      if (!matchedInputs.size) continue;
+      const dealId = [
+        d.account_id,
+        d.domain,
+        d.stage,
+        d.account_name,
+        d.company_name,
+      ].join("|");
+      for (const inp of matchedInputs) {
+        const k = inp + "::" + dealId;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        byInput.get(inp)!.push(d);
+      }
+    }
+  };
+  assign(dealsQ?.rows ?? []);
+  assign(acctDealRows);
+
+  const results = inputs.map((inp) => {
+    const deals = (byInput.get(inp) || []).map((d) => ({
+      name:
+        (d.account_name || d.company_name || "").toString().trim() ||
+        "(unnamed deal)",
+      stage: (d.stage || "").toString().trim() || "(no stage)",
+      owner: (d.owner_name || "").toString().trim() || null,
+      churn_date: (d.churn_date || "").toString().trim() || null,
+      layout: (d.layout || "").toString().trim() || null,
+    }));
+    const stages = Array.from(new Set(deals.map((x) => x.stage))).sort();
+    const hasSignedPaid = deals.some((x) =>
+      custStages.has(x.stage.toLowerCase()),
+    );
+    return {
+      input: inp,
+      registrable: inputReg.get(inp) ?? null,
+      in_crm: deals.length > 0,
+      has_signed_or_paid: hasSignedPaid,
+      stages,
+      deals,
+    };
+  });
+  return { checked_at_iso: nowIso, results };
+}
+
+/**
  * Match an inbound normalized company name to a client by NAME CONTAINMENT —
  * every token of a client's name appears in the inbound name (e.g. client
  * "samref" ⊆ inbound "samref saudi aramco mobil refinery"). Returns the matched
