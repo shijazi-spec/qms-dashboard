@@ -2999,8 +2999,15 @@ export async function getCsClientDirectoryStats(): Promise<{
 // flows through the normal registrable-domain reduction. Extend via env
 // CLIENT_DOMAIN_CORRECTIONS as "bad=good,bad2=good2".
 //   sa.eycom → sa.ey.com (EY Saudi; reduces to ey.com and merges with it).
+//   alwaleedphialnthropies.org → alwaleedphilanthropies.org (Alwaleed
+//     Philanthropies; "phialn" is a misspelling of "philan").
+// NB: saey.com is NOT corrected — it is a real, separate company (Saey Steel,
+// saey.com → saeysteel.com), not an EY typo. Verified 2026-07-26.
 const CLIENT_DOMAIN_CORRECTIONS: Record<string, string> = (() => {
-  const m: Record<string, string> = { "sa.eycom": "sa.ey.com" };
+  const m: Record<string, string> = {
+    "sa.eycom": "sa.ey.com",
+    "alwaleedphialnthropies.org": "alwaleedphilanthropies.org",
+  };
   for (const pair of (process.env.CLIENT_DOMAIN_CORRECTIONS || "").split(",")) {
     const [bad, good] = pair.split("=").map((s) => s.trim().toLowerCase());
     if (bad && good) m[bad] = good;
