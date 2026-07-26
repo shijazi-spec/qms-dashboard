@@ -947,6 +947,12 @@ const WalaPlusNav = {
            to .wp-topstrip so the rail's own buttons are untouched. This ships in
            the shared nav, so the fix applies on EVERY page at once. */
         .wp-topstrip button { display: inline-flex; align-items: center; justify-content: center; }
+        /* Emoji-based topbar icons (🤖 GRQ Assistant) render at font size by
+           default, so they show visibly bigger than the sibling SVG icons
+           (w-5 h-5 = 20px). Normalize the glyph size so the whole cluster
+           reads as one row of same-weight controls. Same box the SVG buttons
+           use (p-1.5 → 32×32 hit target) — only the glyph inside shrinks. */
+        .wp-topstrip .wp-topstrip-emoji { font-size: 20px; line-height: 1; }
         /* Critical tooltip-hiding rule injected here so the rail never double-renders
            its label on pages that don't load /css/navigation.css. The full hover
            polish (colors, arrow, focus) still lives in navigation.css. */
@@ -984,16 +990,20 @@ const WalaPlusNav = {
         /* When search is active, force every (still-visible) group open so matches are reachable */
         body.wp-nav-search-active .wp-rail .wp-rail-group .wp-group-items { display: block !important; }
         /* Precompiled tailwind in this project does not ship sm:/md: variants,
-           so handle responsive visibility with explicit classes here. */
-        .wp-rail-toggle-btn { display: inline-flex; }
-        .wp-mobile-menu-btn { display: none; }
-        .wp-desktop-only    { display: inline-flex; }
-        .wp-tagline         { display: inline; }
+           so handle responsive visibility with explicit classes here.
+           SCOPED to .wp-topstrip so specificity (0,0,2,0) beats the earlier
+           ".wp-topstrip button { display: inline-flex }" rule (0,0,1,1) —
+           without the scope, the mobile-menu hamburger stayed visible on
+           desktop NEXT TO the desktop rail-toggle hamburger (2026-07-07). */
+        .wp-topstrip .wp-rail-toggle-btn { display: inline-flex; }
+        .wp-topstrip .wp-mobile-menu-btn { display: none; }
+        .wp-topstrip .wp-desktop-only    { display: inline-flex; }
+        .wp-topstrip .wp-tagline         { display: inline; }
         @media (max-width: 767px) {
-          .wp-rail-toggle-btn { display: none; }
-          .wp-mobile-menu-btn { display: inline-flex; }
-          .wp-desktop-only,
-          .wp-tagline         { display: none; }
+          .wp-topstrip .wp-rail-toggle-btn { display: none; }
+          .wp-topstrip .wp-mobile-menu-btn { display: inline-flex; }
+          .wp-topstrip .wp-desktop-only,
+          .wp-topstrip .wp-tagline         { display: none; }
         }
 
         /* ===== RTL / Arabic Layout Overrides ===== */
@@ -1073,8 +1083,8 @@ const WalaPlusNav = {
         </div>
         <div class="flex items-center space-x-2">
           <span id="lastUpdated" class="wp-tagline text-xs text-gray-600"></span>
-          <button data-on-click="WalaPlusNav.openAssistant" class="relative p-1.5 rounded-lg hover:bg-gray-100 transition text-lg leading-none" aria-label="Open GRQ Assistant" title="GRQ Assistant" data-testid="button-grq-assistant">
-            <span aria-hidden="true">🤖</span>
+          <button data-on-click="WalaPlusNav.openAssistant" class="relative p-1.5 rounded-lg hover:bg-gray-100 transition leading-none wp-topstrip-icon-btn" aria-label="Open GRQ Assistant" title="GRQ Assistant" data-testid="button-grq-assistant">
+            <span aria-hidden="true" class="wp-topstrip-emoji">🤖</span>
           </button>
           <button data-on-click="WalaPlusNav.refreshDashboard" class="wp-desktop-only bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition items-center space-x-1 text-sm" aria-label="Refresh dashboard" data-testid="button-refresh">
             <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
