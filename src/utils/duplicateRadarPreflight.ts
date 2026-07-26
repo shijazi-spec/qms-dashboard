@@ -3065,72 +3065,113 @@ export function normalizeClientDomain(raw: string | null | undefined): string | 
 }
 
 /**
- * CORPORATE client domains in the ADOPTION or RENEWAL CS phase, with NO churn
- * (Sarah 2026-07-23, tightened 2026-07-26).
+ * CORPORATE current-client domains (Sarah 2026-07-26, FINAL definition).
  *
- * Reads the CS client directory — ALREADY corporate-scoped: its client-deal
- * query excludes Marketplace / WalaOne / Partner-Accounts layouts (see
- * getCsClientDirectory), so no merchant/app clients leak in.
+ * The authoritative rule, straight from the CRM Deal's Customer Success section:
+ *   • Stage = "Agreement Signed" OR "Paid" (PF_BASIC_CUSTOMER_STAGES), AND
+ *   • Churn Date is EMPTY (not churned), AND
+ *   • the domain is taken from the CS-section "Company Domain" field
+ *     (Company_Domain), NOT the deal's own domain nor the Account's.
  *
- * SCOPE (Sarah 2026-07-26, widened): every ACTIVE CS phase — a client whose
- * deal sits in New Deal / Onboarding / Adoption / Renewal — EXCLUDING only
- * Termination (churned). A customer-stage deal with NO recognised CS phase
- * (lifecycle_state === null) is NOT counted as an active client. "New Deal"
- * maps to the "onboarding" lifecycle state (see _csPhaseToActiveState), so the
- * phase set is {onboarding, adoption, renewal}. A churn date can never appear
- * here because a churned client's lifecycle_state is "termination_*".
+ * This is stage-based, not phase-based — a Paid/Signed deal counts even if its
+ * CS Phase field is blank (that was why Riyad Bank etc. dropped under the old
+ * phase filter). Corporate scope only: Marketplace / WalaOne / Partner-Accounts
+ * layouts are excluded. Each Company_Domain is run through the hygiene pass
+ * (normalizeClientDomain) and de-duped. ACTIVE DOAM (HR-ministry) domains are
+ * merged in as a separate overlay (`includeDoam`, default true).
  *
- * DOAM (Sarah 2026-07-26): government entities subscribed THROUGH the HR
- * ministry auto-renew yearly and may NOT be in the CRM as customer deals, so
- * the CS directory misses them. Their ACTIVE domains (doamClients.ts) are
- * merged in unconditionally (they carry no CS phase). `includeDoam` (default
- * true) toggles this.
- *
- * `phases` overrides the phase set (default onboarding/adoption/renewal).
- * `fresh` forces a directory rebuild so the list reflects the DB right now
- * (the caller is an explicit on-demand action, not a hot path).
+ * Field names are env-overridable (DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN /
+ * _CHURN_DATE) to match the tenant's Zoho API names. `fresh` is accepted for
+ * signature compatibility (this query always hits the DB live).
  */
 export async function listActiveClientDomains(opts?: {
   fresh?: boolean;
-  phases?: Array<"onboarding" | "adoption" | "renewal">;
   includeDoam?: boolean;
 }): Promise<{
   domains: string[];
   total: number;
-  raw_matched: number;
+  qualifying_deals: number;
+  missing_company_domain: number;
   dropped_junk: number;
   doam_added: number;
   built_at_iso: string;
-  phases: string[];
+  criteria: string;
 }> {
-  if (opts?.fresh) _csDirCache = null;
-  const allowed = new Set<string>(
-    (opts?.phases && opts.phases.length
-      ? opts.phases
-      : ["onboarding", "adoption", "renewal"]
-    ).map((p) => p.toLowerCase()),
+  // Env-overridable field names (mirror getCsClientDirectory).
+  const _ident = (s: string) => (/^[A-Za-z0-9_ ]+$/.test(s) ? s.trim() : null);
+  const _envFields = (envVar: string, defaults: string[]) =>
+    Array.from(
+      new Set(
+        [...defaults, ...((process.env[envVar] || "").split(","))]
+          .map((s) => _ident(s))
+          .filter((s): s is string => !!s),
+      ),
+    );
+  const domainCoalesce = _envFields("DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN", [
+    "Company_Domain",
+  ])
+    .map((f) => `NULLIF(raw_data->>'${f}','')`)
+    .join(", ");
+  const churnCoalesce = _envFields("DUPLICATE_RADAR_FIELD_CHURN_DATE", [
+    "Churn_Date",
+    "ChurnDate",
+  ])
+    .map((f) => `NULLIF(raw_data->>'${f}','')`)
+    .join(", ");
+  // Corporate scope — exclude merchant/app layouts (same rule as the directory).
+  const _normLayout = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const csExcludeSql = Array.from(
+    new Set(
+      [
+        "Marketplace",
+        "Doam Marketplace",
+        "Partner Accounts",
+        "WalaOne",
+        ...((process.env.DUPLICATE_RADAR_CS_EXCLUDE_LAYOUTS || "").split(",")),
+      ]
+        .map((s) => _normLayout(s.trim()))
+        .filter(Boolean),
+    ),
+  )
+    .map((s) => `'${s.replace(/'/g, "''")}'`)
+    .join(", ");
+  const layoutNormExpr =
+    "LOWER(REGEXP_REPLACE(COALESCE(layout_name, raw_data->'Layout'->>'name', ''), '[^a-zA-Z0-9]', '', 'g'))";
+
+  const q = await queryWithTimeout<any>(
+    `SELECT LOWER(COALESCE(${domainCoalesce})) AS company_domain
+       FROM duplicate_records
+      WHERE record_type = 'deal'
+        -- Stage = Agreement Signed / Paid
+        AND LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) = ANY($1::text[])
+        -- Churn Date empty (not churned)
+        AND COALESCE(${churnCoalesce}) IS NULL
+        -- Corporate scope only
+        AND ${layoutNormExpr} NOT LIKE '%marketplace%'
+        AND ${layoutNormExpr} NOT IN (${csExcludeSql})
+      LIMIT 200000`,
+    [Array.from(PF_BASIC_CUSTOMER_STAGES)],
+    undefined,
+    PREFLIGHT_DIR_TIMEOUT_MS,
   );
-  const dir = await getCsClientDirectory(Date.now());
+
   const set = new Set<string>();
-  let rawMatched = 0;
+  let qualifying = 0;
+  let missingCompanyDomain = 0;
   let droppedJunk = 0;
-  for (const [dom, st] of dir.byDomain.entries()) {
-    const d = (dom || "").toString().trim();
-    // st.active already excludes Termination/churned; the phase gate then keeps
-    // any active phase (New Deal / Onboarding / Adoption / Renewal) and drops
-    // clients with no recognised phase (lifecycle_state === null).
-    if (!(d && st?.active && st.lifecycleState && allowed.has(st.lifecycleState))) {
+  for (const row of q?.rows ?? []) {
+    qualifying++;
+    const cd = (row.company_domain || "").toString().trim();
+    if (!cd) {
+      missingCompanyDomain++; // Paid/Signed + no churn, but CS-section domain blank
       continue;
     }
-    rawMatched++;
-    // Hygiene pass: strip www., reduce sub-domains to the registrable domain,
-    // drop free-mail / malformed entries (Sarah 2026-07-26). The Set then
-    // de-dups the collapsed forms (e.g. www.x.com + x.com → one).
-    const clean = normalizeClientDomain(d);
+    const clean = normalizeClientDomain(cd);
     if (clean) set.add(clean);
     else droppedJunk++;
   }
-  // Merge ACTIVE DOAM (HR-ministry) client domains — they auto-renew and may
+
+  // Merge ACTIVE DOAM (HR-ministry) client domains — a separate overlay that may
   // not surface as CRM deals. Deduped by the Set; count only the NEW ones.
   let doamAdded = 0;
   if (opts?.includeDoam !== false) {
@@ -3143,15 +3184,18 @@ export async function listActiveClientDomains(opts?: {
       }
     }
   }
+
   const domains = Array.from(set).sort();
   return {
     domains,
     total: domains.length,
-    raw_matched: rawMatched,
+    qualifying_deals: qualifying,
+    missing_company_domain: missingCompanyDomain,
     dropped_junk: droppedJunk,
     doam_added: doamAdded,
-    built_at_iso: new Date(dir.builtAt).toISOString(),
-    phases: Array.from(allowed),
+    built_at_iso: new Date().toISOString(),
+    criteria:
+      "Stage in (Agreement Signed, Paid) AND Churn Date empty; domain = CS-section Company_Domain; corporate scope; + active DOAM",
   };
 }
 

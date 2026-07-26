@@ -12587,11 +12587,12 @@ export const duplicateRadarRoutes = [
           const {
             domains,
             total,
-            raw_matched,
+            qualifying_deals,
+            missing_company_domain,
             dropped_junk,
             doam_added,
             built_at_iso,
-            phases,
+            criteria,
           } = await listActiveClientDomains({ fresh });
           if (format === "csv" || format === "txt") {
             const stamp = built_at_iso.slice(0, 10);
@@ -12614,10 +12615,11 @@ export const duplicateRadarRoutes = [
           return c.json({
             success: true,
             total,
-            raw_matched,
+            qualifying_deals,
+            missing_company_domain,
             dropped_junk,
             doam_added,
-            phases,
+            criteria,
             built_at_iso,
             domains,
           });
