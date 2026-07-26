@@ -3065,6 +3065,40 @@ export function normalizeClientDomain(raw: string | null | undefined): string | 
 }
 
 /**
+ * LIGHT clean of a client domain that PRESERVES the exact host — no sub-domain
+ * reduction, no typo-correction (Sarah 2026-07-26: the active-client list must
+ * echo the CRM's Company_Domain verbatim so the count matches the CRM). Only
+ * removes noise: lowercases; strips scheme / userinfo / path / port and a
+ * leading `www.`; rejects whitespace / no-dot / bad-label / 1-char-TLD; drops
+ * consumer free-mail (checked via the registrable SLD, but the RAW host is
+ * returned). So `tp.moi.gov.sa` stays `tp.moi.gov.sa`, `sa.eycom` stays
+ * `sa.eycom`, while `gmail.comhh` and blanks are dropped. Use for LIST output;
+ * use normalizeClientDomain (which reduces) only for form-agnostic MATCHING.
+ */
+export function cleanClientDomain(raw: string | null | undefined): string | null {
+  let s = String(raw ?? "").trim().toLowerCase();
+  if (!s) return null;
+  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
+  if (s.includes("@")) s = s.slice(s.indexOf("@") + 1);
+  s = s.split(/[/?#]/)[0].split(":")[0];
+  s = s.replace(/^www\./, "").replace(/\.+$/, "").trim();
+  if (!s || /\s/.test(s)) return null;
+  const labels = s.split(".");
+  if (labels.length < 2) return null;
+  const labelRe = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+  if (!labels.every((l) => labelRe.test(l))) return null;
+  if (labels[labels.length - 1].length < 2) return null;
+  // Free-mail check uses the registrable SLD, but we DO NOT reduce the output.
+  const last2 = labels.slice(-2).join(".");
+  const reg =
+    labels.length >= 3 && CLIENT_DOMAIN_MULTI_SUFFIX.has(last2)
+      ? labels.slice(-3).join(".")
+      : labels.slice(-2).join(".");
+  if (CLIENT_DOMAIN_FREEMAIL_SLD.has(reg.split(".")[0])) return null;
+  return s;
+}
+
+/**
  * CORPORATE current-client domains (Sarah 2026-07-26, FINAL definition).
  *
  * The authoritative rule, straight from the CRM Deal's Customer Success section:
@@ -3079,9 +3113,11 @@ export function normalizeClientDomain(raw: string | null | undefined): string | 
  * This is PHASE-based: it excludes Termination-phase (churned) deals — which is
  * how a churned client like jomel-ksa.com was wrongly included by the earlier
  * stage-only rule. Corporate scope only: Marketplace / WalaOne / Partner-Accounts
- * layouts are excluded. Each Company_Domain is run through the hygiene pass
- * (normalizeClientDomain) and de-duped. ACTIVE DOAM (HR-ministry) domains are
- * merged in as a separate overlay (`includeDoam`, default true).
+ * layouts are excluded. Each Company_Domain is emitted VERBATIM via
+ * cleanClientDomain (light clean only — NO sub-domain reduction, NO typo-
+ * correction — so the list matches the CRM's actual Company_Domain values and
+ * count; Sarah 2026-07-26) and exact-deduped. ACTIVE DOAM (HR-ministry) domains
+ * are merged in as a separate overlay (`includeDoam`, default true).
  *
  * Field names are env-overridable (DUPLICATE_RADAR_FIELD_PHASE /
  * _COMPANY_DOMAIN / _CHURN_DATE / _RENEWAL_DATE) to match the tenant's Zoho API
@@ -3205,7 +3241,9 @@ export async function listActiveClientDomains(opts?: {
       missingCompanyDomain++; // active phase + not churned, but CS-section domain blank
       continue;
     }
-    const clean = normalizeClientDomain(cd);
+    // LIGHT clean only — keep the CRM Company_Domain verbatim (no sub-domain
+    // reduction, no typo-correction) so the list count matches the CRM.
+    const clean = cleanClientDomain(cd);
     if (clean) set.add(clean);
     else droppedJunk++;
   }
@@ -3221,7 +3259,7 @@ export async function listActiveClientDomains(opts?: {
   if (includeDoam) {
     for (const d of DOAM_CLIENTS) {
       if (!d.active) continue;
-      const clean = normalizeClientDomain(d.domain);
+      const clean = cleanClientDomain(d.domain);
       if (clean) doamSet.add(clean);
     }
   }
