@@ -3069,7 +3069,8 @@ export function normalizeClientDomain(raw: string | null | undefined): string | 
  *
  * The authoritative rule, straight from the CRM Deal's Customer Success section:
  *   • Stage = "Agreement Signed" OR "Paid" (PF_BASIC_CUSTOMER_STAGES), AND
- *   • Churn Date is EMPTY (not churned), AND
+ *   • NOT churned — Churn Date is EMPTY, OR a Renewal Date LATER than the Churn
+ *     Date (Sarah 2026-07-26: renewal after churn = the client came back), AND
  *   • the domain is taken from the CS-section "Company Domain" field
  *     (Company_Domain), NOT the deal's own domain nor the Account's.
  *
@@ -3118,6 +3119,12 @@ export async function listActiveClientDomains(opts?: {
   ])
     .map((f) => `NULLIF(raw_data->>'${f}','')`)
     .join(", ");
+  const renewalCoalesce = _envFields("DUPLICATE_RADAR_FIELD_RENEWAL_DATE", [
+    "Renewal_Date",
+    "RenewalDate",
+  ])
+    .map((f) => `NULLIF(raw_data->>'${f}','')`)
+    .join(", ");
   // Corporate scope — exclude merchant/app layouts (same rule as the directory).
   const _normLayout = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const csExcludeSql = Array.from(
@@ -3144,8 +3151,19 @@ export async function listActiveClientDomains(opts?: {
       WHERE record_type = 'deal'
         -- Stage = Agreement Signed / Paid
         AND LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) = ANY($1::text[])
-        -- Churn Date empty (not churned)
-        AND COALESCE(${churnCoalesce}) IS NULL
+        -- Not churned: Churn Date empty, OR a Renewal Date LATER than the Churn
+        -- Date (the client renewed after churning → active again). ISO-date
+        -- prefixes (yyyy-mm-dd) sort chronologically as text; a non-ISO churn is
+        -- treated as still-churned (conservative).
+        AND (
+          COALESCE(${churnCoalesce}) IS NULL
+          OR (
+            COALESCE(${renewalCoalesce}) IS NOT NULL
+            AND COALESCE(${renewalCoalesce}) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+            AND COALESCE(${churnCoalesce}) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+            AND LEFT(COALESCE(${renewalCoalesce}), 10) > LEFT(COALESCE(${churnCoalesce}), 10)
+          )
+        )
         -- Corporate scope only
         AND ${layoutNormExpr} NOT LIKE '%marketplace%'
         AND ${layoutNormExpr} NOT IN (${csExcludeSql})
@@ -3195,7 +3213,7 @@ export async function listActiveClientDomains(opts?: {
     doam_added: doamAdded,
     built_at_iso: new Date().toISOString(),
     criteria:
-      "Stage in (Agreement Signed, Paid) AND Churn Date empty; domain = CS-section Company_Domain; corporate scope; + active DOAM",
+      "Stage in (Agreement Signed, Paid) AND (Churn Date empty OR Renewal Date > Churn Date); domain = CS-section Company_Domain; corporate scope; + active DOAM",
   };
 }
 
@@ -3226,6 +3244,8 @@ export async function checkDomainsForClientDeals(
       stage: string;
       owner: string | null;
       churn_date: string | null;
+      renewal_date: string | null;
+      renewed_after_churn: boolean;
       layout: string | null;
     }>;
   }>;
@@ -3260,6 +3280,7 @@ export async function checkDomainsForClientDeals(
             raw_data->'Account_Name'->>'id' AS account_id,
             owner_name,
             NULLIF(raw_data->>'Churn_Date','') AS churn_date,
+            NULLIF(raw_data->>'Renewal_Date','') AS renewal_date,
             COALESCE(NULLIF(layout_name,''), raw_data->'Layout'->>'name') AS layout,
             COALESCE(NULLIF(stage,''), raw_data->>'Stage','') AS stage`;
 
@@ -3350,15 +3371,28 @@ export async function checkDomainsForClientDeals(
   assign(acctDealRows);
 
   const results = inputs.map((inp) => {
-    const deals = (byInput.get(inp) || []).map((d) => ({
-      name:
-        (d.account_name || d.company_name || "").toString().trim() ||
-        "(unnamed deal)",
-      stage: (d.stage || "").toString().trim() || "(no stage)",
-      owner: (d.owner_name || "").toString().trim() || null,
-      churn_date: (d.churn_date || "").toString().trim() || null,
-      layout: (d.layout || "").toString().trim() || null,
-    }));
+    const deals = (byInput.get(inp) || []).map((d) => {
+      const churn = (d.churn_date || "").toString().trim() || null;
+      const renewal = (d.renewal_date || "").toString().trim() || null;
+      const iso = /^[0-9]{4}-[0-9]{2}-[0-9]{2}/;
+      const renewedAfterChurn =
+        !!churn &&
+        !!renewal &&
+        iso.test(renewal) &&
+        iso.test(churn) &&
+        renewal.slice(0, 10) > churn.slice(0, 10);
+      return {
+        name:
+          (d.account_name || d.company_name || "").toString().trim() ||
+          "(unnamed deal)",
+        stage: (d.stage || "").toString().trim() || "(no stage)",
+        owner: (d.owner_name || "").toString().trim() || null,
+        churn_date: churn,
+        renewal_date: renewal,
+        renewed_after_churn: renewedAfterChurn,
+        layout: (d.layout || "").toString().trim() || null,
+      };
+    });
     const stages = Array.from(new Set(deals.map((x) => x.stage))).sort();
     const hasSignedPaid = deals.some((x) =>
       custStages.has(x.stage.toLowerCase()),

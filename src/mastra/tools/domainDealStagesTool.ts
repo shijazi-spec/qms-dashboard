@@ -47,6 +47,8 @@ export const domainDealStagesTool = createTool({
               stage: z.string(),
               owner: z.string().nullable(),
               churn_date: z.string().nullable(),
+              renewal_date: z.string().nullable(),
+              renewed_after_churn: z.boolean(),
               layout: z.string().nullable(),
             }),
           ),
