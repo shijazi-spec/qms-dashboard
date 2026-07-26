@@ -12584,7 +12584,7 @@ export const duplicateRadarRoutes = [
           const { listActiveClientDomains } = await import(
             "../../utils/duplicateRadarPreflight"
           );
-          const { domains, total, built_at_iso, phases } =
+          const { domains, total, raw_matched, dropped_junk, built_at_iso, phases } =
             await listActiveClientDomains({ fresh });
           if (format === "csv" || format === "txt") {
             const stamp = built_at_iso.slice(0, 10);
@@ -12604,7 +12604,15 @@ export const duplicateRadarRoutes = [
               },
             });
           }
-          return c.json({ success: true, total, phases, built_at_iso, domains });
+          return c.json({
+            success: true,
+            total,
+            raw_matched,
+            dropped_junk,
+            phases,
+            built_at_iso,
+            domains,
+          });
         } catch (e: any) {
           logger.error("preflight/active-client-domains failed", e);
           const detail =

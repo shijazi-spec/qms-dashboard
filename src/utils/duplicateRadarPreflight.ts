@@ -2993,6 +2993,55 @@ export async function getCsClientDirectoryStats(): Promise<{
   };
 }
 
+// Consumer free-mail providers — never a corporate client's own domain. Matched
+// on the second-level label so gmail.com AND a corrupted gmail.comhh both drop.
+const CLIENT_DOMAIN_FREEMAIL_SLD = new Set([
+  "gmail", "googlemail", "hotmail", "outlook", "live", "msn", "yahoo", "ymail",
+  "rocketmail", "icloud", "aol", "proton", "protonmail", "gmx", "yandex",
+]);
+// Multi-label public suffixes (Saudi + Gulf + common international + the
+// CentralNic domain-hack suffixes like sa.com). Longest-match wins so e.g.
+// impact46.sa.com stays a 3-label registrable domain, NOT collapsed to "sa.com",
+// and moh.gov.sa is kept distinct from moe.gov.sa. Extend as needed.
+const CLIENT_DOMAIN_MULTI_SUFFIX = new Set([
+  "com.sa", "net.sa", "org.sa", "gov.sa", "edu.sa", "sch.sa", "med.sa", "pub.sa",
+  "com.eg", "com.qa", "com.kw", "com.bh", "com.om", "com.ae", "gov.ae", "co.ae",
+  "net.ae", "org.ae", "co.uk", "org.uk", "gov.uk", "ac.uk", "com.au", "com.tr",
+  "co.in", "com.pk", "sa.com", "uk.com", "us.com", "eu.com", "gb.com",
+]);
+
+/**
+ * Clean + normalise a client domain to its registrable form, or null if it is
+ * junk (Sarah 2026-07-26 hygiene pass). Steps: lowercase; strip scheme /
+ * userinfo / path / port; strip a leading `www.`; reject whitespace or a
+ * value with no dot / an invalid label / a 1-char TLD; reduce sub-domains to
+ * the registrable domain (so `intra.riyadbank.com` and `www.oliverwyman.com`
+ * collapse onto `riyadbank.com` / `oliverwyman.com`, while `moh.gov.sa` stays
+ * intact); finally drop consumer free-mail domains. De-dup is left to the
+ * caller's Set.
+ */
+export function normalizeClientDomain(raw: string | null | undefined): string | null {
+  let s = String(raw ?? "").trim().toLowerCase();
+  if (!s) return null;
+  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//, ""); // scheme
+  if (s.includes("@")) s = s.slice(s.indexOf("@") + 1); // userinfo / stray email
+  s = s.split(/[/?#]/)[0].split(":")[0]; // path / query / fragment / port
+  s = s.replace(/^www\./, "").replace(/\.+$/, "").trim();
+  if (!s || /\s/.test(s)) return null;
+  const labels = s.split(".");
+  if (labels.length < 2) return null;
+  const labelRe = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+  if (!labels.every((l) => labelRe.test(l))) return null;
+  if (labels[labels.length - 1].length < 2) return null;
+  const last2 = labels.slice(-2).join(".");
+  const registrable =
+    labels.length >= 3 && CLIENT_DOMAIN_MULTI_SUFFIX.has(last2)
+      ? labels.slice(-3).join(".")
+      : labels.slice(-2).join(".");
+  if (CLIENT_DOMAIN_FREEMAIL_SLD.has(registrable.split(".")[0])) return null;
+  return registrable;
+}
+
 /**
  * CORPORATE client domains in the ADOPTION or RENEWAL CS phase, with NO churn
  * (Sarah 2026-07-23, tightened 2026-07-26).
@@ -3018,7 +3067,14 @@ export async function getCsClientDirectoryStats(): Promise<{
 export async function listActiveClientDomains(opts?: {
   fresh?: boolean;
   phases?: Array<"onboarding" | "adoption" | "renewal">;
-}): Promise<{ domains: string[]; total: number; built_at_iso: string; phases: string[] }> {
+}): Promise<{
+  domains: string[];
+  total: number;
+  raw_matched: number;
+  dropped_junk: number;
+  built_at_iso: string;
+  phases: string[];
+}> {
   if (opts?.fresh) _csDirCache = null;
   const allowed = new Set<string>(
     (opts?.phases && opts.phases.length ? opts.phases : ["adoption", "renewal"]).map(
@@ -3027,18 +3083,29 @@ export async function listActiveClientDomains(opts?: {
   );
   const dir = await getCsClientDirectory(Date.now());
   const set = new Set<string>();
+  let rawMatched = 0;
+  let droppedJunk = 0;
   for (const [dom, st] of dir.byDomain.entries()) {
-    const d = (dom || "").toString().trim().toLowerCase();
+    const d = (dom || "").toString().trim();
     // st.active already implies no churn; the phase gate then narrows to the
     // established-customer phases (Adoption / Renewal).
-    if (d && st?.active && st.lifecycleState && allowed.has(st.lifecycleState)) {
-      set.add(d);
+    if (!(d && st?.active && st.lifecycleState && allowed.has(st.lifecycleState))) {
+      continue;
     }
+    rawMatched++;
+    // Hygiene pass: strip www., reduce sub-domains to the registrable domain,
+    // drop free-mail / malformed entries (Sarah 2026-07-26). The Set then
+    // de-dups the collapsed forms (e.g. www.x.com + x.com → one).
+    const clean = normalizeClientDomain(d);
+    if (clean) set.add(clean);
+    else droppedJunk++;
   }
   const domains = Array.from(set).sort();
   return {
     domains,
     total: domains.length,
+    raw_matched: rawMatched,
+    dropped_junk: droppedJunk,
     built_at_iso: new Date(dir.builtAt).toISOString(),
     phases: Array.from(allowed),
   };

@@ -11,7 +11,9 @@ import { z } from "zod";
  * Renewal = renewed after a year. Onboarding, churned/terminated, and paid
  * deals with no recognised phase are EXCLUDED. Marketplace / WalaOne /
  * Partner-Accounts layouts are already excluded by the directory, so this is a
- * clean corporate list of established, retained clients.
+ * clean corporate list of established, retained clients. Domains are passed
+ * through a hygiene pass (strip www., reduce sub-domains to the registrable
+ * domain, drop free-mail / malformed) and de-duplicated.
  *
  * Read-only; same engine as GET /api/duplicates/preflight/active-client-domains
  * so the numbers always match the Preflight tab's download.
