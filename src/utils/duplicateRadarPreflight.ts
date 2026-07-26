@@ -3072,36 +3072,43 @@ export function normalizeClientDomain(raw: string | null | undefined): string | 
  * query excludes Marketplace / WalaOne / Partner-Accounts layouts (see
  * getCsClientDirectory), so no merchant/app clients leak in.
  *
- * SCOPE (Sarah 2026-07-26): only the two phases that mean an ESTABLISHED,
- * retained customer —
- *   • Adoption — finished Onboarding, now a paying customer ("customer since"),
- *   • Renewal  — passed a year and the CS team renewed the subscription.
- * EXCLUDED: Onboarding (not yet an adopted customer), Termination / churned
- * (any churn date), and customer-stage deals with no recognised CS phase
- * (lifecycle_state === null) — those aren't confirmed Adoption/Renewal.
- * A churn date can never appear here because a churned client's lifecycle_state
- * is "termination_*", never adoption/renewal.
+ * SCOPE (Sarah 2026-07-26, widened): every ACTIVE CS phase — a client whose
+ * deal sits in New Deal / Onboarding / Adoption / Renewal — EXCLUDING only
+ * Termination (churned). A customer-stage deal with NO recognised CS phase
+ * (lifecycle_state === null) is NOT counted as an active client. "New Deal"
+ * maps to the "onboarding" lifecycle state (see _csPhaseToActiveState), so the
+ * phase set is {onboarding, adoption, renewal}. A churn date can never appear
+ * here because a churned client's lifecycle_state is "termination_*".
  *
- * `phases` overrides the phase set (default ["adoption","renewal"]).
+ * DOAM (Sarah 2026-07-26): government entities subscribed THROUGH the HR
+ * ministry auto-renew yearly and may NOT be in the CRM as customer deals, so
+ * the CS directory misses them. Their ACTIVE domains (doamClients.ts) are
+ * merged in unconditionally (they carry no CS phase). `includeDoam` (default
+ * true) toggles this.
+ *
+ * `phases` overrides the phase set (default onboarding/adoption/renewal).
  * `fresh` forces a directory rebuild so the list reflects the DB right now
  * (the caller is an explicit on-demand action, not a hot path).
  */
 export async function listActiveClientDomains(opts?: {
   fresh?: boolean;
   phases?: Array<"onboarding" | "adoption" | "renewal">;
+  includeDoam?: boolean;
 }): Promise<{
   domains: string[];
   total: number;
   raw_matched: number;
   dropped_junk: number;
+  doam_added: number;
   built_at_iso: string;
   phases: string[];
 }> {
   if (opts?.fresh) _csDirCache = null;
   const allowed = new Set<string>(
-    (opts?.phases && opts.phases.length ? opts.phases : ["adoption", "renewal"]).map(
-      (p) => p.toLowerCase(),
-    ),
+    (opts?.phases && opts.phases.length
+      ? opts.phases
+      : ["onboarding", "adoption", "renewal"]
+    ).map((p) => p.toLowerCase()),
   );
   const dir = await getCsClientDirectory(Date.now());
   const set = new Set<string>();
@@ -3109,8 +3116,9 @@ export async function listActiveClientDomains(opts?: {
   let droppedJunk = 0;
   for (const [dom, st] of dir.byDomain.entries()) {
     const d = (dom || "").toString().trim();
-    // st.active already implies no churn; the phase gate then narrows to the
-    // established-customer phases (Adoption / Renewal).
+    // st.active already excludes Termination/churned; the phase gate then keeps
+    // any active phase (New Deal / Onboarding / Adoption / Renewal) and drops
+    // clients with no recognised phase (lifecycle_state === null).
     if (!(d && st?.active && st.lifecycleState && allowed.has(st.lifecycleState))) {
       continue;
     }
@@ -3122,12 +3130,26 @@ export async function listActiveClientDomains(opts?: {
     if (clean) set.add(clean);
     else droppedJunk++;
   }
+  // Merge ACTIVE DOAM (HR-ministry) client domains — they auto-renew and may
+  // not surface as CRM deals. Deduped by the Set; count only the NEW ones.
+  let doamAdded = 0;
+  if (opts?.includeDoam !== false) {
+    for (const d of DOAM_CLIENTS) {
+      if (!d.active) continue;
+      const clean = normalizeClientDomain(d.domain);
+      if (clean && !set.has(clean)) {
+        set.add(clean);
+        doamAdded++;
+      }
+    }
+  }
   const domains = Array.from(set).sort();
   return {
     domains,
     total: domains.length,
     raw_matched: rawMatched,
     dropped_junk: droppedJunk,
+    doam_added: doamAdded,
     built_at_iso: new Date(dir.builtAt).toISOString(),
     phases: Array.from(allowed),
   };

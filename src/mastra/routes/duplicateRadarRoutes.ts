@@ -12584,8 +12584,15 @@ export const duplicateRadarRoutes = [
           const { listActiveClientDomains } = await import(
             "../../utils/duplicateRadarPreflight"
           );
-          const { domains, total, raw_matched, dropped_junk, built_at_iso, phases } =
-            await listActiveClientDomains({ fresh });
+          const {
+            domains,
+            total,
+            raw_matched,
+            dropped_junk,
+            doam_added,
+            built_at_iso,
+            phases,
+          } = await listActiveClientDomains({ fresh });
           if (format === "csv" || format === "txt") {
             const stamp = built_at_iso.slice(0, 10);
             const body =
@@ -12609,6 +12616,7 @@ export const duplicateRadarRoutes = [
             total,
             raw_matched,
             dropped_junk,
+            doam_added,
             phases,
             built_at_iso,
             domains,
