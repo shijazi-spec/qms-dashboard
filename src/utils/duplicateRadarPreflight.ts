@@ -3068,22 +3068,24 @@ export function normalizeClientDomain(raw: string | null | undefined): string | 
  * CORPORATE current-client domains (Sarah 2026-07-26, FINAL definition).
  *
  * The authoritative rule, straight from the CRM Deal's Customer Success section:
- *   • Stage = "Agreement Signed" OR "Paid" (PF_BASIC_CUSTOMER_STAGES), AND
+ *   • CS Phase ∈ {New Deal, Onboarding, Adoption, Renewal} — phase MUST be set
+ *     (blank phase = NOT an active client) and MUST NOT be Termination, AND
  *   • NOT churned — Churn Date is EMPTY, OR a Renewal Date LATER than the Churn
- *     Date (Sarah 2026-07-26: renewal after churn = the client came back), AND
+ *     Date (Sarah 2026-07-26: renewal after churn = the client came back; a
+ *     churn with no renewal, or a churn newer than the renewal, is excluded), AND
  *   • the domain is taken from the CS-section "Company Domain" field
  *     (Company_Domain), NOT the deal's own domain nor the Account's.
  *
- * This is stage-based, not phase-based — a Paid/Signed deal counts even if its
- * CS Phase field is blank (that was why Riyad Bank etc. dropped under the old
- * phase filter). Corporate scope only: Marketplace / WalaOne / Partner-Accounts
+ * This is PHASE-based: it excludes Termination-phase (churned) deals — which is
+ * how a churned client like jomel-ksa.com was wrongly included by the earlier
+ * stage-only rule. Corporate scope only: Marketplace / WalaOne / Partner-Accounts
  * layouts are excluded. Each Company_Domain is run through the hygiene pass
  * (normalizeClientDomain) and de-duped. ACTIVE DOAM (HR-ministry) domains are
  * merged in as a separate overlay (`includeDoam`, default true).
  *
- * Field names are env-overridable (DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN /
- * _CHURN_DATE) to match the tenant's Zoho API names. `fresh` is accepted for
- * signature compatibility (this query always hits the DB live).
+ * Field names are env-overridable (DUPLICATE_RADAR_FIELD_PHASE /
+ * _COMPANY_DOMAIN / _CHURN_DATE / _RENEWAL_DATE) to match the tenant's Zoho API
+ * names. `fresh` is accepted for signature compatibility (always queries live).
  */
 export async function listActiveClientDomains(opts?: {
   fresh?: boolean;
@@ -3125,6 +3127,13 @@ export async function listActiveClientDomains(opts?: {
   ])
     .map((f) => `NULLIF(raw_data->>'${f}','')`)
     .join(", ");
+  const phaseCoalesce = _envFields("DUPLICATE_RADAR_FIELD_PHASE", [
+    "Phase",
+    "CS_Phase",
+    "Customer_Phase",
+  ])
+    .map((f) => `NULLIF(raw_data->>'${f}','')`)
+    .join(", ");
   // Corporate scope — exclude merchant/app layouts (same rule as the directory).
   const _normLayout = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const csExcludeSql = Array.from(
@@ -3149,10 +3158,20 @@ export async function listActiveClientDomains(opts?: {
     `SELECT LOWER(COALESCE(${domainCoalesce})) AS company_domain
        FROM duplicate_records
       WHERE record_type = 'deal'
-        -- Stage = Agreement Signed / Paid
-        AND LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) = ANY($1::text[])
+        -- ACTIVE CS Phase — New Deal / Onboarding / Adoption / Renewal.
+        -- Phase MUST be set (a blank phase is NOT an active client) and must
+        -- NOT be Termination (that is a churned client).
+        AND COALESCE(${phaseCoalesce}) IS NOT NULL
+        AND (
+          LOWER(COALESCE(${phaseCoalesce})) LIKE '%new deal%'
+          OR LOWER(COALESCE(${phaseCoalesce})) LIKE '%onboard%'
+          OR LOWER(COALESCE(${phaseCoalesce})) LIKE '%adopt%'
+          OR LOWER(COALESCE(${phaseCoalesce})) LIKE '%renew%'
+        )
+        AND LOWER(COALESCE(${phaseCoalesce})) NOT LIKE '%terminat%'
         -- Not churned: Churn Date empty, OR a Renewal Date LATER than the Churn
-        -- Date (the client renewed after churning → active again). ISO-date
+        -- Date (the client renewed after churning → active again). A churn with
+        -- no renewal, or a churn NEWER than the renewal, is excluded. ISO-date
         -- prefixes (yyyy-mm-dd) sort chronologically as text; a non-ISO churn is
         -- treated as still-churned (conservative).
         AND (
@@ -3168,7 +3187,7 @@ export async function listActiveClientDomains(opts?: {
         AND ${layoutNormExpr} NOT LIKE '%marketplace%'
         AND ${layoutNormExpr} NOT IN (${csExcludeSql})
       LIMIT 200000`,
-    [Array.from(PF_BASIC_CUSTOMER_STAGES)],
+    [],
     undefined,
     PREFLIGHT_DIR_TIMEOUT_MS,
   );
@@ -3181,7 +3200,7 @@ export async function listActiveClientDomains(opts?: {
     qualifying++;
     const cd = (row.company_domain || "").toString().trim();
     if (!cd) {
-      missingCompanyDomain++; // Paid/Signed + no churn, but CS-section domain blank
+      missingCompanyDomain++; // active phase + not churned, but CS-section domain blank
       continue;
     }
     const clean = normalizeClientDomain(cd);
@@ -3213,16 +3232,17 @@ export async function listActiveClientDomains(opts?: {
     doam_added: doamAdded,
     built_at_iso: new Date().toISOString(),
     criteria:
-      "Stage in (Agreement Signed, Paid) AND (Churn Date empty OR Renewal Date > Churn Date); domain = CS-section Company_Domain; corporate scope; + active DOAM",
+      "Phase in (New Deal, Onboarding, Adoption, Renewal) AND NOT Termination AND (Churn Date empty OR Renewal Date > Churn Date); domain = CS-section Company_Domain; corporate scope; + active DOAM",
   };
 }
 
 /**
  * GROUND-TRUTH LOOKUP (Sarah 2026-07-26). For a list of domains, return every
- * Deal the CRM holds for each domain and its Stage, and flag whether any is at
- * a customer stage (Agreement Signed / Paid). Read-only — no phase logic, no
- * layout scope: it just answers "what deals exist for this domain, and are any
- * signed/paid?" so CS and the CRM can be reconciled row by row.
+ * Deal the CRM holds for each domain with its Stage, CS Phase, Churn/Renewal
+ * dates and a renewed-after-churn flag, and flag whether any is at a customer
+ * stage (Agreement Signed / Paid). Read-only, no layout scope — it just shows
+ * "what deals exist for this domain and their CS status" so CS and the CRM can
+ * be reconciled row by row (e.g. to see a Termination phase on a churned client).
  *
  * Matching is form-agnostic: each input and every deal domain (deal own domain,
  * Company_Domain field, and the linked Account's domain) are reduced to their
@@ -3239,9 +3259,11 @@ export async function checkDomainsForClientDeals(
     in_crm: boolean;
     has_signed_or_paid: boolean;
     stages: string[];
+    phases: string[];
     deals: Array<{
       name: string;
       stage: string;
+      phase: string | null;
       owner: string | null;
       churn_date: string | null;
       renewal_date: string | null;
@@ -3281,6 +3303,7 @@ export async function checkDomainsForClientDeals(
             owner_name,
             NULLIF(raw_data->>'Churn_Date','') AS churn_date,
             NULLIF(raw_data->>'Renewal_Date','') AS renewal_date,
+            COALESCE(NULLIF(raw_data->>'Phase',''), NULLIF(raw_data->>'CS_Phase',''), NULLIF(raw_data->>'Customer_Phase','')) AS phase,
             COALESCE(NULLIF(layout_name,''), raw_data->'Layout'->>'name') AS layout,
             COALESCE(NULLIF(stage,''), raw_data->>'Stage','') AS stage`;
 
@@ -3386,6 +3409,7 @@ export async function checkDomainsForClientDeals(
           (d.account_name || d.company_name || "").toString().trim() ||
           "(unnamed deal)",
         stage: (d.stage || "").toString().trim() || "(no stage)",
+        phase: (d.phase || "").toString().trim() || null,
         owner: (d.owner_name || "").toString().trim() || null,
         churn_date: churn,
         renewal_date: renewal,
@@ -3394,6 +3418,9 @@ export async function checkDomainsForClientDeals(
       };
     });
     const stages = Array.from(new Set(deals.map((x) => x.stage))).sort();
+    const phases = Array.from(
+      new Set(deals.map((x) => x.phase).filter((p): p is string => !!p)),
+    ).sort();
     const hasSignedPaid = deals.some((x) =>
       custStages.has(x.stage.toLowerCase()),
     );
@@ -3403,6 +3430,7 @@ export async function checkDomainsForClientDeals(
       in_crm: deals.length > 0,
       has_signed_or_paid: hasSignedPaid,
       stages,
+      phases,
       deals,
     };
   });

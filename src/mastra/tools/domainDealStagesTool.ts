@@ -41,10 +41,12 @@ export const domainDealStagesTool = createTool({
           in_crm: z.boolean(),
           has_signed_or_paid: z.boolean(),
           stages: z.array(z.string()),
+          phases: z.array(z.string()),
           deals: z.array(
             z.object({
               name: z.string(),
               stage: z.string(),
+              phase: z.string().nullable(),
               owner: z.string().nullable(),
               churn_date: z.string().nullable(),
               renewal_date: z.string().nullable(),
@@ -86,6 +88,7 @@ export const domainDealStagesTool = createTool({
           in_crm: r.in_crm,
           has_signed_or_paid: r.has_signed_or_paid,
           stages: r.stages,
+          phases: r.phases,
           deals: r.deals,
         })),
       };

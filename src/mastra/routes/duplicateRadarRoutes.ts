@@ -12669,7 +12669,7 @@ export const duplicateRadarRoutes = [
           if (format === "csv") {
             const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
             const rows = [
-              "domain,in_crm,has_signed_or_paid,stages,deal_count,deal_names",
+              "domain,in_crm,has_signed_or_paid,phases,stages,deal_count,deal_detail",
             ];
             for (const r of results) {
               rows.push(
@@ -12677,9 +12677,17 @@ export const duplicateRadarRoutes = [
                   esc(r.input),
                   r.in_crm ? "yes" : "no",
                   r.has_signed_or_paid ? "yes" : "no",
+                  esc(r.phases.join(" | ")),
                   esc(r.stages.join(" | ")),
                   r.deals.length,
-                  esc(r.deals.map((d) => `${d.name} (${d.stage})`).join(" | ")),
+                  esc(
+                    r.deals
+                      .map(
+                        (d) =>
+                          `${d.name} [stage=${d.stage}; phase=${d.phase || "-"}; churn=${d.churn_date || "-"}; renewal=${d.renewal_date || "-"}]`,
+                      )
+                      .join(" | "),
+                  ),
                 ].join(","),
               );
             }
@@ -12748,7 +12756,7 @@ export const duplicateRadarRoutes = [
           }
           const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
           const rows = [
-            "domain,in_crm,has_signed_or_paid,stages,deal_count,deal_names",
+            "domain,in_crm,has_signed_or_paid,phases,stages,deal_count,deal_detail",
           ];
           for (const r of results) {
             rows.push(
@@ -12756,9 +12764,17 @@ export const duplicateRadarRoutes = [
                 esc(r.input),
                 r.in_crm ? "yes" : "no",
                 r.has_signed_or_paid ? "yes" : "no",
+                esc(r.phases.join(" | ")),
                 esc(r.stages.join(" | ")),
                 r.deals.length,
-                esc(r.deals.map((d) => `${d.name} (${d.stage})`).join(" | ")),
+                esc(
+                  r.deals
+                    .map(
+                      (d) =>
+                        `${d.name} [stage=${d.stage}; phase=${d.phase || "-"}; churn=${d.churn_date || "-"}; renewal=${d.renewal_date || "-"}]`,
+                    )
+                    .join(" | "),
+                ),
               ].join(","),
             );
           }
