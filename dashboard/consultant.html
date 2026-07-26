@@ -1952,7 +1952,13 @@
         loadChatHistory();
         updateAlertBadge();
         loadWelcomeData();
-        loadThreadHistory();
+        // If we arrived from the widget's "Full view", render the transcript it
+        // handed over (localStorage — survives the new tab) so the conversation,
+        // INCLUDING the last question, shows immediately. Only fall back to the
+        // server thread history when there's no fresh handoff.
+        if (!renderHandoffTranscript()) {
+            loadThreadHistory();
+        }
         loadAdamMemory();
 
         /**
@@ -1966,6 +1972,38 @@
          * pre-applied via attachFeedbackUI's existing per-message rating
          * lookup.
          */
+        // Render the transcript handed over by the widget's "Full view" click
+        // (localStorage 'consultant_handoff'). Returns true if it rendered, so
+        // the caller skips the server re-fetch (which lags by the last turn and
+        // was dropping the last question). The handoff is consumed once (removed)
+        // and only trusted if fresh (<2 min) and for the adopted thread.
+        function renderHandoffTranscript() {
+            try {
+                var raw = localStorage.getItem('consultant_handoff');
+                if (!raw) return false;
+                var h = JSON.parse(raw);
+                localStorage.removeItem('consultant_handoff'); // consume once
+                if (!h || !Array.isArray(h.items) || !h.items.length) return false;
+                if (h.ts && (Date.now() - h.ts) > 120000) return false; // stale
+                var tid = sessionStorage.getItem('consultant_threadId');
+                if (h.threadId && tid && h.threadId !== tid) return false; // different chat
+                clearWelcome();
+                h.items.forEach(function (m) {
+                    if (m.role === 'user') {
+                        appendUserMessage(m.text || '');
+                    } else {
+                        var bubble = createAssistantMessage();
+                        bubble.innerHTML = m.html || renderMarkdown(m.text || '');
+                        chatMessages.push({ role: 'assistant', content: m.text || '', time: new Date().toISOString() });
+                    }
+                });
+                scrollToBottom();
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
         async function loadThreadHistory() {
             var tid = sessionStorage.getItem('consultant_threadId');
             if (!tid) return;

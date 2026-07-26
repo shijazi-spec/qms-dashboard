@@ -314,6 +314,7 @@
                     </div>
                     <div class="aiw-bubble-bot">
                         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                        <span id="ai-widget-typing-label" style="margin-inline-start:8px;font-size:12px;color:#64748b;">Adam is preparing your answer…</span>
                     </div>
                 </div>
             </div>
@@ -467,6 +468,29 @@
             expandLink.addEventListener('click', function (e) {
                 e.preventDefault();
                 var tid = sessionStorage.getItem('widget_consultant_threadId');
+                // Hand the widget's CURRENT transcript to the full page directly,
+                // via localStorage (sessionStorage does NOT cross tabs, and the
+                // server thread lags the widget by the in-flight/last turn — which
+                // is why the last question used to vanish on expand). Snapshot the
+                // rendered messages so whatever you see in the widget is exactly
+                // what the full page shows.
+                try {
+                    var items = [];
+                    messagesEl.querySelectorAll('.widget-msg-user, .widget-msg-ai').forEach(function (el) {
+                        var b = el.querySelector('.bubble');
+                        if (!b) return;
+                        if (el.classList.contains('widget-msg-user')) {
+                            items.push({ role: 'user', text: b.textContent });
+                        } else {
+                            items.push({ role: 'assistant', html: b.innerHTML });
+                        }
+                    });
+                    if (items.length) {
+                        localStorage.setItem('consultant_handoff', JSON.stringify({
+                            threadId: tid || null, items: items, ts: Date.now()
+                        }));
+                    }
+                } catch (_) { /* best-effort — full page falls back to server history */ }
                 var url = tid
                     ? '/consultant.html?thread=' + encodeURIComponent(tid)
                     : '/consultant.html';
@@ -761,10 +785,16 @@
 
             var reader = response.body.getReader();
             var decoder = new TextDecoder();
-            widgetHideTyping();
-            bubble = widgetCreateAI();
-            // dir="auto" is already set by widgetCreateAI.
+            // Keep the "Adam is preparing your answer…" indicator visible until
+            // the FIRST token actually arrives (create the bubble lazily). The
+            // connection can open long before any text — e.g. while the server
+            // waits out an OpenAI rate limit — and hiding the indicator here made
+            // it look like the chat had ended. ensureBubble() flips the state.
             streamOk = true;
+            function ensureBubble() {
+                if (!bubble) { widgetHideTyping(); bubble = widgetCreateAI(); }
+                return bubble;
+            }
             var buffer = '';
 
             while (true) {
@@ -787,12 +817,12 @@
                             }
                             if (parsed.messageId) { capturedMessageId = parsed.messageId; }
                             if (parsed.promptVersion) { capturedPromptVersion = parsed.promptVersion; }
-                            if (parsed.text) { fullText += parsed.text; bubble.innerHTML = renderMarkdown(fullText); widgetScrollBottom(); }
-                            if (parsed.content) { fullText += parsed.content; bubble.innerHTML = renderMarkdown(fullText); widgetScrollBottom(); }
-                            if (parsed.error) { fullText += '\n\n**Error:** ' + parsed.error; bubble.innerHTML = renderMarkdown(fullText); }
+                            if (parsed.text) { fullText += parsed.text; ensureBubble().innerHTML = renderMarkdown(fullText); widgetScrollBottom(); }
+                            if (parsed.content) { fullText += parsed.content; ensureBubble().innerHTML = renderMarkdown(fullText); widgetScrollBottom(); }
+                            if (parsed.error) { fullText += '\n\n**Error:** ' + parsed.error; ensureBubble().innerHTML = renderMarkdown(fullText); }
                         } catch (pe) {
                             fullText += data;
-                            bubble.innerHTML = renderMarkdown(fullText);
+                            ensureBubble().innerHTML = renderMarkdown(fullText);
                             widgetScrollBottom();
                         }
                     }
@@ -801,7 +831,15 @@
 
             if (buffer.trim() && buffer.startsWith('data: ') && buffer.substring(6) !== '[DONE]') {
                 fullText += buffer.substring(6);
-                bubble.innerHTML = renderMarkdown(fullText);
+                ensureBubble().innerHTML = renderMarkdown(fullText);
+            }
+
+            // Stream ended with nothing rendered (e.g. rate limit consumed the
+            // turn): show a clear message instead of an empty/blank bubble that
+            // looks like Adam stopped mid-answer.
+            if (!fullText.trim()) {
+                widgetHideTyping();
+                ensureBubble().innerHTML = renderMarkdown("I couldn't generate a response just now — please try again in a moment.");
             }
 
             if (capturedMessageId && fullText.trim()) {
