@@ -575,6 +575,21 @@ export const mastra = new Mastra({
             return runOverdueRemindersIfDue();
           },
         },
+        // Documentation-collector dead-man's switch. Runs on EVERY tick (no
+        // time window): a collector can die at any hour, and the 90-minute
+        // "silent" threshold would be meaningless if only checked once a day.
+        // The per-collector 20h alert stamp is what stops the loop re-sending.
+        // A tracker that has quietly stopped updating is worse than no tracker,
+        // because it is trusted.
+        {
+          name: "DocTrackerHealth",
+          fn: async () => {
+            const { runCollectorHealthCheckIfDue } = await import(
+              "../utils/docTrackerStaleness"
+            );
+            return runCollectorHealthCheckIfDue();
+          },
+        },
       ];
       for (const h of helpers) {
         try {
