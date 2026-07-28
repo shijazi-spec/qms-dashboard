@@ -11591,7 +11591,6 @@
                     + '<td>' + datesCell + '</td>'
                     + '<td class="rr-muted whitespace-nowrap">' + fmtDate(g.last_contact_date) + '</td>'
                     + '<td class="rr-mono" style="white-space:nowrap">' + escapeHtml(g.ext_id == null || g.ext_id === '' ? '—' : String(g.ext_id)) + '</td>'
-                    + '<td class="rr-num rr-muted" style="white-space:nowrap">' + (g.days_since_modified == null ? '—' : g.days_since_modified) + '</td>'
                     + '<td>' + violationCell + '</td>'
                     + '</tr>';
             }).join('');
