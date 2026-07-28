@@ -3674,6 +3674,88 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // BATCH doc-compliance (Sarah 2026-07-29) — check up to 50 deals' Zoho
+    // attachments in ONE request, server-side, with bounded concurrency + the
+    // existing 429 backoff. The dashboard's "Check all documents" used to fire
+    // 200 separate browser fetches with heavy per-row work, which hung the
+    // whole device / crashed the browser. Now the browser sends ~10 light
+    // batch calls instead. Body: { deals: [{ id, stage }] }.
+    path: "/api/duplicates/deals/doc-compliance-batch",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const items = Array.isArray(body?.deals) ? body.deals : [];
+          const deals = items
+            .map((d: any) => ({
+              id: String(d?.id || "").trim(),
+              stage: String(d?.stage || ""),
+            }))
+            .filter((d: any) => d.id)
+            .slice(0, 50); // hard cap per request
+          if (!deals.length) return c.json({ success: true, results: [] });
+          const checkedBy =
+            user.email || user.userId ? String(user.email || user.userId) : null;
+          const nowIso = new Date().toISOString();
+          const results: any[] = new Array(deals.length);
+          // Bounded concurrency keeps us under Zoho's attachment rate limit
+          // while still finishing a batch in a few seconds.
+          const CONC = 3;
+          let cursor = 0;
+          const worker = async () => {
+            while (cursor < deals.length) {
+              const my = cursor++;
+              const d = deals[my];
+              try {
+                const atts = await fetchRecordAttachments("Deals", d.id);
+                const r = evaluateDocCompliance(d.stage, atts);
+                try {
+                  await upsertDealDocCompliance({
+                    zohoDealId: d.id,
+                    stage: d.stage,
+                    compliant: !!r.compliant,
+                    presentDocs: (r.presentDocs || []).map((p: any) => p.label),
+                    missingDocs: (r.missingDocs || []).map((m: any) => m.label),
+                    attachmentCount: r.attachmentCount || 0,
+                    checkedBy,
+                  });
+                } catch {
+                  /* persist is best-effort */
+                }
+                results[my] = {
+                  id: d.id,
+                  stage: d.stage,
+                  compliant: !!r.compliant,
+                  presentDocs: r.presentDocs || [],
+                  missingDocs: r.missingDocs || [],
+                  attachmentCount: r.attachmentCount || 0,
+                  checkedBy,
+                  checkedAt: nowIso,
+                };
+              } catch (e: any) {
+                results[my] = {
+                  id: d.id,
+                  stage: d.stage,
+                  error: e?.message || String(e),
+                };
+              }
+            }
+          };
+          await Promise.all(
+            Array.from({ length: Math.min(CONC, deals.length) }, worker),
+          );
+          return c.json({ success: true, results });
+        } catch (e: any) {
+          logger.error("deals/doc-compliance-batch failed", e);
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Persisted doc-compliance results (latest scan per deal) — rehydrates the
     // Deal-Compliance tab on open so prior scans aren't lost. Optional ?ids=a,b
     // to fetch just the visible deals; otherwise returns the most recent 5000.

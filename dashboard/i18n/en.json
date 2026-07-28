@@ -2257,7 +2257,7 @@
     "dup_deals": "Dup Deals",
     "dup_contacts": "Dup Contacts",
     "dup_accounts": "Dup Accounts",
-    "pipeline_inflation": "Pipeline Inflation",
+    "pipeline_inflation": "Amount at risk (SAR)",
     "resolution_rate": "Duplicate Resolution Rate",
     "sec_by_source": "Duplicates by Source",
     "sec_similarity": "Similarity Score Distribution",

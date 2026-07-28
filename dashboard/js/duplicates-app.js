@@ -7645,37 +7645,71 @@
 
         // Sequentially verify documents for every loaded deal (bounded, paced to
         // respect Zoho rate limits). Documents is the whole point of this tab.
+        // Verify documents for the loaded deals via the SERVER-side BATCH
+        // endpoint. The browser sends ~10 light requests (25 deals each) instead
+        // of firing 200 individual fetches with heavy per-row work — that old
+        // pattern hung the whole device / crashed the browser (Sarah 2026-07-29).
+        // The server does the paced Zoho attachment calls with bounded concurrency.
         async function checkAllDealDocs() {
             if (window._dcScanRunning) return; // re-entrancy guard — no stacked scans
             var btn = document.getElementById('checkAllDocsBtn');
             var rows = Array.prototype.slice.call(document.querySelectorAll('#dealComplianceBody tr[data-deal-id]'));
             if (!rows.length) return;
             var cap = Math.min(rows.length, 200);
+            var BATCH = 25;
             window._dcScanRunning = true;
+            var orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; }
-            var pending = {}; // id -> rec, flushed to localStorage in ONE write at the end
             try {
-                for (var i = 0; i < cap; i++) {
-                    if (btn) btn.textContent = 'Checking ' + (i + 1) + '/' + cap + '…';
-                    var id = rows[i].getAttribute('data-deal-id');
-                    var stage = rows[i].getAttribute('data-deal-stage');
-                    // deferPersist: update row + in-memory only; no per-row store
-                    // write and no per-row card/chart re-render (that 200x work is
-                    // what killed the page). Batch both below.
-                    await checkDealDocs(id, stage, { deferPersist: true });
-                    if (window._dcResults[id]) pending[id] = window._dcResults[id];
-                    // Throttle the cards/charts refresh: every 25 rows for a sense
-                    // of progress, not every row.
-                    if ((i + 1) % 25 === 0) _dcUpdateCards();
-                    // Pace the loop so we don't burst Zoho's attachment API (which
-                    // 429s under load). The server also retries 429 with backoff.
-                    if (i < cap - 1) await new Promise(function (r) { setTimeout(r, 350); });
+                for (var start = 0; start < cap; start += BATCH) {
+                    var slice = rows.slice(start, Math.min(start + BATCH, cap));
+                    if (btn) btn.textContent = 'Checking ' + Math.min(start + slice.length, cap) + '/' + cap + '…';
+                    var payload = slice.map(function (tr) {
+                        return { id: tr.getAttribute('data-deal-id'), stage: tr.getAttribute('data-deal-stage') };
+                    });
+                    var data = null;
+                    try {
+                        var res = await fetch('/api/duplicates/deals/doc-compliance-batch', {
+                            method: 'POST', credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ deals: payload }),
+                        });
+                        data = await res.json();
+                        if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                    } catch (e) {
+                        // Mark this batch's rows as errored, keep going.
+                        slice.forEach(function (tr) {
+                            var id = tr.getAttribute('data-deal-id');
+                            var span = document.getElementById('docs-' + id);
+                            if (span) span.innerHTML = '<span class="text-xs text-amber-700">err: ' + escapeHtml(String(e && e.message || e)) + '</span>';
+                        });
+                        continue;
+                    }
+                    var pending = {};
+                    (data.results || []).forEach(function (r) {
+                        if (!r || !r.id) return;
+                        var span = document.getElementById('docs-' + r.id);
+                        if (r.error) { if (span) span.innerHTML = '<span class="text-xs text-amber-700">err: ' + escapeHtml(String(r.error)) + '</span>'; return; }
+                        var rec = {
+                            compliant: !!r.compliant,
+                            present: (r.presentDocs || []).map(function (p) { return p.label; }),
+                            missing: (r.missingDocs || []).map(function (m) { return m.label; }),
+                            attachmentCount: r.attachmentCount || 0,
+                            stage: r.stage,
+                            checkedAt: r.checkedAt || new Date().toISOString(),
+                            checkedBy: r.checkedBy || null,
+                        };
+                        window._dcResults[r.id] = rec;
+                        pending[r.id] = rec;
+                        if (span) span.innerHTML = _dcDocCellHtml(r.id, rec, r.stage);
+                        _dcSetRowSev(r.id, rec.compliant);
+                    });
+                    _dcStorePutMany(pending); // ONE store write per batch
+                    _dcUpdateCards();          // ONE cards+charts render per batch (~10 total)
                 }
             } finally {
-                _dcStorePutMany(pending); // ONE store serialization for the whole scan
-                _dcUpdateCards();          // ONE final cards + charts render
                 window._dcScanRunning = false;
-                if (btn) { btn.disabled = false; btn.textContent = '🔍 Run Scan'; }
+                if (btn) { btn.disabled = false; btn.innerHTML = orig || '🔍 Run Scan'; }
             }
         }
 
