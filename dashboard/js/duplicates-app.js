@@ -7439,9 +7439,37 @@
             if (v >= 1e3) return 'SAR ' + (v / 1e3).toFixed(1) + 'K';
             return 'SAR ' + v.toLocaleString();
         }
-        // Amount-at-risk OPEN vs CLOSED split, rendered under the exec card.
-        // Respects the segment chip; active/non-resolved clusters only (matches
-        // the headline figure, so dismissing a cluster drops it here too).
+        // Amount-at-risk OPEN vs CLOSED split, rendered under the exec card,
+        // with an "open-only headline" toggle. Respects the segment chip;
+        // active/non-resolved clusters only (matches the headline figure, so
+        // dismissing a cluster drops it here too).
+        function _inflationOpenOnly() {
+            try { return localStorage.getItem('dc_inflation_open_only') === '1'; } catch (e) { return false; }
+        }
+        function toggleInflationOpenOnly() {
+            try { localStorage.setItem('dc_inflation_open_only', _inflationOpenOnly() ? '0' : '1'); } catch (e) {}
+            if (window._lastInflationBreakdown) _renderInflationBreakdown(window._lastInflationBreakdown);
+        }
+        function _renderInflationBreakdown(d) {
+            var el = document.getElementById('pipelineInflationBreakdown');
+            var val = document.getElementById('pipelineInflation');
+            var lbl = document.getElementById('pipelineInflationLabel');
+            if (!el || !d) return;
+            var openOnly = _inflationOpenOnly();
+            // Headline: open-only shows just the open-pipeline exposure (the real
+            // double-booking risk); default shows the full total (open + closed).
+            if (val) val.textContent = formatCurrency((openOnly ? d.open_sar : d.total_sar) || 0);
+            if (lbl) lbl.textContent = openOnly ? 'Amount at risk — Open pipeline (SAR)' : 'Amount at risk (SAR)';
+            var openPct = d.total_sar > 0 ? Math.round((d.open_sar / d.total_sar) * 100) : 0;
+            var toggle = '<span data-on-click="toggleInflationOpenOnly" style="cursor:pointer;font-weight:600;color:#4f46e5" title="Switch the headline number between the full total and open-pipeline-only (excludes duplicates of closed/won/lost deals).">'
+                + (openOnly ? '● Headline: open-only — show total' : '○ Show open-only headline') + '</span>';
+            el.innerHTML =
+                '<span style="color:#b45309;font-weight:600">Open ' + formatCurrency(d.open_sar || 0) + '</span>'
+                + ' <span style="color:#9ca3af">(' + _fn(d.open_deals || 0) + ' · ' + openPct + '%)</span>'
+                + '<br><span style="color:#6b7280;font-weight:600">Closed ' + formatCurrency(d.closed_sar || 0) + '</span>'
+                + ' <span style="color:#9ca3af">(' + _fn(d.closed_deals || 0) + ')</span>'
+                + '<br>' + toggle;
+        }
         async function loadInflationBreakdown() {
             var el = document.getElementById('pipelineInflationBreakdown');
             if (!el) return;
@@ -7452,12 +7480,8 @@
                 var res = await fetch(url, { credentials: 'same-origin' });
                 var d = await res.json();
                 if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
-                var openPct = d.total_sar > 0 ? Math.round((d.open_sar / d.total_sar) * 100) : 0;
-                el.innerHTML =
-                    '<span style="color:#b45309;font-weight:600">Open ' + formatCurrency(d.open_sar || 0) + '</span>'
-                    + ' <span style="color:#9ca3af">(' + _fn(d.open_deals || 0) + ' deals · ' + openPct + '%)</span>'
-                    + '<br><span style="color:#6b7280;font-weight:600">Closed ' + formatCurrency(d.closed_sar || 0) + '</span>'
-                    + ' <span style="color:#9ca3af">(' + _fn(d.closed_deals || 0) + ' deals)</span>';
+                window._lastInflationBreakdown = d;
+                _renderInflationBreakdown(d);
             } catch (e) {
                 el.textContent = '';
             }
