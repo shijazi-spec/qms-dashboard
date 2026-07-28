@@ -1973,6 +1973,8 @@
     "console_pick_clause": "Select a clause…",
     "console_suggest_btn": "Suggest Documents",
     "console_idle": "Pick a framework and clause above, then click Suggest Documents to ask the AI for candidates.",
+    "suggest_none_content": "No documents with extracted content yet — the controlled documents are still awaiting their approved file upload. Attach the approved versions in Integrated QMS, then run mapping.",
+    "suggest_none_relevant": "No document matched this clause. {n} document(s) were checked — none mentioned this clause’s subject.",
     "all_frameworks": "All Frameworks",
     "findings_title": "AI-Judged Findings",
     "findings_subtitle": "Document/clause links the AI judge marked as partial, missing topic, or needs review. Add stronger evidence or revise the clause owner.",

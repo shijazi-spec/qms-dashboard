@@ -212,7 +212,7 @@ export async function getFrameworkCoverage(
       WHERE o.regulation_id = $1
         AND o.status = 'applicable'
         AND od.id IS NULL
-   ORDER BY COALESCE(o.section_order, 0), o.obligation_code`,
+   ORDER BY o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code`,
     [regulationId],
   );
 

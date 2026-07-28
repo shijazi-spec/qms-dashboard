@@ -164,6 +164,7 @@ export async function initComplianceTables(): Promise<void> {
       section_domain VARCHAR(100),
       section_order INTEGER,
       clause_number VARCHAR(50),
+      clause_sort_key VARCHAR(64),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
@@ -243,6 +244,18 @@ export async function initComplianceTables(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS clause_number VARCHAR(50)`,
+  );
+  // Hierarchical clause ordering (1, 1.1, 1.2, 2, 2.1, …). Precomputed because
+  // clause formats differ per framework ("Cl. 4.1", "A.5.15", "§3.7",
+  // "1-1-1", "Req. 1.1.1"), so a regex inside ORDER BY would be fragile — and
+  // because obligation_code is VARCHAR, which sorted ISO9001-10.3 before
+  // ISO9001-4.1 and SAMA-105 before SAMA-11. See utils/clauseSortKey.ts.
+  await pool.query(
+    `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS clause_sort_key VARCHAR(64)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_obligations_clause_order
+       ON obligations (regulation_id, section_order, clause_sort_key)`,
   );
 
   // Compliance v2 — clause-source traceability. Records whether the
@@ -355,7 +368,87 @@ export async function initComplianceTables(): Promise<void> {
     // crash boot. The original PDPL/SAMA seed remains usable.
   }
 
+  await backfillClauseSortKeys();
+  await removeRetiredFrameworks();
+
   logger.info("✅ [ComplianceDB] Compliance tables initialized");
+}
+
+/**
+ * Frameworks retired from the compliance module. Removing the seed block alone
+ * is not enough — the row already exists in every deployed database, and the
+ * Mapping Console would keep offering a framework with zero clauses.
+ *
+ * Safe by construction: only deletes a regulation that has NO obligations, so
+ * if anyone ever seeds a clause catalogue for one of these the delete becomes a
+ * no-op rather than destroying real mappings. Idempotent and best-effort.
+ */
+const RETIRED_REGULATION_CODES = ["COPC"];
+
+export async function removeRetiredFrameworks(): Promise<number> {
+  try {
+    const res = await pool.query(
+      `DELETE FROM regulations r
+        WHERE r.regulation_code = ANY($1::text[])
+          AND NOT EXISTS (SELECT 1 FROM obligations o WHERE o.regulation_id = r.id)
+        RETURNING r.regulation_code`,
+      [RETIRED_REGULATION_CODES],
+    );
+    if (res.rowCount && res.rowCount > 0) {
+      logger.info(
+        `🗑️ [ComplianceDB] Removed retired framework(s): ${res.rows
+          .map((x: any) => x.regulation_code)
+          .join(", ")}`,
+      );
+    }
+    return res.rowCount || 0;
+  } catch (err) {
+    logger.error("⚠️ [ComplianceDB] Retired-framework cleanup failed:", err);
+    return 0;
+  }
+}
+
+/**
+ * Fill `clause_sort_key` for any obligation missing one. Idempotent and cheap:
+ * only rows WHERE clause_sort_key IS NULL are touched, so the steady state is a
+ * single indexed lookup returning nothing. Runs after the seeds so freshly
+ * seeded rows are keyed on the same boot.
+ *
+ * Best-effort — a failure here degrades ordering to section_order, which is
+ * still far better than the alphabetical-by-title order this replaced, and must
+ * never crash boot.
+ */
+export async function backfillClauseSortKeys(): Promise<number> {
+  try {
+    const { buildClauseSortKey } = await import("./clauseSortKey");
+    const pending = await pool.query(
+      `SELECT id, clause_number, article_reference, obligation_code
+         FROM obligations
+        WHERE clause_sort_key IS NULL`,
+    );
+    if (pending.rows.length === 0) return 0;
+
+    let updated = 0;
+    for (const row of pending.rows) {
+      const key = buildClauseSortKey(
+        row.clause_number || row.article_reference,
+        row.obligation_code,
+      );
+      if (!key) continue;
+      await pool.query(
+        `UPDATE obligations SET clause_sort_key = $2 WHERE id = $1`,
+        [row.id, key],
+      );
+      updated++;
+    }
+    logger.info(
+      `✅ [ComplianceDB] clause_sort_key backfilled for ${updated}/${pending.rows.length} obligation(s)`,
+    );
+    return updated;
+  } catch (err) {
+    logger.error("⚠️ [ComplianceDB] clause_sort_key backfill failed:", err);
+    return 0;
+  }
 }
 
 async function seedDefaultRegulations(): Promise<void> {
@@ -451,19 +544,17 @@ async function seedDefaultRegulations(): Promise<void> {
       version: "2022",
       source_url: "https://www.iso.org/standard/27001",
     },
-    {
-      regulation_code: "COPC",
-      name: "COPC Customer Experience Standard",
-      description:
-        "Performance management framework for customer experience operations",
-      jurisdiction: "international",
-      category: "quality",
-      issuing_body: "COPC Inc.",
-      effective_date: "2020-01-01",
-      status: "active",
-      version: "7.0",
-      source_url: "https://www.copc.com/standards/cx-standard/",
-    },
+    // COPC was removed from the compliance frameworks 2026-07-29. It was the
+    // only regulation with no clause catalogue (there is no seeds/copc*.ts), so
+    // the Mapping Console rendered "No clauses for this framework" and it could
+    // never map a document or contribute coverage — a permanently dead column.
+    //
+    // NOTE: this does NOT touch the COPC *QA scorecard* (src/data/
+    // scorecardV2CopcCanonical.ts, TableF, call intelligence). That is a
+    // separate call-quality feature and is unaffected.
+    //
+    // Re-adding it means authoring a paraphrased clause catalogue first — see
+    // runFrameworkSeed in src/utils/seeds/. Do not re-add the bare row.
     {
       regulation_code: "PCI-DSS",
       name: "PCI DSS v4.0 Payment Card Industry Data Security Standard",
@@ -579,7 +670,17 @@ export async function getAllRegulations(filters?: {
   jurisdiction?: string;
   category?: string;
 }): Promise<Regulation[]> {
-  let query = "SELECT * FROM regulations WHERE 1=1";
+  // `obligation_count` lets callers hide frameworks that have no clause
+  // catalogue. A framework with zero clauses can never map a document or
+  // contribute coverage, so offering it in the Mapping Console is a dead end —
+  // that is exactly how COPC behaved before it was retired, and how SOC 2 would
+  // behave in the window between adding its regulation row and seeding its
+  // clauses. Additive field; existing consumers are unaffected.
+  let query = `SELECT r.*,
+                      (SELECT COUNT(*)::int FROM obligations o
+                        WHERE o.regulation_id = r.id
+                          AND o.status = 'applicable') AS obligation_count
+                 FROM regulations r WHERE 1=1`;
   const values: any[] = [];
   let paramCount = 1;
 
@@ -616,6 +717,14 @@ export async function getRegulationById(
 export async function createObligation(obl: Obligation): Promise<Obligation> {
   logger.info("📝 [ComplianceDB] Creating obligation:", obl.title);
 
+  // Set the ordering key at write time so a clause added through the API sorts
+  // correctly immediately, rather than waiting for the boot backfill.
+  const { buildClauseSortKey } = await import("./clauseSortKey");
+  const clauseSortKey = buildClauseSortKey(
+    (obl as any).clause_number || obl.article_reference,
+    obl.obligation_code,
+  );
+
   const result = await pool.query(
     `
     INSERT INTO obligations (
@@ -623,8 +732,8 @@ export async function createObligation(obl: Obligation): Promise<Obligation> {
       requirement_type, control_type, applicability_criteria, compliance_frequency,
       evidence_requirements, penalty_for_noncompliance,
       linked_control_ids, linked_policy_ids, linked_risk_ids,
-      responsible_department, responsible_role, status, priority
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      responsible_department, responsible_role, status, priority, clause_sort_key
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
     RETURNING *
   `,
     [
@@ -646,6 +755,7 @@ export async function createObligation(obl: Obligation): Promise<Obligation> {
       obl.responsible_role,
       obl.status || "applicable",
       obl.priority || "medium",
+      clauseSortKey,
     ],
   );
 
@@ -656,7 +766,7 @@ export async function getObligationsByRegulation(
   regulationId: number,
 ): Promise<Obligation[]> {
   const result = await pool.query(
-    "SELECT * FROM obligations WHERE regulation_id = $1 ORDER BY section_order ASC NULLS LAST, obligation_code ASC",
+    "SELECT * FROM obligations WHERE regulation_id = $1 ORDER BY section_order ASC NULLS LAST, clause_sort_key ASC NULLS LAST, obligation_code ASC",
     [regulationId],
   );
   return result.rows;
@@ -699,7 +809,12 @@ export async function getAllObligations(filters?: {
     values,
   );
 
-  query += " ORDER BY o.priority DESC, o.title ASC";
+  // Clause order, NOT priority/title. This drives the Mapping Console clause
+  // dropdown, which was rendering alphabetically by title ("Actions… →
+  // Analysis → Awareness → Changes…") instead of 4.1, 4.2, … 10.3.
+  // See utils/clauseSortKey.ts for why section_order leads.
+  query +=
+    " ORDER BY o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code";
   const result = await pool.query(query, values);
 
   return {

@@ -1058,7 +1058,7 @@ export const complianceRoutes = [
                   ON q.obligation_id = o.id AND q.document_id = od.document_id
               WHERE o.regulation_id = $1 AND o.status = 'applicable'
            GROUP BY o.id, o.obligation_code, o.title, o.priority, o.section_domain
-           ORDER BY COALESCE(o.section_order, 0), o.obligation_code`,
+           ORDER BY o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code`,
             [id],
           );
           const RANK_TO_LABEL: Record<number, string> = {
@@ -1508,7 +1508,7 @@ export const complianceRoutes = [
             `SELECT id, obligation_code, title, description, section_domain, evidence_requirements
                FROM obligations
               WHERE regulation_id = $1 AND status = 'applicable'
-              ORDER BY COALESCE(section_order, 0), obligation_code`,
+              ORDER BY section_order NULLS LAST, clause_sort_key NULLS LAST, obligation_code`,
             [regulationId],
           );
           let order = 1;
@@ -1982,7 +1982,7 @@ export const complianceRoutes = [
                    LIMIT 1
                ) latest ON true
               WHERE o.regulation_id = $1 AND o.status = 'applicable'
-              ORDER BY COALESCE(o.section_order, 0), o.obligation_code`,
+              ORDER BY o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code`,
             [id],
           );
           const counts = { compliant: 0, partial: 0, non_compliant: 0, not_assessed: 0 };
@@ -2490,7 +2490,7 @@ export const complianceRoutes = [
                 AND NOT EXISTS (
                   SELECT 1 FROM obligation_documents od WHERE od.obligation_id = o.id
                 )
-              ORDER BY r.regulation_code, COALESCE(o.section_order, 0), o.obligation_code`,
+              ORDER BY r.regulation_code, o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code`,
           );
           const groups: Record<string, any> = {};
           for (const row of r.rows) {
@@ -2549,7 +2549,7 @@ export const complianceRoutes = [
                 AND NOT EXISTS (
                   SELECT 1 FROM obligation_documents od WHERE od.obligation_id = o.id
                 )
-              ORDER BY r.regulation_code, COALESCE(o.section_order, 0), o.obligation_code`,
+              ORDER BY r.regulation_code, o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code`,
           );
           const esc = (v: any) => {
             const s = v == null ? "" : String(v);
@@ -2930,7 +2930,7 @@ export const complianceRoutes = [
                JOIN qms_uploaded_documents d ON d.id = od.document_id
                LEFT JOIN obligation_evidence_quality q
                  ON q.obligation_id = od.obligation_id AND q.document_id = od.document_id
-              ORDER BY reg.regulation_code, COALESCE(o.section_order, 0), o.obligation_code, d.title`,
+              ORDER BY reg.regulation_code, o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code, d.title`,
           );
           const esc = (v: any) => {
             const s = v == null ? "" : String(v);

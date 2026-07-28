@@ -158,7 +158,7 @@ async function loadCandidateObligations(
          JOIN regulations r ON o.regulation_id = r.id
         WHERE r.regulation_code = ANY($1::text[])
           AND o.status = 'applicable'
-        ORDER BY r.regulation_code, COALESCE(o.section_order, 0), o.obligation_code
+        ORDER BY r.regulation_code, o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code
         LIMIT ${SUGGEST_MAX_OBLIGATIONS}`,
       [documentRegulationCodes],
     );
@@ -168,7 +168,7 @@ async function loadCandidateObligations(
          FROM obligations o
          JOIN regulations r ON o.regulation_id = r.id
         WHERE o.status = 'applicable'
-        ORDER BY r.regulation_code, COALESCE(o.section_order, 0), o.obligation_code
+        ORDER BY r.regulation_code, o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code
         LIMIT ${SUGGEST_MAX_OBLIGATIONS}`,
     );
   }

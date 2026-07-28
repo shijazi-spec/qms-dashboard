@@ -311,7 +311,7 @@ export async function recommendNextGapBatch(
       WHERE o.status = 'applicable' AND r.status = 'active'
         AND NOT EXISTS (SELECT 1 FROM obligation_documents od WHERE od.obligation_id = o.id)
         AND NOT EXISTS (SELECT 1 FROM obligation_gap_recommendations gr WHERE gr.obligation_id = o.id)
-      ORDER BY r.regulation_code, COALESCE(o.section_order, 0), o.obligation_code
+      ORDER BY r.regulation_code, o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code
       LIMIT $1`,
     [limit],
   );
@@ -350,7 +350,7 @@ export async function listRecommendations(): Promise<any[]> {
        FROM obligation_gap_recommendations gr
        JOIN obligations o ON o.id = gr.obligation_id
        JOIN regulations reg ON reg.id = o.regulation_id
-      ORDER BY reg.regulation_code, COALESCE(o.section_order, 0), o.obligation_code`,
+      ORDER BY reg.regulation_code, o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code`,
   );
   return r.rows.map((row: any) => {
     // Keep the list/CSV light — surface only whether a draft exists, not the

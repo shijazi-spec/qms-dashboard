@@ -110,7 +110,7 @@ export function chooseProjectionText(opts: {
  */
 async function resolvePolicyText(policy: any): Promise<{
   text: string;
-  status: "extracted" | "empty";
+  status: "extracted" | "empty" | "placeholder";
 }> {
   let fileText: string | null = null;
   // Only pay for file extraction when there is no content_text to use.
@@ -133,6 +133,20 @@ async function resolvePolicyText(policy: any): Promise<{
     fileText,
     description: policy.description,
   });
+
+  // A register entry whose only text is its own one-line description, with no
+  // file attached, is NOT document content — it is metadata about a document
+  // that has not been uploaded yet. The 154 seeded WP-* controlled documents
+  // are all in this state ("Controlled document (WP-…) — pending file upload").
+  //
+  // Treating those as mappable text is what made "Suggest Documents" return the
+  // same 154 rows, all scoring 0, for every clause in every framework. Mark
+  // them 'placeholder' so the suggester and the auto-mapper skip them. As soon
+  // as the approved file is attached the projection re-runs and flips to
+  // 'extracted' on its own.
+  if (chosen.source === "description" && !policy.file_path) {
+    return { text: chosen.text, status: "placeholder" };
+  }
   return { text: chosen.text, status: chosen.status };
 }
 
@@ -240,7 +254,7 @@ export async function runSemanticAutoMap(
                        FROM obligations o
                        JOIN regulations r ON o.regulation_id = r.id
                       WHERE o.status = 'applicable'${regCodes ? " AND r.regulation_code = ANY($1::text[])" : ""}
-                      ORDER BY r.regulation_code, COALESCE(o.section_order, 0), o.obligation_code
+                      ORDER BY r.regulation_code, o.section_order NULLS LAST, o.clause_sort_key NULLS LAST, o.obligation_code
                       LIMIT ${SEMANTIC_MAX_OBLIGATIONS}`;
     const candRes = regCodes
       ? await pool.query(candSql, [regCodes])
@@ -511,6 +525,18 @@ export async function syncPolicyToMapping(
 
   if (status === "empty" || !text) {
     return { policy_id: policyId, projected_document_id: projectedId, status: "empty", reason: "no mappable text" };
+  }
+
+  // Placeholder = the document has not been uploaded yet, so there is nothing
+  // to map. Stop before the citation pass and before any LLM spend; mapping
+  // against the register's own blurb produces noise, not evidence.
+  if (status === "placeholder") {
+    return {
+      policy_id: policyId,
+      projected_document_id: projectedId,
+      status: "empty",
+      reason: "awaiting file upload — no document content to map",
+    };
   }
 
   const { stored, auto_mapped, raw_count } = await runCitationExtraction(projectedId);

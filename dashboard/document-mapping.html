@@ -466,8 +466,17 @@
                 const data = await res.json();
                 frameworks = data.regulations || [];
                 const sel = document.getElementById('consoleFramework');
+                // Only offer frameworks that actually have a clause catalogue.
+                // A zero-clause framework renders "No clauses for this
+                // framework" and can never map anything — that was COPC before
+                // it was retired, and would be SOC 2 between adding its
+                // regulation row and seeding its criteria. If the field is
+                // missing (older API), fall back to showing the framework.
+                var mappable = frameworks.filter(function (r) {
+                    return r.obligation_count == null || Number(r.obligation_count) > 0;
+                });
                 sel.innerHTML = '<option value="" data-i18n="docmap.all_frameworks">All Frameworks</option>'
-                    + frameworks.map(function (r) {
+                    + mappable.map(function (r) {
                         return '<option value="' + r.id + '">' + escAttr(r.regulation_code + ' — ' + r.name) + '</option>';
                     }).join('');
                 if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(sel);
@@ -521,7 +530,22 @@
                 }
                 const candidates = data.candidates || [];
                 if (candidates.length === 0) {
-                    results.innerHTML = '<div class="text-sm text-gray-500 text-center py-6">No candidate documents found. Upload a relevant document via <a href="/qms-docs" class="text-emerald-700 underline">QMS Documents</a> first.</div>';
+                    // Say WHICH kind of nothing this is. Previously any empty
+                    // result read as "upload a document", even when documents
+                    // existed but none was actually relevant to this clause.
+                    // Literal i18n keys (not a variable) so scripts/check-i18n.cjs
+                    // can verify them statically.
+                    var i18n = window.WalaPlusI18n;
+                    var msg;
+                    if (data.empty_reason === 'no_documents_with_content') {
+                        msg = (i18n ? i18n.t('docmap.suggest_none_content') : null)
+                            || 'No documents with extracted content yet — the controlled documents are still awaiting their approved file upload. Attach the approved versions in Integrated QMS, then run mapping.';
+                    } else {
+                        msg = ((i18n ? i18n.t('docmap.suggest_none_relevant') : null)
+                            || 'No document matched this clause. {n} document(s) were checked — none mentioned this clause’s subject.')
+                            .replace('{n}', data.candidates_considered || 0);
+                    }
+                    results.innerHTML = '<div class="text-sm text-gray-500 text-center py-6">' + escAttr(msg) + '</div>';
                     return;
                 }
                 results.innerHTML = '<div class="space-y-3">' + candidates.map(function (s, idx) {

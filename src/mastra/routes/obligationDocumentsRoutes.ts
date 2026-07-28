@@ -640,54 +640,86 @@ export const obligationDocumentsRoutes = [
           const ob = obRes.rows[0];
 
           // Candidate documents: those tagged with the same regulation_code
-          // OR (fallback) the most recently uploaded 25 documents.
+          // OR (fallback) any document that has real extracted text.
+          //
+          // `extraction_status <> 'placeholder'` is load-bearing. Register
+          // entries awaiting their file upload project a row whose only text is
+          // the register's own blurb ("Controlled document (WP-…) — pending file
+          // upload"). Those matched every framework here, scored 0 against every
+          // clause, and — because an all-zero sort is a no-op — were returned in
+          // `uploaded_at DESC` order, i.e. the SAME list for every clause in
+          // every framework, presented as if it were a relevance ranking.
           const docsRes = await sharedPool.query(
             `SELECT id, title, mime_type, regulation_codes,
                     LEFT(COALESCE(extracted_text,''), 1500) AS excerpt,
                     extraction_status
                FROM qms_uploaded_documents
-              WHERE regulation_codes && ARRAY[$1]::text[]
-                 OR (regulation_codes IS NULL AND extracted_text IS NOT NULL)
+              WHERE COALESCE(extraction_status, '') <> 'placeholder'
+                AND (
+                     regulation_codes && ARRAY[$1]::text[]
+                  OR (regulation_codes IS NULL AND extracted_text IS NOT NULL)
+                )
               ORDER BY uploaded_at DESC
               LIMIT 25`,
             [ob.regulation_code],
           );
 
-          // Run the suggest tool reverse-style by calling it for each candidate
-          // would be expensive. Cheap heuristic v1: keyword overlap between
-          // obligation title and document excerpt. Phase 4 can swap to the
-          // LLM suggest tool with caching.
+          // Cheap heuristic: keyword overlap between the obligation title and
+          // the document excerpt.
           const obKeywords = String(ob.title || "")
             .toLowerCase()
             .split(/[^a-z0-9]+/)
             .filter((w: string) => w.length >= 4);
 
-          const ranked = docsRes.rows
-            .map((d: any) => {
-              const ex = String(d.excerpt || "").toLowerCase();
-              let score = 0;
-              for (const k of obKeywords) {
-                if (ex.includes(k)) score += 10;
-              }
-              if (Array.isArray(d.regulation_codes) && d.regulation_codes.includes(ob.regulation_code)) {
-                score += 5;
-              }
-              return {
-                document_id: d.id,
-                title: d.title,
-                excerpt: d.excerpt,
-                extraction_status: d.extraction_status,
-                score,
-              };
-            })
+          // A candidate must actually match something. Scoring zero means "no
+          // evidence of relevance", which is a result worth reporting honestly —
+          // never a ranked suggestion. Framework tagging alone (+5) is not
+          // relevance either, so the bar sits above it.
+          const MIN_SUGGEST_SCORE = 10;
+
+          const scored = docsRes.rows.map((d: any) => {
+            const ex = String(d.excerpt || "").toLowerCase();
+            let score = 0;
+            for (const k of obKeywords) {
+              if (ex.includes(k)) score += 10;
+            }
+            if (
+              Array.isArray(d.regulation_codes) &&
+              d.regulation_codes.includes(ob.regulation_code)
+            ) {
+              score += 5;
+            }
+            return {
+              document_id: d.id,
+              title: d.title,
+              excerpt: d.excerpt,
+              extraction_status: d.extraction_status,
+              score,
+            };
+          });
+
+          const ranked = scored
+            .filter((d: any) => d.score >= MIN_SUGGEST_SCORE)
             .sort((a: any, b: any) => b.score - a.score)
             .slice(0, 10);
+
+          // Machine-readable reason so the UI can say something true rather
+          // than rendering an empty list with no explanation.
+          let empty_reason: string | null = null;
+          if (ranked.length === 0) {
+            empty_reason =
+              docsRes.rows.length === 0
+                ? "no_documents_with_content"
+                : "no_relevant_match";
+          }
 
           return c.json({
             success: true,
             obligation_id: obligationId,
             obligation_code: ob.obligation_code,
             candidates: ranked,
+            candidates_considered: docsRes.rows.length,
+            empty_reason,
           });
         } catch (error) {
           safeLogger.error("❌ [ObligationDocs] suggest-documents error:", error);
