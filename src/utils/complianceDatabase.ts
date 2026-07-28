@@ -355,6 +355,7 @@ export async function initComplianceTables(): Promise<void> {
     const { seedNcaEccObligations } = await import("./seeds/ncaEccObligations");
     const { seedNcaDccObligations } = await import("./seeds/ncaDccObligations");
     const { seedPciDssObligations } = await import("./seeds/pciDssObligations");
+    const { seedSoc2Obligations } = await import("./seeds/soc2Obligations");
     await seedPdplFillObligations(pool as any);
     await seedSamaCsfFullObligations(pool as any);
     await seedISO27001Obligations(pool as any);
@@ -362,6 +363,7 @@ export async function initComplianceTables(): Promise<void> {
     await seedNcaEccObligations(pool as any);
     await seedNcaDccObligations(pool as any);
     await seedPciDssObligations(pool as any);
+    await seedSoc2Obligations(pool as any);
   } catch (err) {
     logger.error("⚠️ [ComplianceDB] Extended framework seed failed:", err);
     // Do NOT throw — failing to seed extended catalogues should not
@@ -555,6 +557,20 @@ async function seedDefaultRegulations(): Promise<void> {
     //
     // Re-adding it means authoring a paraphrased clause catalogue first — see
     // runFrameworkSeed in src/utils/seeds/. Do not re-add the bare row.
+    {
+      regulation_code: "SOC2",
+      name: "SOC 2 Trust Services Criteria",
+      description:
+        "AICPA Trust Services Criteria for Security, Availability, Processing Integrity, Confidentiality and Privacy — the control set a SOC 2 Type I/II report is issued against.",
+      jurisdiction: "international",
+      category: "cybersecurity",
+      issuing_body: "AICPA",
+      effective_date: "2017-04-15",
+      status: "active",
+      version: "2017 (rev. 2022)",
+      source_url:
+        "https://www.aicpa-cima.com/resources/landing/system-and-organization-controls-soc-suite-of-services",
+    },
     {
       regulation_code: "PCI-DSS",
       name: "PCI DSS v4.0 Payment Card Industry Data Security Standard",

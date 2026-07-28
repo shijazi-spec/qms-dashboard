@@ -51,7 +51,16 @@ export const FRAMEWORK_ALIASES: Array<{ pattern: RegExp; code: string }> = [
   { pattern: /\bSAMA(?:[\s-]?CSF)?\b/i, code: "SAMA-CSF" },
   { pattern: /\bNCA[\s-]?ECC\b/i, code: "NCA-ECC" },
   { pattern: /\bNCA[\s-]?DCC\b/i, code: "NCA-DCC" },
-  { pattern: /\bCOPC\b/i, code: "COPC" },
+  // SOC 2 is cited three ways in practice: by report name, by the criteria set,
+  // or by the abbreviation. Without this alias (and the TSC clause shape below)
+  // SOC 2 coverage would be structurally 0% forever — the regulation and its
+  // criteria would exist, but nothing could ever create a link to them.
+  {
+    pattern: /\b(?:SOC[\s-]?2|Trust\s+Services\s+Criteria|TSC)\b/i,
+    code: "SOC2",
+  },
+  // COPC removed 2026-07-29 — the regulation had no clause catalogue and was
+  // retired from the compliance frameworks. Citing it can no longer resolve.
 ];
 
 // Clause-shape regexes. Each match returns the framework hint (if
@@ -66,21 +75,31 @@ export const FRAMEWORK_ALIASES: Array<{ pattern: RegExp; code: string }> = [
 //   "Clause 8.2.1"          — clause without framework hint
 //   "A.12.1.2"              — bare Annex A id
 const CLAUSE_PATTERNS: Array<{ regex: RegExp; framework_idx: number; clause_idx: number }> = [
-  // ISO 27001 A.5.15 / ISO27001 A.5.15
+  // ISO 27001 A.5.15 / ISO27001 A.5.15 / SOC 2 CC6.1
   {
-    regex: /\b(ISO[\s-]?27001|ISO[\s-]?9001|PCI[\s-]?DSS|PDPL|SAMA[\s-]?CSF|NCA[\s-]?ECC|NCA[\s-]?DCC|COPC)[\s:.-]+(A\.[0-9]+(?:\.[0-9]+){1,3}|Clause\s+\d+(?:\.\d+){0,3}|Article\s+\d+(?:\.\d+)?|\d+(?:\.\d+){1,3})\b/gi,
+    regex: /\b(ISO[\s-]?27001|ISO[\s-]?9001|PCI[\s-]?DSS|PDPL|SAMA[\s-]?CSF|NCA[\s-]?ECC|NCA[\s-]?DCC|SOC[\s-]?2|Trust\s+Services\s+Criteria|TSC)[\s:.-]+(A\.[0-9]+(?:\.[0-9]+){1,3}|CC[1-9]\.[0-9]+|A1\.[0-9]+|C1\.[0-9]+|PI1\.[0-9]+|P[1-8]\.[0-9]+|Clause\s+\d+(?:\.\d+){0,3}|Article\s+\d+(?:\.\d+)?|\d+(?:\.\d+){1,3})\b/gi,
     framework_idx: 1,
     clause_idx: 2,
   },
-  // Article 12 of PDPL
+  // Article 12 of PDPL / CC6.1 of SOC 2
   {
-    regex: /\b(Article\s+\d+(?:\.\d+)?|Clause\s+\d+(?:\.\d+){0,3})\s+of\s+(ISO[\s-]?27001|ISO[\s-]?9001|PCI[\s-]?DSS|PDPL|SAMA[\s-]?CSF|NCA[\s-]?ECC|NCA[\s-]?DCC|COPC)\b/gi,
+    regex: /\b(Article\s+\d+(?:\.\d+)?|Clause\s+\d+(?:\.\d+){0,3}|CC[1-9]\.[0-9]+|A1\.[0-9]+|C1\.[0-9]+|PI1\.[0-9]+|P[1-8]\.[0-9]+)\s+of\s+(ISO[\s-]?27001|ISO[\s-]?9001|PCI[\s-]?DSS|PDPL|SAMA[\s-]?CSF|NCA[\s-]?ECC|NCA[\s-]?DCC|SOC[\s-]?2|Trust\s+Services\s+Criteria|TSC)\b/gi,
     framework_idx: 2,
     clause_idx: 1,
   },
   // Bare A.5.1.2 (Annex A)
   {
     regex: /\bA\.[0-9]+(?:\.[0-9]+){1,3}\b/g,
+    framework_idx: -1,
+    clause_idx: 0,
+  },
+  // Bare Trust Services Criteria id (CC6.1, A1.2, C1.1, PI1.3, P6.4).
+  // Placed AFTER the framework-qualified patterns so the claimed-range
+  // suppression keeps "SOC 2 CC6.1" as one qualified hit rather than also
+  // matching the bare "CC6.1" inside it. Note "A1.2" (TSC) and "A.1.2"
+  // (ISO Annex A) are distinct shapes and cannot collide.
+  {
+    regex: /\b(?:CC[1-9]\.[0-9]+|A1\.[0-9]+|C1\.[0-9]+|PI1\.[0-9]+|P[1-8]\.[0-9]+)\b/g,
     framework_idx: -1,
     clause_idx: 0,
   },
