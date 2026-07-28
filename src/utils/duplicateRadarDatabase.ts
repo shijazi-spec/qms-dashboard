@@ -4216,11 +4216,19 @@ export async function getClusterSummary(): Promise<{
       COUNT(*) FILTER (WHERE confidence_level = 'high') as high_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'medium') as medium_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'low') as low_confidence,
-      -- Amount at risk counts ACTIVE clusters only: dismissing a false positive
-      -- (status != 'active') or resolving one (in resolved_act) drops its value
-      -- out of the figure (Sarah 2026-07-29). Previously this summed EVERY
-      -- cluster regardless of status, so dismiss/resolve never decreased it.
-      COALESCE(SUM(estimated_pipeline_value) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL), 0) as pipeline_inflation,
+      -- Amount at risk (Sarah 2026-07-29): ACTIVE, non-resolved clusters only
+      -- (dismiss/resolve drops the value out), AND excludes duplicate deals at
+      -- Agreement Signed / Paid — those are WON customers, not pipeline at risk.
+      -- Computed from duplicate_records (not the stored estimated_pipeline_value
+      -- column) so the stage exclusion applies without a full rebuild.
+      (SELECT COALESCE(SUM(r.deal_value), 0)
+         FROM duplicate_records r
+         JOIN duplicate_clusters c2 ON c2.id = r.cluster_id
+         LEFT JOIN resolved_act ra2 ON ra2.cluster_id = c2.id
+        WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
+          AND c2.status = 'active' AND ra2.cluster_id IS NULL
+          AND LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage','')) NOT IN ('agreement signed','paid')
+      ) as pipeline_inflation,
       COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
       COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count
     FROM duplicate_clusters dc
@@ -7508,14 +7516,17 @@ export interface DuplicateCreationTrendBucket {
 export async function getInflationOpenClosedBreakdown(
   segment?: DuplicateFilters["segment"],
 ): Promise<{
-  total_sar: number;
+  total_sar: number; // everything (for reference)
+  at_risk_sar: number; // headline: EXCLUDES Agreement Signed + Paid
   open_sar: number;
-  closed_sar: number;
+  closed_sar: number; // terminal but NOT signed/paid
+  excluded_signed_paid_sar: number; // Agreement Signed + Paid (won customers)
   open_deals: number;
   closed_deals: number;
+  excluded_deals: number;
   by_stage: Array<{
     stage: string;
-    bucket: "open" | "closed";
+    bucket: "open" | "closed" | "excluded";
     sar: number;
     deals: number;
   }>;
@@ -7524,9 +7535,13 @@ export async function getInflationOpenClosedBreakdown(
   const segCond = seg.condition ? ` AND ${seg.condition}` : "";
   const stageExpr =
     "LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage',''))";
-  const CLOSED_RE =
-    "(paid|agreement signed|closed|won|lost|drop|cancel|transferred to cs|client activated)";
-  const bucketExpr = `CASE WHEN ${stageExpr} ~ '${CLOSED_RE}' THEN 'closed' ELSE 'open' END`;
+  // Sarah 2026-07-29: Agreement Signed / Paid = WON customers → EXCLUDED from
+  // Amount at risk. Other terminal stages (closed lost/won/dropped/cancelled/…)
+  // = "closed"; everything else = "open" pipeline. Amount at risk = open + closed.
+  const bucketExpr = `CASE
+      WHEN ${stageExpr} IN ('agreement signed','paid') THEN 'excluded'
+      WHEN ${stageExpr} ~ '(closed|won|lost|drop|cancel|transferred to cs|client activated)' THEN 'closed'
+      ELSE 'open' END`;
   const rows = (
     await pool.query(
       `WITH resolved_act AS (
@@ -7549,12 +7564,17 @@ export async function getInflationOpenClosedBreakdown(
   ).rows as any[];
   let open_sar = 0,
     closed_sar = 0,
+    excluded_signed_paid_sar = 0,
     open_deals = 0,
-    closed_deals = 0;
+    closed_deals = 0,
+    excluded_deals = 0;
   const by_stage = rows.map((x) => {
     const sar = Number(x.sar) || 0;
     const deals = Number(x.deals) || 0;
-    if (x.bucket === "closed") {
+    if (x.bucket === "excluded") {
+      excluded_signed_paid_sar += sar;
+      excluded_deals += deals;
+    } else if (x.bucket === "closed") {
       closed_sar += sar;
       closed_deals += deals;
     } else {
@@ -7563,17 +7583,20 @@ export async function getInflationOpenClosedBreakdown(
     }
     return {
       stage: String(x.stage),
-      bucket: x.bucket as "open" | "closed",
+      bucket: x.bucket as "open" | "closed" | "excluded",
       sar,
       deals,
     };
   });
   return {
-    total_sar: open_sar + closed_sar,
+    total_sar: open_sar + closed_sar + excluded_signed_paid_sar,
+    at_risk_sar: open_sar + closed_sar,
     open_sar,
     closed_sar,
+    excluded_signed_paid_sar,
     open_deals,
     closed_deals,
+    excluded_deals,
     by_stage,
   };
 }

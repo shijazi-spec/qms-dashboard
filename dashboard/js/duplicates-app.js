@@ -7456,18 +7456,21 @@
             var lbl = document.getElementById('pipelineInflationLabel');
             if (!el || !d) return;
             var openOnly = _inflationOpenOnly();
-            // Headline: open-only shows just the open-pipeline exposure (the real
-            // double-booking risk); default shows the full total (open + closed).
-            if (val) val.textContent = formatCurrency((openOnly ? d.open_sar : d.total_sar) || 0);
+            // Headline: Amount at risk = open + closed, EXCLUDING Agreement
+            // Signed / Paid (won customers). Open-only narrows further to just
+            // the active-pipeline exposure.
+            var atRisk = d.at_risk_sar || 0;
+            if (val) val.textContent = formatCurrency((openOnly ? d.open_sar : atRisk) || 0);
             if (lbl) lbl.textContent = openOnly ? 'Amount at risk — Open pipeline (SAR)' : 'Amount at risk (SAR)';
-            var openPct = d.total_sar > 0 ? Math.round((d.open_sar / d.total_sar) * 100) : 0;
-            var toggle = '<span data-on-click="toggleInflationOpenOnly" style="cursor:pointer;font-weight:600;color:#4f46e5" title="Switch the headline number between the full total and open-pipeline-only (excludes duplicates of closed/won/lost deals).">'
-                + (openOnly ? '● Headline: open-only — show total' : '○ Show open-only headline') + '</span>';
+            var openPct = atRisk > 0 ? Math.round((d.open_sar / atRisk) * 100) : 0;
+            var toggle = '<span data-on-click="toggleInflationOpenOnly" style="cursor:pointer;font-weight:600;color:#4f46e5" title="Switch the headline between at-risk (open + closed-lost, excludes Agreement Signed / Paid) and open-pipeline only.">'
+                + (openOnly ? '● Headline: open-only — show at-risk' : '○ Show open-only headline') + '</span>';
             el.innerHTML =
                 '<span style="color:#b45309;font-weight:600">Open ' + formatCurrency(d.open_sar || 0) + '</span>'
                 + ' <span style="color:#9ca3af">(' + _fn(d.open_deals || 0) + ' · ' + openPct + '%)</span>'
                 + '<br><span style="color:#6b7280;font-weight:600">Closed ' + formatCurrency(d.closed_sar || 0) + '</span>'
                 + ' <span style="color:#9ca3af">(' + _fn(d.closed_deals || 0) + ')</span>'
+                + '<br><span style="color:#9ca3af">Excluded — Signed/Paid ' + formatCurrency(d.excluded_signed_paid_sar || 0) + ' (' + _fn(d.excluded_deals || 0) + ')</span>'
                 + '<br>' + toggle;
         }
         async function loadInflationBreakdown() {

@@ -590,7 +590,7 @@
                     <div id="mediumConfidence" data-testid="text-medium-confidence" class="rr-kpi-value">-</div>
                     <div class="rr-kpi-sub">60-89%</div>
                 </div>
-                <div class="rr-kpi rr-kpi-rich rr-acc-purple" title="Sum of Deal.Amount across the ACTIVE duplicate clusters' non-survivor records — the SAR exposure currently inflating pipeline reporting because the same opportunity is counted multiple times. Dismissing / resolving a cluster removes its value. Split into OPEN pipeline vs CLOSED (won/lost/paid) deals below.">
+                <div class="rr-kpi rr-kpi-rich rr-acc-purple" title="Sum of Deal.Amount across the ACTIVE duplicate clusters' non-survivor records — the SAR exposure currently inflating pipeline reporting because the same opportunity is counted multiple times. EXCLUDES deals at Agreement Signed / Paid (won customers). Dismissing / resolving a cluster removes its value. Split into OPEN pipeline vs CLOSED (lost/won) and the excluded Signed/Paid amount below.">
                     <div id="pipelineInflationLabel" class="rr-kpi-label" style="text-transform:none;" data-i18n="duplicates.pipeline_inflation">Amount at risk (SAR)</div>
                     <div id="pipelineInflation" data-testid="text-pipeline-inflation" class="rr-kpi-value">-</div>
                     <div id="pipelineInflationBreakdown" class="rr-kpi-sub" style="text-transform:none; line-height:1.4;"></div>
@@ -2357,7 +2357,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=141"></script>
+    <script src="/js/duplicates-app.js?v=142"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
