@@ -734,13 +734,18 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   //
   // Writes (review state, promote) are governance-only: assigning a reviewer or
   // adding a document to the controlled register is a judgement act.
+  //
+  // `(\/|$)` matches BOTH the subtree and the bare path. A trailing-slash-only
+  // pattern leaves `/api/documentation-tracker` itself matching no rule, which
+  // deny-by-default then 403s — and it breaks the page-shell drift test, whose
+  // backingApiPath is the bare path.
   {
-    pattern: /^\/api\/documentation-tracker\//,
+    pattern: /^\/api\/documentation-tracker(\/|$)/,
     methods: ["POST", "PUT", "PATCH", "DELETE"],
     roles: ["admin", "grc_manager", "quality_manager", "head_of_operations_quality"],
   },
   {
-    pattern: /^\/api\/documentation-tracker\//,
+    pattern: /^\/api\/documentation-tracker(\/|$)/,
     methods: ["GET"],
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },

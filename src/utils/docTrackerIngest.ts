@@ -481,6 +481,22 @@ export async function ingestSnapshot(payload: IngestPayload): Promise<IngestResu
       }
     }
 
+    // Nudge any open board. Counts only — never the payload; the page refetches
+    // what it needs. Best-effort and non-blocking: SSE is an accelerator on top
+    // of the page's 60s poll, so a failed broadcast costs latency, not
+    // correctness.
+    try {
+      const { broadcast } = await import("./docTrackerStream");
+      broadcast("snapshot", {
+        status,
+        collectorId,
+        counts,
+        at: new Date().toISOString(),
+      });
+    } catch {
+      /* never block ingest on fan-out */
+    }
+
     return { status, snapshotId, snapshotHash, counts, warnings };
   } finally {
     try {

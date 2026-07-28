@@ -77,6 +77,7 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/compliance.html",
   "dashboard/consultant.html",
   "dashboard/document-mapping.html",
+  "dashboard/documentation-tracker.html",
   "dashboard/duplicates.html",
   "dashboard/executive.html",
   "dashboard/external-audits.html",

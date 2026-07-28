@@ -472,6 +472,22 @@ export const staticPageRoutes = [
         `To access the Document Mapping workspace, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
+  // /documentation-tracker → Documentation Live Tracker. Shows the true state
+  // of the controlled documentation library on the file server (what exists,
+  // whether codes are valid, how far review has progressed). Same role gate as
+  // /compliance; the drift test below asserts the page gate and the backing API
+  // rule never diverge.
+  {
+    path: "/documentation-tracker",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "documentation-tracker.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Documentation Tracker Setup Required",
+        `To access the Documentation Live Tracker, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /audit-readiness → Compliance v2 Audit Run engine. Reuses the
   // existing audits + grc_audit_findings infrastructure but is scoped
   // to compliance audits (audit_kind='compliance'). Role-gated to the
@@ -891,6 +907,11 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
     path: "/document-mapping",
     allowedRoles: GOVERNANCE_AND_EXECUTIVE,
     backingApiPath: "/api/compliance",
+  },
+  {
+    path: "/documentation-tracker",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/documentation-tracker",
   },
   {
     path: "/audit-readiness",

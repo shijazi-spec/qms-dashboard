@@ -439,5 +439,14 @@ export async function setReviewState(opts: {
     /* never block on audit */
   }
 
+  // Push the single changed row to any open board so a second reviewer sees the
+  // state move without waiting for their poll.
+  try {
+    const { broadcast } = await import("./docTrackerStream");
+    broadcast("document", { register_code: code, review_state: state });
+  } catch {
+    /* fan-out is best-effort */
+  }
+
   return { ok: true, row: upd.rows[0] };
 }

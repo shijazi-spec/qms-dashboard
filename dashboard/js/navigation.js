@@ -104,6 +104,7 @@ const WalaPlusNav = {
       case 'infographic':     return this._t('nav.items.infographic');
       case 'logs':            return this._t('nav.items.logs');
       case 'health':          return this._t('nav.items.health');
+      case 'documentation-tracker': return this._t('nav.items.documentation-tracker');
     }
     return '';
   },
@@ -166,6 +167,9 @@ const WalaPlusNav = {
         // AI-judged findings, and audit-readiness PDFs live here so the
         // Compliance page stays focused on governance/assessment workflow.
         { label: 'Document Mapping', href: '/document-mapping', icon: 'duplicate', id: 'document-mapping' },
+        // Documentation Live Tracker — disk-state of the controlled library,
+        // pushed by the collector on the file server.
+        { label: 'Documentation Tracker', href: '/documentation-tracker', icon: 'document-text', id: 'documentation-tracker' },
       ]
     },
     {

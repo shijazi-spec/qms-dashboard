@@ -363,6 +363,38 @@ export const documentationTrackerRoutes = [
       };
     },
   },
+  {
+    // Live updates. EventSource cannot send custom headers, so this is
+    // session-authenticated (cookie) and must NEVER be added to PUBLIC_PATHS —
+    // that is precisely why the collector's key-authenticated endpoints are
+    // separate routes rather than one bidirectional channel.
+    path: "/api/documentation-tracker/stream",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_READ_ROLES);
+        if (g.error) return g.error;
+        try {
+          const { createStream, MAX_SSE_CLIENTS } = await import(
+            "../../utils/docTrackerStream"
+          );
+          const { getOverview } = await import("../../utils/docTrackerRead");
+          const res = createStream(await getOverview());
+          if (!res) {
+            return c.json(
+              { error: `Too many live listeners (max ${MAX_SSE_CLIENTS})` },
+              503,
+            );
+          }
+          return res;
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] stream failed:", err);
+          return c.json({ error: "Stream unavailable" }, 500);
+        }
+      };
+    },
+  },
+
   // ── Write surface (governance roles only) ─────────────────────────────
   {
     // Attach the approved file, replacing the draft in place. This is what
