@@ -50,11 +50,47 @@ function aiIntegrationsKeyIsValid(): boolean {
  * are too short. Logs once per process if AI_INTEGRATIONS key is present
  * but rejected for being too short, so the fallback is visible in logs.
  */
+/** One-line masked view of a key: first 3 + last 4 + length. Never the value. */
+function maskKey(k?: string): string {
+  return k ? `${k.slice(0, 3)}…${k.slice(-4)} (len ${k.length})` : "(unset)";
+}
+
+/**
+ * Force the DIRECT OpenAI key (Sarah 2026-07-28). When OPENAI_FORCE_DIRECT is
+ * truthy, ignore AI_INTEGRATIONS_OPENAI_API_KEY entirely and use OPENAI_API_KEY
+ * against api.openai.com. This is the reliable way to make a personal Tier-4
+ * key take effect without having to delete the AI_INTEGRATIONS secret (which the
+ * Replit integration can re-populate). Default off = existing behaviour.
+ */
+export function forceDirectOpenAI(): boolean {
+  const v = (process.env.OPENAI_FORCE_DIRECT || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+let loggedActiveSource = false;
+function logActiveSourceOnce(source: string, key?: string): void {
+  if (loggedActiveSource) return;
+  loggedActiveSource = true;
+  logger.info(
+    `[openaiCredentials] active OpenAI key source = ${source} · ${maskKey(key)}` +
+      (forceDirectOpenAI() ? " · OPENAI_FORCE_DIRECT=on" : ""),
+  );
+}
+
 export function getOpenAIApiKey(): string | undefined {
   const ai = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
   const fallback = process.env.OPENAI_API_KEY;
 
-  if (ai && ai.length >= MIN_VALID_KEY_LENGTH) return ai;
+  // Explicit override: use the direct OPENAI_API_KEY, skip the gateway key.
+  if (forceDirectOpenAI() && fallback) {
+    logActiveSourceOnce("OPENAI_API_KEY (forced direct)", fallback);
+    return fallback;
+  }
+
+  if (ai && ai.length >= MIN_VALID_KEY_LENGTH) {
+    logActiveSourceOnce("AI_INTEGRATIONS_OPENAI_API_KEY", ai);
+    return ai;
+  }
 
   if (ai && ai.length > 0 && ai.length < MIN_VALID_KEY_LENGTH) {
     if (!warnedShortKey) {
@@ -67,6 +103,7 @@ export function getOpenAIApiKey(): string | undefined {
     }
   }
 
+  if (fallback) logActiveSourceOnce("OPENAI_API_KEY (fallback)", fallback);
   return fallback || undefined;
 }
 
@@ -81,6 +118,8 @@ export function getOpenAIApiKey(): string | undefined {
  * gateway key isn't usable so callers default to api.openai.com.
  */
 export function getOpenAIBaseUrl(): string | undefined {
+  // Forced direct → never route through the gateway; use api.openai.com.
+  if (forceDirectOpenAI()) return undefined;
   const v = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
   if (!v || !v.trim()) return undefined;
   if (!aiIntegrationsKeyIsValid()) {

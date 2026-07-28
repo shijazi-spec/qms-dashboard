@@ -920,6 +920,13 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
   {
+    // OpenAI credential health check — read-only diagnostics; masked key tail
+    // only, never the value. Same allowlist as the consultant memory routes.
+    pattern: /^\/api\/consultant\/openai-health$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
+  {
     // Call-intelligence CRM-link audit/repair — admin-only (handler also
     // enforces verifyAdminKey as defense-in-depth).
     pattern: /^\/api\/calls\/audit-crm-links$/,
