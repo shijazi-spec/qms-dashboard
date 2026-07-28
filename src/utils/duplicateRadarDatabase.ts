@@ -388,18 +388,36 @@ export async function getAllClustersByInflation(
 ): Promise<any[]> {
   const limit = Math.max(1, Math.min(opts.limit ?? 500, 2000));
   const offset = Math.max(0, opts.offset ?? 0);
-  const statusClause = opts.includeInactive ? "" : `AND status = 'active'`;
+  // Aligned to the Amount-at-risk definition (Sarah 2026-07-29): value =
+  // duplicate deal Amounts EXCLUDING Agreement Signed / Paid, recomputed live;
+  // default excludes dismissed (status != 'active') and resolved clusters.
+  const statusClause = opts.includeInactive
+    ? ""
+    : `AND c.status = 'active' AND ra.cluster_id IS NULL`;
   const r = await pool.query(
-    `SELECT id, domain, company_name, company_name_arabic,
-            estimated_pipeline_value, total_records,
-            total_leads, total_deals, total_contacts, total_accounts,
-            confidence_score, confidence_level, status,
-            cs_overlap_verdict, arr_exposure, pipeline_lifecycle_state, client_sector
-       FROM duplicate_clusters
-      WHERE estimated_pipeline_value > 0
-        AND total_records > 1
+    `WITH resolved_act AS (
+       SELECT DISTINCT cluster_id FROM duplicate_merge_actions
+        WHERE action_type IN ('resolve','module_resolved')
+     ),
+     at_risk AS (
+       SELECT rr.cluster_id, SUM(rr.deal_value) AS at_risk_value
+         FROM duplicate_records rr
+        WHERE rr.record_type = 'deal' AND rr.is_primary = false AND rr.deal_value > 0
+          AND LOWER(COALESCE(NULLIF(rr.stage,''), rr.raw_data->>'Stage','')) NOT IN ('agreement signed','paid')
+        GROUP BY rr.cluster_id
+     )
+     SELECT c.id, c.domain, c.company_name, c.company_name_arabic,
+            ar.at_risk_value AS estimated_pipeline_value, c.total_records,
+            c.total_leads, c.total_deals, c.total_contacts, c.total_accounts,
+            c.confidence_score, c.confidence_level, c.status,
+            c.cs_overlap_verdict, c.arr_exposure, c.pipeline_lifecycle_state, c.client_sector
+       FROM duplicate_clusters c
+       JOIN at_risk ar ON ar.cluster_id = c.id
+       LEFT JOIN resolved_act ra ON ra.cluster_id = c.id
+      WHERE ar.at_risk_value > 0
+        AND c.total_records > 1
         ${statusClause}
-      ORDER BY estimated_pipeline_value DESC, total_records DESC
+      ORDER BY ar.at_risk_value DESC, c.total_records DESC
       LIMIT $1 OFFSET $2`,
     [limit, offset],
   );
@@ -7860,7 +7878,19 @@ export async function getEnhancedSummary(): Promise<{
       COUNT(*) FILTER (WHERE confidence_level = 'high' AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1) as high_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'medium' AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1) as medium_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'low' AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1) as low_confidence,
-      COALESCE(SUM(estimated_pipeline_value), 0) as pipeline_inflation,
+      -- Amount at risk (Sarah 2026-07-29): ACTIVE, non-resolved clusters only
+      -- (dismiss sets status='ignored', resolve joins resolved_act — both drop
+      -- out), AND excludes duplicate deals at Agreement Signed / Paid (won
+      -- customers). Computed live from duplicate_records so the stage exclusion
+      -- and dismiss both apply immediately, with no full rebuild.
+      (SELECT COALESCE(SUM(r.deal_value), 0)
+         FROM duplicate_records r
+         JOIN duplicate_clusters c2 ON c2.id = r.cluster_id
+         LEFT JOIN resolved_act ra2 ON ra2.cluster_id = c2.id
+        WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
+          AND c2.status = 'active' AND ra2.cluster_id IS NULL
+          AND LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage','')) NOT IN ('agreement signed','paid')
+      ) as pipeline_inflation,
       COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
       COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count,
       COUNT(*) FILTER (WHERE dc.status = 'ignored' AND ra.cluster_id IS NULL) as ignored_count
@@ -7920,12 +7950,32 @@ export async function getEnhancedSummary(): Promise<{
   }
 
   // D4: Top 5 clusters by pipeline inflation (active only — excludes resolved/ignored false positives)
+  // Top clusters ranked by AMOUNT AT RISK (Sarah 2026-07-29) — recomputed live
+  // from duplicate_records EXCLUDING Agreement Signed / Paid duplicate deals,
+  // active + non-resolved clusters only, so this panel matches the headline.
+  // Aliased back to estimated_pipeline_value so the frontend needs no change.
   const topClustersResult = await pool.query(`
-    SELECT id, domain, company_name, estimated_pipeline_value, total_records, confidence_score
-    FROM duplicate_clusters
-    WHERE estimated_pipeline_value > 0 AND total_records > 1 AND status = 'active'
-    ORDER BY estimated_pipeline_value DESC
-    LIMIT 5
+    WITH resolved_act AS (
+      SELECT DISTINCT cluster_id FROM duplicate_merge_actions
+       WHERE action_type IN ('resolve','module_resolved')
+    ),
+    at_risk AS (
+      SELECT r.cluster_id, SUM(r.deal_value) AS at_risk_value
+        FROM duplicate_records r
+       WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
+         AND LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage','')) NOT IN ('agreement signed','paid')
+       GROUP BY r.cluster_id
+    )
+    SELECT c.id, c.domain, c.company_name,
+           ar.at_risk_value AS estimated_pipeline_value,
+           c.total_records, c.confidence_score
+      FROM duplicate_clusters c
+      JOIN at_risk ar ON ar.cluster_id = c.id
+      LEFT JOIN resolved_act ra ON ra.cluster_id = c.id
+     WHERE c.status = 'active' AND ra.cluster_id IS NULL
+       AND ar.at_risk_value > 0 AND c.total_records > 1
+     ORDER BY ar.at_risk_value DESC
+     LIMIT 5
   `);
 
   // D4: Last scan info — most recent FULL rebuild (every row in
