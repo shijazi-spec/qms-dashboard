@@ -629,6 +629,106 @@ export const consultantRoutes = [
   },
 
   {
+    // OpenAI credential health check (Sarah 2026-07-26): confirm the key the
+    // app actually uses works — after swapping in the Tier-4 key. Reports which
+    // env source is active + a MASKED tail (never the full key), then makes a
+    // tiny live chat call and reports ok / the exact provider error (rate limit,
+    // auth, etc.). Read-only, no state change.
+    //   GET /api/consultant/openai-health
+    path: "/api/consultant/openai-health",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const { getOpenAIApiKey, getOpenAIBaseUrl } = await import(
+            "../../utils/openaiCredentials"
+          );
+          const key = getOpenAIApiKey();
+          const baseUrl = getOpenAIBaseUrl() || "https://api.openai.com/v1";
+          const aiInt = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+          const source =
+            aiInt && aiInt.length >= 40
+              ? "AI_INTEGRATIONS_OPENAI_API_KEY"
+              : process.env.OPENAI_API_KEY
+                ? "OPENAI_API_KEY"
+                : "none";
+          const mask = (k?: string) =>
+            k ? `${k.slice(0, 3)}…${k.slice(-4)} (len ${k.length})` : "(unset)";
+
+          if (!key) {
+            return c.json({
+              ok: false,
+              keySource: source,
+              keyMasked: mask(key),
+              error: "No OpenAI key resolved — set OPENAI_API_KEY.",
+            });
+          }
+
+          const t0 = Date.now();
+          let ok = false;
+          let status = 0;
+          let model = "gpt-4o";
+          let errorMsg: string | undefined;
+          let org: string | undefined;
+          try {
+            const resp = await fetch(`${baseUrl}/chat/completions`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${key}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model,
+                max_tokens: 1,
+                messages: [{ role: "user", content: "ping" }],
+              }),
+            });
+            status = resp.status;
+            org = resp.headers.get("openai-organization") || undefined;
+            ok = resp.ok;
+            if (!resp.ok) {
+              const body = await resp.json().catch(() => ({}));
+              // Sanitize — never echo a key even if the provider does.
+              errorMsg = String(body?.error?.message || resp.statusText).replace(
+                /sk-[A-Za-z0-9_-]+/g,
+                "sk-…",
+              );
+            }
+          } catch (e: any) {
+            errorMsg = e?.message || String(e);
+          }
+
+          return c.json({
+            ok,
+            keySource: source,
+            keyMasked: mask(key),
+            usingGateway: baseUrl !== "https://api.openai.com/v1",
+            baseUrl: baseUrl.replace(/\/+$/, ""),
+            org: org || null,
+            model,
+            httpStatus: status,
+            latencyMs: Date.now() - t0,
+            error: errorMsg || null,
+            hint: ok
+              ? "Key works — Adam is live on this key."
+              : /rate limit|429|tokens per min|TPM/i.test(errorMsg || "")
+                ? "Still rate-limited — the app is NOT on the new Tier-4 key yet. Check that OPENAI_API_KEY holds the new key AND that AI_INTEGRATIONS_OPENAI_API_KEY is cleared, then republish."
+                : /invalid|incorrect|auth|401/i.test(errorMsg || "")
+                  ? "Auth error — the key value looks wrong or wasn't saved to the deployment secrets."
+                  : "Call failed — see error.",
+          });
+        } catch (error) {
+          logger.error("[Consultant] openai-health error:", error);
+          return c.json({ error: "Health check failed" }, 500);
+        }
+      };
+    },
+  },
+
+  {
     // Clear what Adam remembers about the requesting user (PDPL right to
     // erasure). Resets the resource-scoped working memory to empty so the
     // next conversation starts fresh. Only ever affects the caller's own
