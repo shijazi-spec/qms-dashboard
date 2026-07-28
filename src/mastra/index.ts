@@ -60,6 +60,7 @@ import { handoffTaskRoutes } from "./routes/handoffTaskRoutes";
 import { techRequestRoutes } from "./routes/techRequestRoutes";
 import { kpiRoutes } from "./routes/kpiRoutes";
 import { leadershipFeedRoutes } from "./routes/leadershipFeedRoutes";
+import { documentationTrackerRoutes } from "./routes/documentationTrackerRoutes";
 import { northStarSourceRoutes } from "./routes/northStarSourceRoutes";
 import { kpiCatalogRoutes } from "./routes/kpiCatalogRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
@@ -312,6 +313,7 @@ export const mastra = new Mastra({
       //     `/api/kpis/:id` handlers). Pulled by the WalaPlus Leadership
       //     Platform; self-authenticates via the X-Feed-Key header. ──────────
       ...leadershipFeedRoutes,
+      ...documentationTrackerRoutes,
       ...northStarSourceRoutes,
       ...kpiCatalogRoutes,
       ...kpiRoutes,

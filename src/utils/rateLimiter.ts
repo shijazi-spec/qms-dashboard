@@ -34,6 +34,32 @@ const AUDIO_LIMIT = 20;
 const UNAUTH_READ_LIMIT = 10;
 const UNAUTH_WRITE_LIMIT = 3;
 
+/**
+ * Documentation Live Tracker collector budget.
+ *
+ * The collector's three endpoints are in PUBLIC_PATHS (they self-authenticate
+ * with X-Tracker-Key because the caller is a Windows service, not a browser),
+ * which means the limiter would otherwise treat them as UNAUTHENTICATED writes
+ * at 3/min per IP. A file-watcher push plus a heartbeat plus one retry blows
+ * through that immediately, and several collectors behind one office NAT share
+ * the same ip: bucket.
+ *
+ * A dedicated category rather than a bypass: the limiter runs BEFORE the
+ * handler, so a blanket exemption on an unauthenticated write path would let an
+ * attacker with a bad key reach the body parser on every request. 30/min covers
+ * a 5-minute cadence with retries and still caps a flood.
+ */
+const TRACKER_LIMIT = (() => {
+  const raw = parseInt(process.env.RATE_LIMIT_DOC_TRACKER_PER_MIN ?? "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 30;
+})();
+
+const DOC_TRACKER_PATHS = [
+  "/api/documentation-tracker/ingest",
+  "/api/documentation-tracker/heartbeat",
+  "/api/documentation-tracker/collector-config",
+];
+
 const AUTH_PATHS = [
   "/api/auth/",
   "/api/invitations/accept",
@@ -100,6 +126,9 @@ ensureTable().catch((err) => {
 
 function getCategory(path?: string): string {
   if (path) {
+    // Checked first: these are PUBLIC_PATHS entries, so without their own
+    // category they would fall through to the 3/min unauthenticated write cap.
+    if (DOC_TRACKER_PATHS.includes(path.split("?")[0])) return "doc-tracker";
     if (AUTH_PATHS.some((p) => path.startsWith(p) || path.includes(p)))
       return "auth";
     // Audio downloads are large binary responses; use a tighter dedicated limit
@@ -216,6 +245,11 @@ export async function checkRateLimit(
     limit = EXPORT_LIMIT;
   } else if (category === "audio") {
     limit = AUDIO_LIMIT;
+  } else if (category === "doc-tracker") {
+    // MUST be evaluated before the !isAuthenticated branch: the collector is by
+    // definition unauthenticated to the limiter (it carries a key header, not a
+    // session), so falling through would cap it at UNAUTH_WRITE_LIMIT = 3/min.
+    limit = TRACKER_LIMIT;
   } else if (!isAuthenticated) {
     limit = isWrite ? UNAUTH_WRITE_LIMIT : UNAUTH_READ_LIMIT;
   } else {

@@ -213,6 +213,25 @@ export const PUBLIC_PATHS = [
   // compare vs LEADERSHIP_FEED_KEY) in src/mastra/routes/leadershipFeedRoutes.ts
   // and fails closed (503) when the key is unset. EXACT entry.
   '/api/kpis/leadership-feed',
+
+  // ---- Documentation Live Tracker collector (server-to-server push) ----
+  // A Windows collector on the controlled-documentation file server pushes
+  // snapshots here. It has no platform session, so each route self-authenticates
+  // via the X-Tracker-Key header (constant-time compare vs
+  // DOC_TRACKER_INGEST_KEY) in routes/documentationTrackerRoutes.ts and fails
+  // closed (503) when the key is unset.
+  //
+  // EXACT entries — no trailing slash. A '/api/documentation-tracker/' prefix
+  // entry would make the ENTIRE tracker read surface (documents, coverage,
+  // review state) unauthenticated, which is the same class of bug as
+  // '/api/health' once swallowing '/api/health-index'.
+  //
+  // These are rate-limited under a dedicated 'doc-tracker' category (see
+  // utils/rateLimiter.ts) because the default unauthenticated write budget is
+  // 3/min per IP, which a watcher plus heartbeat plus retry exceeds instantly.
+  '/api/documentation-tracker/ingest',
+  '/api/documentation-tracker/heartbeat',
+  '/api/documentation-tracker/collector-config',
 ];
 
 const MASTRA_INTERNAL_PREFIXES = ['/api/workflows/', '/api/memory/'];

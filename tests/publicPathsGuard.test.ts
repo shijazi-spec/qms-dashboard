@@ -101,6 +101,14 @@ const PUBLIC_PATH_ALLOWLIST: Record<string, string> = {
   "/api/kpis/leadership-feed":
     "GET: read-only KPI feed PULLED server-to-server by the separate Leadership Platform app (no platform session). Fail-closed — returns 503 when LEADERSHIP_FEED_KEY is unset/<16 chars and 401 on any X-Feed-Key mismatch (src/mastra/routes/leadershipFeedRoutes.ts). The in-platform /api/kpis/leadership-feed/preview variant is session + role gated.",
 
+  // ---- Documentation Live Tracker collector (server-to-server push) ------
+  "/api/documentation-tracker/ingest":
+    "POST: full library snapshot PUSHED server-to-server by the Windows collector on the controlled-documentation file server (no platform session). Fail-closed — 503 when DOC_TRACKER_INGEST_KEY is unset/<16 chars, 401 on any X-Tracker-Key mismatch, constant-time compare (src/mastra/routes/documentationTrackerRoutes.ts). Rate-limited under the dedicated 'doc-tracker' category. Writes only collector-owned fact columns; human review state is never touched, and absent documents are soft-deleted behind a mass-deletion guard.",
+  "/api/documentation-tracker/heartbeat":
+    "POST: collector liveness ping, same X-Tracker-Key gate as /ingest. Exists so a collector whose library simply has not changed is distinguishable from one that has died — silence must never render as 'nothing changed'. Writes only doc_tracker_collectors liveness columns.",
+  "/api/documentation-tracker/collector-config":
+    "GET: read-only scan configuration (folder list, code pattern, caps, debounce) so the collector can be retuned without redeploying the executable on the file server. Same X-Tracker-Key gate; exposes no document or review data.",
+
   // ---- routeManifest paths whose declared path is matched as public -------
   // These are concrete manifest entries that fall under one of the prefix
   // bypasses above. Listing them explicitly forces a future engineer adding a
