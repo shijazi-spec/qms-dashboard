@@ -5222,6 +5222,29 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Amount at risk split by OPEN vs CLOSED deal stage (Sarah 2026-07-29).
+    //   GET /api/duplicates/inflation-breakdown?segment=
+    path: "/api/duplicates/inflation-breakdown",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const admin = await requireDuplicateRadarAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const segment = c.req.query("segment") || undefined;
+          const { getInflationOpenClosedBreakdown } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const result = await getInflationOpenClosedBreakdown(segment as any);
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error fetching inflation breakdown:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/logs",
     method: "GET" as const,
     createHandler: async () => {

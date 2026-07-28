@@ -4216,7 +4216,11 @@ export async function getClusterSummary(): Promise<{
       COUNT(*) FILTER (WHERE confidence_level = 'high') as high_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'medium') as medium_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'low') as low_confidence,
-      COALESCE(SUM(estimated_pipeline_value), 0) as pipeline_inflation,
+      -- Amount at risk counts ACTIVE clusters only: dismissing a false positive
+      -- (status != 'active') or resolving one (in resolved_act) drops its value
+      -- out of the figure (Sarah 2026-07-29). Previously this summed EVERY
+      -- cluster regardless of status, so dismiss/resolve never decreased it.
+      COALESCE(SUM(estimated_pipeline_value) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL), 0) as pipeline_inflation,
       COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
       COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count
     FROM duplicate_clusters dc
@@ -7488,6 +7492,90 @@ export interface DuplicateCreationTrendBucket {
   new_records: number;
   new_duplicates: number;
   duplicate_rate_pct: number; // 0-100, rounded to 1 decimal
+}
+
+/**
+ * AMOUNT-AT-RISK OPEN vs CLOSED breakdown (Sarah 2026-07-29). The Amount at
+ * risk = SUM of the Zoho `Amount` of every DUPLICATE (non-primary) deal in an
+ * ACTIVE cluster. This splits that total by deal STAGE: "closed" = terminal /
+ * customer states (Paid, Agreement Signed, Closed Won/Lost, Dropped, Cancelled,
+ * Transferred to CS, Client Activated) — a duplicate of an already-concluded
+ * deal, i.e. data debt but not open pipeline; "open" = everything still in the
+ * active sales pipeline (real inflation that could still book twice). Only
+ * ACTIVE, non-resolved clusters count — dismissed / resolved drop out, matching
+ * the headline figure. Read-only.
+ */
+export async function getInflationOpenClosedBreakdown(
+  segment?: DuplicateFilters["segment"],
+): Promise<{
+  total_sar: number;
+  open_sar: number;
+  closed_sar: number;
+  open_deals: number;
+  closed_deals: number;
+  by_stage: Array<{
+    stage: string;
+    bucket: "open" | "closed";
+    sar: number;
+    deals: number;
+  }>;
+}> {
+  const seg = buildSegmentPredicate(segment, 1);
+  const segCond = seg.condition ? ` AND ${seg.condition}` : "";
+  const stageExpr =
+    "LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage',''))";
+  const CLOSED_RE =
+    "(paid|agreement signed|closed|won|lost|drop|cancel|transferred to cs|client activated)";
+  const bucketExpr = `CASE WHEN ${stageExpr} ~ '${CLOSED_RE}' THEN 'closed' ELSE 'open' END`;
+  const rows = (
+    await pool.query(
+      `WITH resolved_act AS (
+         SELECT DISTINCT cluster_id FROM duplicate_merge_actions
+          WHERE action_type IN ('resolve','module_resolved')
+       )
+       SELECT COALESCE(NULLIF(${stageExpr}, ''), '(no stage)') AS stage,
+              ${bucketExpr} AS bucket,
+              COUNT(*)::int AS deals,
+              COALESCE(SUM(r.deal_value), 0)::float AS sar
+         FROM duplicate_records r
+         JOIN duplicate_clusters c ON c.id = r.cluster_id
+         LEFT JOIN resolved_act ra ON ra.cluster_id = c.id
+        WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
+          AND c.status = 'active' AND ra.cluster_id IS NULL${segCond}
+        GROUP BY 1, 2
+        ORDER BY sar DESC`,
+      seg.params,
+    )
+  ).rows as any[];
+  let open_sar = 0,
+    closed_sar = 0,
+    open_deals = 0,
+    closed_deals = 0;
+  const by_stage = rows.map((x) => {
+    const sar = Number(x.sar) || 0;
+    const deals = Number(x.deals) || 0;
+    if (x.bucket === "closed") {
+      closed_sar += sar;
+      closed_deals += deals;
+    } else {
+      open_sar += sar;
+      open_deals += deals;
+    }
+    return {
+      stage: String(x.stage),
+      bucket: x.bucket as "open" | "closed",
+      sar,
+      deals,
+    };
+  });
+  return {
+    total_sar: open_sar + closed_sar,
+    open_sar,
+    closed_sar,
+    open_deals,
+    closed_deals,
+    by_stage,
+  };
 }
 
 /**

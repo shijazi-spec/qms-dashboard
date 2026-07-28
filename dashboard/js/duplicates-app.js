@@ -1314,6 +1314,7 @@
             document.getElementById('highConfidence').textContent = _fn(data.highConfidence || 0);
             document.getElementById('mediumConfidence').textContent = _fn(data.mediumConfidence || 0);
             document.getElementById('pipelineInflation').textContent = formatCurrency(data.estimatedPipelineInflation || 0);
+            loadInflationBreakdown(); // open vs closed split under the card
 
             document.getElementById('leadRate').textContent = WalaPlusI18n.t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateLeadRate || data.kpis?.duplicateLeadRate || 0) });
             document.getElementById('dealRate').textContent = WalaPlusI18n.t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateDealRate || data.kpis?.duplicateDealRate || 0) });
@@ -7438,6 +7439,30 @@
             if (v >= 1e3) return 'SAR ' + (v / 1e3).toFixed(1) + 'K';
             return 'SAR ' + v.toLocaleString();
         }
+        // Amount-at-risk OPEN vs CLOSED split, rendered under the exec card.
+        // Respects the segment chip; active/non-resolved clusters only (matches
+        // the headline figure, so dismissing a cluster drops it here too).
+        async function loadInflationBreakdown() {
+            var el = document.getElementById('pipelineInflationBreakdown');
+            if (!el) return;
+            try {
+                var segEl = document.getElementById('filterSegment');
+                var seg = segEl ? segEl.value : '';
+                var url = '/api/duplicates/inflation-breakdown' + (seg && seg !== 'all' ? ('?segment=' + encodeURIComponent(seg)) : '');
+                var res = await fetch(url, { credentials: 'same-origin' });
+                var d = await res.json();
+                if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
+                var openPct = d.total_sar > 0 ? Math.round((d.open_sar / d.total_sar) * 100) : 0;
+                el.innerHTML =
+                    '<span style="color:#b45309;font-weight:600">Open ' + formatCurrency(d.open_sar || 0) + '</span>'
+                    + ' <span style="color:#9ca3af">(' + _fn(d.open_deals || 0) + ' deals · ' + openPct + '%)</span>'
+                    + '<br><span style="color:#6b7280;font-weight:600">Closed ' + formatCurrency(d.closed_sar || 0) + '</span>'
+                    + ' <span style="color:#9ca3af">(' + _fn(d.closed_deals || 0) + ' deals)</span>';
+            } catch (e) {
+                el.textContent = '';
+            }
+        }
+
         function _dcUpdateCards() {
             var deals = window._dcDeals || [];
             var results = window._dcResults || {};
