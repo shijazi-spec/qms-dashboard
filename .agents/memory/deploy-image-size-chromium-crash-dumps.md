@@ -28,8 +28,15 @@ dropped workspace 7.6 GB → 2.9 GB.
 
 **Prevention:** playwright.config.ts now passes
 `--disable-crash-reporter --disable-breakpad` to the chromium project's
-launchOptions so dumps can't accumulate again. If the limit is hit again,
-re-run the `du` sweep — other caches regrow.
+launchOptions. NOTE: this is NOT sufficient — dumps regrew to 826 MB in ~2
+weeks anyway (other chromium launches, e.g. screenshot/browser tooling, still
+write to the same profile). Periodically `rm -rf ".config/chromium/Crash
+Reports"` before publishing, and re-run the `du` sweep — other caches regrow.
+
+**Related:** deploy builds can also fail transiently at the "Installing
+dependencies" step — log stalls ~9 min then dies with no error line (or shows
+"connection lost"). That is platform-side; code is fine if a same-day build
+succeeded. Fix = just retry the publish (worked every time so far).
 
 **Why:** deployment image = workspace snapshot; anything on disk counts, even
 caches never referenced by code.
