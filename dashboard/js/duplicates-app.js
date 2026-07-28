@@ -11431,6 +11431,45 @@
             }));
         }
 
+        // Preferred display order + accent for the CS lifecycle phases. Keys
+        // are the lowercase phase names summary.by_phase is keyed by. Any phase
+        // Zoho returns that isn't listed here still renders (appended after the
+        // known ones, alphabetically) so a new picklist value can't silently
+        // vanish from the census.
+        const CS_PHASE_CENSUS_ORDER = [
+            { key: 'new deal',    label: 'New deal',    accent: 'rr-acc-blue'   },
+            { key: 'onboarding',  label: 'Onboarding',  accent: 'rr-acc-indigo' },
+            { key: 'adoption',    label: 'Adoption',    accent: 'rr-acc-green'  },
+            { key: 'renewal',     label: 'Renewal',     accent: 'rr-acc-purple' },
+            { key: 'termination', label: 'Termination', accent: 'rr-acc-red'    },
+        ];
+
+        // Render the "CS deals by phase" census strip from summary.by_phase.
+        // Display-only counts — the accurate whole-population view of every
+        // deal carrying Customer Success section data, regardless of whether
+        // it has any violations (Sarah 2026-07-28).
+        function renderCsLifecyclePhaseCensus(byPhase, totalCsDeals) {
+            const host = document.getElementById('csLifePhaseCensus');
+            if (!host) return;
+            byPhase = byPhase || {};
+            const known = new Set(CS_PHASE_CENSUS_ORDER.map(p => p.key));
+            // Extra phases present in the data but not in the preferred order.
+            const extras = Object.keys(byPhase)
+                .filter(k => !known.has(k) && (byPhase[k] || 0) > 0)
+                .sort()
+                .map(k => ({ key: k, label: k.replace(/\b\w/g, c => c.toUpperCase()), accent: 'rr-acc-teal' }));
+            // Class-only styling — the page CSP strips inline style="" attributes
+            // (nonce-based style-src), so sizing must come from classes. Reuse the
+            // rr-kpi cards + the same grid as the summary tiles above.
+            host.innerHTML = CS_PHASE_CENSUS_ORDER.concat(extras).map(p => {
+                const n = byPhase[p.key] || 0;
+                return '<div class="rr-kpi rr-kpi-rich ' + p.accent + '">'
+                    +   '<div class="rr-kpi-label">' + escapeHtml(p.label) + '</div>'
+                    +   '<div class="rr-kpi-value">' + n + '</div>'
+                    + '</div>';
+            }).join('');
+        }
+
         function renderCsLifecycle(data) {
             window._csLifecycleData = data;
             const s = (data.summary && data.summary.by_severity) || {};
@@ -11439,6 +11478,15 @@
             document.getElementById('csLifeSumInfo').textContent     = s.info     || 0;
             document.getElementById('csLifeSumDeals').textContent    = (data.summary && data.summary.total_cs_deals) || 0;
             document.getElementById('csLifeSumTotal').textContent    = (data.summary && data.summary.total_violations) || 0;
+
+            // Phase census — the accurate "whole data" count of every CS-section
+            // deal by phase (summary.by_phase), rendered as a strip above the
+            // violations table so the CS team reads the population first, then
+            // the violations layer. Independent of the severity/phase filters.
+            renderCsLifecyclePhaseCensus(
+                (data.summary && data.summary.by_phase) || {},
+                (data.summary && data.summary.total_cs_deals) || 0,
+            );
 
             updateCsLifecycleSortIndicators();
 

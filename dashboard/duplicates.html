@@ -1820,6 +1820,18 @@
                 </div>
             </div>
 
+            <!--
+                Phase census (Sarah 2026-07-28) — the accurate count of EVERY
+                deal that carries Customer Success section data, bucketed by
+                its current CS Phase, independent of violations. This is the
+                "whole data" view the CS team reads first (Adoption / Renewal /
+                Onboarding / New deal / Termination); the table below is the
+                violations layer on top of it. Populated in renderCsLifecycle()
+                from summary.by_phase, so it always matches the CRM's CS section.
+            -->
+            <div class="rr-kpi-label mb-1 text-gray-500">CS deals by phase</div>
+            <div id="csLifePhaseCensus" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" aria-label="CS deals by lifecycle phase"></div>
+
             <!-- Filters -->
             <div class="flex flex-wrap items-center gap-2 mb-3">
                 <div class="flex items-center gap-1">
@@ -2344,7 +2356,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=136"></script>
+    <script src="/js/duplicates-app.js?v=137"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

@@ -11066,14 +11066,21 @@ export async function scanCsLifecycleViolations(opts: {
   params.push(limit);
   const limitPh = "$" + params.length;
 
+  // A deal IS a CS deal when it carries data in the CRM's Customer Success
+  // section — that's the ONLY gate (evaluateCsLifecycle returns is_cs_deal=true
+  // iff the CS "Phase" field is set). So the census must fetch EVERY WalaPlus
+  // Deal and let that gate decide (Sarah 2026-07-28). Previously the fetch
+  // pre-filtered `cleanup_class IS NULL` (empty/junk) and active-cluster only,
+  // which silently DROPPED real CS clients — especially domain-less ones that
+  // trip the empty/junk classifier — so Adoption/Renewal/Onboarding undercounted
+  // (140/126/10 instead of the true 179/171/13). Junk/test deals don't carry a
+  // real CS Phase, so they still fall out at the is_cs_deal gate — the count
+  // stays clean without narrowing by dedup/cleanup state.
   const dealRows = await pool.query(
     `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,
             r.domain, r.modified_date, r.raw_data, r.gov_type
        FROM duplicate_records r
-       LEFT JOIN duplicate_clusters dc ON dc.id = r.cluster_id
-      WHERE r.zoho_module = 'Deals'
-        AND r.cleanup_class IS NULL
-        AND (dc.status IS NULL OR dc.status = 'active')${segmentCond}
+      WHERE r.zoho_module = 'Deals'${segmentCond}
       ORDER BY r.modified_date DESC NULLS LAST
       LIMIT ${limitPh}`,
     params,
