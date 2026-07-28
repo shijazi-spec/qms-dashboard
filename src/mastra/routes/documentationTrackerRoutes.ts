@@ -80,6 +80,18 @@ const TRACKER_READ_ROLES = [
 ];
 
 /**
+ * Who may WRITE. Attaching an approved file, settling a review state, and
+ * adding a document to the controlled register are all judgement acts, so
+ * `executive` (read-only oversight) is deliberately excluded.
+ */
+const TRACKER_WRITE_ROLES = [
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+];
+
+/**
  * Session gate for the browser-facing endpoints. These are NEVER in
  * PUBLIC_PATHS — only the three collector routes above are, and they carry a
  * key instead of a session.
@@ -347,6 +359,172 @@ export const documentationTrackerRoutes = [
         } catch (err) {
           safeLogger.error("❌ [DocTracker] snapshots failed:", err);
           return c.json({ error: "Failed to load snapshots" }, 500);
+        }
+      };
+    },
+  },
+  // ── Write surface (governance roles only) ─────────────────────────────
+  {
+    // Attach the approved file, replacing the draft in place. This is what
+    // clears the placeholder state: real text is extracted, coverage and
+    // "Suggest Documents" stop operating on the register's own blurb, and
+    // policy_versions records the draft→approved change automatically.
+    path: "/api/documentation-tracker/documents/:code/attach",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_WRITE_ROLES);
+        if (g.error) return g.error;
+        try {
+          const rawLen = c.req.header("Content-Length");
+          if (rawLen && parseInt(rawLen, 10) > 26 * 1024 * 1024) {
+            return c.json({ error: "Request body too large (max 25 MB)" }, 413);
+          }
+          const form = await c.req.formData();
+          const file = form.get("file");
+          if (!file || !(file instanceof File)) {
+            return c.json({ error: "No file provided" }, 400);
+          }
+          const { attachApprovedFile } = await import(
+            "../../utils/docTrackerAttach"
+          );
+          const result = await attachApprovedFile({
+            registerCode: String(c.req.param("code") || ""),
+            buffer: Buffer.from(await file.arrayBuffer()),
+            originalName: file.name,
+            mimeType: file.type,
+            uploadedBy: g.user?.email || "tracker",
+          });
+          if (result.status === "error") {
+            return c.json({ error: result.reason || "Attach failed" }, 400);
+          }
+          if (result.status === "orphan") {
+            return c.json(
+              {
+                error:
+                  "This document is not on the master list — promote it to the register first",
+                status: "orphan",
+              },
+              409,
+            );
+          }
+          return c.json({ success: true, ...result });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] attach failed:", err);
+          return c.json({ error: "Attach failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/documentation-tracker/documents/:code/review",
+    method: "PATCH" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_WRITE_ROLES);
+        if (g.error) return g.error;
+        try {
+          const body = await c.req.json().catch(() => ({}));
+          const { setReviewState } = await import("../../utils/docTrackerAttach");
+          const res = await setReviewState({
+            registerCode: String(c.req.param("code") || ""),
+            reviewState: body.reviewState ?? body.review_state,
+            assigneeEmail: body.assigneeEmail ?? body.assignee_email ?? null,
+            note: body.note ?? null,
+            reviewedBy: g.user?.email || "tracker",
+          });
+          if (!res.ok) {
+            return c.json(
+              { error: res.reason },
+              res.reason === "not_found" ? 404 : 400,
+            );
+          }
+          return c.json({ success: true, document: res.row });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] review update failed:", err);
+          return c.json({ error: "Review update failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/documentation-tracker/documents/:code/promote",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_WRITE_ROLES);
+        if (g.error) return g.error;
+        try {
+          const { promoteOrphan } = await import("../../utils/docTrackerAttach");
+          const res = await promoteOrphan(
+            String(c.req.param("code") || ""),
+            g.user?.email || "tracker",
+          );
+          const code =
+            res.status === "not_found" ? 404 : res.status === "failed" ? 500 : 200;
+          return c.json({ success: res.status !== "failed", ...res }, code);
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] promote failed:", err);
+          return c.json({ error: "Promote failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Bulk promote exists because the seeded register has no "-AR" variants, so
+    // roughly 150 Arabic files land as orphans on the first snapshot. Without
+    // this the panel is unusable and someone "temporarily" makes ingest
+    // auto-create register rows — which would end human control of the master
+    // list. One summary audit event, not 200.
+    path: "/api/documentation-tracker/promote-bulk",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_WRITE_ROLES);
+        if (g.error) return g.error;
+        try {
+          const body = await c.req.json().catch(() => ({}));
+          const codes = Array.isArray(body.registerCodes) ? body.registerCodes : null;
+          if (!codes || codes.length === 0) {
+            return c.json({ error: "registerCodes[] is required" }, 400);
+          }
+          const { promoteOrphansBulk, MAX_BULK_PROMOTE } = await import(
+            "../../utils/docTrackerAttach"
+          );
+          if (codes.length > MAX_BULK_PROMOTE) {
+            return c.json(
+              { error: `Too many codes (max ${MAX_BULK_PROMOTE})` },
+              413,
+            );
+          }
+          const res = await promoteOrphansBulk(
+            codes.map((x: any) => String(x)),
+            g.user?.email || "tracker",
+          );
+          return c.json({ success: true, ...res });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] bulk promote failed:", err);
+          return c.json({ error: "Bulk promote failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/documentation-tracker/documents/:code/project",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_WRITE_ROLES);
+        if (g.error) return g.error;
+        try {
+          const { projectDocument } = await import("../../utils/docTrackerAttach");
+          return c.json({
+            success: true,
+            ...(await projectDocument(String(c.req.param("code") || ""))),
+          });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] project failed:", err);
+          return c.json({ error: "Projection failed" }, 500);
         }
       };
     },
