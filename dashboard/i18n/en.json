@@ -3617,6 +3617,12 @@
     "promote_all_confirm": "Add {n} document(s) to the controlled register?",
     "promote_failed": "Promote failed",
     "review_failed": "Could not save the review state — the change was reverted.",
-    "none": "Nothing here."
+    "none": "Nothing here.",
+    "export": "Export (CSV)",
+    "dangling_title": "Broken cross-references",
+    "dangling_hint": "A controlled document points at another document that is not in the library — the reader is told to follow a procedure that does not exist.",
+    "depended_title": "Most depended upon",
+    "depended_hint": "How many other documents reference each one. Check this before revising a document — it is what tells you the blast radius of a change.",
+    "not_in_library": "not in library"
   }
 }

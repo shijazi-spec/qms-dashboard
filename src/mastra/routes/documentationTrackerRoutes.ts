@@ -343,6 +343,102 @@ export const documentationTrackerRoutes = [
     },
   },
   {
+    // Cross-references pointing at documents that are not in the library, plus
+    // the most-depended-upon documents. A dangling reference means a controlled
+    // document tells the reader to follow a procedure that does not exist.
+    path: "/api/documentation-tracker/refs/dangling",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_READ_ROLES);
+        if (g.error) return g.error;
+        try {
+          const { getDanglingRefs, getMostReferenced } = await import(
+            "../../utils/docTrackerRead"
+          );
+          const [dangling, mostReferenced] = await Promise.all([
+            getDanglingRefs(),
+            getMostReferenced(20),
+          ]);
+          return c.json({ success: true, dangling, mostReferenced });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] dangling refs failed:", err);
+          return c.json({ error: "Failed to load references" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Flat export of the board — the collector's disk facts joined to the
+    // platform's review judgement, so the tracker can be handed to an auditor
+    // as evidence rather than screenshotted.
+    path: "/api/documentation-tracker/export.csv",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_READ_ROLES);
+        if (g.error) return g.error;
+        try {
+          const { exportRows } = await import("../../utils/docTrackerRead");
+          const rows = await exportRows();
+          const esc = (v: any) => {
+            const s = v == null ? "" : String(v);
+            return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+          };
+          const header =
+            "Register Code,Base Code,Lang,Type,Title,File,Folder,Size KB,Modified,Content Hash,Code OK,Issues,Refs,Dangling Refs,Register Link,Register Status,Version,Review State,Stale Since Review,Assignee,Reviewed By,Reviewed At,Note,Deleted\n";
+          const body = rows
+            .map((r: any) =>
+              [
+                r.register_code,
+                r.base_code,
+                r.lang,
+                r.doc_family,
+                r.title,
+                r.file_name,
+                r.folder,
+                r.size_kb,
+                r.modified_at ? new Date(r.modified_at).toISOString() : "",
+                r.content_hash,
+                r.code_ok ? "yes" : "no",
+                Array.isArray(r.issues) ? r.issues.join("; ") : "",
+                r.ref_count,
+                r.dangling_count,
+                r.link_status,
+                r.register_status || "",
+                r.register_version || "",
+                r.review_state,
+                r.stale_since_review ? "yes" : "no",
+                r.assignee_email || "",
+                r.reviewed_by || "",
+                r.reviewed_at ? new Date(r.reviewed_at).toISOString() : "",
+                (r.note || "").slice(0, 500),
+                r.deleted ? "yes" : "no",
+              ]
+                .map(esc)
+                .join(","),
+            )
+            .join("\n");
+          // Leading BOM so Excel opens UTF-8 correctly — this library is
+          // bilingual and Arabic titles would otherwise render as mojibake.
+          const csv = "﻿" + header + body + (body ? "\n" : "");
+          return new Response(csv, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition":
+                'attachment; filename="documentation-tracker.csv"',
+              "Cache-Control": "private, max-age=0, no-cache",
+            },
+          });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] export.csv failed:", err);
+          return c.json({ error: "Export failed" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/documentation-tracker/snapshots",
     method: "GET" as const,
     createHandler: async () => {

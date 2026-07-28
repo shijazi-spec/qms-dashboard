@@ -390,6 +390,80 @@ export async function getRefGraph(): Promise<{ nodes: any[]; edges: any[] }> {
   return { nodes: nodes.rows, edges: edges.rows };
 }
 
+/**
+ * Cross-references that point at a document not present in the library.
+ *
+ * A dangling reference means a controlled document instructs the reader to
+ * follow a procedure that does not exist — an audit finding in its own right,
+ * and one nothing in the platform could surface before, because document→
+ * document references were never stored.
+ */
+export async function getDanglingRefs(): Promise<any[]> {
+  await initDocTrackerTables();
+  const r = await pool.query(
+    `SELECT r.from_code, r.to_code,
+            d.title      AS from_title,
+            d.doc_family AS from_family,
+            d.lang       AS from_lang
+       FROM doc_tracker_refs r
+       LEFT JOIN doc_tracker_documents d ON d.register_code = r.from_code
+      WHERE r.resolved = FALSE
+   ORDER BY r.from_code, r.to_code`,
+  );
+  return r.rows;
+}
+
+/**
+ * Documents most depended upon — the inverted reference graph.
+ *
+ * Answers "what breaks if I change this?", which is the question that makes a
+ * proposed revision reviewable rather than a guess.
+ */
+export async function getMostReferenced(limit = 20): Promise<any[]> {
+  await initDocTrackerTables();
+  const r = await pool.query(
+    `SELECT r.to_code,
+            COUNT(*)::int AS inbound,
+            d.title AS title,
+            (d.register_code IS NOT NULL) AS in_library
+       FROM doc_tracker_refs r
+       LEFT JOIN doc_tracker_documents d
+              ON d.register_code = r.to_code AND d.deleted = FALSE
+   GROUP BY r.to_code, d.title, d.register_code
+   ORDER BY inbound DESC, r.to_code
+      LIMIT $1`,
+    [Math.min(100, Math.max(1, limit))],
+  );
+  return r.rows;
+}
+
+/**
+ * Flat export of the whole board. One row per tracked document, joining the
+ * collector's disk facts to the platform's review judgement, so the tracker can
+ * be handed to an auditor as evidence without screenshots.
+ */
+export async function exportRows(): Promise<any[]> {
+  await initDocTrackerTables();
+  const r = await pool.query(
+    `SELECT d.register_code, d.base_code, d.lang, d.doc_family, d.title,
+            d.file_name, d.folder, d.size_kb, d.modified_at, d.content_hash,
+            d.code_ok, d.issues, d.ref_count, d.dangling_count,
+            d.review_state, d.assignee_email, d.note, d.reviewed_at, d.reviewed_by,
+            d.deleted, d.updated_at,
+            p.policy_number AS register_code_matched,
+            p.status  AS register_status,
+            p.version AS register_version,
+            ${LINK_STATUS_SQL} AS link_status,
+            ${staleSql(1)} AS stale_since_review
+       FROM doc_tracker_documents d
+       LEFT JOIN qms_uploaded_documents q ON q.source_policy_id = d.policy_id
+       LEFT JOIN policies p ON p.id = d.policy_id
+   ORDER BY d.register_code`,
+    [TERMINAL_REVIEW_STATES],
+  );
+  return r.rows;
+}
+
 /** Ingest history — the audit trail of what the collector pushed and when. */
 export async function listSnapshots(limit = 50): Promise<any[]> {
   await initDocTrackerTables();

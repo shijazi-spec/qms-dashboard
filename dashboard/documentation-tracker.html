@@ -106,6 +106,7 @@
                     <span id="dtrackConnLabel" data-i18n="doctracker.conn_connecting">Connecting…</span>
                     <span id="dtrackAgo" class="font-mono"></span>
                 </span>
+                <a href="/api/documentation-tracker/export.csv" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium text-sm" data-testid="link-tracker-export" data-i18n="doctracker.export">Export (CSV)</a>
                 <button type="button" data-on-click="dtrackReload" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium text-sm" data-testid="button-tracker-refresh" data-i18n="common.refresh">Refresh</button>
             </div>
         </div>
@@ -212,6 +213,30 @@
                 </div>
             </details>
         </div>
+
+        <!-- Cross-reference findings -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <details class="bg-white rounded-lg shadow">
+                <summary class="px-4 py-3 cursor-pointer flex items-center justify-between gap-2">
+                    <span class="text-sm font-semibold text-gray-900" data-i18n="doctracker.dangling_title">Broken cross-references</span>
+                    <span id="dtrackDanglingCount" class="dtrack-pill dtrack-stale">0</span>
+                </summary>
+                <div class="px-4 pb-4">
+                    <p class="text-xs text-gray-500 mb-2" data-i18n="doctracker.dangling_hint">A controlled document points at another document that is not in the library — the reader is told to follow a procedure that does not exist.</p>
+                    <div id="dtrackDangling" class="text-xs"></div>
+                </div>
+            </details>
+            <details class="bg-white rounded-lg shadow">
+                <summary class="px-4 py-3 cursor-pointer flex items-center justify-between gap-2">
+                    <span class="text-sm font-semibold text-gray-900" data-i18n="doctracker.depended_title">Most depended upon</span>
+                    <span id="dtrackDependedCount" class="dtrack-pill dtrack-linked">0</span>
+                </summary>
+                <div class="px-4 pb-4">
+                    <p class="text-xs text-gray-500 mb-2" data-i18n="doctracker.depended_hint">How many other documents reference each one. Check this before revising a document — it is what tells you the blast radius of a change.</p>
+                    <div id="dtrackDepended" class="text-xs"></div>
+                </div>
+            </details>
+        </div>
     </main>
 
     <script>
@@ -225,6 +250,8 @@
             rows: [],
             overview: null,
             orphans: { missingFromMaster: [], missingFromDisk: [] },
+            dangling: [],
+            depended: [],
             es: null,
             pollTimer: null,
             agoTimer: null,
@@ -244,7 +271,57 @@
 
         // ── Load ────────────────────────────────────────────────────────
         async function dtrackReload() {
-            await Promise.all([dtrackLoadOverview(), dtrackLoadDocuments(), dtrackLoadOrphans()]);
+            await Promise.all([dtrackLoadOverview(), dtrackLoadDocuments(), dtrackLoadOrphans(), dtrackLoadRefs()]);
+        }
+
+        async function dtrackLoadRefs() {
+            try {
+                var r = await fetch('/api/documentation-tracker/refs/dangling', { credentials: 'same-origin' });
+                if (!r.ok) return;
+                var d = await r.json();
+                DTRACK.dangling = d.dangling || [];
+                DTRACK.depended = d.mostReferenced || [];
+                dtrackRenderRefs();
+            } catch (e) { /* non-fatal */ }
+        }
+
+        function dtrackRenderRefs() {
+            var dHost = document.getElementById('dtrackDangling');
+            var pHost = document.getElementById('dtrackDepended');
+            var dc = document.getElementById('dtrackDanglingCount');
+            var pc = document.getElementById('dtrackDependedCount');
+            var dangling = DTRACK.dangling || [];
+            var depended = DTRACK.depended || [];
+            if (dc) dc.textContent = String(dangling.length);
+            if (pc) pc.textContent = String(depended.length);
+
+            if (dHost) {
+                dHost.innerHTML = dangling.length === 0
+                    ? '<div class="text-gray-500 py-2">' + dtrackEsc(dtrackT('doctracker.none', 'Nothing here.')) + '</div>'
+                    : dangling.slice(0, 200).map(function (x) {
+                        return '<div class="flex items-center justify-between gap-2 py-1 border-b border-gray-100">'
+                            + '<span class="font-mono">' + dtrackEsc(x.from_code) + '</span>'
+                            + '<span class="text-gray-400">→</span>'
+                            + '<span class="font-mono text-red-700">' + dtrackEsc(x.to_code) + '</span>'
+                            + '<span class="text-gray-500 truncate flex-1" dir="auto">' + dtrackEsc(x.from_title || '') + '</span>'
+                            + '</div>';
+                    }).join('');
+            }
+            if (pHost) {
+                pHost.innerHTML = depended.length === 0
+                    ? '<div class="text-gray-500 py-2">' + dtrackEsc(dtrackT('doctracker.none', 'Nothing here.')) + '</div>'
+                    : depended.map(function (x) {
+                        // A heavily-referenced document that is NOT in the
+                        // library is the worst case: everything depends on
+                        // something that does not exist.
+                        var miss = x.in_library ? '' : ' <span class="dtrack-pill dtrack-stale">' + dtrackEsc(dtrackT('doctracker.not_in_library', 'not in library')) + '</span>';
+                        return '<div class="flex items-center justify-between gap-2 py-1 border-b border-gray-100">'
+                            + '<span class="font-mono">' + dtrackEsc(x.to_code) + '</span>' + miss
+                            + '<span class="text-gray-500 truncate flex-1" dir="auto">' + dtrackEsc(x.title || '') + '</span>'
+                            + '<span class="tabular-nums font-semibold">' + (x.inbound || 0) + '</span>'
+                            + '</div>';
+                    }).join('');
+            }
         }
 
         async function dtrackLoadOverview() {
