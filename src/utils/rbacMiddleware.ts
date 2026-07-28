@@ -725,6 +725,26 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
 
+  // ---- Documentation Live Tracker -------------------------------------
+  // The three COLLECTOR paths (/ingest, /heartbeat, /collector-config) are in
+  // PUBLIC_PATHS and self-authenticate with X-Tracker-Key, so they never reach
+  // this map. Everything else is the browser-facing board and must be
+  // session-gated here — unmatched /api/* is denied by default, so omitting
+  // these rules would 403 the whole page.
+  //
+  // Writes (review state, promote) are governance-only: assigning a reviewer or
+  // adding a document to the controlled register is a judgement act.
+  {
+    pattern: /^\/api\/documentation-tracker\//,
+    methods: ["POST", "PUT", "PATCH", "DELETE"],
+    roles: ["admin", "grc_manager", "quality_manager", "head_of_operations_quality"],
+  },
+  {
+    pattern: /^\/api\/documentation-tracker\//,
+    methods: ["GET"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
+  },
+
   {
     pattern: /^\/api\/vendors/,
     methods: ["POST", "PUT", "DELETE"],

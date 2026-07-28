@@ -70,6 +70,34 @@ function authoriseCollector(c: any): { ok: true } | { ok: false; res: any } {
   return { ok: true };
 }
 
+/** Who may READ the tracker board. Mirrors the compliance read set. */
+const TRACKER_READ_ROLES = [
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+  "executive",
+];
+
+/**
+ * Session gate for the browser-facing endpoints. These are NEVER in
+ * PUBLIC_PATHS — only the three collector routes above are, and they carry a
+ * key instead of a session.
+ */
+async function gateSession(c: any, allowed: string[]) {
+  const { requireRole, getSessionUser, unauthorizedResponse, forbiddenResponse } =
+    await import("../../utils/rbacMiddleware");
+  const user = await requireRole(c, allowed as any);
+  if (!user) {
+    if (!getSessionUser(c)) return { error: unauthorizedResponse(c), user: null };
+    return {
+      error: forbiddenResponse(c, "Permission denied for the Documentation Tracker"),
+      user: null,
+    };
+  }
+  return { error: null, user };
+}
+
 export const documentationTrackerRoutes = [
   {
     path: "/api/documentation-tracker/ingest",
@@ -181,6 +209,168 @@ export const documentationTrackerRoutes = [
             "Security Controls",
           ],
         });
+      };
+    },
+  },
+
+  // ── Session-authenticated read surface ────────────────────────────────
+  // Browser-facing. Never in PUBLIC_PATHS, and each needs a
+  // ROUTE_PERMISSION_MAP rule because unmatched /api/* is denied by default.
+  {
+    // The polling floor. The page refreshes this every 60s and treats SSE
+    // purely as an accelerator, because the SSE client registry is per-instance
+    // and a browser on one instance never sees a broadcast from another.
+    path: "/api/documentation-tracker/overview",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_READ_ROLES);
+        if (g.error) return g.error;
+        try {
+          const { getOverview } = await import("../../utils/docTrackerRead");
+          return c.json({ success: true, ...(await getOverview()) });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] overview failed:", err);
+          return c.json({ error: "Failed to load overview" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/documentation-tracker/documents",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_READ_ROLES);
+        if (g.error) return g.error;
+        try {
+          const u = new URL(c.req.url).searchParams;
+          const { listDocuments } = await import("../../utils/docTrackerRead");
+          const data = await listDocuments({
+            state: u.get("state") || undefined,
+            family: u.get("family") || undefined,
+            lang: u.get("lang") || undefined,
+            linkStatus: u.get("link_status") || undefined,
+            stale: u.get("stale") === "true",
+            q: u.get("q") || undefined,
+            includeDeleted: u.get("include_deleted") === "true",
+            page: parseInt(u.get("page") || "0", 10) || 0,
+            pageSize: parseInt(u.get("page_size") || "100", 10) || 100,
+          });
+          return c.json({ success: true, ...data });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] documents failed:", err);
+          return c.json({ error: "Failed to load documents" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/documentation-tracker/coverage",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_READ_ROLES);
+        if (g.error) return g.error;
+        try {
+          const raw = new URL(c.req.url).searchParams.get("regulation_id") || "";
+          let regulationId: number | undefined;
+          if (raw) {
+            const n = parseInt(raw, 10);
+            if (Number.isFinite(n) && String(n) === raw) regulationId = n;
+            else {
+              const { sharedPool } = await import("../../utils/sharedPool");
+              const rr = await sharedPool.query(
+                `SELECT id FROM regulations WHERE public_id = $1 LIMIT 1`,
+                [raw],
+              );
+              regulationId = rr.rows[0]?.id;
+            }
+          }
+          const { getCoverage } = await import("../../utils/docTrackerRead");
+          return c.json({ success: true, coverage: await getCoverage(regulationId) });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] coverage failed:", err);
+          return c.json({ error: "Failed to load coverage" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/documentation-tracker/orphans",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_READ_ROLES);
+        if (g.error) return g.error;
+        try {
+          const { getOrphans } = await import("../../utils/docTrackerRead");
+          return c.json({ success: true, ...(await getOrphans()) });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] orphans failed:", err);
+          return c.json({ error: "Failed to load orphans" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/documentation-tracker/refs/graph",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_READ_ROLES);
+        if (g.error) return g.error;
+        try {
+          const { getRefGraph } = await import("../../utils/docTrackerRead");
+          return c.json({ success: true, ...(await getRefGraph()) });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] ref graph failed:", err);
+          return c.json({ error: "Failed to load reference graph" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/documentation-tracker/snapshots",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_READ_ROLES);
+        if (g.error) return g.error;
+        try {
+          const limit = parseInt(
+            new URL(c.req.url).searchParams.get("limit") || "50",
+            10,
+          );
+          const { listSnapshots } = await import("../../utils/docTrackerRead");
+          return c.json({ success: true, snapshots: await listSnapshots(limit) });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] snapshots failed:", err);
+          return c.json({ error: "Failed to load snapshots" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Declared LAST so the literal sibling paths above (/overview, /coverage,
+    // /orphans, /snapshots) are matched before this parameterised one.
+    path: "/api/documentation-tracker/documents/:code",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const g = await gateSession(c, TRACKER_READ_ROLES);
+        if (g.error) return g.error;
+        try {
+          const { getDocumentDetail } = await import("../../utils/docTrackerRead");
+          const doc = await getDocumentDetail(
+            String(c.req.param("code") || "").toUpperCase(),
+          );
+          if (!doc) return c.json({ error: "Document not found" }, 404);
+          return c.json({ success: true, document: doc });
+        } catch (err) {
+          safeLogger.error("❌ [DocTracker] document detail failed:", err);
+          return c.json({ error: "Failed to load document" }, 500);
+        }
       };
     },
   },
