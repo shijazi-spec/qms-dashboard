@@ -10768,6 +10768,9 @@ export interface CsLifecycleViolationRow {
   customer_since: string | null;
   renewal_date: string | null;
   churn_date: string | null;
+  // Last Contact Date — CS section's last-touch date (Sarah 2026-07-28),
+  // surfaced as its own column so CS can spot silent accounts.
+  last_contact_date: string | null;
   health: string | null;
   // ExtID (Admin) — Zoho custom field surfaced in the CS Lifecycle tab
   // (operator request 2026-05-30). Replaces the Health column in the
@@ -11159,6 +11162,7 @@ export async function scanCsLifecycleViolations(opts: {
         customer_since: fmtDate(detail.customer_since),
         renewal_date: fmtDate(detail.renewal_date),
         churn_date: fmtDate(detail.churn_date),
+        last_contact_date: fmtDate(detail.last_contact_date),
         health: detail.health ?? null,
         ext_id: detail.ext_id ?? null,
         layout: dealLayout,

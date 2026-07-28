@@ -1888,13 +1888,14 @@
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;phase&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="phase">Phase <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" class="whitespace-nowrap">CS Owner</th>
                             <th scope="col" title="Three CS lifecycle dates stacked: Since (Customer Since) / Renew (Renewal Date) / Churn (Churn Date).">Lifecycle Dates</th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;lastcontact&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="lastcontact" title="Last Contact Date — when the CS team last touched this customer (from the Customer Success section). Set the Zoho API name via the DUPLICATE_RADAR_FIELD_LAST_CONTACT env var if your tenant uses a non-default field name.">Last Contact <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" class="whitespace-nowrap" title="ExtID (Admin) — Zoho custom field. Set the API name via the DUPLICATE_RADAR_FIELD_EXT_ID env var if your tenant uses a non-default field name.">ExtID</th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;days&quot;]" class="rr-num cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="days" title="Days since the deal was last modified in Zoho.">Idle (d) <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="violation" title="Violation pills (top) and the human-readable explanation message (below). Click to sort by worst violation code.">Violation / Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody id="csLifecycleTable">
-                        <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
+                        <tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -2356,7 +2357,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=137"></script>
+    <script src="/js/duplicates-app.js?v=138"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

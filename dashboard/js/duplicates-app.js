@@ -7001,7 +7001,7 @@
             // Health from the audit-trail export would break downstream
             // reporting. New "ExtID (Admin)" column slotted in next to
             // Health so the file stays self-describing.
-            const headers = ['Severity', 'Account', 'Domain', 'Phase', 'CS Owner', 'Customer Since', 'Renewal Date', 'Churn Date', 'Health', 'ExtID (Admin)', 'Days Since Modified', 'Violations', 'Messages'];
+            const headers = ['Severity', 'Account', 'Domain', 'Phase', 'CS Owner', 'Customer Since', 'Renewal Date', 'Churn Date', 'Last Contact Date', 'Health', 'ExtID (Admin)', 'Days Since Modified', 'Violations', 'Messages'];
             const rows = sorted.map(g => [
                 g.worst_severity || '',
                 g.account_name || '',
@@ -7011,6 +7011,7 @@
                 g.customer_since || '',
                 g.renewal_date || '',
                 g.churn_date || '',
+                g.last_contact_date || '',
                 (g.health == null || g.health === '') ? '' : g.health,
                 (g.ext_id == null || g.ext_id === '') ? '' : g.ext_id,
                 g.days_since_modified == null ? '' : g.days_since_modified,
@@ -11173,6 +11174,7 @@
                         customer_since: v.customer_since,
                         renewal_date: v.renewal_date,
                         churn_date: v.churn_date,
+                        last_contact_date: v.last_contact_date,
                         health: v.health,
                         ext_id: v.ext_id,
                         // 2026-06-08 — propagate layout / stage / pipeline so
@@ -11208,6 +11210,7 @@
                 case 'account':   return (g.account_name || '').toLowerCase();
                 case 'domain':    return (g.domain || '').toLowerCase();
                 case 'phase':     return (g.current_phase || '').toLowerCase();
+                case 'lastcontact': return g.last_contact_date || ''; // ISO YYYY-MM-DD sorts lexically
                 case 'days':      return g.days_since_modified == null ? -1 : Number(g.days_since_modified);
                 case 'violation': return csLifeViolationLabel(worst.code).toLowerCase();
                 case 'message':   return (worst.message || '').toLowerCase();
@@ -11493,7 +11496,7 @@
             const body = document.getElementById('csLifecycleTable');
             const allViolations = data.violations || [];
             if (allViolations.length === 0) {
-                body.innerHTML = rrEmptyRow(8, { glyph: '✓', title: 'No violations detected', desc: 'CS is compliant for the current filter.' });
+                body.innerHTML = rrEmptyRow(9, { glyph: '✓', title: 'No violations detected', desc: 'CS is compliant for the current filter.' });
                 _refreshCsLifecyclePhaseOptions([]);
                 _refreshCsLifecycleOwnerOptions(); // roster is independent of the rows
                 // Reset the pager — otherwise the stale "Page 5 of 6 · N deals"
@@ -11521,7 +11524,7 @@
             const sorted = sortCsLifecycleRows(filtered, window._csLifecycleSort.key, window._csLifecycleSort.dir);
 
             if (sorted.length === 0) {
-                body.innerHTML = rrEmptyRow(8, { glyph: '🔍', title: 'No CS deals match the active filters', desc: 'Adjust the phase chip or click <em>Clear All Filters</em> in the Advanced Filters panel.' });
+                body.innerHTML = rrEmptyRow(9, { glyph: '🔍', title: 'No CS deals match the active filters', desc: 'Adjust the phase chip or click <em>Clear All Filters</em> in the Advanced Filters panel.' });
                 window._csLifecyclePage = 0;
                 renderPagination('csLifecyclePagination', 0, 1, () => {}, 0, 'deals');
                 return;
@@ -11586,6 +11589,7 @@
                     + '<td class="rr-muted" style="white-space:nowrap">' + escapeHtml(g.current_phase || '—') + '</td>'
                     + '<td class="rr-muted">' + escapeHtml(g.cs_owner_name || '—') + '</td>'
                     + '<td>' + datesCell + '</td>'
+                    + '<td class="rr-muted whitespace-nowrap">' + fmtDate(g.last_contact_date) + '</td>'
                     + '<td class="rr-mono" style="white-space:nowrap">' + escapeHtml(g.ext_id == null || g.ext_id === '' ? '—' : String(g.ext_id)) + '</td>'
                     + '<td class="rr-num rr-muted" style="white-space:nowrap">' + (g.days_since_modified == null ? '—' : g.days_since_modified) + '</td>'
                     + '<td>' + violationCell + '</td>'

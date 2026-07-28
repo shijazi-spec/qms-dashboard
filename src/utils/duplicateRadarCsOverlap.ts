@@ -294,6 +294,9 @@ export function extractCsFieldsFromRawData(
   renewal_date?: string | Date | null;
   cs_owner_name?: string | null;
   health?: string | null;
+  // Last Contact Date — when the CS team last spoke to / touched the customer.
+  // Surfaced in the CS Lifecycle tab so CS can spot silent accounts at a glance.
+  last_contact_date?: string | Date | null;
   // ExtID (Admin) — Zoho custom field surfaced in the CS Lifecycle tab.
   // Optional so legacy callers don't have to destructure it.
   ext_id?: string | null;
@@ -489,6 +492,26 @@ export function extractCsFieldsFromRawData(
     ]),
   );
 
+  // Last Contact Date — the CS section's last-touch date. Display only.
+  // Tolerant of common Zoho variants + a fuzzy "lastcontact"/"lastactivity"
+  // fallback; pin with DUPLICATE_RADAR_FIELD_LAST_CONTACT if a tenant's API
+  // name doesn't normalise to one of the candidates. Falls back to Zoho's
+  // standard Last_Activity_Time only when no dedicated field is present.
+  const lastContactRaw =
+    tryKeysOrNormalized(
+      envOr("DUPLICATE_RADAR_FIELD_LAST_CONTACT", [
+        "Last_Contact_Date",
+        "last_contact_date",
+        "LastContactDate",
+        "Last Contact Date",
+        "Last_Contact",
+        "Last_Contacted",
+        "Last_Contacted_Time",
+      ]),
+    ) ??
+    tryKeysFuzzyContains(["LastContact", "LastContacted"]) ??
+    tryKeysOrNormalized(["Last_Activity_Time", "Last_Activity"]);
+
   // Customer Success → Company field (2026-05-30). Operator wants the
   // CS Lifecycle "Account" column sourced from THIS custom field rather
   // than the Deal's standard Account_Name lookup. Without this, the
@@ -574,6 +597,8 @@ export function extractCsFieldsFromRawData(
     cs_owner_name:
       csOwnerName == null ? null : csOwnerName.trim() || null,
     health: healthRaw == null ? null : String(healthRaw).trim() || null,
+    last_contact_date:
+      lastContactRaw == null ? null : (lastContactRaw as string | Date),
     ext_id: extIdRaw == null ? null : String(extIdRaw).trim() || null,
     cs_company:
       csCompanyRaw == null
