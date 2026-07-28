@@ -7357,6 +7357,15 @@
                 // Deal↔Contact) alongside the original Deal→Account section above.
                 renderRecordHintsSection('contact_account', 'recordHintsContactAccountBody');
                 renderRecordHintsSection('deal_contact', 'recordHintsDealContactBody');
+                // §4 Unaccounted/stalled deals — auto-load once per refresh cycle
+                // (like §2/§3) so its data appears on tab entry instead of only
+                // after a manual Run Scan (Sarah 2026-07-28). scanStaleDeals is a
+                // live DB scan, so guard it to first-visit-per-refresh to respect
+                // the read-rate budget; Run Scan / view chips still re-run it.
+                if (!window._loadedTabs.has('stale-deals')) {
+                    loadStaleDeals();
+                    window._loadedTabs.add('stale-deals');
+                }
             }
             if (tab === 'logs') { loadAgentActivity(); loadManualActions(); }
             if (tab === 'deal-compliance' && !window._loadedTabs.has('deal-compliance')) loadDealCompliance();
