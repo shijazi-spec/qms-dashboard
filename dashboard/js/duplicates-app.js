@@ -7645,25 +7645,46 @@
         // Sequentially verify documents for every loaded deal (bounded, paced to
         // respect Zoho rate limits). Documents is the whole point of this tab.
         async function checkAllDealDocs() {
+            if (window._dcScanRunning) return; // re-entrancy guard — no stacked scans
             var btn = document.getElementById('checkAllDocsBtn');
             var rows = Array.prototype.slice.call(document.querySelectorAll('#dealComplianceBody tr[data-deal-id]'));
             if (!rows.length) return;
             var cap = Math.min(rows.length, 200);
+            window._dcScanRunning = true;
             if (btn) { btn.disabled = true; }
-            for (var i = 0; i < cap; i++) {
-                if (btn) btn.textContent = 'Checking ' + (i + 1) + '/' + cap + '…';
-                var id = rows[i].getAttribute('data-deal-id');
-                var stage = rows[i].getAttribute('data-deal-stage');
-                await checkDealDocs(id, stage);
-                // Pace the loop so we don't burst Zoho's attachment API (which
-                // 429s under load). The server also retries 429 with backoff.
-                if (i < cap - 1) await new Promise(function (r) { setTimeout(r, 350); });
+            var pending = {}; // id -> rec, flushed to localStorage in ONE write at the end
+            try {
+                for (var i = 0; i < cap; i++) {
+                    if (btn) btn.textContent = 'Checking ' + (i + 1) + '/' + cap + '…';
+                    var id = rows[i].getAttribute('data-deal-id');
+                    var stage = rows[i].getAttribute('data-deal-stage');
+                    // deferPersist: update row + in-memory only; no per-row store
+                    // write and no per-row card/chart re-render (that 200x work is
+                    // what killed the page). Batch both below.
+                    await checkDealDocs(id, stage, { deferPersist: true });
+                    if (window._dcResults[id]) pending[id] = window._dcResults[id];
+                    // Throttle the cards/charts refresh: every 25 rows for a sense
+                    // of progress, not every row.
+                    if ((i + 1) % 25 === 0) _dcUpdateCards();
+                    // Pace the loop so we don't burst Zoho's attachment API (which
+                    // 429s under load). The server also retries 429 with backoff.
+                    if (i < cap - 1) await new Promise(function (r) { setTimeout(r, 350); });
+                }
+            } finally {
+                _dcStorePutMany(pending); // ONE store serialization for the whole scan
+                _dcUpdateCards();          // ONE final cards + charts render
+                window._dcScanRunning = false;
+                if (btn) { btn.disabled = false; btn.textContent = '🔍 Run Scan'; }
             }
-            if (btn) { btn.disabled = false; btn.textContent = '🔍 Run Scan'; }
         }
 
         // Lazily fetch a deal's Zoho attachments and show which required docs are present/missing.
-        async function checkDealDocs(id, stage) {
+        // opts.deferPersist (used by the bulk Run Scan): update the in-memory result
+        // + the row cell, but SKIP the whole-store localStorage write and the
+        // cards/charts re-render — the bulk caller batches both at the end so we
+        // don't do that heavy work 200× and freeze the page.
+        async function checkDealDocs(id, stage, opts) {
+            var defer = !!(opts && opts.deferPersist);
             var span = document.getElementById('docs-' + id);
             if (span) span.innerHTML = '<span class="text-xs text-gray-400">checking…</span>';
             var data;
@@ -7692,10 +7713,12 @@
                 checkedBy: data.checkedBy || null,
             };
             window._dcResults[id] = rec;
-            _dcStorePut(id, rec);
-            _dcUpdateCards();
             if (span) span.innerHTML = _dcDocCellHtml(id, rec, stage);
             _dcSetRowSev(id, rec.compliant);
+            if (!defer) {
+                _dcStorePut(id, rec);   // single-row check: persist + repaint now
+                _dcUpdateCards();
+            }
         }
 
         // ══ Empty / Orphaned Records cleanup tab ════════════════════════════
@@ -8543,9 +8566,18 @@
             catch (e) { return {}; }
         }
         function _dcStorePut(id, rec) {
+            var m = {}; m[String(id)] = rec;
+            _dcStorePutMany(m);
+        }
+        // Batched persist: load + prune + stringify + write the whole store ONCE
+        // for any number of records. The bulk "Run Scan" MUST use this (not a
+        // per-row _dcStorePut) — re-serialising the entire store 200× on the main
+        // thread was what froze and killed the tab (Sarah 2026-07-28).
+        function _dcStorePutMany(recsById) {
             try {
+                if (!recsById || !Object.keys(recsById).length) return;
                 var store = _dcStoreLoad();
-                store[String(id)] = rec;
+                Object.keys(recsById).forEach(function (id) { store[String(id)] = recsById[id]; });
                 var keys = Object.keys(store);
                 if (keys.length > 5000) { // prune oldest by checkedAt
                     keys.sort(function (a, b) { return (store[a].checkedAt || '') < (store[b].checkedAt || '') ? -1 : 1; });
