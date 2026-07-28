@@ -79,6 +79,48 @@
             </div>
         </div>
 
+        <!-- ── Master List: one row per document, one column per framework ──
+             The organising view. Everything below it is a drill-down; the
+             framework selector here scopes the whole page. -->
+        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-master-list">
+            <div class="p-4 border-b border-gray-200 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.master_title">Master List</h2>
+                    <p class="text-xs text-gray-500" data-i18n="docmap.master_subtitle">One row per controlled document, one column per framework. Read coverage across a document instead of framework by framework.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <label for="pageFramework" class="text-xs text-gray-500" data-i18n="docmap.scope_label">Scope</label>
+                    <select id="pageFramework" data-on-change="setPageFramework" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-page-framework">
+                        <option value="" data-i18n="docmap.all_frameworks">All Frameworks</option>
+                    </select>
+                    <input id="masterSearch" type="search" data-on-input="renderMasterList" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-i18n-placeholder="docmap.master_search" placeholder="Search document…" data-testid="input-master-search" />
+                </div>
+            </div>
+
+            <!-- Four-step workflow strip. Step 1 gates the rest: while most
+                 documents are still awaiting their file, steps 2-4 show
+                 "waiting on documents" rather than percentages computed from
+                 empty files. -->
+            <div id="stepStrip" class="grid grid-cols-2 md:grid-cols-4 gap-3 p-4">
+                <div class="text-sm text-gray-400 col-span-full text-center py-4" data-i18n="common.loading">Loading…</div>
+            </div>
+
+            <div class="overflow-x-auto border-t border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200" id="masterTable">
+                    <thead class="bg-gray-50">
+                        <tr id="masterHead"></tr>
+                    </thead>
+                    <tbody id="masterBody" class="bg-white divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+            <div class="px-4 py-2 border-t border-gray-100 flex flex-wrap items-center gap-4 text-[11px] text-gray-500">
+                <span><span class="inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">3</span> <span data-i18n="docmap.legend_confirmed">confirmed clauses</span></span>
+                <span><span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">2</span> <span data-i18n="docmap.legend_pending">pending review</span></span>
+                <span><span class="text-gray-300 font-mono">—</span> <span data-i18n="docmap.legend_none">not mapped</span></span>
+                <span id="masterCount" class="ms-auto tabular-nums"></span>
+            </div>
+        </section>
+
         <!-- Overall coverage strip -->
         <section class="bg-white rounded-lg shadow p-6 mb-6" data-testid="section-overall-coverage">
             <div class="flex flex-wrap items-center justify-between gap-4">
@@ -475,13 +517,163 @@
                 var mappable = frameworks.filter(function (r) {
                     return r.obligation_count == null || Number(r.obligation_count) > 0;
                 });
-                sel.innerHTML = '<option value="" data-i18n="docmap.all_frameworks">All Frameworks</option>'
-                    + mappable.map(function (r) {
-                        return '<option value="' + r.id + '">' + escAttr(r.regulation_code + ' — ' + r.name) + '</option>';
-                    }).join('');
+                var opts = mappable.map(function (r) {
+                    return '<option value="' + r.id + '">' + escAttr(r.regulation_code + ' — ' + r.name) + '</option>';
+                }).join('');
+                sel.innerHTML = '<option value="" data-i18n="docmap.all_frameworks">All Frameworks</option>' + opts;
+
+                // The page-level scope selector offers the same set; keep the
+                // current selection across refreshes.
+                var pageSel = document.getElementById('pageFramework');
+                if (pageSel) {
+                    pageSel.innerHTML = '<option value="" data-i18n="docmap.all_frameworks">All Frameworks</option>' + opts;
+                    if (MASTER.scope) pageSel.value = MASTER.scope;
+                    if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(pageSel);
+                }
                 if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(sel);
             } catch (e) {
                 console.error('Error loading frameworks', e);
+            }
+        }
+
+        // ──────────────────── Master List ────────────────────
+        // One row per document, one column per framework. MASTER holds the last
+        // payload so search/sort re-render from memory without refetching.
+        var MASTER = { frameworks: [], documents: [], summary: null, scope: '' };
+
+        async function loadMasterList() {
+            var head = document.getElementById('masterHead');
+            var body = document.getElementById('masterBody');
+            if (!body) return;
+            body.innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-gray-400">…</td></tr>';
+            try {
+                var url = '/api/compliance/document-mapping/master-list';
+                if (MASTER.scope) url += '?regulation_id=' + encodeURIComponent(MASTER.scope);
+                var r = await fetch(url, { credentials: 'same-origin' });
+                var d = await r.json();
+                if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+                MASTER.frameworks = d.frameworks || [];
+                MASTER.documents = d.documents || [];
+                MASTER.summary = d.summary || null;
+                renderStepStrip();
+                renderMasterList();
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-red-600">' + escAttr(e.message) + '</td></tr>';
+            }
+        }
+
+        // Page-level scope: re-query so the strip numbers and the grid agree.
+        async function setPageFramework() {
+            var sel = document.getElementById('pageFramework');
+            MASTER.scope = sel ? sel.value : '';
+            await loadMasterList();
+        }
+
+        function renderStepStrip() {
+            var host = document.getElementById('stepStrip');
+            if (!host) return;
+            var s = MASTER.summary;
+            if (!s) { host.innerHTML = ''; return; }
+            var t = recT;
+
+            // While most documents are still placeholders, coverage numbers are
+            // computed from empty files and mean nothing — say so instead.
+            var gated = !!s.awaiting_documents;
+            var waiting = t('docmap.step_waiting', 'Waiting on documents');
+
+            function card(accent, label, value, sub) {
+                return '<div class="rounded-lg border border-gray-200 p-3">'
+                    + '<div class="text-[11px] uppercase text-gray-500">' + escAttr(label) + '</div>'
+                    + '<div class="text-2xl font-bold ' + accent + ' tabular-nums">' + escAttr(value) + '</div>'
+                    + '<div class="text-[11px] text-gray-500">' + escAttr(sub) + '</div>'
+                    + '</div>';
+            }
+
+            var pct = s.clauses_total > 0
+                ? Math.round((s.clauses_with_evidence / s.clauses_total) * 100) + '%'
+                : '—';
+
+            host.innerHTML =
+                card('text-indigo-700',
+                     t('docmap.step1', '1 · Documents'),
+                     s.documents_with_content + ' / ' + s.documents_total,
+                     s.documents_placeholder > 0
+                        ? t('docmap.step1_pending', '{n} awaiting file upload').replace('{n}', s.documents_placeholder)
+                        : t('docmap.step1_ok', 'all documents have content'))
+              + card(gated ? 'text-gray-400' : 'text-emerald-700',
+                     t('docmap.step2', '2 · Mapped'),
+                     gated ? '—' : pct,
+                     gated ? waiting : (s.clauses_with_evidence + ' / ' + s.clauses_total + ' ' + t('docmap.step2_sub', 'clauses with evidence')))
+              + card(gated ? 'text-gray-400' : 'text-amber-700',
+                     t('docmap.step3', '3 · Review'),
+                     gated ? '—' : String(s.links_awaiting_review),
+                     gated ? waiting : t('docmap.step3_sub', 'links awaiting your confirmation'))
+              + card(gated ? 'text-gray-400' : 'text-red-700',
+                     t('docmap.step4', '4 · Gaps'),
+                     gated ? '—' : String(s.clauses_without_evidence),
+                     gated ? waiting : t('docmap.step4_sub', 'clauses with no document yet'));
+        }
+
+        function renderMasterList() {
+            var head = document.getElementById('masterHead');
+            var body = document.getElementById('masterBody');
+            var countEl = document.getElementById('masterCount');
+            if (!head || !body) return;
+            var t = recT;
+            var fws = MASTER.frameworks;
+
+            var thBase = 'px-3 py-2 text-start text-[11px] font-medium text-gray-500 uppercase';
+            head.innerHTML =
+                '<th scope="col" class="' + thBase + '">' + escAttr(t('docmap.col_code', 'Code')) + '</th>'
+              + '<th scope="col" class="' + thBase + ' min-w-[200px]">' + escAttr(t('docmap.col_document', 'Document')) + '</th>'
+              + '<th scope="col" class="' + thBase + '">' + escAttr(t('docmap.col_owner', 'Owner')) + '</th>'
+              + '<th scope="col" class="' + thBase + '">' + escAttr(t('docmap.col_status', 'Status')) + '</th>'
+              + fws.map(function (f) {
+                    return '<th scope="col" class="' + thBase + ' whitespace-nowrap" title="' + escAttr(f.name) + '">' + escAttr(f.regulation_code) + '</th>';
+                }).join('');
+
+            var q = (document.getElementById('masterSearch') || {}).value || '';
+            q = q.toLowerCase().trim();
+            var rows = MASTER.documents.filter(function (d) {
+                if (!q) return true;
+                return (String(d.code || '') + ' ' + String(d.title || '') + ' ' + String(d.owner || '')).toLowerCase().indexOf(q) !== -1;
+            });
+
+            if (rows.length === 0) {
+                body.innerHTML = '<tr><td colspan="' + (4 + fws.length) + '" class="px-4 py-6 text-center text-gray-500">'
+                    + escAttr(t('docmap.master_empty', 'No documents match.')) + '</td></tr>';
+                if (countEl) countEl.textContent = '';
+                return;
+            }
+
+            body.innerHTML = rows.map(function (d) {
+                var cells = fws.map(function (f) {
+                    var c = d.coverage ? d.coverage[f.regulation_code] : null;
+                    if (!c) return '<td class="px-3 py-2 text-center"><span class="text-gray-300 font-mono">—</span></td>';
+                    var parts = '';
+                    if (c.confirmed > 0) parts += '<span class="inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-semibold" title="' + escAttr(t('docmap.legend_confirmed', 'confirmed clauses')) + '">' + c.confirmed + '</span>';
+                    if (c.pending > 0) parts += ' <span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold" title="' + escAttr(t('docmap.legend_pending', 'pending review')) + '">' + c.pending + '</span>';
+                    return '<td class="px-3 py-2 text-center whitespace-nowrap">' + parts + '</td>';
+                }).join('');
+
+                // Placeholder = still awaiting its approved file. Flagged so a
+                // row with no coverage is not mistaken for a mapping failure.
+                var statusCell = d.has_content
+                    ? '<span class="text-[11px] text-gray-600">' + escAttr(d.doc_status || '—') + '</span>'
+                    : '<span class="inline-block px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-semibold">' + escAttr(t('docmap.awaiting_file', 'awaiting file')) + '</span>';
+
+                return '<tr class="hover:bg-gray-50">'
+                    + '<td class="px-3 py-2 text-[11px] font-mono text-gray-700 whitespace-nowrap">' + escAttr(d.code || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-900" dir="auto">' + escAttr(d.title || '') + '</td>'
+                    + '<td class="px-3 py-2 text-[11px] text-gray-500" dir="auto">' + escAttr(d.owner || '—') + '</td>'
+                    + '<td class="px-3 py-2">' + statusCell + '</td>'
+                    + cells
+                    + '</tr>';
+            }).join('');
+
+            if (countEl) {
+                countEl.textContent = t('docmap.master_count', '{n} of {m} documents')
+                    .replace('{n}', rows.length).replace('{m}', MASTER.documents.length);
             }
         }
 
@@ -676,6 +868,7 @@
 
         async function reloadAll() {
             await loadFrameworks();
+            await loadMasterList();
             await loadCoverage();
             await loadGaps();
             await loadRecommendations();

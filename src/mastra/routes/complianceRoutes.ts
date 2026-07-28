@@ -2467,6 +2467,55 @@ export const complianceRoutes = [
     // "Open Gaps" panel on the Document Mapping screen. Same underlying
     // query as gaps.csv. Read-only; covered by the generic /api/compliance
     // GET allowlist.
+    // Master List — one row per document, one column per framework, plus the
+    // four workflow numbers. This is the page's organising view: coverage is
+    // read ACROSS a document instead of reconstructed per framework.
+    // `?regulation_id=` scopes the whole page to one framework and accepts
+    // either the numeric id or the obfuscated public_id UUID the regulations
+    // list hands the front-end.
+    path: "/api/compliance/document-mapping/master-list",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { initComplianceTables } = await import(
+            "../../utils/complianceDatabase"
+          );
+          const { initObligationDocumentsTable } = await import(
+            "../../utils/obligationDocumentsDatabase"
+          );
+          await initComplianceTables();
+          await initObligationDocumentsTable();
+
+          const raw = new URL(c.req.url).searchParams.get("regulation_id") || "";
+          let regulationId: number | undefined;
+          if (raw) {
+            const n = parseInt(raw, 10);
+            if (Number.isFinite(n) && String(n) === raw) {
+              regulationId = n;
+            } else {
+              const { sharedPool } = await import("../../utils/sharedPool");
+              const rr = await sharedPool.query(
+                `SELECT id FROM regulations WHERE public_id = $1 LIMIT 1`,
+                [raw],
+              );
+              regulationId = rr.rows[0]?.id;
+            }
+          }
+
+          const { getMasterListWithSummary } = await import(
+            "../../utils/documentMasterList"
+          );
+          const data = await getMasterListWithSummary({ regulationId });
+          return c.json({ success: true, ...data });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] master-list failed:", err);
+          return c.json({ error: "Failed to load master list" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/compliance/document-mapping/gaps",
     method: "GET" as const,
     createHandler: async () => {
