@@ -176,45 +176,63 @@ export async function listDocuments(f: DocumentFilters = {}): Promise<{
   const page = Math.max(0, f.page ?? 0);
   const pageSize = Math.min(500, Math.max(1, f.pageSize ?? 100));
 
-  const params: any[] = [TERMINAL_REVIEW_STATES];
-  const where: string[] = [];
-  if (!f.includeDeleted) where.push("d.deleted = FALSE");
-  if (f.state) {
-    params.push(f.state);
-    where.push(`d.review_state = $${params.length}`);
+  // The count and the page need DIFFERENT parameter sets: the page also selects
+  // link_status and stale_since_review, the count does not. Postgres rejects a
+  // bind that supplies more parameters than the statement references
+  // ("bind message supplies 1 parameters, but prepared statement requires 0"),
+  // so each query builds its own array and assigns indices as it goes rather
+  // than sharing one list with a hardcoded $1.
+  function buildWhere(p: any[]): string {
+    const where: string[] = [];
+    if (!f.includeDeleted) where.push("d.deleted = FALSE");
+    if (f.state) {
+      p.push(f.state);
+      where.push(`d.review_state = $${p.length}`);
+    }
+    if (f.family) {
+      p.push(f.family);
+      where.push(`d.doc_family = $${p.length}`);
+    }
+    if (f.lang) {
+      p.push(String(f.lang).toUpperCase());
+      where.push(`d.lang = $${p.length}`);
+    }
+    if (f.q) {
+      p.push(`%${f.q.toLowerCase()}%`);
+      where.push(
+        `(LOWER(d.register_code) LIKE $${p.length} OR LOWER(COALESCE(d.title,'')) LIKE $${p.length} OR LOWER(COALESCE(d.file_name,'')) LIKE $${p.length})`,
+      );
+    }
+    if (f.stale === true) {
+      p.push(TERMINAL_REVIEW_STATES);
+      where.push(staleSql(p.length));
+    }
+    if (f.linkStatus) {
+      if (f.linkStatus === "orphan") where.push("d.policy_id IS NULL");
+      else if (f.linkStatus === "unprojected")
+        where.push("d.policy_id IS NOT NULL AND q.id IS NULL");
+      else if (f.linkStatus === "linked")
+        where.push("d.policy_id IS NOT NULL AND q.id IS NOT NULL");
+    }
+    return where.length ? `WHERE ${where.join(" AND ")}` : "";
   }
-  if (f.family) {
-    params.push(f.family);
-    where.push(`d.doc_family = $${params.length}`);
-  }
-  if (f.lang) {
-    params.push(String(f.lang).toUpperCase());
-    where.push(`d.lang = $${params.length}`);
-  }
-  if (f.q) {
-    params.push(`%${f.q.toLowerCase()}%`);
-    where.push(
-      `(LOWER(d.register_code) LIKE $${params.length} OR LOWER(COALESCE(d.title,'')) LIKE $${params.length} OR LOWER(COALESCE(d.file_name,'')) LIKE $${params.length})`,
-    );
-  }
-  if (f.stale === true) where.push(staleSql(1));
-  if (f.linkStatus) {
-    if (f.linkStatus === "orphan") where.push("d.policy_id IS NULL");
-    else if (f.linkStatus === "unprojected")
-      where.push("d.policy_id IS NOT NULL AND q.id IS NULL");
-    else if (f.linkStatus === "linked")
-      where.push("d.policy_id IS NOT NULL AND q.id IS NOT NULL");
-  }
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
+  const countParams: any[] = [];
+  const countWhere = buildWhere(countParams);
   const countRes = await pool.query(
     `SELECT COUNT(*)::int AS n
        FROM doc_tracker_documents d
        LEFT JOIN qms_uploaded_documents q ON q.source_policy_id = d.policy_id
-       ${whereSql}`,
-    params,
+       ${countWhere}`,
+    countParams,
   );
 
+  const params: any[] = [];
+  const whereSql = buildWhere(params);
+  // The SELECT list needs the terminal-state array for stale_since_review.
+  // String order is irrelevant to binding — only the $N index has to match.
+  params.push(TERMINAL_REVIEW_STATES);
+  const staleIdx = params.length;
   params.push(pageSize, page * pageSize);
   const rows = await pool.query(
     `SELECT d.id, d.register_code, d.base_code, d.lang, d.doc_family, d.title,
@@ -225,7 +243,7 @@ export async function listDocuments(f: DocumentFilters = {}): Promise<{
             d.policy_id, q.id AS projected_document_id,
             p.title AS register_title, p.status AS register_status, p.version,
             ${LINK_STATUS_SQL} AS link_status,
-            ${staleSql(1)} AS stale_since_review
+            ${staleSql(staleIdx)} AS stale_since_review
        FROM doc_tracker_documents d
        LEFT JOIN qms_uploaded_documents q ON q.source_policy_id = d.policy_id
        LEFT JOIN policies p ON p.id = d.policy_id

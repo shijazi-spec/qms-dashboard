@@ -215,6 +215,20 @@ export function buildSegmentPredicate(
 }
 
 /**
+ * OPEN-PIPELINE deal-stage predicate (Sarah 2026-07-29). Amount at risk =
+ * OPEN pipeline only: a duplicate deal counts only if it is still live in the
+ * sales pipeline — NOT a won customer (Agreement Signed / Paid) and NOT any
+ * terminal / closed stage (Closed Lost/Won, Dropped, Cancelled, Transferred to
+ * CS, Client Activated). `alias` is the duplicate_records table alias.
+ * Single source of truth so the exec headline, Adam's digest, the Top Clusters
+ * panel and the View-all modal all agree.
+ */
+export function openStagePredicate(alias: string): string {
+  const s = `LOWER(COALESCE(NULLIF(${alias}.stage,''), ${alias}.raw_data->>'Stage',''))`;
+  return `${s} NOT IN ('agreement signed','paid') AND ${s} !~ '(closed|won|lost|drop|cancel|transferred to cs|client activated)'`;
+}
+
+/**
  * The JS mirror of `buildSegmentPredicate`'s layout semantics, for filtering an
  * already-fetched array of records (e.g. the cluster preview modal) by segment
  * WITHOUT another query. Reads the record's layout from `layout_name` with the
@@ -403,7 +417,7 @@ export async function getAllClustersByInflation(
        SELECT rr.cluster_id, SUM(rr.deal_value) AS at_risk_value
          FROM duplicate_records rr
         WHERE rr.record_type = 'deal' AND rr.is_primary = false AND rr.deal_value > 0
-          AND LOWER(COALESCE(NULLIF(rr.stage,''), rr.raw_data->>'Stage','')) NOT IN ('agreement signed','paid')
+          AND (${openStagePredicate("rr")})
         GROUP BY rr.cluster_id
      )
      SELECT c.id, c.domain, c.company_name, c.company_name_arabic,
@@ -4245,7 +4259,7 @@ export async function getClusterSummary(): Promise<{
          LEFT JOIN resolved_act ra2 ON ra2.cluster_id = c2.id
         WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
           AND c2.status = 'active' AND ra2.cluster_id IS NULL
-          AND LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage','')) NOT IN ('agreement signed','paid')
+          AND (${openStagePredicate("r")})
       ) as pipeline_inflation,
       COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
       COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count
@@ -7889,7 +7903,7 @@ export async function getEnhancedSummary(): Promise<{
          LEFT JOIN resolved_act ra2 ON ra2.cluster_id = c2.id
         WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
           AND c2.status = 'active' AND ra2.cluster_id IS NULL
-          AND LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage','')) NOT IN ('agreement signed','paid')
+          AND (${openStagePredicate("r")})
       ) as pipeline_inflation,
       COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
       COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count,
@@ -7963,7 +7977,7 @@ export async function getEnhancedSummary(): Promise<{
       SELECT r.cluster_id, SUM(r.deal_value) AS at_risk_value
         FROM duplicate_records r
        WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
-         AND LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage','')) NOT IN ('agreement signed','paid')
+         AND (${openStagePredicate("r")})
        GROUP BY r.cluster_id
     )
     SELECT c.id, c.domain, c.company_name,

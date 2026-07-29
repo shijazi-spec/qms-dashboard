@@ -103,7 +103,10 @@
             <div class="flex flex-wrap items-center gap-3">
                 <span id="dtrackConn" class="dtrack-conn dtrack-degraded" role="status" aria-live="polite">
                     <i class="dtrack-conn-dot" aria-hidden="true"></i>
-                    <span id="dtrackConnLabel" data-i18n="doctracker.conn_connecting">Connecting…</span>
+                    <!-- No data-i18n here on purpose: dtrackSetConn owns this
+                         text, and applyToDOM would otherwise overwrite the live
+                         state back to "Connecting…" on every translation pass. -->
+                    <span id="dtrackConnLabel">Connecting…</span>
                     <span id="dtrackAgo" class="font-mono"></span>
                 </span>
                 <a href="/api/documentation-tracker/export.csv" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium text-sm" data-testid="link-tracker-export" data-i18n="doctracker.export">Export (CSV)</a>
@@ -622,7 +625,19 @@
             el.textContent = s < 90 ? s + 's' : Math.round(s / 60) + 'm';
         }
 
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', async function () {
+            // WAIT for translations before rendering anything.
+            // WalaPlusI18n.t() returns the LAST DOT-SEGMENT of a key when the
+            // catalogue has not loaded (i18n.js), not null — so the `|| fallback`
+            // in dtrackT never fires and the UI renders raw key fragments like
+            // "k_tracked" and "s_linked". init() is cached, so awaiting it here
+            // is cheap and idempotent alongside the footer bootstrap.
+            try {
+                if (window.WalaPlusI18n && window.WalaPlusI18n.init) {
+                    await window.WalaPlusI18n.init();
+                }
+            } catch (e) { /* fall through to the English fallbacks */ }
+
             // Populate filter dropdowns that depend on i18n.
             var st = document.getElementById('dtrackState');
             if (st) {
