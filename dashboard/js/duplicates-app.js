@@ -7444,7 +7444,13 @@
         // active/non-resolved clusters only (matches the headline figure, so
         // dismissing a cluster drops it here too).
         function _inflationOpenOnly() {
-            try { return localStorage.getItem('dc_inflation_open_only') === '1'; } catch (e) { return false; }
+            // Default = open-only (Sarah 2026-07-29): the leadership headline is
+            // the live open-pipeline exposure; closed-lost & signed/paid are
+            // shown only in the breakdown. Toggle persists an explicit choice.
+            try {
+                var v = localStorage.getItem('dc_inflation_open_only');
+                return v === null ? true : v === '1';
+            } catch (e) { return true; }
         }
         function toggleInflationOpenOnly() {
             try { localStorage.setItem('dc_inflation_open_only', _inflationOpenOnly() ? '0' : '1'); } catch (e) {}
