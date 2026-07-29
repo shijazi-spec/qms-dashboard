@@ -3402,7 +3402,9 @@
                     <td class="px-6 py-3 text-sm font-medium">${o.duplicate_records}</td>
                     <td class="px-6 py-3 text-sm"><span class="rag-${ragClass} px-2 py-1 rounded text-xs font-bold">${_fn(o.duplicate_rate)}%</span></td>
                     <td class="px-6 py-3 text-sm">${_fn(o.high_confidence_duplicates)}</td>
-                    <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}</td>
+                    <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}
+                        <button data-on-click="openOwnerOffboard" data-args='${escAttr(JSON.stringify([o.owner_name || '']))}' title="Offboard: review this owner's OPEN-pipeline deals grouped by stage, then bulk-close (Closed Lost / Old Data) or move them in Zoho." class="ms-2 px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800 hover:bg-red-200 align-middle">⚑ Offboard</button>
+                    </td>
                 </tr>`;
             }).join('') || rrEmptyRow(9, { glyph: '—', title: escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_owner_data')) });
             // Re-apply any active filter and refresh select-all/count chrome.
@@ -3677,6 +3679,140 @@
             } else {
                 console.warn('[OwnerClusters] No cluster-detail handler found; URL hash fallback.');
                 window.location.hash = '#cluster-' + encodeURIComponent(String(clusterId));
+            }
+        }
+
+        // ══ Owner offboarding — review & bulk-close a (resigned) owner's OPEN
+        // pipeline deals in Zoho (Sarah 2026-07-30). DESTRUCTIVE write behind a
+        // confirm gate; server re-checks each deal before updating. ═══════════
+        async function openOwnerOffboard(ownerName) {
+            let modal = document.getElementById('ownerOffboardModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'ownerOffboardModal';
+                modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4';
+                modal.innerHTML =
+                    '<div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">'
+                    + '<div class="flex items-center justify-between px-5 py-3 border-b"><div><div id="ooTitle" class="text-lg font-semibold"></div><div id="ooSubtitle" class="text-xs text-gray-500"></div></div><button data-on-click="closeOwnerOffboard" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button></div>'
+                    + '<div id="ooBody" class="flex-1 overflow-y-auto px-5 py-3"></div>'
+                    + '<div id="ooFooter" class="border-t px-5 py-3"></div>'
+                    + '</div>';
+                document.body.appendChild(modal);
+            }
+            if (!window._ooBound) {
+                window._ooBound = true;
+                document.addEventListener('change', function (e) {
+                    const t = e.target;
+                    if (!t || !t.classList) return;
+                    if (t.classList.contains('oo-stage-cb')) {
+                        const stage = t.getAttribute('data-oo-stage');
+                        document.querySelectorAll('#ownerOffboardModal .oo-deal-cb').forEach(function (cb) {
+                            if (cb.getAttribute('data-oo-stage') === stage) cb.checked = t.checked;
+                        });
+                        ooRecalc();
+                    } else if (t.classList.contains('oo-deal-cb')) {
+                        ooRecalc();
+                    }
+                });
+            }
+            modal.classList.remove('hidden');
+            window._ooOwner = ownerName;
+            document.getElementById('ooTitle').textContent = 'Offboard — ' + ownerName;
+            document.getElementById('ooSubtitle').textContent = 'Loading open-pipeline deals…';
+            document.getElementById('ooBody').innerHTML = (typeof rrSkeletonRows === 'function') ? rrSkeletonRows(5) : 'Loading…';
+            document.getElementById('ooFooter').innerHTML = '';
+            try {
+                const res = await fetch('/api/duplicates/owner-deals?owner=' + encodeURIComponent(ownerName), { credentials: 'same-origin' });
+                const d = await res.json();
+                if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
+                window._ooData = d;
+                renderOwnerOffboard(d);
+            } catch (e) {
+                document.getElementById('ooBody').innerHTML = '<div class="text-red-600 text-sm py-6 text-center">Failed to load: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+            }
+        }
+        function closeOwnerOffboard() { const m = document.getElementById('ownerOffboardModal'); if (m) m.classList.add('hidden'); }
+        function renderOwnerOffboard(d) {
+            document.getElementById('ooSubtitle').textContent = _fn(d.total || 0) + ' open-pipeline deal(s) · ' + formatCurrencyCompact(d.total_value || 0) + ' across ' + ((d.by_stage || []).length) + ' stage(s)';
+            const body = document.getElementById('ooBody');
+            if (!d.by_stage || !d.by_stage.length) {
+                body.innerHTML = '<div class="text-center text-gray-500 py-8">No open-pipeline deals for this owner.</div>';
+                document.getElementById('ooFooter').innerHTML = '';
+                return;
+            }
+            body.innerHTML = d.by_stage.map(function (g) {
+                const rows = g.deals.map(function (dl) {
+                    return '<tr class="border-b last:border-0">'
+                        + '<td class="px-2 py-1"><input type="checkbox" class="oo-deal-cb" data-oo-id="' + escAttr(dl.id) + '" data-oo-val="' + (dl.value || 0) + '" data-oo-stage="' + escAttr(g.stage) + '"></td>'
+                        + '<td class="px-2 py-1 text-sm">' + escapeHtml(dl.name) + '</td>'
+                        + '<td class="px-2 py-1 text-xs text-gray-500">' + escapeHtml(dl.domain || '—') + '</td>'
+                        + '<td class="px-2 py-1 text-sm text-end whitespace-nowrap">' + formatCurrency(dl.value || 0) + '</td>'
+                        + '<td class="px-2 py-1 text-xs text-gray-400 whitespace-nowrap">' + escapeHtml(String(dl.modified || '').slice(0, 10)) + '</td></tr>';
+                }).join('');
+                return '<div class="mb-4 border rounded-lg">'
+                    + '<div class="px-3 py-2 bg-gray-50 rounded-t-lg"><label class="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" class="oo-stage-cb" data-oo-stage="' + escAttr(g.stage) + '"> ' + escapeHtml(g.stage) + ' <span class="text-xs font-normal text-gray-500">(' + _fn(g.count) + ' · ' + formatCurrencyCompact(g.value || 0) + ')</span></label></div>'
+                    + '<table class="min-w-full"><tbody>' + rows + '</tbody></table></div>';
+            }).join('');
+            document.getElementById('ooFooter').innerHTML =
+                '<div class="flex flex-wrap items-center gap-3">'
+                + '<label class="text-sm">Action <select id="ooAction" data-on-change="ooActionChanged" class="ms-1 border rounded px-2 py-1 text-sm"><option value="close_lost">Close Lost</option><option value="move">Move to stage…</option></select></label>'
+                + '<span id="ooActionExtra"><label class="text-sm">Lost reason <input id="ooReason" value="Old Data" class="ms-1 border rounded px-2 py-1 text-sm" style="width:120px"></label></span>'
+                + '<span id="ooSelCount" class="text-sm text-gray-600 ms-auto">Selected: 0 · SAR 0</span>'
+                + '<button id="ooApplyBtn" data-on-click="ooApply" class="px-3 py-1.5 rounded text-sm font-semibold text-white" style="background:#dc2626">⚑ Apply to Zoho</button>'
+                + '</div>'
+                + '<div class="text-[11px] text-gray-400 mt-1">Writes to Zoho. Each deal is re-checked (still owned by this rep AND still open) before updating; already-changed deals are skipped. Audit-logged.</div>';
+            ooRecalc();
+        }
+        function ooActionChanged() {
+            const a = (document.getElementById('ooAction') || {}).value;
+            const ex = document.getElementById('ooActionExtra');
+            if (!ex) return;
+            if (a === 'move') ex.innerHTML = '<label class="text-sm">Target stage <input id="ooTargetStage" list="ooStageList" placeholder="e.g. Proposal" class="ms-1 border rounded px-2 py-1 text-sm" style="width:160px"></label><datalist id="ooStageList"><option>New Deal</option><option>Contacted</option><option>Meeting</option><option>Proposal</option><option>On Hold</option><option>Closed Lost</option></datalist>';
+            else ex.innerHTML = '<label class="text-sm">Lost reason <input id="ooReason" value="Old Data" class="ms-1 border rounded px-2 py-1 text-sm" style="width:120px"></label>';
+        }
+        function ooRecalc() {
+            const cbs = document.querySelectorAll('#ownerOffboardModal .oo-deal-cb:checked');
+            let n = 0, v = 0;
+            cbs.forEach(function (cb) { n++; v += Number(cb.getAttribute('data-oo-val')) || 0; });
+            const el = document.getElementById('ooSelCount');
+            if (el) el.textContent = 'Selected: ' + _fn(n) + ' · ' + formatCurrency(v);
+        }
+        function ooSelectedIds() {
+            return Array.prototype.map.call(document.querySelectorAll('#ownerOffboardModal .oo-deal-cb:checked'), function (cb) { return cb.getAttribute('data-oo-id'); });
+        }
+        async function ooApply() {
+            const ids = ooSelectedIds();
+            if (!ids.length) { rrToast('Select at least one deal first.'); return; }
+            const action = (document.getElementById('ooAction') || {}).value || 'close_lost';
+            const payload = { owner: window._ooOwner, dealIds: ids, action: action };
+            let desc;
+            if (action === 'move') {
+                const target = ((document.getElementById('ooTargetStage') || {}).value || '').trim();
+                if (!target) { rrToast('Enter a target stage.'); return; }
+                payload.targetStage = target;
+                desc = 'move ' + ids.length + ' deal(s) to stage "' + target + '"';
+            } else {
+                const reason = (((document.getElementById('ooReason') || {}).value) || 'Old Data').trim();
+                payload.lostReason = reason;
+                desc = 'set ' + ids.length + ' deal(s) to Closed Lost (reason: "' + reason + '")';
+            }
+            if (!window.confirm('This WRITES to Zoho and cannot be auto-undone.\n\nOwner: ' + window._ooOwner + '\nAction: ' + desc + '\n\nProceed?')) return;
+            const btn = document.getElementById('ooApplyBtn');
+            const orig = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = 'Applying…'; }
+            try {
+                const res = await fetch('/api/duplicates/owner-deals/bulk-update', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const d = await res.json();
+                if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
+                rrToast('Done — ' + _fn(d.updated) + ' updated, ' + _fn(d.failed) + ' failed, ' + _fn((d.skipped || []).length) + ' skipped.');
+                openOwnerOffboard(window._ooOwner); // reload (updated deals now excluded)
+            } catch (e) {
+                rrToast('Bulk update failed: ' + (e && e.message || e));
+                if (btn) { btn.disabled = false; btn.textContent = orig; }
             }
         }
 

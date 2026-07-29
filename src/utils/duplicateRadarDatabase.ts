@@ -7678,6 +7678,156 @@ export async function getInflationOpenClosedBreakdown(
 }
 
 /**
+ * OWNER OFFBOARDING (Sarah 2026-07-30). For a (usually resigned) deal owner,
+ * list their OPEN-pipeline deals grouped by Stage so the operator can review
+ * and bulk-close / re-stage them in Zoho. "Open pipeline" = openStagePredicate
+ * (NOT Agreement Signed / Paid and NOT any closed/terminal stage). Read-only.
+ * Owner is matched EXACTLY on owner_name (a destructive follow-up write acts on
+ * these ids, so we do not fuzzy-match and risk touching another rep's deals).
+ */
+export async function getOwnerOpenDeals(ownerName: string): Promise<{
+  owner: string;
+  total: number;
+  total_value: number;
+  by_stage: Array<{
+    stage: string;
+    count: number;
+    value: number;
+    deals: Array<{
+      id: string;
+      name: string;
+      domain: string | null;
+      value: number;
+      modified: string | null;
+    }>;
+  }>;
+}> {
+  const owner = String(ownerName || "").trim();
+  if (!owner) return { owner: "", total: 0, total_value: 0, by_stage: [] };
+  const rows = (
+    await pool.query(
+      `SELECT r.zoho_record_id AS id,
+              COALESCE(NULLIF(r.account_name,''), NULLIF(r.company_name,''), '(unnamed deal)') AS name,
+              LOWER(r.domain) AS domain,
+              COALESCE(r.deal_value, 0)::float AS value,
+              COALESCE(NULLIF(r.stage,''), NULLIF(r.raw_data->>'Stage',''), '(no stage)') AS stage,
+              r.raw_data->>'Modified_Time' AS modified
+         FROM duplicate_records r
+        WHERE r.record_type = 'deal'
+          AND r.owner_name = $1
+          AND r.zoho_record_id IS NOT NULL AND r.zoho_record_id <> ''
+          AND (${openStagePredicate("r")})
+        ORDER BY value DESC`,
+      [owner],
+    )
+  ).rows as any[];
+  const byStage = new Map<string, any>();
+  let total_value = 0;
+  for (const d of rows) {
+    const stage = String(d.stage || "(no stage)");
+    const value = Number(d.value) || 0;
+    total_value += value;
+    let g = byStage.get(stage);
+    if (!g) {
+      g = { stage, count: 0, value: 0, deals: [] };
+      byStage.set(stage, g);
+    }
+    g.count++;
+    g.value += value;
+    g.deals.push({
+      id: String(d.id),
+      name: String(d.name),
+      domain: d.domain || null,
+      value,
+      modified: d.modified || null,
+    });
+  }
+  return {
+    owner,
+    total: rows.length,
+    total_value,
+    by_stage: Array.from(byStage.values()).sort((a, b) => b.value - a.value),
+  };
+}
+
+/**
+ * OWNER OFFBOARDING — the destructive bulk write (Sarah 2026-07-30). Re-checks
+ * each id against the mirror (must still be OWNED BY `owner` and OPEN-pipeline)
+ * so we never act on stale selections, then bulk-updates Zoho: action
+ * 'close_lost' → Stage 'Closed Lost' + the Lost-Reason field (env
+ * DUPLICATE_RADAR_FIELD_LOST_REASON, default Reason_For_Loss); action 'move' →
+ * Stage = targetStage. Returns per-deal outcomes + a skipped list.
+ */
+export async function bulkUpdateOwnerDeals(input: {
+  owner: string;
+  dealIds: string[];
+  action: "close_lost" | "move";
+  targetStage?: string;
+  lostReason?: string;
+}): Promise<{
+  attempted: number;
+  updated: number;
+  failed: number;
+  skipped: string[];
+  outcomes: Array<{ id: string; status: string; message?: string }>;
+}> {
+  const owner = String(input.owner || "").trim();
+  const ids = Array.from(
+    new Set((input.dealIds || []).map((x) => String(x).trim()).filter(Boolean)),
+  );
+  if (!owner || !ids.length) {
+    return { attempted: 0, updated: 0, failed: 0, skipped: [], outcomes: [] };
+  }
+  // Re-validate against the mirror: still this owner AND still open-pipeline.
+  const valid = (
+    await pool.query(
+      `SELECT r.zoho_record_id AS id
+         FROM duplicate_records r
+        WHERE r.record_type = 'deal'
+          AND r.owner_name = $1
+          AND r.zoho_record_id = ANY($2::text[])
+          AND (${openStagePredicate("r")})`,
+      [owner, ids],
+    )
+  ).rows.map((x: any) => String(x.id));
+  const validSet = new Set(valid);
+  const skipped = ids.filter((id) => !validSet.has(id));
+  if (!valid.length) {
+    return { attempted: 0, updated: 0, failed: 0, skipped, outcomes: [] };
+  }
+  const { updateZohoRecordsBulk } = await import("./zohoCRM");
+  let records: Array<Record<string, any>>;
+  if (input.action === "move") {
+    const stage = String(input.targetStage || "").trim();
+    if (!stage) throw new Error("targetStage required for action 'move'");
+    records = valid.map((id) => ({ id, Stage: stage }));
+  } else {
+    const lostField = (
+      process.env.DUPLICATE_RADAR_FIELD_LOST_REASON || "Reason_For_Loss"
+    ).trim();
+    const reason = String(input.lostReason || "Old Data");
+    records = valid.map((id) => ({
+      id,
+      Stage: "Closed Lost",
+      [lostField]: reason,
+    }));
+  }
+  const outcomes = await updateZohoRecordsBulk("Deals", records);
+  const updated = outcomes.filter((o) => o.status === "success").length;
+  return {
+    attempted: valid.length,
+    updated,
+    failed: valid.length - updated,
+    skipped,
+    outcomes: outcomes.map((o, i) => ({
+      id: String(records[i]?.id ?? ""),
+      status: o.status,
+      message: o.message,
+    })),
+  };
+}
+
+/**
  * DUPLICATE SPIKE ROOT-CAUSE (Sarah 2026-07-23). The Creation-Trend chart shows
  * WHEN duplicates are rising, but not WHY. This attributes the rise: it counts
  * NEW duplicate records (created in-window AND part of a real duplicate cluster —

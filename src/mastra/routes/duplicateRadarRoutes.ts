@@ -315,6 +315,8 @@ import {
   getClusterRecordTypeMeta,
   getSyncState,
   getAllClustersByInflation,
+  getOwnerOpenDeals,
+  bulkUpdateOwnerDeals,
   getClustersBySignal,
   findOrCreateClusterByCompany,
   getSeparationParticipants,
@@ -5242,6 +5244,71 @@ export const duplicateRadarRoutes = [
           return c.json({ error: "An internal error occurred" }, 500);
         }
       };
+    },
+  },
+  {
+    // OWNER OFFBOARDING — read: a (resigned) owner's OPEN-pipeline deals grouped
+    // by Stage (Sarah 2026-07-30). GET ?owner=<exact owner_name>.
+    path: "/api/duplicates/owner-deals",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const admin = await requireDuplicateRadarAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const owner = c.req.query("owner") || "";
+          if (!owner) return c.json({ error: "owner required" }, 400);
+          const result = await getOwnerOpenDeals(String(owner));
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("owner-deals read failed:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // OWNER OFFBOARDING — DESTRUCTIVE bulk write to Zoho (Sarah 2026-07-30).
+    // Admin-gated. Body: { owner, dealIds[], action: 'close_lost'|'move',
+    // targetStage?, lostReason? }. Re-checks each id (still owned + open) before
+    // writing; returns per-deal outcomes + skipped.
+    path: "/api/duplicates/owner-deals/bulk-update",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } =
+          await import("../../utils/rbacMiddleware");
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const owner = String(body?.owner || "").trim();
+        const dealIds = Array.isArray(body?.dealIds)
+          ? body.dealIds.map((x: any) => String(x)).filter(Boolean)
+          : [];
+        const action = body?.action === "move" ? "move" : "close_lost";
+        if (!owner) return c.json({ error: "owner required" }, 400);
+        if (!dealIds.length) return c.json({ error: "dealIds required" }, 400);
+        if (action === "move" && !String(body?.targetStage || "").trim()) {
+          return c.json({ error: "targetStage required for move" }, 400);
+        }
+        logger.info(
+          `[OwnerOffboard] ${su?.email || "operator"} bulk ${action} on ${dealIds.length} deal(s) of owner "${owner}"` +
+            (action === "move" ? ` -> "${body.targetStage}"` : ` (Closed Lost / ${body?.lostReason || "Old Data"})`),
+        );
+        const result = await bulkUpdateOwnerDeals({
+          owner,
+          dealIds,
+          action,
+          targetStage: body?.targetStage,
+          lostReason: body?.lostReason,
+        });
+        return c.json({ success: true, action, ...result });
+      } catch (e: any) {
+        logger.error("owner-deals bulk-update failed", e);
+        const detail =
+          e instanceof Error ? e.message : String(e || "unknown error");
+        return c.json({ error: detail.slice(0, 400) }, 500);
+      }
     },
   },
   {
