@@ -429,7 +429,7 @@ export async function getAllClustersByInflation(
        JOIN at_risk ar ON ar.cluster_id = c.id
        LEFT JOIN resolved_act ra ON ra.cluster_id = c.id
       WHERE ar.at_risk_value > 0
-        AND c.total_records > 1
+        AND c.total_deals > 1
         ${statusClause}
       ORDER BY ar.at_risk_value DESC, c.total_records DESC
       LIMIT $1 OFFSET $2`,
@@ -4259,6 +4259,7 @@ export async function getClusterSummary(): Promise<{
          LEFT JOIN resolved_act ra2 ON ra2.cluster_id = c2.id
         WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
           AND c2.status = 'active' AND ra2.cluster_id IS NULL
+          AND c2.total_deals > 1
           AND (${openStagePredicate("r")})
       ) as pipeline_inflation,
       COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
@@ -5143,6 +5144,11 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
     SELECT COALESCE(SUM(deal_value), 0) as inflation
     FROM duplicate_records
     WHERE cluster_id = $1 AND record_type = 'deal' AND is_primary = false AND deal_value > 0
+      -- Only a genuine deal-duplicate cluster (2+ deals) inflates pipeline. A
+      -- lone deal sharing a domain with an account is NOT a duplicate deal
+      -- (Sarah 2026-07-29).
+      AND (SELECT COUNT(*) FROM duplicate_records d2
+             WHERE d2.cluster_id = $1 AND d2.record_type = 'deal') > 1
   `,
     [clusterId],
   );
@@ -7588,7 +7594,8 @@ export async function getInflationOpenClosedBreakdown(
          JOIN duplicate_clusters c ON c.id = r.cluster_id
          LEFT JOIN resolved_act ra ON ra.cluster_id = c.id
         WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
-          AND c.status = 'active' AND ra.cluster_id IS NULL${segCond}
+          AND c.status = 'active' AND ra.cluster_id IS NULL
+          AND c.total_deals > 1${segCond}
         GROUP BY 1, 2
         ORDER BY sar DESC`,
       seg.params,
@@ -7903,6 +7910,7 @@ export async function getEnhancedSummary(): Promise<{
          LEFT JOIN resolved_act ra2 ON ra2.cluster_id = c2.id
         WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
           AND c2.status = 'active' AND ra2.cluster_id IS NULL
+          AND c2.total_deals > 1
           AND (${openStagePredicate("r")})
       ) as pipeline_inflation,
       COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
@@ -7987,7 +7995,7 @@ export async function getEnhancedSummary(): Promise<{
       JOIN at_risk ar ON ar.cluster_id = c.id
       LEFT JOIN resolved_act ra ON ra.cluster_id = c.id
      WHERE c.status = 'active' AND ra.cluster_id IS NULL
-       AND ar.at_risk_value > 0 AND c.total_records > 1
+       AND ar.at_risk_value > 0 AND c.total_deals > 1
      ORDER BY ar.at_risk_value DESC
      LIMIT 5
   `);
