@@ -3666,15 +3666,16 @@
          */
         function openClusterFromOwner(clusterId) {
             closeOwnerClusters();
-            // openCluster is the page's existing cluster-detail loader
-            // (binds the cluster modal). We test for it on the chance
-            // a future refactor renames it.
-            if (typeof window.openCluster === 'function') {
+            // The page's real cluster-detail loader is showClusterDetails (used
+            // by the Clusters tab + Top Clusters). The old openCluster /
+            // openClusterById names never existed, so Open silently fell through
+            // to a URL hash that nothing listens to (Sarah 2026-07-30).
+            if (typeof showClusterDetails === 'function') {
+                showClusterDetails(clusterId);
+            } else if (typeof window.openCluster === 'function') {
                 window.openCluster(clusterId);
-            } else if (typeof window.openClusterById === 'function') {
-                window.openClusterById(clusterId);
             } else {
-                console.warn('[OwnerClusters] No openCluster handler found; falling back to URL hash.');
+                console.warn('[OwnerClusters] No cluster-detail handler found; URL hash fallback.');
                 window.location.hash = '#cluster-' + encodeURIComponent(String(clusterId));
             }
         }
