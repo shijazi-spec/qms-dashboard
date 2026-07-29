@@ -413,12 +413,17 @@ export async function getAllClustersByInflation(
        SELECT DISTINCT cluster_id FROM duplicate_merge_actions
         WHERE action_type IN ('resolve','module_resolved')
      ),
-     at_risk AS (
-       SELECT rr.cluster_id, SUM(rr.deal_value) AS at_risk_value
+     open_deals AS (
+       SELECT rr.cluster_id, rr.deal_value,
+              ROW_NUMBER() OVER (PARTITION BY rr.cluster_id
+                ORDER BY rr.is_primary DESC, rr.deal_value DESC, rr.created_date ASC NULLS LAST, rr.id ASC) AS rn
          FROM duplicate_records rr
-        WHERE rr.record_type = 'deal' AND rr.is_primary = false AND rr.deal_value > 0
+        WHERE rr.record_type = 'deal' AND rr.deal_value > 0
           AND (${openStagePredicate("rr")})
-        GROUP BY rr.cluster_id
+     ),
+     at_risk AS (
+       SELECT cluster_id, SUM(deal_value) AS at_risk_value
+         FROM open_deals WHERE rn > 1 GROUP BY cluster_id
      )
      SELECT c.id, c.domain, c.company_name, c.company_name_arabic,
             ar.at_risk_value AS estimated_pipeline_value, c.total_records,
@@ -4253,14 +4258,18 @@ export async function getClusterSummary(): Promise<{
       -- Agreement Signed / Paid — those are WON customers, not pipeline at risk.
       -- Computed from duplicate_records (not the stored estimated_pipeline_value
       -- column) so the stage exclusion applies without a full rebuild.
-      (SELECT COALESCE(SUM(r.deal_value), 0)
-         FROM duplicate_records r
-         JOIN duplicate_clusters c2 ON c2.id = r.cluster_id
-         LEFT JOIN resolved_act ra2 ON ra2.cluster_id = c2.id
-        WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
-          AND c2.status = 'active' AND ra2.cluster_id IS NULL
-          AND c2.total_deals > 1
-          AND (${openStagePredicate("r")})
+      (SELECT COALESCE(SUM(t.deal_value), 0) FROM (
+         SELECT r.deal_value,
+                ROW_NUMBER() OVER (PARTITION BY r.cluster_id
+                  ORDER BY r.is_primary DESC, r.deal_value DESC, r.created_date ASC NULLS LAST, r.id ASC) AS rn
+           FROM duplicate_records r
+           JOIN duplicate_clusters c2 ON c2.id = r.cluster_id
+           LEFT JOIN resolved_act ra2 ON ra2.cluster_id = c2.id
+          WHERE r.record_type = 'deal' AND r.deal_value > 0
+            AND c2.status = 'active' AND ra2.cluster_id IS NULL
+            AND c2.total_deals > 1
+            AND (${openStagePredicate("r")})
+       ) t WHERE t.rn > 1
       ) as pipeline_inflation,
       COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
       COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count
@@ -7627,6 +7636,34 @@ export async function getInflationOpenClosedBreakdown(
       deals,
     };
   });
+  // Survivor exclusion for the OPEN bucket (the headline): keep ONE survivor
+  // open deal per cluster and sum the rest, so a genuine 2-deal cluster where
+  // the ACCOUNT is primary doesn't count both deals (Sarah 2026-07-29). The
+  // by_stage / closed / excluded figures above stay full-sum (informational).
+  const openAdj = (
+    await pool.query(
+      `WITH resolved_act AS (
+         SELECT DISTINCT cluster_id FROM duplicate_merge_actions
+          WHERE action_type IN ('resolve','module_resolved')
+       ),
+       open_deals AS (
+         SELECT r.deal_value,
+                ROW_NUMBER() OVER (PARTITION BY r.cluster_id
+                  ORDER BY r.is_primary DESC, r.deal_value DESC, r.created_date ASC NULLS LAST, r.id ASC) AS rn
+           FROM duplicate_records r
+           JOIN duplicate_clusters c ON c.id = r.cluster_id
+           LEFT JOIN resolved_act ra ON ra.cluster_id = c.id
+          WHERE r.record_type = 'deal' AND r.deal_value > 0
+            AND c.status = 'active' AND ra.cluster_id IS NULL AND c.total_deals > 1
+            AND (${openStagePredicate("r")})${segCond}
+       )
+       SELECT COALESCE(SUM(deal_value),0)::float AS sar, COUNT(*)::int AS deals
+         FROM open_deals WHERE rn > 1`,
+      seg.params,
+    )
+  ).rows[0];
+  open_sar = Number(openAdj?.sar) || 0;
+  open_deals = Number(openAdj?.deals) || 0;
   return {
     total_sar: open_sar + closed_sar + excluded_signed_paid_sar,
     at_risk_sar: open_sar + closed_sar,
@@ -7904,14 +7941,18 @@ export async function getEnhancedSummary(): Promise<{
       -- out), AND excludes duplicate deals at Agreement Signed / Paid (won
       -- customers). Computed live from duplicate_records so the stage exclusion
       -- and dismiss both apply immediately, with no full rebuild.
-      (SELECT COALESCE(SUM(r.deal_value), 0)
-         FROM duplicate_records r
-         JOIN duplicate_clusters c2 ON c2.id = r.cluster_id
-         LEFT JOIN resolved_act ra2 ON ra2.cluster_id = c2.id
-        WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
-          AND c2.status = 'active' AND ra2.cluster_id IS NULL
-          AND c2.total_deals > 1
-          AND (${openStagePredicate("r")})
+      (SELECT COALESCE(SUM(t.deal_value), 0) FROM (
+         SELECT r.deal_value,
+                ROW_NUMBER() OVER (PARTITION BY r.cluster_id
+                  ORDER BY r.is_primary DESC, r.deal_value DESC, r.created_date ASC NULLS LAST, r.id ASC) AS rn
+           FROM duplicate_records r
+           JOIN duplicate_clusters c2 ON c2.id = r.cluster_id
+           LEFT JOIN resolved_act ra2 ON ra2.cluster_id = c2.id
+          WHERE r.record_type = 'deal' AND r.deal_value > 0
+            AND c2.status = 'active' AND ra2.cluster_id IS NULL
+            AND c2.total_deals > 1
+            AND (${openStagePredicate("r")})
+       ) t WHERE t.rn > 1
       ) as pipeline_inflation,
       COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
       COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count,
@@ -7981,12 +8022,17 @@ export async function getEnhancedSummary(): Promise<{
       SELECT DISTINCT cluster_id FROM duplicate_merge_actions
        WHERE action_type IN ('resolve','module_resolved')
     ),
-    at_risk AS (
-      SELECT r.cluster_id, SUM(r.deal_value) AS at_risk_value
+    open_deals AS (
+      SELECT r.cluster_id, r.deal_value,
+             ROW_NUMBER() OVER (PARTITION BY r.cluster_id
+               ORDER BY r.is_primary DESC, r.deal_value DESC, r.created_date ASC NULLS LAST, r.id ASC) AS rn
         FROM duplicate_records r
-       WHERE r.record_type = 'deal' AND r.is_primary = false AND r.deal_value > 0
+       WHERE r.record_type = 'deal' AND r.deal_value > 0
          AND (${openStagePredicate("r")})
-       GROUP BY r.cluster_id
+    ),
+    at_risk AS (
+      SELECT cluster_id, SUM(deal_value) AS at_risk_value
+        FROM open_deals WHERE rn > 1 GROUP BY cluster_id
     )
     SELECT c.id, c.domain, c.company_name,
            ar.at_risk_value AS estimated_pipeline_value,
