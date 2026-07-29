@@ -1313,7 +1313,7 @@
             document.getElementById('totalAccounts').textContent = _fn(data.totalDuplicateAccounts || 0);
             document.getElementById('highConfidence').textContent = _fn(data.highConfidence || 0);
             document.getElementById('mediumConfidence').textContent = _fn(data.mediumConfidence || 0);
-            document.getElementById('pipelineInflation').textContent = formatCurrency(data.estimatedPipelineInflation || 0);
+            document.getElementById('pipelineInflation').textContent = formatCurrencyCompact(data.estimatedPipelineInflation || 0);
             loadInflationBreakdown(); // open vs closed split under the card
 
             document.getElementById('leadRate').textContent = WalaPlusI18n.t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateLeadRate || data.kpis?.duplicateLeadRate || 0) });
@@ -7460,17 +7460,18 @@
             // Signed / Paid (won customers). Open-only narrows further to just
             // the active-pipeline exposure.
             var atRisk = d.at_risk_sar || 0;
-            if (val) val.textContent = formatCurrency((openOnly ? d.open_sar : atRisk) || 0);
+            var headline = (openOnly ? d.open_sar : atRisk) || 0;
+            if (val) { val.textContent = formatCurrencyCompact(headline); val.title = formatCurrency(headline); }
             if (lbl) lbl.textContent = openOnly ? 'Amount at risk — Open pipeline (SAR)' : 'Amount at risk (SAR)';
             var openPct = atRisk > 0 ? Math.round((d.open_sar / atRisk) * 100) : 0;
             var toggle = '<span data-on-click="toggleInflationOpenOnly" style="cursor:pointer;font-weight:600;color:#4f46e5" title="Switch the headline between at-risk (open + closed-lost, excludes Agreement Signed / Paid) and open-pipeline only.">'
                 + (openOnly ? '● Headline: open-only — show at-risk' : '○ Show open-only headline') + '</span>';
             el.innerHTML =
-                '<span style="color:#b45309;font-weight:600">Open ' + formatCurrency(d.open_sar || 0) + '</span>'
+                '<span style="color:#b45309;font-weight:600">Open ' + formatCurrencyCompact(d.open_sar || 0) + '</span>'
                 + ' <span style="color:#9ca3af">(' + _fn(d.open_deals || 0) + ' · ' + openPct + '%)</span>'
-                + '<br><span style="color:#6b7280;font-weight:600">Closed ' + formatCurrency(d.closed_sar || 0) + '</span>'
+                + '<br><span style="color:#6b7280;font-weight:600">Closed ' + formatCurrencyCompact(d.closed_sar || 0) + '</span>'
                 + ' <span style="color:#9ca3af">(' + _fn(d.closed_deals || 0) + ')</span>'
-                + '<br><span style="color:#9ca3af">Excluded — Signed/Paid ' + formatCurrency(d.excluded_signed_paid_sar || 0) + ' (' + _fn(d.excluded_deals || 0) + ')</span>'
+                + '<br><span style="color:#9ca3af">Excluded — Signed/Paid ' + formatCurrencyCompact(d.excluded_signed_paid_sar || 0) + ' (' + _fn(d.excluded_deals || 0) + ')</span>'
                 + '<br>' + toggle;
         }
         async function loadInflationBreakdown() {
@@ -13707,6 +13708,16 @@
         function formatCurrency(v) {
             if (!v || v === 0) return 'SAR ' + _fn(0);
             return 'SAR ' + _fn(Number(v));
+        }
+        // Compact SAR for headline KPI tiles so a large value fits on one line
+        // (e.g. "SAR 152.61M") instead of wrapping. Sarah 2026-07-29.
+        function formatCurrencyCompact(v) {
+            var n = Number(v) || 0;
+            var a = Math.abs(n);
+            if (a >= 1e9) return 'SAR ' + (n / 1e9).toFixed(2) + 'B';
+            if (a >= 1e6) return 'SAR ' + (n / 1e6).toFixed(2) + 'M';
+            if (a >= 1e3) return 'SAR ' + (n / 1e3).toFixed(1) + 'K';
+            return 'SAR ' + _fn(n);
         }
 
         function getConfidenceLevel(score) {
