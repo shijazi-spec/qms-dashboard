@@ -139,6 +139,9 @@
                     loadDealLifecycle();
                 } else if (activeTab === 'account-hints') {
                     loadAccountHints();
+                } else if (activeTab === 'cleaning-progress') {
+                    const _cpSeg0 = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : 'all';
+                    await loadCleaningProgress(_cpSeg0);
                 }
                 // summary / logs / owners / search tabs need no extra work —
                 // summary essentials above already populated them.
@@ -905,6 +908,7 @@
             { key: 'dealsLifecycle',       label: 'Deals Lifecycle',       icon: '📐', tab: 'deal-lifecycle',   desc: 'Sales-pipeline stage aging vs Sales SOP §7.' },
             { key: 'dealCompliance',       label: 'Deal Compliance',       icon: '📎', tab: 'deal-compliance',  desc: 'Required document attachments on Proposal / Agreement Signed / Paid deals.' },
             { key: 'accountHints',         label: 'Account Hints',         icon: '💡', tab: 'account-hints',    desc: 'Deals missing Account_Name with inferred-Account verdicts.' },
+            { key: 'cleaningProgress',     label: 'Cleaning Progress',     icon: '🧹', tab: 'cleaning-progress', desc: 'Verified data-cleaning results for Deals & Accounts.' },
             { key: 'ownerAccountability',  label: 'Owner Accountability',  icon: '👤', tab: 'owners',           desc: 'Per-rep duplicate scorecard. RAG bands per SDR-KPI-09.' },
             { key: 'logs',                 label: 'Logs',                  icon: '📋', tab: 'logs',             desc: 'Agent Activity + operator Manual Actions audit trail (24h window).' },
         ];
@@ -7490,6 +7494,10 @@
             if (tab === 'cs-overlap') loadCsOverlap(window._csOverlapFilter || 'all');
             if (tab === 'cs-lifecycle') loadCsLifecycle(window._csLifecycleFilter || 'all');
             if (tab === 'deal-lifecycle') loadDealLifecycle();
+            if (tab === 'cleaning-progress') {
+                const _cpSeg1 = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : 'all';
+                loadCleaningProgress(_cpSeg1);
+            }
             if (tab === 'account-hints') {
                 loadAccountHints();
                 // Record Hint tab now has 2 additional sections (Contact→Account,
@@ -11225,6 +11233,98 @@
             setTimeout(() => URL.revokeObjectURL(a.href), 1000);
         }
 
+        // ─── Cleaning Progress — verified merges + est. records removed ─────
+        // Single source of truth: GET /api/duplicates/cleaning-progress?segment=
+        // (dataCleaningProgress.ts / getDataCleaningProgress). Segment-aware
+        // like Deal Lifecycle / CS Lifecycle — reads the shared #filterSegment
+        // chip, re-fetches server-side on every segment flip (no client cache
+        // to go stale).
+        async function loadCleaningProgress(segment) {
+            const seg = segment || 'all';
+            let url = '/api/duplicates/cleaning-progress';
+            if (seg && seg !== 'all') url += '?segment=' + encodeURIComponent(seg);
+            const host = document.getElementById('cpTrend');
+            try {
+                const res = await fetch(url, { credentials: 'same-origin' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                renderCleaningProgress(await res.json());
+            } catch (e) {
+                if (host) host.innerHTML = '<div class="text-sm text-red-600">Failed to load: ' + escapeHtml(String(e.message || e)) + '</div>';
+            }
+        }
+
+        function renderCleaningProgress(d) {
+            const m = (d && d.modules) || {};
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = (v == null ? 0 : v).toLocaleString(); };
+            set('cpDealsOutstanding', m.Deals && m.Deals.outstanding);
+            set('cpDealsMerges',      m.Deals && m.Deals.verified_merges);
+            set('cpDealsRemoved',     m.Deals && m.Deals.est_records_removed);
+            set('cpAcctOutstanding', m.Accounts && m.Accounts.outstanding);
+            set('cpAcctMerges',      m.Accounts && m.Accounts.verified_merges);
+            set('cpAcctRemoved',     m.Accounts && m.Accounts.est_records_removed);
+            set('cpEmptyDeleted', ((m.Deals && m.Deals.empty_deleted) || 0) + ((m.Accounts && m.Accounts.empty_deleted) || 0));
+
+            // Explanations (plain language + honesty footnotes).
+            const ex = document.getElementById('cpExplain');
+            if (ex) {
+                const unknownNote = (d && d.unknown_segment && d.unknown_segment.verified_merges > 0)
+                    ? '<p class="text-gray-500">' + escapeHtml(String(d.unknown_segment.verified_merges)) + ' verified merges could not be attributed to a layout (survivor record no longer present).</p>'
+                    : '';
+                ex.innerHTML = [
+                    '<p><strong>Verified merges</strong> = duplicate clusters confirmed merged in Zoho (survivor kept, duplicates deleted).</p>',
+                    '<p><strong>Empty/messy records deleted</strong> = records verified removed from Zoho. Shown for <em>all layouts</em> (deletion records carry no layout).</p>',
+                    '<p><strong>Est. records removed</strong> may undercount cleanup done before per-record tracking existed.</p>',
+                    unknownNote,
+                ].join('');
+            }
+            renderCleaningTrend(d && d.trend);
+            window._cleaningProgressData = d;
+        }
+
+        // Minimal dependency-free SVG line chart — open vs solved, last 30
+        // days of duplicate_progress_daily for the Deals module (the report's
+        // burndown headline). No inline style="" attributes (CSP strips
+        // them) — every visual is a class or an SVG presentation attribute.
+        function renderCleaningTrend(trend) {
+            const host = document.getElementById('cpTrend');
+            if (!host) return;
+            const series = (trend && Array.isArray(trend.series)) ? trend.series : [];
+            if (series.length < 2) {
+                host.innerHTML = '<div class="text-sm text-gray-500">Trend starts building today for this segment.</div>';
+                return;
+            }
+            const w = 640, h = 140, padL = 8, padR = 8, padT = 8, padB = 18;
+            const innerW = w - padL - padR, innerH = h - padT - padB;
+            const n = series.length;
+            const maxV = Math.max(1, ...series.map(p => Math.max(Number(p.open) || 0, Number(p.solved) || 0)));
+            const x = (i) => padL + (n === 1 ? 0 : (innerW * i) / (n - 1));
+            const y = (v) => padT + innerH - (innerH * (Number(v) || 0)) / maxV;
+            const pathFor = (key) => series.map((p, i) => (i === 0 ? 'M' : 'L') + x(i).toFixed(1) + ',' + y(p[key]).toFixed(1)).join(' ');
+            const first = series[0], last = series[series.length - 1];
+            host.innerHTML = ''
+                + '<svg viewBox="0 0 ' + w + ' ' + h + '" class="w-full" role="img" aria-label="Open vs solved trend">'
+                + '<line x1="' + padL + '" y1="' + (padT + innerH) + '" x2="' + (padL + innerW) + '" y2="' + (padT + innerH) + '" stroke="currentColor" class="text-gray-200" stroke-width="1"></line>'
+                + '<path d="' + pathFor('open') + '" fill="none" stroke="currentColor" class="text-amber-500" stroke-width="2"></path>'
+                + '<path d="' + pathFor('solved') + '" fill="none" stroke="currentColor" class="text-emerald-500" stroke-width="2"></path>'
+                + '</svg>'
+                + '<div class="flex items-center gap-4 mt-2 text-xs text-gray-500">'
+                + '<span class="inline-flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-amber-500"></span>Open</span>'
+                + '<span class="inline-flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>Solved</span>'
+                + '<span class="ms-auto">' + escapeHtml(String((first && first.date) || '')) + ' → ' + escapeHtml(String((last && last.date) || '')) + '</span>'
+                + '</div>';
+        }
+
+        function exportCleaningProgress() {
+            const d = window._cleaningProgressData;
+            if (!d || !d.modules) { rrToast('Nothing to export yet.'); return; }
+            const headers = ['Module', 'Outstanding', 'Verified merges', 'Est. records removed', 'Empty/messy deleted (all layouts)'];
+            const rows = ['Deals', 'Accounts'].map(k => {
+                const mod = d.modules[k] || {};
+                return [k, mod.outstanding || 0, mod.verified_merges || 0, mod.est_records_removed || 0, mod.empty_deleted || 0];
+            });
+            downloadCsvRows('data-cleaning-progress-' + (d.segment || 'all') + '.csv', headers, rows);
+        }
+
         // ─── CS lifecycle compliance ────────────────────────────────────────
         window._csLifecycleFilter = 'all';
 
@@ -14327,6 +14427,14 @@
             if (activeTab === 'deal-lifecycle') {
                 if (window._dealLifecycleData) renderDealLifecycle(window._dealLifecycleData);
                 else await loadDealLifecycle();
+                return;
+            }
+            if (activeTab === 'cleaning-progress') {
+                // Segment is filtered SERVER-SIDE (the KPI cards + trend must
+                // reflect only the chosen layout), so always re-fetch on a
+                // segment flip rather than re-rendering the cached payload.
+                const _cpSeg2 = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : 'all';
+                await loadCleaningProgress(_cpSeg2);
                 return;
             }
             if (activeTab === 'deal-compliance') {

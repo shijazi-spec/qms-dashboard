@@ -405,6 +405,15 @@
                 <span class="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
                 Deal Compliance
             </button>
+            <!-- Cleaning Progress sits next to Deal Compliance so the "how are
+                 we doing" reporting tabs are grouped. Reads
+                 /api/duplicates/cleaning-progress?segment= — verified merges +
+                 estimated records removed for Deals/Accounts, honoring the
+                 shared segment chip above. -->
+            <button data-on-click="showTab" data-args="[&quot;cleaning-progress&quot;]" id="tab-cleaning-progress" data-testid="tab-cleaning-progress" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Verified data-cleaning results for Deals &amp; Accounts — clusters confirmed merged in Zoho and empty/junk records confirmed deleted, honoring the segment chip.">
+                <span class="inline-block w-2 h-2 rounded-full bg-teal-500"></span>
+                🧹 Cleaning Progress
+            </button>
             <button data-on-click="showTab" data-args="[&quot;preflight&quot;]" id="tab-preflight" data-testid="tab-preflight" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Check a batch of incoming leads/deals against existing CRM data BEFORE pushing to CRM">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Preflight Check
@@ -1903,6 +1912,65 @@
           </div><!-- /lg:px-… inner padding wrapper -->
         </div>
 
+        <!-- ═══ CLEANING PROGRESS — verified merges + est. records removed ═══ -->
+        <div id="content-cleaning-progress" class="tab-content hidden lg:-mx-8 xl:-mx-16 2xl:-mx-32">
+          <div class="lg:px-8 xl:px-16 2xl:px-32">
+            <div class="rr-note rr-note-info mb-3">
+                <strong>Data Cleaning Progress.</strong> Verified data-cleaning results for Deals &amp; Accounts — duplicate clusters confirmed merged in Zoho (survivor kept, duplicates deleted) and empty/junk records confirmed deleted. Honors the segment chip above; "Outstanding" is what's left to clean under the current filter.
+            </div>
+
+            <div class="flex items-center justify-end mb-2">
+                <button data-on-click="exportCleaningProgress" id="cpExportBtn" data-testid="button-export-cleaning-progress" title="Download a CSV of the KPI numbers shown below for the current segment." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+            </div>
+
+            <div class="rr-kpi-label mb-1 text-gray-500">Deals</div>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                <div class="rr-kpi rr-kpi-rich rr-acc-amber">
+                    <div class="rr-kpi-label">Outstanding duplicate deals</div>
+                    <div id="cpDealsOutstanding" class="rr-kpi-value">—</div>
+                </div>
+                <div class="rr-kpi rr-kpi-rich rr-acc-green">
+                    <div class="rr-kpi-label">Verified merges</div>
+                    <div id="cpDealsMerges" class="rr-kpi-value">—</div>
+                </div>
+                <div class="rr-kpi rr-kpi-rich rr-acc-teal">
+                    <div class="rr-kpi-label">Est. records removed</div>
+                    <div id="cpDealsRemoved" class="rr-kpi-value">—</div>
+                </div>
+            </div>
+
+            <div class="rr-kpi-label mb-1 text-gray-500">Accounts</div>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                <div class="rr-kpi rr-kpi-rich rr-acc-amber">
+                    <div class="rr-kpi-label">Outstanding duplicate accounts</div>
+                    <div id="cpAcctOutstanding" class="rr-kpi-value">—</div>
+                </div>
+                <div class="rr-kpi rr-kpi-rich rr-acc-green">
+                    <div class="rr-kpi-label">Verified merges</div>
+                    <div id="cpAcctMerges" class="rr-kpi-value">—</div>
+                </div>
+                <div class="rr-kpi rr-kpi-rich rr-acc-teal">
+                    <div class="rr-kpi-label">Est. records removed</div>
+                    <div id="cpAcctRemoved" class="rr-kpi-value">—</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div class="rr-kpi rr-kpi-rich rr-acc-rose">
+                    <div class="rr-kpi-label">Empty/messy records deleted (all layouts)</div>
+                    <div id="cpEmptyDeleted" class="rr-kpi-value">—</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-4 mb-4">
+                <div class="rr-kpi-label mb-2 text-gray-500">30-day burndown — Deals (open vs solved)</div>
+                <div id="cpTrend"></div>
+            </div>
+
+            <div id="cpExplain" class="bg-white rounded-lg shadow p-4 text-sm text-gray-700 space-y-2"></div>
+          </div><!-- /lg:px-… inner padding wrapper -->
+        </div>
+
         <!-- ═══ EMPTY / ORPHANED RECORDS — CRM cleanup (tag Empty-Delete) ═══ -->
         <div id="content-empty-records" class="tab-content hidden">
           <div class="bg-rose-50 border border-rose-200 rounded-lg p-3 mb-4 text-sm text-rose-900">
@@ -2357,7 +2425,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=146"></script>
+    <script src="/js/duplicates-app.js?v=147"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
