@@ -8104,9 +8104,12 @@ export async function getEnhancedSummary(): Promise<{
             AND (${openStagePredicate("r")})
        ) t WHERE t.rn > 1
       ) as pipeline_inflation,
-      COUNT(*) FILTER (WHERE dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
-      COUNT(*) FILTER (WHERE dc.status = 'resolved' OR ra.cluster_id IS NOT NULL) as resolved_count,
-      COUNT(*) FILTER (WHERE dc.status = 'ignored' AND ra.cluster_id IS NULL) as ignored_count
+      COUNT(*) FILTER (WHERE GREATEST(dc.total_leads, dc.total_deals, dc.total_contacts, dc.total_accounts) > 1
+                        AND dc.status = 'active' AND ra.cluster_id IS NULL) as active_count,
+      COUNT(*) FILTER (WHERE GREATEST(dc.total_leads, dc.total_deals, dc.total_contacts, dc.total_accounts) > 1
+                        AND (dc.status = 'resolved' OR ra.cluster_id IS NOT NULL)) as resolved_count,
+      COUNT(*) FILTER (WHERE GREATEST(dc.total_leads, dc.total_deals, dc.total_contacts, dc.total_accounts) > 1
+                        AND dc.status = 'ignored' AND ra.cluster_id IS NULL) as ignored_count
     FROM duplicate_clusters dc
     LEFT JOIN resolved_act ra ON ra.cluster_id = dc.id
   `);
