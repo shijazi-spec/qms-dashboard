@@ -29,6 +29,7 @@ import { untagRecordsTool } from "../tools/untagRecordsTool";
 import { mergeRecordsTool } from "../tools/mergeRecordsTool";
 import { updateRecordFieldTool } from "../tools/updateRecordFieldTool";
 import { csLifecycleStatusTool } from "../tools/csLifecycleStatusTool";
+import { cleaningProgressTool } from "../tools/cleaningProgressTool";
 import { csOwnersTool } from "../tools/csOwnersTool";
 import { activeClientDomainsTool } from "../tools/activeClientDomainsTool";
 import { domainDealStagesTool } from "../tools/domainDealStagesTool";
@@ -466,6 +467,9 @@ export const qmsConsultantAgent = new Agent({
     preflightCheckTool:               wt(preflightCheckTool, AGENT_NAME),        // Preflight Check
     clusterMergeCandidatesTool:       wt(clusterMergeCandidatesTool, AGENT_NAME),// Cluster Merge — same-domain duplicates
     emptyRecordsStatusTool:           wt(emptyRecordsStatusTool, AGENT_NAME),     // Empty / Orphaned Records cleanup
+    // "How much data have we cleaned?" / Cleaning Progress tab — verified
+    // duplicate merges + verified empty-record deletions, still outstanding.
+    cleaningProgressTool:             wt(cleaningProgressTool, AGENT_NAME),
 
     // --- HIGH-risk write tools (gated) ---
     // Tag Zoho records for removal (migrate-then-tag): Adam flags duplicates/
