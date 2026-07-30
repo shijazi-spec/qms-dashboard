@@ -4,6 +4,15 @@ import { normalizeSslMode } from "./normalizeDatabaseUrl";
 // Arabic-aware name normalizer (planner only type-imports this file, so this
 // runtime import creates no cycle).
 import { normalizePersonName } from "./duplicateMergePlanner";
+// Segment classification (JS mirror of buildSegmentPredicate) + the Cleaning
+// Progress shaper — used by getDataCleaningProgress and the segmented
+// burndown writer (captureDuplicateProgressSnapshot).
+import { classifySegmentFromLayout } from "./duplicateRadarSegment";
+import {
+  shapeCleaningProgress,
+  type ResolveRowRaw,
+  type DataCleaningProgress,
+} from "./dataCleaningProgress";
 
 // Normalize sslmode directly on the connection string (module-scope pool —
 // see src/utils/normalizeDatabaseUrl.ts for why env-var ordering is unreliable
@@ -2292,52 +2301,59 @@ export async function captureDuplicateProgressSnapshot(): Promise<DuplicateProgr
     merged: 0,
   }));
   try {
-    const selects = PROGRESS_MODULES.map(
-      (o) =>
-        `COUNT(*) FILTER (WHERE dc.${o.col} > 0)::int AS ${o.col}_t,
-         COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND dc.status = 'active'
-                          AND NOT EXISTS (
-                            SELECT 1 FROM duplicate_merge_actions ma
-                             WHERE ma.cluster_id = dc.id
-                               AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending')
-                          ))::int AS ${o.col}_o`,
-    ).join(",\n");
-    const r = await pool.query(`SELECT ${selects} FROM duplicate_clusters dc`);
-    const row = r.rows[0] || {};
+    // Per-segment merged counts (verified resolves attributed by survivor layout).
+    const resolveRows = await fetchResolveRowsWithSurvivorSegment();
+    const mergedBySeg: Record<string, Record<string, number>> = {}; // segment -> module -> count
+    const bump = (seg: string, mod: string) => {
+      (mergedBySeg[seg] ??= {})[mod] = ((mergedBySeg[seg] ??= {})[mod] || 0) + 1;
+    };
+    for (const row of resolveRows) {
+      if (!row.survivor_present) continue; // unknown segment excluded from per-segment trend
+      bump(classifySegmentFromLayout(row.layout), row.module);
+      bump("all", row.module);
+    }
 
-    // Durable real merges per module (ledger survives Rebuild Clusters).
-    const lg = await pool.query<{ module: string; n: string }>(
-      `SELECT module, COUNT(*)::text AS n
-         FROM duplicate_resolution_ledger
-        WHERE master_zoho_id IS NOT NULL
-        GROUP BY module`,
-    );
-    const mergedByModule = new Map<string, number>(
-      lg.rows.map((x) => [x.module, Number(x.n) || 0]),
-    );
-
-    PROGRESS_MODULES.forEach((o, i) => {
-      const total = Number(row[`${o.col}_t`] || 0);
-      const open = Number(row[`${o.col}_o`] || 0);
-      out[i].total = total;
-      out[i].open = open;
-      out[i].solved = Math.max(0, total - open);
-      out[i].merged = mergedByModule.get(o.module) || 0;
-    });
-
-    for (const p of out) {
-      await pool.query(
-        `INSERT INTO duplicate_progress_daily
-           (snapshot_date, module, open_count, solved_count, total_count, merged_count, created_at)
-         VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, NOW())
-         ON CONFLICT (snapshot_date, module) DO UPDATE SET
-           open_count = EXCLUDED.open_count,
-           solved_count = EXCLUDED.solved_count,
-           total_count = EXCLUDED.total_count,
-           merged_count = EXCLUDED.merged_count,
-           created_at = NOW()`,
-        [p.module, p.open, p.solved, p.total, p.merged],
-      );
+    // open/solved/total per segment via an EXISTS on duplicate_records layout.
+    const SEG_LIST = ["all", "marketplace", "walaplus", "walaone"] as const;
+    for (const seg of SEG_LIST) {
+      const p = buildSegmentPredicate(seg === "all" ? "all" : seg, 1);
+      const exists = p.condition
+        ? `AND EXISTS (SELECT 1 FROM duplicate_records r
+                        WHERE r.cluster_id = dc.id AND ${p.condition})`
+        : "";
+      const segSelects = PROGRESS_MODULES.map(
+        (o) =>
+          `COUNT(*) FILTER (WHERE dc.${o.col} > 0 ${exists})::int AS ${o.col}_t,
+           COUNT(*) FILTER (WHERE dc.${o.col} > 0 ${exists} AND dc.status = 'active'
+                            AND NOT EXISTS (SELECT 1 FROM duplicate_merge_actions ma
+                              WHERE ma.cluster_id = dc.id
+                                AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending')))::int AS ${o.col}_o`,
+      ).join(",\n");
+      const sr = await pool.query(`SELECT ${segSelects} FROM duplicate_clusters dc`, p.params);
+      const srow = sr.rows[0] || {};
+      for (const [i, o] of PROGRESS_MODULES.entries()) {
+        const total = Number(srow[`${o.col}_t`] || 0);
+        const open = Number(srow[`${o.col}_o`] || 0);
+        const solved = Math.max(0, total - open);
+        const merged = mergedBySeg[seg]?.[o.module] || 0;
+        // Keep populating out[] from the seg === "all" pass so the function's
+        // return value (used by existing 1-segment callers) is unchanged.
+        if (seg === "all") {
+          out[i].total = total;
+          out[i].open = open;
+          out[i].solved = solved;
+          out[i].merged = merged;
+        }
+        await pool.query(
+          `INSERT INTO duplicate_progress_daily
+             (snapshot_date, module, segment, open_count, solved_count, total_count, merged_count, created_at)
+           VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, $6, NOW())
+           ON CONFLICT (snapshot_date, module, segment) DO UPDATE SET
+             open_count = EXCLUDED.open_count, solved_count = EXCLUDED.solved_count,
+             total_count = EXCLUDED.total_count, merged_count = EXCLUDED.merged_count, created_at = NOW()`,
+          [o.module, seg, open, solved, total, merged],
+        );
+      }
     }
   } catch (e) {
     logger.warn("[DuplicateRadar] captureDuplicateProgressSnapshot skipped (non-fatal)", {
@@ -2362,7 +2378,10 @@ export interface DuplicateProgressSeriesPoint {
  * before a scan), it captures one on the fly so the caller always sees current
  * numbers.
  */
-export async function getDuplicateProgressSeries(days = 30): Promise<{
+export async function getDuplicateProgressSeries(
+  days = 30,
+  segment: string = "all",
+): Promise<{
   byModule: Record<
     string,
     {
@@ -2381,7 +2400,9 @@ export async function getDuplicateProgressSeries(days = 30): Promise<{
   try {
     // Make sure today's row exists so "latest" is never stale.
     const todayCheck = await pool.query<{ n: string }>(
-      `SELECT COUNT(*)::text AS n FROM duplicate_progress_daily WHERE snapshot_date = CURRENT_DATE`,
+      `SELECT COUNT(*)::text AS n FROM duplicate_progress_daily
+        WHERE snapshot_date = CURRENT_DATE AND segment = $1`,
+      [segment],
     );
     if (Number(todayCheck.rows[0]?.n || 0) === 0) {
       await captureDuplicateProgressSnapshot();
@@ -2391,9 +2412,9 @@ export async function getDuplicateProgressSeries(days = 30): Promise<{
       `SELECT to_char(snapshot_date, 'YYYY-MM-DD') AS date, module,
               open_count, solved_count, total_count, merged_count
          FROM duplicate_progress_daily
-        WHERE snapshot_date >= CURRENT_DATE - ($1::int - 1)
+        WHERE snapshot_date >= CURRENT_DATE - ($1::int - 1) AND segment = $2
         ORDER BY module, snapshot_date ASC`,
-      [lookback],
+      [lookback, segment],
     );
     for (const row of r.rows) {
       const bucket = byModule[row.module];
@@ -2418,6 +2439,81 @@ export async function getDuplicateProgressSeries(days = 30): Promise<{
     });
   }
   return { byModule, generatedAt: new Date().toISOString() };
+}
+
+/**
+ * All VERIFIED duplicate merges (action_type='resolve'), each joined to its
+ * surviving record so we can attribute it to a segment by layout. survivor_present
+ * distinguishes "blank layout on a real record" (→ walaplus) from "survivor gone"
+ * (→ unknown bucket). dup_count = number of dups tagged/removed for that survivor.
+ */
+export async function fetchResolveRowsWithSurvivorSegment(): Promise<ResolveRowRaw[]> {
+  const r = await pool.query(
+    `SELECT l.module AS module,
+            (r.zoho_record_id IS NOT NULL) AS survivor_present,
+            COALESCE(NULLIF(r.layout_name,''), r.raw_data#>>'{Layout,name}',
+                     r.raw_data#>>'{$layout,name}', r.raw_data->>'Layout') AS layout,
+            COALESCE(jsonb_array_length(NULLIF(l.duplicate_zoho_ids, '[]'::jsonb)), 0) AS dup_count
+       FROM duplicate_resolution_ledger l
+       LEFT JOIN duplicate_records r ON r.zoho_record_id = l.master_zoho_id
+      WHERE l.action_type = 'resolve'
+        AND l.module IN ('Deals','Accounts')`,
+  );
+  return r.rows.map((x: any) => ({
+    module: x.module,
+    survivor_present: x.survivor_present === true,
+    layout: x.layout ?? null,
+    dup_count: Number(x.dup_count) || 0,
+  }));
+}
+
+/** One source of truth for the Cleaning Progress tab, its export, and Adam. */
+export async function getDataCleaningProgress(
+  segment: DuplicateFilters["segment"],
+): Promise<DataCleaningProgress> {
+  const seg = segment && segment !== "all" ? segment : "all";
+  const sync = await pool.query(
+    `SELECT to_char(MAX(last_sync_at), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_sync_at FROM zoho_sync_state`,
+  );
+  const resolveRows = await fetchResolveRowsWithSurvivorSegment();
+  const empty = await pool.query(
+    `SELECT module, COUNT(*)::text AS n FROM empty_delete_ledger
+      WHERE status = 'deleted' AND module IN ('Deals','Accounts') GROUP BY module`,
+  );
+  const emptyMap: Record<"Deals" | "Accounts", number> = { Deals: 0, Accounts: 0 };
+  for (const row of empty.rows) if (row.module in emptyMap) emptyMap[row.module as "Deals" | "Accounts"] = Number(row.n) || 0;
+
+  const outstanding = { Deals: 0, Accounts: 0 } as Record<"Deals" | "Accounts", number>;
+  for (const [mod, rtype] of [["Deals", "deal"], ["Accounts", "account"]] as const) {
+    const p = buildSegmentPredicate(seg, 1);
+    const segCond = p.condition ? " AND " + p.condition : "";
+    const res = await pool.query(
+      `SELECT COUNT(*)::text AS n
+         FROM duplicate_records r
+         JOIN duplicate_clusters dc ON dc.id = r.cluster_id
+         LEFT JOIN duplicate_merge_actions ma ON ma.cluster_id = dc.id
+        WHERE r.record_type = $${p.params.length + 1}
+          AND dc.status = 'active' AND dc.total_${rtype === "deal" ? "deals" : "accounts"} > 1
+          AND r.is_primary = false${segCond}`,
+      [...p.params, rtype],
+    );
+    outstanding[mod] = Number(res.rows[0]?.n) || 0;
+  }
+
+  const series = await getDuplicateProgressSeries(30, seg);
+  const trendModule = "Deals"; // burndown headline module
+  const bm = series.byModule[trendModule] || { series: [], latest: null };
+  const trend = {
+    days: 30, segment: seg, series: bm.series,
+    first: bm.series[0] ?? null, latest: bm.latest ?? null,
+  };
+
+  return shapeCleaningProgress({
+    segment: seg,
+    generatedAt: new Date().toISOString(),
+    lastSyncAt: sync.rows[0]?.last_sync_at ?? null,
+    resolveRows, emptyDeleted: emptyMap, outstanding, trend,
+  });
 }
 
 // ── Bulk auto-merge: Contacts with EXACT email + phone match (Sarah 2026-06-20) ─
