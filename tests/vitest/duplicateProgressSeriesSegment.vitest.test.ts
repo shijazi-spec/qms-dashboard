@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-const query = vi.fn();
-vi.mock("../../src/utils/database", () => ({ pool: { query: (...a: any[]) => query(...a) } }));
+const { query } = vi.hoisted(() => ({ query: vi.fn() }));
+vi.mock("../../src/utils/redactedPool", () => ({
+  createRedactedPool: () => ({
+    query: (...a: any[]) => query(...a),
+    connect: async () => ({ query: (...a: any[]) => query(...a), release: () => {} }),
+  }),
+}));
 import { getDuplicateProgressSeries } from "../../src/utils/duplicateRadarDatabase";
 beforeEach(() => query.mockReset());
 

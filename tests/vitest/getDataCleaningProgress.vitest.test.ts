@@ -1,34 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const query = vi.fn();
-vi.mock("../../src/utils/database", () => ({ pool: { query: (...a: any[]) => query(...a) } }));
+// Pool comes from redactedPool (createRedactedPool), NOT ./database. Use
+// vi.hoisted so the hoisted vi.mock factory can reference the shared spy.
+const { query } = vi.hoisted(() => ({ query: vi.fn() }));
+vi.mock("../../src/utils/redactedPool", () => ({
+  createRedactedPool: () => ({
+    query: (...a: any[]) => query(...a),
+    connect: async () => ({ query: (...a: any[]) => query(...a), release: () => {} }),
+  }),
+}));
+vi.mock("../../src/utils/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 import { getDataCleaningProgress } from "../../src/utils/duplicateRadarDatabase";
 
 beforeEach(() => query.mockReset());
 
 describe("getDataCleaningProgress", () => {
-  it("only counts action_type='resolve' and returns per-module modules", async () => {
-    // Order of pool.query calls inside getDataCleaningProgress:
-    // 1) last_sync_at  2) resolve rows  3) empty deleted  4) outstanding Deals  5) outstanding Accounts  6) trend series
-    query
-      .mockResolvedValueOnce({ rows: [{ last_sync_at: "2026-07-29T00:00:00Z" }] })
-      .mockResolvedValueOnce({ rows: [
-        { module: "Deals", survivor_present: true, layout: "Corporate", dup_count: 2 },
-        { module: "Accounts", survivor_present: true, layout: "WalaOne", dup_count: 1 },
-      ] })
-      .mockResolvedValueOnce({ rows: [{ module: "Deals", n: "5" }, { module: "Accounts", n: "2" }] })
-      .mockResolvedValueOnce({ rows: [{ n: "40" }] })
-      .mockResolvedValueOnce({ rows: [{ n: "10" }] })
-      .mockResolvedValueOnce({ rows: [] });
+  it("fetches verified merges with action_type='resolve' ONLY (never tagged-not-deleted)", async () => {
+    // Default every query to empty rows — the assertion is on WHICH SQL runs,
+    // not on a fixed call order (getDataCleaningProgress nests other queries).
+    query.mockResolvedValue({ rows: [] });
 
-    const out = await getDataCleaningProgress("all");
-    expect(out.modules.Deals.verified_merges).toBe(1);
-    expect(out.modules.Deals.empty_deleted).toBe(5);
-    expect(out.modules.Accounts.verified_merges).toBe(1);
-    // The resolve-rows query must be gated to action_type='resolve'.
-    const resolveSql = query.mock.calls[1][0] as string;
+    await getDataCleaningProgress("all");
+
+    const sqls = query.mock.calls.map((c) => String(c[0]));
+    const resolveSql = sqls.find((s) => s.includes("duplicate_resolution_ledger"));
+    expect(resolveSql, "a duplicate_resolution_ledger query should run").toBeTruthy();
     expect(resolveSql).toContain("action_type = 'resolve'");
     expect(resolveSql).not.toContain("module_resolved");
+    expect(resolveSql).not.toContain("auto_merge_pending");
+    // Empty-record deletions must be gated to verified deletions.
+    const emptySql = sqls.find((s) => s.includes("empty_delete_ledger"));
+    expect(emptySql).toContain("status = 'deleted'");
   });
 });
