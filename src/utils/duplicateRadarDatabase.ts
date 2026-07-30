@@ -2272,7 +2272,7 @@ export interface DuplicateProgressRow {
   open: number; // active clusters with this module
   solved: number; // clusters no longer active (Sarah's definition)
   total: number; // open + solved (the "from the beginning" denominator)
-  merged: number; // durable real-merge count (ledger; survives rebuilds)
+  merged: number; // durable real-merge count across ALL 4 modules (ledger; survives rebuilds)
 }
 
 /**
@@ -2301,16 +2301,17 @@ export async function captureDuplicateProgressSnapshot(): Promise<DuplicateProgr
     merged: 0,
   }));
   try {
-    // Per-segment merged counts (verified resolves attributed by survivor layout).
-    const resolveRows = await fetchResolveRowsWithSurvivorSegment();
+    // Per-segment merged counts (ALL ledger rows w/ a resolved survivor,
+    // attributed by layout — matches the old un-segmented all-modules count).
+    const resolveRows = await fetchResolveRowsWithSurvivorSegment(false);
     const mergedBySeg: Record<string, Record<string, number>> = {}; // segment -> module -> count
     const bump = (seg: string, mod: string) => {
-      (mergedBySeg[seg] ??= {})[mod] = ((mergedBySeg[seg] ??= {})[mod] || 0) + 1;
+      const b = (mergedBySeg[seg] ??= {});
+      b[mod] = (b[mod] || 0) + 1;
     };
     for (const row of resolveRows) {
-      if (!row.survivor_present) continue; // unknown segment excluded from per-segment trend
-      bump(classifySegmentFromLayout(row.layout), row.module);
-      bump("all", row.module);
+      bump("all", row.module); // matches old all-modules ledger count
+      if (row.survivor_present) bump(classifySegmentFromLayout(row.layout), row.module);
     }
 
     // open/solved/total per segment via an EXISTS on duplicate_records layout.
@@ -2442,12 +2443,29 @@ export async function getDuplicateProgressSeries(
 }
 
 /**
- * All VERIFIED duplicate merges (action_type='resolve'), each joined to its
- * surviving record so we can attribute it to a segment by layout. survivor_present
- * distinguishes "blank layout on a real record" (→ walaplus) from "survivor gone"
- * (→ unknown bucket). dup_count = number of dups tagged/removed for that survivor.
+ * Duplicate-merge ledger rows across ALL 4 modules (Leads, Deals, Contacts,
+ * Accounts), each joined to its surviving record so we can attribute it to a
+ * segment by layout. survivor_present distinguishes "blank layout on a real
+ * record" (→ walaplus) from "survivor gone" (→ unknown bucket). dup_count =
+ * number of dups tagged/removed for that survivor.
+ *
+ * `resolveOnly` (default true) selects which ledger rows count:
+ *   - true  → only VERIFIED merges (action_type='resolve'). This is the
+ *             headline consumer (getDataCleaningProgress); its Cleaning
+ *             Progress modules only cover Deals/Accounts, so Leads/Contacts
+ *             rows returned here are simply dropped by shapeCleaningProgress's
+ *             module guard — never miscounted into the unknown bucket.
+ *   - false → every ledger row with a resolved survivor (master_zoho_id IS
+ *             NOT NULL), reproducing the original writer semantics used by
+ *             captureDuplicateProgressSnapshot's per-tab "merged" burndown
+ *             count (resolve + module_resolved + auto_merge_pending etc).
  */
-export async function fetchResolveRowsWithSurvivorSegment(): Promise<ResolveRowRaw[]> {
+export async function fetchResolveRowsWithSurvivorSegment(
+  resolveOnly: boolean = true,
+): Promise<ResolveRowRaw[]> {
+  const whereClause = resolveOnly
+    ? `l.action_type = 'resolve'`
+    : `l.master_zoho_id IS NOT NULL`;
   const r = await pool.query(
     `SELECT l.module AS module,
             (r.zoho_record_id IS NOT NULL) AS survivor_present,
@@ -2456,8 +2474,7 @@ export async function fetchResolveRowsWithSurvivorSegment(): Promise<ResolveRowR
             COALESCE(jsonb_array_length(NULLIF(l.duplicate_zoho_ids, '[]'::jsonb)), 0) AS dup_count
        FROM duplicate_resolution_ledger l
        LEFT JOIN duplicate_records r ON r.zoho_record_id = l.master_zoho_id
-      WHERE l.action_type = 'resolve'
-        AND l.module IN ('Deals','Accounts')`,
+      WHERE ${whereClause}`,
   );
   return r.rows.map((x: any) => ({
     module: x.module,
@@ -2472,6 +2489,11 @@ export async function getDataCleaningProgress(
   segment: DuplicateFilters["segment"],
 ): Promise<DataCleaningProgress> {
   const seg = segment && segment !== "all" ? segment : "all";
+  // duplicate_progress_daily + classifySegmentFromLayout never produce
+  // "corporate" (it's the legacy alias for "walaplus") — normalize here so
+  // shapeCleaningProgress's segment equality check and the daily-series
+  // lookup both match rows actually stored under "walaplus".
+  const segN = seg === "corporate" ? "walaplus" : seg;
   const sync = await pool.query(
     `SELECT to_char(MAX(last_sync_at), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_sync_at FROM zoho_sync_state`,
   );
@@ -2485,13 +2507,12 @@ export async function getDataCleaningProgress(
 
   const outstanding = { Deals: 0, Accounts: 0 } as Record<"Deals" | "Accounts", number>;
   for (const [mod, rtype] of [["Deals", "deal"], ["Accounts", "account"]] as const) {
-    const p = buildSegmentPredicate(seg, 1);
+    const p = buildSegmentPredicate(segN, 1);
     const segCond = p.condition ? " AND " + p.condition : "";
     const res = await pool.query(
       `SELECT COUNT(*)::text AS n
          FROM duplicate_records r
          JOIN duplicate_clusters dc ON dc.id = r.cluster_id
-         LEFT JOIN duplicate_merge_actions ma ON ma.cluster_id = dc.id
         WHERE r.record_type = $${p.params.length + 1}
           AND dc.status = 'active' AND dc.total_${rtype === "deal" ? "deals" : "accounts"} > 1
           AND r.is_primary = false${segCond}`,
@@ -2500,16 +2521,16 @@ export async function getDataCleaningProgress(
     outstanding[mod] = Number(res.rows[0]?.n) || 0;
   }
 
-  const series = await getDuplicateProgressSeries(30, seg);
+  const series = await getDuplicateProgressSeries(30, segN);
   const trendModule = "Deals"; // burndown headline module
   const bm = series.byModule[trendModule] || { series: [], latest: null };
   const trend = {
-    days: 30, segment: seg, series: bm.series,
+    days: 30, segment: segN, series: bm.series,
     first: bm.series[0] ?? null, latest: bm.latest ?? null,
   };
 
   return shapeCleaningProgress({
-    segment: seg,
+    segment: segN,
     generatedAt: new Date().toISOString(),
     lastSyncAt: sync.rows[0]?.last_sync_at ?? null,
     resolveRows, emptyDeleted: emptyMap, outstanding, trend,
