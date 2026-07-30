@@ -985,6 +985,15 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
   {
+    // Data Cleaning Progress report — same read set as the sibling
+    // /api/duplicates GET rule immediately above (already covers this path
+    // via prefix match; listed explicitly per the route's own allowlist
+    // entry, same pattern as openai-health at a2191f02).
+    pattern: /^\/api\/duplicates\/cleaning-progress$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
     pattern: /^\/api\/policies/,
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],

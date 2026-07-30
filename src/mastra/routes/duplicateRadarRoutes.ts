@@ -12974,6 +12974,29 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  {
+    // Data Cleaning Progress report — single source of truth for the
+    // Cleaning Progress tab, its export, and Adam (getDataCleaningProgress,
+    // duplicateRadarDatabase.ts). Mirrors the CS-lifecycle read routes above.
+    //   GET /api/duplicates/cleaning-progress?segment=
+    path: "/api/duplicates/cleaning-progress",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const segment = new URL(c.req.url).searchParams.get("segment") || "all";
+          const { getDataCleaningProgress } = await import("../../utils/duplicateRadarDatabase");
+          const result = await getDataCleaningProgress(segment as any);
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error building cleaning-progress report:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
 ];
 
 export default duplicateRadarRoutes;
