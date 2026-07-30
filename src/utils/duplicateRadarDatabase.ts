@@ -1362,14 +1362,32 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     CREATE TABLE IF NOT EXISTS duplicate_progress_daily (
       snapshot_date DATE NOT NULL,
       module VARCHAR(16) NOT NULL,
+      segment VARCHAR(16) NOT NULL DEFAULT 'all',
       open_count INTEGER NOT NULL DEFAULT 0,
       solved_count INTEGER NOT NULL DEFAULT 0,
       total_count INTEGER NOT NULL DEFAULT 0,
       merged_count INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (snapshot_date, module)
+      PRIMARY KEY (snapshot_date, module, segment)
     )
   `);
+
+  // Segment burndown (2026-07-30): older deployments created this table before
+  // the segment column existed. Add it + widen the PK so we can store one row
+  // per (date, module, segment). Existing rows default to 'all' → no PK clash.
+  // No DROP TABLE (Replit publish schema-sync trap). Idempotent.
+  await pool.query(
+    `ALTER TABLE duplicate_progress_daily
+       ADD COLUMN IF NOT EXISTS segment VARCHAR(16) NOT NULL DEFAULT 'all'`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_progress_daily
+       DROP CONSTRAINT IF EXISTS duplicate_progress_daily_pkey`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_progress_daily
+       ADD PRIMARY KEY (snapshot_date, module, segment)`,
+  );
 
   // Separation ledger (Ahmad 2026-06-20) — durable "these Zoho records are NOT
   // duplicates of each other" decisions captured from Split / Dismiss. The
