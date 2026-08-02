@@ -1882,6 +1882,8 @@
                     </select>
                 </div>
                 <div class="flex-1"></div>
+                <input type="file" id="csReconcileFile" accept=".xlsx" class="hidden" data-on-change="reconcileClientHubFile" />
+                <button data-on-click="pickReconcileFile" id="csReconcileBtn" title="Reconcile a ClientHub export (.xlsx with a 'CRM ID' column) against Zoho: shows why any ClientHub companies are NOT in the QMS census (non-corporate layout / blank Phase / account-not-deal / not in CRM), with a per-ID breakdown." class="rr-btn rr-btn-ghost me-2">🔗 Reconcile ClientHub</button>
                 <button data-on-click="exportCsLifecycle" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of exactly the CS-lifecycle violations shown below (incl. CS detail columns), in the current sort order and filter." class="rr-btn rr-btn-ghost me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="rr-btn rr-btn-ghost me-2">🔃 Refresh from Zoho (live)</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="rr-btn rr-btn-primary me-2">🔍 Run Scan</button>
@@ -2425,7 +2427,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=147"></script>
+    <script src="/js/duplicates-app.js?v=148"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

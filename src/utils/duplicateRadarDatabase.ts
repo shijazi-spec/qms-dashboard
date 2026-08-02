@@ -7813,6 +7813,102 @@ export async function getInflationOpenClosedBreakdown(
 }
 
 /**
+ * CLIENTHUB ↔ ZOHO RECONCILE BY CRM ID (Sarah 2026-08-03). Given the Zoho
+ * record IDs ClientHub stores (its "CRM ID" column), classify each against the
+ * Zoho mirror so a ClientHub-vs-QMS count gap can be attributed exactly:
+ *   corporate_deal   — a Deal on a WalaPlus layout WITH a CS Phase set → this is
+ *                      what the CS-Lifecycle census counts.
+ *   non_corporate    — a Deal but on a Marketplace / WalaOne layout → the census
+ *                      (WalaPlus-scoped) excludes it.
+ *   not_a_deal       — the id resolves to an Account/Contact/Lead, not a Deal →
+ *                      the deal-based census can't count it.
+ *   blank_phase      — a WalaPlus Deal but its CS Phase field is empty → the
+ *                      is_cs_deal gate drops it.
+ *   not_in_mirror    — the id isn't in the synced Zoho mirror at all.
+ * Read-only.
+ */
+export async function reconcileCrmIds(crmIds: string[]): Promise<{
+  total: number;
+  summary: {
+    corporate_deal: number;
+    non_corporate: number;
+    not_a_deal: number;
+    blank_phase: number;
+    not_in_mirror: number;
+  };
+  by_phase_corporate: Record<string, number>;
+  rows: Array<{
+    crm_id: string;
+    verdict: string;
+    record_type: string | null;
+    segment: string | null;
+    phase: string | null;
+    stage: string | null;
+  }>;
+}> {
+  const ids = Array.from(
+    new Set((crmIds || []).map((x) => String(x).trim()).filter(Boolean)),
+  );
+  const summary = {
+    corporate_deal: 0,
+    non_corporate: 0,
+    not_a_deal: 0,
+    blank_phase: 0,
+    not_in_mirror: 0,
+  };
+  const by_phase_corporate: Record<string, number> = {};
+  if (!ids.length) return { total: 0, summary, by_phase_corporate, rows: [] };
+  const dbRows = (
+    await pool.query(
+      `SELECT r.zoho_record_id AS crm_id, r.record_type,
+              COALESCE(NULLIF(r.layout_name,''), r.raw_data#>>'{Layout,name}', r.raw_data#>>'{$layout,name}', r.raw_data->>'Layout','') AS layout,
+              COALESCE(NULLIF(r.raw_data->>'Phase',''), NULLIF(r.raw_data->>'CS_Phase',''), NULLIF(r.raw_data->>'Customer_Phase','')) AS phase,
+              COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage','') AS stage
+         FROM duplicate_records r
+        WHERE r.zoho_record_id = ANY($1::text[])`,
+      [ids],
+    )
+  ).rows as any[];
+  // Prefer a Deal row if the same id somehow appears under multiple types.
+  const byId = new Map<string, any>();
+  for (const x of dbRows) {
+    const k = String(x.crm_id);
+    const prev = byId.get(k);
+    if (!prev || (prev.record_type !== "deal" && x.record_type === "deal")) {
+      byId.set(k, x);
+    }
+  }
+  const rows = ids.map((id) => {
+    const rec = byId.get(id);
+    if (!rec) {
+      summary.not_in_mirror++;
+      return { crm_id: id, verdict: "not_in_mirror", record_type: null, segment: null, phase: null, stage: null };
+    }
+    const rt = String(rec.record_type || "");
+    if (rt !== "deal") {
+      summary.not_a_deal++;
+      return { crm_id: id, verdict: "not_a_deal", record_type: rt, segment: null, phase: null, stage: null };
+    }
+    const segment = classifyLayoutSegment(String(rec.layout || ""));
+    const phase = (rec.phase || "").toString().trim() || null;
+    const stage = (rec.stage || "").toString().trim() || null;
+    if (segment !== "walaplus") {
+      summary.non_corporate++;
+      return { crm_id: id, verdict: "non_corporate", record_type: rt, segment, phase, stage };
+    }
+    if (!phase) {
+      summary.blank_phase++;
+      return { crm_id: id, verdict: "blank_phase", record_type: rt, segment, phase, stage };
+    }
+    summary.corporate_deal++;
+    const pk = phase.toLowerCase();
+    by_phase_corporate[pk] = (by_phase_corporate[pk] || 0) + 1;
+    return { crm_id: id, verdict: "corporate_deal", record_type: rt, segment, phase, stage };
+  });
+  return { total: ids.length, summary, by_phase_corporate, rows };
+}
+
+/**
  * OWNER OFFBOARDING (Sarah 2026-07-30). For a (usually resigned) deal owner,
  * list their OPEN-pipeline deals grouped by Stage so the operator can review
  * and bulk-close / re-stage them in Zoho. "Open pipeline" = openStagePredicate

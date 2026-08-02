@@ -317,6 +317,7 @@ import {
   getAllClustersByInflation,
   getOwnerOpenDeals,
   bulkUpdateOwnerDeals,
+  reconcileCrmIds,
   getClustersBySignal,
   findOrCreateClusterByCompany,
   getSeparationParticipants,
@@ -5242,6 +5243,72 @@ export const duplicateRadarRoutes = [
         } catch (error: any) {
           logger.error("Error fetching inflation breakdown:", error);
           return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // CLIENTHUB ↔ ZOHO reconcile by CRM ID (Sarah 2026-08-03). Upload a
+    // ClientHub export (.xlsx with a "CRM ID" column) OR POST JSON
+    // { crmIds: [] }; classifies each id against the Zoho mirror so a
+    // count gap can be attributed exactly. Read-only.
+    path: "/api/duplicates/cs-lifecycle/reconcile-ids",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const contentType = c.req.header("content-type") || "";
+          let crmIds: string[] = [];
+          if (contentType.startsWith("multipart/form-data")) {
+            const form = await c.req.parseBody();
+            const file = (form as any).file;
+            if (!file || typeof file === "string") {
+              return c.json({ error: "Send the workbook as a multipart 'file' field." }, 400);
+            }
+            const buffer = Buffer.from(await (file as any).arrayBuffer());
+            if (buffer.length > 10 * 1024 * 1024) {
+              return c.json({ error: "Workbook too large — 10 MB cap." }, 413);
+            }
+            const ExcelJSMod: any = await import("exceljs");
+            const ExcelJS = ExcelJSMod.default ?? ExcelJSMod;
+            const wb = new ExcelJS.Workbook();
+            try {
+              await wb.xlsx.load(buffer);
+            } catch (pe: any) {
+              return c.json({ error: "Could not parse as .xlsx.", detail: pe?.message || String(pe) }, 400);
+            }
+            const ws = wb.worksheets[0];
+            if (!ws) return c.json({ error: "No worksheet." }, 400);
+            const headerRow = ws.getRow(1);
+            const norm = (s: any) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+            let crmCol = -1;
+            (headerRow.values as any[]).forEach((h, idx) => {
+              const n = norm(h);
+              if (crmCol < 0 && (n === "crmid" || n === "crmrecordid" || n === "zohoid" || n === "recordid")) crmCol = idx;
+            });
+            if (crmCol < 0) {
+              return c.json({ error: "No 'CRM ID' column found in the workbook header." }, 400);
+            }
+            ws.eachRow((row: any, rowNum: number) => {
+              if (rowNum === 1) return;
+              const v = row.getCell(crmCol).value;
+              const id = String((v && (v as any).text) || v || "").trim();
+              if (id) crmIds.push(id);
+            });
+          } else {
+            const body = await c.req.json().catch(() => ({}));
+            crmIds = Array.isArray(body?.crmIds) ? body.crmIds.map((x: any) => String(x)) : [];
+          }
+          crmIds = crmIds.map((s) => s.trim()).filter(Boolean).slice(0, 20000);
+          if (!crmIds.length) return c.json({ error: "No CRM IDs found." }, 400);
+          const result = await reconcileCrmIds(crmIds);
+          return c.json({ success: true, ...result });
+        } catch (e: any) {
+          logger.error("cs-lifecycle/reconcile-ids failed", e);
+          const detail = e instanceof Error ? e.message : String(e || "unknown error");
+          return c.json({ error: detail.slice(0, 400) }, 500);
         }
       };
     },

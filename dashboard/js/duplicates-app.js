@@ -11803,6 +11803,75 @@
             }).join('');
         }
 
+        // ── ClientHub ↔ Zoho reconcile by CRM ID (Sarah 2026-08-03) ──────────
+        function pickReconcileFile() { const f = document.getElementById('csReconcileFile'); if (f) { f.value = ''; f.click(); } }
+        async function reconcileClientHubFile(ev) {
+            const input = (ev && ev.target) ? ev.target : document.getElementById('csReconcileFile');
+            const file = input && input.files && input.files[0];
+            if (!file) return;
+            const btn = document.getElementById('csReconcileBtn');
+            const orig = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = 'Reconciling…'; }
+            try {
+                const fd = new FormData(); fd.append('file', file);
+                const res = await fetch('/api/duplicates/cs-lifecycle/reconcile-ids', { method: 'POST', credentials: 'same-origin', body: fd });
+                const d = await res.json();
+                if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
+                window._csReconcileData = d;
+                showReconcileResult(d, file.name);
+            } catch (e) {
+                rrToast('Reconcile failed: ' + (e && e.message || e));
+            } finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
+        }
+        function closeReconcileModal() { const m = document.getElementById('csReconcileModal'); if (m) m.classList.add('hidden'); }
+        function showReconcileResult(d, fileName) {
+            let modal = document.getElementById('csReconcileModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'csReconcileModal';
+                modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4';
+                modal.innerHTML = '<div class="bg-white rounded-xl shadow-xl w-full max-w-2xl">'
+                    + '<div class="flex items-center justify-between px-5 py-3 border-b"><div class="text-lg font-semibold">ClientHub &harr; Zoho reconcile</div><button data-on-click="closeReconcileModal" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button></div>'
+                    + '<div id="csReconcileBody" class="px-5 py-4"></div>'
+                    + '<div class="px-5 py-3 border-t text-end"><button data-on-click="downloadReconcileCsv" class="rr-btn rr-btn-ghost">&#8595; Download per-ID CSV</button></div>'
+                    + '</div>';
+                document.body.appendChild(modal);
+            }
+            modal.classList.remove('hidden');
+            const s = d.summary || {};
+            const notCounted = (s.non_corporate || 0) + (s.not_a_deal || 0) + (s.blank_phase || 0) + (s.not_in_mirror || 0);
+            const stat = function (label, color, val, sub) { return '<div class="border rounded-lg p-3"><div class="text-xs text-gray-500">' + escapeHtml(label) + '</div><div class="text-2xl font-bold" style="color:' + color + '">' + _fn(val) + '</div><div class="text-[11px] text-gray-400">' + escapeHtml(sub) + '</div></div>'; };
+            const line = function (label, val) { return '<tr><td class="py-0.5 pe-4 text-sm">' + escapeHtml(label) + '</td><td class="py-0.5 text-end text-sm font-semibold">' + _fn(val) + '</td></tr>'; };
+            const phaseRows = Object.keys(d.by_phase_corporate || {}).sort().map(function (k) { return line(k, d.by_phase_corporate[k]); }).join('');
+            document.getElementById('csReconcileBody').innerHTML =
+                '<div class="text-xs text-gray-500 mb-3">' + escapeHtml(fileName || '') + ' &middot; ' + _fn(d.total) + ' CRM IDs checked</div>'
+                + '<div class="grid grid-cols-2 gap-3 mb-4">'
+                + stat('Counted in QMS census', '#059669', s.corporate_deal || 0, 'Corporate Deal + Phase set')
+                + stat('NOT counted (the gap)', '#dc2626', notCounted, 'excluded — see below')
+                + '</div>'
+                + '<div class="text-sm font-semibold mb-1">Why the NOT-counted are excluded</div>'
+                + '<table class="w-full mb-4"><tbody>'
+                + line('Non-corporate layout (Marketplace / WalaOne)', s.non_corporate || 0)
+                + line('CRM ID is an Account / Contact / Lead, not a Deal', s.not_a_deal || 0)
+                + line('Corporate Deal but CS Phase is blank', s.blank_phase || 0)
+                + line('Not in the synced Zoho mirror', s.not_in_mirror || 0)
+                + '</tbody></table>'
+                + '<div class="text-sm font-semibold mb-1">Counted deals by Zoho Phase</div>'
+                + '<table class="w-full"><tbody>' + (phaseRows || '<tr><td class="text-gray-400 text-sm">—</td></tr>') + '</tbody></table>';
+        }
+        function downloadReconcileCsv() {
+            const d = window._csReconcileData;
+            if (!d || !d.rows) { rrToast('Nothing to download.'); return; }
+            const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+            const rows = ['crm_id,verdict,record_type,segment,phase,stage'];
+            d.rows.forEach(function (r) { rows.push([esc(r.crm_id), r.verdict, r.record_type || '', r.segment || '', esc(r.phase || ''), esc(r.stage || '')].join(',')); });
+            const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+            a.download = 'clienthub-reconcile_' + new Date().toISOString().slice(0, 10) + '.csv';
+            document.body.appendChild(a); a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+        }
+
         function renderCsLifecycle(data) {
             window._csLifecycleData = data;
             const s = (data.summary && data.summary.by_severity) || {};
