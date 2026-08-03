@@ -7827,7 +7827,21 @@ export async function getInflationOpenClosedBreakdown(
  *   not_in_mirror    — the id isn't in the synced Zoho mirror at all.
  * Read-only.
  */
-export async function reconcileCrmIds(crmIds: string[]): Promise<{
+interface ReconcilePhaseBucket {
+  file_total: number; // file rows ClientHub tags with THIS phase
+  in_qms_same_phase: number; // …that QMS also counts as this phase (exact overlap)
+  in_qms_other_phase: number; // …that QMS counts, but under a DIFFERENT phase
+  non_corporate: number;
+  not_a_deal: number;
+  blank_phase: number;
+  not_in_mirror: number;
+}
+export async function reconcileCrmIds(
+  crmIds: string[],
+  /** Optional map of CRM ID → the phase ClientHub tags it with (from the file's
+   *  Stage column), so the reconcile can compare per-phase, not just overall. */
+  clientHubPhaseById?: Record<string, string>,
+): Promise<{
   total: number;
   summary: {
     corporate_deal: number;
@@ -7837,6 +7851,9 @@ export async function reconcileCrmIds(crmIds: string[]): Promise<{
     not_in_mirror: number;
   };
   by_phase_corporate: Record<string, number>;
+  /** Per ClientHub phase (lowercased), the overlap with QMS using the FILE's own
+   *  IDs. Empty when no phase map was supplied. */
+  clienthub_phases: Record<string, ReconcilePhaseBucket>;
   rows: Array<{
     crm_id: string;
     verdict: string;
@@ -7844,6 +7861,7 @@ export async function reconcileCrmIds(crmIds: string[]): Promise<{
     segment: string | null;
     phase: string | null;
     stage: string | null;
+    clienthub_phase: string | null;
   }>;
 }> {
   const ids = Array.from(
@@ -7857,7 +7875,29 @@ export async function reconcileCrmIds(crmIds: string[]): Promise<{
     not_in_mirror: 0,
   };
   const by_phase_corporate: Record<string, number> = {};
-  if (!ids.length) return { total: 0, summary, by_phase_corporate, rows: [] };
+  const clienthub_phases: Record<string, ReconcilePhaseBucket> = {};
+  const phaseMap = clientHubPhaseById || {};
+  const hasPhaseMap = Object.keys(phaseMap).length > 0;
+  const chBucket = (id: string): ReconcilePhaseBucket | null => {
+    if (!hasPhaseMap) return null;
+    const key = String(phaseMap[id] || "").trim().toLowerCase() || "(blank)";
+    let b = clienthub_phases[key];
+    if (!b) {
+      b = {
+        file_total: 0,
+        in_qms_same_phase: 0,
+        in_qms_other_phase: 0,
+        non_corporate: 0,
+        not_a_deal: 0,
+        blank_phase: 0,
+        not_in_mirror: 0,
+      };
+      clienthub_phases[key] = b;
+    }
+    return b;
+  };
+  if (!ids.length)
+    return { total: 0, summary, by_phase_corporate, clienthub_phases, rows: [] };
   const dbRows = (
     await pool.query(
       `SELECT r.zoho_record_id AS crm_id, r.record_type,
@@ -7879,33 +7919,44 @@ export async function reconcileCrmIds(crmIds: string[]): Promise<{
     }
   }
   const rows = ids.map((id) => {
+    const b = chBucket(id);
+    if (b) b.file_total++;
+    const chPhase = String(phaseMap[id] || "").trim().toLowerCase() || null;
     const rec = byId.get(id);
     if (!rec) {
       summary.not_in_mirror++;
-      return { crm_id: id, verdict: "not_in_mirror", record_type: null, segment: null, phase: null, stage: null };
+      if (b) b.not_in_mirror++;
+      return { crm_id: id, verdict: "not_in_mirror", record_type: null, segment: null, phase: null, stage: null, clienthub_phase: chPhase };
     }
     const rt = String(rec.record_type || "");
     if (rt !== "deal") {
       summary.not_a_deal++;
-      return { crm_id: id, verdict: "not_a_deal", record_type: rt, segment: null, phase: null, stage: null };
+      if (b) b.not_a_deal++;
+      return { crm_id: id, verdict: "not_a_deal", record_type: rt, segment: null, phase: null, stage: null, clienthub_phase: chPhase };
     }
     const segment = classifyLayoutSegment(String(rec.layout || ""));
     const phase = (rec.phase || "").toString().trim() || null;
     const stage = (rec.stage || "").toString().trim() || null;
     if (segment !== "walaplus") {
       summary.non_corporate++;
-      return { crm_id: id, verdict: "non_corporate", record_type: rt, segment, phase, stage };
+      if (b) b.non_corporate++;
+      return { crm_id: id, verdict: "non_corporate", record_type: rt, segment, phase, stage, clienthub_phase: chPhase };
     }
     if (!phase) {
       summary.blank_phase++;
-      return { crm_id: id, verdict: "blank_phase", record_type: rt, segment, phase, stage };
+      if (b) b.blank_phase++;
+      return { crm_id: id, verdict: "blank_phase", record_type: rt, segment, phase, stage, clienthub_phase: chPhase };
     }
     summary.corporate_deal++;
     const pk = phase.toLowerCase();
     by_phase_corporate[pk] = (by_phase_corporate[pk] || 0) + 1;
-    return { crm_id: id, verdict: "corporate_deal", record_type: rt, segment, phase, stage };
+    if (b) {
+      if (chPhase && pk === chPhase) b.in_qms_same_phase++;
+      else b.in_qms_other_phase++;
+    }
+    return { crm_id: id, verdict: "corporate_deal", record_type: rt, segment, phase, stage, clienthub_phase: chPhase };
   });
-  return { total: ids.length, summary, by_phase_corporate, rows };
+  return { total: ids.length, summary, by_phase_corporate, clienthub_phases, rows };
 }
 
 /**

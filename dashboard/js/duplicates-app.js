@@ -11797,20 +11797,27 @@
             const rc = _csReconcileStored();
             host.innerHTML = CS_PHASE_CENSUS_ORDER.concat(extras).map(p => {
                 const n = byPhase[p.key] || 0;
-                // "vs ClientHub" reconciliation badge on the Termination card,
-                // sourced from the last uploaded ClientHub reconcile (Sarah
-                // 2026-08-04). Gap = QMS census − ClientHub row count; a warn
-                // chip surfaces any CRM IDs missing from the synced mirror (the
-                // potential "lost data") and opens the reconcile detail on click.
+                // Per-phase "vs ClientHub" reconciliation badge, sourced from the
+                // last uploaded ClientHub reconcile (Sarah 2026-08-04). Counts
+                // only the FILE's OWN IDs for THIS phase: matched = file IDs that
+                // QMS also counts in this phase; gap = file rows QMS doesn't count
+                // here (excluded or in a different phase). A warn chip surfaces
+                // CRM IDs missing from the synced mirror (potential "lost data").
                 let badge = '';
-                if (p.key === 'termination' && rc && typeof rc.total === 'number') {
+                const chp = rc && rc.clienthub_phases ? rc.clienthub_phases[p.key] : null;
+                if (chp && typeof chp.file_total === 'number') {
+                    const matched = chp.in_qms_same_phase || 0;
+                    const gap = matched - chp.file_total;
+                    badge += '<div class="rr-kpi-label" title="Of ' + chp.file_total + ' ClientHub row(s) tagged &quot;' + escapeHtml(p.label) + '&quot;, QMS counts ' + matched + ' as this phase' + ((chp.in_qms_other_phase || 0) > 0 ? '; ' + chp.in_qms_other_phase + ' sit in a different Zoho phase' : '') + '. Source: ' + escapeHtml(rc.fileName || 'last upload') + '.">vs ClientHub: ' + matched + '/' + chp.file_total + (gap < 0 ? ' (−' + Math.abs(gap) + ')' : '') + '</div>';
+                    const nim = chp.not_in_mirror || 0;
+                    if (nim > 0) {
+                        badge += '<div class="rr-kpi-label" data-on-click="openStoredReconcile" title="' + nim + ' ClientHub CRM ID(s) tagged ' + escapeHtml(p.label) + ' are not in the synced Zoho mirror — possible lost data. Click to inspect / verify live.">⚠ ' + nim + ' not in CRM →</div>';
+                    }
+                } else if (p.key === 'termination' && rc && typeof rc.total === 'number' && !rc.clienthub_phases) {
+                    // Backward-compat for a reconcile saved before per-phase support.
                     const gap = n - rc.total;
                     const sign = gap > 0 ? '+' : (gap < 0 ? '−' : '');
-                    badge += '<div class="rr-kpi-label" title="QMS WalaPlus Termination deals (' + n + ') vs ClientHub churned list (' + rc.total + '), from ' + escapeHtml(rc.fileName || 'the last upload') + '.">vs ClientHub: ' + sign + Math.abs(gap) + '</div>';
-                    const nim = (rc.summary && rc.summary.not_in_mirror) || 0;
-                    if (nim > 0) {
-                        badge += '<div class="rr-kpi-label" data-on-click="openStoredReconcile" title="' + nim + ' ClientHub CRM ID(s) are not in the synced Zoho mirror — possible lost data. Click to inspect / verify live.">⚠ ' + nim + ' not in CRM →</div>';
-                    }
+                    badge += '<div class="rr-kpi-label" title="QMS census vs ClientHub row count (' + rc.total + ').">vs ClientHub: ' + sign + Math.abs(gap) + '</div>';
                 }
                 return '<div class="rr-kpi rr-kpi-rich ' + p.accent + '">'
                     +   '<div class="rr-kpi-label">' + escapeHtml(p.label) + '</div>'
@@ -11876,6 +11883,15 @@
             const stat = function (label, color, val, sub) { return '<div class="border rounded-lg p-3"><div class="text-xs text-gray-500">' + escapeHtml(label) + '</div><div class="text-2xl font-bold" style="color:' + color + '">' + _fn(val) + '</div><div class="text-[11px] text-gray-400">' + escapeHtml(sub) + '</div></div>'; };
             const line = function (label, val) { return '<tr><td class="py-0.5 pe-4 text-sm">' + escapeHtml(label) + '</td><td class="py-0.5 text-end text-sm font-semibold">' + _fn(val) + '</td></tr>'; };
             const phaseRows = Object.keys(d.by_phase_corporate || {}).sort().map(function (k) { return line(k, d.by_phase_corporate[k]); }).join('');
+            // Per ClientHub phase overlap (uses the file's own Stage column).
+            const chp = d.clienthub_phases || {};
+            const chpKeys = Object.keys(chp).sort();
+            const chpTable = chpKeys.length
+                ? '<div class="text-sm font-semibold mb-1 mt-3">Per ClientHub phase (file\'s own IDs)</div>'
+                    + '<table class="w-full mb-3 text-sm"><thead><tr class="text-gray-500"><td class="py-0.5 pe-3">ClientHub phase</td><td class="py-0.5 text-end">File</td><td class="py-0.5 text-end">QMS match</td><td class="py-0.5 text-end">Other phase</td><td class="py-0.5 text-end">Not in CRM</td></tr></thead><tbody>'
+                    + chpKeys.map(function (k) { var b = chp[k]; return '<tr><td class="py-0.5 pe-3">' + escapeHtml(k) + '</td><td class="py-0.5 text-end">' + _fn(b.file_total || 0) + '</td><td class="py-0.5 text-end font-semibold" style="color:#059669">' + _fn(b.in_qms_same_phase || 0) + '</td><td class="py-0.5 text-end">' + _fn(b.in_qms_other_phase || 0) + '</td><td class="py-0.5 text-end" style="color:#dc2626">' + _fn(b.not_in_mirror || 0) + '</td></tr>'; }).join('')
+                    + '</tbody></table>'
+                : '';
             document.getElementById('csReconcileBody').innerHTML =
                 '<div class="text-xs text-gray-500 mb-3">' + escapeHtml(fileName || '') + ' &middot; ' + _fn(d.total) + ' CRM IDs checked</div>'
                 + '<div class="grid grid-cols-2 gap-3 mb-4">'
@@ -11889,6 +11905,7 @@
                 + line('Corporate Deal but CS Phase is blank', s.blank_phase || 0)
                 + line('Not in the synced Zoho mirror', s.not_in_mirror || 0)
                 + '</tbody></table>'
+                + chpTable
                 + '<div class="text-sm font-semibold mb-1">Counted deals by Zoho Phase</div>'
                 + '<table class="w-full mb-3"><tbody>' + (phaseRows || '<tr><td class="text-gray-400 text-sm">—</td></tr>') + '</tbody></table>'
                 + ((s.not_in_mirror || 0) > 0

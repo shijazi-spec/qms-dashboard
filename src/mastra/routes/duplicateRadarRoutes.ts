@@ -5262,6 +5262,7 @@ export const duplicateRadarRoutes = [
           if (!user) return unauthorizedResponse(c);
           const contentType = c.req.header("content-type") || "";
           let crmIds: string[] = [];
+          const clientHubPhaseById: Record<string, string> = {};
           if (contentType.startsWith("multipart/form-data")) {
             const form = await c.req.parseBody();
             const file = (form as any).file;
@@ -5285,9 +5286,13 @@ export const duplicateRadarRoutes = [
             const headerRow = ws.getRow(1);
             const norm = (s: any) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
             let crmCol = -1;
+            let phaseCol = -1;
             (headerRow.values as any[]).forEach((h, idx) => {
               const n = norm(h);
               if (crmCol < 0 && (n === "crmid" || n === "crmrecordid" || n === "zohoid" || n === "recordid")) crmCol = idx;
+              // The ClientHub export tags each row with its phase in a Stage /
+              // Phase column — use it to reconcile ALL phases, not just Termination.
+              if (phaseCol < 0 && (n === "stage" || n === "phase" || n === "csphase" || n === "lifecyclephase")) phaseCol = idx;
             });
             if (crmCol < 0) {
               return c.json({ error: "No 'CRM ID' column found in the workbook header." }, 400);
@@ -5296,15 +5301,26 @@ export const duplicateRadarRoutes = [
               if (rowNum === 1) return;
               const v = row.getCell(crmCol).value;
               const id = String((v && (v as any).text) || v || "").trim();
-              if (id) crmIds.push(id);
+              if (!id) return;
+              crmIds.push(id);
+              if (phaseCol > 0) {
+                const pv = row.getCell(phaseCol).value;
+                const ph = String((pv && (pv as any).text) || pv || "").trim();
+                if (ph) clientHubPhaseById[id] = ph;
+              }
             });
           } else {
             const body = await c.req.json().catch(() => ({}));
             crmIds = Array.isArray(body?.crmIds) ? body.crmIds.map((x: any) => String(x)) : [];
+            if (body?.clientHubPhaseById && typeof body.clientHubPhaseById === "object") {
+              for (const [k, v] of Object.entries(body.clientHubPhaseById)) {
+                clientHubPhaseById[String(k)] = String(v);
+              }
+            }
           }
           crmIds = crmIds.map((s) => s.trim()).filter(Boolean).slice(0, 20000);
           if (!crmIds.length) return c.json({ error: "No CRM IDs found." }, 400);
-          const result = await reconcileCrmIds(crmIds);
+          const result = await reconcileCrmIds(crmIds, clientHubPhaseById);
           return c.json({ success: true, ...result });
         } catch (e: any) {
           logger.error("cs-lifecycle/reconcile-ids failed", e);
