@@ -4153,6 +4153,105 @@ async function runPreflightBasic(input: {
     }
   }
 
+  // ── RULE 3B — LIVE-CRM verification of "past client" PASS rows ─────────────
+  // (Sarah 2026-08-03). The "past client, cool-off elapsed → PASS" verdict
+  // (reason past_cooloff_may_reengage) is derived from the LOCAL CS/Termination
+  // mirror, which goes stale two ways: (a) a company mis-tagged Termination that
+  // never actually became a client (e.g. PwC Academy), and (b) a company that
+  // has RE-SIGNED since it churned (e.g. Riyadh Air, now carrying a live deal).
+  // Both slip through as a clean PASS. Before we tell Sales "safe to re-import",
+  // verify LIVE against Zoho that the company has NO active deal — an OPEN
+  // pipeline deal OR a current, non-churned customer deal. If it does, downgrade
+  // to REVIEW and surface the live deal + owner. Bounded to the (small) set of
+  // past-client PASS rows, deduped by company, best-effort, env-gated
+  // (PREFLIGHT_VERIFY_PASS_LIVE=false to disable).
+  if (process.env.PREFLIGHT_VERIFY_PASS_LIVE !== "false") {
+    const toVerify = out.filter(
+      (r) =>
+        r.verdict === "pass" &&
+        (r.reason === "past_cooloff_may_reengage" ||
+          r.reason.startsWith("past_cooloff_may_reengage")),
+    );
+    if (toVerify.length > 0) {
+      try {
+        const { verifyCompanyActiveDeal } = await import("./zohoCRM");
+        // Dedupe by the company we'd query (account id, else domain) so N sibling
+        // contacts of the same firm cost ONE live check.
+        const cache = new Map<
+          string,
+          Awaited<ReturnType<typeof verifyCompanyActiveDeal>>
+        >();
+        const MAX_LIVE = Number(process.env.PREFLIGHT_VERIFY_PASS_MAX || 40);
+        let checked = 0;
+        for (const row of toVerify) {
+          const accId = (row.matched_account_zoho_id || "").trim();
+          const dom = (row.input?.domain || "").trim().toLowerCase();
+          const key = accId ? "a:" + accId : dom ? "d:" + dom : "";
+          if (!key) continue; // nothing to look up
+          let hit = cache.get(key);
+          if (!cache.has(key)) {
+            if (checked >= MAX_LIVE) break; // hard cap on live calls per run
+            checked++;
+            hit = await verifyCompanyActiveDeal({
+              accountId: accId || null,
+              domain: dom || null,
+            }).catch(() => null);
+            cache.set(key, hit ?? null);
+          }
+          if (!hit) {
+            // Verified: no live active deal. Keep PASS but replace the stale
+            // "past client" narrative with a CRM-verified, accurate one.
+            row.reason = "past_client_verified_no_active_deal";
+            row.suggested_action =
+              "Verified against Zoho: no active deal (open pipeline or current customer) — safe to import.";
+            row.executive_action =
+              "Safe to import — verified against the CRM: no live active deal.";
+            continue;
+          }
+          // A live active deal exists → this is NOT a safe re-import.
+          const ownerTxt = hit.owner ? " owned by " + hit.owner : "";
+          const stageTxt = hit.stage ? " (stage: " + hit.stage + ")" : "";
+          const kindTxt =
+            hit.kind === "open" ? "an OPEN pipeline deal" : "a current (active) customer deal";
+          summary[row.verdict]--;
+          summary.review++;
+          row.verdict = "review";
+          row.reason = "live_active_deal_" + hit.kind;
+          row.suggested_action =
+            'The CRM shows ' +
+            kindTxt +
+            ' — "' +
+            hit.dealName +
+            '"' +
+            stageTxt +
+            ownerTxt +
+            ". This company is NOT a safe re-import: coordinate with the deal owner before adding it back.";
+          row.executive_action =
+            "REVIEW — live " +
+            (hit.kind === "open" ? "open deal" : "active customer") +
+            stageTxt +
+            ownerTxt +
+            ". Verified against the CRM; do not re-import blindly.";
+          row.executive_severity = "high";
+          if (hit.owner && !row.owners.includes(hit.owner)) row.owners.push(hit.owner);
+          row.crm_links = {
+            active_lead: row.crm_links?.active_lead ?? null,
+            active_deal: {
+              url: buildZohoRecordUrl("Deals", hit.dealId),
+              label: hit.dealName,
+            },
+            client_deal: row.crm_links?.client_deal ?? null,
+            account: row.crm_links?.account ?? null,
+          };
+        }
+      } catch (e: any) {
+        logger.warn(
+          `[preflight] live PASS verification skipped: ${e?.message || e}`,
+        );
+      }
+    }
+  }
+
   const reasonBuckets = new Map<string, number>();
   const bump = (label: string) =>
     reasonBuckets.set(label, (reasonBuckets.get(label) ?? 0) + 1);
@@ -4168,7 +4267,9 @@ async function runPreflightBasic(input: {
       bump(
         r.reason === "possible_existing_client_fuzzy_name"
           ? "Possible existing client (name match) — verify before contacting"
-          : "Recently churned client — CS sign-off before re-engaging",
+          : r.reason.startsWith("live_active_deal")
+            ? "Live active deal in CRM — coordinate with owner, not a safe re-import"
+            : "Recently churned client — CS sign-off before re-engaging",
       );
     } else if (r.verdict === "warn") {
       bump("Past CS cool-off — Sales may re-engage with CS sign-off");

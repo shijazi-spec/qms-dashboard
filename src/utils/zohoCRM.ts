@@ -1388,6 +1388,150 @@ export async function getLiveClientAccounts(accountIds: string[]): Promise<Set<s
   return out;
 }
 
+/** A live deal that makes a company "active" (blocks a Preflight re-import). */
+export interface ActiveDealHit {
+  accountId: string | null;
+  dealId: string;
+  dealName: string;
+  owner: string | null;
+  stage: string;
+  /** open = still being worked in the pipeline; customer = signed/paid and NOT churned. */
+  kind: "open" | "customer";
+}
+
+/**
+ * LIVE verification (Sarah 2026-08-03) — does this Account currently carry an
+ * ACTIVE deal? Used by the Preflight to double-check a "past client, cool-off
+ * elapsed → PASS" verdict against Zoho before telling Sales it is safe to
+ * re-import, because the local CS/Termination mirror goes stale (a company can
+ * have re-signed, or have been mis-tagged as a client it never became).
+ *
+ * ACTIVE = an OPEN-pipeline deal (a non-empty Stage that is neither a customer
+ * stage nor a dead stage) OR a CURRENT-CUSTOMER deal (signed / paid / won /
+ * client-activated / transferred-to-cs, or carrying CS churn/renewal data) that
+ * is NOT churned. Churn is read the SAME way as getLiveClientAccounts — churn is
+ * the most-recent event on the timeline — PLUS an explicit Phase = "Termination".
+ * A past client (every deal closed-lost / cancelled / churned) returns null, so
+ * it stays importable past the cool-off.
+ *
+ * Best-effort: a lookup error returns null so an API hiccup never blocks an
+ * import on its own (the mirror-based rules are the backstop).
+ */
+export async function findActiveDealForAccount(
+  accountId: string,
+): Promise<ActiveDealHit | null> {
+  const id = String(accountId || "").trim();
+  if (!id) return null;
+  const churnField = process.env.PREFLIGHT_CHURN_DATE_FIELD || "Churn_Date";
+  const renewalField = process.env.PREFLIGHT_RENEWAL_DATE_FIELD || "Renewal_Date";
+  const customerStages = new Set(
+    (process.env.PREFLIGHT_SIGNED_STAGES || "Agreement Signed,Paid")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+      .concat(["closed won", "client activated", "transferred to cs"]),
+  );
+  const deadRe = /lost|dropped|cancel/;
+  const parseDate = (v: any): number | null => {
+    const s = String(v ?? "").trim();
+    if (!s) return null;
+    const t = Date.parse(s);
+    return isNaN(t) ? null : t;
+  };
+  let deals: any[] = [];
+  try {
+    deals = await makeZohoRequest(
+      async (config) =>
+        fetch(
+          `${config.apiDomain}/crm/v2/Accounts/${encodeURIComponent(id)}/Deals?fields=Deal_Name,Stage,Owner,Phase,${churnField},${renewalField}&per_page=200`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Zoho-oauthtoken ${config.accessToken}`,
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      async (response) => {
+        if (response.status === 204) return [];
+        if (!response.ok) throw new Error(`Account ${id} deals: ${response.status}`);
+        const t = await response.text();
+        if (!t || !t.trim()) return [];
+        return JSON.parse(t).data || [];
+      },
+    );
+  } catch {
+    return null; // best-effort — do not block on an API hiccup
+  }
+  let openHit: ActiveDealHit | null = null;
+  let customerHit: ActiveDealHit | null = null;
+  for (const d of deals) {
+    const stageRaw = String(d?.Stage || "").trim();
+    const st = stageRaw.toLowerCase();
+    if (!st || deadRe.test(st)) continue; // no stage or dead → not active
+    const phase = String(d?.Phase || "").trim().toLowerCase();
+    if (phase.includes("terminat")) continue; // explicitly churned
+    const churn = parseDate(d?.[churnField]);
+    const renewal = parseDate(d?.[renewalField]);
+    const churnedByTimeline = churn != null && (renewal == null || churn > renewal);
+    if (churnedByTimeline) continue; // churned after renewal → past client
+    const isCustomer =
+      Array.from(customerStages).some((sig) => st === sig || st.includes(sig)) ||
+      churn != null ||
+      renewal != null;
+    const hit: ActiveDealHit = {
+      accountId: id,
+      dealId: String(d?.id || "").trim(),
+      dealName: String(d?.Deal_Name || "").trim() || String(d?.id || ""),
+      owner: d?.Owner?.name || d?.Owner?.id || null,
+      stage: stageRaw,
+      kind: isCustomer ? "customer" : "open",
+    };
+    // An OPEN deal (someone is actively working it) is the strongest signal —
+    // return it immediately. Otherwise remember a live-customer deal and keep
+    // scanning in case an open one appears.
+    if (!isCustomer) {
+      openHit = hit;
+      break;
+    }
+    if (!customerHit) customerHit = hit;
+  }
+  return openHit || customerHit;
+}
+
+/**
+ * LIVE verification for a COMPANY — checks the mirror-matched Account plus any
+ * Account that Zoho's global search links to the company's email DOMAIN (so a
+ * re-sign under a NEW Account, not just the one the mirror knows, is still
+ * caught). Returns the first ACTIVE deal found, else null. Bounded to a handful
+ * of accounts per call so the per-row verification can't hammer the API.
+ */
+export async function verifyCompanyActiveDeal(input: {
+  accountId?: string | null;
+  domain?: string | null;
+}): Promise<ActiveDealHit | null> {
+  const ids = new Set<string>();
+  const a = String(input.accountId || "").trim();
+  if (a) ids.add(a);
+  const dom = String(input.domain || "").trim().toLowerCase();
+  // Domains are distinctive enough to resolve extra Accounts safely; company
+  // names are NOT (too many false collisions), so we deliberately do NOT
+  // name-search here — the mirror-matched accountId already covers the name path.
+  if (dom) {
+    try {
+      const accts = await searchZohoRecordsByWord("Accounts", dom);
+      for (const r of accts.slice(0, 5)) if (r.id) ids.add(String(r.id));
+    } catch {
+      /* best-effort */
+    }
+  }
+  for (const id of Array.from(ids).slice(0, 6)) {
+    const hit = await findActiveDealForAccount(id).catch(() => null);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 /** Bulk UPDATE (Zoho v2 PUT /crm/v2/{module}). Each record MUST carry `id`
  * plus the fields to change. Chunks at 100; returns per-record outcomes
  * positionally aligned to input (same shape as createZohoRecordsBulk). Used by
