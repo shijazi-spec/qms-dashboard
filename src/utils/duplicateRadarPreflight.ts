@@ -4153,35 +4153,32 @@ async function runPreflightBasic(input: {
     }
   }
 
-  // ── RULE 3B — LIVE-CRM verification of "past client" PASS rows ─────────────
-  // (Sarah 2026-08-03). The "past client, cool-off elapsed → PASS" verdict
-  // (reason past_cooloff_may_reengage) is derived from the LOCAL CS/Termination
-  // mirror, which goes stale two ways: (a) a company mis-tagged Termination that
-  // never actually became a client (e.g. PwC Academy), and (b) a company that
-  // has RE-SIGNED since it churned (e.g. Riyadh Air, now carrying a live deal).
-  // Both slip through as a clean PASS. Before we tell Sales "safe to re-import",
-  // verify LIVE against Zoho that the company has NO active deal — an OPEN
-  // pipeline deal OR a current, non-churned customer deal. If it does, downgrade
-  // to REVIEW and surface the live deal + owner. Bounded to the (small) set of
-  // past-client PASS rows, deduped by company, best-effort, env-gated
-  // (PREFLIGHT_VERIFY_PASS_LIVE=false to disable).
+  // ── RULE 3B — LIVE-CRM verification of EVERY PASS row (Sarah 2026-08-03/04) ─
+  // A PASS verdict is derived from the LOCAL mirror, which goes stale: a churned
+  // client that RE-SIGNED (Riyadh Air), a Termination mis-tag that never joined
+  // (PwC Academy), or simply a deal the mirror hasn't caught yet. So EVERY row
+  // that would pass is verified LIVE against Zoho: the company must have NO
+  // active deal — a deal in any OPEN pipeline stage (New Deal / Contacted / Not
+  // Attend Meeting / Meeting / Proposal / On Hold / Agreement Sent …) OR a
+  // current CUSTOMER deal (Agreement Signed / Paid / Closed Won / Client
+  // Activated / Transferred to CS, or carrying CS churn/renewal data) that is
+  // NOT churned. If one exists the row is DOWNGRADED to REVIEW with the live
+  // deal LINK + owner + stage. Deduped per company, account fetches cached
+  // globally, best-effort, env-gated (PREFLIGHT_VERIFY_PASS_LIVE=false).
   if (process.env.PREFLIGHT_VERIFY_PASS_LIVE !== "false") {
-    const toVerify = out.filter(
-      (r) =>
-        r.verdict === "pass" &&
-        (r.reason === "past_cooloff_may_reengage" ||
-          r.reason.startsWith("past_cooloff_may_reengage")),
-    );
+    const toVerify = out.filter((r) => r.verdict === "pass");
     if (toVerify.length > 0) {
       try {
-        const { verifyCompanyActiveDeal } = await import("./zohoCRM");
+        const { findActiveDealForAccount, searchZohoRecordsByWord } = await import(
+          "./zohoCRM"
+        );
         // Discover EVERY candidate Account for a company from the local mirror —
-        // by domain AND by company name — because the row may have matched by
-        // NAME (no domain), and a re-signed company's live deal can sit under a
-        // different Account than the churned one the CS directory keyed on. The
-        // mirror has broad record coverage (only its STAGE data is stale), so it
-        // is the right place to discover WHICH accounts exist; Zoho is then the
-        // source of truth for whether any of them carries a live active deal.
+        // by domain AND by company name — because a row may match by NAME (no
+        // domain), and a company's live deal can sit under a different Account
+        // than the one the mirror keyed on. The mirror has broad record coverage
+        // (only its STAGE data is stale), so it is the right place to discover
+        // WHICH accounts exist; Zoho is then the source of truth for whether any
+        // of them carries a live active deal.
         const mirrorAccountIds = async (
           domain: string,
           companyName: string,
@@ -4228,48 +4225,134 @@ async function runPreflightBasic(input: {
           return Array.from(ids).filter(Boolean);
         };
 
+        // GLOBAL per-Account cache so an Account shared by several PASS rows is
+        // fetched from Zoho ONCE. Value = the active deal on it (or null when
+        // checked-and-clean); accountErr = accounts whose live fetch errored.
+        const accountDealCache = new Map<string, any>();
+        const accountErr = new Set<string>();
+        const checkAccount = async (
+          id: string,
+        ): Promise<{ hit: any; checked: boolean }> => {
+          if (accountDealCache.has(id))
+            return { hit: accountDealCache.get(id) ?? null, checked: true };
+          if (accountErr.has(id)) return { hit: null, checked: false };
+          try {
+            const h = await findActiveDealForAccount(id);
+            accountDealCache.set(id, h ?? null);
+            return { hit: h ?? null, checked: true };
+          } catch {
+            accountErr.add(id);
+            return { hit: null, checked: false };
+          }
+        };
+
         // Dedupe by the company we'd query (domain, else account id, else name)
         // so N sibling contacts of the same firm cost ONE live verification.
-        const cache = new Map<
-          string,
-          { hit: any; checked: boolean }
-        >();
-        const MAX_LIVE = Number(process.env.PREFLIGHT_VERIFY_PASS_MAX || 40);
-        let liveCalls = 0;
-        for (const row of toVerify) {
+        const companyKey = (row: PreflightResultRow) => {
           const accId = (row.matched_account_zoho_id || "").trim();
           const dom = (row.input?.domain || "").trim().toLowerCase();
           const nm = (row.input?.company_name || "").trim();
           const key = dom ? "d:" + dom : accId ? "a:" + accId : nm ? "n:" + nm.toLowerCase() : "";
-          if (!key) continue; // nothing to look up
-          let res = cache.get(key);
-          if (!cache.has(key)) {
-            if (liveCalls >= MAX_LIVE) break; // hard cap on live calls per run
-            liveCalls++;
-            const discovered = await mirrorAccountIds(dom, nm);
-            const accountIds = accId ? [accId, ...discovered] : discovered;
-            res = await verifyCompanyActiveDeal({ accountIds, domain: dom || null }).catch(
-              () => ({ hit: null, checked: false }),
-            );
-            cache.set(key, res);
-            if (process.env.PREFLIGHT_VERIFY_DEBUG === "true") {
-              logger.info(
-                `[preflight verify] ${nm || dom || accId}: accounts=${accountIds.length} checked=${res.checked} ` +
-                  (res.hit
-                    ? `ACTIVE ${res.hit.kind} "${res.hit.dealName}" stage=${res.hit.stage}`
-                    : "no-active-deal"),
-              );
+          return { key, accId, dom, nm };
+        };
+        const companies = new Map<
+          string,
+          { accIds: Set<string>; dom: string; nm: string }
+        >();
+        for (const row of toVerify) {
+          const { key, accId, dom, nm } = companyKey(row);
+          if (!key) continue;
+          let e = companies.get(key);
+          if (!e) {
+            e = { accIds: new Set(), dom, nm };
+            companies.set(key, e);
+          }
+          if (accId) e.accIds.add(accId);
+        }
+
+        const MAX_LIVE = Number(process.env.PREFLIGHT_VERIFY_PASS_MAX || 300);
+        const allKeys = Array.from(companies.keys());
+        const capped = allKeys.length > MAX_LIVE;
+        const workKeys = allKeys.slice(0, MAX_LIVE);
+        const cache = new Map<string, { hit: any; checked: boolean }>();
+
+        // Resolve ONE company: mirror-discover its accounts, live-check each
+        // (globally cached), with a Zoho domain-search fallback only when the
+        // mirror knows no account for it.
+        const resolveCompany = async (key: string): Promise<void> => {
+          const e = companies.get(key)!;
+          const discovered = await mirrorAccountIds(e.dom, e.nm);
+          let ids = Array.from(
+            new Set(
+              [...e.accIds, ...discovered].map((x) => (x || "").trim()).filter(Boolean),
+            ),
+          );
+          if (ids.length === 0 && e.dom) {
+            try {
+              const accts = await searchZohoRecordsByWord("Accounts", e.dom);
+              ids = accts
+                .slice(0, 5)
+                .map((a: any) => String(a.id || "").trim())
+                .filter(Boolean);
+            } catch {
+              /* fallback is optional */
             }
           }
-          const hit = res?.hit ?? null;
-          const wasChecked = !!res?.checked;
+          let hit: any = null;
+          let checked = false;
+          for (const id of ids.slice(0, 10)) {
+            const r = await checkAccount(id);
+            if (r.checked) checked = true;
+            if (r.hit) {
+              hit = r.hit;
+              break;
+            }
+          }
+          cache.set(key, { hit, checked });
+          if (process.env.PREFLIGHT_VERIFY_DEBUG === "true") {
+            logger.info(
+              `[preflight verify] ${e.nm || e.dom || key}: accounts=${ids.length} checked=${checked} ` +
+                (hit
+                  ? `ACTIVE ${hit.kind} "${hit.dealName}" stage=${hit.stage}`
+                  : "no-active-deal"),
+            );
+          }
+        };
+
+        // Resolve companies concurrently (bounded) so a large batch of live Zoho
+        // calls doesn't run for minutes and time the request out.
+        const CONC = Math.max(1, Number(process.env.PREFLIGHT_VERIFY_CONCURRENCY || 6));
+        let next = 0;
+        await Promise.all(
+          Array.from({ length: Math.min(CONC, workKeys.length) }, async () => {
+            while (next < workKeys.length) {
+              const k = workKeys[next++]!;
+              await resolveCompany(k);
+            }
+          }),
+        );
+
+        // Apply the per-company verdicts back onto every PASS row.
+        for (const row of toVerify) {
+          const { key } = companyKey(row);
+          const res = key ? cache.get(key) : undefined;
+          if (!res) continue; // no key, or capped-out this run → leave as-is
+          const hit = res.hit ?? null;
+          const wasChecked = !!res.checked;
+          const wasPastClient = row.reason.startsWith("past_cooloff_may_reengage");
           if (!hit) {
-            // No live active deal. KEEP the detailed "past client, cool-off
-            // elapsed, CS owner…" comment the operator asked to preserve — only
-            // record, in the engineer reason, whether we actually verified it.
-            row.reason = wasChecked
-              ? "past_client_verified_no_active_deal"
-              : "past_cooloff_may_reengage_unverified";
+            // No live active deal. KEEP the row's existing comment (for a past
+            // client that is the detailed "past client, cool-off elapsed, CS
+            // owner…" narrative the operator asked to preserve; for a plain
+            // safe-to-import row it stays "Safe to import."). Only record, in the
+            // engineer reason, whether we actually verified it against Zoho.
+            if (wasPastClient) {
+              row.reason = wasChecked
+                ? "past_client_verified_no_active_deal"
+                : "past_cooloff_may_reengage_unverified";
+            } else if (wasChecked && row.reason === "safe_to_import") {
+              row.reason = "safe_to_import_verified_no_active_deal";
+            }
             continue;
           }
           // A live active deal exists → this is NOT a safe re-import.
@@ -4307,6 +4390,12 @@ async function runPreflightBasic(input: {
             client_deal: row.crm_links?.client_deal ?? null,
             account: row.crm_links?.account ?? null,
           };
+        }
+        if (capped) {
+          logger.warn(
+            `[preflight] live PASS verification hit the ${MAX_LIVE}-company cap — ` +
+              `some PASS rows were NOT live-verified this run (raise PREFLIGHT_VERIFY_PASS_MAX).`,
+          );
         }
       } catch (e: any) {
         logger.warn(
