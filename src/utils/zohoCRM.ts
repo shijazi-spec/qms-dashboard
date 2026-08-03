@@ -1399,6 +1399,55 @@ export interface ActiveDealHit {
   kind: "open" | "customer";
 }
 
+/** Fields + rules shared by every "is this deal active?" check. */
+function _pfChurnField() {
+  return process.env.PREFLIGHT_CHURN_DATE_FIELD || "Churn_Date";
+}
+function _pfRenewalField() {
+  return process.env.PREFLIGHT_RENEWAL_DATE_FIELD || "Renewal_Date";
+}
+function _pfCustomerStages(): string[] {
+  return (process.env.PREFLIGHT_SIGNED_STAGES || "Agreement Signed,Paid")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .concat(["closed won", "client activated", "transferred to cs"]);
+}
+const _PF_DEAD_STAGE_RE = /lost|dropped|cancel/;
+function _pfParseDate(v: any): number | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const t = Date.parse(s);
+  return isNaN(t) ? null : t;
+}
+
+/**
+ * Classify ONE raw Zoho Deal record. Returns "open" | "customer" if the deal
+ * makes its company active, or null if it does not (no/dead stage, explicitly
+ * Terminated, or churned on the timeline). Shared by the account-related-list
+ * check and the deal-search check so both use identical rules.
+ */
+function _classifyActiveDeal(d: any): "open" | "customer" | null {
+  const st = String(d?.Stage || "").trim().toLowerCase();
+  if (!st || _PF_DEAD_STAGE_RE.test(st)) return null; // no stage or dead
+  const phase = String(d?.Phase || "").trim().toLowerCase();
+  if (phase.includes("terminat")) return null; // explicitly churned
+  const churn = _pfParseDate(d?.[_pfChurnField()]);
+  const renewal = _pfParseDate(d?.[_pfRenewalField()]);
+  if (churn != null && (renewal == null || churn > renewal)) return null; // churned
+  const isCustomer =
+    _pfCustomerStages().some((sig) => st === sig || st.includes(sig)) ||
+    churn != null ||
+    renewal != null;
+  return isCustomer ? "customer" : "open";
+}
+
+/** Normalized ASCII core of a name (lowercase, alphanumerics only) for a
+ * conservative containment guard on deal-search false positives. */
+function _pfNameCore(s: string): string {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 /**
  * LIVE verification (Sarah 2026-08-03) — does this Account currently carry an
  * ACTIVE deal? Used by the Preflight to double-check a "past client, cool-off
@@ -1422,22 +1471,8 @@ export async function findActiveDealForAccount(
 ): Promise<ActiveDealHit | null> {
   const id = String(accountId || "").trim();
   if (!id) return null;
-  const churnField = process.env.PREFLIGHT_CHURN_DATE_FIELD || "Churn_Date";
-  const renewalField = process.env.PREFLIGHT_RENEWAL_DATE_FIELD || "Renewal_Date";
-  const customerStages = new Set(
-    (process.env.PREFLIGHT_SIGNED_STAGES || "Agreement Signed,Paid")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean)
-      .concat(["closed won", "client activated", "transferred to cs"]),
-  );
-  const deadRe = /lost|dropped|cancel/;
-  const parseDate = (v: any): number | null => {
-    const s = String(v ?? "").trim();
-    if (!s) return null;
-    const t = Date.parse(s);
-    return isNaN(t) ? null : t;
-  };
+  const churnField = _pfChurnField();
+  const renewalField = _pfRenewalField();
   // Throws on a hard API error so the caller can tell "checked, none active"
   // from "could not check" (a Zoho hiccup must never masquerade as verified).
   const deals: any[] = await makeZohoRequest(
@@ -1463,31 +1498,95 @@ export async function findActiveDealForAccount(
   let openHit: ActiveDealHit | null = null;
   let customerHit: ActiveDealHit | null = null;
   for (const d of deals) {
-    const stageRaw = String(d?.Stage || "").trim();
-    const st = stageRaw.toLowerCase();
-    if (!st || deadRe.test(st)) continue; // no stage or dead → not active
-    const phase = String(d?.Phase || "").trim().toLowerCase();
-    if (phase.includes("terminat")) continue; // explicitly churned
-    const churn = parseDate(d?.[churnField]);
-    const renewal = parseDate(d?.[renewalField]);
-    const churnedByTimeline = churn != null && (renewal == null || churn > renewal);
-    if (churnedByTimeline) continue; // churned after renewal → past client
-    const isCustomer =
-      Array.from(customerStages).some((sig) => st === sig || st.includes(sig)) ||
-      churn != null ||
-      renewal != null;
+    const kind = _classifyActiveDeal(d);
+    if (!kind) continue;
     const hit: ActiveDealHit = {
       accountId: id,
       dealId: String(d?.id || "").trim(),
       dealName: String(d?.Deal_Name || "").trim() || String(d?.id || ""),
       owner: d?.Owner?.name || d?.Owner?.id || null,
-      stage: stageRaw,
-      kind: isCustomer ? "customer" : "open",
+      stage: String(d?.Stage || "").trim(),
+      kind,
     };
     // An OPEN deal (someone is actively working it) is the strongest signal —
     // return it immediately. Otherwise remember a live-customer deal and keep
     // scanning in case an open one appears.
-    if (!isCustomer) {
+    if (kind === "open") {
+      openHit = hit;
+      break;
+    }
+    if (!customerHit) customerHit = hit;
+  }
+  return openHit || customerHit;
+}
+
+/**
+ * LIVE verification by COMPANY NAME (Sarah 2026-08-04) — the account-related-list
+ * check misses when a deal's Account carries no matching domain and the mirror's
+ * name is punctuated differently (e.g. Account "Riyadh Air - طيران الرياض" vs the
+ * inbound "Riyadh Air | طيران الرياض"). Zoho's global word-search indexes
+ * Deal_Name AND the Account_Name shown on the deal, so searching the company's
+ * distinctive name finds the live deal directly, regardless of account linkage.
+ *
+ * A normalized-ASCII containment guard keeps out false positives: a returned
+ * deal counts only when its Deal_Name / Account_Name core contains the company
+ * core (or vice-versa). Names with a <4-char ASCII core are too generic to
+ * search safely and return null. Throws on a hard API error (caller treats that
+ * as "could not verify"). Returns the first ACTIVE deal, preferring an OPEN one.
+ */
+export async function findActiveDealByCompany(input: {
+  companyName?: string | null;
+  domain?: string | null;
+}): Promise<ActiveDealHit | null> {
+  const raw = String(input.companyName || "").trim();
+  // Use the Latin/leading segment before a separator as the search term
+  // ("Riyadh Air | طيران الرياض" → "Riyadh Air"); fall back to the whole string.
+  const term = (raw.split(/[|\/]|\s-\s/)[0] || raw).trim();
+  const companyCore = _pfNameCore(raw) || _pfNameCore(term);
+  if (companyCore.length < 4) return null; // too generic to search by name safely
+  const churnField = _pfChurnField();
+  const renewalField = _pfRenewalField();
+  const searchTerm = term.length >= 3 ? term : raw;
+  const deals: any[] = await makeZohoRequest(
+    async (config) =>
+      fetch(
+        `${config.apiDomain}/crm/v2/Deals/search?word=${encodeURIComponent(searchTerm)}&fields=Deal_Name,Stage,Owner,Phase,Account_Name,${churnField},${renewalField}&per_page=200`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Zoho-oauthtoken ${config.accessToken}`,
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    async (response) => {
+      if (response.status === 204) return [];
+      if (!response.ok) throw new Error(`Deals search "${searchTerm}": ${response.status}`);
+      const t = await response.text();
+      if (!t || !t.trim()) return [];
+      return JSON.parse(t).data || [];
+    },
+  );
+  let openHit: ActiveDealHit | null = null;
+  let customerHit: ActiveDealHit | null = null;
+  for (const d of deals) {
+    // Containment guard — the returned deal must actually be THIS company.
+    const dealCore = _pfNameCore(
+      String(d?.Deal_Name || "") + " " + String(d?.Account_Name?.name || ""),
+    );
+    if (!dealCore.includes(companyCore) && !companyCore.includes(dealCore.slice(0, companyCore.length)))
+      continue;
+    const kind = _classifyActiveDeal(d);
+    if (!kind) continue;
+    const hit: ActiveDealHit = {
+      accountId: d?.Account_Name?.id ? String(d.Account_Name.id) : null,
+      dealId: String(d?.id || "").trim(),
+      dealName: String(d?.Deal_Name || "").trim() || String(d?.id || ""),
+      owner: d?.Owner?.name || d?.Owner?.id || null,
+      stage: String(d?.Stage || "").trim(),
+      kind,
+    };
+    if (kind === "open") {
       openHit = hit;
       break;
     }

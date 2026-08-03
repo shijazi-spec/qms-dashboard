@@ -4169,9 +4169,8 @@ async function runPreflightBasic(input: {
     const toVerify = out.filter((r) => r.verdict === "pass");
     if (toVerify.length > 0) {
       try {
-        const { findActiveDealForAccount, searchZohoRecordsByWord } = await import(
-          "./zohoCRM"
-        );
+        const { findActiveDealForAccount, findActiveDealByCompany, searchZohoRecordsByWord } =
+          await import("./zohoCRM");
         // Discover EVERY candidate Account for a company from the local mirror —
         // by domain AND by company name — because a row may match by NAME (no
         // domain), and a company's live deal can sit under a different Account
@@ -4306,6 +4305,24 @@ async function runPreflightBasic(input: {
             if (r.hit) {
               hit = r.hit;
               break;
+            }
+          }
+          // Backstop: the account-related-list check misses when a deal's Account
+          // carries no matching domain and its name is punctuated differently from
+          // the inbound one (the Riyadh Air case — Account "… - …" vs inbound
+          // "… | …"). Search Zoho Deals directly by the company name, which finds
+          // the live deal regardless of account linkage. Only when accounts found
+          // nothing, so we don't add a search for a company already flagged.
+          if (!hit && (e.nm || e.dom)) {
+            try {
+              const byName = await findActiveDealByCompany({
+                companyName: e.nm || null,
+                domain: e.dom || null,
+              });
+              checked = true;
+              if (byName) hit = byName;
+            } catch {
+              /* search backstop is best-effort */
             }
           }
           cache.set(key, { hit, checked });
