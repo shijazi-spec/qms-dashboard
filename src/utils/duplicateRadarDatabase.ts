@@ -7909,6 +7909,77 @@ export async function reconcileCrmIds(crmIds: string[]): Promise<{
 }
 
 /**
+ * LIVE "lost data" check (Sarah 2026-08-04). For ClientHub CRM IDs the reconcile
+ * flagged as not_in_mirror, ask Zoho DIRECTLY (GET by id) across the likely
+ * modules. Three outcomes per id:
+ *   - in_zoho : found live in some module → just a local sync gap, not lost.
+ *   - lost    : every module returned 404/empty → genuinely gone from the CRM
+ *               (deleted / never existed) — the "lost data" the CS team wants.
+ *   - error   : a lookup errored (rate-limit/auth) and none confirmed found →
+ *               could NOT verify, so we do NOT call it lost.
+ * Read-only (GETs), bounded, small concurrency.
+ */
+export async function verifyCrmIdsInZoho(
+  crmIds: string[],
+  opts?: { max?: number },
+): Promise<{
+  total: number;
+  in_zoho: number;
+  lost: number;
+  errored: number;
+  rows: Array<{ crm_id: string; verdict: "in_zoho" | "lost" | "error"; module: string | null }>;
+}> {
+  const ids = Array.from(
+    new Set((crmIds || []).map((x) => String(x).trim()).filter(Boolean)),
+  ).slice(0, Math.max(1, Math.min(opts?.max ?? 500, 2000)));
+  const rows: Array<{
+    crm_id: string;
+    verdict: "in_zoho" | "lost" | "error";
+    module: string | null;
+  }> = [];
+  let in_zoho = 0;
+  let lost = 0;
+  let errored = 0;
+  if (!ids.length) return { total: 0, in_zoho, lost, errored, rows };
+  const { fetchZohoRecordById } = await import("./zohoCRM");
+  const modules = ["Deals", "Accounts", "Contacts", "Leads"];
+  let idx = 0;
+  const worker = async () => {
+    while (idx < ids.length) {
+      const id = ids[idx++]!;
+      let found = false;
+      let mod: string | null = null;
+      let hadError = false;
+      for (const m of modules) {
+        try {
+          const rec = await fetchZohoRecordById(m, id);
+          if (rec) {
+            found = true;
+            mod = m;
+            break;
+          }
+        } catch {
+          hadError = true; // a real API error, NOT a 404 (those return null)
+        }
+      }
+      if (found) {
+        in_zoho++;
+        rows.push({ crm_id: id, verdict: "in_zoho", module: mod });
+      } else if (hadError) {
+        errored++;
+        rows.push({ crm_id: id, verdict: "error", module: null });
+      } else {
+        lost++;
+        rows.push({ crm_id: id, verdict: "lost", module: null });
+      }
+    }
+  };
+  const CONC = 5;
+  await Promise.all(Array.from({ length: Math.min(CONC, ids.length) }, worker));
+  return { total: ids.length, in_zoho, lost, errored, rows };
+}
+
+/**
  * OWNER OFFBOARDING (Sarah 2026-07-30). For a (usually resigned) deal owner,
  * list their OPEN-pipeline deals grouped by Stage so the operator can review
  * and bulk-close / re-stage them in Zoho. "Open pipeline" = openStagePredicate

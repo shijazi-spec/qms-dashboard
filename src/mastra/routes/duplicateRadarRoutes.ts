@@ -318,6 +318,7 @@ import {
   getOwnerOpenDeals,
   bulkUpdateOwnerDeals,
   reconcileCrmIds,
+  verifyCrmIdsInZoho,
   getClustersBySignal,
   findOrCreateClusterByCompany,
   getSeparationParticipants,
@@ -5307,6 +5308,33 @@ export const duplicateRadarRoutes = [
           return c.json({ success: true, ...result });
         } catch (e: any) {
           logger.error("cs-lifecycle/reconcile-ids failed", e);
+          const detail = e instanceof Error ? e.message : String(e || "unknown error");
+          return c.json({ error: detail.slice(0, 400) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // LIVE "lost data" check (Sarah 2026-08-04) — for the CRM IDs the reconcile
+    // flagged not_in_mirror, ask Zoho directly whether the record still exists.
+    // Splits genuinely-lost (gone from the CRM) from a mere local sync gap.
+    // JSON body { crmIds: string[] }. Read-only live GETs.
+    path: "/api/duplicates/cs-lifecycle/verify-missing-ids",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const crmIds = Array.isArray(body?.crmIds)
+            ? body.crmIds.map((x: any) => String(x))
+            : [];
+          if (!crmIds.length) return c.json({ error: "No CRM IDs provided." }, 400);
+          const result = await verifyCrmIdsInZoho(crmIds, { max: 1000 });
+          return c.json({ success: true, ...result });
+        } catch (e: any) {
+          logger.error("cs-lifecycle/verify-missing-ids failed", e);
           const detail = e instanceof Error ? e.message : String(e || "unknown error");
           return c.json({ error: detail.slice(0, 400) }, 500);
         }

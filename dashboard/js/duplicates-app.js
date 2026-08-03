@@ -11794,13 +11794,39 @@
             // Class-only styling — the page CSP strips inline style="" attributes
             // (nonce-based style-src), so sizing must come from classes. Reuse the
             // rr-kpi cards + the same grid as the summary tiles above.
+            const rc = _csReconcileStored();
             host.innerHTML = CS_PHASE_CENSUS_ORDER.concat(extras).map(p => {
                 const n = byPhase[p.key] || 0;
+                // "vs ClientHub" reconciliation badge on the Termination card,
+                // sourced from the last uploaded ClientHub reconcile (Sarah
+                // 2026-08-04). Gap = QMS census − ClientHub row count; a warn
+                // chip surfaces any CRM IDs missing from the synced mirror (the
+                // potential "lost data") and opens the reconcile detail on click.
+                let badge = '';
+                if (p.key === 'termination' && rc && typeof rc.total === 'number') {
+                    const gap = n - rc.total;
+                    const sign = gap > 0 ? '+' : (gap < 0 ? '−' : '');
+                    badge += '<div class="rr-kpi-label" title="QMS WalaPlus Termination deals (' + n + ') vs ClientHub churned list (' + rc.total + '), from ' + escapeHtml(rc.fileName || 'the last upload') + '.">vs ClientHub: ' + sign + Math.abs(gap) + '</div>';
+                    const nim = (rc.summary && rc.summary.not_in_mirror) || 0;
+                    if (nim > 0) {
+                        badge += '<div class="rr-kpi-label" data-on-click="openStoredReconcile" title="' + nim + ' ClientHub CRM ID(s) are not in the synced Zoho mirror — possible lost data. Click to inspect / verify live.">⚠ ' + nim + ' not in CRM →</div>';
+                    }
+                }
                 return '<div class="rr-kpi rr-kpi-rich ' + p.accent + '">'
                     +   '<div class="rr-kpi-label">' + escapeHtml(p.label) + '</div>'
                     +   '<div class="rr-kpi-value">' + n + '</div>'
+                    +   badge
                     + '</div>';
             }).join('');
+        }
+        function _csReconcileStored() {
+            try { return JSON.parse(localStorage.getItem('cs_reconcile_last') || 'null'); } catch (e) { return null; }
+        }
+        function openStoredReconcile() {
+            const rc = _csReconcileStored();
+            if (!rc) { rrToast('No saved reconcile yet — upload a ClientHub file first.'); return; }
+            window._csReconcileData = rc;
+            showReconcileResult(rc, rc.fileName || '');
         }
 
         // ── ClientHub ↔ Zoho reconcile by CRM ID (Sarah 2026-08-03) ──────────
@@ -11818,6 +11844,13 @@
                 const d = await res.json();
                 if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
                 window._csReconcileData = d;
+                // Persist so the "vs ClientHub" badge on the Termination card
+                // survives reloads / other viewers of the shared dashboard.
+                try { localStorage.setItem('cs_reconcile_last', JSON.stringify(Object.assign({}, d, { fileName: file.name, ts: Date.now() }))); } catch (e) {}
+                // Repaint the census strip so the badge appears immediately.
+                if (window._csLifecycleData && window._csLifecycleData.summary) {
+                    renderCsLifecyclePhaseCensus(window._csLifecycleData.summary.by_phase || {}, window._csLifecycleData.summary.total_cs_deals || 0);
+                }
                 showReconcileResult(d, file.name);
             } catch (e) {
                 rrToast('Reconcile failed: ' + (e && e.message || e));
@@ -11857,7 +11890,59 @@
                 + line('Not in the synced Zoho mirror', s.not_in_mirror || 0)
                 + '</tbody></table>'
                 + '<div class="text-sm font-semibold mb-1">Counted deals by Zoho Phase</div>'
-                + '<table class="w-full"><tbody>' + (phaseRows || '<tr><td class="text-gray-400 text-sm">—</td></tr>') + '</tbody></table>';
+                + '<table class="w-full mb-3"><tbody>' + (phaseRows || '<tr><td class="text-gray-400 text-sm">—</td></tr>') + '</tbody></table>'
+                + ((s.not_in_mirror || 0) > 0
+                    ? '<div class="border-t pt-3 mt-1">'
+                        + '<div class="text-sm font-semibold mb-1">Possible lost data — ' + _fn(s.not_in_mirror) + ' CRM ID(s) not in the synced mirror</div>'
+                        + '<div class="text-[11px] text-gray-500 mb-2">These may just be un-synced, or genuinely deleted from Zoho. Check them LIVE against the CRM to tell which.</div>'
+                        + '<button data-on-click="verifyMissingIdsLive" class="rr-btn rr-btn-primary">&#128269; Check if these are lost in Zoho</button>'
+                        + '<div id="csVerifyMissingResult" class="mt-3"></div>'
+                      + '</div>'
+                    : '');
+        }
+        // LIVE "lost data" check: take the not_in_mirror CRM IDs and ask Zoho
+        // directly whether each still exists (Sarah 2026-08-04).
+        async function verifyMissingIdsLive() {
+            const d = window._csReconcileData;
+            const ids = (d && d.rows ? d.rows : []).filter(function (r) { return r.verdict === 'not_in_mirror'; }).map(function (r) { return r.crm_id; });
+            const host = document.getElementById('csVerifyMissingResult');
+            if (!ids.length) { if (host) host.innerHTML = '<div class="text-sm text-gray-500">Nothing to check.</div>'; return; }
+            if (host) host.innerHTML = '<div class="text-sm text-gray-500">Checking ' + _fn(ids.length) + ' ID(s) live against Zoho…</div>';
+            try {
+                const res = await fetch('/api/duplicates/cs-lifecycle/verify-missing-ids', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ crmIds: ids })
+                });
+                const r = await res.json();
+                if (!res.ok || !r.success) throw new Error((r && r.error) || ('HTTP ' + res.status));
+                window._csVerifyMissingData = r;
+                const lostIds = (r.rows || []).filter(function (x) { return x.verdict === 'lost'; }).map(function (x) { return x.crm_id; });
+                host.innerHTML =
+                    '<div class="grid grid-cols-3 gap-2 mb-2">'
+                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">Still in Zoho (sync gap)</div><div class="text-xl font-bold" style="color:#059669">' + _fn(r.in_zoho || 0) + '</div></div>'
+                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">LOST — gone from CRM</div><div class="text-xl font-bold" style="color:#dc2626">' + _fn(r.lost || 0) + '</div></div>'
+                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">Could not verify</div><div class="text-xl font-bold" style="color:#a16207">' + _fn(r.errored || 0) + '</div></div>'
+                    + '</div>'
+                    + ((r.lost || 0) > 0
+                        ? '<div class="text-[11px] text-gray-600 mb-1">Lost CRM IDs: <span class="font-mono break-all">' + lostIds.slice(0, 40).map(escapeHtml).join(', ') + (lostIds.length > 40 ? ' …' : '') + '</span></div>'
+                            + '<button data-on-click="downloadVerifyMissingCsv" class="rr-btn rr-btn-ghost">&#8595; Download lost/verify CSV</button>'
+                        : '<div class="text-sm text-emerald-700">None are lost — all still exist in Zoho (just not yet mirrored locally).</div>');
+            } catch (e) {
+                host.innerHTML = '<div class="text-sm text-red-600">Verify failed: ' + escapeHtml(e && e.message || String(e)) + '</div>';
+            }
+        }
+        function downloadVerifyMissingCsv() {
+            const d = window._csVerifyMissingData;
+            if (!d || !d.rows) { rrToast('Nothing to download.'); return; }
+            const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+            const rows = ['crm_id,verdict,module'];
+            d.rows.forEach(function (r) { rows.push([esc(r.crm_id), r.verdict, r.module || ''].join(',')); });
+            const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+            a.download = 'clienthub-lost-check_' + new Date().toISOString().slice(0, 10) + '.csv';
+            document.body.appendChild(a); a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 100);
         }
         function downloadReconcileCsv() {
             const d = window._csReconcileData;
