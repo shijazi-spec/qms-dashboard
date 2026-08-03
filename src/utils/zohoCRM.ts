@@ -1438,31 +1438,28 @@ export async function findActiveDealForAccount(
     const t = Date.parse(s);
     return isNaN(t) ? null : t;
   };
-  let deals: any[] = [];
-  try {
-    deals = await makeZohoRequest(
-      async (config) =>
-        fetch(
-          `${config.apiDomain}/crm/v2/Accounts/${encodeURIComponent(id)}/Deals?fields=Deal_Name,Stage,Owner,Phase,${churnField},${renewalField}&per_page=200`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Zoho-oauthtoken ${config.accessToken}`,
-              "Content-Type": "application/json",
-            },
+  // Throws on a hard API error so the caller can tell "checked, none active"
+  // from "could not check" (a Zoho hiccup must never masquerade as verified).
+  const deals: any[] = await makeZohoRequest(
+    async (config) =>
+      fetch(
+        `${config.apiDomain}/crm/v2/Accounts/${encodeURIComponent(id)}/Deals?fields=Deal_Name,Stage,Owner,Phase,${churnField},${renewalField}&per_page=200`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Zoho-oauthtoken ${config.accessToken}`,
+            "Content-Type": "application/json",
           },
-        ),
-      async (response) => {
-        if (response.status === 204) return [];
-        if (!response.ok) throw new Error(`Account ${id} deals: ${response.status}`);
-        const t = await response.text();
-        if (!t || !t.trim()) return [];
-        return JSON.parse(t).data || [];
-      },
-    );
-  } catch {
-    return null; // best-effort — do not block on an API hiccup
-  }
+        },
+      ),
+    async (response) => {
+      if (response.status === 204) return [];
+      if (!response.ok) throw new Error(`Account ${id} deals: ${response.status}`);
+      const t = await response.text();
+      if (!t || !t.trim()) return [];
+      return JSON.parse(t).data || [];
+    },
+  );
   let openHit: ActiveDealHit | null = null;
   let customerHit: ActiveDealHit | null = null;
   for (const d of deals) {
@@ -1500,36 +1497,47 @@ export async function findActiveDealForAccount(
 }
 
 /**
- * LIVE verification for a COMPANY — checks the mirror-matched Account plus any
- * Account that Zoho's global search links to the company's email DOMAIN (so a
- * re-sign under a NEW Account, not just the one the mirror knows, is still
- * caught). Returns the first ACTIVE deal found, else null. Bounded to a handful
- * of accounts per call so the per-row verification can't hammer the API.
+ * LIVE verification for a COMPANY — checks a set of candidate Account ids (the
+ * caller passes the mirror-discovered accounts for this domain/name) PLUS any
+ * Account that Zoho's global search links to the company's email DOMAIN, so a
+ * re-sign under a NEW Account is caught too. Returns the first ACTIVE deal
+ * found. `checked` is true when at least one Account was queried WITHOUT a hard
+ * API error — the caller uses it to tell "verified: none active" apart from
+ * "could not verify" (never let a Zoho hiccup pass as verified). Bounded so the
+ * per-row verification can't hammer the API.
  */
 export async function verifyCompanyActiveDeal(input: {
-  accountId?: string | null;
+  accountIds?: Array<string | null | undefined>;
   domain?: string | null;
-}): Promise<ActiveDealHit | null> {
+}): Promise<{ hit: ActiveDealHit | null; checked: boolean }> {
   const ids = new Set<string>();
-  const a = String(input.accountId || "").trim();
-  if (a) ids.add(a);
+  for (const a of input.accountIds || []) {
+    const s = String(a || "").trim();
+    if (s) ids.add(s);
+  }
   const dom = String(input.domain || "").trim().toLowerCase();
   // Domains are distinctive enough to resolve extra Accounts safely; company
   // names are NOT (too many false collisions), so we deliberately do NOT
-  // name-search here — the mirror-matched accountId already covers the name path.
+  // name-search Accounts here — the caller's mirror-discovered ids cover names.
   if (dom) {
     try {
       const accts = await searchZohoRecordsByWord("Accounts", dom);
       for (const r of accts.slice(0, 5)) if (r.id) ids.add(String(r.id));
     } catch {
-      /* best-effort */
+      /* best-effort — the domain net is optional */
     }
   }
-  for (const id of Array.from(ids).slice(0, 6)) {
-    const hit = await findActiveDealForAccount(id).catch(() => null);
-    if (hit) return hit;
+  let checked = false;
+  for (const id of Array.from(ids).slice(0, 10)) {
+    try {
+      const hit = await findActiveDealForAccount(id);
+      checked = true; // this account was queried successfully
+      if (hit) return { hit, checked: true };
+    } catch {
+      /* this account errored — keep trying the others */
+    }
   }
-  return null;
+  return { hit: null, checked };
 }
 
 /** Bulk UPDATE (Zoho v2 PUT /crm/v2/{module}). Each record MUST carry `id`

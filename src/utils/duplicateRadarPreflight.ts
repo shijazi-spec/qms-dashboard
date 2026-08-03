@@ -4175,37 +4175,101 @@ async function runPreflightBasic(input: {
     if (toVerify.length > 0) {
       try {
         const { verifyCompanyActiveDeal } = await import("./zohoCRM");
-        // Dedupe by the company we'd query (account id, else domain) so N sibling
-        // contacts of the same firm cost ONE live check.
+        // Discover EVERY candidate Account for a company from the local mirror —
+        // by domain AND by company name — because the row may have matched by
+        // NAME (no domain), and a re-signed company's live deal can sit under a
+        // different Account than the churned one the CS directory keyed on. The
+        // mirror has broad record coverage (only its STAGE data is stale), so it
+        // is the right place to discover WHICH accounts exist; Zoho is then the
+        // source of truth for whether any of them carries a live active deal.
+        const mirrorAccountIds = async (
+          domain: string,
+          companyName: string,
+        ): Promise<string[]> => {
+          const ids = new Set<string>();
+          const conds: string[] = [];
+          const params: any[] = [];
+          let i = 1;
+          const dom = (domain || "").trim().toLowerCase();
+          const nm = (companyName || "").trim();
+          if (dom) {
+            conds.push(`LOWER(domain) = $${i}`);
+            params.push(dom);
+            i++;
+          }
+          if (nm.length >= 4 && !isPlaceholderName(nm)) {
+            conds.push(`account_name ILIKE $${i}`);
+            params.push("%" + nm + "%");
+            i++;
+            conds.push(`company_name ILIKE $${i}`);
+            params.push("%" + nm + "%");
+            i++;
+          }
+          if (!conds.length) return [];
+          try {
+            const q = await queryWithTimeout<any>(
+              `SELECT zoho_record_id, record_type,
+                      raw_data->'Account_Name'->>'id' AS deal_account_id
+                 FROM duplicate_records
+                WHERE record_type IN ('account','deal')
+                  AND (${conds.join(" OR ")})
+                LIMIT 500`,
+              params,
+            );
+            for (const r of q?.rows ?? []) {
+              if (r.record_type === "account" && r.zoho_record_id)
+                ids.add(String(r.zoho_record_id).trim());
+              if (r.record_type === "deal" && r.deal_account_id)
+                ids.add(String(r.deal_account_id).trim());
+            }
+          } catch {
+            /* discovery is best-effort */
+          }
+          return Array.from(ids).filter(Boolean);
+        };
+
+        // Dedupe by the company we'd query (domain, else account id, else name)
+        // so N sibling contacts of the same firm cost ONE live verification.
         const cache = new Map<
           string,
-          Awaited<ReturnType<typeof verifyCompanyActiveDeal>>
+          { hit: any; checked: boolean }
         >();
         const MAX_LIVE = Number(process.env.PREFLIGHT_VERIFY_PASS_MAX || 40);
-        let checked = 0;
+        let liveCalls = 0;
         for (const row of toVerify) {
           const accId = (row.matched_account_zoho_id || "").trim();
           const dom = (row.input?.domain || "").trim().toLowerCase();
-          const key = accId ? "a:" + accId : dom ? "d:" + dom : "";
+          const nm = (row.input?.company_name || "").trim();
+          const key = dom ? "d:" + dom : accId ? "a:" + accId : nm ? "n:" + nm.toLowerCase() : "";
           if (!key) continue; // nothing to look up
-          let hit = cache.get(key);
+          let res = cache.get(key);
           if (!cache.has(key)) {
-            if (checked >= MAX_LIVE) break; // hard cap on live calls per run
-            checked++;
-            hit = await verifyCompanyActiveDeal({
-              accountId: accId || null,
-              domain: dom || null,
-            }).catch(() => null);
-            cache.set(key, hit ?? null);
+            if (liveCalls >= MAX_LIVE) break; // hard cap on live calls per run
+            liveCalls++;
+            const discovered = await mirrorAccountIds(dom, nm);
+            const accountIds = accId ? [accId, ...discovered] : discovered;
+            res = await verifyCompanyActiveDeal({ accountIds, domain: dom || null }).catch(
+              () => ({ hit: null, checked: false }),
+            );
+            cache.set(key, res);
+            if (process.env.PREFLIGHT_VERIFY_DEBUG === "true") {
+              logger.info(
+                `[preflight verify] ${nm || dom || accId}: accounts=${accountIds.length} checked=${res.checked} ` +
+                  (res.hit
+                    ? `ACTIVE ${res.hit.kind} "${res.hit.dealName}" stage=${res.hit.stage}`
+                    : "no-active-deal"),
+              );
+            }
           }
+          const hit = res?.hit ?? null;
+          const wasChecked = !!res?.checked;
           if (!hit) {
-            // Verified: no live active deal. Keep PASS but replace the stale
-            // "past client" narrative with a CRM-verified, accurate one.
-            row.reason = "past_client_verified_no_active_deal";
-            row.suggested_action =
-              "Verified against Zoho: no active deal (open pipeline or current customer) — safe to import.";
-            row.executive_action =
-              "Safe to import — verified against the CRM: no live active deal.";
+            // No live active deal. KEEP the detailed "past client, cool-off
+            // elapsed, CS owner…" comment the operator asked to preserve — only
+            // record, in the engineer reason, whether we actually verified it.
+            row.reason = wasChecked
+              ? "past_client_verified_no_active_deal"
+              : "past_cooloff_may_reengage_unverified";
             continue;
           }
           // A live active deal exists → this is NOT a safe re-import.
@@ -4218,7 +4282,7 @@ async function runPreflightBasic(input: {
           row.verdict = "review";
           row.reason = "live_active_deal_" + hit.kind;
           row.suggested_action =
-            'The CRM shows ' +
+            "The CRM shows " +
             kindTxt +
             ' — "' +
             hit.dealName +
