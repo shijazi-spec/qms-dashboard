@@ -57,10 +57,18 @@ const DOC_PROPOSAL_SENT: RequiredDoc = {
   label: "Proposal sent (latest version)",
   match: /proposal|offer|عرض/i,
 };
-const DOC_CONTRACT: RequiredDoc = {
-  key: "contract",
-  label: "Quotation / PO / Service Agreement / Contract",
-  match: /quotation|quote|\bp\.?o\.?\b|purchase\s*order|service\s*agreement|agreement|contract|اتفاقية|عقد|أمر\s*شراء/i,
+// Split into two separate required docs (Sarah 2026-08-03): a client can have a
+// signed contract but no quotation/PO on file (or vice-versa), and each must be
+// evidenced on its own.
+const DOC_SERVICE_AGREEMENT: RequiredDoc = {
+  key: "service_agreement",
+  label: "Service Agreement / Contract",
+  match: /service\s*agreement|agreement|contract|اتفاقية|عقد|اتفاق/i,
+};
+const DOC_QUOTATION_PO: RequiredDoc = {
+  key: "quotation_po",
+  label: "Quotation / PO / Invoice",
+  match: /quotation|quote|\bp\.?o\.?\b|purchase\s*order|invoice|فاتورة|عرض\s*سعر|أمر\s*شراء/i,
 };
 const DOC_VAT: RequiredDoc = {
   key: "vat",
@@ -83,7 +91,14 @@ export function requiredDocsForStage(stage: string): RequiredDoc[] {
   const s = (stage || "").trim().toLowerCase();
   if (s === "proposal") return [DOC_FINANCIAL_OFFER];
   if (FULL_DOC_STAGES.includes(s)) {
-    return [DOC_PROPOSAL_SENT, DOC_CONTRACT, DOC_VAT, DOC_CR, DOC_NATIONAL_ADDRESS];
+    return [
+      DOC_PROPOSAL_SENT,
+      DOC_SERVICE_AGREEMENT,
+      DOC_QUOTATION_PO,
+      DOC_VAT,
+      DOC_CR,
+      DOC_NATIONAL_ADDRESS,
+    ];
   }
   return [];
 }
