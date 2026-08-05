@@ -78,3 +78,92 @@ export async function ensureQualityReportTables(): Promise<void> {
   tablesReady = true;
   logger.info("[QualityReports] tables ensured + seeded");
 }
+
+export interface QualityReportBU {
+  id: number; bu_key: string; bu_name: string; channel: Channel; segment: Segment;
+  fn: string; head_email: string | null; policy_department: string | null;
+  kpi_bu_name: string | null; sort_order: number; is_active: boolean; owners: string[];
+}
+
+async function ownersFor(buIds: number[]): Promise<Map<number, string[]>> {
+  const map = new Map<number, string[]>();
+  if (!buIds.length) return map;
+  const r = await pool.query(
+    `SELECT bu_id, owner_email FROM quality_report_bu_owners WHERE bu_id = ANY($1::int[])`,
+    [buIds],
+  );
+  for (const row of r.rows) {
+    const list = map.get(row.bu_id) || [];
+    list.push(row.owner_email);
+    map.set(row.bu_id, list);
+  }
+  return map;
+}
+
+function rowToBU(row: any, owners: string[]): QualityReportBU {
+  return {
+    id: row.id, bu_key: row.bu_key, bu_name: row.bu_name, channel: row.channel,
+    segment: row.segment, fn: row.fn, head_email: row.head_email ?? null,
+    policy_department: row.policy_department ?? null, kpi_bu_name: row.kpi_bu_name ?? null,
+    sort_order: Number(row.sort_order) || 0, is_active: row.is_active !== false, owners,
+  };
+}
+
+export async function listBUs(): Promise<QualityReportBU[]> {
+  await ensureQualityReportTables();
+  const r = await pool.query(`SELECT * FROM quality_report_bus ORDER BY sort_order ASC, id ASC`);
+  const owners = await ownersFor(r.rows.map((x) => x.id));
+  return r.rows.map((row) => rowToBU(row, owners.get(row.id) || []));
+}
+
+export async function getBUByKey(buKey: string): Promise<QualityReportBU | null> {
+  await ensureQualityReportTables();
+  const r = await pool.query(`SELECT * FROM quality_report_bus WHERE bu_key = $1 LIMIT 1`, [buKey]);
+  if (!r.rows[0]) return null;
+  const owners = await ownersFor([r.rows[0].id]);
+  return rowToBU(r.rows[0], owners.get(r.rows[0].id) || []);
+}
+
+export async function upsertBU(input: {
+  bu_key: string; bu_name: string; channel: Channel; fn: string;
+  head_email?: string | null; policy_department?: string | null;
+  kpi_bu_name?: string | null; sort_order?: number; is_active?: boolean;
+}): Promise<QualityReportBU> {
+  await ensureQualityReportTables();
+  const segment = channelToSegment(input.channel); // ALWAYS derived
+  const r = await pool.query(
+    `INSERT INTO quality_report_bus
+       (bu_key, bu_name, channel, segment, fn, head_email, policy_department, kpi_bu_name, sort_order, is_active, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,true),NOW())
+     ON CONFLICT (bu_key) DO UPDATE SET
+       bu_name=EXCLUDED.bu_name, channel=EXCLUDED.channel, segment=EXCLUDED.segment,
+       fn=EXCLUDED.fn, head_email=EXCLUDED.head_email, policy_department=EXCLUDED.policy_department,
+       kpi_bu_name=EXCLUDED.kpi_bu_name, sort_order=EXCLUDED.sort_order,
+       is_active=EXCLUDED.is_active, updated_at=NOW()
+     RETURNING *`,
+    [input.bu_key, input.bu_name, input.channel, segment, input.fn,
+     input.head_email ?? null, input.policy_department ?? null, input.kpi_bu_name ?? null,
+     input.sort_order ?? 0, input.is_active ?? true],
+  );
+  const owners = await ownersFor([r.rows[0].id]);
+  return rowToBU(r.rows[0], owners.get(r.rows[0].id) || []);
+}
+
+export async function deleteBU(id: number): Promise<void> {
+  await ensureQualityReportTables();
+  await pool.query(`DELETE FROM quality_report_bus WHERE id = $1`, [id]);
+}
+
+export async function setBUOwners(buId: number, emails: string[]): Promise<void> {
+  await ensureQualityReportTables();
+  const clean = Array.from(new Set(
+    (emails || []).map((e) => String(e || "").trim().toLowerCase()).filter(Boolean),
+  ));
+  await pool.query(`DELETE FROM quality_report_bu_owners WHERE bu_id = $1`, [buId]);
+  for (const email of clean) {
+    await pool.query(
+      `INSERT INTO quality_report_bu_owners (bu_id, owner_email) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+      [buId, email],
+    );
+  }
+}
