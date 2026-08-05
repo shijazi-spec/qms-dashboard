@@ -1514,34 +1514,63 @@
                 // (threadId + title + count + time), so unbounded growth is
                 // negligible for localStorage; full transcripts live server-side.
                 localStorage.setItem('consultant_chat_history', JSON.stringify(history));
-                loadChatHistory();
+                // Persist the title + count to the server so the history list
+                // follows the user across devices (fire-and-forget).
+                fetch('/api/consultant/threads/' + encodeURIComponent(tid) + '/meta', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: title, messages: msgs.length })
+                }).catch(function(){});
+                // Render the local list immediately for instant feedback; the
+                // server copy syncs via the POST above (and on next load).
+                renderChatHistoryList(history);
             } catch(e) {}
         }
 
+        // Render a history list (array of {threadId,title,messages,time}) into
+        // the sidebar. Shared by the server load and the localStorage fallback.
+        // Every chat is shown (no display cap) in a scrollable list; each row
+        // has its own ✕ delete button (Sarah 2026-08-05).
+        function renderChatHistoryList(history) {
+            var container = document.getElementById('chatHistoryList');
+            if (!container) return;
+            history = history || [];
+            if (!history.length) {
+                container.innerHTML = '<div class="text-xs text-gray-600 py-1 text-center">No previous chats</div>';
+                return;
+            }
+            container.innerHTML = history.map(function(h) {
+                return '<div class="history-item flex items-center gap-2 p-2 text-xs" data-on-click="resumeChat" data-args="' + escAttr(JSON.stringify([h.threadId])) + '">' +
+                    '<svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>' +
+                    '<div class="min-w-0 flex-1">' +
+                        '<div class="font-medium text-gray-700 truncate">' + escapeHtml(h.title || 'Chat') + '</div>' +
+                        '<div class="text-gray-400">' + timeAgo(h.time) + ' · ' + (h.messages || 0) + ' msgs</div>' +
+                    '</div>' +
+                    '<button type="button" class="shrink-0 text-gray-300 hover:text-red-500 p-1 rounded" title="Delete this chat" aria-label="Delete this chat" data-on-click="deleteChat" data-args="' + escAttr(JSON.stringify([h.threadId])) + '">' +
+                        '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
+                    '</button>' +
+                '</div>';
+            }).join('');
+        }
+
         function loadChatHistory() {
-            try {
-                var history = JSON.parse(localStorage.getItem('consultant_chat_history') || '[]');
-                var container = document.getElementById('chatHistoryList');
-                if (!history.length) {
-                    container.innerHTML = '<div class="text-xs text-gray-600 py-1 text-center">No previous chats</div>';
-                    return;
-                }
-                // Render EVERY saved chat (no display cap) — the list scrolls.
-                // Each row has its own delete (✕) button so a chat is only ever
-                // removed when the user chooses to (Sarah 2026-08-05).
-                container.innerHTML = history.map(function(h) {
-                    return '<div class="history-item flex items-center gap-2 p-2 text-xs" data-on-click="resumeChat" data-args="' + escAttr(JSON.stringify([h.threadId])) + '">' +
-                        '<svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>' +
-                        '<div class="min-w-0 flex-1">' +
-                            '<div class="font-medium text-gray-700 truncate">' + escapeHtml(h.title) + '</div>' +
-                            '<div class="text-gray-400">' + timeAgo(h.time) + ' · ' + h.messages + ' msgs</div>' +
-                        '</div>' +
-                        '<button type="button" class="shrink-0 text-gray-300 hover:text-red-500 p-1 rounded" title="Delete this chat" aria-label="Delete this chat" data-on-click="deleteChat" data-args="' + escAttr(JSON.stringify([h.threadId])) + '">' +
-                            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
-                        '</button>' +
-                    '</div>';
-                }).join('');
-            } catch(e) {}
+            // Server-first so the Chat History list follows the user across
+            // devices/browsers. The browser's localStorage is only an offline
+            // fallback + fast cache — the server thread list is the source of
+            // truth (Sarah 2026-08-05).
+            fetch('/api/consultant/threads', { credentials: 'same-origin' })
+                .then(function(r){ return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+                .then(function(data){
+                    var threads = (data && data.threads) || [];
+                    try { localStorage.setItem('consultant_chat_history', JSON.stringify(threads)); } catch(e){}
+                    renderChatHistoryList(threads);
+                })
+                .catch(function(){
+                    try {
+                        renderChatHistoryList(JSON.parse(localStorage.getItem('consultant_chat_history') || '[]'));
+                    } catch(e){}
+                });
         }
 
         window.resumeChat = function(tid) {
@@ -1567,6 +1596,12 @@
                 var history = JSON.parse(localStorage.getItem('consultant_chat_history') || '[]');
                 history = history.filter(function(h) { return h.threadId !== tid; });
                 localStorage.setItem('consultant_chat_history', JSON.stringify(history));
+                // Delete server-side too so the chat stays gone on every device
+                // (fire-and-forget; ownership is enforced on the server).
+                fetch('/api/consultant/threads/' + encodeURIComponent(tid), {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                }).catch(function(){});
                 // If the deleted chat is the one on screen, reset to a fresh chat
                 // WITHOUT re-saving it (clearChat would re-add it to history).
                 if (threadId === tid) {
@@ -1577,7 +1612,7 @@
                     welcomeScreen = null;
                     showSmartWelcome();
                 }
-                loadChatHistory();
+                renderChatHistoryList(history);
             } catch(e) {}
         };
 

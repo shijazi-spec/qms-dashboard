@@ -1960,6 +1960,25 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
 
+  // Consultant chat-thread list / metadata / delete (cross-device Chat History).
+  // Handlers use `requireRole(c, CONSULTANT_ROLES)` and are resource-scoped to
+  // the caller's own threads. Same role set as the sibling history rule above.
+  {
+    pattern: /^\/api\/consultant\/threads$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
+    pattern: /^\/api\/consultant\/threads\/[^/]+\/meta$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
+    pattern: /^\/api\/consultant\/threads\/[^/]+$/,
+    methods: ["DELETE"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+
   // Recent-downloads tracker — per-user list/insert/clear via `getSessionUser`
   // (any authenticated caller). Used by the streaming-download UI to surface
   // each user's own recent export history.

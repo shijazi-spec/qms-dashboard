@@ -594,6 +594,149 @@ export const consultantRoutes = [
   },
 
   {
+    // List the requesting user's chat threads (server-side, so the Chat
+    // History sidebar follows the user across devices/browsers instead of
+    // living only in that browser's localStorage). Resource-scoped: only the
+    // caller's own threads (resourceId = userResourceId) are ever returned.
+    // Title + message-count come from thread.title / thread.metadata, which the
+    // /threads/:threadId/meta endpoint keeps current as the user chats.
+    path: "/api/consultant/threads",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const mastra = c.get("mastra");
+          const agent = mastra?.getAgent("qmsConsultantAgent");
+          const memory = await agent?.getMemory?.();
+          if (!memory) return c.json({ threads: [] });
+
+          const resourceId = userResourceId(user.userId);
+          const threads: any[] = await memory
+            .getThreadsByResourceId({ resourceId })
+            .catch(() => []);
+
+          const toIso = (d: any): string | null =>
+            d instanceof Date ? d.toISOString() : typeof d === "string" ? d : null;
+
+          const list = (threads || [])
+            .filter((t) => t && t.id)
+            .map((t) => ({
+              threadId: t.id,
+              title:
+                (t.title && String(t.title).trim()) ||
+                (t.metadata && String(t.metadata.title || "").trim()) ||
+                "Chat",
+              messages:
+                (t.metadata && Number(t.metadata.messages)) || 0,
+              time: toIso(t.updatedAt) || toIso(t.createdAt) || null,
+            }))
+            // Newest first (server ordering isn't guaranteed across adapters).
+            .sort((a, b) => String(b.time || "").localeCompare(String(a.time || "")));
+
+          return c.json({ threads: list });
+        } catch (error) {
+          logger.error("[Consultant] Thread list error:", error);
+          return c.json({ error: "Failed to list threads" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    // Persist a thread's display title + message count so the cross-device
+    // history list can show a meaningful label. Called by the client as the
+    // user chats (mirrors the old localStorage saveChatToHistory). generateTitle
+    // is disabled on this agent (avoids a blocking GPT call), so the title is
+    // the client-derived first-user-message snippet. Ownership-checked.
+    path: "/api/consultant/threads/:threadId/meta",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const threadId = c.req.param("threadId");
+          if (!threadId) return c.json({ error: "threadId is required" }, 400);
+
+          const body = await c.req.json().catch(() => ({}));
+          const title =
+            typeof body?.title === "string" ? body.title.trim().slice(0, 120) : "";
+          const messages = Number.isFinite(body?.messages)
+            ? Math.max(0, Math.floor(body.messages))
+            : 0;
+
+          const mastra = c.get("mastra");
+          const agent = mastra?.getAgent("qmsConsultantAgent");
+          const memory = await agent?.getMemory?.();
+          if (!memory) return c.json({ ok: false });
+
+          const resourceId = userResourceId(user.userId);
+          const thread = await memory.getThreadById({ threadId });
+          // Thread is created by the chat generate call; if it isn't there yet
+          // (meta arrived first), skip quietly rather than error.
+          if (!thread) return c.json({ ok: false });
+          if (thread.resourceId && thread.resourceId !== resourceId) {
+            return c.json({ error: "Not found" }, 404);
+          }
+
+          await memory.updateThread({
+            id: threadId,
+            title: title || thread.title || "Chat",
+            metadata: {
+              ...(thread.metadata || {}),
+              title: title || (thread.metadata as any)?.title || "Chat",
+              messages,
+            },
+          });
+          return c.json({ ok: true });
+        } catch (error) {
+          logger.error("[Consultant] Thread meta update error:", error);
+          return c.json({ error: "Failed to update thread" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    // Delete ONE of the caller's chat threads — the only thing that removes a
+    // chat (the client's ✕ button). Ownership-checked so a role-qualified user
+    // cannot delete another user's thread by id.
+    path: "/api/consultant/threads/:threadId",
+    method: "DELETE" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const threadId = c.req.param("threadId");
+          if (!threadId) return c.json({ error: "threadId is required" }, 400);
+
+          const mastra = c.get("mastra");
+          const agent = mastra?.getAgent("qmsConsultantAgent");
+          const memory = await agent?.getMemory?.();
+          if (!memory) return c.json({ ok: true });
+
+          const resourceId = userResourceId(user.userId);
+          const thread = await memory.getThreadById({ threadId });
+          if (thread && thread.resourceId && thread.resourceId !== resourceId) {
+            return c.json({ error: "Not found" }, 404);
+          }
+          await memory.deleteThread(threadId).catch(() => {});
+          return c.json({ ok: true });
+        } catch (error) {
+          logger.error("[Consultant] Thread delete error:", error);
+          return c.json({ error: "Failed to delete thread" }, 500);
+        }
+      };
+    },
+  },
+
+  {
     // Adam's persistent Working Memory for the requesting user — the durable
     // "what Adam knows about me" profile that follows them across every chat
     // (web + Slack). PDPL/ISO 27001: a user can only ever read THEIR OWN
