@@ -235,7 +235,7 @@
                         <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="consultant.chat_history">Chat History</span>
                         <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                         </div>
-                    <div id="chatHistoryList" class="space-y-1 mb-2">
+                    <div id="chatHistoryList" class="space-y-1 mb-2 max-h-96 overflow-y-auto">
                         <div class="text-xs text-gray-400 py-1 text-center" data-i18n="consultant.no_previous_chats">No previous chats</div>
                     </div>
                 </div>
@@ -1509,7 +1509,10 @@
                     : (existing ? existing.title : 'Chat');
                 history = history.filter(function(h) { return h.threadId !== tid; });
                 history.unshift({ threadId: tid, title: title, messages: msgs.length, time: new Date().toISOString() });
-                if (history.length > 20) history = history.slice(0, 20);
+                // No cap — every chat is retained until the user deletes it
+                // directly (Sarah 2026-08-05). Entries are lightweight metadata
+                // (threadId + title + count + time), so unbounded growth is
+                // negligible for localStorage; full transcripts live server-side.
                 localStorage.setItem('consultant_chat_history', JSON.stringify(history));
                 loadChatHistory();
             } catch(e) {}
@@ -1523,13 +1526,19 @@
                     container.innerHTML = '<div class="text-xs text-gray-600 py-1 text-center">No previous chats</div>';
                     return;
                 }
-                container.innerHTML = history.slice(0, 8).map(function(h) {
+                // Render EVERY saved chat (no display cap) — the list scrolls.
+                // Each row has its own delete (✕) button so a chat is only ever
+                // removed when the user chooses to (Sarah 2026-08-05).
+                container.innerHTML = history.map(function(h) {
                     return '<div class="history-item flex items-center gap-2 p-2 text-xs" data-on-click="resumeChat" data-args="' + escAttr(JSON.stringify([h.threadId])) + '">' +
                         '<svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>' +
                         '<div class="min-w-0 flex-1">' +
                             '<div class="font-medium text-gray-700 truncate">' + escapeHtml(h.title) + '</div>' +
                             '<div class="text-gray-400">' + timeAgo(h.time) + ' · ' + h.messages + ' msgs</div>' +
                         '</div>' +
+                        '<button type="button" class="shrink-0 text-gray-300 hover:text-red-500 p-1 rounded" title="Delete this chat" aria-label="Delete this chat" data-on-click="deleteChat" data-args="' + escAttr(JSON.stringify([h.threadId])) + '">' +
+                            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
+                        '</button>' +
                     '</div>';
                 }).join('');
             } catch(e) {}
@@ -1546,6 +1555,30 @@
             // so the old conversation is fully visible when reopened.
             loadThreadHistory();
             chatInput.focus();
+        };
+
+        // Direct delete — removes ONE chat from the history list, only when the
+        // user clicks its ✕ (Sarah 2026-08-05). Nothing else prunes the list.
+        // The ✕ button carries its own data-on-click so the click resolves to
+        // delete, not to resumeChat on the surrounding row.
+        window.deleteChat = function(tid) {
+            try {
+                if (!tid) return;
+                var history = JSON.parse(localStorage.getItem('consultant_chat_history') || '[]');
+                history = history.filter(function(h) { return h.threadId !== tid; });
+                localStorage.setItem('consultant_chat_history', JSON.stringify(history));
+                // If the deleted chat is the one on screen, reset to a fresh chat
+                // WITHOUT re-saving it (clearChat would re-add it to history).
+                if (threadId === tid) {
+                    threadId = null;
+                    chatMessages = [];
+                    sessionStorage.removeItem('consultant_threadId');
+                    messagesContainer.innerHTML = '';
+                    welcomeScreen = null;
+                    showSmartWelcome();
+                }
+                loadChatHistory();
+            } catch(e) {}
         };
 
         function toggleSidebar() {
