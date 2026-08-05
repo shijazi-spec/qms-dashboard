@@ -2537,6 +2537,27 @@ export async function getDataCleaningProgress(
   });
 }
 
+// Outstanding lead-duplicate count for a segment — mirrors the outstanding-count
+// query in getDataCleaningProgress above, but for record_type='lead' (Deals/
+// Accounts cleaning progress doesn't cover Leads, so the Quality Reports Hub's
+// per-BU aggregator needs this standalone for SDR/Partnership function reports).
+export async function getSegmentLeadDuplicateCount(
+  segment: DuplicateFilters["segment"],
+): Promise<{ segment: string; outstanding_leads: number }> {
+  const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
+  const p = buildSegmentPredicate(seg, 1);
+  const segCond = p.condition ? " AND " + p.condition : "";
+  const res = await pool.query(
+    `SELECT COUNT(*)::text AS n
+       FROM duplicate_records r
+       JOIN duplicate_clusters dc ON dc.id = r.cluster_id
+      WHERE r.record_type = 'lead' AND dc.status = 'active'
+        AND dc.total_leads > 1 AND r.is_primary = false${segCond}`,
+    [...p.params],
+  );
+  return { segment: seg, outstanding_leads: Number(res.rows[0]?.n) || 0 };
+}
+
 // ── Bulk auto-merge: Contacts with EXACT email + phone match (Sarah 2026-06-20) ─
 //
 // Rule: when ≥2 contacts share the SAME email AND the SAME phone (both exact,
