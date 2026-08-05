@@ -11,8 +11,10 @@ describe("upsertBU", () => {
   it("derives segment from channel and never trusts a caller-supplied segment", async () => {
     query.mockResolvedValue({ rows: [{ id: 1, bu_key: "x", bu_name: "X", channel: "MP", segment: "marketplace", fn: "partnership", sort_order: 0, is_active: true }] });
     await upsertBU({ bu_key: "x", bu_name: "X", channel: "MP", fn: "partnership" });
-    const sql = String(query.mock.calls[0][0]);
-    const params = query.mock.calls[0][1];
+    const upsertCall = query.mock.calls.find((c) => String(c[0]).includes("ON CONFLICT (bu_key) DO UPDATE"));
+    expect(upsertCall, "upsert INSERT should have run").toBeTruthy();
+    const sql = String(upsertCall![0]);
+    const params = upsertCall![1] as any[];
     expect(sql).toContain("quality_report_bus");
     // 'marketplace' (derived from MP) must be among the bound params.
     expect(params).toContain("marketplace");
