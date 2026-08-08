@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Quality Reports - WalaPlus Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html, body { font-family: 'Inter', 'Noto Sans Arabic', sans-serif; height: 100%; margin: 0; }
+        .main-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
+        /* Shared SaaS-phase KPI tile language (see dashboard/duplicates.html for
+           the canonical definitions) — copied here so this page renders the same
+           card language without depending on another page's <style> block. */
+        .rr-kpi { background: #FFFFFF; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.07); border-inline-start: 3px solid #CBD5E1; }
+        html.wp-dark .rr-kpi { background: #1E293B; box-shadow: 0 1px 3px rgba(0,0,0,0.35); border-inline-start-color: #475569; }
+        .rr-kpi-label { font-size: 12px; color: #6B7280; }
+        html.wp-dark .rr-kpi-label { color: #94A3B8; }
+        .rr-kpi-value { font-size: 22px; font-weight: 600; margin-top: 2px; color: #111827; }
+        html.wp-dark .rr-kpi-value { color: #F8FAFC; }
+        .rr-kpi-sub { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
+        html.wp-dark .rr-kpi-sub { color: #64748B; }
+        .rr-kpi-rich { background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-inline-start: 4px solid var(--rr-accent, #2563EB); border-radius: 10px; }
+        html.wp-dark .rr-kpi-rich { background: #1E293B; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+        .rr-kpi-rich .rr-kpi-value { font-size: 20px; font-weight: 700; color: var(--rr-accent, #111827); }
+        /* Per-card accent as CLASSES, not inline style — the CSP strips inline
+           style="" attributes, so accents must live in this <style> block. */
+        .rr-acc-blue   { --rr-accent: #2563EB; }
+        .rr-acc-amber  { --rr-accent: #D97706; }
+        .rr-acc-red    { --rr-accent: #DC2626; }
+        .rr-acc-teal   { --rr-accent: #0D9488; }
+        .rr-acc-indigo { --rr-accent: #4F46E5; }
+        .rr-acc-yellow { --rr-accent: #CA8A04; }
+        .rr-acc-purple { --rr-accent: #7C3AED; }
+        .rr-acc-green  { --rr-accent: #16A34A; }
+        .rr-acc-sky    { --rr-accent: #0EA5E9; }
+        .rr-acc-rose   { --rr-accent: #E11D48; }
+        .rr-btn { font-size: 11.5px; font-weight: 500; padding: 5px 10px; border-radius: 7px; border: 1px solid transparent; cursor: pointer; line-height: 1; display: inline-flex; align-items: center; gap: 5px; transition: background .12s ease, border-color .12s ease, filter .12s ease; }
+        .rr-btn.rr-btn-ghost { background: transparent; color: #6B7280; border-color: #E5E7EB; }
+        .rr-btn.rr-btn-ghost:hover { background: #F9FAFB; color: #111827; }
+        .rr-btn:focus-visible { outline: 2px solid #1E3A8A; outline-offset: 2px; }
+        html.wp-dark .rr-btn.rr-btn-ghost { color: #94A3B8; border-color: #2B3A52; }
+        html.wp-dark .rr-btn.rr-btn-ghost:hover { background: #16233B; color: #F1F5F9; }
+        html.wp-dark .rr-btn:focus-visible { outline-color: #2563EB; }
+        .rr-note { border-radius: 10px; padding: 12px 14px; font-size: 12.5px; border: 1px solid; color: #374151; }
+        .rr-note.rr-note-info { background: #EFF6FF; border-color: #BFDBFE; }
+        html.wp-dark .rr-note { color: #94A3B8; }
+        html.wp-dark .rr-note.rr-note-info { background: rgba(96,165,250,.1); border-color: rgba(96,165,250,.28); }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/i18n.js?v=1.1"></script>
+    <script src="/js/csp-styles.js?v=1"></script>
+</head>
+<body class="bg-gray-100">
+    <div id="walaplus-nav"></div>
+    <script src="/js/a11y.js?v=2" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('quality-reports');
+        });
+    </script>
+
+    <div class="main-scroll bg-gray-100">
+        <div class="max-w-7xl mx-auto p-6">
+            <div class="mb-5">
+                <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100">Quality Reports</h1>
+                <p class="text-sm text-gray-500 mt-1">Per-business-unit rollup of SOPs, KPIs, data cleanup, compliance and open actions.</p>
+            </div>
+
+            <div id="qrHub" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="rr-kpi-sub">Loading business units…</div>
+            </div>
+
+            <div id="qrBU" class="hidden"></div>
+        </div>
+    </div>
+
+    <script src="/js/quality-reports.js?v=1"></script>
+</body>
+</html>
