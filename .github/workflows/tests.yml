@@ -91,18 +91,48 @@ jobs:
       # this step makes the runner self-diagnosing instead: it prints exactly
       # which of node / npm / npx / tsx is missing. Cheap (a few seconds) and
       # it runs unconditionally so a future 127 is never a mystery again.
+      # Findings are emitted as `::warning::` workflow commands, NOT plain
+      # stdout. Raw step logs need repo-admin rights to download, but
+      # annotations are readable anonymously via
+      # `GET /repos/:o/:r/check-runs/:id/annotations` — so this is the one
+      # channel that actually surfaces the answer without admin access.
+      # Each message is truncated so it can't blow the annotation size cap.
       - name: Environment diagnostics
         continue-on-error: true
         run: |
-          echo "node    : $(node -v 2>&1)"
-          echo "npm     : $(npm -v 2>&1)"
-          echo "npx     : $(npx --version 2>&1)"
-          echo "--- is tsx resolvable? ---"
-          echo "which tsx        : $(which tsx 2>&1 || echo 'NOT ON PATH')"
-          echo "node_modules/.bin: $(ls node_modules/.bin 2>/dev/null | grep -E '^(tsx|vitest|tsc)$' | tr '\n' ' ' || echo 'none of tsx/vitest/tsc present')"
-          echo "require.resolve  : $(node -e "console.log(require.resolve('tsx/package.json'))" 2>&1)"
-          echo "--- does the exact test-script command work? ---"
-          echo "npx tsx --version: $(npx tsx --version 2>&1)"
+          trunc() { tr '\n' ' ' | tr -d '\r' | cut -c1-700; }
+
+          NODE_V=$(node -v 2>&1 | trunc)
+          NPM_V=$(npm -v 2>&1 | trunc)
+          NPX_V=$(npx --version 2>&1 | trunc)
+          echo "::warning title=diag-1-versions::node=${NODE_V} npm=${NPM_V} npx=${NPX_V}"
+
+          WHICH_TSX=$(command -v tsx 2>&1 || echo 'NOT-ON-PATH')
+          BIN_HITS=$(ls node_modules/.bin 2>/dev/null | grep -E '^(tsx|vitest|tsc|prettier)$' | tr '\n' ',' || echo 'NONE')
+          BIN_COUNT=$(ls node_modules/.bin 2>/dev/null | wc -l || echo 0)
+          echo "::warning title=diag-2-tsx-resolution::which=${WHICH_TSX} | .bin hits=[${BIN_HITS}] | .bin total entries=${BIN_COUNT}"
+
+          RESOLVE=$(node -e "console.log(require.resolve('tsx/package.json'))" 2>&1 | trunc)
+          echo "::warning title=diag-3-require-resolve::${RESOLVE}"
+
+          NPX_TSX=$(npx tsx --version 2>&1 | trunc)
+          echo "::warning title=diag-4-npx-tsx-version::${NPX_TSX}"
+
+          # The decisive one: run the actual test script, bounded, and report
+          # its TRUE exit code plus the head of its output. Redirect to a file
+          # rather than piping — `RC=$?` after `OUT=$(cmd | head)` would
+          # capture head's status, not npm's, and PIPESTATUS doesn't survive a
+          # command-substitution assignment either. `|| true` keeps this
+          # diagnostic from masking the real "Run test suite" step below.
+          # `cmd && RC=0 || RC=$?` is the idiom that both survives the
+          # `set -e` GitHub applies to bash steps AND preserves the real
+          # exit code (a trailing `|| true` would force $? to 0).
+          timeout 90 npm test > /tmp/npm-test.log 2>&1 && RC=0 || RC=$?
+          HEAD_OUT=$(head -c 700 /tmp/npm-test.log | trunc)
+          TAIL_OUT=$(tail -c 500 /tmp/npm-test.log | trunc)
+          echo "::warning title=diag-5-npm-test-exit::exit_code=${RC}"
+          echo "::warning title=diag-6-npm-test-head::${HEAD_OUT}"
+          echo "::warning title=diag-7-npm-test-tail::${TAIL_OUT}"
 
       # Non-blocking while we establish the baseline. Remove
       # `continue-on-error` to promote this to a hard gate.
