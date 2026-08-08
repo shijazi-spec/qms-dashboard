@@ -108,11 +108,69 @@ jobs:
       # `npx vitest run` for the vitest suites, so .bin has to be populated
       # for the suite to work at all — pointing the top-level call at an
       # absolute path would not have been enough.
+      # `npm rebuild` alone is NOT sufficient: on the runner it exits 1 after
+      # about a second (some package's rebuild fails), and because GitHub
+      # applies `set -e` to bash steps that aborted the whole job and skipped
+      # everything downstream. So this step is tolerant by design:
+      #   1. try `npm rebuild`, capturing its exit code + output instead of
+      #      letting a partial failure kill the run;
+      #   2. if the shims we actually need are still missing, synthesise them
+      #      directly from each package's own `bin` field — that is all npm
+      #      would have done anyway;
+      #   3. only hard-fail if tsx is STILL unusable afterwards.
+      # `continue-on-error` keeps the diagnostics + baseline running even then.
       - name: Repair node_modules/.bin (npm ci leaves it empty)
+        continue-on-error: true
         run: |
-          echo "::warning title=bin-before::entries=$(ls node_modules/.bin 2>/dev/null | wc -l)"
-          npm rebuild
-          echo "::warning title=bin-after::entries=$(ls node_modules/.bin 2>/dev/null | wc -l) hits=[$(ls node_modules/.bin 2>/dev/null | grep -E '^(tsx|vitest|tsc)$' | tr '\n' ',')]"
+          echo "::warning title=bin-1-before::entries=$(ls node_modules/.bin 2>/dev/null | wc -l)"
+
+          npm rebuild > /tmp/rebuild.log 2>&1 && RC=0 || RC=$?
+          echo "::warning title=bin-2-rebuild::exit=${RC} tail=$(tail -c 400 /tmp/rebuild.log | tr '\n' ' ' | tr -d '\r')"
+          echo "::warning title=bin-3-after-rebuild::entries=$(ls node_modules/.bin 2>/dev/null | wc -l)"
+
+          # Fallback: build the shims ourselves from each package's `bin`
+          # field. Writes a tiny `exec node <abs-path>` wrapper, which is
+          # exactly what npx/PATH need and is immune to whatever made
+          # `npm rebuild` fail.
+          cat > /tmp/mkshims.cjs <<'NODEEOF'
+          const fs = require("fs");
+          const path = require("path");
+          const binDir = path.join(process.cwd(), "node_modules", ".bin");
+          fs.mkdirSync(binDir, { recursive: true });
+          for (const name of ["tsx", "vitest"]) {
+            let pkgPath;
+            try {
+              pkgPath = require.resolve(name + "/package.json", { paths: [process.cwd()] });
+            } catch (e) {
+              console.log("SKIP " + name + " (not installed)");
+              continue;
+            }
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+            const dir = path.dirname(pkgPath);
+            let bins = pkg.bin;
+            if (typeof bins === "string") bins = { [pkg.name]: bins };
+            for (const [binName, rel] of Object.entries(bins || {})) {
+              const target = path.join(dir, rel);
+              const shim = path.join(binDir, binName);
+              if (fs.existsSync(shim)) { console.log("KEEP " + binName); continue; }
+              fs.writeFileSync(shim, '#!/bin/sh\nexec node "' + target + '" "$@"\n');
+              fs.chmodSync(shim, 0o755);
+              console.log("SHIM " + binName + " -> " + target);
+            }
+          }
+          NODEEOF
+          node /tmp/mkshims.cjs > /tmp/shims.log 2>&1 && SRC=0 || SRC=$?
+          echo "::warning title=bin-4-shims::exit=${SRC} $(tr '\n' ' ' < /tmp/shims.log | tr -d '\r' | cut -c1-400)"
+
+          FINAL=$(ls node_modules/.bin 2>/dev/null | wc -l)
+          HITS=$(ls node_modules/.bin 2>/dev/null | grep -E '^(tsx|vitest|tsc)$' | tr '\n' ',')
+          VER=$(npx tsx --version 2>&1 | tr '\n' ' ' | cut -c1-160)
+          echo "::warning title=bin-5-final::entries=${FINAL} hits=[${HITS}] npx_tsx=${VER}"
+
+          if ! npx tsx --version > /dev/null 2>&1; then
+            echo "::error title=bin-repair-failed::tsx is still not runnable after rebuild + shim fallback; the suite cannot start"
+            exit 1
+          fi
 
       # The first run of this workflow exited 127 ("command not found") in
       # ~40s without running a single test, and `continue-on-error` masked it
