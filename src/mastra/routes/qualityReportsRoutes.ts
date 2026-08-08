@@ -5,7 +5,7 @@ import type { UserRole } from "../../utils/rbacDatabase";
 import {
   listBUs, getBUByKey, upsertBU, deleteBU, setBUOwners, type Channel,
 } from "../../utils/qualityReportsDepartments";
-import { getBUReport } from "../../utils/qualityReportsAggregator";
+import { getBUReport, getBUHeadline } from "../../utils/qualityReportsAggregator";
 import { logger } from "../../utils/logger";
 
 // Keep in sync with the ROUTE_PERMISSION_MAP entries added for
@@ -66,6 +66,25 @@ export const qualityReportsRoutes = [
           return c.json({ success: true, ...rep });
         } catch (e: any) {
           logger.error("[QualityReports] bu report", e);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/quality-reports/bus/:buKey/summary",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, READ_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const h = await getBUHeadline(c.req.param("buKey"));
+          if (!h) return c.json({ error: "Not found" }, 404);
+          return c.json({ success: true, ...h });
+        } catch (e: any) {
+          logger.error("[QualityReports] bu headline", e);
           return c.json({ error: "An internal error occurred" }, 500);
         }
       };

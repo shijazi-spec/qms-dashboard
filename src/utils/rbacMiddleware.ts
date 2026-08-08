@@ -981,6 +981,13 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "grc_manager", "head_of_operations_quality", "quality_manager"],
   },
   {
+    // BU headline summary — same read allowlist as GET /bus/:buKey above
+    // (the [^/]+ pattern there does not match the /summary suffix).
+    pattern: /^\/api\/quality-reports\/bus\/[^/]+\/summary$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
     // Call-intelligence CRM-link audit/repair — admin-only (handler also
     // enforces verifyAdminKey as defense-in-depth).
     pattern: /^\/api\/calls\/audit-crm-links$/,
