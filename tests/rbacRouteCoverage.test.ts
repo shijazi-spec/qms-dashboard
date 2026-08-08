@@ -160,16 +160,38 @@ function isFrameworkManaged(urlPath: string): boolean {
 /**
  * Replace Mastra-style `:param` placeholders with concrete values that satisfy
  * the regexes used in `ROUTE_PERMISSION_MAP`. "1" matches `\d+`, `\w+`, and
- * `[^/]+`, so it is safe for every observed pattern (numeric IDs, names,
- * filenames, ISO dates, codes, sections, etc.).
+ * `[^/]+`, so it is the right default for numeric IDs, names, filenames, ISO
+ * dates, codes, sections, etc.
+ *
+ * EXCEPTION — enum-constrained params. A route like
+ *   /api/handoff-tasks/:id{[0-9]+}/:action{(accept|reject|done|resend)}
+ * has a param whose inline constraint only accepts specific literals. Blindly
+ * substituting "1" produced `/api/handoff-tasks/1/1`, which no rule can match,
+ * and the test then reported the route as having NO RBAC rule at all. That was
+ * a false positive: `rbacMiddleware.ts` does cover it via
+ * `/^\/api\/handoff-tasks\/\d+\/(accept|reject|done|resend)$/`. For those we
+ * substitute the constraint's first literal alternative instead, so the
+ * generated path is one the route could actually receive at runtime.
  */
 function concretize(routePath: string): string {
   // Mastra route paths can carry an inline regex constraint after the
   // param name, e.g. `/api/qms/capa/:id{[0-9]+}` (digits-only). The
   // ROUTE_PERMISSION_MAP rules match against runtime URL paths which
-  // never include the `{…}` suffix, so strip it before substitution.
+  // never include the `{…}` suffix, so resolve it away before substitution.
   return routePath
-    .replace(/:([A-Za-z][A-Za-z0-9_]*)\{[^}]*\}/g, "1")
+    .replace(
+      /:([A-Za-z][A-Za-z0-9_]*)\{([^}]*)\}/g,
+      (_match, _name: string, constraint: string) => {
+        const enumGroup = /^\(([^)]*)\)$/.exec(constraint.trim());
+        if (enumGroup) {
+          const first = enumGroup[1].split("|")[0].trim();
+          // Only accept a plain literal — anything with regex metacharacters
+          // is not a safe substitution, so fall through to the "1" default.
+          if (first && /^[A-Za-z0-9_-]+$/.test(first)) return first;
+        }
+        return "1";
+      },
+    )
     .replace(/:([A-Za-z][A-Za-z0-9_]*)/g, "1");
 }
 

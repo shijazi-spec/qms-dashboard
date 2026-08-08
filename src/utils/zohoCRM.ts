@@ -1244,7 +1244,7 @@ export async function findAccountIdsByDomains(domains: string[]): Promise<Map<st
     // domain-or-name resolvers. (This lookup is an idempotency helper, not the
     // sole account source.) Only the domain hits from good chunks are used.
     if (rows === null) {
-      try { console.warn("[findAccountIdsByDomains] chunk skipped:", lastErr?.message || String(lastErr)); } catch { /* noop */ }
+      try { logger.warn("[findAccountIdsByDomains] chunk skipped:", lastErr?.message || String(lastErr)); } catch { /* noop */ }
       continue;
     }
     for (const r of rows) {
@@ -1278,7 +1278,7 @@ export async function findAccountIdsByNames(names: string[]): Promise<Map<string
     // Best-effort like findAccountIdsByDomains — a bad chunk skips, never aborts
     // the push (the company falls back to the domain / cluster resolver).
     if (rows === null) {
-      try { console.warn("[findAccountIdsByNames] chunk skipped:", lastErr?.message || String(lastErr)); } catch { /* noop */ }
+      try { logger.warn("[findAccountIdsByNames] chunk skipped:", lastErr?.message || String(lastErr)); } catch { /* noop */ }
       continue;
     }
     for (const r of rows) {
