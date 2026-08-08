@@ -85,6 +85,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The first run of this workflow exited 127 ("command not found") in
+      # ~40s without running a single test, and `continue-on-error` masked it
+      # as a green job. Downloading the raw log needs repo-admin rights, so
+      # this step makes the runner self-diagnosing instead: it prints exactly
+      # which of node / npm / npx / tsx is missing. Cheap (a few seconds) and
+      # it runs unconditionally so a future 127 is never a mystery again.
+      - name: Environment diagnostics
+        continue-on-error: true
+        run: |
+          echo "node    : $(node -v 2>&1)"
+          echo "npm     : $(npm -v 2>&1)"
+          echo "npx     : $(npx --version 2>&1)"
+          echo "--- is tsx resolvable? ---"
+          echo "which tsx        : $(which tsx 2>&1 || echo 'NOT ON PATH')"
+          echo "node_modules/.bin: $(ls node_modules/.bin 2>/dev/null | grep -E '^(tsx|vitest|tsc)$' | tr '\n' ' ' || echo 'none of tsx/vitest/tsc present')"
+          echo "require.resolve  : $(node -e "console.log(require.resolve('tsx/package.json'))" 2>&1)"
+          echo "--- does the exact test-script command work? ---"
+          echo "npx tsx --version: $(npx tsx --version 2>&1)"
+
       # Non-blocking while we establish the baseline. Remove
       # `continue-on-error` to promote this to a hard gate.
       - name: Run test suite
@@ -111,10 +130,16 @@ jobs:
           if [ "${{ steps.tests.outcome }}" = "success" ]; then
             echo "### ✅ Test suite passed" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "The suite is green. Consider promoting this workflow to a hard gate by removing \`continue-on-error: true\` from the *Run test suite* step in \`.github/workflows/tests.yml\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "The suite is green. Promote this workflow to a hard gate by removing \`continue-on-error: true\` from the *Run test suite* step in \`.github/workflows/tests.yml\`." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "### ⚠️ Test suite failed (non-blocking)" >> "$GITHUB_STEP_SUMMARY"
+            echo "### ⚠️ Test suite did not pass (non-blocking)" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "This workflow is intentionally non-blocking while the baseline is established, so the merge was **not** blocked." >> "$GITHUB_STEP_SUMMARY"
-            echo "See the *Run test suite* step log for the per-file failure list." >> "$GITHUB_STEP_SUMMARY"
+            echo "Merges are **not** blocked while the baseline is being established." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Distinguish two very different cases before triaging:**" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Symptom | Meaning |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Exit **127**, finishes in well under a minute, no per-file output | Tests **never ran** — a command was not found. Check the *Environment diagnostics* step above. This is infrastructure, not a real test failure. |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Per-file \`PASS\`/\`FAIL\` lines and an \`N/M test files passed\` tally | Tests **did run**; the listed files genuinely failed. Triage into fix / quarantine / delete. |" >> "$GITHUB_STEP_SUMMARY"
           fi
