@@ -18,6 +18,14 @@
       "source": "dashboard/document-mapping.html (inline <script>)"
     },
     {
+      "snippet": "t('duplicates.er_badge_' + (m[reason] ? reason : 'empty'));",
+      "source": "dashboard/js/duplicates-app.js"
+    },
+    {
+      "snippet": "t(_isTest ? 'duplicates.er_test_ready' : 'duplicates.er_empty_",
+      "source": "dashboard/js/duplicates-app.js"
+    },
+    {
       "snippet": "t('policies.' + k);",
       "source": "dashboard/policies.html (inline <script>)"
     },

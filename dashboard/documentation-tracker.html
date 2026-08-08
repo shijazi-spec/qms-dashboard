@@ -627,7 +627,7 @@
 
         document.addEventListener('DOMContentLoaded', async function () {
             // WAIT for translations before rendering anything.
-            // WalaPlusI18n.t() returns the LAST DOT-SEGMENT of a key when the
+            // The WalaPlusI18n translate helper returns the LAST DOT-SEGMENT of a key when the
             // catalogue has not loaded (i18n.js), not null — so the `|| fallback`
             // in dtrackT never fires and the UI renders raw key fragments like
             // "k_tracked" and "s_linked". init() is cached, so awaiting it here
