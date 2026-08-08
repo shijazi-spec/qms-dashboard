@@ -133,7 +133,10 @@ const WalaPlusNav = {
         // Nonconformance / coaching workflows. Distinct from the
         // Integrated QMS document register above. The /qms URL is kept
         // for backward compatibility with bookmarks.
-        { label: 'Audit Reports', href: '/qms', icon: 'shield-check', id: 'qms' }
+        { label: 'Audit Reports', href: '/qms', icon: 'shield-check', id: 'qms' },
+        // Quality Reports Department Hub (URL /quality-reports): per-BU
+        // reporting hub aggregating SOPs/KPIs/cleanup/compliance/actions.
+        { label: 'Quality Reports', href: '/quality-reports', icon: 'document-report', id: 'quality-reports' }
       ]
     },
     // Document Control — promoted to its own top-level group per Sarah's
