@@ -35,6 +35,21 @@
 
     var CHANNEL_LABEL = { B2B: 'B2B', B2C: 'B2C', MP: 'Marketplace' };
 
+    // Populated by qrLoadHub from GET /api/quality-reports/bus. The admin
+    // panel's Save handlers (qrSaveBU/qrSaveOwners) read a BU's immutable
+    // fields (bu_key/bu_name/channel/fn/sort_order/is_active) out of this
+    // list so the POST upsert never has to guess at what wasn't edited —
+    // upsertBU()'s ON CONFLICT clause overwrites every column it's given
+    // (including sort_order/is_active, which default to 0/true when
+    // omitted), so re-sending the row's current values here is what keeps
+    // a mapping-only save from silently resetting them.
+    var qrCurrentBUs = [];
+
+    // Mirrors WRITE_ROLES in qualityReportsRoutes.ts — the server is the
+    // real gate (every write endpoint calls requireRole independently);
+    // this list only decides whether the admin toggle button is shown.
+    var ADMIN_ROLES = ['admin', 'grc_manager', 'head_of_operations_quality', 'quality_manager'];
+
     async function qrLoadHub() {
         var host = document.getElementById('qrHub');
         try {
@@ -42,6 +57,8 @@
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
             var bus = (data && data.bus) || [];
+            qrCurrentBUs = bus;
+            qrRenderAdmin(bus);
             if (!bus.length) {
                 host.innerHTML = '<div class="rr-note rr-note-info">No business units configured yet.</div>';
                 return;
@@ -58,6 +75,108 @@
             host.innerHTML = '<div class="text-sm text-red-600">Failed to load business units: ' + escapeHtml(String((e && e.message) || e)) + '</div>';
         }
     }
+
+    /** Shows the admin toggle button only for roles that can actually write (server still re-checks on every call). */
+    function qrCheckAdminAccess() {
+        fetch('/api/auth/me', { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : { authenticated: false }; })
+            .then(function (data) {
+                var role = (data && data.authenticated && data.user && data.user.role) || null;
+                var btn = document.getElementById('qrAdminToggle');
+                if (btn && role && ADMIN_ROLES.indexOf(role) !== -1) btn.classList.remove('hidden');
+            })
+            .catch(function () { /* fail closed — leave the toggle hidden */ });
+    }
+
+    window.qrToggleAdmin = function () {
+        var panel = document.getElementById('qrAdminPanel');
+        if (panel) panel.classList.toggle('hidden');
+    };
+
+    /** Rebuilds the admin panel's BU list. Safe to call even while the panel is hidden (cheap, keeps it in sync with qrLoadHub). */
+    function qrRenderAdmin(bus) {
+        var host = document.getElementById('qrAdminList');
+        if (!host) return;
+        if (!bus.length) {
+            host.innerHTML = '<div class="rr-note rr-note-info">No business units configured yet.</div>';
+            return;
+        }
+        host.innerHTML = bus.map(function (b) {
+            var key = escAttr(b.bu_key);
+            var channel = CHANNEL_LABEL[b.channel] || b.channel || '';
+            var owners = (b.owners || []).join('\n');
+            return '<div class="bg-white rounded-lg shadow p-4 mb-3">' +
+                '<div class="font-semibold text-gray-900">' + escapeHtml(b.bu_name || b.bu_key) + '</div>' +
+                '<div class="rr-kpi-sub mb-2">' + escapeHtml(b.bu_key + ' · ' + channel + ' · ' + (b.fn || '')) + '</div>' +
+                '<div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">' +
+                '<label class="text-xs text-gray-600">Head email' +
+                '<input type="email" id="qr-head-' + key + '" value="' + escAttr(b.head_email || '') + '" class="mt-1 w-full border rounded px-2 py-1 text-sm"></label>' +
+                '<label class="text-xs text-gray-600">SOP policy department' +
+                '<input type="text" id="qr-pol-' + key + '" value="' + escAttr(b.policy_department || '') + '" class="mt-1 w-full border rounded px-2 py-1 text-sm"></label>' +
+                '<label class="text-xs text-gray-600">KPI BU name' +
+                '<input type="text" id="qr-kpi-' + key + '" value="' + escAttr(b.kpi_bu_name || '') + '" class="mt-1 w-full border rounded px-2 py-1 text-sm"></label>' +
+                '</div>' +
+                '<div class="flex justify-end mb-3">' +
+                '<button type="button" class="rr-btn rr-btn-ghost" data-on-click="qrSaveBU" data-args="' + escAttr(JSON.stringify([b.bu_key])) + '">Save mapping</button>' +
+                '</div>' +
+                '<label class="text-xs text-gray-600 block mb-1">Owners (comma, semicolon or newline separated emails)</label>' +
+                '<textarea id="qr-owners-' + key + '" rows="2" class="w-full border rounded px-2 py-1 text-sm">' + escapeHtml(owners) + '</textarea>' +
+                '<div class="flex justify-end mt-2">' +
+                '<button type="button" class="rr-btn rr-btn-ghost" data-on-click="qrSaveOwners" data-args="' + escAttr(JSON.stringify([b.id, b.bu_key])) + '">Save owners</button>' +
+                '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    function qrVal(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+
+    /** rrToast isn't defined on this page (it's a duplicates.html/duplicates-app.js helper) — fall back to a status span next to the admin panel heading. */
+    function qrStatus(msg) {
+        var el = document.getElementById('qrAdminStatus');
+        if (!el) return;
+        el.textContent = msg;
+        clearTimeout(qrStatus._t);
+        qrStatus._t = setTimeout(function () { el.textContent = ''; }, 5000);
+    }
+
+    window.qrSaveBU = async function (buKey) {
+        var bu = qrCurrentBUs.find(function (b) { return b.bu_key === buKey; });
+        if (!bu) return;
+        var payload = {
+            bu_key: bu.bu_key, bu_name: bu.bu_name, channel: bu.channel, fn: bu.fn,
+            sort_order: bu.sort_order, is_active: bu.is_active,
+            head_email: qrVal('qr-head-' + buKey), policy_department: qrVal('qr-pol-' + buKey), kpi_bu_name: qrVal('qr-kpi-' + buKey)
+        };
+        try {
+            var res = await fetch('/api/quality-reports/bus', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!res.ok) {
+                var err = await res.json().catch(function () { return {}; });
+                qrStatus('Save failed: ' + (err.error || ('HTTP ' + res.status)));
+                return;
+            }
+            if (typeof window.rrToast === 'function') { window.rrToast('Saved'); } else { qrStatus('Saved ' + (bu.bu_name || bu.bu_key)); }
+            qrLoadHub();
+        } catch (e) {
+            qrStatus('Save failed: ' + String((e && e.message) || e));
+        }
+    };
+
+    window.qrSaveOwners = async function (buId, buKey) {
+        var raw = qrVal('qr-owners-' + buKey) || '';
+        var owners = raw.split(/[\s,;]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+        try {
+            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buId) + '/owners', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owners: owners }) });
+            if (!res.ok) {
+                var err = await res.json().catch(function () { return {}; });
+                qrStatus('Owners save failed: ' + (err.error || ('HTTP ' + res.status)));
+                return;
+            }
+            if (typeof window.rrToast === 'function') { window.rrToast('Owners saved'); } else { qrStatus('Owners saved (' + owners.length + ')'); }
+            qrLoadHub();
+        } catch (e) {
+            qrStatus('Owners save failed: ' + String((e && e.message) || e));
+        }
+    };
 
     window.qrOpenBU = async function (buKey) {
         var host = document.getElementById('qrBU');
@@ -213,5 +332,8 @@
         return out.join('');
     }
 
-    document.addEventListener('DOMContentLoaded', qrLoadHub);
+    document.addEventListener('DOMContentLoaded', function () {
+        qrLoadHub();
+        qrCheckAdminAccess();
+    });
 })();
