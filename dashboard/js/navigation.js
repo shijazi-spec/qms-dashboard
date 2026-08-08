@@ -960,6 +960,12 @@ const WalaPlusNav = {
            reads as one row of same-weight controls. Same box the SVG buttons
            use (p-1.5 → 32×32 hit target) — only the glyph inside shrinks. */
         .wp-topstrip .wp-topstrip-emoji { font-size: 20px; line-height: 1; }
+        /* Refresh button — outlined "secondary" style so it stops shouting
+           in bright indigo next to the ghost icon buttons on either side.
+           navigation.css already flips text-gray-* + hover:bg-gray-100 on
+           dark mode; the border-gray-300 needs its own dark rule. */
+        html.wp-dark .wp-topbar-refresh-btn { border-color: rgba(255,255,255,0.15); color: #e5e7eb; }
+        html.wp-dark .wp-topbar-refresh-btn:hover { background-color: rgba(255,255,255,0.08); }
         /* Critical tooltip-hiding rule injected here so the rail never double-renders
            its label on pages that don't load /css/navigation.css. The full hover
            polish (colors, arrow, focus) still lives in navigation.css. */
@@ -1093,8 +1099,8 @@ const WalaPlusNav = {
           <button data-on-click="WalaPlusNav.openAssistant" class="relative p-1.5 rounded-lg hover:bg-gray-100 transition leading-none wp-topstrip-icon-btn" aria-label="Open GRQ Assistant" title="GRQ Assistant" data-testid="button-grq-assistant">
             <span aria-hidden="true" class="wp-topstrip-emoji">🤖</span>
           </button>
-          <button data-on-click="WalaPlusNav.refreshDashboard" class="wp-desktop-only bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition items-center space-x-1 text-sm" aria-label="Refresh dashboard" data-testid="button-refresh">
-            <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <button data-on-click="WalaPlusNav.refreshDashboard" class="wp-desktop-only wp-topbar-refresh-btn text-gray-700 border border-gray-300 hover:bg-gray-100 px-2.5 py-1 rounded-lg transition items-center gap-1.5 text-xs font-medium" aria-label="Refresh dashboard" data-testid="button-refresh">
+            <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             <span data-i18n="nav.refresh">${this._t('nav.refresh')}</span>
           </button>
           <button id="wp-theme-toggle" data-on-click="WalaPlusNav.toggleTheme" class="wp-theme-toggle relative p-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="Toggle dark mode" title="Toggle dark mode" data-testid="button-theme-toggle">
@@ -1104,7 +1110,7 @@ const WalaPlusNav = {
           <div class="relative nav-dropdown" data-group="notifications">
             <button class="relative p-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="${this._t('nav.notifications')}" aria-haspopup="true" aria-expanded="false" aria-controls="nav-notifications-list" data-testid="button-notifications">
               <svg class="w-5 h-5 text-gray-500" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-              <span id="nav-alert-badge" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold nav-alert-badge-text" aria-live="polite"></span>
+              <span id="nav-alert-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-[10px] leading-none rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center font-bold nav-alert-badge-text" aria-live="polite"></span>
             </button>
             <div class="dropdown-menu hidden absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
               <div class="p-3 border-b border-gray-100 flex justify-between items-center">
