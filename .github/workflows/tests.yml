@@ -85,6 +85,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ROOT CAUSE (found via the annotation diagnostics below on run
+      # 31276980758): `npm ci` installs the packages but leaves
+      # `node_modules/.bin` completely EMPTY — 0 entries. So every package is
+      # present on disk (node's own `require.resolve('tsx/package.json')`
+      # resolves fine) but nothing is on PATH, and `npm test`'s
+      # `npx tsx …` dies with `sh: 1: tsx: not found` -> exit 127.
+      #
+      # It is not a config problem: `npm config get bin-links` is `true` and
+      # package-lock.json does record tsx's bin (`{"tsx": "dist/cli.mjs"}`).
+      # The same empty-.bin state reproduces on a local Windows checkout, so
+      # it is repo/lockfile-specific rather than a CI quirk.
+      #
+      # `npm rebuild` is npm's documented way to recreate bin links from the
+      # already-installed tree. It is cheap (no network — nothing is
+      # re-downloaded) and idempotent, so it is safe to run unconditionally:
+      # if a future npm version fixes the underlying bug this step simply
+      # becomes a no-op.
+      #
+      # This also matters for more than the top-level command:
+      # tests/runIntegrationTests.ts spawns `npx tsx <file>` per test file and
+      # `npx vitest run` for the vitest suites, so .bin has to be populated
+      # for the suite to work at all — pointing the top-level call at an
+      # absolute path would not have been enough.
+      - name: Repair node_modules/.bin (npm ci leaves it empty)
+        run: |
+          echo "::warning title=bin-before::entries=$(ls node_modules/.bin 2>/dev/null | wc -l)"
+          npm rebuild
+          echo "::warning title=bin-after::entries=$(ls node_modules/.bin 2>/dev/null | wc -l) hits=[$(ls node_modules/.bin 2>/dev/null | grep -E '^(tsx|vitest|tsc)$' | tr '\n' ',')]"
+
       # The first run of this workflow exited 127 ("command not found") in
       # ~40s without running a single test, and `continue-on-error` masked it
       # as a green job. Downloading the raw log needs repo-admin rights, so
