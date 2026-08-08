@@ -952,6 +952,35 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
   {
+    // Quality Reports Department Hub — page + BU registry reads. Same
+    // allowlist as the consultant chat's read-side roles. Kept in sync with
+    // READ_ROLES in src/mastra/routes/qualityReportsRoutes.ts.
+    pattern: /^\/quality-reports$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
+    pattern: /^\/api\/quality-reports\/bus$/,
+    methods: ["GET", "POST"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
+    pattern: /^\/api\/quality-reports\/bus\/[^/]+$/,
+    methods: ["GET", "DELETE"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
+    // Owners write is more restrictive — matches WRITE_ROLES in
+    // qualityReportsRoutes.ts. POST /bus and DELETE /bus/:id above are
+    // deliberately admitted at the coarser read-role set; the handler
+    // itself re-gates with requireRole(c, WRITE_ROLES) as the real check
+    // (see the brief note: allowlist is coarser, handlers are authoritative
+    // for writes).
+    pattern: /^\/api\/quality-reports\/bus\/[^/]+\/owners$/,
+    methods: ["PUT"],
+    roles: ["admin", "grc_manager", "head_of_operations_quality", "quality_manager"],
+  },
+  {
     // Call-intelligence CRM-link audit/repair — admin-only (handler also
     // enforces verifyAdminKey as defense-in-depth).
     pattern: /^\/api\/calls\/audit-crm-links$/,
