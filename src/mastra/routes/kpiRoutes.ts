@@ -280,6 +280,18 @@ export const kpiRoutes = [
             );
           const id = parseInt(c.req.param("id"));
           const body = await c.req.json();
+          // P3: a LOCKED (approved) KPI may only be changed by the HOD or admin.
+          const existing = await getKPIById(id);
+          if (
+            existing &&
+            (existing as any).locked &&
+            !["head_of_operations_quality", "admin"].includes((user as any).role)
+          ) {
+            return forbiddenResponse(
+              c,
+              "This KPI is locked (approved). Only the Head of GRQ can change it.",
+            );
+          }
           const kpi = await updateKPIDefinition(id, body);
           if (!kpi) {
             return c.json({ error: "KPI not found or no changes" }, 404);
@@ -303,6 +315,47 @@ export const kpiRoutes = [
         } catch (error) {
           safeLogger.error("Error updating KPI:", error);
           return c.json({ error: "Failed to update KPI" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // P3: approve/lock (or unlock) a KPI — HOD + admin only.
+    path: "/api/kpis/:id{[0-9]+}/lock",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, ["head_of_operations_quality", "admin"]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Only the Head of GRQ can approve/lock KPIs",
+            );
+          const id = parseInt(c.req.param("id"));
+          const body = await c.req.json().catch(() => ({}));
+          const locked = !!body?.locked;
+          const { setKpiLock } = await import("../../utils/kpiDatabase");
+          const kpi = await setKpiLock(id, locked, (user as any).email || "HOD");
+          if (!kpi) return c.json({ error: "KPI not found" }, 404);
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({
+              actionType: "UPDATE",
+              entityType: "KPI",
+              entityId: String(id),
+              entityName: (kpi as any).kpi_name || (kpi as any).kpi_code,
+              description: `KPI ${locked ? "approved & locked" : "unlocked"} by HOD`,
+              module: "kpis",
+              severity: "INFO",
+            });
+          } catch {}
+          return c.json({ success: true, kpi });
+        } catch (error) {
+          safeLogger.error("Error locking KPI:", error);
+          return c.json({ error: "Failed to change lock" }, 500);
         }
       };
     },
@@ -424,11 +477,14 @@ export const kpiRoutes = [
           const history = await getKPIHistory(id, 12);
           const { getKpiInsight } = await import("../../utils/kpiInsight");
           const insight = await getKpiInsight((kpi as any).kpi_code);
-          const canEdit = ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"].includes(
-            (user as any).role,
-          );
+          const role = (user as any).role;
+          const isHod = ["head_of_operations_quality", "admin"].includes(role);
+          const isManager = ["quality_manager", "grc_manager"].includes(role);
+          // A locked KPI is editable by the HOD only; unlocked by any manager.
+          const canEdit = (kpi as any).locked ? isHod : isHod || isManager;
           return c.json({
             kpi,
+            can_lock: isHod,
             latest: latest
               ? {
                   actual_value: (latest as any).actual_value,

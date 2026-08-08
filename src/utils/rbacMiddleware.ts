@@ -1146,6 +1146,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST", "PUT", "DELETE"],
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
+  {
+    // Approve/lock a KPI (P3) — HOD + admin only. The handler re-checks too.
+    pattern: /^\/api\/kpis\/\d+\/lock$/,
+    methods: ["PUT"],
+    roles: ["admin", "head_of_operations_quality"],
+  },
   // KPI reads (definitions, summary, individual KPI, history) — governance roles + executive.
   {
     pattern: /^\/api\/kpis(\/(\d+(\/(history|detail))?|summary))?$/,

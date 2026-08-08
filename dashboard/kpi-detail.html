@@ -151,11 +151,21 @@
                 </div>
               </div>
 
-              ${data.can_edit ? `<div class="mt-5 flex items-center gap-3">
-                  <button data-on-click="toggleEdit" id="editBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">✎ Edit this KPI</button>
-                  ${k.is_customized ? '<span class="text-xs text-gray-500">Customized — the boot seed no longer overwrites this KPI.</span>' : '<span class="text-xs text-gray-400">Editing marks this KPI customized so your changes survive republish.</span>'}
-                </div>
-                <div id="editPanel" class="hidden bg-white rounded-lg shadow p-5 mt-4"></div>` : ''}
+              <div class="mt-5 flex flex-wrap items-center gap-3">
+                ${k.locked
+                  ? `<span class="text-xs px-2 py-1 rounded bg-slate-800 text-white">🔒 Approved &amp; locked${k.approved_by ? ' by ' + _esc(k.approved_by) : ''}</span>`
+                  : (k.is_customized ? '<span class="text-xs text-gray-500">Customized — survives republish.</span>' : '')}
+                ${data.can_edit
+                  ? `<button data-on-click="toggleEdit" id="editBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">✎ Edit this KPI</button>`
+                  : (k.locked ? '<span class="text-xs text-gray-500">Locked — only the Head of GRQ can change this KPI.</span>' : '')}
+                ${data.can_lock
+                  ? (k.locked
+                      ? `<button data-on-click="setLock" data-args="[false]" class="px-4 py-2 border border-slate-400 text-slate-700 rounded hover:bg-slate-50 text-sm">🔓 Unlock</button>`
+                      : `<button data-on-click="setLock" data-args="[true]" class="px-4 py-2 bg-slate-800 text-white rounded hover:bg-slate-900 text-sm">🔒 Approve &amp; lock</button>`)
+                  : ''}
+                <span id="lockMsg" class="text-xs"></span>
+              </div>
+              <div id="editPanel" class="hidden bg-white rounded-lg shadow p-5 mt-4"></div>
             `;
             window._kpi = k; // keep the definition for the editor
         }
@@ -233,6 +243,23 @@
                     msg.textContent = 'Failed to save' + (reason ? ' — ' + reason : ''); msg.className = 'text-xs text-red-600';
                 }
             } catch (e) { msg.textContent = 'Network error.'; msg.className = 'text-xs text-red-600'; }
+        }
+
+        async function setLock(locked) {
+            const id = _kpiId();
+            const msg = document.getElementById('lockMsg');
+            if (locked && !confirm('Approve and LOCK this KPI? After this, only the Head of GRQ can change it.')) return;
+            try {
+                const res = await fetch(`/api/kpis/${id}/lock`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ locked })
+                });
+                if (res.ok) { if (msg) { msg.textContent = locked ? 'Approved & locked.' : 'Unlocked.'; msg.className = 'text-xs text-emerald-700'; } setTimeout(loadDetail, 400); }
+                else {
+                    let reason = ''; try { reason = (await res.json()).error || ''; } catch {}
+                    if (msg) { msg.textContent = 'Failed' + (reason ? ' — ' + reason : ''); msg.className = 'text-xs text-red-600'; }
+                }
+            } catch (e) { if (msg) { msg.textContent = 'Network error.'; msg.className = 'text-xs text-red-600'; } }
         }
 
         document.addEventListener('DOMContentLoaded', loadDetail);

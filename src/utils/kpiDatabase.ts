@@ -130,6 +130,11 @@ export async function initKPITables(): Promise<void> {
       -- Set true the moment a manager edits a KPI in the UI. The boot seed then
       -- STOPS overwriting that row, so manual edits survive republish (P2).
       is_customized BOOLEAN DEFAULT false,
+      -- Approval / lock (P3): once the HOD approves a KPI it is locked, and only
+      -- the HOD (head_of_operations_quality) or admin may change it thereafter.
+      locked BOOLEAN DEFAULT false,
+      approved_by VARCHAR(200),
+      approved_at TIMESTAMP,
       navigation_map JSONB,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
@@ -227,6 +232,16 @@ export async function initKPITables(): Promise<void> {
   // is_customized: guards manager edits from being overwritten by the boot seed.
   await pool.query(
     `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS is_customized BOOLEAN DEFAULT false`,
+  );
+  // Approval / HOD lock (P3).
+  await pool.query(
+    `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT false`,
+  );
+  await pool.query(
+    `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS approved_by VARCHAR(200)`,
+  );
+  await pool.query(
+    `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP`,
   );
 
   // Name normalization: Sarah prefers her name spelled "Sarah" everywhere.
@@ -1771,6 +1786,29 @@ export async function updateKPIDefinition(
   const result = await pool.query(
     `UPDATE kpi_definitions SET ${fields.join(", ")} WHERE id = $${paramCount} RETURNING *`,
     values,
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Lock (approve) or unlock a KPI (P3). Locking stamps who approved it; only the
+ * HOD/admin can then edit it. Locking also marks it customized so the boot seed
+ * can never overwrite an approved definition.
+ */
+export async function setKpiLock(
+  id: number,
+  locked: boolean,
+  approvedBy: string,
+): Promise<KPIDefinition | null> {
+  const result = await pool.query(
+    `UPDATE kpi_definitions
+        SET locked = $2,
+            is_customized = CASE WHEN $2 THEN true ELSE is_customized END,
+            approved_by = CASE WHEN $2 THEN $3 ELSE NULL END,
+            approved_at = CASE WHEN $2 THEN NOW() ELSE NULL END,
+            updated_at = NOW()
+      WHERE id = $1 RETURNING *`,
+    [id, locked, approvedBy || null],
   );
   return result.rows[0] || null;
 }
