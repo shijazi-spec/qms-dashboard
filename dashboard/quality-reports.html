@@ -59,6 +59,16 @@
         .rr-note.rr-note-info { background: #EFF6FF; border-color: #BFDBFE; }
         html.wp-dark .rr-note { color: #94A3B8; }
         html.wp-dark .rr-note.rr-note-info { background: rgba(96,165,250,.1); border-color: rgba(96,165,250,.28); }
+        .rr-btn.rr-btn-primary { background: #1E3A8A; color: #fff; }
+        .rr-btn.rr-btn-primary:hover { filter: brightness(1.08); }
+        html.wp-dark .rr-btn.rr-btn-primary { background: #2563EB; }
+        /* Email-to-head preview modal (Quality Reports Phase 3, Task 3) — not
+           defined anywhere else on this page, so class-based styles live here
+           rather than as inline style="" (CSP strips inline styles). */
+        .rr-modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+        .rr-modal { background: #FFFFFF; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.25); padding: 16px; width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto; }
+        html.wp-dark .rr-modal { background: #1E293B; color: #F1F5F9; }
+        .qr-email-frame { width: 100%; height: 340px; border: 1px solid #DDDDDD; background: #fff; border-radius: 4px; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
@@ -104,6 +114,6 @@
         </div>
     </div>
 
-    <script src="/js/quality-reports.js?v=3"></script>
+    <script src="/js/quality-reports.js?v=4"></script>
 </body>
 </html>

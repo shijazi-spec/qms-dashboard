@@ -228,6 +228,65 @@
         try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
     };
 
+    /**
+     * Email-to-head preview modal. `.rr-modal-backdrop`/`.rr-modal` and
+     * `.rr-btn-primary` aren't styled anywhere on this page (they're only
+     * defined in duplicates.html) — quality-reports.html's own <style>
+     * block adds class-based definitions for them below. The email HTML
+     * itself is rendered inside a sandboxed <iframe srcdoc="..."> so its
+     * own inline styles are isolated to that sub-document and never touch
+     * this page's CSP-governed markup.
+     */
+    window.qrEmailBU = async function (buKey) {
+        var host = document.getElementById('qrEmailModal');
+        if (!host) { host = document.createElement('div'); host.id = 'qrEmailModal'; document.body.appendChild(host); }
+        host.innerHTML = '<div class="rr-modal-backdrop"><div class="rr-modal"><div class="text-sm text-gray-500">Loading preview…</div></div></div>';
+        try {
+            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey) + '/email-preview', { credentials: 'same-origin' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var d = await res.json();
+            var iframe = '<iframe sandbox="" class="qr-email-frame" srcdoc="' + escAttr(d.html) + '"></iframe>';
+            host.innerHTML =
+                '<div class="rr-modal-backdrop"><div class="rr-modal">' +
+                    '<div class="font-semibold mb-1">' + escapeHtml(d.subject || 'Quality Report') + '</div>' +
+                    '<div class="text-xs text-gray-500 mb-2">To: ' + escapeHtml(d.headEmail || '(no head email mapped)') + '</div>' +
+                    iframe +
+                    '<div class="flex gap-2 mt-3">' +
+                        (d.headEmail ? '<button type="button" class="rr-btn rr-btn-primary" data-on-click="qrEmailSend" data-args="' + escAttr(JSON.stringify([buKey, 'head'])) + '">Send to ' + escapeHtml(d.headEmail) + '</button>' : '') +
+                        '<button type="button" class="rr-btn rr-btn-ghost" data-on-click="qrEmailSend" data-args="' + escAttr(JSON.stringify([buKey, 'self'])) + '">Send test to me</button>' +
+                        '<button type="button" class="rr-btn rr-btn-ghost" data-on-click="qrEmailClose">Cancel</button>' +
+                    '</div>' +
+                '</div></div>';
+        } catch (e) {
+            host.innerHTML = '<div class="rr-modal-backdrop"><div class="rr-modal"><div class="text-sm text-red-600">Preview failed: ' + escapeHtml(String((e && e.message) || e)) + '</div><button type="button" class="rr-btn rr-btn-ghost mt-2" data-on-click="qrEmailClose">Close</button></div></div>';
+        }
+    };
+
+    window.qrEmailClose = function () {
+        var h = document.getElementById('qrEmailModal');
+        if (h) h.innerHTML = '';
+    };
+
+    /** rrToast isn't defined on this page (see qrStatus above) — success is silent (modal just closes) and failure falls back to alert(), same pattern as the rest of this file. */
+    window.qrEmailSend = async function (buKey, mode) {
+        try {
+            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey) + '/email', {
+                method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: mode })
+            });
+            var d = await res.json().catch(function () { return {}; });
+            if (res.ok && d.success) {
+                if (typeof window.rrToast === 'function') { window.rrToast('Sent to ' + (d.to || (mode === 'self' ? 'you' : 'head'))); }
+                qrEmailClose();
+            } else {
+                var msg = d.error || 'Send failed';
+                if (typeof window.rrToast === 'function') { window.rrToast(msg, 'error'); } else { alert(msg); }
+            }
+        } catch (e) {
+            var failMsg = 'Send failed: ' + String((e && e.message) || e);
+            if (typeof window.rrToast === 'function') { window.rrToast(failMsg, 'error'); } else { alert(failMsg); }
+        }
+    };
+
     /** One stat tile in the summary strip. `accent` must be one of the valid rr-acc-* tokens. */
     function qrStatCard(accent, label, value, sub) {
         return '<div class="rr-kpi rr-kpi-rich rr-acc-' + accent + '">' +
@@ -256,6 +315,8 @@
         var parts = [];
 
         parts.push('<button type="button" class="rr-btn rr-btn-ghost mb-3" data-on-click="qrBackToHub">← All units</button>');
+        var hasHead = bu.head_email && String(bu.head_email).trim();
+        parts.push('<button type="button" class="rr-btn rr-btn-ghost mb-3" ' + (hasHead ? '' : 'disabled title="Map a head email in settings first" ') + 'data-on-click="qrEmailBU" data-args="' + escAttr(JSON.stringify([bu.bu_key])) + '">✉ Email to head</button>');
         parts.push('<h2 class="text-lg font-bold mb-1 text-gray-900">' + escapeHtml(bu.bu_name || bu.bu_key || '') + '</h2>');
         parts.push('<div class="text-xs text-gray-500 mb-4">' + escapeHtml((CHANNEL_LABEL[bu.channel] || bu.channel || '') + ' · segment ' + (bu.segment || '—') + ' · ' + (bu.fn || '')) + '</div>');
 
