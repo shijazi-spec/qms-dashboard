@@ -4,7 +4,7 @@ import { logger } from "./logger";
 export function functionReportKeys(fn: string): string[] {
   switch (fn) {
     case "sdr": return ["leads"];
-    case "sales": return ["deals", "deal_compliance", "stage_aging"];
+    case "sales": return ["deals", "stage_aging"]; // deal_compliance deferred to Phase 2 (no segment-level engine yet)
     case "cs":
     case "partnersuccess": return ["cs_lifecycle"];
     case "partnership": return ["leads", "deals"];
@@ -67,7 +67,7 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
     return out;
   }, notConfigured);
 
-  const compliance = await section("compliance", keys.some((k) => k.startsWith("cs_lifecycle") || k === "deal_compliance" || k === "stage_aging"), async () => {
+  const compliance = await section("compliance", keys.some((k) => k.startsWith("cs_lifecycle") || k === "stage_aging"), async () => {
     const out: any = {};
     if (keys.includes("cs_lifecycle") || keys.includes("cs_lifecycle_onboarding")) {
       out.cs = await DRD.scanCsLifecycleViolations({ segment: bu.segment });
@@ -81,7 +81,10 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
     const owners = new Set(bu.owners.map((o) => o.toLowerCase()));
     // getCapaRecords returns { records, total }; each CapaRecord carries
     // `assigned_to` (qmsDatabase.ts:229/577) — matches the brief's field access.
-    const capaRes = await qmsDb.getCapaRecords({ status: "open" });
+    // Large limit: getCapaRecords defaults to 50, but we filter to this BU's
+    // owners in-memory below, so we must fetch the full open-CAPA set or older
+    // open CAPAs for this BU would be silently dropped (understated count).
+    const capaRes = await qmsDb.getCapaRecords({ status: "open", limit: 5000 });
     const capas = (capaRes.records || []).filter((r: any) =>
       r.assigned_to && owners.has(String(r.assigned_to).toLowerCase()));
     const acct = await DRD.getOwnerAccountability();
