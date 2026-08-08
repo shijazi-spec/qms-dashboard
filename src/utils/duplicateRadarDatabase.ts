@@ -2558,6 +2558,45 @@ export async function getSegmentLeadDuplicateCount(
   return { segment: seg, outstanding_leads: Number(res.rows[0]?.n) || 0 };
 }
 
+/** Deal doc-compliance rolled up to a segment (join to duplicate_records layout).
+ *  Counts ONLY deals that have been doc-checked (rows in deal_doc_compliance). */
+export async function getSegmentDealComplianceSummary(
+  segment: DuplicateFilters["segment"],
+): Promise<{ segment: string; checked: number; compliant: number; compliant_rate: number | null }> {
+  const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
+  const p = buildSegmentPredicate(seg, 1);
+  const segCond = p.condition ? " AND " + p.condition : "";
+  const res = await pool.query(
+    `SELECT COUNT(*)::int AS checked,
+            COUNT(*) FILTER (WHERE d.compliant)::int AS compliant
+       FROM deal_doc_compliance d
+       JOIN duplicate_records r ON r.zoho_record_id = d.zoho_deal_id
+      WHERE r.record_type = 'deal'${segCond}`,
+    [...p.params],
+  );
+  const checked = Number(res.rows[0]?.checked) || 0;
+  const compliant = Number(res.rows[0]?.compliant) || 0;
+  return { segment: seg, checked, compliant, compliant_rate: checked ? Math.round((100 * compliant) / checked) : null };
+}
+
+/** Outstanding duplicate DEALS in a segment — mirrors getSegmentLeadDuplicateCount. */
+export async function getSegmentDealDuplicateCount(
+  segment: DuplicateFilters["segment"],
+): Promise<{ segment: string; outstanding_deals: number }> {
+  const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
+  const p = buildSegmentPredicate(seg, 1);
+  const segCond = p.condition ? " AND " + p.condition : "";
+  const res = await pool.query(
+    `SELECT COUNT(*)::text AS n
+       FROM duplicate_records r
+       JOIN duplicate_clusters dc ON dc.id = r.cluster_id
+      WHERE r.record_type = 'deal' AND dc.status = 'active'
+        AND dc.total_deals > 1 AND r.is_primary = false${segCond}`,
+    [...p.params],
+  );
+  return { segment: seg, outstanding_deals: Number(res.rows[0]?.n) || 0 };
+}
+
 // ── Bulk auto-merge: Contacts with EXACT email + phone match (Sarah 2026-06-20) ─
 //
 // Rule: when ≥2 contacts share the SAME email AND the SAME phone (both exact,
