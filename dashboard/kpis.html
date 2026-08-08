@@ -811,6 +811,7 @@
                             </select>
                         </div>
                         <div class="flex gap-2">
+                            <a href="/kpi/${kpi.id}" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900 text-sm">🔍 Open full view</a>
                             ${kpi.calc_mode === 'checklist' ? `<button data-on-click="openChecklistModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm">📋 Manage Checklist</button>` : ''}
                             ${kpi.calc_mode === 'bu_coverage' ? `<button data-on-click="openBuCoverageModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm">🏢 Manage BU Coverage</button>` : ''}
                             <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">${WalaPlusI18n.t('dyn.kpis.record_value_btn')}</button>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>KPI Detail - WalaPlus Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.add('wp-dark'); }
+            } catch (e) { /* light default is fine */ }
+        })();
+    </script>
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () { WalaPlusNav.init('kpis'); });
+    </script>
+
+    <div class="max-w-5xl mx-auto px-4 py-6">
+        <a href="/kpis" class="text-sm text-indigo-600 hover:underline">&larr; Back to KPIs</a>
+        <div id="kpiDetail" class="mt-3">
+            <div class="text-gray-500 text-sm">Loading…</div>
+        </div>
+    </div>
+
+    <script>
+        const _esc = (s) => String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        function _kpiId() {
+            const m = location.pathname.match(/\/kpi\/(\d+)/);
+            return m ? parseInt(m[1], 10) : null;
+        }
+
+        const RAG = {
+            green: ['On Track', 'bg-emerald-100 text-emerald-700'],
+            amber: ['At Risk', 'bg-amber-100 text-amber-700'],
+            red: ['Off Track', 'bg-red-100 text-red-700']
+        };
+        const TREND = { improving: '↑', declining: '↓', stable: '→' };
+
+        function _fmtVal(v, unit) {
+            if (v === null || v === undefined) return '—';
+            return unit === 'days' ? `${v} days` : `${v}%`;
+        }
+
+        /** Turn a calculator's details object into readable "gap" rows. */
+        function _gaps(insight) {
+            if (!insight || insight.kind === 'none') {
+                return '<p class="text-sm text-gray-500">No live breakdown for this KPI type — see the formula and data source above.</p>';
+            }
+            if (insight.data_available === false) {
+                return `<p class="text-sm text-amber-700">No source data yet${insight.reason ? ` (${_esc(insight.reason)})` : ''}. This KPI stays blank until its data is entered.</p>`;
+            }
+            const d = insight.details || {};
+            const rows = Object.entries(d).map(([k, v]) => {
+                const label = k.replace(/_/g, ' ');
+                // nested objects (internal/external halves) → render as a sub-block
+                if (v && typeof v === 'object') {
+                    const sub = Object.entries(v).map(([kk, vv]) => {
+                        if (vv && typeof vv === 'object') {
+                            const inner = Object.entries(vv).map(([a, b]) => `${a.replace(/_/g, ' ')}: <strong>${_esc(b)}</strong>`).join(' · ');
+                            return `<div class="text-xs text-gray-600 ms-3">${kk.replace(/_/g, ' ')}: ${inner}</div>`;
+                        }
+                        return `<div class="text-xs text-gray-600 ms-3">${kk.replace(/_/g, ' ')}: <strong>${_esc(vv)}</strong></div>`;
+                    }).join('');
+                    return `<div class="py-1"><div class="text-sm font-medium text-gray-800 capitalize">${label}</div>${sub}</div>`;
+                }
+                return `<div class="flex justify-between py-1 text-sm"><span class="text-gray-600 capitalize">${label}</span><span class="font-medium text-gray-900">${_esc(v)}</span></div>`;
+            }).join('');
+            return `<div class="divide-y">${rows || '<p class="text-sm text-gray-500">No breakdown returned.</p>'}</div>`;
+        }
+
+        async function loadDetail() {
+            const id = _kpiId();
+            const box = document.getElementById('kpiDetail');
+            if (!id) { box.innerHTML = '<p class="text-red-600">Invalid KPI id.</p>'; return; }
+            let data;
+            try {
+                const res = await fetch(`/api/kpis/${id}/detail`);
+                if (!res.ok) {
+                    box.innerHTML = res.status === 403
+                        ? '<p class="text-red-600">You don’t have permission to view this KPI.</p>'
+                        : '<p class="text-red-600">KPI not found.</p>';
+                    return;
+                }
+                data = await res.json();
+            } catch (e) { box.innerHTML = '<p class="text-red-600">Failed to load.</p>'; return; }
+
+            const k = data.kpi || {};
+            const latest = data.latest;
+            const val = latest ? latest.actual_value : null;
+            const [ragLabel, ragCls] = RAG[latest && latest.status] || ['No data', 'bg-gray-100 text-gray-600'];
+            const trend = latest && latest.trend ? (TREND[latest.trend] || '') : '';
+            document.title = `${k.kpi_name || 'KPI'} — WalaPlus`;
+
+            box.innerHTML = `
+              <div class="bg-white rounded-lg shadow p-5 mb-5">
+                <div class="flex flex-wrap items-start gap-4">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-xs text-gray-500">${_esc(k.kpi_code || '')} · ${_esc(k.owner_name || '')}</div>
+                    <h1 class="text-2xl font-bold text-gray-900">${k.is_north_star ? '⭐ ' : ''}${_esc(k.kpi_name || '')}</h1>
+                    <p class="text-sm text-gray-600 mt-1">${_esc(k.description || '')}</p>
+                  </div>
+                  <div class="text-end">
+                    <div class="text-3xl font-bold text-gray-900">${_fmtVal(val, k.unit)}</div>
+                    <span class="text-xs px-2 py-0.5 rounded ${ragCls}">${ragLabel}</span>
+                    ${trend ? `<span class="text-lg ms-1 text-gray-500">${trend}</span>` : ''}
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
+                  <div><div class="text-gray-500 text-xs">Target</div><div class="font-medium">${_fmtVal(k.target_value, k.unit)}</div></div>
+                  <div><div class="text-gray-500 text-xs">Weight</div><div class="font-medium">${k.weight != null ? Number(k.weight) + '%' : '—'}</div></div>
+                  <div><div class="text-gray-500 text-xs">Frequency</div><div class="font-medium capitalize">${_esc(k.frequency || '—')}</div></div>
+                  <div><div class="text-gray-500 text-xs">Source</div><div class="font-medium capitalize">${_esc(k.calc_mode || '—')}</div></div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div class="bg-white rounded-lg shadow p-5">
+                  <h2 class="font-semibold text-gray-900 mb-3">What's inside &amp; gaps</h2>
+                  ${_gaps(data.insight)}
+                  ${(k.calc_mode === 'checklist') ? `<a href="/kpis" class="inline-block mt-3 text-xs text-indigo-600 hover:underline">Open the full Action Plan on the KPIs page →</a>` : ''}
+                </div>
+                <div class="bg-white rounded-lg shadow p-5">
+                  <h2 class="font-semibold text-gray-900 mb-3">Definition</h2>
+                  <div class="text-sm space-y-2">
+                    <div><div class="text-gray-500 text-xs">Formula</div><div class="text-gray-900">${_esc(k.formula || '—')}</div></div>
+                    <div><div class="text-gray-500 text-xs">Data source</div><div class="text-gray-900">${_esc(k.data_source || '—')}</div></div>
+                    <div><div class="text-gray-500 text-xs">Category</div><div class="text-gray-900 capitalize">${_esc(k.category || '—')}</div></div>
+                  </div>
+                  <h2 class="font-semibold text-gray-900 mt-5 mb-2">History</h2>
+                  ${(data.history && data.history.length)
+                    ? `<div class="divide-y text-sm">${data.history.map(h => `
+                        <div class="flex justify-between py-1">
+                          <span class="text-gray-600">${_esc(String(h.period_end).slice(0,10))}</span>
+                          <span class="font-medium">${_fmtVal(h.actual_value, k.unit)}</span>
+                        </div>`).join('')}</div>`
+                    : '<p class="text-sm text-gray-500">No recorded values yet.</p>'}
+                </div>
+              </div>
+
+              ${data.can_edit ? '<p class="text-xs text-gray-400 mt-4">In-place editing arrives in the next update (P2). For now, edit via the KPIs page.</p>' : ''}
+            `;
+        }
+
+        document.addEventListener('DOMContentLoaded', loadDetail);
+    </script>
+    <script>
+        if (window.WalaPlusI18n) { window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); }); }
+    </script>
+</body>
+</html>

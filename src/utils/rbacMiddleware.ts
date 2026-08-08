@@ -1148,7 +1148,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   },
   // KPI reads (definitions, summary, individual KPI, history) — governance roles + executive.
   {
-    pattern: /^\/api\/kpis(\/(\d+(\/history)?|summary))?$/,
+    pattern: /^\/api\/kpis(\/(\d+(\/(history|detail))?|summary))?$/,
     methods: ["GET"],
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },

@@ -385,6 +385,70 @@ export const kpiRoutes = [
     },
   },
   {
+    // Full KPI detail page (P1: view). Definition + live value + gaps + history +
+    // (for checklist KPIs) the Action Plan, on one screen.
+    path: "/kpi/:id{[0-9]+}",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const paths = [
+          join(process.cwd(), "dashboard", "kpi-detail.html"),
+          "/home/runner/workspace/dashboard/kpi-detail.html",
+        ];
+        for (const p of paths) {
+          try {
+            return c.html(readFileSync(p, "utf-8"));
+          } catch {}
+        }
+        return c.text("KPI detail page not found", 404);
+      };
+    },
+  },
+  {
+    // Aggregated data for the detail page: definition + latest value + status +
+    // trend + history + the calculator's gap breakdown (via getKpiInsight).
+    path: "/api/kpis/:id{[0-9]+}/detail",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user)
+            return forbiddenResponse(c, "Insufficient permissions for KPI detail");
+          const id = parseInt(c.req.param("id"));
+          const kpi = await getKPIById(id);
+          if (!kpi) return c.json({ error: "KPI not found" }, 404);
+          const latest = await getLatestKPIValue(id);
+          const history = await getKPIHistory(id, 12);
+          const { getKpiInsight } = await import("../../utils/kpiInsight");
+          const insight = await getKpiInsight((kpi as any).kpi_code);
+          const canEdit = ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"].includes(
+            (user as any).role,
+          );
+          return c.json({
+            kpi,
+            latest: latest
+              ? {
+                  actual_value: (latest as any).actual_value,
+                  status: (latest as any).status,
+                  trend: (latest as any).trend,
+                  period_end: (latest as any).period_end,
+                }
+              : null,
+            history,
+            insight,
+            can_edit: canEdit,
+          });
+        } catch (error) {
+          safeLogger.error("Error fetching KPI detail:", error);
+          return c.json({ error: "Failed to fetch KPI detail" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/executive/reports",
     method: "GET" as const,
     createHandler: async () => {
