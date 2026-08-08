@@ -77,3 +77,17 @@ export async function buildBUReportEmail(
   const { subject, html } = renderBUReportEmailHtml(report, dateISO);
   return { subject, html, headEmail: report.bu.head_email ?? null, buName: report.bu.bu_name };
 }
+
+/** Decide the recipient for a send. `mode:'self'` ALWAYS uses the caller's
+ *  session email — never a client-supplied address (no open-relay). */
+export function resolveEmailRecipient(
+  mode: string, headEmail: string | null, sessionEmail: string | null,
+): { to: string } | { error: string; status: 400 } {
+  if (mode === "self") {
+    return sessionEmail ? { to: sessionEmail } : { error: "Could not resolve your email.", status: 400 };
+  }
+  if (mode === "head") {
+    return headEmail ? { to: headEmail } : { error: "This BU has no head email mapped.", status: 400 };
+  }
+  return { error: "Invalid mode.", status: 400 };
+}

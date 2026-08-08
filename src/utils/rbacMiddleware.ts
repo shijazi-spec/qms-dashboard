@@ -988,6 +988,21 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
   {
+    // Email preview — same read allowlist as GET /bus/:buKey and /summary
+    // above. Kept in sync with READ_ROLES in qualityReportsRoutes.ts.
+    pattern: /^\/api\/quality-reports\/bus\/[^/]+\/email-preview$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
+    // Email send — write-restricted like /owners above (the handler decides
+    // the recipient server-side via resolveEmailRecipient; the request body
+    // never supplies an address). Matches WRITE_ROLES in qualityReportsRoutes.ts.
+    pattern: /^\/api\/quality-reports\/bus\/[^/]+\/email$/,
+    methods: ["POST"],
+    roles: ["admin", "grc_manager", "head_of_operations_quality", "quality_manager"],
+  },
+  {
     // Call-intelligence CRM-link audit/repair — admin-only (handler also
     // enforces verifyAdminKey as defense-in-depth).
     pattern: /^\/api\/calls\/audit-crm-links$/,

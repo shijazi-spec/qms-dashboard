@@ -92,6 +92,56 @@ export const qualityReportsRoutes = [
   },
 
   {
+    path: "/api/quality-reports/bus/:buKey/email-preview",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, READ_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const { buildBUReportEmail } = await import("../../utils/qualityReportsEmail");
+          const dateISO = new Date().toISOString().slice(0, 10);
+          const built = await buildBUReportEmail(c.req.param("buKey"), dateISO);
+          if (!built) return c.json({ error: "Not found" }, 404);
+          return c.json({ success: true, subject: built.subject, html: built.html, headEmail: built.headEmail, buName: built.buName });
+        } catch (error: any) {
+          logger.error("[QualityReports] email preview:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/quality-reports/bus/:buKey/email",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, WRITE_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const body = await c.req.json().catch(() => ({}));
+          const mode = String(body?.mode || "");
+          const { buildBUReportEmail, resolveEmailRecipient } = await import("../../utils/qualityReportsEmail");
+          const { sendResendEmail } = await import("../../utils/resendMail");
+          const dateISO = new Date().toISOString().slice(0, 10);
+          const built = await buildBUReportEmail(c.req.param("buKey"), dateISO);
+          if (!built) return c.json({ error: "Not found" }, 404);
+          // Recipient is decided server-side ONLY — never from the request body.
+          const recip = resolveEmailRecipient(mode, built.headEmail, user.email || null);
+          if ("error" in recip) return c.json({ error: recip.error }, recip.status);
+          const res = await sendResendEmail({ to: recip.to, subject: built.subject, html: built.html });
+          logger.info("[QualityReports] email send", { actor: user.email, buKey: c.req.param("buKey"), to: recip.to, mode, ok: res.success, resendId: res.id, error: res.error });
+          if (!res.success) return c.json({ success: false, error: res.error || "Email failed to send." }, 502);
+          return c.json({ success: true, id: res.id, to: recip.to });
+        } catch (error: any) {
+          logger.error("[QualityReports] email send:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+
+  {
     path: "/api/quality-reports/bus",
     method: "POST" as const,
     createHandler: async () => {
