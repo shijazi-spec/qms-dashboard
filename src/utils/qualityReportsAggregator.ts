@@ -4,7 +4,7 @@ import { logger } from "./logger";
 export function functionReportKeys(fn: string): string[] {
   switch (fn) {
     case "sdr": return ["leads"];
-    case "sales": return ["deals", "stage_aging"]; // deal_compliance deferred to Phase 2 (no segment-level engine yet)
+    case "sales": return ["deals", "deal_compliance", "stage_aging"];
     case "cs":
     case "partnersuccess": return ["cs_lifecycle"];
     case "partnership": return ["leads", "deals"];
@@ -67,12 +67,13 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
     return out;
   }, notConfigured);
 
-  const compliance = await section("compliance", keys.some((k) => k.startsWith("cs_lifecycle") || k === "stage_aging"), async () => {
+  const compliance = await section("compliance", keys.some((k) => k.startsWith("cs_lifecycle") || k === "deal_compliance" || k === "stage_aging"), async () => {
     const out: any = {};
     if (keys.includes("cs_lifecycle") || keys.includes("cs_lifecycle_onboarding")) {
       out.cs = await DRD.scanCsLifecycleViolations({ segment: bu.segment });
       if (keys.includes("cs_lifecycle_onboarding")) out.phaseFocus = "Onboarding";
     }
+    if (keys.includes("deal_compliance")) out.dealCompliance = await DRD.getSegmentDealComplianceSummary(bu.segment);
     if (keys.includes("stage_aging")) out.stageAging = await DRD.scanDealStageAgingViolations({ segment: bu.segment });
     return out;
   }, notConfigured);
@@ -94,4 +95,57 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
   }, notConfigured);
 
   return { bu, sections: { sops, kpis, cleanup, compliance, actions }, notConfigured };
+}
+
+export interface BUHeadline {
+  bu_key: string;
+  sops: number | null;
+  kpiPct: number | null;
+  outstanding: number;
+  openCapas: number | null;
+}
+
+/** Cheap per-BU headline for the hub cards — counts only, NO heavy violation scans. */
+export async function getBUHeadline(buKey: string): Promise<BUHeadline | null> {
+  const bu = await getBUByKey(buKey);
+  if (!bu) return null;
+  const DRD = await import("./duplicateRadarDatabase");
+  const policyDb = await import("./policyDatabase");
+  const kpiDb = await import("./kpiChecklistDatabase");
+  const qmsDb = await import("./qmsDatabase");
+
+  const safe = async <T>(run: () => Promise<T>, fallback: T): Promise<T> => {
+    try { return await run(); } catch { return fallback; }
+  };
+
+  // SOPs count (null if unmapped).
+  const sops = bu.policy_department
+    ? await safe(async () => (await policyDb.getAllPolicies({ owner_department: bu.policy_department as string } as any)).policies.length, null as number | null)
+    : null;
+
+  // KPI pct (null if unmapped).
+  const kpiPct = bu.kpi_bu_name
+    ? await safe(async () => {
+        const all = await kpiDb.getFrameworkProgressByBU();
+        const e = all[bu.kpi_bu_name as string];
+        return e ? e.pct : null;
+      }, null as number | null)
+    : null;
+
+  // Outstanding dup count — leads for sdr, deals otherwise. Always available.
+  const outstanding = await safe(async () => {
+    if (bu.fn === "sdr") return (await DRD.getSegmentLeadDuplicateCount(bu.segment)).outstanding_leads;
+    return (await DRD.getSegmentDealDuplicateCount(bu.segment)).outstanding_deals;
+  }, 0);
+
+  // Open CAPAs for this BU's owners (null if no owners mapped).
+  const openCapas = bu.owners.length
+    ? await safe(async () => {
+        const owners = new Set(bu.owners.map((o) => o.toLowerCase()));
+        const res = await qmsDb.getCapaRecords({ status: "open", limit: 5000 });
+        return (res.records || []).filter((r: any) => r.assigned_to && owners.has(String(r.assigned_to).toLowerCase())).length;
+      }, null as number | null)
+    : null;
+
+  return { bu_key: bu.bu_key, sops, kpiPct, outstanding, openCapas };
 }
