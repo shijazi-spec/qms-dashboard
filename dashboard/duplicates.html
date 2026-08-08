@@ -348,19 +348,29 @@
                      a modal with the exact failure reason (invalid client /
                      invalid grant / wrong datacenter / rate-limited /
                      network unreachable). Read-only, no records change. -->
-                <button data-on-click="runZohoDiagnostic" id="btn-diagnose-zoho-duplicates" title="Actively test the Zoho OAuth connection. Use this when the dashboard shows no data — surfaces the real error (invalid credentials / wrong region / rate-limited)." class="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-medium flex items-center gap-2">
+                <!-- Test Zoho — read-only diagnostic. Was bg-rose-600 (red
+                     misled ops into thinking it was destructive); now a
+                     neutral outlined "secondary" style consistent with other
+                     read-only checks across the platform. -->
+                <button data-on-click="runZohoDiagnostic" id="btn-diagnose-zoho-duplicates" title="Actively test the Zoho OAuth connection. Use this when the dashboard shows no data — surfaces the real error (invalid credentials / wrong region / rate-limited)." class="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                     Test Zoho
                 </button>
-                <button data-on-click="syncNowZohoCRM" id="syncNowBtn" data-testid="button-sync-now" title="Quick sync to pull latest changes from Zoho (recommended after merging duplicates in Zoho)" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2">
+                <!-- Sync Now — primary happy-path action; stays visually
+                     prominent but adopts the WalaPlus green brand primary
+                     instead of purple, so the top bar reads on-brand. -->
+                <button data-on-click="syncNowZohoCRM" id="syncNowBtn" data-testid="button-sync-now" title="Quick sync to pull latest changes from Zoho (recommended after merging duplicates in Zoho)" class="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:opacity-90 font-medium text-sm flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
                     Sync Now
                 </button>
-                <button data-on-click="verifyPruneDeletedGlobal" id="globalPruneDeletedBtn" data-testid="button-global-prune-deleted" title="Clean deleted data on EVERY tab. Incremental sync doesn't report deletions, so records removed/merged/converted in Zoho can linger in the mirror (clusters, record hints, lists). This live-checks the visible open clusters against Zoho right now AND launches the platform-wide id-set reconcile in the background (a few minutes) that prunes ALL deleted records everywhere. The platform never deletes anything in Zoho — it only drops its own copy of records already gone. Safety-capped. Requires admin key." class="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-medium flex items-center gap-2">
+                <!-- Verify & prune deleted — genuinely DESTRUCTIVE (drops
+                     records from the mirror); red stays. Uses the semantic
+                     destructive token so light/dark themes both track. -->
+                <button data-on-click="verifyPruneDeletedGlobal" id="globalPruneDeletedBtn" data-testid="button-global-prune-deleted" title="Clean deleted data on EVERY tab. Incremental sync doesn't report deletions, so records removed/merged/converted in Zoho can linger in the mirror (clusters, record hints, lists). This live-checks the visible open clusters against Zoho right now AND launches the platform-wide id-set reconcile in the background (a few minutes) that prunes ALL deleted records everywhere. The platform never deletes anything in Zoho — it only drops its own copy of records already gone. Safety-capped. Requires admin key." class="px-3 py-1.5 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 font-medium text-sm flex items-center gap-2">
                     🧹 Verify &amp; prune deleted
                 </button>
             </div>
