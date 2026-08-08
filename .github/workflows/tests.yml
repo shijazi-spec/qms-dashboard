@@ -245,6 +245,16 @@ jobs:
           echo "::warning title=test-2-tally::${SUMMARY:-<no summary line — suite likely crashed before finishing>}"
           echo "::warning title=test-3-failing-files::${FAILS:-<none captured>}"
 
+          # Per-assertion detail. The failing-files list alone says WHICH file
+          # broke but never WHY, and the raw log needs repo-admin rights to
+          # download — so triage previously meant reproducing locally, which
+          # is impossible for the DB-backed suites when the dev box has no
+          # Postgres. These two annotations carry the actual assertion text.
+          DETAIL=$(grep -a '✗' /tmp/test-output.log | head -12 | tr '\n' ' ' | tr -d '\r' | cut -c1-900)
+          echo "::warning title=test-4-assertions::${DETAIL:-<no ✗ lines captured>}"
+          ERRS=$(grep -aoE "(Cannot find package '[^']*'|ECONNREFUSED [0-9.:]+|relation \"[a-z_]+\" does not exist|[A-Za-z]*Error: [^\\\"]{0,90})" /tmp/test-output.log | sort | uniq -c | sort -rn | head -8 | tr '\n' ' ' | tr -d '\r' | cut -c1-900)
+          echo "::warning title=test-5-error-kinds::${ERRS:-<none>}"
+
           {
             echo "### Test baseline"
             echo ""
