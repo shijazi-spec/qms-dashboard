@@ -1199,6 +1199,21 @@
             const all = (d.sections || []).flatMap(s => s.items || []);
             const done = all.filter(i => i.is_done).length;
             d.progress = { total: all.length, done, pct: all.length ? Math.round(done / all.length * 100) : 0 };
+            // Keep the schedule-scoped headline in sync while ticking (mirrors the server:
+            // score only BUs due by end of this quarter).
+            const now = new Date();
+            const qEnd = new Date(Date.UTC(now.getUTCFullYear(), (Math.floor(now.getUTCMonth() / 3) + 1) * 3, 0)).toISOString().slice(0, 10);
+            const scheduled = bus.filter(s => s.deadline);
+            if (scheduled.length) {
+                const inScope = scheduled.filter(s => String(s.deadline).slice(0, 10) <= qEnd);
+                if (!inScope.length) { d.scoped_rate = null; }
+                else {
+                    const c = inScope.filter(s => s.complete).length;
+                    d.scoped_rate = { value: Math.round(c / inScope.length * 1000) / 10, complete: c, total: inScope.length, total_bus: bus.length, scoped: true };
+                }
+            } else {
+                d.scoped_rate = { value: bus.length ? Math.round(bus.filter(s => s.complete).length / bus.length * 1000) / 10 : 0, complete: bus.filter(s => s.complete).length, total: bus.length, total_bus: bus.length, scoped: false };
+            }
         }
         function _renderChecklist() {
             const data = _checklistData;
@@ -1216,8 +1231,18 @@
                 document.getElementById('checklistFlatAdd').classList.toggle('hidden', sectioned);
 
                 if (sectioned) {
-                    document.getElementById('checklistProgress').innerHTML =
-                        `KPI: <span class="text-gray-900 font-semibold">${buSummary.total ? Math.round(buSummary.complete / buSummary.total * 100) : 0}%</span> &middot; ${buSummary.complete} of ${buSummary.total} BUs complete <span class="text-gray-400">(a BU counts only at 100%)</span> &middot; <span class="text-gray-400">sub-steps ${prog.pct}%</span>`;
+                    const sr = data.scoped_rate;
+                    if (sr && sr.scoped) {
+                        // Scored against BUs DUE by end of this quarter (deadline-based).
+                        document.getElementById('checklistProgress').innerHTML =
+                            `KPI: <span class="text-gray-900 font-semibold">${sr.value}%</span> &middot; ${sr.complete} of ${sr.total} BUs due this quarter complete <span class="text-gray-400">(${sr.total_bus} BUs total; later-quarter BUs not counted yet)</span>`;
+                    } else if (sr === null) {
+                        document.getElementById('checklistProgress').innerHTML =
+                            `KPI: <span class="text-gray-900 font-semibold">—</span> <span class="text-gray-400">&middot; no BUs due this quarter yet (set a deadline to bring a BU into scope)</span>`;
+                    } else {
+                        document.getElementById('checklistProgress').innerHTML =
+                            `KPI: <span class="text-gray-900 font-semibold">${buSummary.total ? Math.round(buSummary.complete / buSummary.total * 100) : 0}%</span> &middot; ${buSummary.complete} of ${buSummary.total} BUs complete <span class="text-gray-400">(a BU counts only at 100%)</span> &middot; <span class="text-gray-400">sub-steps ${prog.pct}%</span>`;
+                    }
                     wrap.innerHTML = sections.filter(s => s.section).map(s => {
                         const open = !_collapsedBUs.has(s.section);
                         return `

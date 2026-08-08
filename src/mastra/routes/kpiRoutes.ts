@@ -790,11 +790,24 @@ export const kpiRoutes = [
             (s: any) => s.section && s.complete,
           ).length;
           const buTotal = sections.filter((s: any) => s.section).length;
+          // Schedule-scoped headline: score against BUs DUE by end of this quarter
+          // (deadline ≤ cutoff), so a later-quarter BU doesn't drag the number down.
+          let scoped = null;
+          try {
+            const def = await getKPIById(kpiId);
+            if (def?.kpi_code) {
+              const { actionPlanCompleteRate } = await import(
+                "../../utils/kpiChecklistDatabase"
+              );
+              scoped = await actionPlanCompleteRate(def.kpi_code);
+            }
+          } catch {}
           return c.json({
             items,
             progress: checklistProgress(items),
             sections,
             bu_summary: { complete: buComplete, total: buTotal },
+            scoped_rate: scoped, // {value, complete, total(in-scope), total_bus, scoped} | null
           });
         } catch (error) {
           safeLogger.error("Error fetching KPI checklist:", error);

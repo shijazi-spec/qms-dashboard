@@ -225,29 +225,86 @@ export async function seedActionPlan(kpiCode: string, plan: ActionPlan): Promise
  * total planned BUs (the commercial 8). Matches the Excel formula. Returns null if
  * no BUs configured. Used by both QM-KPI-015 (Readiness) and QM-KPI-008 (Pilot).
  */
-export async function actionPlanCompleteRate(
-  kpiCode: string,
-): Promise<{ value: number; complete: number; total: number } | null> {
-  const kpi = await getKPIByCode(kpiCode);
-  if (!kpi?.id) return null;
-  // Denominator = the BUs ACTUALLY in this KPI's checklist (so adding/removing a
-  // BU changes the rate), not a fixed list.
+export interface ActionPlanRate {
+  value: number;
+  complete: number;
+  total: number; // BUs in scope (the denominator actually used)
+  total_bus: number; // all BUs in the checklist (for context)
+  scoped: boolean; // true = scored against BUs due by the period (deadline ≤ cutoff)
+}
+
+/** Last calendar day of the quarter containing `d`, as YYYY-MM-DD (UTC). */
+export function endOfQuarterIso(d: Date): string {
+  const q = Math.floor(d.getUTCMonth() / 3);
+  const end = new Date(Date.UTC(d.getUTCFullYear(), q * 3 + 3, 0)); // day 0 of next month = last day
+  return end.toISOString().slice(0, 10);
+}
+
+/**
+ * Binary completion rate for a per-BU action-plan KPI, SCORED AGAINST THE PLAN:
+ * a BU only counts toward the denominator once it is DUE by the period end
+ * (its deadline ≤ cutoff). So a BU scheduled for a later quarter never drags the
+ * current quarter down — you're measured on what your manager scheduled for the
+ * period, not the whole multi-quarter rollout.
+ *
+ * - If BUs have deadlines: denominator = BUs due by `cutoff`; returns null (N/A)
+ *   when nothing is due yet in the period (nothing to score).
+ * - If NO BU has a deadline: falls back to counting all BUs (legacy behaviour),
+ *   so a KPI without schedules still reports.
+ *
+ * `asOf` (for historical backfill) also gates completion by tick timestamp.
+ */
+async function scopedActionPlanRate(
+  kpiId: number,
+  cutoffIso: string,
+  asOf?: Date,
+): Promise<ActionPlanRate | null> {
+  const doneFilter = asOf ? "ci.is_done AND ci.updated_at <= $3" : "ci.is_done";
+  const params: any[] = asOf ? [kpiId, cutoffIso, asOf] : [kpiId, cutoffIso];
   const res = await pool.query(
-    `SELECT section,
+    `SELECT ci.section,
             COUNT(*)::int AS n,
-            COUNT(*) FILTER (WHERE is_done)::int AS done
-       FROM kpi_checklist_items
-      WHERE kpi_id = $1 AND COALESCE(TRIM(section), '') <> ''
-      GROUP BY section`,
-    [kpi.id],
+            COUNT(*) FILTER (WHERE ${doneFilter})::int AS done,
+            to_char(MAX(s.deadline), 'YYYY-MM-DD') AS deadline
+       FROM kpi_checklist_items ci
+       LEFT JOIN kpi_bu_schedule s
+              ON s.kpi_id = ci.kpi_id AND s.bu_name = ci.section
+      WHERE ci.kpi_id = $1 AND COALESCE(TRIM(ci.section), '') <> ''
+      GROUP BY ci.section`,
+    params,
   );
-  const total = res.rows.length;
-  if (total === 0) return null;
+  const rows = res.rows;
+  if (rows.length === 0) return null;
+
+  const scheduled = rows.filter((r: any) => r.deadline);
+  let poolRows = rows;
+  let scoped = false;
+  if (scheduled.length > 0) {
+    const inScope = scheduled.filter((r: any) => r.deadline <= cutoffIso);
+    if (inScope.length === 0) return null; // nothing due yet this period → N/A
+    poolRows = inScope;
+    scoped = true;
+  }
+  const total = poolRows.length;
   let complete = 0;
-  for (const r of res.rows) {
+  for (const r of poolRows) {
     if (Number(r.n) > 0 && Number(r.n) === Number(r.done)) complete++;
   }
-  return { value: Math.round((complete / total) * 1000) / 10, complete, total };
+  return {
+    value: Math.round((complete / total) * 1000) / 10,
+    complete,
+    total,
+    total_bus: rows.length,
+    scoped,
+  };
+}
+
+export async function actionPlanCompleteRate(
+  kpiCode: string,
+): Promise<ActionPlanRate | null> {
+  const kpi = await getKPIByCode(kpiCode);
+  if (!kpi?.id) return null;
+  return scopedActionPlanRate(kpi.id, endOfQuarterIso(new Date()));
 }
 
 /**
@@ -261,25 +318,12 @@ export async function actionPlanCompleteRate(
 export async function actionPlanCompleteRateAsOf(
   kpiCode: string,
   asOf: Date,
-): Promise<{ value: number; complete: number; total: number } | null> {
+): Promise<ActionPlanRate | null> {
   const kpi = await getKPIByCode(kpiCode);
   if (!kpi?.id) return null;
-  const res = await pool.query(
-    `SELECT section,
-            COUNT(*)::int AS n,
-            COUNT(*) FILTER (WHERE is_done AND updated_at <= $2)::int AS done
-       FROM kpi_checklist_items
-      WHERE kpi_id = $1 AND COALESCE(TRIM(section), '') <> ''
-      GROUP BY section`,
-    [kpi.id, asOf],
-  );
-  const total = res.rows.length;
-  if (total === 0) return null;
-  let complete = 0;
-  for (const r of res.rows) {
-    if (Number(r.n) > 0 && Number(r.n) === Number(r.done)) complete++;
-  }
-  return { value: Math.round((complete / total) * 1000) / 10, complete, total };
+  // Scope to the BUs that were due by the end of the as-of quarter, and count
+  // completion by tick timestamp as-of that date.
+  return scopedActionPlanRate(kpi.id, endOfQuarterIso(asOf), asOf);
 }
 
 /**
