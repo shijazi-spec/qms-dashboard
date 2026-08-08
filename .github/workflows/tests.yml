@@ -1,0 +1,120 @@
+name: Tests
+
+# Runs the platform test suite on every push and PR.
+#
+# WHY THIS EXISTS
+# ---------------
+# The repo carries ~241 test files (171 under tests/*.test.ts, 70 colocated
+# under src/**/*.test.ts) plus the vitest suites in tests/vitest/**. Before
+# this workflow, NONE of them ran in CI — `typecheck.yml` only type-checks
+# them (`tsc -p tsconfig.tests.json`), which proves they COMPILE but never
+# that they PASS. All the test-writing effort produced zero regression
+# protection on ~245K lines of code.
+#
+# Two real regressions that a running suite would have caught:
+#   - the `.wp-topstrip button { display: inline-flex }` rule silently
+#     out-specified `.wp-mobile-menu-btn { display: none }`, so two hamburger
+#     icons rendered side-by-side on desktop for weeks;
+#   - a concurrent session's commit swept up half a feature's edits without
+#     the type definition that made them compile, reddening CI on the
+#     NEXT commit rather than its own.
+#
+# ROLLOUT: NON-BLOCKING FIRST
+# ---------------------------
+# The test step runs with `continue-on-error: true` so this workflow reports
+# the true pass/fail baseline WITHOUT blocking merges on day one. Once the
+# baseline is green (or the known-failing files are fixed/quarantined), drop
+# the `continue-on-error` line to make it a hard gate — same pattern
+# typecheck.yml used when it was introduced against ~900 pre-existing errors.
+#
+# ENTRY POINT
+# -----------
+# `npm test` → `npx tsx tests/runIntegrationTests.ts`, which discovers every
+# tests/*.test.ts + src/**/*.test.ts, runs each in its own tsx subprocess
+# (so DB pools / env mutation stay isolated), then invokes `npx vitest run`
+# for the mock-dependent suites. It exits non-zero if any file fails. The
+# heavy end-to-end suites are opt-in behind RUN_*_E2E env vars and skip
+# cleanly when unset — we deliberately do NOT set them here; they have their
+# own dedicated workflows (streaming-download-smoke.yml et al).
+
+on:
+  push:
+    branches: [main, QMS]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Real Postgres rather than the dummy connection string the test files
+    # fall back to (`postgres://test:test@localhost:5432/test`). Strictly
+    # better: files that only need a parseable URL are unaffected, while
+    # files that actually connect exercise real SQL — which is what catches
+    # the schema-drift class of bug at test time instead of at deploy time.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: qms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Non-blocking while we establish the baseline. Remove
+      # `continue-on-error` to promote this to a hard gate.
+      - name: Run test suite
+        id: tests
+        continue-on-error: true
+        env:
+          # The four vars test files self-default (`process.env.X || "..."`).
+          # Setting them explicitly means the suite runs against known values
+          # rather than per-file fallbacks that drift over time.
+          DATABASE_URL: postgres://test:test@localhost:5432/qms_test
+          SESSION_SECRET: ci-test-session-secret-not-a-real-secret
+          ADMIN_API_KEY: ci-test-admin-key-not-a-real-secret
+          REPLIT_DOMAINS: localhost:5000
+          # Bounded so a runaway suite can't eat the whole 30-minute budget
+          # on a 2-core runner.
+          TEST_CONCURRENCY: "4"
+        run: npm test
+
+      # Always surface the outcome in the job summary so the baseline is
+      # readable at a glance without opening the raw log.
+      - name: Report outcome
+        if: always()
+        run: |
+          if [ "${{ steps.tests.outcome }}" = "success" ]; then
+            echo "### ✅ Test suite passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The suite is green. Consider promoting this workflow to a hard gate by removing \`continue-on-error: true\` from the *Run test suite* step in \`.github/workflows/tests.yml\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### ⚠️ Test suite failed (non-blocking)" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "This workflow is intentionally non-blocking while the baseline is established, so the merge was **not** blocked." >> "$GITHUB_STEP_SUMMARY"
+            echo "See the *Run test suite* step log for the per-file failure list." >> "$GITHUB_STEP_SUMMARY"
+          fi
