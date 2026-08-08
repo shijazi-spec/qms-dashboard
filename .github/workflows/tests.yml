@@ -205,21 +205,11 @@ jobs:
           NPX_TSX=$(npx tsx --version 2>&1 | trunc)
           echo "::warning title=diag-4-npx-tsx-version::${NPX_TSX}"
 
-          # The decisive one: run the actual test script, bounded, and report
-          # its TRUE exit code plus the head of its output. Redirect to a file
-          # rather than piping — `RC=$?` after `OUT=$(cmd | head)` would
-          # capture head's status, not npm's, and PIPESTATUS doesn't survive a
-          # command-substitution assignment either. `|| true` keeps this
-          # diagnostic from masking the real "Run test suite" step below.
-          # `cmd && RC=0 || RC=$?` is the idiom that both survives the
-          # `set -e` GitHub applies to bash steps AND preserves the real
-          # exit code (a trailing `|| true` would force $? to 0).
-          timeout 90 npm test > /tmp/npm-test.log 2>&1 && RC=0 || RC=$?
-          HEAD_OUT=$(head -c 700 /tmp/npm-test.log | trunc)
-          TAIL_OUT=$(tail -c 500 /tmp/npm-test.log | trunc)
-          echo "::warning title=diag-5-npm-test-exit::exit_code=${RC}"
-          echo "::warning title=diag-6-npm-test-head::${HEAD_OUT}"
-          echo "::warning title=diag-7-npm-test-tail::${TAIL_OUT}"
+          # NOTE: this step used to also run `timeout 90 npm test` to capture
+          # the failure. That was how the exit-127 and the missing-vite
+          # breakage were found — but now that the suite genuinely runs, it is
+          # pure duplication that burned 90s of every run. The real
+          # "Run test suite" step below reports the tally itself.
 
       # Non-blocking while we establish the baseline. Remove
       # `continue-on-error` to promote this to a hard gate.
@@ -237,7 +227,39 @@ jobs:
           # Bounded so a runaway suite can't eat the whole 30-minute budget
           # on a 2-core runner.
           TEST_CONCURRENCY: "4"
-        run: npm test
+        # Tee the run so the tally + failing-file list can be republished as
+        # annotations. Raw step logs need repo-admin rights to download, so
+        # without this the baseline numbers would be invisible from the API.
+        # `PIPESTATUS[0]` is npm's status (not tee's), captured before any
+        # other command can clobber it.
+        run: |
+          set +e
+          npm test 2>&1 | tee /tmp/test-output.log
+          RC=${PIPESTATUS[0]}
+          set -e
+
+          SUMMARY=$(grep -a 'test files passed' /tmp/test-output.log | tail -1 | tr -d '\r')
+          FAILS=$(grep -a 'FAIL' /tmp/test-output.log | head -25 | tr '\n' ' ' | tr -d '\r' | cut -c1-900)
+
+          echo "::warning title=test-1-exit::exit_code=${RC}"
+          echo "::warning title=test-2-tally::${SUMMARY:-<no summary line — suite likely crashed before finishing>}"
+          echo "::warning title=test-3-failing-files::${FAILS:-<none captured>}"
+
+          {
+            echo "### Test baseline"
+            echo ""
+            echo "- exit code: \`${RC}\`"
+            echo "- tally: ${SUMMARY:-_no summary line_}"
+            echo ""
+            echo "<details><summary>Failing files (first 25)</summary>"
+            echo ""
+            echo '```'
+            grep -a 'FAIL' /tmp/test-output.log | head -25 || echo "(none)"
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit $RC
 
       # Always surface the outcome in the job summary so the baseline is
       # readable at a glance without opening the raw log.
