@@ -233,6 +233,11 @@ const WalaPlusNav = {
         { label: 'Team Performance', href: '/team', icon: 'user-group', id: 'team' },
         { label: 'Handoff Tracker', href: '/handoff-tracker', icon: 'check-circle', id: 'handoff-tracker', requiresRole: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
         { label: 'Tech Requests', href: '/tech-requests', icon: 'check-circle', id: 'tech-requests', requiresRole: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'quality_specialist'] },
+        // KPI Source Data — entry screen for the North Star source tables that feed
+        // the leadership feed (certification calendar, evidence, TPRA, adoption…).
+        // Was previously orphaned (no nav link), which is why the certification
+        // calendar for GRC-KPI-002 was never entered and that KPI stayed empty.
+        { label: 'KPI Source Data', href: '/leadership-kpis/data', icon: 'chart-bar', id: 'leadership-kpis', requiresRole: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
         // AI Approvals Queue lives under Team Mgmt per user request — it is
         // a people/queue management surface (approvers reviewing pending AI
         // actions) rather than a platform-admin tool. Item-level requiresRole
