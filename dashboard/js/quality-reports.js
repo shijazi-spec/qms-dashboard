@@ -69,8 +69,34 @@
                     '<div class="rr-kpi-label">' + escapeHtml(channel) + '</div>' +
                     '<div class="rr-kpi-value text-base leading-snug">' + escapeHtml(b.bu_name || b.bu_key) + '</div>' +
                     '<div class="rr-kpi-sub">' + escapeHtml(b.fn || '') + '</div>' +
+                    '<div class="rr-sub" id="qr-hubline-' + escAttr(b.bu_key) + '"></div>' +
                     '</button>';
             }).join('');
+
+            // Lazy hub status line: fetch each card's summary in the background
+            // and fill in its status line once it arrives (never blocks the grid render).
+            qrCurrentBUs.forEach(function (b) {
+                fetch('/api/quality-reports/bus/' + encodeURIComponent(b.bu_key) + '/summary', { credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (h) {
+                        if (!h) return;
+                        var el = document.getElementById('qr-hubline-' + b.bu_key);
+                        if (!el) return;
+                        var parts = [];
+                        if (h.kpiPct != null) parts.push('KPIs ' + h.kpiPct + '%');
+                        parts.push((h.outstanding || 0) + ' outstanding');
+                        if (h.openCapas != null) parts.push(h.openCapas + ' open CAPAs');
+                        el.textContent = parts.join(' · ');
+                    })
+                    .catch(function () { /* leave the status line blank */ });
+            });
+
+            // Deep-link: ?bu=<key> opens that BU directly.
+            var params = new URLSearchParams(window.location.search);
+            var wantBU = params.get('bu');
+            if (wantBU && qrCurrentBUs.some(function (b) { return b.bu_key === wantBU; })) {
+                qrOpenBU(wantBU);
+            }
         } catch (e) {
             host.innerHTML = '<div class="text-sm text-red-600">Failed to load business units: ' + escapeHtml(String((e && e.message) || e)) + '</div>';
         }
@@ -188,6 +214,7 @@
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var payload = await res.json();
             qrRenderBU(payload);
+            try { history.replaceState(null, '', '?bu=' + encodeURIComponent(buKey)); } catch (e2) {}
         } catch (e) {
             host.innerHTML =
                 '<button type="button" class="rr-btn rr-btn-ghost mb-3" data-on-click="qrBackToHub">← All units</button>' +
@@ -198,6 +225,7 @@
     window.qrBackToHub = function () {
         document.getElementById('qrBU').classList.add('hidden');
         document.getElementById('qrHub').classList.remove('hidden');
+        try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
     };
 
     /** One stat tile in the summary strip. `accent` must be one of the valid rr-acc-* tokens. */
@@ -303,6 +331,14 @@
         var out = [];
         if (c.cs && c.cs.summary) out.push('<div class="text-sm">CS Lifecycle violations: ' + (c.cs.summary.total_violations || 0) + (c.phaseFocus ? ' (focus: ' + escapeHtml(c.phaseFocus) + ')' : '') + '</div>');
         if (c.stageAging && c.stageAging.summary) out.push('<div class="text-sm">Deal stage-aging violations: ' + (c.stageAging.summary.total_violations || 0) + '</div>');
+        if (c.dealCompliance) {
+            var dc = c.dealCompliance;
+            if (dc.checked > 0) {
+                out.push('<div class="text-sm">Deal docs: ' + (dc.compliant || 0) + '/' + dc.checked + ' compliant (' + (dc.compliant_rate == null ? '—' : dc.compliant_rate + '%') + ') <span class="rr-sub">of checked deals</span></div>');
+            } else {
+                out.push('<div class="text-sm rr-sub">Deal docs: no deals checked yet</div>');
+            }
+        }
         return out.join('') || '<div class="text-xs text-gray-500">No compliance data.</div>';
     }
 
