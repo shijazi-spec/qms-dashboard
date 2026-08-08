@@ -127,6 +127,9 @@ export async function initKPITables(): Promise<void> {
       is_active BOOLEAN DEFAULT true,
       is_north_star BOOLEAN DEFAULT false,
       calc_mode VARCHAR(20) DEFAULT 'manual',
+      -- Set true the moment a manager edits a KPI in the UI. The boot seed then
+      -- STOPS overwriting that row, so manual edits survive republish (P2).
+      is_customized BOOLEAN DEFAULT false,
       navigation_map JSONB,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
@@ -220,6 +223,10 @@ export async function initKPITables(): Promise<void> {
   // calc_mode: how each KPI's live value is produced (auto | checklist | manual).
   await pool.query(
     `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS calc_mode VARCHAR(20) DEFAULT 'manual'`,
+  );
+  // is_customized: guards manager edits from being overwritten by the boot seed.
+  await pool.query(
+    `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS is_customized BOOLEAN DEFAULT false`,
   );
 
   // Name normalization: Sarah prefers her name spelled "Sarah" everywhere.
@@ -1756,6 +1763,8 @@ export async function updateKPIDefinition(
 
   if (fields.length === 0) return null;
 
+  // Any manual edit protects the row from the boot seed's overwrite (P2).
+  fields.push(`is_customized = true`);
   fields.push(`updated_at = NOW()`);
   values.push(id);
 

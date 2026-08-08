@@ -151,8 +151,88 @@
                 </div>
               </div>
 
-              ${data.can_edit ? '<p class="text-xs text-gray-400 mt-4">In-place editing arrives in the next update (P2). For now, edit via the KPIs page.</p>' : ''}
+              ${data.can_edit ? `<div class="mt-5 flex items-center gap-3">
+                  <button data-on-click="toggleEdit" id="editBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">✎ Edit this KPI</button>
+                  ${k.is_customized ? '<span class="text-xs text-gray-500">Customized — the boot seed no longer overwrites this KPI.</span>' : '<span class="text-xs text-gray-400">Editing marks this KPI customized so your changes survive republish.</span>'}
+                </div>
+                <div id="editPanel" class="hidden bg-white rounded-lg shadow p-5 mt-4"></div>` : ''}
             `;
+            window._kpi = k; // keep the definition for the editor
+        }
+
+        const FREQ = ['monthly', 'quarterly', 'annual', 'daily', 'weekly', 'Per Certificate'];
+        const CALC = ['auto', 'checklist', 'manual'];
+
+        /** Derive RAG bands from the target (same convention as the seed). */
+        function _bands(target, dir) {
+            const t = Number(target) || 0;
+            return dir === 'lower_is_better'
+                ? { green: t, amber: Math.round(t * 1.5), red: Math.round(t * 2) }
+                : { green: t, amber: Math.round(t * 0.85), red: Math.round(t * 0.7) };
+        }
+
+        function toggleEdit() {
+            const panel = document.getElementById('editPanel');
+            if (!panel) return;
+            if (!panel.classList.contains('hidden')) { panel.classList.add('hidden'); return; }
+            const k = window._kpi || {};
+            const opt = (arr, cur) => arr.map(v => `<option value="${_esc(v)}"${v === cur ? ' selected' : ''}>${_esc(v)}</option>`).join('');
+            panel.innerHTML = `
+              <h2 class="font-semibold text-gray-900 mb-3">Edit KPI</h2>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <label class="sm:col-span-2">Name<input id="e_name" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.kpi_name || '')}"></label>
+                <label class="sm:col-span-2">Description<textarea id="e_desc" rows="2" class="w-full border rounded px-2 py-1 mt-1">${_esc(k.description || '')}</textarea></label>
+                <label class="sm:col-span-2">Formula<input id="e_formula" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.formula || '')}"></label>
+                <label>Target<input id="e_target" type="number" step="0.1" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.target_value)}"></label>
+                <label>Weight (%)<input id="e_weight" type="number" step="0.1" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.weight)}"></label>
+                <label>Direction<select id="e_dir" class="w-full border rounded px-2 py-1 mt-1">${opt(['higher_is_better', 'lower_is_better'], k.threshold_direction)}</select></label>
+                <label>Frequency<select id="e_freq" class="w-full border rounded px-2 py-1 mt-1">${opt(FREQ, k.frequency)}</select></label>
+                <label>Calc mode<select id="e_calc" class="w-full border rounded px-2 py-1 mt-1">${opt(CALC, k.calc_mode)}</select></label>
+                <label>Data source<input id="e_source" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.data_source || '')}"></label>
+                <label class="flex items-center gap-2 mt-2"><input id="e_ns" type="checkbox" ${k.is_north_star ? 'checked' : ''}> North Star ⭐</label>
+              </div>
+              <div class="flex items-center gap-3 mt-4">
+                <button data-on-click="saveEdit" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm">Save</button>
+                <button data-on-click="toggleEdit" class="px-4 py-2 border rounded text-sm">Cancel</button>
+                <span id="e_msg" class="text-xs"></span>
+              </div>
+              <p class="text-xs text-gray-400 mt-2">Changing the target recomputes the RAG bands automatically. Changing calc mode changes how the value is produced.</p>`;
+            panel.classList.remove('hidden');
+        }
+
+        async function saveEdit() {
+            const id = _kpiId();
+            const msg = document.getElementById('e_msg');
+            const dir = document.getElementById('e_dir').value;
+            const target = parseFloat(document.getElementById('e_target').value);
+            const b = _bands(target, dir);
+            const body = {
+                kpi_name: document.getElementById('e_name').value.trim(),
+                description: document.getElementById('e_desc').value.trim(),
+                formula: document.getElementById('e_formula').value.trim(),
+                target_value: isFinite(target) ? target : undefined,
+                weight: parseFloat(document.getElementById('e_weight').value) || 0,
+                threshold_direction: dir,
+                threshold_green: b.green, threshold_amber: b.amber, threshold_red: b.red,
+                frequency: document.getElementById('e_freq').value,
+                calc_mode: document.getElementById('e_calc').value,
+                data_source: document.getElementById('e_source').value.trim(),
+                is_north_star: document.getElementById('e_ns').checked
+            };
+            try {
+                const res = await fetch(`/api/kpis/${id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) {
+                    msg.textContent = 'Saved — survives republish now.'; msg.className = 'text-xs text-emerald-700';
+                    setTimeout(loadDetail, 500);
+                } else {
+                    let reason = ''; try { reason = (await res.json()).error || ''; } catch {}
+                    if (res.status === 403) reason = 'You don’t have permission to edit KPIs.';
+                    msg.textContent = 'Failed to save' + (reason ? ' — ' + reason : ''); msg.className = 'text-xs text-red-600';
+                }
+            } catch (e) { msg.textContent = 'Network error.'; msg.className = 'text-xs text-red-600'; }
         }
 
         document.addEventListener('DOMContentLoaded', loadDetail);

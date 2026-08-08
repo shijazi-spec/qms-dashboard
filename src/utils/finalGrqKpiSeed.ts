@@ -127,7 +127,8 @@ export async function seedFinalGrqKpis(): Promise<void> {
          is_active = true,
          is_north_star = EXCLUDED.is_north_star,
          calc_mode = EXCLUDED.calc_mode,
-         updated_at = NOW()`,
+         updated_at = NOW()
+       WHERE kpi_definitions.is_customized IS NOT TRUE`,
       [k.name, k.code, k.description, k.owner_type, k.owner_name, k.category, k.formula, k.data_source, k.unit, k.frequency,
        b.green, b.amber, b.red, k.direction, k.target, k.weight, k.north_star ?? false, k.calc_mode],
     );
