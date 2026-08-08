@@ -1149,7 +1149,7 @@
                 const key = s.section + '::' + st;
                 const open = !_collapsedStages.has(key);
                 const col = pct >= 100 ? 'text-emerald-600' : pct > 0 ? 'text-amber-600' : 'text-gray-400';
-                return `<div class="border rounded ml-1">
+                return `<div class="border rounded ms-1">
                     <div class="flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-gray-50" data-on-click="toggleStage" data-args="[&quot;${_esc(key)}&quot;]">
                         <span class="text-gray-400 text-[10px]">${open ? '▾' : '▸'}</span>
                         <span class="text-sm text-gray-800 flex-1">${i + 1}. ${_esc(st)}</span>
