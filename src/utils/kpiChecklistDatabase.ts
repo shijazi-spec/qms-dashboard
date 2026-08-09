@@ -166,6 +166,34 @@ export async function renameBu(
   );
 }
 
+/**
+ * Candidate BUs for the one-time duplicate cleanup: sections that are EMPTY of
+ * real work — 0 items done, every item still system-seeded (never human-edited),
+ * and NO schedule set. These are exactly the re-seeded canonical duplicates (and
+ * any never-started placeholder). Safe to remove: no progress or dates are lost,
+ * and any that's still wanted can be re-added via "Add BU".
+ */
+export async function listCleanupCandidates(
+  kpiId: number,
+): Promise<Array<{ section: string; items: number }>> {
+  const res = await pool.query(
+    `SELECT ci.section, COUNT(*)::int AS items
+       FROM kpi_checklist_items ci
+      WHERE ci.kpi_id = $1 AND COALESCE(TRIM(ci.section), '') <> ''
+      GROUP BY ci.section
+     HAVING COUNT(*) FILTER (WHERE ci.is_done) = 0
+        AND bool_and(ci.updated_by IS NULL OR ci.updated_by = 'system')
+        AND NOT EXISTS (
+              SELECT 1 FROM kpi_bu_schedule s
+               WHERE s.kpi_id = $1 AND s.bu_name = ci.section
+                 AND (s.start_date IS NOT NULL OR s.deadline IS NOT NULL)
+        )
+      ORDER BY ci.section`,
+    [kpiId],
+  );
+  return res.rows.map((r: any) => ({ section: r.section, items: Number(r.items) }));
+}
+
 /** Remove a BU entirely (its checklist items + schedule). */
 export async function removeBu(kpiId: number, bu: string): Promise<void> {
   const b = (bu || "").trim();

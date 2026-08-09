@@ -883,6 +883,53 @@ export const kpiRoutes = [
     },
   },
   {
+    // One-time duplicate cleanup: {apply:false} previews the empty/untouched/
+    // unscheduled BUs; {apply:true, remove:[...]} deletes exactly those named.
+    path: "/api/kpis/:id{[0-9]+}/checklist/cleanup",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to edit KPI checklist",
+            );
+          const kpiId = parseInt(c.req.param("id"));
+          const body = await c.req.json().catch(() => ({}));
+          const { listCleanupCandidates, removeBu } = await import(
+            "../../utils/kpiChecklistDatabase"
+          );
+          const candidates = await listCleanupCandidates(kpiId);
+          if (!body?.apply) {
+            return c.json({ candidates }); // preview
+          }
+          // Apply — only remove names that are BOTH requested AND still candidates
+          // (never delete a BU that has progress/schedule, even if named).
+          const safe = new Set(candidates.map((x) => x.section));
+          const requested: string[] = Array.isArray(body?.remove)
+            ? body.remove
+            : candidates.map((x) => x.section);
+          const removed: string[] = [];
+          for (const name of requested) {
+            if (safe.has(name)) {
+              await removeBu(kpiId, name);
+              removed.push(name);
+            }
+          }
+          await recordChecklistKPIValue(kpiId);
+          return c.json({ success: true, removed });
+        } catch (error) {
+          safeLogger.error("Error cleaning up BUs:", error);
+          return c.json({ error: "Failed to clean up BUs" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Set a BU's start date and/or deadline (per-BU schedule).
     path: "/api/kpis/:id{[0-9]+}/checklist/bu-schedule",
     method: "PUT" as const,
