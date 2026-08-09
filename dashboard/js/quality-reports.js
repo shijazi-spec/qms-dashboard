@@ -396,7 +396,7 @@
             var dc = c.dealCompliance;
             if (dc.checked > 0) {
                 var fmtSar = function (n) { return 'SAR ' + (Number(n) || 0).toLocaleString(); };
-                out.push('<div class="text-sm">Deal docs: ' + (dc.compliant || 0) + '/' + dc.checked + ' compliant (' + (dc.compliant_rate == null ? '—' : dc.compliant_rate + '%') + ') · At-risk: ' + fmtSar(dc.at_risk_sar) + '</div>');
+                out.push('<div class="text-sm">Deal docs: ' + (dc.compliant || 0) + '/' + dc.checked + ' compliant (' + (dc.compliant_rate == null ? '—' : dc.compliant_rate + '%') + ') · At-risk (missing docs): ' + fmtSar(dc.at_risk_sar) + '</div>');
                 // By stage
                 if (dc.by_stage && dc.by_stage.length) {
                     out.push('<div class="text-xs text-gray-500 mt-1">By stage</div>');

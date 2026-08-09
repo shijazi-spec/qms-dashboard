@@ -3,7 +3,7 @@ export interface DealComplianceRow {
   compliant: boolean;
   amount: number;
   owner: string;
-  missing_docs: Array<{ key?: string; label?: string }> | null;
+  missing_docs: Array<string | { key?: string; label?: string }> | null;
 }
 export interface DealComplianceSummary {
   segment: string;
@@ -39,7 +39,9 @@ export function shapeDealCompliance(segment: string, rows: DealComplianceRow[]):
 
     if (!isC && Array.isArray(r.missing_docs)) {
       for (const m of r.missing_docs) {
-        const lbl = (m && m.label && String(m.label).trim()) || (m && m.key ? String(m.key) : "Unknown");
+        const lbl = typeof m === "string"
+          ? (m.trim() || "Unknown")
+          : ((m && m.label && String(m.label).trim()) || (m && m.key ? String(m.key) : "Unknown"));
         missing.set(lbl, (missing.get(lbl) || 0) + 1);
       }
     }

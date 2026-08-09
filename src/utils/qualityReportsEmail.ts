@@ -46,7 +46,7 @@ export function renderBUReportEmailHtml(report: any, dateISO: string): { subject
       const dc = s.compliance.dealCompliance;
       if (dc.checked > 0) {
         const sar = `SAR ${(Number(dc.at_risk_sar) || 0).toLocaleString()}`;
-        parts.push(`Deal docs: ${escHtml(dc.compliant || 0)}/${escHtml(dc.checked)} compliant (${dc.compliant_rate == null ? "&mdash;" : escHtml(dc.compliant_rate) + "%"}) · At-risk: ${escHtml(sar)}`);
+        parts.push(`Deal docs: ${escHtml(dc.compliant || 0)}/${escHtml(dc.checked)} compliant (${dc.compliant_rate == null ? "&mdash;" : escHtml(dc.compliant_rate) + "%"}) · At-risk (missing docs): ${escHtml(sar)}`);
         if (Array.isArray(dc.by_stage) && dc.by_stage.length) {
           const st = dc.by_stage.map((x: any) => `${escHtml(x.stage)}: ${escHtml(x.missing)} missing`).join(" · ");
           parts.push(`By stage — ${st}`);

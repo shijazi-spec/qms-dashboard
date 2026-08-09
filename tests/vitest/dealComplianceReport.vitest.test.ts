@@ -35,4 +35,11 @@ describe("shapeDealCompliance", () => {
     expect(out.by_owner.length).toBe(10);
     expect(out.owner_overflow).toBe(3);
   });
+  it("aggregates missing_docs stored as plain label strings (real DB format)", () => {
+    const stringRows = [
+      { stage: "Agreement Signed", compliant: false, amount: 10, owner: "Ali", missing_docs: ["VAT Certificate", "VAT Certificate"] },
+    ];
+    const out = shapeDealCompliance("walaplus", stringRows);
+    expect(out.top_missing_docs[0]).toEqual({ label: "VAT Certificate", count: 2 });
+  });
 });
