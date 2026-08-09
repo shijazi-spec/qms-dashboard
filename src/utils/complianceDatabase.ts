@@ -165,6 +165,9 @@ export async function initComplianceTables(): Promise<void> {
       section_order INTEGER,
       clause_number VARCHAR(50),
       clause_sort_key VARCHAR(64),
+      -- Target date by which this obligation should be fully mapped (control +
+      -- owner + evidence). Drives the per-quarter Compliance Coverage KPI.
+      target_date DATE,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
@@ -252,6 +255,9 @@ export async function initComplianceTables(): Promise<void> {
   // ISO9001-4.1 and SAMA-105 before SAMA-11. See utils/clauseSortKey.ts.
   await pool.query(
     `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS clause_sort_key VARCHAR(64)`,
+  );
+  await pool.query(
+    `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS target_date DATE`,
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_obligations_clause_order
@@ -748,8 +754,9 @@ export async function createObligation(obl: Obligation): Promise<Obligation> {
       requirement_type, control_type, applicability_criteria, compliance_frequency,
       evidence_requirements, penalty_for_noncompliance,
       linked_control_ids, linked_policy_ids, linked_risk_ids,
-      responsible_department, responsible_role, status, priority, clause_sort_key
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      responsible_department, responsible_role, status, priority, clause_sort_key,
+      target_date
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
     RETURNING *
   `,
     [
@@ -772,6 +779,7 @@ export async function createObligation(obl: Obligation): Promise<Obligation> {
       obl.status || "applicable",
       obl.priority || "medium",
       clauseSortKey,
+      (obl as any).target_date || null,
     ],
   );
 
@@ -880,6 +888,7 @@ export async function updateObligation(
     "linked_control_ids",
     "linked_policy_ids",
     "linked_risk_ids",
+    "target_date",
   ];
 
   for (const [key, value] of Object.entries(updates)) {

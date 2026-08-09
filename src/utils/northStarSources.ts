@@ -255,22 +255,35 @@ export async function insertSource(
 
 /** GRC-KPI-002 — (milestones delivered on time / planned) × 100. */
 export async function calcCertMilestoneDelivery() {
+  // Scored PER QUARTER, per the deadline model: only certifications whose target
+  // (planned) date falls in the CURRENT quarter count. On-time = achieved on/
+  // before the target date; a later-quarter certification doesn't affect this
+  // quarter, and one due earlier that's still missing counts against.
   const r = await pool.query(`
     SELECT
-      COUNT(*) FILTER (WHERE status <> 'cancelled')::int AS total,
       COUNT(*) FILTER (
-        WHERE delivered_date IS NOT NULL
-          AND (planned_date IS NULL OR delivered_date <= planned_date)
+        WHERE status <> 'cancelled'
+          AND planned_date IS NOT NULL
+          AND planned_date >= date_trunc('quarter', NOW())::date
+          AND planned_date <  (date_trunc('quarter', NOW()) + interval '3 months')::date
+      )::int AS due,
+      COUNT(*) FILTER (
+        WHERE status <> 'cancelled'
+          AND planned_date IS NOT NULL
+          AND planned_date >= date_trunc('quarter', NOW())::date
+          AND planned_date <  (date_trunc('quarter', NOW()) + interval '3 months')::date
+          AND delivered_date IS NOT NULL AND delivered_date <= planned_date
       )::int AS on_time
     FROM certification_milestones
   `);
-  const total = r.rows[0]?.total ?? 0;
+  const due = r.rows[0]?.due ?? 0;
   const onTime = r.rows[0]?.on_time ?? 0;
-  if (total <= 0) return { value: 0, dataAvailable: false };
+  if (due <= 0)
+    return { value: 0, dataAvailable: false, reason: "no_certifications_due_this_quarter" };
   return {
-    value: Math.round((onTime / total) * 1000) / 10,
+    value: Math.round((onTime / due) * 1000) / 10,
     dataAvailable: true,
-    details: { planned_milestones: total, delivered_on_time: onTime },
+    details: { certifications_due_this_quarter: due, achieved_on_time: onTime },
   };
 }
 

@@ -450,6 +450,10 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_evidence_req">Evidence Requirements</label>
                     <textarea name="evidence_requirements" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="What evidence is needed to demonstrate compliance?"></textarea>
                 </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Target date to be mapped</label>
+                    <input type="date" name="target_date" class="w-full border border-gray-300 rounded-lg px-3 py-2" title="When this obligation must be mapped (control + owner + evidence) — drives the per-quarter Compliance Coverage KPI">
+                </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
                     <button type="button" data-on-click="closeModal" data-args="[&quot;addObligationModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="common.cancel">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800" data-i18n="compliance.create_obligation">Create Obligation</button>

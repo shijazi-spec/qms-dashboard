@@ -265,38 +265,46 @@ async function calcAuditExecutionRate() {
 
 /** GRC-KPI-008 — (applicable obligations with a mapped control/policy / total applicable) × 100. */
 async function calcComplianceCoverage() {
+  // Scored PER QUARTER against the schedule: denominator = applicable obligations
+  // DUE to be mapped by the end of the current quarter (target_date ≤ quarter
+  // end). "Mapped" now requires ALL THREE — a linked control, a named owner, and
+  // an evidence requirement. Obligations with no target_date are out of scope
+  // until one is set (same discipline as the BU KPIs).
   const r = await pool.query(`
+    WITH q AS (
+      SELECT (date_trunc('quarter', NOW()) + interval '3 months')::date AS qend
+    )
     SELECT
-      COUNT(*) FILTER (WHERE status = 'applicable')::int AS total_applicable,
       COUNT(*) FILTER (
-        WHERE status = 'applicable' AND (
-          (linked_control_ids IS NOT NULL AND array_length(linked_control_ids, 1) > 0)
-          OR (linked_policy_ids IS NOT NULL AND array_length(linked_policy_ids, 1) > 0)
-        )
+        WHERE o.status = 'applicable'
+          AND o.target_date IS NOT NULL AND o.target_date < q.qend
+      )::int AS due,
+      COUNT(*) FILTER (
+        WHERE o.status = 'applicable'
+          AND o.target_date IS NOT NULL AND o.target_date < q.qend
+          AND o.linked_control_ids IS NOT NULL AND array_length(o.linked_control_ids, 1) > 0
+          AND (COALESCE(TRIM(o.responsible_department), '') <> ''
+               OR COALESCE(TRIM(o.responsible_role), '') <> '')
+          AND COALESCE(TRIM(o.evidence_requirements), '') <> ''
       )::int AS mapped
-    FROM obligations
+    FROM obligations o, q
   `);
-  const total = r.rows[0]?.total_applicable ?? 0;
+  const due = r.rows[0]?.due ?? 0;
   const mapped = r.rows[0]?.mapped ?? 0;
-  if (total <= 0) {
-    return { value: 0, dataAvailable: false, reason: "no_applicable_obligations_in_qms" };
-  }
-  if (mapped <= 0) {
-    // Obligations exist but NONE are linked to a control/policy yet. That is a
-    // "mapping not populated" signal, not a measured 0% — emitting value:0 would
-    // overwrite the Leadership Platform's manual value with a misleading zero.
-    // Mark unavailable so the connector skips it (per the feed safety contract).
-    return {
-      value: 0,
-      dataAvailable: false,
-      reason: "no_obligations_mapped_yet",
-      details: { total_applicable: total, mapped_obligations: 0 },
-    };
+  if (due <= 0) {
+    // Nothing scheduled to be mapped by this quarter yet → N/A (never a fake 0
+    // over the Leadership Platform's value). Set a target_date on obligations to
+    // bring them into scope.
+    return { value: 0, dataAvailable: false, reason: "no_obligations_due_this_quarter" };
   }
   return {
-    value: Math.round((mapped / total) * 1000) / 10,
+    value: Math.round((mapped / due) * 1000) / 10,
     dataAvailable: true,
-    details: { total_applicable: total, mapped_obligations: mapped },
+    details: {
+      obligations_due_this_quarter: due,
+      fully_mapped: mapped,
+      mapping_rule: "control + owner + evidence",
+    },
   };
 }
 
