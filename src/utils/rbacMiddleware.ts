@@ -1074,6 +1074,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  {
+    // Manual push of KPI values to the Leadership Platform — KPI write roles.
+    pattern: /^\/api\/kpis\/push-to-leadership$/,
+    methods: ["POST"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
+  },
   // Tech Requests board (internal side). The assignee response path is public
   // + token-gated and is listed in PUBLIC_PATHS instead.
   {

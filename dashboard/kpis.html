@@ -68,6 +68,9 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                     Recalculate
                 </button>
+                <button data-on-click="pushToLeadership" id="pushBtn" class="border border-purple-600 text-purple-700 px-3 py-2 rounded text-sm hover:bg-purple-50 flex items-center gap-1" title="Send the current KPI values to the Leadership Platform now (instead of waiting for its scheduled pull)">
+                    ⬆ Push to Leadership
+                </button>
                 <button data-on-click="openAddModal" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">+ Add KPI</button>
             </div>
         </div>
@@ -1037,6 +1040,26 @@
             }
         }
 
+        async function pushToLeadership() {
+            const btn = document.getElementById('pushBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Pushing…'; }
+            try {
+                const res = await fetch('/api/kpis/push-to-leadership', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) { alert(data.error || 'Push failed.'); return; }
+                if (data.configured === false) {
+                    alert('Push not configured.\n\n' + (data.error || 'Set PLATFORM_WEBHOOK_URL and WEBHOOK_SECRET in Replit Secrets, then republish.'));
+                    return;
+                }
+                const lines = (data.pushed || []).map(p => `${p.ok ? '✓' : '—'} ${p.code}${p.value != null ? ' = ' + p.value + '%' : ''}${p.note ? '  (' + p.note + ')' : ''}`);
+                alert(`Pushed ${data.ok_count} of ${(data.pushed || []).length} KPI(s) to the Leadership Platform:\n\n${lines.join('\n')}`);
+            } catch (e) {
+                console.error('Push error:', e); alert('Network error during push.');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
         async function recalcKPIs() {
             const btn = document.getElementById('recalcBtn');
             const orig = btn ? btn.innerHTML : '';

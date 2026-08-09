@@ -760,6 +760,32 @@ export const kpiRoutes = [
     },
   },
   {
+    // Manual push of current KPI values to the Leadership Platform's webhook.
+    // Reads the URL + secret from Replit Secrets — never hardcoded.
+    path: "/api/kpis/push-to-leadership",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to push to the Leadership Platform",
+            );
+          const { pushToLeadership } = await import("../../utils/leadershipPush");
+          const result = await pushToLeadership();
+          return c.json(result);
+        } catch (error) {
+          safeLogger.error("Error pushing to leadership:", error);
+          return c.json({ error: "Failed to push to Leadership Platform" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/kpis/:id{[0-9]+}/checklist",
     method: "GET" as const,
     createHandler: async () => {
