@@ -188,6 +188,16 @@ export async function removeBu(kpiId: number, bu: string): Promise<void> {
 export async function seedActionPlan(kpiCode: string, plan: ActionPlan): Promise<void> {
   const kpi = await getKPIByCode(kpiCode);
   if (!kpi?.id) return;
+  // SEED-ONCE: if this KPI already has ANY BU, its BU list is user-managed
+  // (renames, removals, additions). Re-seeding the canonical 8 here is what made
+  // renamed/removed BUs reappear as fresh 0% duplicates on every republish and
+  // diluted the KPI %. So only seed on first-time setup (no BUs yet).
+  const existing = await pool.query(
+    `SELECT 1 FROM kpi_checklist_items
+      WHERE kpi_id = $1 AND COALESCE(TRIM(section), '') <> '' LIMIT 1`,
+    [kpi.id],
+  );
+  if (existing.rows.length > 0) return;
   const expected = plan.flatMap(([, steps]) => steps);
   let added = 0;
   for (const bu of FRAMEWORK_BUSINESS_UNITS) {
@@ -259,8 +269,10 @@ async function scopedActionPlanRate(
   cutoffIso: string,
   asOf?: Date,
 ): Promise<ActionPlanRate | null> {
-  const doneFilter = asOf ? "ci.is_done AND ci.updated_at <= $3" : "ci.is_done";
-  const params: any[] = asOf ? [kpiId, cutoffIso, asOf] : [kpiId, cutoffIso];
+  // The cutoff is applied in JS below, NOT in SQL — so it must NOT be a bound
+  // parameter (supplying an unused param makes Postgres reject the query).
+  const doneFilter = asOf ? "ci.is_done AND ci.updated_at <= $2" : "ci.is_done";
+  const params: any[] = asOf ? [kpiId, asOf] : [kpiId];
   const res = await pool.query(
     `SELECT ci.section,
             COUNT(*)::int AS n,
