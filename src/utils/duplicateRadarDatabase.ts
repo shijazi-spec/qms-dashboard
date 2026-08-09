@@ -13,6 +13,7 @@ import {
   type ResolveRowRaw,
   type DataCleaningProgress,
 } from "./dataCleaningProgress";
+import { shapeDealCompliance, type DealComplianceSummary } from "./dealComplianceReport";
 
 // Normalize sslmode directly on the connection string (module-scope pool —
 // see src/utils/normalizeDatabaseUrl.ts for why env-var ordering is unreliable
@@ -2562,21 +2563,30 @@ export async function getSegmentLeadDuplicateCount(
  *  Counts ONLY deals that have been doc-checked (rows in deal_doc_compliance). */
 export async function getSegmentDealComplianceSummary(
   segment: DuplicateFilters["segment"],
-): Promise<{ segment: string; checked: number; compliant: number; compliant_rate: number | null }> {
+): Promise<DealComplianceSummary> {
   const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
   const p = buildSegmentPredicate(seg, 1);
   const segCond = p.condition ? " AND " + p.condition : "";
   const res = await pool.query(
-    `SELECT COUNT(*)::int AS checked,
-            COUNT(*) FILTER (WHERE d.compliant)::int AS compliant
+    `SELECT d.stage AS stage,
+            d.compliant AS compliant,
+            COALESCE(r.deal_value, 0) AS amount,
+            COALESCE(NULLIF(r.owner_name,''), NULLIF(r.owner_email,''), 'Unassigned') AS owner,
+            d.missing_docs AS missing_docs
        FROM deal_doc_compliance d
        JOIN duplicate_records r ON r.zoho_record_id = d.zoho_deal_id
       WHERE r.record_type = 'deal'${segCond}`,
     [...p.params],
   );
-  const checked = Number(res.rows[0]?.checked) || 0;
-  const compliant = Number(res.rows[0]?.compliant) || 0;
-  return { segment: seg, checked, compliant, compliant_rate: checked ? Math.round((100 * compliant) / checked) : null };
+  const rows = res.rows.map((x: any) => ({
+    stage: x.stage || "Unknown",
+    compliant: x.compliant === true,
+    amount: Number(x.amount) || 0,
+    owner: x.owner || "Unassigned",
+    // pg parses jsonb into a JS array already; guard non-arrays to [].
+    missing_docs: Array.isArray(x.missing_docs) ? x.missing_docs : [],
+  }));
+  return shapeDealCompliance(seg, rows);
 }
 
 /** Outstanding duplicate DEALS in a segment — mirrors getSegmentLeadDuplicateCount. */
