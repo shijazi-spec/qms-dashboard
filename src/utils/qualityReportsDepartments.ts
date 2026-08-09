@@ -23,18 +23,22 @@ export interface QualityReportBUSeed {
   channel: Channel;
   fn: string;
   sort_order: number;
+  /** Default mapping to a KPI checklist BU (FRAMEWORK_BUSINESS_UNITS in
+   *  kpiChecklistDatabase.ts). Backfilled onto existing rows ONLY where the
+   *  admin hasn't set kpi_bu_name, so it never overrides a manual mapping. */
+  kpi_bu_name: string;
 }
 
 export const SEED_BUS: QualityReportBUSeed[] = [
-  { bu_key: "sdr_b2b", bu_name: "SDR (B2B)", channel: "B2B", fn: "sdr", sort_order: 1 },
-  { bu_key: "sales_b2b", bu_name: "Sales (B2B)", channel: "B2B", fn: "sales", sort_order: 2 },
-  { bu_key: "cs_b2b", bu_name: "Customer Success (B2B)", channel: "B2B", fn: "cs", sort_order: 3 },
-  { bu_key: "sdr_b2c", bu_name: "SDR (B2C)", channel: "B2C", fn: "sdr", sort_order: 4 },
-  { bu_key: "sales_b2c", bu_name: "Sales (B2C)", channel: "B2C", fn: "sales", sort_order: 5 },
-  { bu_key: "cs_b2c", bu_name: "Customer Success (B2C)", channel: "B2C", fn: "cs", sort_order: 6 },
-  { bu_key: "partnership_mp", bu_name: "Partnership (MP)", channel: "MP", fn: "partnership", sort_order: 7 },
-  { bu_key: "onboarding_mp", bu_name: "Onboarding (MP)", channel: "MP", fn: "onboarding", sort_order: 8 },
-  { bu_key: "partnersuccess_mp", bu_name: "PartnerSuccess (MP)", channel: "MP", fn: "partnersuccess", sort_order: 9 },
+  { bu_key: "sdr_b2b", bu_name: "SDR (B2B)", channel: "B2B", fn: "sdr", sort_order: 1, kpi_bu_name: "SDR" },
+  { bu_key: "sales_b2b", bu_name: "Sales (B2B)", channel: "B2B", fn: "sales", sort_order: 2, kpi_bu_name: "Sales B2B" },
+  { bu_key: "cs_b2b", bu_name: "Customer Success (B2B)", channel: "B2B", fn: "cs", sort_order: 3, kpi_bu_name: "Customer Success" },
+  { bu_key: "sdr_b2c", bu_name: "SDR (B2C)", channel: "B2C", fn: "sdr", sort_order: 4, kpi_bu_name: "SDR" },
+  { bu_key: "sales_b2c", bu_name: "Sales (B2C)", channel: "B2C", fn: "sales", sort_order: 5, kpi_bu_name: "Sales B2C" },
+  { bu_key: "cs_b2c", bu_name: "Customer Success (B2C)", channel: "B2C", fn: "cs", sort_order: 6, kpi_bu_name: "Customer Success" },
+  { bu_key: "partnership_mp", bu_name: "Partnership (MP)", channel: "MP", fn: "partnership", sort_order: 7, kpi_bu_name: "Marketplace" },
+  { bu_key: "onboarding_mp", bu_name: "Onboarding (MP)", channel: "MP", fn: "onboarding", sort_order: 8, kpi_bu_name: "Marketplace" },
+  { bu_key: "partnersuccess_mp", bu_name: "PartnerSuccess (MP)", channel: "MP", fn: "partnersuccess", sort_order: 9, kpi_bu_name: "Marketplace" },
 ];
 
 let tablesReady = false;
@@ -69,10 +73,18 @@ export async function ensureQualityReportTables(): Promise<void> {
   // Idempotent seed: insert the 9 canonical BUs; never overwrite admin edits.
   for (const b of SEED_BUS) {
     await pool.query(
-      `INSERT INTO quality_report_bus (bu_key, bu_name, channel, segment, fn, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO quality_report_bus (bu_key, bu_name, channel, segment, fn, sort_order, kpi_bu_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (bu_key) DO NOTHING`,
-      [b.bu_key, b.bu_name, b.channel, channelToSegment(b.channel), b.fn, b.sort_order],
+      [b.bu_key, b.bu_name, b.channel, channelToSegment(b.channel), b.fn, b.sort_order, b.kpi_bu_name],
+    );
+    // Backfill the default KPI mapping onto rows already seeded before this
+    // column had a default — ONLY when the admin hasn't set one, so a manual
+    // kpi_bu_name is never clobbered (Sarah 2026-08-09).
+    await pool.query(
+      `UPDATE quality_report_bus SET kpi_bu_name = $2, updated_at = NOW()
+        WHERE bu_key = $1 AND kpi_bu_name IS NULL`,
+      [b.bu_key, b.kpi_bu_name],
     );
   }
   tablesReady = true;
