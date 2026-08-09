@@ -118,6 +118,16 @@ export const staticAssetRoutes = [
       serveStaticText("js/ai-consultant-widget.js", "application/javascript"),
   },
   {
+    // Quality Reports hub script (dashboard/js/quality-reports.js). Dashboard
+    // JS is served via EXPLICIT per-file routes here (there is no generic /js/*
+    // static handler), so a new page's script must be registered or it 404s and
+    // never loads — which left the Quality Reports hub stuck on "Loading…".
+    path: "/js/quality-reports.js",
+    method: "GET" as const,
+    createHandler: async () =>
+      serveStaticText("js/quality-reports.js", "application/javascript"),
+  },
+  {
     path: "/css/utilities.css",
     method: "GET" as const,
     createHandler: async () => serveStaticText("css/utilities.css", "text/css"),
