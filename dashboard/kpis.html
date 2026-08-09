@@ -309,10 +309,9 @@
                 <div id="checklistProgress" class="mb-3 text-sm font-medium text-gray-700"></div>
                 <div id="checklistItems" class="space-y-2 mb-4"></div>
                 <!-- Sectioned KPIs (e.g. BU Framework): add a Business Unit -->
-                <div id="checklistAddBu" class="hidden border-t pt-3 mt-2 flex gap-2 items-center">
+                <div id="checklistAddBu" class="hidden border-t pt-3 mt-2 flex gap-2">
                     <input id="newChecklistBu" type="text" placeholder="Add a Business Unit…" class="border rounded px-3 py-2 text-sm flex-1" />
                     <button data-on-click="addChecklistBu" class="bg-indigo-600 text-white px-3 py-2 rounded text-sm hover:bg-indigo-700">+ Add BU</button>
-                    <button data-on-click="cleanupDuplicateBus" class="border border-red-300 text-red-700 px-3 py-2 rounded text-sm hover:bg-red-50" title="Remove empty, never-touched, unscheduled BUs (the re-seeded duplicates)">🧹 Clean up empty BUs</button>
                 </div>
                 <!-- Flat KPIs: add a single checklist item -->
                 <div id="checklistFlatAdd" class="hidden flex gap-2">
@@ -1307,29 +1306,6 @@
                 if (res.ok) { input.value = ''; await loadChecklist(); }
                 else { const d = await res.json().catch(()=>({})); alert(d.error || 'Failed to add BU.'); }
             } catch (e) { console.error('Add BU error:', e); }
-        }
-        async function cleanupDuplicateBus() {
-            if (_checklistKpiId == null) return;
-            await flushTicks();
-            try {
-                // 1) Preview — get the safe candidates (empty, never-touched, unscheduled).
-                const pre = await fetch(`/api/kpis/${_checklistKpiId}/checklist/cleanup`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apply: false })
-                });
-                if (!pre.ok) { const d = await pre.json().catch(() => ({})); alert(d.error || 'Failed to scan for duplicates.'); return; }
-                const { candidates } = await pre.json();
-                if (!candidates || !candidates.length) { alert('No empty/duplicate BUs to remove. Everything here has progress or a schedule.'); return; }
-                const names = candidates.map(c => `• ${c.section}`).join('\n');
-                if (!confirm(`Remove these ${candidates.length} empty, never-touched, unscheduled BU(s)?\n\n${names}\n\nNo progress or dates are lost — any you still want can be re-added.`)) return;
-                // 2) Apply — remove exactly those.
-                const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist/cleanup`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apply: true, remove: candidates.map(c => c.section) })
-                });
-                if (res.ok) { const d = await res.json(); await loadChecklist(); alert(`Removed ${d.removed ? d.removed.length : 0} BU(s).`); }
-                else { const d = await res.json().catch(() => ({})); alert(d.error || 'Failed to remove.'); }
-            } catch (e) { console.error('Cleanup error:', e); alert('Network error during cleanup.'); }
         }
         async function renameBuPrompt(bu) {
             const to = prompt('Rename BU "' + bu + '" to:', bu);
