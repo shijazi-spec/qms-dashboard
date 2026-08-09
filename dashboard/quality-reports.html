@@ -69,6 +69,15 @@
         .rr-modal { background: #FFFFFF; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.25); padding: 16px; width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto; }
         html.wp-dark .rr-modal { background: #1E293B; color: #F1F5F9; }
         .qr-email-frame { width: 100%; height: 340px; border: 1px solid #DDDDDD; background: #fff; border-radius: 4px; }
+        /* Deal-compliance breakdown tables (Task 3) — .rr-table isn't defined
+           anywhere else on this page (canonical version lives in
+           dashboard/duplicates.html), so a minimal theme-aware copy lives here. */
+        .rr-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 4px 0 8px; }
+        .rr-table th, .rr-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #eee; white-space: nowrap; }
+        .rr-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; font-weight: 600; }
+        .rr-table td { color: #111827; }
+        html.wp-dark .rr-table th, html.wp-dark .rr-table td { border-color: #374151; }
+        html.wp-dark .rr-table td { color: #e5e7eb; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
