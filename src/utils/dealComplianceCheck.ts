@@ -57,18 +57,15 @@ const DOC_PROPOSAL_SENT: RequiredDoc = {
   label: "Proposal sent (latest version)",
   match: /proposal|offer|عرض/i,
 };
-// Split into two separate required docs (Sarah 2026-08-03): a client can have a
-// signed contract but no quotation/PO on file (or vice-versa), and each must be
-// evidenced on its own.
-const DOC_SERVICE_AGREEMENT: RequiredDoc = {
-  key: "service_agreement",
-  label: "Service Agreement / Contract",
-  match: /service\s*agreement|agreement|contract|اتفاقية|عقد|اتفاق/i,
-};
-const DOC_QUOTATION_PO: RequiredDoc = {
-  key: "quotation_po",
-  label: "Quotation / PO / Invoice",
-  match: /quotation|quote|\bp\.?o\.?\b|purchase\s*order|invoice|فاتورة|عرض\s*سعر|أمر\s*شراء/i,
+// Quotation / PO / Service Agreement / Contract — ONE combined required doc,
+// matching Sales Governance v1.1 SOP 7.5.10, which lists these together as a
+// single bullet ("Quotation/PO/Service Agreement/Contract"). Reverted the
+// 2026-08-03 two-doc split to reflect the governance document exactly
+// (Sarah 2026-08-09). Any ONE of these attachments satisfies the requirement.
+const DOC_QUOTATION_AGREEMENT: RequiredDoc = {
+  key: "quotation_agreement",
+  label: "Quotation / PO / Service Agreement / Contract",
+  match: /quotation|quote|\bp\.?o\.?\b|purchase\s*order|invoice|service\s*agreement|agreement|contract|اتفاقية|عقد|اتفاق|فاتورة|عرض\s*سعر|أمر\s*شراء/i,
 };
 const DOC_VAT: RequiredDoc = {
   key: "vat",
@@ -91,10 +88,10 @@ export function requiredDocsForStage(stage: string): RequiredDoc[] {
   const s = (stage || "").trim().toLowerCase();
   if (s === "proposal") return [DOC_FINANCIAL_OFFER];
   if (FULL_DOC_STAGES.includes(s)) {
+    // 5 required docs per Sales Governance v1.1 SOP 7.5.10.
     return [
       DOC_PROPOSAL_SENT,
-      DOC_SERVICE_AGREEMENT,
-      DOC_QUOTATION_PO,
+      DOC_QUOTATION_AGREEMENT,
       DOC_VAT,
       DOC_CR,
       DOC_NATIONAL_ADDRESS,
