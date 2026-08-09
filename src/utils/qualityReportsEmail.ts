@@ -44,9 +44,20 @@ export function renderBUReportEmailHtml(report: any, dateISO: string): { subject
     if (s.compliance.stageAging && s.compliance.stageAging.summary) parts.push(`Deal stage-aging violations: ${escHtml(s.compliance.stageAging.summary.total_violations || 0)}`);
     if (s.compliance.dealCompliance) {
       const dc = s.compliance.dealCompliance;
-      parts.push(dc.checked > 0
-        ? `Deal docs: ${escHtml(dc.compliant || 0)}/${escHtml(dc.checked)} compliant (${dc.compliant_rate == null ? "&mdash;" : escHtml(dc.compliant_rate) + "%"})`
-        : `Deal docs: no deals checked yet`);
+      if (dc.checked > 0) {
+        const sar = `SAR ${(Number(dc.at_risk_sar) || 0).toLocaleString()}`;
+        parts.push(`Deal docs: ${escHtml(dc.compliant || 0)}/${escHtml(dc.checked)} compliant (${dc.compliant_rate == null ? "&mdash;" : escHtml(dc.compliant_rate) + "%"}) · At-risk: ${escHtml(sar)}`);
+        if (Array.isArray(dc.by_stage) && dc.by_stage.length) {
+          const st = dc.by_stage.map((x: any) => `${escHtml(x.stage)}: ${escHtml(x.missing)} missing`).join(" · ");
+          parts.push(`By stage — ${st}`);
+        }
+        if (Array.isArray(dc.top_missing_docs) && dc.top_missing_docs.length) {
+          const md = dc.top_missing_docs.slice(0, 3).map((m: any) => `${escHtml(m.label)} (${escHtml(m.count)})`).join(", ");
+          parts.push(`Top missing docs: ${md}`);
+        }
+      } else {
+        parts.push(`Deal docs: no deals checked yet`);
+      }
     }
     compliance = parts.join("<br>") || "&mdash;";
   }

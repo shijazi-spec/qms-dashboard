@@ -395,7 +395,28 @@
         if (c.dealCompliance) {
             var dc = c.dealCompliance;
             if (dc.checked > 0) {
-                out.push('<div class="text-sm">Deal docs: ' + (dc.compliant || 0) + '/' + dc.checked + ' compliant (' + (dc.compliant_rate == null ? '—' : dc.compliant_rate + '%') + ') <span class="rr-sub">of checked deals</span></div>');
+                var fmtSar = function (n) { return 'SAR ' + (Number(n) || 0).toLocaleString(); };
+                out.push('<div class="text-sm">Deal docs: ' + (dc.compliant || 0) + '/' + dc.checked + ' compliant (' + (dc.compliant_rate == null ? '—' : dc.compliant_rate + '%') + ') · At-risk: ' + fmtSar(dc.at_risk_sar) + '</div>');
+                // By stage
+                if (dc.by_stage && dc.by_stage.length) {
+                    out.push('<div class="text-xs text-gray-500 mt-1">By stage</div>');
+                    out.push('<table class="rr-table"><thead><tr><th>Stage</th><th>Checked</th><th>Compliant</th><th>Missing</th></tr></thead><tbody>' +
+                        dc.by_stage.map(function (s) { return '<tr><td>' + escapeHtml(s.stage) + '</td><td>' + s.checked + '</td><td>' + s.compliant + '</td><td>' + s.missing + '</td></tr>'; }).join('') +
+                        '</tbody></table>');
+                }
+                // By owner (top 10)
+                if (dc.by_owner && dc.by_owner.length) {
+                    out.push('<div class="text-xs text-gray-500 mt-1">By owner (top 10)</div>');
+                    out.push('<table class="rr-table"><thead><tr><th>Owner</th><th>Checked</th><th>Compliant</th><th>Missing</th></tr></thead><tbody>' +
+                        dc.by_owner.map(function (o) { return '<tr><td>' + escapeHtml(o.owner) + '</td><td>' + o.checked + '</td><td>' + o.compliant + '</td><td>' + o.missing + '</td></tr>'; }).join('') +
+                        '</tbody></table>');
+                    if (dc.owner_overflow > 0) out.push('<div class="text-xs text-gray-400">and ' + dc.owner_overflow + ' more owners</div>');
+                }
+                // Top missing docs
+                if (dc.top_missing_docs && dc.top_missing_docs.length) {
+                    out.push('<div class="text-xs text-gray-500 mt-1">Top missing documents</div><ul class="text-sm">' +
+                        dc.top_missing_docs.slice(0, 6).map(function (m) { return '<li>' + escapeHtml(m.label) + ' — ' + m.count + '</li>'; }).join('') + '</ul>');
+                }
             } else {
                 out.push('<div class="text-sm rr-sub">Deal docs: no deals checked yet</div>');
             }
