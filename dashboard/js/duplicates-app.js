@@ -2708,7 +2708,7 @@
                         <span id="dup-chev-${gid}" class="text-gray-600 font-mono" aria-hidden="true">▶</span>
                         <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
                         <span class="text-xs text-gray-500">${summary.count} duplicate ${moduleLabel}</span>
-                        <span class="flex flex-wrap gap-1">${chips}</span>
+                        <span class="flex flex-wrap gap-1">${chips}${summary.extraChips || ''}</span>
                         ${aiStateBadge}
                         <span class="ms-auto flex items-center gap-2">${reopenBtn}${verifyBtn}${aiBtn}${dismissBtn}<span class="text-xs text-gray-500">Click to expand</span></span>
                     </div>
@@ -2736,6 +2736,48 @@
             const raw = r && r.raw_data ? r.raw_data : {};
             const layoutName = (raw.Layout && (raw.Layout.name || raw.Layout.display_label)) || r.layout || '-';
             return `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho layout">${escapeHtml(layoutName || '-')}</td>`;
+        }
+
+        // Account PRODUCT (Sarah 2026-08-11) — corporate accounts share the
+        // "Corporate Accounts" layout, so the product (WalaPlus vs WalaOne) is
+        // NOT in the layout: it lives in the account's Zoho multi-select
+        // "Products" field (e.g. ["WalaOne"]). A populated "WalaPlus Products"
+        // sub-field is a secondary WalaPlus signal. Returns 'walaplus' |
+        // 'walaone' | 'both' | null, read entirely client-side from raw_data.
+        function _accountProduct(r) {
+            const raw = r && r.raw_data ? r.raw_data : {};
+            const collect = (v) => {
+                if (v == null) return [];
+                if (Array.isArray(v)) return v.map(x => (x && typeof x === 'object') ? (x.name || x.display_label || '') : x);
+                if (typeof v === 'object') return [v.name || v.display_label || ''];
+                return String(v).split(/[,;|]/);
+            };
+            const vals = collect(raw.Products).concat(collect(raw.Product))
+                .map(s => String(s || '').trim().toLowerCase().replace(/\s+/g, '')).filter(Boolean);
+            const hasWO = vals.some(v => v.includes('walaone'));
+            let hasWP = vals.some(v => v.includes('walaplus'));
+            if (!hasWP) {
+                const wpp = raw['WalaPlus_Products'] != null ? raw['WalaPlus_Products'] : raw['WalaPlus Products'];
+                const wppVals = collect(wpp).map(s => String(s || '').trim()).filter(v => v && v !== '-');
+                if (wppVals.length) hasWP = true;
+            }
+            if (hasWO && hasWP) return 'both';
+            if (hasWO) return 'walaone';
+            if (hasWP) return 'walaplus';
+            return null;
+        }
+        function _accountProductChip(prod) {
+            if (prod === 'walaone') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-800" title="Account product (Zoho Products field): WalaOne">WalaOne</span>';
+            if (prod === 'walaplus') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800" title="Account product (Zoho Products field): WalaPlus">WalaPlus</span>';
+            if (prod === 'both') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800" title="Account product (Zoho Products field): WalaPlus + WalaOne">WalaPlus + WalaOne</span>';
+            return '';
+        }
+        // Accounts-only layout cell: the Zoho layout PLUS the product chip below.
+        function _dupAccountLayoutCell(r) {
+            const raw = r && r.raw_data ? r.raw_data : {};
+            const layoutName = (raw.Layout && (raw.Layout.name || raw.Layout.display_label)) || r.layout || '-';
+            const chip = _accountProductChip(_accountProduct(r));
+            return `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho layout + product"><div>${escapeHtml(layoutName || '-')}</div>${chip ? '<div class="mt-1">' + chip + '</div>' : ''}</td>`;
         }
 
         // 2026-06-09 — Contact-only variant of _dupLayoutCell. Reads the
@@ -3179,6 +3221,13 @@
             groupList.forEach((idxs, gIdx) => {
                 const gid = 'accounts-' + gIdx;
                 const summary = _dupGroupSummary(items, idxs, extractors, keyDefs);
+                // Cross-product flag: this cluster's accounts span more than one
+                // product (e.g. a WalaPlus account + a WalaOne account for the
+                // same company) — exactly the pairs Sarah wants to spot.
+                const _prodSet = new Set(idxs.map(i => _accountProduct(items[i])).filter(Boolean));
+                summary.extraChips = _prodSet.size > 1
+                    ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 border border-amber-300" title="Cross-product cluster — its accounts span more than one product (WalaPlus + WalaOne). You chose to accept these as duplicates.">⚡ cross-product</span>'
+                    : '';
                 const cmeta = (summary.primary && clusterMetaById[summary.primary.cluster_id]) || null;
                 rows += _dupGroupHeaderRow(gid, summary, 8, 'accounts', cmeta);
 
@@ -3213,7 +3262,7 @@
                         : '<td class="px-4 py-3 text-sm text-gray-400">-</td>';
                     const ownerCell = `<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name || '-')}</td>`;
 
-                    rows += `<tr data-dup-group="${gid}" class="hidden bg-white">${identity}${signalCell}${emailCell}${phoneCell}${websiteCell}${_dupLayoutCell(r)}${ownerCell}${_dupCreatedCell(r)}</tr>`;
+                    rows += `<tr data-dup-group="${gid}" class="hidden bg-white">${identity}${signalCell}${emailCell}${phoneCell}${websiteCell}${_dupAccountLayoutCell(r)}${ownerCell}${_dupCreatedCell(r)}</tr>`;
                 });
             });
             tbody.innerHTML = rows || rrEmptyRow(8, { glyph: '✓', title: 'No duplicate accounts on this page', desc: 'Every account has a unique name, email, phone, website, and CRM ID.' });
