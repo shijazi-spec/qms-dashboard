@@ -2757,9 +2757,16 @@
             // The WalaPlus product FAMILY (Sarah 2026-08-12): the "Products" field
             // carries the specific product, and WalaPlus, Wala Offer / WalaOffer
             // and WalaBravo all count as WalaPlus. WalaOne is the only WalaOne
-            // signal. Add any new WalaPlus sub-product token here.
-            const WP_TOKENS = ['walaplus', 'walaoffer', 'walabravo'];
-            const hasWO = vals.some(v => v.includes('walaone'));
+            // signal. Tokens come from env via /api/duplicates/config so a new
+            // WalaPlus sub-product needs NO code change (env
+            // RADAR_WALAPLUS_PRODUCT_TOKENS / RADAR_WALAONE_PRODUCT_TOKENS); the
+            // built-in lists below are the fallback if the config hasn't loaded.
+            const _cfg = window._radarProductConfig || {};
+            const WP_TOKENS = (_cfg.walaplusProductTokens && _cfg.walaplusProductTokens.length)
+                ? _cfg.walaplusProductTokens : ['walaplus', 'walaoffer', 'walabravo'];
+            const WO_TOKENS = (_cfg.walaoneProductTokens && _cfg.walaoneProductTokens.length)
+                ? _cfg.walaoneProductTokens : ['walaone'];
+            const hasWO = vals.some(v => WO_TOKENS.some(t => v.includes(t)));
             let hasWP = vals.some(v => WP_TOKENS.some(t => v.includes(t)));
             if (!hasWP) {
                 // Secondary signal: a populated "WalaPlus Products" sub-field.
@@ -6822,7 +6829,18 @@
             }
         }
         // close on backdrop click
+        // Env-driven client config (product-token lists etc.) fetched once on
+        // load so a new WalaPlus sub-product can be added via env, no code change.
+        // Falls back to the built-in defaults in _accountProduct if unavailable.
+        function _loadRadarConfig() {
+            return fetch('/api/duplicates/config', { credentials: 'same-origin' })
+                .then(r => r.ok ? r.json() : null)
+                .then(d => { if (d && d.success) window._radarProductConfig = d; })
+                .catch(() => {});
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
+            _loadRadarConfig();
             const lm = document.getElementById('listModal');
             if (lm) lm.addEventListener('click', (e) => { if (e.target === lm) closeListModal(); });
 

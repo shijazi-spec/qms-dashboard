@@ -5358,6 +5358,47 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Radar client config (Sarah 2026-08-12) — env-driven values the dashboard
+    // JS needs but can't read directly. Currently the product-token lists that
+    // map a Zoho Account "Products" value to WalaPlus vs WalaOne, so a new
+    // WalaPlus sub-product (WalaOffer / WalaBravo / …) is added via env, no code
+    // change. Tokens are normalized (lowercased, spaces stripped) to match the
+    // client's _accountProduct comparison.
+    path: "/api/duplicates/config",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const norm = (csv: string, dflt: string) =>
+            Array.from(
+              new Set(
+                (csv || dflt)
+                  .split(",")
+                  .map((s) => s.trim().toLowerCase().replace(/\s+/g, ""))
+                  .filter(Boolean),
+              ),
+            );
+          return c.json({
+            success: true,
+            walaplusProductTokens: norm(
+              process.env.RADAR_WALAPLUS_PRODUCT_TOKENS || "",
+              "walaplus,walaoffer,walabravo",
+            ),
+            walaoneProductTokens: norm(
+              process.env.RADAR_WALAONE_PRODUCT_TOKENS || "",
+              "walaone",
+            ),
+          });
+        } catch (e: any) {
+          logger.error("duplicates/config failed", e);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // OWNER OFFBOARDING — read: a (resigned) owner's OPEN-pipeline deals grouped
     // by Stage (Sarah 2026-07-30). GET ?owner=<exact owner_name>.
     path: "/api/duplicates/owner-deals",
