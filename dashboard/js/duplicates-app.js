@@ -2754,9 +2754,15 @@
             };
             const vals = collect(raw.Products).concat(collect(raw.Product))
                 .map(s => String(s || '').trim().toLowerCase().replace(/\s+/g, '')).filter(Boolean);
+            // The WalaPlus product FAMILY (Sarah 2026-08-12): the "Products" field
+            // carries the specific product, and WalaPlus, Wala Offer / WalaOffer
+            // and WalaBravo all count as WalaPlus. WalaOne is the only WalaOne
+            // signal. Add any new WalaPlus sub-product token here.
+            const WP_TOKENS = ['walaplus', 'walaoffer', 'walabravo'];
             const hasWO = vals.some(v => v.includes('walaone'));
-            let hasWP = vals.some(v => v.includes('walaplus'));
+            let hasWP = vals.some(v => WP_TOKENS.some(t => v.includes(t)));
             if (!hasWP) {
+                // Secondary signal: a populated "WalaPlus Products" sub-field.
                 const wpp = raw['WalaPlus_Products'] != null ? raw['WalaPlus_Products'] : raw['WalaPlus Products'];
                 const wppVals = collect(wpp).map(s => String(s || '').trim()).filter(v => v && v !== '-');
                 if (wppVals.length) hasWP = true;
