@@ -1316,6 +1316,50 @@ const NORTH_STAR_DEFS: Array<{
  * Compute all feed KPIs. KPIs that error or have no data are returned under
  * `unavailable` instead of `kpis`, so callers can omit them from the push.
  */
+/**
+ * The 5 GRQ North-Star KPIs leadership tracks. For THESE we mirror the /kpis
+ * dashboard exactly — send the same stored KPI-engine value (kpi_values) the
+ * dashboard shows — instead of the feed's own independent recompute, so leadership
+ * never drifts from what the Quality/GRC managers see in QMS (Ahmad 2026-08-16).
+ * Every other feed KPI keeps its live calc.
+ */
+const MIRROR_DASHBOARD_CODES = new Set<string>([
+  "QM-KPI-002", // Audit Execution Rate
+  "QM-KPI-015", // BU Framework Readiness Rate
+  "QM-KPI-008", // BU Pilot Validation Completion Rate
+  "GRC-KPI-002", // Certification Milestones On Track
+  "GRC-KPI-008", // Compliance Coverage Index
+]);
+
+/**
+ * Read the exact value the /kpis dashboard shows for a code: the recorded
+ * kpi_values.actual_value for the CURRENT quarter (identical to the dashboard's
+ * quarter card via getLatestKPIValueForQuarter), falling back to the latest
+ * recorded value if this quarter has no entry yet. dataAvailable:false (→ omitted,
+ * leadership keeps its prior value) when nothing is recorded at all.
+ */
+async function dashboardValueForCode(
+  code: string,
+  now: Date,
+): Promise<{ value: number; dataAvailable: boolean; reason?: string; details?: any }> {
+  const { getKPIByCode, getLatestKPIValueForQuarter, getLatestKPIValue } =
+    await import("./kpiDatabase");
+  const def = await getKPIByCode(code);
+  if (!def?.id) return { value: 0, dataAvailable: false, reason: "kpi_not_defined_in_qms" };
+  const year = now.getUTCFullYear();
+  const quarter = Math.floor(now.getUTCMonth() / 3) + 1;
+  let lv = await getLatestKPIValueForQuarter(def.id, year, quarter);
+  if (!lv) lv = await getLatestKPIValue(def.id);
+  if (!lv || lv.actual_value == null) {
+    return { value: 0, dataAvailable: false, reason: "no_value_recorded_in_qms" };
+  }
+  return {
+    value: Number(lv.actual_value),
+    dataAvailable: true,
+    details: { source: "kpi_values (mirrors /kpis)", period_end: lv.period_end },
+  };
+}
+
 export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
   const now = new Date();
   const asOf = now.toISOString();
@@ -1349,7 +1393,11 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
 
   for (const cfg of FEED_KPIS) {
     try {
-      const { value, dataAvailable, details, reason } = await cfg.calc();
+      // The 5 GRQ North-Star KPIs mirror the /kpis dashboard value exactly; the
+      // rest keep their live recompute.
+      const { value, dataAvailable, details, reason } = MIRROR_DASHBOARD_CODES.has(cfg.code)
+        ? await dashboardValueForCode(cfg.code, now)
+        : await cfg.calc();
       if (!dataAvailable) {
         unavailable.push({
           code: cfg.code,
