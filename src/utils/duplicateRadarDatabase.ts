@@ -189,10 +189,72 @@ export interface DuplicateFilters {
  * "corporate" is the complement, defaulting NULL/empty to corporate so
  *   legacy records without an explicit layout aren't lost to the filter.
  */
+/**
+ * FAST SEGMENT PATH (opt-in via DUPLICATE_RADAR_FAST_SEGMENT=true).
+ *
+ * The classification below is per-row and expensive: LOWER + regexp_replace +
+ * three leading-wildcard LIKEs on every row of duplicate_records, for a
+ * predicate used by ~36 call sites across every radar tab. No index can help —
+ * the walaplus branch is a NEGATED leading-wildcard LIKE matching the majority
+ * of the table, so a sequential scan is the correct plan and always will be.
+ * The cost isn't lookup, it's recomputing the same regex per row.
+ *
+ * But `layout_name` only ever holds a handful of DISTINCT values. So we
+ * classify those distinct values once (using classifySegmentFromLayout, the
+ * exact JS mirror of the SQL below) and reduce the per-row test to an array
+ * membership check against a short list.
+ *
+ * CORRECTNESS RULE — the cache is an optimization, never a source of truth.
+ * The emitted predicate keeps the original expression as a live fallback for
+ * any row whose layout is blank OR is not in the cached set. So a stale cache
+ * (a layout added since the last refresh) makes those rows SLOWER, never
+ * misclassified. That property is what makes this safe to run against numbers
+ * that drive KPIs; verify it with scripts/checkSegmentPredicateParity.ts.
+ */
+const FAST_SEGMENT_ENABLED = process.env.DUPLICATE_RADAR_FAST_SEGMENT === "true";
+const LAYOUT_CACHE_TTL_MS = 10 * 60 * 1000;
+
+type LayoutSegmentCache = {
+  at: number;
+  all: string[];
+  bySegment: Record<"marketplace" | "walaone" | "walaplus", string[]>;
+};
+let layoutCache: LayoutSegmentCache | null = null;
+let layoutCacheInFlight: Promise<LayoutSegmentCache> | null = null;
+
+/** Reads the distinct layout values and classifies them. Cheap: served by idx_duplicate_records_layout. */
+export async function refreshLayoutSegmentCache(): Promise<LayoutSegmentCache> {
+  if (layoutCacheInFlight) return layoutCacheInFlight;
+  layoutCacheInFlight = (async () => {
+    const r = await pool.query(
+      `SELECT DISTINCT layout_name FROM duplicate_records
+        WHERE layout_name IS NOT NULL AND layout_name <> ''`,
+    );
+    const bySegment: LayoutSegmentCache["bySegment"] = {
+      marketplace: [], walaone: [], walaplus: [],
+    };
+    const all: string[] = [];
+    for (const row of r.rows) {
+      const name = String(row.layout_name);
+      all.push(name);
+      bySegment[classifySegmentFromLayout(name)].push(name);
+    }
+    layoutCache = { at: Date.now(), all, bySegment };
+    return layoutCache;
+  })().finally(() => { layoutCacheInFlight = null; });
+  return layoutCacheInFlight;
+}
+
+function freshLayoutCache(): LayoutSegmentCache | null {
+  if (!layoutCache) return null;
+  if (Date.now() - layoutCache.at > LAYOUT_CACHE_TTL_MS) return null;
+  return layoutCache;
+}
+
 export function buildSegmentPredicate(
   segment: DuplicateFilters["segment"],
   paramOffset: number,
-): { condition: string | null; params: string[]; needsRecordJoin: boolean } {
+): { condition: string | null; params: any[]; needsRecordJoin: boolean } {
   if (!segment || segment === "all") {
     return { condition: null, params: [], needsRecordJoin: false };
   }
@@ -216,29 +278,63 @@ export function buildSegmentPredicate(
   const NORM = `regexp_replace(${LAYOUT}, '[^a-z0-9]', '', 'g')`;
   const mktMatch = (offset: number) =>
     markers.map((_, i) => `${NORM} LIKE $${offset + i}`).join(" OR ");
-  if (segment === "marketplace") {
+
+  // The original per-row expression, parameterised by where its binds start so
+  // the fast path can shift it after its own two array params.
+  // walaone takes no binds; marketplace/walaplus take the two markers.
+  const buildExact = (offset: number): { condition: string; params: any[] } => {
+    if (segment === "marketplace") {
+      return { condition: `(${mktMatch(offset)})`, params: [...markers] };
+    }
+    if (segment === "walaone") {
+      // WalaOne product — layout CONTAINS "walaone" (substring, so "WalaOne",
+      // "Wala One", "WalaOne Corporate" all match). No bind params (literal).
+      return { condition: `${NORM} LIKE '%walaone%'`, params: [] };
+    }
+    // "walaplus" (renamed "corporate") + legacy "corporate" = NOT marketplace
+    // AND NOT WalaOne. NULL/empty layout defaults here so legacy records
+    // aren't lost.
     return {
-      condition: `(${mktMatch(paramOffset)})`,
-      params: markers,
-      needsRecordJoin: true,
+      condition: `NOT (${mktMatch(offset)}) AND ${NORM} NOT LIKE '%walaone%'`,
+      params: [...markers],
     };
-  }
-  if (segment === "walaone") {
-    // WalaOne product — layout CONTAINS "walaone" (substring, so "WalaOne",
-    // "Wala One", "WalaOne Corporate" all match). No bind params (literal).
-    return {
-      condition: `${NORM} LIKE '%walaone%'`,
-      params: [],
-      needsRecordJoin: true,
-    };
-  }
-  // "walaplus" (renamed "corporate") + legacy "corporate" = NOT marketplace AND
-  // NOT WalaOne. NULL/empty layout defaults here so legacy records aren't lost.
-  return {
-    condition: `NOT (${mktMatch(paramOffset)}) AND ${NORM} NOT LIKE '%walaone%'`,
-    params: markers,
-    needsRecordJoin: true,
   };
+
+  const target: "marketplace" | "walaone" | "walaplus" =
+    segment === "marketplace" ? "marketplace"
+      : segment === "walaone" ? "walaone"
+        : "walaplus";
+
+  const cache = FAST_SEGMENT_ENABLED ? freshLayoutCache() : null;
+  if (cache && cache.all.length > 0) {
+    // Row is in this segment if its layout is a KNOWN layout of this segment,
+    // OR its layout is blank/unknown and the original expression says so. The
+    // second branch is what keeps a stale cache slow-but-correct rather than
+    // wrong — never simplify it away.
+    const exact = buildExact(paramOffset + 2);
+    return {
+      condition:
+        `(r.layout_name = ANY($${paramOffset}::text[])` +
+        ` OR ((r.layout_name IS NULL OR r.layout_name = ''` +
+        ` OR NOT (r.layout_name = ANY($${paramOffset + 1}::text[])))` +
+        ` AND (${exact.condition})))`,
+      params: [cache.bySegment[target], cache.all, ...exact.params],
+      needsRecordJoin: true,
+    };
+  }
+
+  // Cold or stale cache: emit the original predicate (always correct) and warm
+  // the cache in the background so the NEXT query gets the fast path. Never
+  // awaited — this function is sync and called from 36 SQL-building sites.
+  if (FAST_SEGMENT_ENABLED) {
+    void refreshLayoutSegmentCache().catch((e) => {
+      logger.warn("[DuplicateRadar] layout segment cache refresh failed", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    });
+  }
+  const exact = buildExact(paramOffset);
+  return { condition: exact.condition, params: exact.params, needsRecordJoin: true };
 }
 
 /**
