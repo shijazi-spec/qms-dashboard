@@ -49,6 +49,14 @@
     // the Add KPI action, and it is not part of the sections payload.
     var qrCurrentBUKey = null;
 
+    // Populated by qrCheckAdminAccess (fetched from /api/auth/me, async —
+    // starts null and stays null if the fetch fails or hasn't resolved yet).
+    // qrKpisHtml reads it to decide whether to render "+ Add KPI". This is a
+    // UI affordance only: the server re-checks WRITE_ROLES on every call, so
+    // a stale/late role here just means the button is briefly absent, never
+    // a security gap.
+    var qrUserRole = null;
+
     // Mirrors WRITE_ROLES in qualityReportsRoutes.ts — the server is the
     // real gate (every write endpoint calls requireRole independently);
     // this list only decides whether the admin toggle button is shown.
@@ -112,10 +120,11 @@
             .then(function (r) { return r.ok ? r.json() : { authenticated: false }; })
             .then(function (data) {
                 var role = (data && data.authenticated && data.user && data.user.role) || null;
+                qrUserRole = role;
                 var btn = document.getElementById('qrAdminToggle');
                 if (btn && role && ADMIN_ROLES.indexOf(role) !== -1) btn.classList.remove('hidden');
             })
-            .catch(function () { /* fail closed — leave the toggle hidden */ });
+            .catch(function () { /* fail closed — leave the toggle hidden, qrUserRole stays null */ });
     }
 
     window.qrToggleAdmin = function () {
@@ -502,7 +511,9 @@
         // create them. Owner is set server-side from the BU mapping. Renders
         // whenever the BU has a KPI owner, whether or not it has KPIs yet —
         // a BU with none is exactly the case where adding one matters most.
-        if (k && k.owner) {
+        // Role-gated so a read-only user doesn't fill in the whole modal
+        // before hitting a 403 — the server remains the real gate.
+        if (k && k.owner && qrUserRole && ADMIN_ROLES.indexOf(qrUserRole) !== -1) {
             out.push('<div class="mb-2"><button type="button" class="rr-btn rr-btn-ghost" data-on-click="qrAddKpi" data-args="' +
                 escAttr(JSON.stringify([qrCurrentBUKey, k.owner])) + '">+ Add KPI</button></div>');
         }

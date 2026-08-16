@@ -136,12 +136,21 @@ export async function seedFinalGrqKpis(): Promise<void> {
 
   // Deactivate older GRQ KPIs not in the final list (old QM/GRC/MAM/SHR codes,
   // the previous composites, etc.). Only the 5 GRQ owner groups — never SDR/Sales.
+  // Department-owned KPIs are exempt by owner_name (not just owner_type): a new
+  // BU's first KPI is created with owner_type='shared' (see
+  // getOwnerTypeForOwnerName's fallback in kpiDatabase.ts) before it has any
+  // rows of its own, so owner_type alone can't distinguish it from a real GRQ
+  // "shared" KPI. Excluding by owner_name covers every current and future
+  // department, not just SDR/Sales.
+  const { getDepartmentKpiOwnerNames } = await import("./qualityReportsDepartments");
+  const deptOwnerNames = await getDepartmentKpiOwnerNames();
   const res = await pool.query(
     `UPDATE kpi_definitions SET is_active = false, updated_at = NOW()
       WHERE owner_type IN ('quality_manager','grc_manager','grq_specialist','legal_specialist','shared','governance_officer')
         AND kpi_code <> ALL($1::text[])
+        AND (owner_name IS NULL OR owner_name <> ALL($2::text[]))
         AND is_active = true`,
-    [FINAL_CODES],
+    [FINAL_CODES, deptOwnerNames],
   );
   logger.info(
     `📋 [KPIDB] Seeded ${FINAL_KPIS.length} final GRQ KPIs; deactivated ${res.rowCount ?? 0} superseded.`,

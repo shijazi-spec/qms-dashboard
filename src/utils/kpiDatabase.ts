@@ -1726,8 +1726,12 @@ export async function getKPIsByOwnerName(
  *
  * Falls back to 'shared' for a team with no KPIs yet: owner_type is
  * CHECK-constrained (kpiDatabase.ts:221-223) so a derived string like
- * "cs_team" would be rejected by Postgres. Harmless either way -- visibility
- * is decided by the BU registry, never by owner_type.
+ * "cs_team" would be rejected by Postgres. This fallback is safe ONLY
+ * because the GRQ final-seed sweep (finalGrqKpiSeed.ts) exempts
+ * department-owned rows by owner_name, not just owner_type -- otherwise a
+ * brand-new department's first KPI (owner_type='shared') would be caught by
+ * that sweep's owner_type IN (...,'shared',...) clause and deactivated on
+ * the next boot. See finalGrqKpiSeed.ts's seedFinalGrqKpis for the exemption.
  */
 export async function getOwnerTypeForOwnerName(
   ownerName: string,

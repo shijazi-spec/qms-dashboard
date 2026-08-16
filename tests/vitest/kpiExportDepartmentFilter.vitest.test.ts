@@ -116,4 +116,38 @@ describe("KPI export department exclusion", () => {
     expect(valueCount).toBeTruthy();
     expect(valueCount).toMatch(/JOIN\s+kpi_definitions/i);
   });
+
+  // The empty owner set is the highest-consequence case: getting it wrong
+  // (e.g. a "skip the WHERE clause when there's nothing to exclude" special
+  // case) would empty the entire KPI Engine export, not just leak/hide a
+  // department's rows. Every other suite covers the empty set for its own
+  // code path; the exports didn't, so cover it here too.
+  describe("with an empty department owner set", () => {
+    beforeEach(() => {
+      deptOwners.mockReset().mockResolvedValue([]);
+    });
+
+    it("CSV export still carries the <> ALL clause and binds an empty array", async () => {
+      await run("/api/kpis/export");
+      const defReads = cursorCalls.filter((c) => /kpi_definitions/i.test(c.sql));
+      expect(defReads.length).toBeGreaterThan(0);
+      for (const c of defReads) {
+        assertExcluded(c.sql, c.params);
+        expect(c.params.some((p) => Array.isArray(p) && p.length === 0)).toBe(true);
+      }
+    });
+
+    it("XLSX export still carries the <> ALL clause in every kpi_definitions statement", async () => {
+      await run("/api/kpis/export-xlsx");
+      const direct = poolQuery.mock.calls
+        .map((c) => ({ sql: String(c[0]), params: (c[1] ?? []) as any[] }))
+        .filter((c) => /kpi_definitions/i.test(c.sql));
+      const viaCursor = cursorCalls.filter((c) => /kpi_definitions/i.test(c.sql));
+      expect(direct.length + viaCursor.length).toBe(5);
+      for (const c of [...direct, ...viaCursor]) {
+        assertExcluded(c.sql, c.params);
+        expect(c.params.some((p) => Array.isArray(p) && p.length === 0)).toBe(true);
+      }
+    });
+  });
 });

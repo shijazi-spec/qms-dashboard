@@ -1003,6 +1003,13 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "grc_manager", "head_of_operations_quality", "quality_manager"],
   },
   {
+    // Create a department KPI for this BU — write-restricted like /owners
+    // and /email above. Matches WRITE_ROLES in qualityReportsRoutes.ts.
+    pattern: /^\/api\/quality-reports\/bus\/[^/]+\/kpis$/,
+    methods: ["POST"],
+    roles: ["admin", "grc_manager", "head_of_operations_quality", "quality_manager"],
+  },
+  {
     // Call-intelligence CRM-link audit/repair — admin-only (handler also
     // enforces verifyAdminKey as defense-in-depth).
     pattern: /^\/api\/calls\/audit-crm-links$/,

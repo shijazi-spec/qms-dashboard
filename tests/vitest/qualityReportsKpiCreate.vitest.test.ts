@@ -71,7 +71,7 @@ beforeEach(() => {
 
 describe("POST /api/quality-reports/bus/:buKey/kpis", () => {
   it("sets owner_name from the BU, never from the body", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team" });
+    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team", is_active: true });
     await post("sdr_b2b", { ...VALID, owner_name: "Sarah", owner_type: "quality_manager" });
     const arg = createKPIDefinition.mock.calls[0][0];
     expect(arg.owner_name).toBe("SDR Team");
@@ -85,25 +85,32 @@ describe("POST /api/quality-reports/bus/:buKey/kpis", () => {
   });
 
   it("400s when the BU has no KPI owner mapped", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2c", kpi_owner_name: null });
+    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2c", kpi_owner_name: null, is_active: true });
     const res: any = await post("sdr_b2c", VALID);
     expect(res.status).toBe(400);
     expect(createKPIDefinition).not.toHaveBeenCalled();
   });
 
   it("400s when a required field is missing", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team" });
+    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team", is_active: true });
     const res: any = await post("sdr_b2b", { ...VALID, kpi_code: "" });
     expect(res.status).toBe(400);
     expect(createKPIDefinition).not.toHaveBeenCalled();
   });
 
   it("409s on a duplicate kpi_code", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team" });
+    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team", is_active: true });
     createKPIDefinition.mockRejectedValue(
       Object.assign(new Error("dup"), { code: "23505" }),
     );
     const res: any = await post("sdr_b2b", VALID);
     expect(res.status).toBe(409);
+  });
+
+  it("400s when the BU is inactive, even with a KPI owner mapped", async () => {
+    getBUByKey.mockResolvedValue({ bu_key: "cs_team_old", kpi_owner_name: "CS Team", is_active: false });
+    const res: any = await post("cs_team_old", VALID);
+    expect(res.status).toBe(400);
+    expect(createKPIDefinition).not.toHaveBeenCalled();
   });
 });

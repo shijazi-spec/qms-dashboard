@@ -162,6 +162,18 @@ export const qualityReportsRoutes = [
               400,
             );
           }
+          // getBUByKey deliberately ignores is_active (other callers rely on
+          // that), but getDepartmentKpiOwnerNames only returns owners for
+          // ACTIVE BUs. A KPI created for an inactive BU would therefore land
+          // with an owner_name that isn't in the department-exempt set, so it
+          // would surface in the GRQ KPI Engine instead of staying on this
+          // BU's page -- reject it here instead.
+          if (!bu.is_active) {
+            return c.json(
+              { error: "This business unit is inactive and cannot accept new KPIs." },
+              400,
+            );
+          }
           const b = await c.req.json().catch(() => ({}));
           const str = (v: any) => (typeof v === "string" ? v.trim() : "");
           const kpi_name = str(b?.kpi_name);
