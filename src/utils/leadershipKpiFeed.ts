@@ -694,6 +694,29 @@ async function calcVendorFindingsClosure() {
   return { value: Math.round((closed / total) * 1000) / 10, dataAvailable: true, details: { total_findings: total, closed_findings: closed } };
 }
 
+/**
+ * GRC-KPI-002 for the LEADERSHIP platform = the raw COUNT of certifications
+ * achieved ON TIME this quarter — leadership tracks Certification Milestones as an
+ * integer count with per-quarter targets (e.g. Q3 = 2), NOT a percentage. QMS's
+ * /kpis card still shows the %; only the leadership feed sends the count. Source:
+ * calcCertMilestoneDelivery's `achieved_on_time`. Omits (leadership keeps its prior
+ * value) when no certifications are due this quarter.
+ */
+async function calcCertMilestoneCount() {
+  const r: any = await calcCertMilestoneDelivery();
+  if (!r?.dataAvailable) return r;
+  const count = Number(r?.details?.achieved_on_time ?? 0);
+  return {
+    value: count,
+    dataAvailable: true,
+    details: {
+      ...r.details,
+      unit_note:
+        "count of certifications achieved on time this quarter (leadership tracks a count, not %)",
+    },
+  };
+}
+
 const FEED_KPIS: FeedKpiConfig[] = [
   {
     code: "QM-KPI-002",
@@ -811,13 +834,13 @@ const FEED_KPIS: FeedKpiConfig[] = [
   },
   {
     code: "GRC-KPI-002",
-    name: "Certification Milestone Delivery Rate",
-    unit: "%",
-    target: 100,
-    green: 100,
-    amber: 85,
+    name: "Certification Milestones On Track",
+    unit: "count", // leadership tracks a COUNT of certificates, not a %
+    target: 2,
+    green: 2,
+    amber: 1,
     direction: "higher_is_better",
-    calc: calcCertMilestoneDelivery,
+    calc: calcCertMilestoneCount,
   },
   {
     code: "GRC-KPI-004",
@@ -1331,8 +1354,9 @@ const NORTH_STAR_DEFS: Array<{
  */
 const MIRROR_DASHBOARD_CODES = new Set<string>([
   "QM-KPI-002", // Audit Execution Rate (auto)
-  "GRC-KPI-002", // Certification Milestones On Track (auto)
   "GRC-KPI-008", // Compliance Coverage Index (auto)
+  // GRC-KPI-002 (Certification) is NOT mirrored: leadership tracks a COUNT of
+  // certificates, not the /kpis %. It uses calcCertMilestoneCount above.
 ]);
 
 /**
