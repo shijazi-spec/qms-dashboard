@@ -27,10 +27,26 @@ export interface QualityReportBUSeed {
    *  kpiChecklistDatabase.ts). Backfilled onto existing rows ONLY where the
    *  admin hasn't set kpi_bu_name, so it never overrides a manual mapping. */
   kpi_bu_name: string;
+  /**
+   * Mapping to a KPI CATALOG owner (`kpi_definitions.owner_name`, e.g.
+   * "SDR Team" / "Sales Team") — the performance KPIs shown on /kpis, most of
+   * which are auto-calculated from CRM by kpiProcessCalc.ts.
+   *
+   * Deliberately NOT derived from `fn`. KPI owners are team-level
+   * ("SDR Team") while BUs are team x segment (SDR B2B, SDR B2C), and per
+   * Sarah 2026-08-16 the SDR KPIs belong to **SDR B2B only** — B2C must not
+   * inherit them just because it shares fn="sdr". Null = no catalog KPIs
+   * mapped, and the section renders "not mapped" rather than a misleading 0.
+   */
+  kpi_owner_name?: string | null;
 }
 
 export const SEED_BUS: QualityReportBUSeed[] = [
-  { bu_key: "sdr_b2b", bu_name: "SDR (B2B)", channel: "B2B", fn: "sdr", sort_order: 1, kpi_bu_name: "SDR" },
+  // SDR B2B is the ONLY BU seeded with a catalog-KPI owner: per Sarah
+  // 2026-08-16 the SDR-KPI-01..06 set measures SDR B2B, not B2C. Other BUs
+  // are left null on purpose — map them from Admin: BU mappings when their
+  // KPI ownership is confirmed (Sales Team KPIs already exist in the catalog).
+  { bu_key: "sdr_b2b", bu_name: "SDR (B2B)", channel: "B2B", fn: "sdr", sort_order: 1, kpi_bu_name: "SDR", kpi_owner_name: "SDR Team" },
   { bu_key: "sales_b2b", bu_name: "Sales (B2B)", channel: "B2B", fn: "sales", sort_order: 2, kpi_bu_name: "Sales B2B" },
   { bu_key: "cs_b2b", bu_name: "Customer Success (B2B)", channel: "B2B", fn: "cs", sort_order: 3, kpi_bu_name: "Customer Success" },
   { bu_key: "sdr_b2c", bu_name: "SDR (B2C)", channel: "B2C", fn: "sdr", sort_order: 4, kpi_bu_name: "SDR" },
@@ -56,12 +72,22 @@ export async function ensureQualityReportTables(): Promise<void> {
       head_email        VARCHAR(200),
       policy_department VARCHAR(100),
       kpi_bu_name       VARCHAR(80),
+      kpi_owner_name    VARCHAR(100),
       sort_order        INTEGER NOT NULL DEFAULT 0,
       is_active         BOOLEAN NOT NULL DEFAULT TRUE,
       created_at        TIMESTAMP DEFAULT NOW(),
       updated_at        TIMESTAMP DEFAULT NOW()
     )
   `);
+  // Existing deployments already have the table, so CREATE TABLE IF NOT
+  // EXISTS above is a no-op for them — the column has to be added
+  // separately. Kept in lockstep with the canonical CREATE TABLE per the
+  // strict schema-parity rule (check:schema-parity fails on drift, and a
+  // column missing from the canonical source is what makes Replit's
+  // deploy-time schema diff propose DROPping it).
+  await pool.query(
+    `ALTER TABLE quality_report_bus ADD COLUMN IF NOT EXISTS kpi_owner_name VARCHAR(100)`,
+  );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS quality_report_bu_owners (
       id          SERIAL PRIMARY KEY,
@@ -86,6 +112,16 @@ export async function ensureQualityReportTables(): Promise<void> {
         WHERE bu_key = $1 AND kpi_bu_name IS NULL`,
       [b.bu_key, b.kpi_bu_name],
     );
+    // Same never-clobber rule for the catalog-KPI owner. Only BUs that carry
+    // a seed value are touched (today: sdr_b2b -> "SDR Team"), so an admin
+    // who clears or re-points a mapping keeps their choice across restarts.
+    if (b.kpi_owner_name) {
+      await pool.query(
+        `UPDATE quality_report_bus SET kpi_owner_name = $2, updated_at = NOW()
+          WHERE bu_key = $1 AND kpi_owner_name IS NULL`,
+        [b.bu_key, b.kpi_owner_name],
+      );
+    }
   }
   tablesReady = true;
   logger.info("[QualityReports] tables ensured + seeded");
@@ -94,7 +130,8 @@ export async function ensureQualityReportTables(): Promise<void> {
 export interface QualityReportBU {
   id: number; bu_key: string; bu_name: string; channel: Channel; segment: Segment;
   fn: string; head_email: string | null; policy_department: string | null;
-  kpi_bu_name: string | null; sort_order: number; is_active: boolean; owners: string[];
+  kpi_bu_name: string | null; kpi_owner_name: string | null;
+  sort_order: number; is_active: boolean; owners: string[];
 }
 
 async function ownersFor(buIds: number[]): Promise<Map<number, string[]>> {
@@ -117,6 +154,7 @@ function rowToBU(row: any, owners: string[]): QualityReportBU {
     id: row.id, bu_key: row.bu_key, bu_name: row.bu_name, channel: row.channel,
     segment: row.segment, fn: row.fn, head_email: row.head_email ?? null,
     policy_department: row.policy_department ?? null, kpi_bu_name: row.kpi_bu_name ?? null,
+    kpi_owner_name: row.kpi_owner_name ?? null,
     sort_order: Number(row.sort_order) || 0, is_active: row.is_active !== false, owners,
   };
 }
@@ -139,22 +177,25 @@ export async function getBUByKey(buKey: string): Promise<QualityReportBU | null>
 export async function upsertBU(input: {
   bu_key: string; bu_name: string; channel: Channel; fn: string;
   head_email?: string | null; policy_department?: string | null;
-  kpi_bu_name?: string | null; sort_order?: number; is_active?: boolean;
+  kpi_bu_name?: string | null; kpi_owner_name?: string | null;
+  sort_order?: number; is_active?: boolean;
 }): Promise<QualityReportBU> {
   await ensureQualityReportTables();
   const segment = channelToSegment(input.channel); // ALWAYS derived
   const r = await pool.query(
     `INSERT INTO quality_report_bus
-       (bu_key, bu_name, channel, segment, fn, head_email, policy_department, kpi_bu_name, sort_order, is_active, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,true),NOW())
+       (bu_key, bu_name, channel, segment, fn, head_email, policy_department, kpi_bu_name, kpi_owner_name, sort_order, is_active, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11,true),NOW())
      ON CONFLICT (bu_key) DO UPDATE SET
        bu_name=EXCLUDED.bu_name, channel=EXCLUDED.channel, segment=EXCLUDED.segment,
        fn=EXCLUDED.fn, head_email=EXCLUDED.head_email, policy_department=EXCLUDED.policy_department,
-       kpi_bu_name=EXCLUDED.kpi_bu_name, sort_order=EXCLUDED.sort_order,
+       kpi_bu_name=EXCLUDED.kpi_bu_name, kpi_owner_name=EXCLUDED.kpi_owner_name,
+       sort_order=EXCLUDED.sort_order,
        is_active=EXCLUDED.is_active, updated_at=NOW()
      RETURNING *`,
     [input.bu_key, input.bu_name, input.channel, segment, input.fn,
      input.head_email ?? null, input.policy_department ?? null, input.kpi_bu_name ?? null,
+     input.kpi_owner_name ?? null,
      input.sort_order ?? 0, input.is_active ?? true],
   );
   const owners = await ownersFor([r.rows[0].id]);
