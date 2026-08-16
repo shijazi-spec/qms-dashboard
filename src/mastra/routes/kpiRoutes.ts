@@ -135,6 +135,27 @@ export const kpiRoutes = [
           } else {
             kpis = await getAllKPIDefinitions();
           }
+          // Department KPIs (SDR Team / Sales Team) are managed on their
+          // Quality Reports BU page and must not appear in the GRQ engine.
+          //
+          // Filtered HERE, at the presentation layer. NEVER inside
+          // getAllKPIDefinitions() -- that function also feeds
+          // scheduledJobs.ts and the Inngest runner, and filtering there
+          // would stop the auto KPIs recording values, silently freezing the
+          // BU page at "--" with nothing appearing broken.
+          //
+          // Runs BEFORE the value-attachment Promise.all below so excluded
+          // rows cost no per-KPI value lookups.
+          const { getDepartmentKpiOwnerNames } = await import(
+            "../../utils/qualityReportsDepartments"
+          );
+          const deptOwnerNames = await getDepartmentKpiOwnerNames();
+          if (deptOwnerNames.length) {
+            const deptSet = new Set(deptOwnerNames);
+            kpis = (kpis as any[]).filter(
+              (k) => !k.owner_name || !deptSet.has(String(k.owner_name)),
+            );
+          }
           // Attach the recorded value to each KPI so owner-filtered cards show real
           // numbers + RAG status (parity with /api/kpis/summary). latestValue = the
           // numeric actual_value; status is separate. Quarter-scoped when ?quarter set.
