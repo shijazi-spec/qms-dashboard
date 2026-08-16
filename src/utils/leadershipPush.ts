@@ -13,23 +13,26 @@
 import { logger } from "./logger";
 
 /**
- * QMS KPI code → Leadership Platform strategyItem UUID.
+ * QMS KPI code → Leadership Platform strategyItem UUID (PRODUCTION database).
  *
- * VERIFIED 2026-08-09 against the live leadership DB (prisma strategyItem.findMany).
- * The earlier spec-doc UUIDs were ALL wrong and were replaced with the real ids.
+ * IMPORTANT dev/prod split: the leadership Replit WORKSPACE Shell and the DEPLOYED
+ * app use DIFFERENT databases. A prisma query in the workspace Shell returns the
+ * DEV ids (e7de0477…), but the deployed webhook the push hits runs on PROD, whose
+ * ids are the ones below — proven empirically: pushing with these returned "3 ok",
+ * while the dev ids 404'd. So verify UUIDs against PROD (the deployed board), never
+ * the workspace Shell.
  *
  * Only KPIs that exist as native leadership `strategyItem` records can be pushed —
  * the inbound webhook does `strategyItem.findUnique({ where: { id } })` and 404s
  * otherwise. QM-KPI-015 (BU Framework Readiness) and QM-KPI-008 (BU Pilot
- * Validation) are intentionally OMITTED: they are not native leadership records —
- * they surface on the board via the QMS pull feed, so the webhook cannot update
- * them. Refresh those two by re-running the leadership pull, not by pushing.
- * Override/extend via the LEADERSHIP_KPI_MAP env JSON if leadership adds records.
+ * Validation) are intentionally OMITTED: they are not native prod records — they
+ * surface on the board via the QMS pull feed. Add them here (with PROD ids) once
+ * leadership creates native records. Override via the LEADERSHIP_KPI_MAP env JSON.
  */
 const DEFAULT_MAP: Record<string, string> = {
-  "QM-KPI-002": "e7de0477-cf45-4e83-a80e-dda95ccf09af", // Audit Execution Rate
-  "GRC-KPI-008": "6bd0ea69-01d4-4791-aba2-8405c8cac66d", // Compliance Coverage Index
-  "GRC-KPI-002": "71afbc40-6462-45f8-938f-c4805dee82db", // Certification Milestones On-Track
+  "QM-KPI-002": "c1ee6e62-ca61-4dc3-942d-4f83f208278e", // Audit Execution Rate
+  "GRC-KPI-008": "73b2b61f-52e2-4bb4-88dc-15bfb3c406f1", // Compliance Coverage Index
+  "GRC-KPI-002": "2f11d78d-1363-4546-bd9e-30eac23c3a5e", // Certification Milestones On-Track
 };
 
 function getMap(): Record<string, string> {
