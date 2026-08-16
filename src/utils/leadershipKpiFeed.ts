@@ -10,8 +10,8 @@
  *
  * Scope = the 4 KPIs leadership tracks today:
  *   - QM-KPI-002  Audit Execution Rate                    (Quality Manager)
- *   - QM-KPI-008  BU Coverage Rate                         (Quality Manager)
- *   - QM-KPI-015  QMS Framework Completion                 (Quality Manager)
+ *   - QM-KPI-008  BU Pilot Validation Completion Rate     (Quality Manager)
+ *   - QM-KPI-015  BU Framework Readiness Rate             (Quality Manager)
  *   - GRC-KPI-008 Compliance Coverage Index               (GRC Manager)
  *
  * SAFETY RULE: if a KPI has no underlying data in QMS (its source table is
@@ -707,13 +707,13 @@ const FEED_KPIS: FeedKpiConfig[] = [
   },
   {
     code: "QM-KPI-008",
-    name: "BU Coverage Rate",
+    name: "BU Pilot Validation Completion Rate",
     unit: "%",
     target: 100,
     green: 95,
     amber: 80,
     direction: "higher_is_better",
-    calc: calcBuCoverageRate,
+    calc: calcBuCoverageRate, // NOTE: fn name is legacy; it computes the QM-KPI-008 Pilot Validation checklist rate (see its body).
   },
   {
     code: "GRC-KPI-008",
@@ -727,7 +727,7 @@ const FEED_KPIS: FeedKpiConfig[] = [
   },
   {
     code: "QM-KPI-015",
-    name: "QMS Framework Completion",
+    name: "BU Framework Readiness Rate",
     unit: "%",
     target: 100,
     green: 95,
