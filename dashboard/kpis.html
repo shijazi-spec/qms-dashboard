@@ -69,6 +69,10 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                     Recalculate
                 </button>
+                <button data-on-click="recalcKPIs" data-args="[true]" id="recalcCycleBtn" class="border border-amber-600 text-amber-700 px-3 py-2 rounded text-sm hover:bg-amber-50 flex items-center gap-1" title="Recalculate AND refresh the Sales Proposal/Agreement cycle times (SALES-KPI-03/04). Calls the Zoho API — up to 40 stage-history requests, so it can take minutes. Normally handled by the nightly job; use this when that has not run or is suspected of failing.">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    + Cycle times
+                </button>
                 <button data-on-click="pushToLeadership" id="pushBtn" class="border border-purple-600 text-purple-700 px-3 py-2 rounded text-sm hover:bg-purple-50 flex items-center gap-1" title="Send the current KPI values to the Leadership Platform now (instead of waiting for its scheduled pull)">
                     ⬆ Push to Leadership
                 </button>
@@ -1055,24 +1059,60 @@
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
         }
-        async function recalcKPIs() {
-            const btn = document.getElementById('recalcBtn');
+        // The Sales cycle-time KPIs (SALES-KPI-03 Proposal, SALES-KPI-04
+        // Agreement) are the only step that calls the Zoho API — up to 40
+        // sequential per-deal stage-history requests. They are therefore
+        // EXCLUDED from the plain Recalculate button, which must stay fast, and
+        // normally run only in the nightly job. `withCycleTimes` is the
+        // on-demand path for when the nightly run hasn't happened yet or is
+        // suspected of failing: the endpoint takes ?cycleTimes=1.
+        //
+        // The two runs cannot share a button because the slow one can take
+        // minutes and would make the fast path look hung.
+        async function recalcKPIs(withCycleTimes) {
+            const slow = withCycleTimes === true;
+            const btn = document.getElementById(slow ? 'recalcCycleBtn' : 'recalcBtn');
+            const other = document.getElementById(slow ? 'recalcBtn' : 'recalcCycleBtn');
             const orig = btn ? btn.innerHTML : '';
-            if (btn) { btn.disabled = true; btn.innerHTML = 'Recalculating…'; }
+            // Disable BOTH so the two runs can't overlap — they write the same
+            // kpi_values rows, and the slow one holds a Zoho token.
+            if (btn) { btn.disabled = true; btn.innerHTML = slow ? 'Recalculating + Zoho…' : 'Recalculating…'; }
+            if (other) other.disabled = true;
             try {
-                const res = await fetch('/api/kpis/recalc', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const url = slow ? '/api/kpis/recalc?cycleTimes=1' : '/api/kpis/recalc';
+                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
                 const data = await res.json();
                 if (res.ok) {
                     await loadKPIs();
-                    alert(`Recalculated. Recorded ${data.recorded} live value(s), skipped ${data.skipped} (no data / manual).`);
+                    let msg = `Recalculated. Recorded ${data.recorded} live value(s), skipped ${data.skipped} (no data / manual).`;
+                    if (slow) {
+                        // Report the two KPIs this run exists for by name. Without
+                        // this the operator only sees a total and cannot tell
+                        // whether the Zoho step actually worked — which is the
+                        // whole reason for running it on demand.
+                        const details = Array.isArray(data.details) ? data.details : [];
+                        const cycle = details.filter(d => d && (d.code === 'SALES-KPI-03' || d.code === 'SALES-KPI-04'));
+                        msg += '\n\nSales cycle times:';
+                        if (!cycle.length) {
+                            msg += '\n  • not reported by this run — the Zoho stage-history step did not run. Check the server log for "[KPIProcessCalc] cycle-times failed".';
+                        } else {
+                            cycle.forEach(d => {
+                                msg += `\n  • ${d.code}: ` + (d.value !== undefined && d.value !== null ? `${d.value}` : `no value — ${d.reason || 'unknown reason'}`);
+                            });
+                        }
+                    }
+                    alert(msg);
                 } else {
                     alert(data.error || 'Failed to recalculate KPIs.');
                 }
             } catch (e) {
                 console.error('Recalc error:', e);
-                alert('Failed to recalculate KPIs.');
+                alert(slow
+                    ? 'Failed to recalculate with cycle times. This run calls Zoho and can take minutes — if it timed out, the plain Recalculate still works.'
+                    : 'Failed to recalculate KPIs.');
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+                if (other) other.disabled = false;
             }
         }
 
