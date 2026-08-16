@@ -2047,10 +2047,27 @@ export async function getKPIHistory(
 export async function getKPIDashboardSummary(
   quarter?: { year: number; quarter: number },
 ): Promise<any> {
-  const kpis = await getAllKPIDefinitions();
+  const allKpis = await getAllKPIDefinitions();
+  // Department KPIs live on their Quality Reports BU page, not in this engine.
+  // Lazy import to keep the module graph acyclic (same pattern the Quality
+  // Reports aggregator uses). Presentation-layer only -- see the note in
+  // kpiRoutes.ts: filtering inside getAllKPIDefinitions() would break the
+  // scheduled/Inngest value recording for these KPIs.
+  const { getDepartmentKpiOwnerNames } = await import(
+    "./qualityReportsDepartments"
+  );
+  const deptSet = new Set(await getDepartmentKpiOwnerNames());
+  const kpis = deptSet.size
+    ? allKpis.filter(
+        (k: any) => !k.owner_name || !deptSet.has(String(k.owner_name)),
+      )
+    : allKpis;
   const summary: any = {
     total: kpis.length,
-    byOwner: { quality_manager: 0, grc_manager: 0, grq_specialist: 0, legal_specialist: 0, sdr_team: 0, sales_team: 0, shared: 0 },
+    // sdr_team / sales_team intentionally absent: those KPIs are excluded
+    // above, so seeding the keys would leave two permanent zeros in the
+    // owner donut's legend.
+    byOwner: { quality_manager: 0, grc_manager: 0, grq_specialist: 0, legal_specialist: 0, shared: 0 },
     byStatus: { green: 0, amber: 0, red: 0, no_data: 0 },
     byCategory: {},
     kpiDetails: [],
