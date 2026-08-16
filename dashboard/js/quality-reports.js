@@ -45,6 +45,10 @@
     // a mapping-only save from silently resetting them.
     var qrCurrentBUs = [];
 
+    // The BU currently open in the detail view — qrKpisHtml needs it to scope
+    // the Add KPI action, and it is not part of the sections payload.
+    var qrCurrentBUKey = null;
+
     // Mirrors WRITE_ROLES in qualityReportsRoutes.ts — the server is the
     // real gate (every write endpoint calls requireRole independently);
     // this list only decides whether the admin toggle button is shown.
@@ -216,6 +220,7 @@
     var QR_REPORT_TIMEOUT_MS = 45000;
 
     window.qrOpenBU = async function (buKey) {
+        qrCurrentBUKey = buKey;
         var host = document.getElementById('qrBU');
         document.getElementById('qrHub').classList.add('hidden');
         host.classList.remove('hidden');
@@ -461,6 +466,12 @@
                     : '') +
                 '</div>'
             );
+            // Department KPIs live only here now, so this page must be able to
+            // create them. Owner is set server-side from the BU mapping.
+            if (k && k.owner) {
+                out.push('<div class="mb-2"><button type="button" class="rr-btn rr-btn-ghost" data-on-click="qrAddKpi" data-args="' +
+                    escAttr(JSON.stringify([qrCurrentBUKey, k.owner])) + '">+ Add KPI</button></div>');
+            }
             var rows = list.map(function (i) {
                 var rag = QR_RAG[i.rag] || QR_RAG.none;
                 // Department KPIs are no longer in the KPI Engine, so this is
@@ -581,6 +592,64 @@
         }
         return out.join('');
     }
+
+    window.qrAddKpi = function (buKey, ownerName) {
+        var host = document.getElementById('qrKpiModal');
+        if (!host) { host = document.createElement('div'); host.id = 'qrKpiModal'; document.body.appendChild(host); }
+        var f = function (id, label, value, type) {
+            return '<label class="text-xs text-gray-600 block mb-2">' + escapeHtml(label) +
+                '<input id="' + escAttr(id) + '" type="' + (type || 'text') + '" value="' + escAttr(value || '') +
+                '" class="mt-1 w-full border rounded px-2 py-1 text-sm"></label>';
+        };
+        host.innerHTML = '<div class="rr-modal-backdrop"><div class="rr-modal">' +
+            '<div class="font-semibold mb-1">Add KPI</div>' +
+            '<div class="text-xs text-gray-500 mb-3">Owner: ' + escapeHtml(ownerName) + ' (set automatically)</div>' +
+            f('qrk-name', 'KPI name', '') +
+            f('qrk-code', 'KPI code (e.g. SDR-KPI-12)', '') +
+            f('qrk-cat', 'Category', 'quality') +
+            f('qrk-unit', 'Unit', '%') +
+            f('qrk-target', 'Target value', '', 'number') +
+            f('qrk-green', 'Green threshold', '', 'number') +
+            f('qrk-amber', 'Amber threshold', '', 'number') +
+            f('qrk-red', 'Red threshold', '', 'number') +
+            '<label class="text-xs text-gray-600 block mb-2">Direction' +
+            '<select id="qrk-dir" class="mt-1 w-full border rounded px-2 py-1 text-sm">' +
+            '<option value="higher_is_better">Higher is better</option>' +
+            '<option value="lower_is_better">Lower is better</option></select></label>' +
+            '<div id="qrk-err" class="text-xs text-red-600 mb-2"></div>' +
+            '<div class="flex gap-2 mt-2">' +
+            '<button type="button" class="rr-btn rr-btn-primary" data-on-click="qrAddKpiSave" data-args="' + escAttr(JSON.stringify([buKey])) + '">Create</button>' +
+            '<button type="button" class="rr-btn rr-btn-ghost" data-on-click="qrAddKpiClose">Cancel</button>' +
+            '</div></div></div>';
+    };
+
+    window.qrAddKpiClose = function () {
+        var h = document.getElementById('qrKpiModal');
+        if (h) h.innerHTML = '';
+    };
+
+    window.qrAddKpiSave = async function (buKey) {
+        var err = document.getElementById('qrk-err');
+        var payload = {
+            kpi_name: qrVal('qrk-name'), kpi_code: qrVal('qrk-code'),
+            category: qrVal('qrk-cat'), unit: qrVal('qrk-unit'),
+            target_value: qrVal('qrk-target'), threshold_green: qrVal('qrk-green'),
+            threshold_amber: qrVal('qrk-amber'), threshold_red: qrVal('qrk-red'),
+            threshold_direction: qrVal('qrk-dir')
+        };
+        try {
+            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey) + '/kpis', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+            });
+            var d = await res.json().catch(function () { return {}; });
+            if (!res.ok) { if (err) err.textContent = d.error || ('HTTP ' + res.status); return; }
+            qrAddKpiClose();
+            qrOpenBU(buKey);
+        } catch (e) {
+            if (err) err.textContent = String((e && e.message) || e);
+        }
+    };
 
     document.addEventListener('DOMContentLoaded', function () {
         qrLoadHub();

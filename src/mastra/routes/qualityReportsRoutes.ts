@@ -142,6 +142,78 @@ export const qualityReportsRoutes = [
   },
 
   {
+    // Create a KPI for this BU's team. The owner is resolved SERVER-SIDE from
+    // the BU mapping and never read from the body -- otherwise a client could
+    // file a KPI under any team, or under none (which would surface it in the
+    // GRQ KPI Engine). Same rule as the email route's recipient.
+    path: "/api/quality-reports/bus/:buKey/kpis",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, WRITE_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const buKey = c.req.param("buKey");
+          const bu = await getBUByKey(buKey);
+          if (!bu) return c.json({ error: "Not found" }, 404);
+          if (!bu.kpi_owner_name) {
+            return c.json(
+              { error: "This business unit has no KPI owner mapped." },
+              400,
+            );
+          }
+          const b = await c.req.json().catch(() => ({}));
+          const str = (v: any) => (typeof v === "string" ? v.trim() : "");
+          const kpi_name = str(b?.kpi_name);
+          const kpi_code = str(b?.kpi_code);
+          const category = str(b?.category);
+          if (!kpi_name || !kpi_code || !category) {
+            return c.json(
+              { error: "kpi_name, kpi_code and category are required." },
+              400,
+            );
+          }
+          const num = (v: any, d: number | null) =>
+            v === null || v === undefined || v === "" ? d : Number(v);
+          const { createKPIDefinition, getOwnerTypeForOwnerName } =
+            await import("../../utils/kpiDatabase");
+          const kpi = await createKPIDefinition({
+            kpi_name,
+            kpi_code,
+            description: str(b?.description) || null,
+            owner_name: bu.kpi_owner_name,
+            owner_type: await getOwnerTypeForOwnerName(bu.kpi_owner_name),
+            category,
+            formula: str(b?.formula) || null,
+            data_source: null,
+            unit: str(b?.unit) || "%",
+            frequency: str(b?.frequency) || "monthly",
+            threshold_green: num(b?.threshold_green, 0),
+            threshold_amber: num(b?.threshold_amber, 0),
+            threshold_red: num(b?.threshold_red, 0),
+            threshold_direction: str(b?.threshold_direction) || "higher_is_better",
+            target_value: num(b?.target_value, null),
+            weight: 1.0,
+            is_active: true,
+            is_north_star: false,
+            calc_mode: "manual",
+          } as any);
+          logger.info("[QualityReports] KPI created", {
+            actor: user.email, buKey, kpi_code, owner: bu.kpi_owner_name,
+          });
+          return c.json({ success: true, kpi });
+        } catch (e: any) {
+          if (e?.code === "23505") {
+            return c.json({ error: "That KPI code already exists." }, 409);
+          }
+          logger.error("[QualityReports] create kpi", e);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+
+  {
     path: "/api/quality-reports/bus",
     method: "POST" as const,
     createHandler: async () => {

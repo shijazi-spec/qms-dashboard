@@ -1720,6 +1720,27 @@ export async function getKPIsByOwnerName(
 }
 
 /**
+ * The owner_type used by a team's existing KPIs, for creating a new one under
+ * the same team. All of a team's rows share one value ('sdr_team' for
+ * "SDR Team", 'sales_team' for "Sales Team").
+ *
+ * Falls back to 'shared' for a team with no KPIs yet: owner_type is
+ * CHECK-constrained (kpiDatabase.ts:221-223) so a derived string like
+ * "cs_team" would be rejected by Postgres. Harmless either way -- visibility
+ * is decided by the BU registry, never by owner_type.
+ */
+export async function getOwnerTypeForOwnerName(
+  ownerName: string,
+): Promise<string> {
+  const r = await pool.query(
+    `SELECT owner_type FROM kpi_definitions
+      WHERE owner_name = $1 AND is_active = true LIMIT 1`,
+    [ownerName],
+  );
+  return r.rows[0]?.owner_type ?? "shared";
+}
+
+/**
  * Catalog KPIs for a team, each joined to its most recent recorded value and
  * given a RAG band. One query for the definitions + one for the values (rather
  * than N+1 per-KPI lookups), since a BU page renders the whole set at once.
