@@ -1245,3 +1245,40 @@ Delete the department entries from **all three arrays**, keeping them index-alig
 ```
 
 The two dropped colours are `#0891B2` (SDR) and `#0E7490` (Sales); `#6D28D9` stays with GRQ Team. Misaligning these arrays would silently mislabel every slice, so verify all three have five entries.
+
+- [ ] **Step 8: The "All Values" sheet (found during implementation)**
+
+The xlsx endpoint has a fourth `kpi_definitions` reader the enumeration above missed: the **All Values** sheet (`allValSource`, ~line 963) lists every `kpi_values` row `LEFT JOIN kpi_definitions` to show each KPI's name. Unfiltered, department KPIs appear there by name — and, worse, it disagrees with the value count from Step 4, which joins and excludes them: the summary would report one number while the sheet listed more rows.
+
+Give both statements **identical** join semantics and the same clause. Use `LEFT JOIN` in both, so a `kpi_values` row whose definition is missing (an orphan) is counted and listed consistently rather than silently dropped from one but not the other.
+
+The count becomes:
+
+```ts
+            pool.query(
+              `SELECT COUNT(*)::int AS total FROM kpi_values kv
+                 LEFT JOIN kpi_definitions kd ON kd.id = kv.kpi_id
+                WHERE (kd.owner_name IS NULL OR kd.owner_name <> ALL($1::text[]))`,
+              [deptOwnerNames],
+            ),
+```
+
+and the All Values query gains the same clause and bind:
+
+```ts
+          const allValSource = cursorQuery(
+            pool,
+            `
+            SELECT kv.kpi_id, COALESCE(kd.kpi_name, '') AS kpi_name,
+                   kv.actual_value, kv.target_value,
+                   TO_CHAR(kv.period_start, 'YYYY-MM-DD') AS period_start_str,
+                   TO_CHAR(kv.period_end,   'YYYY-MM-DD') AS period_end_str,
+                   kv.calculated_by
+            FROM kpi_values kv LEFT JOIN kpi_definitions kd ON kd.id = kv.kpi_id
+            WHERE (kd.owner_name IS NULL OR kd.owner_name <> ALL($1::text[]))
+            ORDER BY kv.period_end DESC, kv.kpi_id`,
+            [deptOwnerNames],
+          );
+```
+
+Extend the test so the "All Values" statement is covered by the same `assertExcluded` check as the rest — it must not be the one statement the suite skips.
