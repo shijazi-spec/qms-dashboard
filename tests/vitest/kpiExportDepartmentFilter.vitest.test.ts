@@ -150,4 +150,45 @@ describe("KPI export department exclusion", () => {
       }
     });
   });
+
+  // The /estimate endpoints power the pre-download size warning. If they count
+  // department KPIs the exports no longer contain, the warning overstates the
+  // file -- so they must carry the SAME exclusion as the handlers they mirror.
+  describe("estimate endpoints", () => {
+    it("CSV estimate mirrors the CSV export's exclusion", async () => {
+      await run("/api/kpis/export/estimate");
+      const reads = poolQuery.mock.calls
+        .map((c) => ({ sql: String(c[0]), params: (c[1] ?? []) as any[] }))
+        .filter((c) => /kpi_definitions/i.test(c.sql));
+      expect(reads.length).toBeGreaterThan(0);
+      for (const c of reads) assertExcluded(c.sql, c.params);
+    });
+
+    it("XLSX estimate excludes in BOTH of its counts", async () => {
+      await run("/api/kpis/export-xlsx/estimate");
+      const reads = poolQuery.mock.calls
+        .map((c) => ({ sql: String(c[0]), params: (c[1] ?? []) as any[] }))
+        .filter((c) => /kpi_definitions/i.test(c.sql));
+      // Both the definition count AND the value count must reach
+      // kpi_definitions -- the value count only does so via a LEFT JOIN, and
+      // without that join it would silently count department KPI values.
+      expect(reads.length).toBe(2);
+      for (const c of reads) assertExcluded(c.sql, c.params);
+      expect(reads.some((c) => /FROM\s+kpi_values/i.test(c.sql))).toBe(true);
+    });
+
+    it("estimates exclude nothing when no BU maps a KPI owner", async () => {
+      deptOwners.mockResolvedValue([]);
+      await run("/api/kpis/export/estimate");
+      await run("/api/kpis/export-xlsx/estimate");
+      const reads = poolQuery.mock.calls
+        .map((c) => ({ sql: String(c[0]), params: (c[1] ?? []) as any[] }))
+        .filter((c) => /kpi_definitions/i.test(c.sql));
+      expect(reads.length).toBe(3);
+      for (const c of reads) {
+        assertExcluded(c.sql, c.params);
+        expect(c.params.some((p) => Array.isArray(p) && p.length === 0)).toBe(true);
+      }
+    });
+  });
 });

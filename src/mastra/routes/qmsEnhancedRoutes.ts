@@ -456,11 +456,18 @@ const _qmsEnhancedRoutesRaw = [
       try {
         // Mirrors the LEFT JOIN row shape of /api/kpis/export — one row per
         // (kpi_definition × kpi_value), with at least one row per definition.
+        // The department-KPI exclusion must mirror it too, or the pre-download
+        // size warning overstates a file that no longer contains those rows.
+        const { getDepartmentKpiOwnerNames } = await import(
+          "../../utils/qualityReportsDepartments"
+        );
+        const deptOwnerNames = await getDepartmentKpiOwnerNames();
         return await qmsEstimateResponse(
           `SELECT COUNT(*)::int AS total
              FROM kpi_definitions kd
-             LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id`,
-          [],
+             LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id
+            WHERE (kd.owner_name IS NULL OR kd.owner_name <> ALL($1::text[]))`,
+          [deptOwnerNames],
           "csv",
         );
       } catch (e) {
@@ -479,11 +486,26 @@ const _qmsEnhancedRoutesRaw = [
           connectionString: process.env.DATABASE_URL,
         });
         try {
+          // Same exclusion, and the same LEFT JOIN shape, as the two counts the
+          // real /api/kpis/export-xlsx handler runs — an estimate that counted
+          // department KPIs would warn about rows the workbook no longer has.
+          const { getDepartmentKpiOwnerNames } = await import(
+            "../../utils/qualityReportsDepartments"
+          );
+          const deptOwnerNames = await getDepartmentKpiOwnerNames();
+          const notDept = `(kd.owner_name IS NULL OR kd.owner_name <> ALL($1::text[]))`;
           const [defR, valR] = await Promise.all([
             pool.query(
-              `SELECT COUNT(*)::int AS total FROM kpi_definitions WHERE is_active = true`,
+              `SELECT COUNT(*)::int AS total FROM kpi_definitions kd
+                WHERE kd.is_active = true AND ${notDept}`,
+              [deptOwnerNames],
             ),
-            pool.query(`SELECT COUNT(*)::int AS total FROM kpi_values`),
+            pool.query(
+              `SELECT COUNT(*)::int AS total FROM kpi_values kv
+                 LEFT JOIN kpi_definitions kd ON kd.id = kv.kpi_id
+                WHERE ${notDept}`,
+              [deptOwnerNames],
+            ),
           ]);
           const totalRows =
             (defR.rows[0]?.total ?? 0) + (valR.rows[0]?.total ?? 0);
