@@ -881,7 +881,7 @@ const _qmsEnhancedRoutesRaw = [
             ),
             pool.query(
               `SELECT COUNT(*)::int AS total FROM kpi_values kv
-                 JOIN kpi_definitions kd ON kd.id = kv.kpi_id
+                 LEFT JOIN kpi_definitions kd ON kd.id = kv.kpi_id
                 WHERE ${notDept}`,
               [deptOwnerNames],
             ),
@@ -969,7 +969,9 @@ const _qmsEnhancedRoutesRaw = [
                    TO_CHAR(kv.period_end,   'YYYY-MM-DD') AS period_end_str,
                    kv.calculated_by
             FROM kpi_values kv LEFT JOIN kpi_definitions kd ON kd.id = kv.kpi_id
+            WHERE (kd.owner_name IS NULL OR kd.owner_name <> ALL($1::text[]))
             ORDER BY kv.period_end DESC, kv.kpi_id`,
+            [deptOwnerNames],
           );
           const allValRows = (async function* () {
             try {

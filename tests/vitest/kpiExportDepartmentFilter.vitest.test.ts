@@ -84,18 +84,27 @@ beforeEach(() => {
 describe("KPI export department exclusion", () => {
   it("CSV export excludes department KPIs and binds the owner array", async () => {
     await run("/api/kpis/export");
-    const defReads = cursorCalls.filter((c) => /FROM\s+kpi_definitions/i.test(c.sql));
+    const defReads = cursorCalls.filter((c) => /kpi_definitions/i.test(c.sql));
     expect(defReads.length).toBeGreaterThan(0);
     for (const c of defReads) assertExcluded(c.sql, c.params);
   });
 
   it("XLSX export excludes department KPIs in every kpi_definitions statement", async () => {
     await run("/api/kpis/export-xlsx");
+    // Match any statement that reads kpi_definitions at all — not just ones
+    // where it's the FROM target. The "All Values" sheet reaches it only via
+    // a LEFT JOIN (`FROM kpi_values kv LEFT JOIN kpi_definitions kd ...`),
+    // and a narrower `FROM\s+kpi_definitions` matcher would silently skip it.
     const direct = poolQuery.mock.calls
       .map((c) => ({ sql: String(c[0]), params: (c[1] ?? []) as any[] }))
-      .filter((c) => /FROM\s+kpi_definitions/i.test(c.sql));
-    const viaCursor = cursorCalls.filter((c) => /FROM\s+kpi_definitions/i.test(c.sql));
-    expect(direct.length + viaCursor.length).toBeGreaterThan(0);
+      .filter((c) => /kpi_definitions/i.test(c.sql));
+    const viaCursor = cursorCalls.filter((c) => /kpi_definitions/i.test(c.sql));
+    // 5 statements total should reference kpi_definitions: kpiTotR, valTotR,
+    // catsR (all direct pool.query), plus catDefSql and allValSource (both
+    // via cursorQuery). Assert this explicitly so a regression that drops a
+    // statement — or narrows the regex back down — is caught by a count
+    // check, not just a silent no-op loop over an empty array.
+    expect(direct.length + viaCursor.length).toBe(5);
     for (const c of [...direct, ...viaCursor]) assertExcluded(c.sql, c.params);
   });
 
