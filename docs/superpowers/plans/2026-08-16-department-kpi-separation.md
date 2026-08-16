@@ -536,42 +536,98 @@ These endpoints do **not** use `getAllKPIDefinitions()` — they run their own r
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/vitest/kpiExportDepartmentFilter.vitest.test.ts`. This asserts on the SQL text, which is what actually carries the exclusion:
+Create `tests/vitest/kpiExportDepartmentFilter.vitest.test.ts`. It invokes the real handlers and captures every SQL statement + params they issue, so it tests behaviour rather than source text:
 
 ```ts
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import { join } from "path";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const src = readFileSync(
-  join(process.cwd(), "src/mastra/routes/qmsEnhancedRoutes.ts"),
-  "utf-8",
-);
+const { poolQuery, cursorCalls, deptOwners } = vi.hoisted(() => ({
+  poolQuery: vi.fn(),
+  cursorCalls: [] as Array<{ sql: string; params: any[] }>,
+  deptOwners: vi.fn(),
+}));
 
-/** Every statement reading kpi_definitions in the two export endpoints must
- *  carry the departmental exclusion, or the workbook leaks department KPIs. */
+vi.mock("pg", () => ({
+  default: { Pool: class { query = (...a: any[]) => poolQuery(...a); end = async () => {}; } },
+}));
+vi.mock("../../src/utils/excelExport", () => ({
+  cursorQuery: (_pool: any, sql: string, params: any[] = []) => {
+    cursorCalls.push({ sql, params });
+    return (async function* () {})();
+  },
+  streamXlsx: vi.fn(async () => new Uint8Array()),
+}));
+vi.mock("../../src/utils/qualityReportsDepartments", () => ({
+  getDepartmentKpiOwnerNames: deptOwners,
+}));
+vi.mock("../../src/utils/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+import { qmsEnhancedRoutes } from "../../src/mastra/routes/qmsEnhancedRoutes";
+
+function ctx() {
+  return {
+    req: { query: () => undefined, param: () => undefined, header: () => undefined },
+    json: (b: any, s?: number) => ({ body: b, status: s ?? 200 }),
+    body: (b: any, s?: number) => ({ body: b, status: s ?? 200 }),
+    header: () => {},
+  };
+}
+
+async function run(path: string) {
+  const route = qmsEnhancedRoutes.find(
+    (r: any) => r.path === path && r.method === "GET",
+  );
+  expect(route, `route ${path} not found`).toBeTruthy();
+  const handler = await (route as any).createHandler();
+  try { await handler(ctx()); } catch { /* streaming/response plumbing is not under test */ }
+}
+
+/** Every statement that reads kpi_definitions must carry the exclusion, or the
+ *  export leaks department KPIs (or its totals disagree with its rows). */
+function assertExcluded(sql: string, params: any[]) {
+  expect(sql).toMatch(/owner_name IS NULL OR/i);
+  expect(sql).toMatch(/owner_name <> ALL/i);
+  expect(params.some((p) => Array.isArray(p))).toBe(true);
+}
+
+beforeEach(() => {
+  poolQuery.mockReset().mockResolvedValue({ rows: [{ total: 0 }] });
+  cursorCalls.length = 0;
+  deptOwners.mockReset().mockResolvedValue(["SDR Team", "Sales Team"]);
+});
+
 describe("KPI export department exclusion", () => {
-  it("every kpi_definitions read in the exports has the owner exclusion", () => {
-    const start = src.indexOf('path: "/api/kpis/export"');
-    const end = src.indexOf('path: "/api/kpis/export-xlsx"');
-    expect(start).toBeGreaterThan(-1);
-    expect(end).toBeGreaterThan(start);
-    // Search from the CSV endpoint to the end of the xlsx endpoint body.
-    const region = src.slice(start, src.indexOf("},", end + 4000) + 2);
-    const statements = region
-      .split(/`/)
-      .filter((s) => /FROM\s+kpi_definitions/i.test(s));
-    expect(statements.length).toBeGreaterThan(0);
-    for (const s of statements) {
-      expect(s).toMatch(/owner_name IS NULL OR .*owner_name <> ALL/i);
-    }
+  it("CSV export excludes department KPIs and binds the owner array", async () => {
+    await run("/api/kpis/export");
+    const defReads = cursorCalls.filter((c) => /FROM\s+kpi_definitions/i.test(c.sql));
+    expect(defReads.length).toBeGreaterThan(0);
+    for (const c of defReads) assertExcluded(c.sql, c.params);
   });
 
-  it("the exclusion keeps the IS NULL arm (null owner = GRQ KPI)", () => {
-    expect(src).toContain("owner_name IS NULL OR");
+  it("XLSX export excludes department KPIs in every kpi_definitions statement", async () => {
+    await run("/api/kpis/export-xlsx");
+    const direct = poolQuery.mock.calls
+      .map((c) => ({ sql: String(c[0]), params: (c[1] ?? []) as any[] }))
+      .filter((c) => /FROM\s+kpi_definitions/i.test(c.sql));
+    const viaCursor = cursorCalls.filter((c) => /FROM\s+kpi_definitions/i.test(c.sql));
+    expect(direct.length + viaCursor.length).toBeGreaterThan(0);
+    for (const c of [...direct, ...viaCursor]) assertExcluded(c.sql, c.params);
+  });
+
+  it("XLSX value count joins kpi_definitions so it matches the row sheets", async () => {
+    await run("/api/kpis/export-xlsx");
+    const valueCount = poolQuery.mock.calls
+      .map((c) => String(c[0]))
+      .find((sql) => /COUNT\(\*\)/i.test(sql) && /FROM\s+kpi_values/i.test(sql));
+    expect(valueCount).toBeTruthy();
+    expect(valueCount).toMatch(/JOIN\s+kpi_definitions/i);
   });
 });
 ```
+
+If a handler's response plumbing proves impractical to drive under mocks, keep the assertions and adjust only the `run()` helper — do not weaken them into source-text matching.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1101,3 +1157,73 @@ These cannot be checked from a dev machine — they need the live database. Run 
 - [ ] **The regression that matters:** click **Recalculate** on `/kpis`, then reload the SDR B2B page — the Auto KPIs (e.g. SDR-KPI-01 Calls Per Day) must still show values, not `--`. If they go blank, the filter was placed in the data layer instead of the presentation layer.
 - [ ] The CSV and Excel exports contain no department KPIs, and the xlsx summary counts match its row sheets.
 - [ ] Add a KPI from the SDR B2B page — it appears there and NOT in `/kpis`.
+
+---
+
+### Task 7: Remove the department teams from the KPI Engine's owner controls
+
+**Added 2026-08-16 after the deployed `/kpis` page showed "SDR Team" / "Sales Team" still selectable.** Tasks 2-4 remove department KPIs from the engine's *data*; `dashboard/kpis.html` still hardcodes the teams in three owner controls. Two of them are traps rather than clutter: they let a user put a KPI into a state where it immediately disappears from the page they are looking at.
+
+**Files:**
+- Modify: `dashboard/kpis.html` — three locations (lines ~160-161, ~213-214, ~412-413)
+
+**Interfaces:**
+- Consumes: nothing. Pure markup/constant removal, no API change.
+- Produces: nothing for later tasks.
+
+- [ ] **Step 1: Remove the teams from the KPI Catalog owner filter**
+
+At lines ~160-161, inside `<select id="ownerFilter">`, delete exactly these two lines:
+
+```html
+                        <option value="sdr_team">SDR Team</option>
+                        <option value="sales_team">Sales Team</option>
+```
+
+Leave `All Owners`, the four GRQ owners, and `GRQ Team (Shared)` untouched. Selecting a department team here would now return an empty list, since Task 2 filters them out of `GET /api/kpis`.
+
+- [ ] **Step 2: Remove the teams from the create/edit KPI form**
+
+At lines ~213-214, inside `<select id="kpiOwnerType">`, delete exactly these two lines:
+
+```html
+                            <option value="sdr_team">SDR Team</option>
+                            <option value="sales_team">Sales Team</option>
+```
+
+A KPI created here under a department team would be filtered straight back out of this page. Department KPIs are created on their Quality Reports BU page instead (Task 6).
+
+- [ ] **Step 3: Remove the teams from the detail modal's "Reassign to…" options**
+
+At lines ~412-413, in the `_KPI_OWNER_OPTIONS` array, delete exactly these two entries:
+
+```js
+            ['sdr_team', 'SDR Team'],
+            ['sales_team', 'Sales Team'],
+```
+
+Reassigning a KPI to a department team from here would make it vanish from this page with no explanation.
+
+**Do NOT touch** the `ownerTypeLabel`-style `switch` statements at lines ~387-389 and ~400-402 that map `sdr_team`/`sales_team` to display strings. Those are read paths: a department KPI still renders on its BU page and on `/kpi/:id`, and removing the mappings would show a raw enum value instead of a name.
+
+- [ ] **Step 4: Verify no other hardcoded reference remains in the engine's controls**
+
+Run:
+
+```bash
+grep -n "sdr_team\|sales_team" dashboard/kpis.html
+```
+
+Expected: ONLY the label-mapping `switch` cases (~387-389, ~400-402) remain. No `<option>` elements and no `_KPI_OWNER_OPTIONS` entries.
+
+- [ ] **Step 5: Verify the page still parses**
+
+Run: `npm run check:all`
+Expected: all gates pass, including `check-dashboard-html-js`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add dashboard/kpis.html
+git commit -m "feat(kpis): drop department teams from the KPI Engine owner controls"
+```
