@@ -134,13 +134,15 @@
             return '<div class="bg-white rounded-lg shadow p-4 mb-3">' +
                 '<div class="font-semibold text-gray-900">' + escapeHtml(b.bu_name || b.bu_key) + '</div>' +
                 '<div class="rr-kpi-sub mb-2">' + escapeHtml(b.bu_key + ' · ' + channel + ' · ' + (b.fn || '')) + '</div>' +
-                '<div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">' +
+                '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">' +
                 '<label class="text-xs text-gray-600">Head email' +
                 '<input type="email" id="qr-head-' + key + '" value="' + escAttr(b.head_email || '') + '" class="mt-1 w-full border rounded px-2 py-1 text-sm"></label>' +
                 '<label class="text-xs text-gray-600">SOP policy department' +
                 '<input type="text" id="qr-pol-' + key + '" value="' + escAttr(b.policy_department || '') + '" class="mt-1 w-full border rounded px-2 py-1 text-sm"></label>' +
-                '<label class="text-xs text-gray-600">KPI BU name' +
+                '<label class="text-xs text-gray-600" title="Framework action-plan checklist BU (QM-KPI-015) — drives the checklist % only.">KPI BU name <span class="text-gray-400">(checklist)</span>' +
                 '<input type="text" id="qr-kpi-' + key + '" value="' + escAttr(b.kpi_bu_name || '') + '" class="mt-1 w-full border rounded px-2 py-1 text-sm"></label>' +
+                '<label class="text-xs text-gray-600" title="KPI catalog owner from /kpis, e.g. &quot;SDR Team&quot; or &quot;Sales Team&quot;. Drives the performance KPI list (most are auto-calculated from CRM). Leave blank if this BU has no catalog KPIs.">KPI owner <span class="text-gray-400">(catalog)</span>' +
+                '<input type="text" id="qr-kpiowner-' + key + '" placeholder="e.g. SDR Team" value="' + escAttr(b.kpi_owner_name || '') + '" class="mt-1 w-full border rounded px-2 py-1 text-sm"></label>' +
                 '</div>' +
                 '<div class="flex justify-end mb-3">' +
                 '<button type="button" class="rr-btn rr-btn-ghost" data-on-click="qrSaveBU" data-args="' + escAttr(JSON.stringify([b.bu_key])) + '">Save mapping</button>' +
@@ -171,7 +173,8 @@
         var payload = {
             bu_key: bu.bu_key, bu_name: bu.bu_name, channel: bu.channel, fn: bu.fn,
             sort_order: bu.sort_order, is_active: bu.is_active,
-            head_email: qrVal('qr-head-' + buKey), policy_department: qrVal('qr-pol-' + buKey), kpi_bu_name: qrVal('qr-kpi-' + buKey)
+            head_email: qrVal('qr-head-' + buKey), policy_department: qrVal('qr-pol-' + buKey),
+            kpi_bu_name: qrVal('qr-kpi-' + buKey), kpi_owner_name: qrVal('qr-kpiowner-' + buKey)
         };
         try {
             var res = await fetch('/api/quality-reports/bus', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -363,7 +366,21 @@
         // page layout doesn't jump between BUs with different function maps.
         var stats = [];
         stats.push(qrStatCard('blue', 'SOPs', isCfg('sops') && s.sops ? String(s.sops.total != null ? s.sops.total : (s.sops.policies || []).length) : '—', 'controlled documents'));
-        stats.push(qrStatCard('amber', 'KPIs', isCfg('kpis') && s.kpis ? (s.kpis.pct || 0) + '%' : '—', isCfg('kpis') && s.kpis ? (s.kpis.done || 0) + ' / ' + (s.kpis.total || 0) + ' done' : 'not mapped'));
+        // KPI card: prefer the PERFORMANCE KPIs (catalog rows for this BU's
+        // team) when the BU has them, and fall back to framework-checklist
+        // progress otherwise. Previously it always showed the checklist,
+        // which is why a BU with six live KPIs still read "0% — 0 / 0 done".
+        var kpiVal = '—', kpiSub = 'not mapped';
+        if (isCfg('kpis') && s.kpis) {
+            if ((s.kpis.kpiCount || 0) > 0) {
+                kpiVal = (s.kpis.kpiOnTarget || 0) + ' / ' + (s.kpis.kpiMeasured || 0);
+                kpiSub = 'on target · ' + (s.kpis.kpiCount || 0) + ' KPIs';
+            } else if (s.kpis.framework) {
+                kpiVal = (s.kpis.framework.pct || 0) + '%';
+                kpiSub = (s.kpis.framework.done || 0) + ' / ' + (s.kpis.framework.total || 0) + ' checklist done';
+            }
+        }
+        stats.push(qrStatCard('amber', 'KPIs', kpiVal, kpiSub));
         var cleanupTotal = null;
         if (isCfg('cleanup') && s.cleanup) {
             var dm = (s.cleanup.deals && s.cleanup.deals.modules) || null;
@@ -412,8 +429,79 @@
         return out.join('');
     }
 
+    // RAG dot colours match the /kpis catalog so the same KPI reads the same
+    // in both places. 'none' = no value recorded yet (render "Not started"
+    // rather than a red zero, which would look like a missed target).
+    var QR_RAG = {
+        green: { dot: 'bg-emerald-500', text: 'text-emerald-700', label: 'On target' },
+        amber: { dot: 'bg-amber-500', text: 'text-amber-700', label: 'Watch' },
+        red: { dot: 'bg-red-500', text: 'text-red-700', label: 'Behind' },
+        none: { dot: 'bg-gray-300', text: 'text-gray-500', label: 'Not started' }
+    };
+
+    function qrKpiValue(k) {
+        if (k.current_value === null || k.current_value === undefined) return '--';
+        var n = Number(k.current_value);
+        var v = Number.isInteger(n) ? String(n) : n.toFixed(1);
+        return v + (k.unit && k.unit !== 'number' ? k.unit : '');
+    }
+
     function qrKpisHtml(k) {
-        return '<div class="text-sm">' + (k.pct || 0) + '% (' + (k.done || 0) + '/' + (k.total || 0) + ')</div>';
+        var out = [];
+        var list = (k && k.list) || [];
+
+        // Performance KPIs (the catalog rows for this BU's owning team).
+        if (list.length) {
+            out.push(
+                '<div class="text-xs text-gray-500 mb-2">' +
+                escapeHtml(k.owner || 'Team') + ' &middot; ' +
+                (k.kpiOnTarget || 0) + ' on target of ' + (k.kpiMeasured || 0) + ' measured' +
+                ((k.kpiCount || 0) > (k.kpiMeasured || 0)
+                    ? ' <span class="text-gray-400">(' + ((k.kpiCount || 0) - (k.kpiMeasured || 0)) + ' not started)</span>'
+                    : '') +
+                '</div>'
+            );
+            var rows = list.map(function (i) {
+                var rag = QR_RAG[i.rag] || QR_RAG.none;
+                return '<div class="flex items-center gap-3 py-1.5 border-b border-gray-100 last:border-0">' +
+                    '<span class="w-2 h-2 rounded-full ' + rag.dot + ' shrink-0"></span>' +
+                    '<div class="min-w-0 flex-1">' +
+                        '<div class="text-sm text-gray-900 truncate">' + escapeHtml(i.kpi_name || '') +
+                            ' <span class="text-xs text-gray-400">' + escapeHtml(i.kpi_code || '') + '</span>' +
+                            (i.calc_mode === 'auto'
+                                ? ' <span class="text-[10px] px-1 py-0.5 rounded bg-gray-100 text-gray-600" title="Calculated automatically from CRM data">Auto</span>'
+                                : '') +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="text-right shrink-0">' +
+                        '<div class="text-sm font-semibold ' + rag.text + '">' + escapeHtml(qrKpiValue(i)) + '</div>' +
+                        '<div class="text-[10px] text-gray-400">' +
+                            (i.target_value !== null && i.target_value !== undefined
+                                ? 'Target ' + escapeHtml(String(i.target_value)) + (i.unit && i.unit !== 'number' ? escapeHtml(i.unit) : '')
+                                : escapeHtml(rag.label)) +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            });
+            out.push('<div class="mb-3">' + rows.join('') + '</div>');
+        } else if (k && k.owner) {
+            out.push('<div class="text-xs text-gray-500 mb-3">No active KPIs found for ' + escapeHtml(k.owner) + '.</div>');
+        }
+
+        // Framework/action-plan checklist progress — kept alongside the KPIs
+        // per Sarah 2026-08-16. Labelled explicitly so it can't be mistaken
+        // for KPI performance (the two used to share one ambiguous "0%").
+        var f = k && k.framework;
+        if (f) {
+            out.push(
+                '<div class="text-xs text-gray-500 pt-1' + (list.length ? ' border-t border-gray-100' : '') + '">' +
+                'Framework checklist: <span class="font-medium text-gray-700">' + (f.pct || 0) + '%</span> ' +
+                '(' + (f.done || 0) + '/' + (f.total || 0) + ' done)' +
+                '</div>'
+            );
+        }
+
+        return out.join('') || '<div class="text-xs text-gray-500">No KPI data.</div>';
     }
 
     function qrCleanupHtml(c) {

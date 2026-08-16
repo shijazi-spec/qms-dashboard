@@ -112,11 +112,49 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
     return res;
   }, notConfigured, timedOut);
 
-  // getFrameworkProgressByBU returns Record<buName,{done,total,pct}> keyed by
-  // the QM-KPI-015 checklist section name (kpiChecklistDatabase.ts:704).
-  const kpis = section("kpis", !!bu.kpi_bu_name, async () => {
-    const all = await kpiDb.getFrameworkProgressByBU();
-    return all[bu.kpi_bu_name as string] || { done: 0, total: 0, pct: 0 };
+  // Two DIFFERENT things live under "kpis", and conflating them is what made
+  // this card read "0% (0/0)" on a BU that has six live KPIs:
+  //
+  //   framework — QM-KPI-015 action-plan CHECKLIST progress for the mapped
+  //               checklist BU (getFrameworkProgressByBU returns
+  //               Record<buName,{done,total,pct}>, kpiChecklistDatabase.ts:704).
+  //               This is "how much of the rollout plan is done".
+  //   list      — the actual KPI CATALOG rows for the BU's owning team
+  //               (SDR-KPI-01..06 etc.), most of them auto-calculated from
+  //               CRM by kpiProcessCalc.ts. This is "how the team is
+  //               performing".
+  //
+  // Sarah 2026-08-16 asked for the performance KPIs here, and to keep the
+  // checklist too — so the section carries both and the UI labels them.
+  // Mapped independently: a BU can have one, both, or neither.
+  const kpis = section("kpis", !!bu.kpi_bu_name || !!bu.kpi_owner_name, async () => {
+    const [framework, list] = await Promise.all([
+      bu.kpi_bu_name
+        ? kpiDb.getFrameworkProgressByBU().then(
+            (all: any) => all[bu.kpi_bu_name as string] || { done: 0, total: 0, pct: 0 },
+          )
+        : Promise.resolve(null),
+      bu.kpi_owner_name
+        ? import("./kpiDatabase").then((m) =>
+            m.getKPIsWithValuesByOwnerName(bu.kpi_owner_name as string),
+          )
+        : Promise.resolve([]),
+    ]);
+    return {
+      framework,                       // null when no checklist BU mapped
+      owner: bu.kpi_owner_name ?? null,
+      list,                            // [] when no KPI owner mapped
+      // Deliberately NOT called `total` — the framework spread below also
+      // carries a `total` (checklist items), and letting the two share a key
+      // makes the number silently mean whichever spread landed last.
+      kpiCount: list.length,
+      kpiMeasured: list.filter((k: any) => k.current_value !== null).length,
+      kpiOnTarget: list.filter((k: any) => k.rag === "green").length,
+      // Back-compat: the hub headline + email template read done/total/pct
+      // off this section. Keep them pointing at the CHECKLIST so existing
+      // consumers don't silently change meaning.
+      ...(framework || { done: 0, total: 0, pct: 0 }),
+    };
   }, notConfigured, timedOut);
 
   const cleanup = section("cleanup", keys.some((k) => k === "deals" || k === "leads"), async () => {

@@ -1677,6 +1677,127 @@ export async function getKPIsByOwner(
   return result.rows;
 }
 
+/**
+ * One catalog KPI plus its latest recorded value, shaped for display.
+ * Used by the Quality Reports per-BU page so a BU can show the SAME KPIs the
+ * /kpis catalog shows for its owning team.
+ */
+export interface CatalogKpiWithValue {
+  id: number;
+  kpi_code: string;
+  kpi_name: string;
+  description: string | null;
+  unit: string | null;
+  frequency: string | null;
+  category: string | null;
+  target_value: number | null;
+  threshold_direction: string;
+  /** "auto" = value is computed from CRM (kpiProcessCalc / kpiAutoCalc). */
+  calc_mode: string;
+  current_value: number | null;
+  period_end: string | null;
+  /** null when there is no value yet or no usable target. */
+  achievement_pct: number | null;
+  /** "none" means nothing recorded yet — render as "Not started", not as 0. */
+  rag: "green" | "amber" | "red" | "none";
+}
+
+/**
+ * Catalog KPIs for a team, BY DISPLAY NAME (`owner_name`, e.g. "SDR Team").
+ *
+ * Distinct from `getKPIsByOwner`, which filters on `owner_type` — the Quality
+ * Reports BU registry maps to the human-facing team name, which is what the
+ * /kpis "KPI Catalog" dropdown shows.
+ */
+export async function getKPIsByOwnerName(
+  ownerName: string,
+): Promise<KPIDefinition[]> {
+  const result = await pool.query(
+    "SELECT * FROM kpi_definitions WHERE owner_name = $1 AND is_active = true ORDER BY kpi_code ASC",
+    [ownerName],
+  );
+  return result.rows;
+}
+
+/**
+ * Catalog KPIs for a team, each joined to its most recent recorded value and
+ * given a RAG band. One query for the definitions + one for the values (rather
+ * than N+1 per-KPI lookups), since a BU page renders the whole set at once.
+ */
+export async function getKPIsWithValuesByOwnerName(
+  ownerName: string,
+): Promise<CatalogKpiWithValue[]> {
+  const defs = await getKPIsByOwnerName(ownerName);
+  if (!defs.length) return [];
+
+  // Latest value per KPI in ONE round-trip. DISTINCT ON is the Postgres
+  // idiom for "top row per group" and avoids a correlated subquery per KPI.
+  const ids = defs.map((d: any) => d.id);
+  const valsRes = await pool.query(
+    `SELECT DISTINCT ON (kpi_id) kpi_id, actual_value, period_end
+       FROM kpi_values
+      WHERE kpi_id = ANY($1::int[])
+      ORDER BY kpi_id, period_end DESC`,
+    [ids],
+  );
+  const latest = new Map<number, { actual_value: any; period_end: any }>();
+  for (const r of valsRes.rows) latest.set(Number(r.kpi_id), r);
+
+  return defs.map((d: any) => {
+    const v = latest.get(Number(d.id));
+    const current =
+      v && v.actual_value !== null && v.actual_value !== undefined
+        ? Number(v.actual_value)
+        : null;
+    const target =
+      d.target_value !== null && d.target_value !== undefined
+        ? Number(d.target_value)
+        : null;
+    const dir = String(d.threshold_direction || "higher_is_better");
+    const lower = dir === "lower_is_better";
+
+    let achievement: number | null = null;
+    if (current !== null && target !== null && target > 0) {
+      const a = lower
+        ? current <= 0
+          ? 100
+          : (target / current) * 100
+        : (current / target) * 100;
+      achievement = Math.max(0, Math.min(100, a));
+    }
+
+    // Band against the KPI's own thresholds, respecting direction. No value
+    // recorded yet => "none" so the UI can say "Not started" instead of
+    // implying a red 0.
+    let rag: CatalogKpiWithValue["rag"] = "none";
+    if (current !== null) {
+      const g = Number(d.threshold_green);
+      const a = Number(d.threshold_amber);
+      if (Number.isFinite(g) && Number.isFinite(a)) {
+        if (lower) rag = current <= g ? "green" : current <= a ? "amber" : "red";
+        else rag = current >= g ? "green" : current >= a ? "amber" : "red";
+      }
+    }
+
+    return {
+      id: Number(d.id),
+      kpi_code: d.kpi_code,
+      kpi_name: d.kpi_name,
+      description: d.description ?? null,
+      unit: d.unit ?? null,
+      frequency: d.frequency ?? null,
+      category: d.category ?? null,
+      target_value: target,
+      threshold_direction: dir,
+      calc_mode: String(d.calc_mode || "manual"),
+      current_value: current,
+      period_end: v?.period_end ? String(v.period_end) : null,
+      achievement_pct: achievement,
+      rag,
+    };
+  });
+}
+
 export async function getKPIById(id: number): Promise<KPIDefinition | null> {
   const result = await pool.query(
     "SELECT * FROM kpi_definitions WHERE id = $1",
