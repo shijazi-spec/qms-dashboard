@@ -1180,11 +1180,23 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["PUT"],
     roles: ["admin", "head_of_operations_quality"],
   },
-  // KPI reads (definitions, summary, individual KPI, history) — governance roles + executive.
+  // KPI reads — engine-wide list and summary (definitions + totals/charts) stay
+  // governance-only. Do NOT widen this to the Quality Reports read audience:
+  // it would expose the whole KPI Engine, not just one BU's KPIs.
   {
-    pattern: /^\/api\/kpis(\/(\d+(\/(history|detail))?|summary))?$/,
+    pattern: /^\/api\/kpis(\/summary)?$/,
     methods: ["GET"],
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
+  },
+  // Single-KPI reads (detail/history for one id) — the Quality Reports BU page
+  // (READ_ROLES in qualityReportsRoutes.ts) links each KPI row to /kpi/:id, so
+  // its wider read audience needs to open that one KPI. This does NOT scope
+  // access to only the reader's own team's KPIs — any id is readable by these
+  // roles — and it deliberately does not extend to the list/summary above.
+  {
+    pattern: /^\/api\/kpis\/\d+(\/(history|detail))?$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
   // GRQ KPI feed/OKR/catalog reads — same read audience as KPI reads.
   {
