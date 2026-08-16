@@ -820,9 +820,17 @@ const _qmsEnhancedRoutesRaw = [
             "period_end",
             "calculated_by",
           ];
+          const { getDepartmentKpiOwnerNames } = await import(
+            "../../utils/qualityReportsDepartments"
+          );
+          const deptOwnerNames = await getDepartmentKpiOwnerNames();
           const source = cursorQuery(
             pool,
-            `SELECT kd.kpi_name, kd.target_value, kv.actual_value, kv.period_start, kv.period_end, kv.calculated_by FROM kpi_definitions kd LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id ORDER BY kd.kpi_name, kv.period_end DESC`,
+            `SELECT kd.kpi_name, kd.target_value, kv.actual_value, kv.period_start, kv.period_end, kv.calculated_by
+               FROM kpi_definitions kd LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id
+              WHERE (kd.owner_name IS NULL OR kd.owner_name <> ALL($1::text[]))
+              ORDER BY kd.kpi_name, kv.period_end DESC`,
+            [deptOwnerNames],
           );
           const rows = (async function* () {
             try {
@@ -859,14 +867,28 @@ const _qmsEnhancedRoutesRaw = [
           const { streamXlsx, cursorQuery } =
             await import("../../utils/excelExport");
 
+          const { getDepartmentKpiOwnerNames } = await import(
+            "../../utils/qualityReportsDepartments"
+          );
+          const deptOwnerNames = await getDepartmentKpiOwnerNames();
+          const notDept = `(kd.owner_name IS NULL OR kd.owner_name <> ALL($1::text[]))`;
+
           // Aggregate summary stats and distinct categories — small results
           const [kpiTotR, valTotR, catsR] = await Promise.all([
             pool.query(
-              `SELECT COUNT(*)::int AS total FROM kpi_definitions WHERE is_active = true`,
+              `SELECT COUNT(*)::int AS total FROM kpi_definitions kd WHERE kd.is_active = true AND ${notDept}`,
+              [deptOwnerNames],
             ),
-            pool.query(`SELECT COUNT(*)::int AS total FROM kpi_values`),
             pool.query(
-              `SELECT DISTINCT COALESCE(category, 'Uncategorised') AS cat FROM kpi_definitions WHERE is_active = true ORDER BY cat`,
+              `SELECT COUNT(*)::int AS total FROM kpi_values kv
+                 JOIN kpi_definitions kd ON kd.id = kv.kpi_id
+                WHERE ${notDept}`,
+              [deptOwnerNames],
+            ),
+            pool.query(
+              `SELECT DISTINCT COALESCE(kd.category, 'Uncategorised') AS cat
+                 FROM kpi_definitions kd WHERE kd.is_active = true AND ${notDept} ORDER BY cat`,
+              [deptOwnerNames],
             ),
           ]);
           const kpiTotal = kpiTotR.rows[0]?.total ?? 0;
@@ -903,6 +925,7 @@ const _qmsEnhancedRoutesRaw = [
               FROM kpi_values WHERE kpi_id = kd.id ORDER BY period_end DESC LIMIT 1
             ) lat ON true
             WHERE kd.is_active = true AND COALESCE(kd.category, 'Uncategorised') = $1
+              AND (kd.owner_name IS NULL OR kd.owner_name <> ALL($2::text[]))
             ORDER BY kd.kpi_name`;
 
           const sheets: Array<{
@@ -928,7 +951,7 @@ const _qmsEnhancedRoutesRaw = [
           ];
 
           for (const cat of kpiCats) {
-            const catSource = cursorQuery(pool, catDefSql, [cat]);
+            const catSource = cursorQuery(pool, catDefSql, [cat, deptOwnerNames]);
             const catRows = (async function* () {
               for await (const r of catSource)
                 yield r as Record<string, unknown>;
