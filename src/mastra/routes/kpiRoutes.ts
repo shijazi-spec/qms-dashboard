@@ -138,6 +138,15 @@ export const kpiRoutes = [
           // Attach the recorded value to each KPI so owner-filtered cards show real
           // numbers + RAG status (parity with /api/kpis/summary). latestValue = the
           // numeric actual_value; status is separate. Quarter-scoped when ?quarter set.
+          // For the CURRENT quarter (or the Latest view), checklist KPIs show the
+          // LIVE schedule-scoped rate — identical to the checklist modal header.
+          // kpi_values can lag behind ticks/backfills (which left e.g. BU Pilot
+          // Validation showing a stale 0 while the checklist read 66.7%). Past
+          // quarters keep their recorded historical value.
+          const nowD = new Date();
+          const curQ = Math.floor(nowD.getUTCMonth() / 3) + 1;
+          const curY = nowD.getUTCFullYear();
+          const currentView = !q || (q.quarter === curQ && q.year === curY);
           kpis = await Promise.all(
             (kpis as any[]).map(async (k) => {
               const lv = k?.id
@@ -145,9 +154,21 @@ export const kpiRoutes = [
                   ? await getLatestKPIValueForQuarter(k.id, q.year, q.quarter)
                   : await getLatestKPIValue(k.id)
                 : null;
+              let latestValue = lv ? lv.actual_value : null;
+              if (k?.calc_mode === "checklist" && k?.kpi_code && currentView) {
+                try {
+                  const { actionPlanCompleteRate } = await import(
+                    "../../utils/kpiChecklistDatabase"
+                  );
+                  const sr = await actionPlanCompleteRate(k.kpi_code);
+                  if (sr && sr.value != null) latestValue = sr.value;
+                } catch {
+                  /* fall back to the recorded value */
+                }
+              }
               return {
                 ...k,
-                latestValue: lv ? lv.actual_value : null,
+                latestValue,
                 status: lv ? lv.status : "no_data",
                 trend: lv ? lv.trend : null,
                 lastUpdated: lv ? lv.period_end : null,
