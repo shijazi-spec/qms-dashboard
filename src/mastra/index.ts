@@ -544,6 +544,7 @@ export const mastra = new Mastra({
         runAutonomousResolutionIfStale,
         runResolutionDigestIfDue,
         runWeeklyExecBriefIfDue,
+        runLeadershipPushIfDue,
       } = await import("../utils/scheduledJobs");
       const helpers: Array<{
         name: string;
@@ -566,6 +567,9 @@ export const mastra = new Mastra({
         { name: "ResolutionDigest", fn: () => runResolutionDigestIfDue() },
         // Weekly leadership exec brief (Sunday 06:00 KSA). No-ops otherwise.
         { name: "ExecBriefWeekly", fn: () => runWeeklyExecBriefIfDue() },
+        // Daily push of KPI values to the Leadership Platform webhook (06:00-09:00
+        // KSA, once/day). No-op unless PLATFORM_WEBHOOK_URL + WEBHOOK_SECRET are set.
+        { name: "LeadershipPushDaily", fn: () => runLeadershipPushIfDue() },
         // Daily overdue reminders (Handoff Tracker + Tech Requests). Window-gated
         // to 07:00-09:59 KSA; per-row 20h stamp stops the 45-min loop re-sending.
         {

@@ -608,3 +608,61 @@ export async function runWeeklyExecBriefIfDue(): Promise<{ ran: boolean; ageHour
   }
 }
 
+/**
+ * Daily push of QMS KPI values to the Leadership Platform webhook.
+ *
+ * QMS is the source of truth; the Leadership Platform only pulls on its own
+ * schedule, so this pushes the mapped KPIs every morning so the leadership board
+ * reflects the current QMS values daily without waiting on their pull.
+ *
+ * Window: 03:00–06:00 UTC (06:00–09:00 KSA), gated to once per ~20h so only one
+ * fire per day actually posts. No-op (and NOT stamped, so it retries next day)
+ * when the push isn't configured — pushToLeadership() itself returns
+ * {configured:false} unless PLATFORM_WEBHOOK_URL + WEBHOOK_SECRET are set, and
+ * it only sends KPIs that map to a real leadership record (skips the rest).
+ */
+export async function runLeadershipPushIfDue(): Promise<{ ran: boolean; ageHours: number }> {
+  const now = new Date();
+  const hourUTC = now.getUTCHours();
+  if (hourUTC < 3 || hourUTC > 6) return { ran: false, ageHours: 0 };
+
+  const pool = sharedPool;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scanner_run_log (
+      id SERIAL PRIMARY KEY,
+      scanner_name VARCHAR(100) NOT NULL,
+      ran_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      success BOOLEAN NOT NULL DEFAULT true,
+      summary JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_scanner_run_log_name_time ON scanner_run_log(scanner_name, ran_at DESC);
+  `);
+  const scanner = "leadership-push-daily";
+  const r = await pool.query<{ hours: number | null }>(
+    `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ran_at)))/3600 AS hours
+     FROM scanner_run_log WHERE scanner_name=$1 AND success=true`,
+    [scanner],
+  );
+  const ageHours = r.rows[0]?.hours == null ? Infinity : Number(r.rows[0].hours);
+  if (ageHours < 20) return { ran: false, ageHours }; // already pushed today
+  try {
+    const { pushToLeadership } = await import("./leadershipPush");
+    const res = await pushToLeadership();
+    // Not-configured is a no-op, not a failure — don't stamp, so it retries once
+    // the operator sets the secrets.
+    if (!res.configured) return { ran: false, ageHours };
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, true, $2)`,
+      [scanner, JSON.stringify(res)],
+    );
+    return { ran: true, ageHours };
+  } catch (err) {
+    logger.error("[LeadershipPush Fallback] failed:", err);
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, false, $2)`,
+      [scanner, JSON.stringify({ error: String(err) })],
+    );
+    return { ran: false, ageHours };
+  }
+}
+
