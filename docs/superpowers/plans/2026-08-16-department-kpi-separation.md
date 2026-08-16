@@ -1227,3 +1227,21 @@ Expected: all gates pass, including `check-dashboard-html-js`.
 git add dashboard/kpis.html
 git commit -m "feat(kpis): drop department teams from the KPI Engine owner controls"
 ```
+
+- [ ] **Step 7: Remove the teams from the "KPIs by Owner" donut (found during implementation)**
+
+A sixth occurrence, not in the original three: `renderCharts()` (~line 586-595) builds the owner doughnut from three hardcoded, index-aligned arrays. Task 3 drops `sdr_team`/`sales_team` from `summary.byOwner`, but this chart would still render both as permanent zero slices in the legend — which is exactly the "BU KPIs are still here" the page shows today.
+
+Delete the department entries from **all three arrays**, keeping them index-aligned at five entries each:
+
+```js
+                data: {
+                    labels: ['Sarah (Quality)', 'Maram (GRC)', 'AlHanouf (Specialist)', 'Ali Fahad (Legal)', 'GRQ Team'],
+                    datasets: [{
+                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.grq_specialist || 0, data.byOwner?.legal_specialist || 0, data.byOwner?.shared || 0],
+                        backgroundColor: ['#1E3A8A', '#1E293B', '#7C3AED', '#B45309', '#6D28D9']
+                    }]
+                },
+```
+
+The two dropped colours are `#0891B2` (SDR) and `#0E7490` (Sales); `#6D28D9` stays with GRQ Team. Misaligning these arrays would silently mislabel every slice, so verify all three have five entries.
