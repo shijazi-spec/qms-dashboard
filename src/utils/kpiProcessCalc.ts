@@ -166,6 +166,88 @@ export async function calcSdrQualificationRate(): Promise<ProcessKpiValue> {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Meeting KPIs (SDR-KPI-04 / SDR-KPI-05)
+// ---------------------------------------------------------------------------
+/**
+ * Zoho has no Events/Meetings module synced into this platform (only Deals,
+ * Leads and Calls are ever fetched), so these are derived from the two Deal
+ * STAGES the Sales SOP defines for the meeting step — "Meeting" (§7.3) and
+ * "Not Attend Meeting" (§7.2.8), see salesStageSlaSpec.ts.
+ *
+ * ORDER MATTERS BELOW: "Not Attend Meeting" also contains the substring
+ * "meeting", so the no-show test must run FIRST. Reversing these two lines
+ * silently scores every no-show as an attended meeting and pushes Show Rate
+ * to 100%.
+ */
+function classifyMeetingStage(stage: string | null): "attended" | "no_show" | null {
+  const s = (stage || "").toLowerCase().trim();
+  if (!s) return null;
+  if (s.includes("not attend")) return "no_show";
+  if (s.includes("meeting")) return "attended";
+  return null;
+}
+
+/** 4 weeks — the window SDR-KPI-04 averages over. */
+const MEETING_WINDOW_DAYS = 28;
+
+/**
+ * SDR-KPI-04 Meetings Booked Per Week — deals that reached the meeting step
+ * (attended or no-show; both were BOOKED) within the window, averaged per week.
+ *
+ * Uses Modified_Time as the stage-entry proxy. That is the same proxy the Deal
+ * Stage Aging engine already uses platform-wide (Zoho exposes no stage-entry
+ * date without a per-deal history call), so a deal edited for an unrelated
+ * reason can re-enter the window. Documented rather than hidden: `details`
+ * carries the raw count so the number can be sanity-checked.
+ */
+export async function calcSdrMeetingsBooked(): Promise<ProcessKpiValue> {
+  const recs = await localRawRecords("Deals");
+  let booked = 0;
+  for (const r of recs) {
+    if (!classifyMeetingStage(readField(r.Stage))) continue;
+    const d = daysSince(r.Modified_Time || r.Created_Time);
+    if (d === null || d > MEETING_WINDOW_DAYS) continue;
+    booked++;
+  }
+  if (booked === 0) return EMPTY;
+  const weeks = MEETING_WINDOW_DAYS / 7;
+  return {
+    value: Math.round((booked / weeks) * 10) / 10,
+    dataAvailable: true,
+    details: { booked, window_days: MEETING_WINDOW_DAYS, weeks },
+  };
+}
+
+/**
+ * SDR-KPI-05 Show Rate — attended ÷ booked across the deals currently AT the
+ * meeting step.
+ *
+ * This is a snapshot of the current meeting cohort, not a historical rate: a
+ * deal that attended and then progressed to Proposal has left both stages and
+ * is no longer counted on either side. A true historical rate needs per-deal
+ * stage history (the same expensive Zoho call the Sales cycle times make), so
+ * the cheap cohort ratio is used here. Both sides move together, so the ratio
+ * stays meaningful even though the denominator is a snapshot.
+ */
+export async function calcSdrShowRate(): Promise<ProcessKpiValue> {
+  const recs = await localRawRecords("Deals");
+  let attended = 0;
+  let noShow = 0;
+  for (const r of recs) {
+    const c = classifyMeetingStage(readField(r.Stage));
+    if (c === "attended") attended++;
+    else if (c === "no_show") noShow++;
+  }
+  const booked = attended + noShow;
+  if (booked === 0) return EMPTY;
+  return {
+    value: Math.round((attended / booked) * 1000) / 10,
+    dataAvailable: true,
+    details: { attended, no_show: noShow, booked },
+  };
+}
+
 /** SDR-KPI-10 Pipeline Aging — avg days leads sit in Contacting/Contacted. */
 export async function calcSdrPipelineAging(): Promise<ProcessKpiValue> {
   const recs = await localRawRecords("Leads");
@@ -631,6 +713,8 @@ export const PROCESS_CALCULATORS: Record<
   "SDR-KPI-01": calcSdrCallsPerDay,
   "SDR-KPI-02": calcSdrContactRate,
   "SDR-KPI-03": calcSdrQualificationRate,
+  "SDR-KPI-04": calcSdrMeetingsBooked,
+  "SDR-KPI-05": calcSdrShowRate,
   "SDR-KPI-06": calcSdrSpeedToLead,
   "SDR-KPI-07": calcSdrLeadToQualified,
   "SDR-KPI-08": calcSdrCrmAccuracy,
