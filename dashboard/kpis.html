@@ -586,10 +586,10 @@
             charts.owner = new Chart(document.getElementById('ownerChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: ['Sarah (Quality)', 'Maram (GRC)', 'AlHanouf (Specialist)', 'Ali Fahad (Legal)', 'SDR Team', 'Sales Team', 'GRQ Team'],
+                    labels: ['Sarah (Quality)', 'Maram (GRC)', 'AlHanouf (Specialist)', 'Ali Fahad (Legal)', 'GRQ Team'],
                     datasets: [{
-                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.grq_specialist || 0, data.byOwner?.legal_specialist || 0, data.byOwner?.sdr_team || 0, data.byOwner?.sales_team || 0, data.byOwner?.shared || 0],
-                        backgroundColor: ['#1E3A8A', '#1E293B', '#7C3AED', '#B45309', '#0891B2', '#0E7490', '#6D28D9']
+                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.grq_specialist || 0, data.byOwner?.legal_specialist || 0, data.byOwner?.shared || 0],
+                        backgroundColor: ['#1E3A8A', '#1E293B', '#7C3AED', '#B45309', '#6D28D9']
                     }]
                 },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
