@@ -42,12 +42,13 @@ export interface QualityReportBUSeed {
 }
 
 export const SEED_BUS: QualityReportBUSeed[] = [
-  // SDR B2B is the ONLY BU seeded with a catalog-KPI owner: per Sarah
-  // 2026-08-16 the SDR-KPI-01..06 set measures SDR B2B, not B2C. Other BUs
-  // are left null on purpose — map them from Admin: BU mappings when their
-  // KPI ownership is confirmed (Sales Team KPIs already exist in the catalog).
+  // Catalog-KPI owners are seeded on the B2B rows ONLY (Sarah 2026-08-16):
+  // SDR-KPI-* measures SDR B2B and SALES-KPI-* measures Sales B2B — the B2C
+  // BUs must NOT inherit them just because they share the same `fn`. The
+  // remaining BUs stay null on purpose so they read "not mapped" rather than
+  // a misleading 0; map them from Admin: BU mappings once ownership is agreed.
   { bu_key: "sdr_b2b", bu_name: "SDR (B2B)", channel: "B2B", fn: "sdr", sort_order: 1, kpi_bu_name: "SDR", kpi_owner_name: "SDR Team" },
-  { bu_key: "sales_b2b", bu_name: "Sales (B2B)", channel: "B2B", fn: "sales", sort_order: 2, kpi_bu_name: "Sales B2B" },
+  { bu_key: "sales_b2b", bu_name: "Sales (B2B)", channel: "B2B", fn: "sales", sort_order: 2, kpi_bu_name: "Sales B2B", kpi_owner_name: "Sales Team" },
   { bu_key: "cs_b2b", bu_name: "Customer Success (B2B)", channel: "B2B", fn: "cs", sort_order: 3, kpi_bu_name: "Customer Success" },
   { bu_key: "sdr_b2c", bu_name: "SDR (B2C)", channel: "B2C", fn: "sdr", sort_order: 4, kpi_bu_name: "SDR" },
   { bu_key: "sales_b2c", bu_name: "Sales (B2C)", channel: "B2C", fn: "sales", sort_order: 5, kpi_bu_name: "Sales B2C" },
