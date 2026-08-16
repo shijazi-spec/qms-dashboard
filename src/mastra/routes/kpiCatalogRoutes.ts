@@ -44,10 +44,60 @@ function ragToLeadershipLabel(
   return "Not Started";
 }
 
-async function legacyGroup(ownerType: string) {
+/**
+ * Which of this catalog's hardcoded group keys are DEPARTMENT teams — i.e.
+ * teams whose KPIs moved to their Quality Reports BU page and must not be
+ * listed here. Derived from the BU registry (never hardcoded), so unmapping a
+ * BU returns its group to this page automatically.
+ *
+ * The group keys are `owner_type` values while the registry stores
+ * `owner_name`, so each departmental name is resolved through the same
+ * owner_type lookup the BU-scoped create endpoint uses.
+ *
+ * 'shared' is EXCLUDED from the result on purpose. It is the GRQ Team's own
+ * owner_type (Sarah 2026-08-16: "shared KPIs are for the GRQ Team, leave them
+ * in the KPI engine as is"), and it is also getOwnerTypeForOwnerName's
+ * fallback for a team with no KPIs yet — so without this guard, a newly-mapped
+ * department with no KPIs would resolve to 'shared' and silently delete the
+ * GRQ Team group from this page.
+ */
+export async function departmentGroupKeys(
+  deptOwnerNames: string[],
+  resolveOwnerType?: (ownerName: string) => Promise<string>,
+): Promise<Set<string>> {
+  if (!deptOwnerNames.length) return new Set();
+  const resolve =
+    resolveOwnerType ??
+    (await import("../../utils/kpiDatabase")).getOwnerTypeForOwnerName;
+  const types = await Promise.all(deptOwnerNames.map((n) => resolve(n)));
+  return new Set(types.filter((t) => t && t !== "shared"));
+}
+
+/** Drops the groups whose owner_type belongs to a department team. */
+export function withoutDepartmentGroups<T extends { key: string }>(
+  groups: T[],
+  deptKeys: Set<string>,
+): T[] {
+  return groups.filter((g) => !deptKeys.has(g.key));
+}
+
+/** Removes department-owned KPIs from a group's rows (owner_name match). */
+export function withoutDepartmentKpis<T extends { owner_name?: string | null }>(
+  defs: T[],
+  deptOwnerNames: string[],
+): T[] {
+  const set = new Set(deptOwnerNames);
+  if (!set.size) return defs;
+  return defs.filter((d) => !d.owner_name || !set.has(String(d.owner_name)));
+}
+
+async function legacyGroup(ownerType: string, deptOwnerNames: string[] = []) {
   const { getKPIsByOwner, getLatestKPIValue } =
     await import("../../utils/kpiDatabase");
-  const defs = await getKPIsByOwner(ownerType);
+  const all = await getKPIsByOwner(ownerType);
+  // Belt-and-braces: a department KPI whose owner_type fell back to 'shared'
+  // would otherwise surface inside the GRQ Team group, which is not dropped.
+  const defs = withoutDepartmentKpis(all as any[], deptOwnerNames);
   return Promise.all(
     defs.map(async (d: any) => {
       let value: number | null = null;
@@ -111,9 +161,18 @@ export const kpiCatalogRoutes = [
                 };
               });
 
+          // Department KPIs (SDR / Sales) are reported on their Quality Reports
+          // BU page, not here — listing them would contradict the note on
+          // /kpis that sends people there.
+          const { getDepartmentKpiOwnerNames } = await import(
+            "../../utils/qualityReportsDepartments"
+          );
+          const deptOwnerNames = await getDepartmentKpiOwnerNames();
+          const deptKeys = await departmentGroupKeys(deptOwnerNames);
+
           const [sdr, shared] = await Promise.all([
-            legacyGroup("sdr_team"),
-            legacyGroup("shared"),
+            legacyGroup("sdr_team", deptOwnerNames),
+            legacyGroup("shared", deptOwnerNames),
           ]);
 
           const groups = [
@@ -124,8 +183,9 @@ export const kpiCatalogRoutes = [
             { key: "cs_team", label: "CS Team", kpis: [] },
             { key: "shared", label: "Shared", kpis: shared },
           ];
+          const visibleGroups = withoutDepartmentGroups(groups, deptKeys);
           c.header("Cache-Control", "no-store");
-          return c.json({ generated_at: feed.generated_at, groups });
+          return c.json({ generated_at: feed.generated_at, groups: visibleGroups });
         } catch (error) {
           safeLogger.error("[KpiCatalog] failed:", error);
           return c.json({ error: "Failed to build KPI catalog" }, 500);
