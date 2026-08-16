@@ -175,6 +175,51 @@ export async function getBUByKey(buKey: string): Promise<QualityReportBU | null>
   return rowToBU(r.rows[0], owners.get(r.rows[0].id) || []);
 }
 
+// ---------------------------------------------------------------------------
+// Department KPI classification
+// ---------------------------------------------------------------------------
+/**
+ * The KPI-catalog owners that belong to a business unit we report on — today
+ * "SDR Team" and "Sales Team". A KPI whose `owner_name` is in this set is a
+ * DEPARTMENT KPI: it is hidden from the GRQ KPI Engine at /kpis and managed on
+ * its Quality Reports BU page instead.
+ *
+ * Derived from the BU registry rather than stored on the KPI, so mapping a new
+ * BU is the only action needed to separate its KPIs. Deliberately NOT keyed off
+ * `kpi_definitions.owner_type` (which does carry 'sdr_team'/'sales_team'):
+ * that would need a CHECK migration + backfill per new department, and could
+ * drift from the registry, leaving two sources disagreeing about one row.
+ *
+ * ORPHANS ARE IMPOSSIBLE BY CONSTRUCTION: if no ACTIVE BU claims an owner, its
+ * KPIs are not departmental and stay visible in /kpis. Deactivating a BU
+ * returns its KPIs to the engine rather than hiding them everywhere. Do not
+ * invert this.
+ */
+const DEPT_OWNER_TTL_MS = 60_000;
+let deptOwnerCache: { at: number; names: string[] } | null = null;
+
+/** Called by upsertBU/deleteBU so an admin mapping change lands without a restart. */
+export function invalidateDepartmentKpiOwnerCache(): void {
+  deptOwnerCache = null;
+}
+
+export async function getDepartmentKpiOwnerNames(): Promise<string[]> {
+  if (deptOwnerCache && Date.now() - deptOwnerCache.at < DEPT_OWNER_TTL_MS) {
+    return deptOwnerCache.names;
+  }
+  await ensureQualityReportTables();
+  const r = await pool.query(
+    `SELECT DISTINCT kpi_owner_name
+       FROM quality_report_bus
+      WHERE is_active = true
+        AND kpi_owner_name IS NOT NULL
+        AND kpi_owner_name <> ''`,
+  );
+  const names = r.rows.map((x: any) => String(x.kpi_owner_name));
+  deptOwnerCache = { at: Date.now(), names };
+  return names;
+}
+
 export async function upsertBU(input: {
   bu_key: string; bu_name: string; channel: Channel; fn: string;
   head_email?: string | null; policy_department?: string | null;
@@ -200,12 +245,14 @@ export async function upsertBU(input: {
      input.sort_order ?? 0, input.is_active ?? true],
   );
   const owners = await ownersFor([r.rows[0].id]);
+  invalidateDepartmentKpiOwnerCache();
   return rowToBU(r.rows[0], owners.get(r.rows[0].id) || []);
 }
 
 export async function deleteBU(id: number): Promise<void> {
   await ensureQualityReportTables();
   await pool.query(`DELETE FROM quality_report_bus WHERE id = $1`, [id]);
+  invalidateDepartmentKpiOwnerCache();
 }
 
 export async function setBUOwners(buId: number, emails: string[]): Promise<void> {
