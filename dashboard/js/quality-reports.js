@@ -466,12 +466,6 @@
                     : '') +
                 '</div>'
             );
-            // Department KPIs live only here now, so this page must be able to
-            // create them. Owner is set server-side from the BU mapping.
-            if (k && k.owner) {
-                out.push('<div class="mb-2"><button type="button" class="rr-btn rr-btn-ghost" data-on-click="qrAddKpi" data-args="' +
-                    escAttr(JSON.stringify([qrCurrentBUKey, k.owner])) + '">+ Add KPI</button></div>');
-            }
             var rows = list.map(function (i) {
                 var rag = QR_RAG[i.rag] || QR_RAG.none;
                 // Department KPIs are no longer in the KPI Engine, so this is
@@ -502,6 +496,15 @@
             out.push('<div class="mb-3">' + rows.join('') + '</div>');
         } else if (k && k.owner) {
             out.push('<div class="text-xs text-gray-500 mb-3">No active KPIs found for ' + escapeHtml(k.owner) + '.</div>');
+        }
+
+        // Department KPIs live only here now, so this page must be able to
+        // create them. Owner is set server-side from the BU mapping. Renders
+        // whenever the BU has a KPI owner, whether or not it has KPIs yet —
+        // a BU with none is exactly the case where adding one matters most.
+        if (k && k.owner) {
+            out.push('<div class="mb-2"><button type="button" class="rr-btn rr-btn-ghost" data-on-click="qrAddKpi" data-args="' +
+                escAttr(JSON.stringify([qrCurrentBUKey, k.owner])) + '">+ Add KPI</button></div>');
         }
 
         // Framework/action-plan checklist progress — kept alongside the KPIs
