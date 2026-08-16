@@ -158,9 +158,35 @@ export async function runZohoCallsImport(
     },
   };
 
-  if (!conn.connected) {
+  // Gate on CONFIGURED, not CONNECTED.
+  //
+  // `connected` is `!!cachedAccessToken && !isTokenExpired()` — i.e. "a token
+  // is already warm IN THIS PROCESS". It says nothing about whether Zoho is
+  // usable: getValidAccessToken() refreshes on demand (zohoCRM.ts:306), so the
+  // fetch below succeeds from a cold cache on its own.
+  //
+  // Gating on `connected` therefore made the FIRST import after every server
+  // restart fail with "Zoho is not connected" even though OAuth was working —
+  // and a republish restarts the server, so this fired on exactly the run an
+  // operator was most likely to make. Observed live 2026-08-17: the import
+  // returned "Scanned 0 / Errors: 1 / Zoho is not connected" while the
+  // Duplicate Radar was syncing from Zoho perfectly.
+  //
+  // `configured` is the real precondition (OAuth config present, or a static
+  // ZOHO_ACCESS_TOKEN). A genuine auth failure still surfaces — it just comes
+  // from the API call below, with Zoho's actual error, instead of a
+  // misleading blanket message.
+  if (!conn.configured) {
     result.errors = 1;
-    result.error_samples.push("Zoho is not connected");
+    result.error_samples.push(
+      "Zoho is not configured — set the Zoho OAuth credentials (or ZOHO_ACCESS_TOKEN) before importing calls.",
+    );
+    result.duration_ms = Date.now() - t0;
+    return result;
+  }
+  if (conn.rateLimited) {
+    result.errors = 1;
+    result.error_samples.push(conn.message);
     result.duration_ms = Date.now() - t0;
     return result;
   }
