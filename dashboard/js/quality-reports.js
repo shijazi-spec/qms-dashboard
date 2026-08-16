@@ -204,21 +204,47 @@
         }
     };
 
+    // Client-side ceiling for the per-BU report. Deliberately BELOW the hosting
+    // proxy's own cutoff (~60s), so a slow report surfaces our own message with
+    // a Retry button instead of the proxy's bare "HTTP 504" — which is what this
+    // page used to show after sitting on "Loading…" for a minute. The server
+    // bounds itself independently (QUALITY_REPORTS_SECTION_TIMEOUT_MS, 20s
+    // default), so hitting this is already the abnormal path.
+    var QR_REPORT_TIMEOUT_MS = 45000;
+
     window.qrOpenBU = async function (buKey) {
         var host = document.getElementById('qrBU');
         document.getElementById('qrHub').classList.add('hidden');
         host.classList.remove('hidden');
         host.innerHTML = '<div class="rr-kpi-sub">Loading…</div>';
+        var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        var timedOut = false;
+        var timer = setTimeout(function () {
+            timedOut = true;
+            if (ctrl) ctrl.abort();
+        }, QR_REPORT_TIMEOUT_MS);
         try {
-            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey), { credentials: 'same-origin' });
+            var opts = { credentials: 'same-origin' };
+            if (ctrl) opts.signal = ctrl.signal;
+            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey), opts);
+            clearTimeout(timer);
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var payload = await res.json();
             qrRenderBU(payload);
             try { history.replaceState(null, '', '?bu=' + encodeURIComponent(buKey)); } catch (e2) {}
         } catch (e) {
+            clearTimeout(timer);
+            // A 504 means the proxy gave up on a still-running request — same
+            // user-visible cause as our own abort, so give it the same advice.
+            var isSlow = timedOut || (e && e.name === 'AbortError') ||
+                /\b(504|502)\b/.test(String((e && e.message) || ''));
+            var detail = isSlow
+                ? 'This report took too long to build. It scans the full deal corpus for this segment, so it can time out while a CRM sync is running.'
+                : 'Failed to load report: ' + escapeHtml(String((e && e.message) || e));
             host.innerHTML =
-                '<button type="button" class="rr-btn rr-btn-ghost mb-3" data-on-click="qrBackToHub">← All units</button>' +
-                '<div class="text-sm text-red-600">Failed to load report: ' + escapeHtml(String((e && e.message) || e)) + '</div>';
+                '<button type="button" class="rr-btn rr-btn-ghost mb-3" data-on-click="qrBackToHub">← All units</button> ' +
+                '<button type="button" class="rr-btn rr-btn-ghost mb-3" data-on-click="qrOpenBU" data-args="' + escAttr(JSON.stringify([buKey])) + '">↻ Retry</button>' +
+                '<div class="text-sm ' + (isSlow ? 'text-amber-600' : 'text-red-600') + '">' + detail + '</div>';
         }
     };
 
@@ -296,13 +322,24 @@
             '</div>';
     }
 
-    /** A detail card below the summary strip. Renders the "not configured" placeholder when unmapped. */
-    function qrSection(title, bodyHtml, configured) {
+    /**
+     * A detail card below the summary strip. Three states, kept distinct on
+     * purpose: mapped-with-data, mapped-but-too-slow (server dropped it at its
+     * section budget), and genuinely unmapped. Folding the timeout case into
+     * "not configured" would tell the user to go fix a mapping that is fine.
+     */
+    function qrSection(title, bodyHtml, configured, didTimeOut) {
+        var body;
+        if (didTimeOut) {
+            body = '<div class="text-xs text-amber-600">Timed out while building this section — the underlying scan is still running. Retry in a moment, or avoid running it during a CRM sync.</div>';
+        } else if (configured) {
+            body = bodyHtml || '<div class="text-xs text-gray-500">No data.</div>';
+        } else {
+            body = '<div class="text-xs text-gray-500">Not configured yet — map this in Quality Reports settings.</div>';
+        }
         return '<div class="bg-white rounded-lg shadow p-4 mb-3">' +
             '<div class="font-semibold mb-2 text-gray-900">' + escapeHtml(title) + '</div>' +
-            (configured
-                ? (bodyHtml || '<div class="text-xs text-gray-500">No data.</div>')
-                : '<div class="text-xs text-gray-500">Not configured yet — map this in Quality Reports settings.</div>') +
+            body +
             '</div>';
     }
 
@@ -310,7 +347,9 @@
         var host = document.getElementById('qrBU');
         var bu = d.bu || {};
         var nc = d.notConfigured || [];
+        var to = d.timedOut || [];
         var isCfg = function (name) { return nc.indexOf(name) === -1; };
+        var isTO = function (name) { return to.indexOf(name) !== -1; };
         var s = d.sections || {};
         var parts = [];
 
@@ -347,11 +386,11 @@
         parts.push('<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">' + stats.join('') + '</div>');
 
         // Detail cards.
-        parts.push(qrSection('SOPs', s.sops ? qrSopsHtml(s.sops) : '', isCfg('sops')));
-        parts.push(qrSection('KPIs', s.kpis ? qrKpisHtml(s.kpis) : '', isCfg('kpis')));
-        parts.push(qrSection('Data cleanup', s.cleanup ? qrCleanupHtml(s.cleanup) : '', isCfg('cleanup')));
-        parts.push(qrSection('Compliance', s.compliance ? qrComplianceHtml(s.compliance) : '', isCfg('compliance')));
-        parts.push(qrSection('Open actions', s.actions ? qrActionsHtml(s.actions) : '', isCfg('actions')));
+        parts.push(qrSection('SOPs', s.sops ? qrSopsHtml(s.sops) : '', isCfg('sops'), isTO('sops')));
+        parts.push(qrSection('KPIs', s.kpis ? qrKpisHtml(s.kpis) : '', isCfg('kpis'), isTO('kpis')));
+        parts.push(qrSection('Data cleanup', s.cleanup ? qrCleanupHtml(s.cleanup) : '', isCfg('cleanup'), isTO('cleanup')));
+        parts.push(qrSection('Compliance', s.compliance ? qrComplianceHtml(s.compliance) : '', isCfg('compliance'), isTO('compliance')));
+        parts.push(qrSection('Open actions', s.actions ? qrActionsHtml(s.actions) : '', isCfg('actions'), isTO('actions')));
 
         host.innerHTML = parts.join('');
     }

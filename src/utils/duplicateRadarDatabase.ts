@@ -18,8 +18,25 @@ import { shapeDealCompliance, type DealComplianceSummary } from "./dealComplianc
 // Normalize sslmode directly on the connection string (module-scope pool —
 // see src/utils/normalizeDatabaseUrl.ts for why env-var ordering is unreliable
 // in the production bundle). Idempotent.
+//
+// statement_timeout is a RUNAWAY BACKSTOP, not a latency budget. This pool is
+// shared by the radar dashboards, Adam's tools AND the Zoho sync jobs, so the
+// default is deliberately generous (15 min): no healthy individual statement
+// comes close, but a query wedged behind a lock or a bad plan now dies with a
+// clear Postgres error instead of pinning one of the pool's connections
+// indefinitely. Tune with DUPLICATE_RADAR_STATEMENT_TIMEOUT_MS; set 0 to
+// disable. Per-request latency is bounded in the callers (e.g. the Quality
+// Reports aggregator's per-section budget), not here.
+const STATEMENT_TIMEOUT_MS = (() => {
+  const raw = process.env.DUPLICATE_RADAR_STATEMENT_TIMEOUT_MS;
+  if (raw == null || raw.trim() === "") return 900000;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 900000;
+})();
+
 const pool = createRedactedPool({
   connectionString: normalizeSslMode(process.env.DATABASE_URL),
+  ...(STATEMENT_TIMEOUT_MS > 0 ? { statement_timeout: STATEMENT_TIMEOUT_MS } : {}),
 });
 
 export interface DuplicateCluster {
@@ -11845,6 +11862,16 @@ export async function scanCsLifecycleViolations(opts: {
   code?: CsViolationCode;
   limit?: number;
   segment?: DuplicateFilters["segment"];
+  /**
+   * Summary-only mode (Quality Reports Hub): compute `summary` but return an
+   * EMPTY `violations` array. Unlike the stage-aging scan this still has to
+   * read `raw_data` — evaluateCsLifecycle extracts the whole Customer Success
+   * section from it, so there is no column projection to fall back on — but it
+   * skips building, sorting and JSON-serialising thousands of violation rows
+   * that the per-BU report never renders (it reads only
+   * summary.total_violations). The CS Lifecycle tab keeps the full path.
+   */
+  summaryOnly?: boolean;
 } = {}): Promise<CsLifecycleScanResult> {
   const t0 = Date.now();
   // Bumped default 2000 → 10000 and cap 5000 → 50000 so the scan covers
@@ -11906,6 +11933,8 @@ export async function scanCsLifecycleViolations(opts: {
     });
     evaluations.push(ev);
     if (!ev.is_cs_deal) continue;
+    // Summary-only: `evaluations` above is all summarizeCsLifecycle needs.
+    if (opts.summaryOnly) continue;
 
     // Pull the Customer Success section detail fields for display alongside
     // each violation (CS owner, customer-since, renewal/churn dates, health).
@@ -12036,6 +12065,30 @@ export async function scanDealStageAgingViolations(
     stage?: string;
     limit?: number;
     segment?: DuplicateFilters["segment"];
+    /**
+     * Summary-only mode (Quality Reports Hub): return `summary` and an EMPTY
+     * `violations` array, reading the projected COLUMNS instead of `raw_data`.
+     *
+     * The full path selects `r.raw_data` for up to 10k deals — tens of MB of
+     * JSONB detoasted, shipped over the wire and JSON-parsed in Node — purely
+     * so the per-BU report could render ONE integer
+     * (summary.total_violations). That single query is what pushed
+     * GET /api/quality-reports/bus/:key past the Replit proxy timeout (504).
+     *
+     * The projection is semantically equivalent, not an approximation:
+     *   - stage: `duplicate_records.stage` is populated from the same Zoho
+     *     `d.Stage` string the full path reads out of raw_data
+     *     (duplicateRadarRoutes.ts:1292), with the raw_data paths kept as a
+     *     COALESCE fallback for rows whose column is blank. COALESCE is lazy,
+     *     so a populated column skips the detoast entirely.
+     *   - created_time: `duplicate_records.created_date` is the column form of
+     *     raw_data.Created_Time, and evaluateDealStageAging only consults it as
+     *     the last fallback after modified_date (dealStageAgingCompliance.ts:153).
+     *
+     * The Deals Lifecycle tab keeps using the full path unchanged — it needs
+     * the violation rows (deal name / owner / amount) that this mode drops.
+     */
+    summaryOnly?: boolean;
   } = {},
 ): Promise<DealStageAgingScanResult> {
   const t0 = Date.now();
@@ -12058,6 +12111,37 @@ export async function scanDealStageAgingViolations(
   }
   params.push(limit);
   const limitPh = "$" + params.length;
+
+  // Summary-only: same rows, same WHERE, same LIMIT — but three narrow columns
+  // instead of the whole raw_data blob. See the summaryOnly doc comment above.
+  if (opts.summaryOnly) {
+    const lite = await pool.query(
+      `SELECT r.modified_date,
+              r.created_date,
+              COALESCE(NULLIF(r.stage,''), r.raw_data#>>'{Stage,name}',
+                       r.raw_data->>'Stage') AS stage
+         FROM duplicate_records r
+         LEFT JOIN duplicate_clusters dc ON dc.id = r.cluster_id
+        WHERE r.zoho_module = 'Deals'
+          AND r.cleanup_class IS NULL
+          AND (dc.status IS NULL OR dc.status = 'active')${segmentCond}
+        ORDER BY r.modified_date DESC NULLS LAST
+        LIMIT ${limitPh}`,
+      params,
+    );
+    const liteEvaluations = lite.rows.map((row: any) =>
+      evaluateDealStageAging({
+        stage: typeof row.stage === "string" ? row.stage.trim() || null : null,
+        modified_date: row.modified_date,
+        created_time: row.created_date ?? null,
+      }),
+    );
+    return {
+      summary: summarizeDealStageAging(liteEvaluations),
+      violations: [],
+      duration_ms: Date.now() - t0,
+    };
+  }
 
   const dealRows = await pool.query(
     `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,
