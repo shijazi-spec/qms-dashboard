@@ -22,17 +22,20 @@ import { logger } from "./logger";
  * while the dev ids 404'd. So verify UUIDs against PROD (the deployed board), never
  * the workspace Shell.
  *
- * Only KPIs that exist as native leadership `strategyItem` records can be pushed —
- * the inbound webhook does `strategyItem.findUnique({ where: { id } })` and 404s
- * otherwise. QM-KPI-015 (BU Framework Readiness) and QM-KPI-008 (BU Pilot
- * Validation) are intentionally OMITTED: they are not native prod records — they
- * surface on the board via the QMS pull feed. Add them here (with PROD ids) once
- * leadership creates native records. Override via the LEADERSHIP_KPI_MAP env JSON.
+ * The inbound webhook does `strategyItem.findUnique({ where: { id } })` and 404s
+ * on an unknown id. All 5 GRQ KPIs exist as native records in PROD (they show on
+ * the deployed board). The 3 native ids below are proven ("3 ok"); the 2 BU ids
+ * are the remaining spec-doc ids — the spec doc described PROD, so its 3 proven
+ * ids give high confidence in its 2 BU ids too. VERIFY on the board after the
+ * first push (right value on the right row); if either 404s, get its real id from
+ * PROD. Override via the LEADERSHIP_KPI_MAP env JSON.
  */
 const DEFAULT_MAP: Record<string, string> = {
   "QM-KPI-002": "c1ee6e62-ca61-4dc3-942d-4f83f208278e", // Audit Execution Rate
   "GRC-KPI-008": "73b2b61f-52e2-4bb4-88dc-15bfb3c406f1", // Compliance Coverage Index
   "GRC-KPI-002": "2f11d78d-1363-4546-bd9e-30eac23c3a5e", // Certification Milestones On-Track
+  "QM-KPI-015": "d6fd13f5-93a7-4d6b-b50a-025b92a4d0fc", // BU Framework Readiness Rate
+  "QM-KPI-008": "d40dba10-d7d0-40ec-b6e1-dcc48c656a0a", // BU Pilot Validation Completion Rate
 };
 
 function getMap(): Record<string, string> {
