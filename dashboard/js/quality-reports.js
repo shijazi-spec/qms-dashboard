@@ -463,7 +463,12 @@
             );
             var rows = list.map(function (i) {
                 var rag = QR_RAG[i.rag] || QR_RAG.none;
-                return '<div class="flex items-center gap-3 py-1.5 border-b border-gray-100 last:border-0">' +
+                // Department KPIs are no longer in the KPI Engine, so this is
+                // the only route to their detail/editor page. Rows without an
+                // id render as plain divs rather than dead links.
+                var open = i.id ? '<a href="/kpi/' + encodeURIComponent(i.id) + '" class="block hover:bg-gray-50 -mx-2 px-2 rounded">' : '';
+                var close = i.id ? '</a>' : '';
+                return open + '<div class="flex items-center gap-3 py-1.5 border-b border-gray-100 last:border-0">' +
                     '<span class="w-2 h-2 rounded-full ' + rag.dot + ' shrink-0"></span>' +
                     '<div class="min-w-0 flex-1">' +
                         '<div class="text-sm text-gray-900 truncate">' + escapeHtml(i.kpi_name || '') +
@@ -481,7 +486,7 @@
                                 : escapeHtml(rag.label)) +
                         '</div>' +
                     '</div>' +
-                '</div>';
+                '</div>' + close;
             });
             out.push('<div class="mb-3">' + rows.join('') + '</div>');
         } else if (k && k.owner) {
