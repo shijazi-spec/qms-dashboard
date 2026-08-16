@@ -1935,6 +1935,14 @@ export async function getKPIDashboardSummary(
     kpiDetails: [],
   };
 
+  // Checklist KPIs show the LIVE schedule-scoped rate on the current-quarter/Latest
+  // view (stored kpi_values can lag behind ticks/backfills) — same correction the
+  // /api/kpis card uses, so the summary tiles agree with the cards.
+  const nowD = new Date();
+  const curQ = Math.floor(nowD.getUTCMonth() / 3) + 1;
+  const curY = nowD.getUTCFullYear();
+  const currentView = !quarter || (quarter.quarter === curQ && quarter.year === curY);
+
   for (const kpi of kpis) {
     summary.byOwner[kpi.owner_type] =
       (summary.byOwner[kpi.owner_type] || 0) + 1;
@@ -1944,25 +1952,60 @@ export async function getKPIDashboardSummary(
     const latestValue = quarter
       ? await getLatestKPIValueForQuarter(kpi.id!, quarter.year, quarter.quarter)
       : await getLatestKPIValue(kpi.id!);
-    if (latestValue && latestValue.status) {
-      summary.byStatus[latestValue.status]++;
-      summary.kpiDetails.push({
-        ...kpi,
-        latestValue: latestValue.actual_value,
-        status: latestValue.status,
-        trend: latestValue.trend,
-        lastUpdated: latestValue.period_end,
-      });
+
+    let effVal: number | null = latestValue ? latestValue.actual_value : null;
+    let overridden = false;
+    if (
+      (kpi as any).calc_mode === "checklist" &&
+      (kpi as any).kpi_code &&
+      currentView
+    ) {
+      try {
+        const { actionPlanCompleteRate } = await import("./kpiChecklistDatabase");
+        const sr = await actionPlanCompleteRate((kpi as any).kpi_code);
+        if (sr && sr.value != null) {
+          effVal = sr.value;
+          overridden = true;
+        }
+      } catch {
+        /* fall back to the recorded value */
+      }
+    }
+
+    // RAG bucket for the Status Distribution donut. For an overridden checklist
+    // value, recompute the band from thresholds so the donut agrees with the tiles
+    // (which the frontend derives from latestValue); else use the stored status.
+    let bucket: string | null = latestValue?.status ?? null;
+    if (overridden && effVal != null) {
+      const dir = (kpi as any).threshold_direction || "higher_is_better";
+      const g = Number((kpi as any).threshold_green);
+      const a = Number((kpi as any).threshold_amber);
+      bucket =
+        dir === "lower_is_better"
+          ? effVal <= g
+            ? "green"
+            : effVal <= a
+              ? "amber"
+              : "red"
+          : effVal >= g
+            ? "green"
+            : effVal >= a
+              ? "amber"
+              : "red";
+    }
+    if (bucket && summary.byStatus[bucket] !== undefined) {
+      summary.byStatus[bucket]++;
     } else {
       summary.byStatus.no_data++;
-      summary.kpiDetails.push({
-        ...kpi,
-        latestValue: null,
-        status: "no_data",
-        trend: null,
-        lastUpdated: null,
-      });
+      bucket = null;
     }
+    summary.kpiDetails.push({
+      ...kpi,
+      latestValue: effVal,
+      status: bucket ?? "no_data",
+      trend: latestValue?.trend ?? null,
+      lastUpdated: latestValue?.period_end ?? null,
+    });
   }
 
   return summary;
