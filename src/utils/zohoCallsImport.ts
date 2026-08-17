@@ -19,7 +19,7 @@
  * not re-run for imported calls since they already have a lead/deal.
  */
 
-import { fetchZohoRecords, getZohoConnectionStatus, type ZohoCRMRecord } from "./zohoCRM";
+import { fetchAllZohoRecords, getZohoConnectionStatus, type ZohoCRMRecord } from "./zohoCRM";
 import { createCallRecord } from "./callIntelligenceDb";
 import { logger } from "./logger";
 
@@ -210,11 +210,21 @@ export async function runZohoCallsImport(
   // Semantics shift slightly and deliberately: modified-since rather than
   // created-since, so a call edited after the fact is re-imported. That is
   // desirable — the upsert is keyed on call_id, so re-importing refreshes it.
+  // PAGINATED. This used to call fetchZohoRecords, which fetches ONE page —
+  // Zoho caps a page at 200, so the import silently stopped at 200 calls no
+  // matter what `max` was set to. Measured live 2026-08-17: requesting max=2000
+  // still returned "scanned: 200". The 30-day window looked like it was working
+  // because each run happened to return a slightly different 200 (ordering
+  // shifts as records are modified), so the total crept up run over run and
+  // masked the cap.
+  //
+  // fetchAllZohoRecords walks the pages and honours maxRecords, the same way the
+  // Tasks sync does.
   let calls: ZohoCRMRecord[] = [];
   try {
-    calls = await fetchZohoRecords("Calls", {
+    calls = await fetchAllZohoRecords("Calls", {
       ifModifiedSince: sinceIso,
-      perPage: Math.min(maxRecords, 200),
+      maxRecords,
       sortBy: "Created_Time",
       sortOrder: "desc",
     });
