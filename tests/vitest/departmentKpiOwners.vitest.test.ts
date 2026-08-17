@@ -45,6 +45,22 @@ describe("getDepartmentKpiOwnerNames", () => {
     expect(query.mock.calls.length).toBe(callsAfterFirst);
   });
 
+  it("NEVER throws — a registry failure degrades to 'exclude nothing'", async () => {
+    // Every caller is a KPI READ path (engine list, dashboard summary, both
+    // exports, both estimates, the catalog). If the BU registry is
+    // unreachable, showing all KPIs beats 500-ing the KPI Engine. Letting the
+    // rejection escape is exactly what broke GET /api/kpis.
+    query.mockRejectedValue(new Error("connect ECONNREFUSED 127.0.0.1:5432"));
+    await expect(getDepartmentKpiOwnerNames()).resolves.toEqual([]);
+  });
+
+  it("does NOT cache a failure — the next call retries", async () => {
+    query.mockRejectedValueOnce(new Error("transient"));
+    expect(await getDepartmentKpiOwnerNames()).toEqual([]);
+    query.mockResolvedValue({ rows: [{ kpi_owner_name: "SDR Team" }] });
+    expect(await getDepartmentKpiOwnerNames()).toEqual(["SDR Team"]);
+  });
+
   it("invalidate forces a re-query", async () => {
     query.mockResolvedValue({ rows: [{ kpi_owner_name: "SDR Team" }] });
     await getDepartmentKpiOwnerNames();

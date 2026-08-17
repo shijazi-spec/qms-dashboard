@@ -207,17 +207,38 @@ export async function getDepartmentKpiOwnerNames(): Promise<string[]> {
   if (deptOwnerCache && Date.now() - deptOwnerCache.at < DEPT_OWNER_TTL_MS) {
     return deptOwnerCache.names;
   }
-  await ensureQualityReportTables();
-  const r = await pool.query(
-    `SELECT DISTINCT kpi_owner_name
-       FROM quality_report_bus
-      WHERE is_active = true
-        AND kpi_owner_name IS NOT NULL
-        AND kpi_owner_name <> ''`,
-  );
-  const names = r.rows.map((x: any) => String(x.kpi_owner_name));
-  deptOwnerCache = { at: Date.now(), names };
-  return names;
+  // NEVER THROWS. This is consulted by the KPI Engine list, its dashboard
+  // summary, both exports, both export estimates and the KPI catalog — all
+  // read paths whose job is to render KPIs, not to depend on the BU registry
+  // being reachable. If this table is unavailable, degrading to "exclude
+  // nothing" shows every KPI (the pre-separation view), which is strictly
+  // better than 500-ing the whole KPI Engine.
+  //
+  // Regression that motivated this: adding the filter to GET /api/kpis made
+  // that endpoint 500 wherever the registry could not be queried, because a
+  // rejected lookup propagated straight out of the handler.
+  //
+  // The failure is NOT cached — a transient outage must not suppress the
+  // filter for the whole TTL, so the next call retries.
+  try {
+    await ensureQualityReportTables();
+    const r = await pool.query(
+      `SELECT DISTINCT kpi_owner_name
+         FROM quality_report_bus
+        WHERE is_active = true
+          AND kpi_owner_name IS NOT NULL
+          AND kpi_owner_name <> ''`,
+    );
+    const names = r.rows.map((x: any) => String(x.kpi_owner_name));
+    deptOwnerCache = { at: Date.now(), names };
+    return names;
+  } catch (e) {
+    logger.warn(
+      "[QualityReports] could not read the department KPI owners — showing ALL KPIs this call",
+      { error: e instanceof Error ? e.message : String(e) },
+    );
+    return [];
+  }
 }
 
 export async function upsertBU(input: {

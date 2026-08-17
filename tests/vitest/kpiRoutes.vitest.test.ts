@@ -20,11 +20,27 @@ import {
 
 const FAKE_USER = { userId: 0, email: "api@system", name: "API Key", role: "admin" as const };
 
+// GET /api/kpis filters out department-owned KPIs, which means the handler now
+// consults the BU registry on every request. Unmocked, that module builds a
+// real pg pool and attempts a connection per request — fast enough to pass this
+// file alone, but slow enough under the full suite's parallel load to blow the
+// 5s test timeout. Stubbed so this stays a route unit test. Returning [] means
+// "no department owners", i.e. exclude nothing, so the existing assertions
+// about the full KPI list still hold.
+vi.mock("../../src/utils/qualityReportsDepartments", () => ({
+  getDepartmentKpiOwnerNames: vi.fn(async () => []),
+}));
 vi.mock("../../src/utils/kpiDatabase", () => ({
   initKPITables: vi.fn(async () => undefined),
   getAllKPIDefinitions: vi.fn(),
   getKPIsByOwner: vi.fn(),
   getKPIById: vi.fn(),
+  // Reached via initKPIChecklistTables -> migrateToCommercialBUs, which the
+  // route module kicks off asynchronously at import time. Omitting it made the
+  // suite flaky rather than failing outright: whether the rejection landed
+  // mid-request depended on load, so this file passed alone and failed inside
+  // the full run. Stubbed to keep that background init inert.
+  getKPIByCode: vi.fn(async () => null),
   createKPIDefinition: vi.fn(),
   updateKPIDefinition: vi.fn(),
   recordKPIValue: vi.fn(),

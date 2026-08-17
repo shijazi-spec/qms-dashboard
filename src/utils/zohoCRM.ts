@@ -418,35 +418,87 @@ export async function fetchZohoRecords(
     page?: number;
     perPage?: number;
     fields?: string[];
+    /**
+     * Zoho search criteria, e.g. `(Lead_Source:equals:Web)`. Setting this
+     * switches the request to the `/search` endpoint, because Zoho v2 honours
+     * criteria ONLY there — on the list endpoint it is silently ignored.
+     *
+     * Consequences of using /search, all Zoho's, not ours:
+     *  - `sortBy`/`sortOrder` are NOT supported; results are unordered.
+     *  - `ifModifiedSince` does not apply. Use criteria OR incremental, not both.
+     *  - Zoho caps search at ~2000 records (10 pages x 200); a filter expected
+     *    to match more than that needs the list endpoint plus local filtering.
+     *  - Zero matches come back as 204, already handled as an empty page.
+     */
     criteria?: string;
+    /** Ignored when `criteria` is set — /search does not support sorting. */
     sortBy?: string;
+    /** Ignored when `criteria` is set — /search does not support sorting. */
     sortOrder?: 'asc' | 'desc';
     /**
      * ISO8601 timestamp. When set, sends the Zoho `If-Modified-Since` header so
      * the LIST endpoint returns ONLY records modified at/after this time — the
-     * reliable incremental-sync mechanism (Zoho ignores `criteria` on the list
-     * endpoint, but honours this header). Zoho replies 304 when nothing changed,
-     * which we treat as an empty page.
+     * reliable incremental-sync mechanism. Zoho replies 304 when nothing
+     * changed, which we treat as an empty page. Mutually exclusive with
+     * `criteria` (which routes to /search, where this header does nothing).
      */
     ifModifiedSince?: string;
   } = {}
 ): Promise<ZohoCRMRecord[]> {
+  // CRITERIA MUST GO TO /search — NOT the list endpoint.
+  //
+  // Zoho v2 honours `criteria` ONLY on `/crm/v2/{module}/search`. Sent to the
+  // plain list endpoint it is SILENTLY IGNORED: no error, no warning, just
+  // unfiltered rows capped by page size. Every caller that passed a filter was
+  // therefore reading whatever Zoho returned first — including `id:equals:<id>`
+  // lookups, which read as "fetch this record" and returned a DIFFERENT one.
+  //
+  // Proven live 2026-08-17: GET /api/zoho/activities/Deals/<id> returned
+  // byte-identical results (same counts, same task ids, same subjects) for two
+  // unrelated deals, because its What_Id filter did nothing.
+  //
+  // The list path below is deliberately left untouched — the Duplicate Radar's
+  // incremental sync depends on it and on the If-Modified-Since header, which
+  // is the documented workaround someone already adopted for exactly this
+  // limitation (see the ifModifiedSince doc above). No caller passes both.
+  const useSearch = !!params.criteria;
+
   const queryParams = new URLSearchParams();
   if (params.page) queryParams.set('page', params.page.toString());
   if (params.perPage) queryParams.set('per_page', params.perPage.toString());
   if (params.fields?.length) queryParams.set('fields', params.fields.join(','));
-  if (params.criteria) queryParams.set('criteria', params.criteria);
-  if (params.sortBy) queryParams.set('sort_by', params.sortBy);
-  if (params.sortOrder) queryParams.set('sort_order', params.sortOrder);
+  if (useSearch) {
+    queryParams.set('criteria', params.criteria as string);
+    // /search supports criteria|email|phone|word + fields + page + per_page.
+    // sort_by/sort_order are NOT supported there, so results come back
+    // unordered. Warn rather than drop silently — a caller that relied on
+    // "newest first" (e.g. the Zoho Calls import) needs to know its ordering
+    // assumption no longer holds now that its filter actually applies.
+    if (params.sortBy || params.sortOrder) {
+      logger.warn(
+        `⚠️ [ZohoCRM] ${module}: sort_by/sort_order are not supported by the /search endpoint — ignoring them. The criteria filter now genuinely applies, so ordering is undefined.`,
+      );
+    }
+    if (params.ifModifiedSince) {
+      logger.warn(
+        `⚠️ [ZohoCRM] ${module}: If-Modified-Since cannot be combined with criteria — /search returns all matches. Use ONE of them, not both.`,
+      );
+    }
+  } else {
+    if (params.sortBy) queryParams.set('sort_by', params.sortBy);
+    if (params.sortOrder) queryParams.set('sort_order', params.sortOrder);
+  }
 
   return makeZohoRequest(
     async (config) => {
-      const url = `${config.apiDomain}/crm/v2/${module}?${queryParams.toString()}`;
+      const path = useSearch ? `${module}/search` : module;
+      const url = `${config.apiDomain}/crm/v2/${path}?${queryParams.toString()}`;
       const headers: Record<string, string> = {
         'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
         'Content-Type': 'application/json',
       };
-      if (params.ifModifiedSince) {
+      // Only meaningful on the list endpoint; /search ignores it.
+      if (params.ifModifiedSince && !useSearch) {
         headers['If-Modified-Since'] = params.ifModifiedSince;
       }
       return fetch(url, { method: 'GET', headers });
