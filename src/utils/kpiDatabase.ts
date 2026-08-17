@@ -120,11 +120,14 @@ export async function initKPITables(): Promise<void> {
       data_source VARCHAR(255),
       unit VARCHAR(50) DEFAULT '%',
       frequency VARCHAR(20) DEFAULT 'monthly',
-      threshold_green DECIMAL(10,2) NOT NULL,
-      threshold_amber DECIMAL(10,2) NOT NULL,
-      threshold_red DECIMAL(10,2) NOT NULL,
+      -- DECIMAL(18,2), not (10,2): a SAR-denominated KPI overflows at
+      -- 99,999,999.99. The Qualified Pipeline target is SAR 168,000,000, which
+      -- failed to insert at all until this was widened (2026-08-17).
+      threshold_green DECIMAL(18,2) NOT NULL,
+      threshold_amber DECIMAL(18,2) NOT NULL,
+      threshold_red DECIMAL(18,2) NOT NULL,
       threshold_direction VARCHAR(20) DEFAULT 'higher_is_better',
-      target_value DECIMAL(10,2),
+      target_value DECIMAL(18,2),
       weight DECIMAL(5,2) DEFAULT 1.0,
       is_active BOOLEAN DEFAULT true,
       is_north_star BOOLEAN DEFAULT false,
@@ -161,8 +164,10 @@ export async function initKPITables(): Promise<void> {
       kpi_id INTEGER REFERENCES kpi_definitions(id) ON DELETE CASCADE,
       period_start DATE NOT NULL,
       period_end DATE NOT NULL,
-      actual_value DECIMAL(10,2) NOT NULL,
-      target_value DECIMAL(10,2),
+      -- Same widening as kpi_definitions: a recorded revenue/pipeline value
+      -- above ~100M would otherwise fail to record, silently losing the period.
+      actual_value DECIMAL(18,2) NOT NULL,
+      target_value DECIMAL(18,2),
       status VARCHAR(10) NOT NULL CHECK (status IN ('green', 'amber', 'red')),
       trend VARCHAR(15),
       calculated_by VARCHAR(20) DEFAULT 'system',
@@ -240,6 +245,19 @@ export async function initKPITables(): Promise<void> {
   await pool.query(
     `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS is_customized BOOLEAN DEFAULT false`,
   );
+  // Widen the money columns. DECIMAL(10,2) caps at 99,999,999.99, so any
+  // SAR-denominated KPI breaks above ~100M — the Qualified Pipeline target of
+  // SAR 168,000,000 could not be stored at all. Widening a numeric is
+  // non-destructive (no rounding, no truncation) and these tables are small.
+  for (const col of ["threshold_green", "threshold_amber", "threshold_red", "target_value"]) {
+    await pool.query(
+      `ALTER TABLE kpi_definitions ALTER COLUMN ${col} TYPE DECIMAL(18,2)`,
+    );
+  }
+  for (const col of ["actual_value", "target_value"]) {
+    await pool.query(`ALTER TABLE kpi_values ALTER COLUMN ${col} TYPE DECIMAL(18,2)`);
+  }
+
   // is_adhoc: manager-tagged "this one is ad-hoc, not part of the catalog".
   // Tagged per KPI on /kpi/:id so it applies retroactively to existing KPIs;
   // drives the separate Ad-hoc box on the Quality Reports BU page.
