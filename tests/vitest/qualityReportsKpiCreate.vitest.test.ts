@@ -114,3 +114,19 @@ describe("POST /api/quality-reports/bus/:buKey/kpis", () => {
     expect(createKPIDefinition).not.toHaveBeenCalled();
   });
 });
+
+describe("ad-hoc default", () => {
+  it("tags a BU-page creation as ad-hoc so it lands in the Ad-hoc box", async () => {
+    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team", is_active: true });
+    await post("sdr_b2b", VALID);
+    // This endpoint IS the ad-hoc path — a KPI added from a BU page is the
+    // team's own addition, not part of the seeded catalog.
+    expect(createKPIDefinition.mock.calls[0][0].is_adhoc).toBe(true);
+  });
+
+  it("lets the caller opt out explicitly", async () => {
+    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team", is_active: true });
+    await post("sdr_b2b", { ...VALID, is_adhoc: false });
+    expect(createKPIDefinition.mock.calls[0][0].is_adhoc).toBe(false);
+  });
+});

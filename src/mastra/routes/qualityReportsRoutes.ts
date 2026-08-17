@@ -209,6 +209,12 @@ export const qualityReportsRoutes = [
             is_active: true,
             is_north_star: false,
             calc_mode: "manual",
+            // Defaults to ad-hoc: this endpoint IS the ad-hoc path — a KPI
+            // added from a BU page is a team's own addition, not part of the
+            // seeded catalog. The flag stays fully editable on /kpi/:id, so
+            // this is a sensible default rather than a decision taken away
+            // from the manager; pass is_adhoc:false to opt out at creation.
+            is_adhoc: b?.is_adhoc === false ? false : true,
           } as any);
           logger.info("[QualityReports] KPI created", {
             actor: user.email, buKey, kpi_code, owner: bu.kpi_owner_name,
