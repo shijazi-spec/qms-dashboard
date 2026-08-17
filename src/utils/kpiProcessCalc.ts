@@ -15,6 +15,7 @@ import {
   pool,
   getDealDocCompliance,
   scanDealStageAgingViolations,
+  openStagePredicate,
 } from "./duplicateRadarDatabase";
 import { fetchDealStageHistory } from "./zohoCRM";
 import { getAllFrameworkCoverage } from "./obligationDocumentsDatabase";
@@ -245,6 +246,147 @@ export async function calcSdrShowRate(): Promise<ProcessKpiValue> {
     value: Math.round((attended / booked) * 1000) / 10,
     dataAvailable: true,
     details: { attended, no_show: noShow, booked },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Follow-up KPIs (SDR-KPI-11 / SALES-KPI-07 / SALES-KPI-08)
+// ---------------------------------------------------------------------------
+/**
+ * All three read the local `zoho_tasks` mirror (zohoTasksSync.ts), never Zoho
+ * directly — a per-record activity fetch costs one API call per parent, which
+ * is why the Sales cycle times are excluded from the interactive recalculate.
+ *
+ * Each returns EMPTY when its denominator is zero, so an unsynced or empty
+ * mirror renders "--" rather than a confident 0% that reads as total failure.
+ *
+ * Zoho links a task through Who_Id (Lead/Contact) or What_Id (Deal/Account).
+ * Rather than trusting the lookup alone, each query JOINS to duplicate_records
+ * on the matching zoho_module, so a Contact-linked task cannot be counted as a
+ * Lead one and an Account-linked task cannot be counted as a Deal one.
+ */
+
+/** First-contact SLA in hours. Env-tunable; 24h is the common desk default. */
+const FIRST_CONTACT_SLA_HOURS = (() => {
+  const n = parseInt(process.env.SALES_FIRST_CONTACT_SLA_HOURS ?? "24", 10);
+  return Number.isFinite(n) && n > 0 ? n : 24;
+})();
+
+/** Window for "new" deals in SALES-KPI-08, in days. */
+const FIRST_CONTACT_WINDOW_DAYS = 90;
+
+/**
+ * SDR-KPI-11 Follow-Up Compliance (SDR) — of the SDR follow-up tasks that have
+ * been COMPLETED and carried a due date, the share closed on or before it.
+ *
+ * Denominator is completed-with-a-due-date, not all tasks: an open task is not
+ * yet late-or-on-time, and a task with no due date has nothing to be measured
+ * against. Counting either would move the number without anyone changing
+ * behaviour.
+ */
+export async function calcSdrFollowUpCompliance(): Promise<ProcessKpiValue> {
+  const r = await pool.query(
+    `SELECT COUNT(*)::int AS completed,
+            COUNT(*) FILTER (
+              WHERE t.closed_time::date <= t.due_date
+            )::int AS on_time
+       FROM zoho_tasks t
+       JOIN duplicate_records r
+         ON r.zoho_module = 'Leads' AND r.zoho_record_id = t.who_id
+      WHERE t.status = 'Completed'
+        AND t.due_date IS NOT NULL
+        AND t.closed_time IS NOT NULL`,
+  );
+  const completed = Number(r.rows[0]?.completed) || 0;
+  const onTime = Number(r.rows[0]?.on_time) || 0;
+  if (completed === 0) return EMPTY;
+  return {
+    value: Math.round((onTime / completed) * 1000) / 10,
+    dataAvailable: true,
+    details: { on_time: onTime, completed },
+  };
+}
+
+/**
+ * SALES-KPI-07 Follow-Up Effectiveness — share of OPEN deals that have at least
+ * one open task still due today or later.
+ *
+ * "Effectiveness" here is coverage: a live deal with no future follow-up booked
+ * has been dropped, whether or not past tasks were done well. An overdue open
+ * task does NOT count as covered — that is precisely the failure state.
+ */
+export async function calcSalesFollowUpEffectiveness(): Promise<ProcessKpiValue> {
+  const r = await pool.query(
+    `WITH open_deals AS (
+       SELECT r.zoho_record_id
+         FROM duplicate_records r
+        WHERE r.zoho_module = 'Deals'
+          AND r.zoho_record_id IS NOT NULL
+          AND ${openStagePredicate("r")}
+     )
+     SELECT COUNT(*)::int AS deals,
+            COUNT(*) FILTER (WHERE EXISTS (
+              SELECT 1 FROM zoho_tasks t
+               WHERE t.what_id = d.zoho_record_id
+                 AND (t.status IS NULL OR t.status <> 'Completed')
+                 AND t.due_date >= CURRENT_DATE
+            ))::int AS covered
+       FROM open_deals d`,
+  );
+  const deals = Number(r.rows[0]?.deals) || 0;
+  const covered = Number(r.rows[0]?.covered) || 0;
+  if (deals === 0) return EMPTY;
+  return {
+    value: Math.round((covered / deals) * 1000) / 10,
+    dataAvailable: true,
+    details: { covered, open_deals: deals },
+  };
+}
+
+/**
+ * SALES-KPI-08 First-Contact SLA — of deals created in the window, the share
+ * whose FIRST logged task landed within FIRST_CONTACT_SLA_HOURS of creation.
+ *
+ * A deal with NO task at all counts as a miss, not as excluded: never being
+ * contacted is the worst outcome, and dropping those would make the metric
+ * improve as the team touched fewer deals.
+ */
+export async function calcSalesFirstContactSla(): Promise<ProcessKpiValue> {
+  const r = await pool.query(
+    `WITH new_deals AS (
+       SELECT r.zoho_record_id,
+              COALESCE(r.created_date, (r.raw_data->>'Created_Time')::timestamptz) AS created
+         FROM duplicate_records r
+        WHERE r.zoho_module = 'Deals'
+          AND r.zoho_record_id IS NOT NULL
+          AND COALESCE(r.created_date, (r.raw_data->>'Created_Time')::timestamptz)
+              >= NOW() - INTERVAL '${FIRST_CONTACT_WINDOW_DAYS} days'
+     ),
+     first_touch AS (
+       SELECT d.zoho_record_id, d.created,
+              (SELECT MIN(t.created_time) FROM zoho_tasks t
+                WHERE t.what_id = d.zoho_record_id) AS first_task
+         FROM new_deals d
+     )
+     SELECT COUNT(*)::int AS deals,
+            COUNT(*) FILTER (
+              WHERE first_task IS NOT NULL
+                AND first_task <= created + INTERVAL '${FIRST_CONTACT_SLA_HOURS} hours'
+            )::int AS within_sla
+       FROM first_touch`,
+  );
+  const deals = Number(r.rows[0]?.deals) || 0;
+  const withinSla = Number(r.rows[0]?.within_sla) || 0;
+  if (deals === 0) return EMPTY;
+  return {
+    value: Math.round((withinSla / deals) * 1000) / 10,
+    dataAvailable: true,
+    details: {
+      within_sla: withinSla,
+      new_deals: deals,
+      sla_hours: FIRST_CONTACT_SLA_HOURS,
+      window_days: FIRST_CONTACT_WINDOW_DAYS,
+    },
   };
 }
 
@@ -720,11 +862,14 @@ export const PROCESS_CALCULATORS: Record<
   "SDR-KPI-08": calcSdrCrmAccuracy,
   "SDR-KPI-09": calcSdrDuplicateRate,
   "SDR-KPI-10": calcSdrPipelineAging,
+  "SDR-KPI-11": calcSdrFollowUpCompliance,
   // Sales
   "SALES-KPI-01": calcSalesStageAgingCompliance,
   "SALES-KPI-02": calcSalesConversionRate,
   "SALES-KPI-05": calcSalesDocCompliance,
   "SALES-KPI-06": calcSalesCrmAccuracy,
+  "SALES-KPI-07": calcSalesFollowUpEffectiveness,
+  "SALES-KPI-08": calcSalesFirstContactSla,
   "SALES-KPI-09": calcSalesDuplicateRate,
   // GRC — driven by the Document Mapping framework coverage
   "GRC-KPI-002": calcCertificationMilestones,
