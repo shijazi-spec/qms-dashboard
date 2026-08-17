@@ -126,6 +126,46 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
     logger.error("[KPI Auto] Fatal error:", err);
   }
 
+  // Refresh the local Zoho Tasks mirror BEFORE the KPI engine runs below.
+  //
+  // ORDER MATTERS: SDR-KPI-11, SALES-KPI-07 and SALES-KPI-08 read `zoho_tasks`.
+  // Recalculating first would score them against yesterday's tasks, so every
+  // value would silently trail the data by a day. Syncing here is also what
+  // stops these three going stale — the sync is otherwise manual-only, wired to
+  // POST /api/zoho/tasks/sync and nothing else.
+  //
+  // Isolated in its own try/catch on purpose: a Zoho outage must not stop the
+  // KPI engine below from recording everything that does not depend on tasks.
+  // The three task KPIs return "--" on an empty mirror rather than a fake 0.
+  try {
+    const { runZohoTasksSync } = await import("./zohoTasksSync");
+    const tasks = await runZohoTasksSync({ maxRecords: 5000 });
+    logger.info("[KPI Auto] Zoho tasks sync", {
+      scanned: tasks.scanned,
+      new: tasks.imported_new,
+      updated: tasks.updated_existing,
+      linkage: tasks.linkage,
+      errors: tasks.errors,
+    });
+    results.push({
+      kpi: "zoho-tasks-sync",
+      value: tasks.scanned,
+      status: tasks.errors === 0 ? "recorded" : "failed",
+      error: tasks.error_samples[0],
+    });
+    // A healthy total with almost nothing linked means the follow-up KPIs are
+    // measuring an empty set — worth seeing in the log before someone reports
+    // the numbers as broken.
+    if (tasks.scanned > 0 && tasks.linkage.none === tasks.scanned) {
+      logger.warn(
+        "[KPI Auto] every synced task is unlinked — the follow-up KPIs have nothing to measure",
+      );
+    }
+  } catch (err) {
+    logger.error("[KPI Auto] Zoho tasks sync error:", err);
+    results.push({ kpi: "zoho-tasks-sync", error: String(err), status: "failed" });
+  }
+
   // Also run the canonical KPI engine: leadership-feed-backed Quality/GRC values
   // + checklist-mode KPIs (% of items done). This is the authoritative source for
   // the agreed owner-based KPI list on /kpis; the scorecard calculators above
