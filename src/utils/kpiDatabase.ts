@@ -1134,11 +1134,13 @@ export async function assignLeftoverKPIsToSpecialist(): Promise<void> {
  * sets navigation_map where it's still empty (never clobbers manual edits).
  */
 const KPI_NAVIGATION_MAPS: Record<string, NavigationStep[]> = {
-  // AUTO — Sales Conversion (computed from the Deals pipeline)
+  // AUTO — Win Rate among DECIDED deals (computed from the Deals pipeline).
+  // Not a funnel conversion: open deals are excluded from the denominator, so
+  // this answers "of the deals we settled, how many did we win".
   "SALES-KPI-02": [
-    { step: 1, action: "Review win/loss", screen: "Duplicate Radar — Deals", route: "/duplicates", what_to_check: "Deals that reached Signed / Agreement Signed / Paid vs Closed Lost this period.", if_result: "Conversion below the 30% target", then_action: "Run a win/loss review with the Sales lead and capture the loss reasons." },
-    { step: 2, action: "Clear stalled deals", screen: "Deal Stage Aging", route: "/duplicates", what_to_check: "Open deals stuck in Proposal / Agreement Sent past their SLA.", if_result: "Many deals aging in interim stages", then_action: "Push each stalled deal to a decision or mark it Closed Lost so the funnel is accurate." },
-    { step: 3, action: "Fix stage hygiene", screen: "Deal Compliance", route: "/duplicates", what_to_check: "Won deals are tagged Signed / Agreement Signed / Paid (not left mid-stage).", if_result: "Won deals mis-staged in Zoho", then_action: "Correct the Stage so the conversion number reflects reality." },
+    { step: 1, action: "Review win/loss", screen: "Duplicate Radar — Deals", route: "/duplicates", what_to_check: "Deals that reached Signed / Agreement Signed / Paid vs Closed Lost this period.", if_result: "Win rate below the 30% target", then_action: "Run a win/loss review with the Sales lead and capture the loss reasons." },
+    { step: 2, action: "Clear stalled deals", screen: "Deal Stage Aging", route: "/duplicates", what_to_check: "Open deals stuck in Proposal / Agreement Sent past their SLA.", if_result: "Many deals aging in interim stages", then_action: "Push each stalled deal to a decision. NOTE: this MOVES the win rate rather than simply improving it — every deal you settle enters the denominator, so closing a batch as Lost will pull the number DOWN. That is the metric working, not breaking." },
+    { step: 3, action: "Fix stage hygiene", screen: "Deal Compliance", route: "/duplicates", what_to_check: "Won deals are tagged Signed / Agreement Signed / Paid (not left mid-stage).", if_result: "Won deals mis-staged in Zoho", then_action: "Correct the Stage so the win rate reflects reality." },
   ],
   // CHECKLIST — BU Framework Completion (per-BU action plans)
   "QM-KPI-015": [
@@ -1633,7 +1635,7 @@ async function seedSalesKPIs(): Promise<void> {
 
   const salesKPIs: Array<Partial<KPIDefinition>> = [
     { kpi_code: "SALES-KPI-01", kpi_name: "Deal Stage Aging Compliance", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "weekly", description: "Open deals sitting within their stage SLA (Sales SOP stage aging).", formula: "(Deals within stage SLA ÷ open deals) × 100" },
-    { kpi_code: "SALES-KPI-02", kpi_name: "Conversion Rate (SQL→Signed)", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 30, threshold_green: 30, threshold_amber: 20, threshold_red: 12, threshold_direction: "higher_is_better", frequency: "monthly", description: "Sales-qualified deals that reach Agreement Signed / Paid.", formula: "(Signed deals ÷ SQL deals) × 100" },
+    { kpi_code: "SALES-KPI-02", kpi_name: "Win Rate (Decided Deals)", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 30, threshold_green: 30, threshold_amber: 20, threshold_red: 12, threshold_direction: "higher_is_better", frequency: "monthly", description: "Of the deals that reached a decision, the share won. Open deals are NOT in the denominator — this is a win rate, not a funnel conversion.", formula: "(Signed + Paid + Closed Won) ÷ (won + Closed Lost) × 100" },
     { kpi_code: "SALES-KPI-03", kpi_name: "Proposal Cycle Time", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "days", target_value: 7, threshold_green: 7, threshold_amber: 14, threshold_red: 21, threshold_direction: "lower_is_better", frequency: "monthly", description: "Average days a deal spends in the Proposal stage.", formula: "Avg(days in Proposal stage)" },
     { kpi_code: "SALES-KPI-04", kpi_name: "Agreement Cycle Time", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "days", target_value: 14, threshold_green: 14, threshold_amber: 30, threshold_red: 45, threshold_direction: "lower_is_better", frequency: "monthly", description: "Average days from Agreement Sent to Agreement Signed.", formula: "Avg(signed date − sent date)" },
     { kpi_code: "SALES-KPI-05", kpi_name: "Deal Document Compliance", owner_type: "sales_team", owner_name: "Sales Team", category: "compliance", unit: "%", target_value: 95, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "monthly", description: "Deals in Proposal/Agreement Signed/Paid carrying the required documents.", formula: "(Deals with required docs ÷ deals in scope) × 100" },
@@ -1652,6 +1654,39 @@ async function seedSalesKPIs(): Promise<void> {
       [k.kpi_name, k.kpi_code, k.description, k.owner_type, k.owner_name, k.category, k.formula, k.unit, k.frequency, k.threshold_green, k.threshold_amber, k.threshold_red, k.threshold_direction, k.target_value],
     );
   }
+
+  // ONE-TIME CORRECTION — SALES-KPI-02 was mislabelled.
+  //
+  // It was named "Conversion Rate (SQL→Signed)" with the formula
+  // "(Signed deals ÷ SQL deals) × 100", but the calculator has always computed
+  // signed / (signed + lost): a WIN RATE among decided deals. No SQL stage is
+  // involved (this tenant has none), and open deals are excluded from the
+  // denominator entirely.
+  //
+  // That mattered beyond pedantry: the BI portal publishes a real
+  // SQL→Closed Won funnel conversion at 3.5% while this read 9.5%, so two
+  // GRQ-owned surfaces appeared to disagree about the same metric when they
+  // were in fact measuring different things (Sarah 2026-08-17).
+  //
+  // The seed above uses ON CONFLICT DO NOTHING, so fixing the literal alone
+  // would never reach the existing row. Hence this explicit UPDATE.
+  //
+  // Guarded twice so it is genuinely one-time and cannot clobber a human:
+  //   - is_customized IS NOT TRUE  -> never overwrite a manager's own edit
+  //   - kpi_name = the OLD name    -> no-op once corrected, and no-op if
+  //                                   someone has since renamed it differently
+  await pool.query(
+    `UPDATE kpi_definitions
+        SET kpi_name = $1, description = $2, formula = $3, updated_at = NOW()
+      WHERE kpi_code = 'SALES-KPI-02'
+        AND is_customized IS NOT TRUE
+        AND kpi_name = 'Conversion Rate (SQL→Signed)'`,
+    [
+      "Win Rate (Decided Deals)",
+      "Of the deals that reached a decision, the share won. Open deals are NOT in the denominator — this is a win rate, not a funnel conversion.",
+      "(Signed + Paid + Closed Won) ÷ (won + Closed Lost) × 100",
+    ],
+  );
 
   logger.info("✅ [KPIDB] Seeded 9 Sales Team KPIs");
 }
