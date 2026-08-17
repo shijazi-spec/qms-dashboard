@@ -32,6 +32,8 @@ export interface KPIDefinition {
   owner_name?: string;
   /** How the live value is produced: auto (computed), checklist (% done), bu_coverage (per-BU tracker), or manual. */
   calc_mode?: "auto" | "checklist" | "manual" | "bu_coverage";
+  /** Manager-tagged: this KPI is ad-hoc, not part of the seeded catalog. */
+  is_adhoc?: boolean;
   category:
     | "governance"
     | "risk"
@@ -130,6 +132,11 @@ export async function initKPITables(): Promise<void> {
       -- Set true the moment a manager edits a KPI in the UI. The boot seed then
       -- STOPS overwriting that row, so manual edits survive republish (P2).
       is_customized BOOLEAN DEFAULT false,
+      -- Ad-hoc = a KPI the team added for a specific need, rather than part of
+      -- the seeded catalog. Tagged per KPI by a manager on /kpi/:id, so it can
+      -- be applied retroactively to KPIs that already exist. Drives the
+      -- separate "Ad-hoc KPIs" box on the Quality Reports BU page.
+      is_adhoc BOOLEAN DEFAULT false,
       -- Approval / lock (P3): once the HOD approves a KPI it is locked, and only
       -- the HOD (head_of_operations_quality) or admin may change it thereafter.
       locked BOOLEAN DEFAULT false,
@@ -232,6 +239,12 @@ export async function initKPITables(): Promise<void> {
   // is_customized: guards manager edits from being overwritten by the boot seed.
   await pool.query(
     `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS is_customized BOOLEAN DEFAULT false`,
+  );
+  // is_adhoc: manager-tagged "this one is ad-hoc, not part of the catalog".
+  // Tagged per KPI on /kpi/:id so it applies retroactively to existing KPIs;
+  // drives the separate Ad-hoc box on the Quality Reports BU page.
+  await pool.query(
+    `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS is_adhoc BOOLEAN DEFAULT false`,
   );
   // Approval / HOD lock (P3).
   await pool.query(
@@ -1729,6 +1742,8 @@ export interface CatalogKpiWithValue {
   threshold_direction: string;
   /** "auto" = value is computed from CRM (kpiProcessCalc / kpiAutoCalc). */
   calc_mode: string;
+  /** Manager-tagged ad-hoc flag — splits the BU page's KPI list into two boxes. */
+  is_adhoc: boolean;
   current_value: number | null;
   period_end: string | null;
   /** null when there is no value yet or no usable target. */
@@ -1850,6 +1865,7 @@ export async function getKPIsWithValuesByOwnerName(
       target_value: target,
       threshold_direction: dir,
       calc_mode: String(d.calc_mode || "manual"),
+      is_adhoc: d.is_adhoc === true,
       current_value: current,
       period_end: v?.period_end ? String(v.period_end) : null,
       achievement_pct: achievement,
@@ -1935,6 +1951,9 @@ export async function updateKPIDefinition(
     "is_active",
     "is_north_star",
     "calc_mode",
+    // Manager-tagged ad-hoc flag. Editable per KPI so it can be applied to
+    // KPIs that already exist, which a creation-time-only marker could not do.
+    "is_adhoc",
   ];
 
   for (const field of allowedFields) {

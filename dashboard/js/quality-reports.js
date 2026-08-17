@@ -418,7 +418,16 @@
 
         // Detail cards.
         parts.push(qrSection('SOPs', s.sops ? qrSopsHtml(s.sops) : '', isCfg('sops'), isTO('sops')));
-        parts.push(qrSection('KPIs', s.kpis ? qrKpisHtml(s.kpis) : '', isCfg('kpis'), isTO('kpis')));
+        // KPIs and Ad-hoc KPIs sit SIDE BY SIDE. On narrow screens the grid
+        // collapses to one column and the ad-hoc box falls directly beneath
+        // its catalog box, which keeps the pairing obvious on mobile.
+        var adhocList = ((s.kpis && s.kpis.list) || []).filter(function (i) { return i.is_adhoc; });
+        parts.push(
+            '<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">' +
+                qrSection('KPIs', s.kpis ? qrKpisHtml(s.kpis) : '', isCfg('kpis'), isTO('kpis')) +
+                qrSection('Ad-hoc KPIs', s.kpis ? qrAdhocHtml(adhocList, s.kpis.owner) : '', isCfg('kpis'), isTO('kpis')) +
+            '</div>'
+        );
         parts.push(qrSection('Data cleanup', s.cleanup ? qrCleanupHtml(s.cleanup) : '', isCfg('cleanup'), isTO('cleanup')));
         parts.push(qrSection('Compliance', s.compliance ? qrComplianceHtml(s.compliance) : '', isCfg('compliance'), isTO('compliance')));
         parts.push(qrSection('Open actions', s.actions ? qrActionsHtml(s.actions) : '', isCfg('actions'), isTO('actions')));
@@ -460,48 +469,81 @@
         return v + (k.unit && k.unit !== 'number' ? k.unit : '');
     }
 
+    /** One KPI row. Shared by the catalog box and the ad-hoc box so the two
+     *  can never drift apart visually. */
+    function qrKpiRow(i) {
+        var rag = QR_RAG[i.rag] || QR_RAG.none;
+        // Department KPIs are no longer in the KPI Engine, so this is the only
+        // route to their detail/editor page — which is also where a manager
+        // ticks "Ad-hoc KPI". Rows without an id render as plain divs rather
+        // than dead links.
+        var open = i.id ? '<a href="/kpi/' + encodeURIComponent(i.id) + '" class="block hover:bg-gray-50 -mx-2 px-2 rounded">' : '';
+        var close = i.id ? '</a>' : '';
+        return open + '<div class="flex items-center gap-3 py-1.5 border-b border-gray-100 last:border-0">' +
+            '<span class="w-2 h-2 rounded-full ' + rag.dot + ' shrink-0"></span>' +
+            '<div class="min-w-0 flex-1">' +
+                '<div class="text-sm text-gray-900 truncate">' + escapeHtml(i.kpi_name || '') +
+                    ' <span class="text-xs text-gray-400">' + escapeHtml(i.kpi_code || '') + '</span>' +
+                    (i.calc_mode === 'auto'
+                        ? ' <span class="text-[10px] px-1 py-0.5 rounded bg-gray-100 text-gray-600" title="Calculated automatically from CRM data">Auto</span>'
+                        : '') +
+                '</div>' +
+            '</div>' +
+            '<div class="text-right shrink-0">' +
+                '<div class="text-sm font-semibold ' + rag.text + '">' + escapeHtml(qrKpiValue(i)) + '</div>' +
+                '<div class="text-[10px] text-gray-400">' +
+                    (i.target_value !== null && i.target_value !== undefined
+                        ? 'Target ' + escapeHtml(String(i.target_value)) + (i.unit && i.unit !== 'number' ? escapeHtml(i.unit) : '')
+                        : escapeHtml(rag.label)) +
+                '</div>' +
+            '</div>' +
+        '</div>' + close;
+    }
+
+    /**
+     * The ad-hoc box, rendered beside the catalog box.
+     *
+     * Membership is the manager-tagged `is_adhoc` flag from /kpi/:id — NOT
+     * calc_mode. A KPI can be manually entered and still be part of the
+     * standard catalog, and an ad-hoc one can later be automated; tying the
+     * split to how the value is produced would move KPIs between boxes for
+     * reasons that have nothing to do with why they exist.
+     */
+    function qrAdhocHtml(adhoc, owner) {
+        if (!adhoc.length) {
+            return '<div class="text-xs text-gray-500">No ad-hoc KPIs. Tag one by opening a KPI and ticking &ldquo;Ad-hoc KPI&rdquo;.</div>';
+        }
+        var onTarget = adhoc.filter(function (i) { return i.rag === 'green'; }).length;
+        var measured = adhoc.filter(function (i) { return i.current_value !== null && i.current_value !== undefined; }).length;
+        return '<div class="text-xs text-gray-500 mb-2">' + escapeHtml(owner || 'Team') + ' &middot; ' +
+            onTarget + ' on target of ' + measured + ' measured' +
+            (adhoc.length > measured ? ' <span class="text-gray-400">(' + (adhoc.length - measured) + ' not started)</span>' : '') +
+            '</div><div>' + adhoc.map(qrKpiRow).join('') + '</div>';
+    }
+
     function qrKpisHtml(k) {
         var out = [];
-        var list = (k && k.list) || [];
+        var all = (k && k.list) || [];
+        // Catalog box shows everything NOT tagged ad-hoc; the ad-hoc box is
+        // rendered separately by qrRenderBU so the two sit side by side.
+        var list = all.filter(function (i) { return !i.is_adhoc; });
 
-        // Performance KPIs (the catalog rows for this BU's owning team).
         if (list.length) {
             out.push(
                 '<div class="text-xs text-gray-500 mb-2">' +
                 escapeHtml(k.owner || 'Team') + ' &middot; ' +
-                (k.kpiOnTarget || 0) + ' on target of ' + (k.kpiMeasured || 0) + ' measured' +
-                ((k.kpiCount || 0) > (k.kpiMeasured || 0)
-                    ? ' <span class="text-gray-400">(' + ((k.kpiCount || 0) - (k.kpiMeasured || 0)) + ' not started)</span>'
+                // Counted from the FILTERED list, not the payload totals —
+                // those cover every KPI including the ad-hoc ones, which now
+                // live in their own box. Using them here would make the catalog
+                // box claim KPIs it is not showing.
+                list.filter(function (i) { return i.rag === 'green'; }).length + ' on target of ' +
+                list.filter(function (i) { return i.current_value !== null && i.current_value !== undefined; }).length + ' measured' +
+                (list.length > list.filter(function (i) { return i.current_value !== null && i.current_value !== undefined; }).length
+                    ? ' <span class="text-gray-400">(' + (list.length - list.filter(function (i) { return i.current_value !== null && i.current_value !== undefined; }).length) + ' not started)</span>'
                     : '') +
                 '</div>'
             );
-            var rows = list.map(function (i) {
-                var rag = QR_RAG[i.rag] || QR_RAG.none;
-                // Department KPIs are no longer in the KPI Engine, so this is
-                // the only route to their detail/editor page. Rows without an
-                // id render as plain divs rather than dead links.
-                var open = i.id ? '<a href="/kpi/' + encodeURIComponent(i.id) + '" class="block hover:bg-gray-50 -mx-2 px-2 rounded">' : '';
-                var close = i.id ? '</a>' : '';
-                return open + '<div class="flex items-center gap-3 py-1.5 border-b border-gray-100 last:border-0">' +
-                    '<span class="w-2 h-2 rounded-full ' + rag.dot + ' shrink-0"></span>' +
-                    '<div class="min-w-0 flex-1">' +
-                        '<div class="text-sm text-gray-900 truncate">' + escapeHtml(i.kpi_name || '') +
-                            ' <span class="text-xs text-gray-400">' + escapeHtml(i.kpi_code || '') + '</span>' +
-                            (i.calc_mode === 'auto'
-                                ? ' <span class="text-[10px] px-1 py-0.5 rounded bg-gray-100 text-gray-600" title="Calculated automatically from CRM data">Auto</span>'
-                                : '') +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="text-right shrink-0">' +
-                        '<div class="text-sm font-semibold ' + rag.text + '">' + escapeHtml(qrKpiValue(i)) + '</div>' +
-                        '<div class="text-[10px] text-gray-400">' +
-                            (i.target_value !== null && i.target_value !== undefined
-                                ? 'Target ' + escapeHtml(String(i.target_value)) + (i.unit && i.unit !== 'number' ? escapeHtml(i.unit) : '')
-                                : escapeHtml(rag.label)) +
-                        '</div>' +
-                    '</div>' +
-                '</div>' + close;
-            });
+            var rows = list.map(qrKpiRow);
             out.push('<div class="mb-3">' + rows.join('') + '</div>');
         } else if (k && k.owner) {
             out.push('<div class="text-xs text-gray-500 mb-3">No active KPIs found for ' + escapeHtml(k.owner) + '.</div>');

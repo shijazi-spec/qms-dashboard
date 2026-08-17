@@ -200,13 +200,14 @@
                 <label>Calc mode<select id="e_calc" class="w-full border rounded px-2 py-1 mt-1">${opt(CALC, k.calc_mode)}</select></label>
                 <label>Data source<input id="e_source" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.data_source || '')}"></label>
                 <label class="flex items-center gap-2 mt-2"><input id="e_ns" type="checkbox" ${k.is_north_star ? 'checked' : ''}> North Star ⭐</label>
+                <label class="flex items-center gap-2 mt-2"><input id="e_adhoc" type="checkbox" ${k.is_adhoc ? 'checked' : ''}> Ad-hoc KPI</label>
               </div>
               <div class="flex items-center gap-3 mt-4">
                 <button data-on-click="saveEdit" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm">Save</button>
                 <button data-on-click="toggleEdit" class="px-4 py-2 border rounded text-sm">Cancel</button>
                 <span id="e_msg" class="text-xs"></span>
               </div>
-              <p class="text-xs text-gray-400 mt-2">Changing the target recomputes the RAG bands automatically. Changing calc mode changes how the value is produced.</p>`;
+              <p class="text-xs text-gray-400 mt-2">Changing the target recomputes the RAG bands automatically. Changing calc mode changes how the value is produced. Marking a KPI ad-hoc moves it into the separate "Ad-hoc KPIs" box on its Quality Reports business-unit page — it does not change how the value is calculated.</p>`;
             panel.classList.remove('hidden');
         }
 
@@ -227,7 +228,8 @@
                 frequency: document.getElementById('e_freq').value,
                 calc_mode: document.getElementById('e_calc').value,
                 data_source: document.getElementById('e_source').value.trim(),
-                is_north_star: document.getElementById('e_ns').checked
+                is_north_star: document.getElementById('e_ns').checked,
+                is_adhoc: document.getElementById('e_adhoc').checked
             };
             try {
                 const res = await fetch(`/api/kpis/${id}`, {
