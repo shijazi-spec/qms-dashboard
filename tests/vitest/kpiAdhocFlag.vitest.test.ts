@@ -27,6 +27,7 @@ vi.mock("../../src/utils/logger", () => ({
 
 import {
   updateKPIDefinition,
+  createKPIDefinition,
   getKPIsWithValuesByOwnerName,
 } from "../../src/utils/kpiDatabase";
 
@@ -84,5 +85,25 @@ describe("is_adhoc reaches the BU page", () => {
     // Null must read as "catalog", not as ad-hoc — otherwise every pre-existing
     // KPI would jump into the ad-hoc box the moment the column was added.
     expect(out[0].is_adhoc).toBe(false);
+  });
+});
+
+describe("is_adhoc survives creation", () => {
+  it("is written by createKPIDefinition", async () => {
+    query.mockResolvedValue({ rows: [{ id: 9, is_adhoc: true }] });
+    await createKPIDefinition({ kpi_code: "ADHOC-1", kpi_name: "One-off", is_adhoc: true } as any);
+    const call = query.mock.calls.find((c) => /INSERT INTO kpi_definitions/i.test(String(c[0])));
+    // The INSERT names its columns explicitly, so a field missing from that
+    // list is silently dropped however loudly the caller passes it. That is
+    // exactly what happened when the BU-page endpoint started setting it.
+    expect(String(call![0])).toMatch(/is_adhoc/);
+    expect((call![1] as any[]).includes(true)).toBe(true);
+  });
+
+  it("defaults to false when the caller says nothing", async () => {
+    query.mockResolvedValue({ rows: [{ id: 10 }] });
+    await createKPIDefinition({ kpi_code: "CAT-1", kpi_name: "Catalog" } as any);
+    const call = query.mock.calls.find((c) => /INSERT INTO kpi_definitions/i.test(String(c[0])));
+    expect((call![1] as any[]).at(-1)).toBe(false);
   });
 });

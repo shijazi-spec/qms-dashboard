@@ -1895,8 +1895,8 @@ export async function createKPIDefinition(
 ): Promise<KPIDefinition> {
   const result = await pool.query(
     `
-    INSERT INTO kpi_definitions (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, data_source, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, weight, is_active, is_north_star, calc_mode)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+    INSERT INTO kpi_definitions (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, data_source, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, weight, is_active, is_north_star, calc_mode, is_adhoc)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
     RETURNING *
   `,
     [
@@ -1919,6 +1919,11 @@ export async function createKPIDefinition(
       kpi.is_active,
       kpi.is_north_star ?? false,
       kpi.calc_mode ?? "manual",
+      // Without this the column is silently dropped: the INSERT names its
+      // columns explicitly, so a field absent from the list never reaches the
+      // row no matter what the caller passes. The BU-page create endpoint sets
+      // is_adhoc, and it was being discarded here.
+      kpi.is_adhoc ?? false,
     ],
   );
   return result.rows[0];
