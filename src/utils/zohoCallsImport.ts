@@ -191,13 +191,29 @@ export async function runZohoCallsImport(
     return result;
   }
 
-  // Pull recent calls. We use Zoho's criteria on Created_Time rather than
-  // Call_Start_Time because the latter is sometimes blank on synthetic
-  // records (e.g. logged-after-the-fact).
+  // Pull recent calls, time-windowed by the If-Modified-Since HEADER on the
+  // LIST endpoint — NOT by a criteria filter.
+  //
+  // This used to pass `(Created_Time:greater_than:<since>)`. That filter never
+  // worked: criteria sent to the list endpoint is silently ignored by Zoho, so
+  // the import was really pulling "the most recent N calls" and the window was
+  // decorative. Once criteria was correctly routed to /search, Zoho rejected it
+  // outright with "400 - Invalid query formed" (its search criteria does not
+  // accept a greater_than on Created_Time in this form), which is how the
+  // long-standing breakage finally became visible.
+  //
+  // If-Modified-Since is the mechanism that actually works here, and it is what
+  // zohoCRM.ts documents as the reliable incremental filter. It also keeps the
+  // list endpoint, so sort_by/sort_order still apply — /search cannot sort, so
+  // the "newest first" guarantee this import relies on would otherwise be lost.
+  //
+  // Semantics shift slightly and deliberately: modified-since rather than
+  // created-since, so a call edited after the fact is re-imported. That is
+  // desirable — the upsert is keyed on call_id, so re-importing refreshes it.
   let calls: ZohoCRMRecord[] = [];
   try {
     calls = await fetchZohoRecords("Calls", {
-      criteria: `(Created_Time:greater_than:${sinceIso})`,
+      ifModifiedSince: sinceIso,
       perPage: Math.min(maxRecords, 200),
       sortBy: "Created_Time",
       sortOrder: "desc",
