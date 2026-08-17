@@ -126,6 +126,46 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
     logger.error("[KPI Auto] Fatal error:", err);
   }
 
+  // Refresh the local Zoho Calls mirror BEFORE the KPI engine runs below.
+  //
+  // Same ordering rule as the Tasks sync that follows: SDR-KPI-01 (Calls Per
+  // Day), SDR-KPI-02 (Contact Rate) and SDR-KPI-06 (Speed to Lead) read
+  // `call_records`, so recalculating first would score them against yesterday's
+  // calls.
+  //
+  // The 30-day window is not arbitrary — it matches CALL_WINDOW_DAYS in
+  // kpiProcessCalc.ts, which is the window those KPIs actually measure over.
+  // Syncing a shorter window would leave the KPI counting days it has no data
+  // for and understate the team.
+  //
+  // maxRecords is set well above one Zoho page: the import was capped at 200
+  // for its whole life because it fetched a single page, which is why Calls Per
+  // Day read 0.9 against a target of 40.
+  try {
+    const { runZohoCallsImport } = await import("./zohoCallsImport");
+    const calls = await runZohoCallsImport({
+      sinceIso: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      maxRecords: 2000,
+    });
+    logger.info("[KPI Auto] Zoho calls import", {
+      scanned: calls.scanned,
+      new: calls.imported_new,
+      updated: calls.updated_existing,
+      errors: calls.errors,
+    });
+    results.push({
+      kpi: "zoho-calls-import",
+      value: calls.scanned,
+      status: calls.errors === 0 ? "recorded" : "failed",
+      error: calls.error_samples[0],
+    });
+  } catch (err) {
+    // Isolated like the Tasks sync: a Zoho outage must not cost the day's
+    // non-call KPIs. The call KPIs return "--" on an empty window, not a fake 0.
+    logger.error("[KPI Auto] Zoho calls import error:", err);
+    results.push({ kpi: "zoho-calls-import", error: String(err), status: "failed" });
+  }
+
   // Refresh the local Zoho Tasks mirror BEFORE the KPI engine runs below.
   //
   // ORDER MATTERS: SDR-KPI-11, SALES-KPI-07 and SALES-KPI-08 read `zoho_tasks`.

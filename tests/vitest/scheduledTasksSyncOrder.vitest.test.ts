@@ -14,9 +14,10 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { calls, tasksSync, kpiAutoCalc, kpiQuery } = vi.hoisted(() => ({
+const { calls, tasksSync, callsImport, kpiAutoCalc, kpiQuery } = vi.hoisted(() => ({
   calls: [] as string[],
   tasksSync: vi.fn(),
+  callsImport: vi.fn(),
   kpiAutoCalc: vi.fn(),
   kpiQuery: vi.fn(),
 }));
@@ -25,6 +26,12 @@ vi.mock("../../src/utils/zohoTasksSync", () => ({
   runZohoTasksSync: (...a: any[]) => {
     calls.push("tasks-sync");
     return tasksSync(...a);
+  },
+}));
+vi.mock("../../src/utils/zohoCallsImport", () => ({
+  runZohoCallsImport: (...a: any[]) => {
+    calls.push("calls-import");
+    return callsImport(...a);
   },
 }));
 vi.mock("../../src/utils/kpiAutoCalc", () => ({
@@ -57,6 +64,11 @@ beforeEach(() => {
   calls.length = 0;
   kpiQuery.mockReset().mockResolvedValue({ rows: [] });
   tasksSync.mockReset().mockResolvedValue(OK_SYNC);
+  callsImport.mockReset().mockResolvedValue({
+    scanned: 500, imported_new: 500, updated_existing: 0, skipped_no_linkage: 0,
+    skipped_owner_mismatch: 0, errors: 0, error_samples: [] as string[],
+    duration_ms: 5, filters_applied: { since: "x", max_records: 2000 },
+  });
   kpiAutoCalc.mockReset().mockResolvedValue({ recorded: 0, skipped: 0, details: [] });
 });
 
@@ -87,5 +99,37 @@ describe("daily KPI job — Zoho tasks sync ordering", () => {
     const arg = tasksSync.mock.calls[0]?.[0] ?? {};
     expect(typeof arg.maxRecords).toBe("number");
     expect(arg.maxRecords).toBeGreaterThan(0);
+  });
+});
+
+describe("daily KPI job — Zoho calls import ordering", () => {
+  it("imports calls BEFORE running the KPI engine", async () => {
+    await runKPIAutoCalc();
+    expect(calls).toContain("calls-import");
+    // SDR-KPI-01/02/06 read call_records; engine-first scores them against
+    // yesterday's calls.
+    expect(calls.indexOf("calls-import")).toBeLessThan(calls.indexOf("kpi-engine"));
+  });
+
+  it("syncs a 30-day window matching CALL_WINDOW_DAYS", async () => {
+    await runKPIAutoCalc();
+    const arg = callsImport.mock.calls[0]?.[0] ?? {};
+    const days = (Date.now() - Date.parse(arg.sinceIso)) / 86400000;
+    // A shorter window leaves the KPI counting days it has no data for.
+    expect(days).toBeGreaterThan(29);
+    expect(days).toBeLessThan(31);
+  });
+
+  it("requests more than one Zoho page", async () => {
+    await runKPIAutoCalc();
+    const arg = callsImport.mock.calls[0]?.[0] ?? {};
+    // The import was capped at 200 (one page) for its whole life.
+    expect(arg.maxRecords).toBeGreaterThan(200);
+  });
+
+  it("still runs the KPI engine when the calls import throws", async () => {
+    callsImport.mockRejectedValue(new Error("Zoho unreachable"));
+    await runKPIAutoCalc();
+    expect(calls).toContain("kpi-engine");
   });
 });
