@@ -10,6 +10,19 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
+
+// kpiRoutes.ts is a large route module with a wide import graph, and each test
+// re-imports it through the mock layer. Alone the file runs in ~1s; inside the
+// full 84-file suite, with forks competing for CPU, it has been measured at
+// ~4.5s against vitest's 5s default — close enough that it tipped over
+// intermittently and failed with "Test timed out in 5000ms". The timeout then
+// leaked into the NEXT test as a 403, which made it look like an auth bug
+// rather than a duration one.
+//
+// This is test-infrastructure headroom, not a product concern: the same tests
+// pass deterministically in isolation. Raise the ceiling so the result depends
+// on behaviour rather than on how busy the machine is.
+vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 });
 import type { FakeContext, CapturedResponse } from "../_helpers/fakeContext";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
 import {
@@ -20,15 +33,33 @@ import {
 
 const FAKE_USER = { userId: 0, email: "api@system", name: "API Key", role: "admin" as const };
 
-// GET /api/kpis filters out department-owned KPIs, which means the handler now
-// consults the BU registry on every request. Unmocked, that module builds a
-// real pg pool and attempts a connection per request — fast enough to pass this
-// file alone, but slow enough under the full suite's parallel load to blow the
-// 5s test timeout. Stubbed so this stays a route unit test. Returning [] means
-// "no department owners", i.e. exclude nothing, so the existing assertions
-// about the full KPI list still hold.
+// GET /api/kpis filters out department-owned KPIs, so the handler now consults
+// the BU registry on every request via a DYNAMIC import.
+//
+// Both mocks below are needed, and the second is the one that actually saves
+// this file. `vi.mock` does not reliably intercept a module that a route pulls
+// in with `await import(...)` — the mock applies to this file's own import
+// while the route still receives the real module (the same behaviour bit
+// kpiCatalogRoutes). When that happens the real qualityReportsDepartments
+// builds a pg pool and attempts a connection per request: fast enough to pass
+// when this file runs alone, slow enough under the full suite's parallel load
+// to blow the 5s timeout — after which the leaked state failed the NEXT test
+// with a 403, which is why the symptom looked like an auth problem.
+//
+// Stubbing redactedPool makes the real module harmless either way: every query
+// resolves instantly, so no socket is ever opened. Returning [] means "no
+// department owners" — exclude nothing — so the existing full-list assertions
+// still hold.
 vi.mock("../../src/utils/qualityReportsDepartments", () => ({
   getDepartmentKpiOwnerNames: vi.fn(async () => []),
+  invalidateDepartmentKpiOwnerCache: vi.fn(),
+}));
+vi.mock("../../src/utils/redactedPool", () => ({
+  createRedactedPool: () => ({
+    query: async () => ({ rows: [] }),
+    connect: async () => ({ query: async () => ({ rows: [] }), release: () => {} }),
+    end: async () => undefined,
+  }),
 }));
 vi.mock("../../src/utils/kpiDatabase", () => ({
   initKPITables: vi.fn(async () => undefined),
