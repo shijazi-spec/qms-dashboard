@@ -66,6 +66,7 @@ import { kpiCatalogRoutes } from "./routes/kpiCatalogRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
 import { zohoAgingRoutes } from "./routes/zohoAgingRoutes";
 import { zohoActivitiesRoutes } from "./routes/zohoActivitiesRoutes";
+import { zohoTasksRoutes } from "./routes/zohoTasksRoutes";
 import { infographicRoutes } from "./routes/infographicRoutes";
 import { rbacRoutes } from "./routes/rbacRoutes";
 import { scorecardRoutes } from "./routes/scorecardRoutes";
@@ -321,6 +322,7 @@ export const mastra = new Mastra({
       ...duplicateRadarRoutes,
       ...zohoAgingRoutes,
       ...zohoActivitiesRoutes,
+      ...zohoTasksRoutes,
       ...rbacRoutes,
       ...scorecardRoutes,
       ...pdplRoutes,

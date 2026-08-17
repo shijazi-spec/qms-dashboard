@@ -1707,6 +1707,20 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
   {
+    // Zoho Tasks bulk sync — WRITES to our zoho_tasks mirror and calls Zoho,
+    // so it is held to the same set that may run other Zoho-touching jobs.
+    pattern: /^\/api\/zoho\/tasks\/sync$/,
+    methods: ["POST"],
+    roles: ["admin", "grc_manager", "head_of_operations_quality", "quality_manager"],
+  },
+  {
+    // Task census (counts + linkage only, no task content) — the read audience
+    // that already sees the activities reader above.
+    pattern: /^\/api\/zoho\/tasks\/stats$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
     pattern: /^\/api\/calls\/mcp\/leads\/match-phone$/,
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],

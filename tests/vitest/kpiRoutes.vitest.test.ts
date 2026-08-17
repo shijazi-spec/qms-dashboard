@@ -11,18 +11,9 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-// kpiRoutes.ts is a large route module with a wide import graph, and each test
-// re-imports it through the mock layer. Alone the file runs in ~1s; inside the
-// full 84-file suite, with forks competing for CPU, it has been measured at
-// ~4.5s against vitest's 5s default — close enough that it tipped over
-// intermittently and failed with "Test timed out in 5000ms". The timeout then
-// leaked into the NEXT test as a 403, which made it look like an auth bug
-// rather than a duration one.
-//
-// This is test-infrastructure headroom, not a product concern: the same tests
-// pass deterministically in isolation. Raise the ceiling so the result depends
-// on behaviour rather than on how busy the machine is.
-vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 });
+// Timeout headroom for this file now lives in vitest.config.ts — several
+// route-module suites need it, so it is set once there rather than per file.
+
 import type { FakeContext, CapturedResponse } from "../_helpers/fakeContext";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
 import {
