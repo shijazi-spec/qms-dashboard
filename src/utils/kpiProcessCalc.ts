@@ -250,6 +250,70 @@ export async function calcSdrShowRate(): Promise<ProcessKpiValue> {
 }
 
 // ---------------------------------------------------------------------------
+// Sales cycle times (SALES-KPI-03 / SALES-KPI-04) — LOCAL
+// ---------------------------------------------------------------------------
+/**
+ * Average days deals have currently spent in a stage, read from the local
+ * mirror. No Zoho call.
+ *
+ * WHY LOCAL: these were previously computable only from Zoho's per-deal
+ * Stage_History, up to 40 sequential API calls, which is why they were excluded
+ * from the interactive recalculate. That path does not work in this tenant —
+ * verified live 2026-08-17: a full cycle-times run completed and reported "no
+ * synced source data" for both, and /api/zoho/deals/:id/stage-aging returns
+ * source:"created", meaning it fell back to the record's creation time because
+ * no usable Stage_Duration came back. Retrying cannot fix that.
+ *
+ * The proxy is `modified_date` as stage-entry, which is what the Deal Stage
+ * Aging engine already uses platform-wide, so this introduces no new
+ * approximation.
+ *
+ * KNOWN BIAS, stated rather than hidden: this measures deals CURRENTLY in the
+ * stage, so it cannot see deals that already moved through it. It therefore
+ * skews toward slow and stuck deals and reads HIGHER than a true completed-
+ * cycle average. It answers "how long are the deals sitting in Proposal right
+ * now", which is the operational question the SOP escalation clause asks.
+ */
+async function avgStageDwellDays(stageMatch: string): Promise<ProcessKpiValue> {
+  const res = await pool.query(
+    `SELECT COUNT(*)::int AS deals,
+            AVG(EXTRACT(EPOCH FROM (NOW() - COALESCE(r.modified_date, r.created_date))) / 86400.0) AS avg_days
+       FROM duplicate_records r
+      WHERE r.zoho_module = 'Deals'
+        AND LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage','')) LIKE $1
+        AND COALESCE(r.modified_date, r.created_date) IS NOT NULL`,
+    [stageMatch],
+  );
+  const deals = Number(res.rows[0]?.deals) || 0;
+  const rawAvg = res.rows[0]?.avg_days;
+  // Check for null BEFORE coercing: Number(null) is 0, which passes
+  // Number.isFinite, so a null average would report a 0-day cycle time — a
+  // nonsense value that reads as excellent against a 7-day target.
+  if (deals === 0 || rawAvg === null || rawAvg === undefined) return EMPTY;
+  const avg = Number(rawAvg);
+  if (!Number.isFinite(avg)) return EMPTY;
+  return {
+    value: Math.round(avg * 10) / 10,
+    dataAvailable: true,
+    details: { deals_in_stage: deals, basis: "current dwell (modified_date proxy)" },
+  };
+}
+
+/** SALES-KPI-03 Proposal Cycle Time — avg days deals have sat in Proposal. */
+export async function calcSalesProposalCycleTime(): Promise<ProcessKpiValue> {
+  return avgStageDwellDays("%proposal%");
+}
+
+/**
+ * SALES-KPI-04 Agreement Cycle Time — avg days deals have sat in Agreement Sent.
+ * Matches "agreement sent" specifically: "Agreement Signed" is a terminal stage
+ * and must not be averaged in, or a won deal's age inflates the cycle time.
+ */
+export async function calcSalesAgreementCycleTime(): Promise<ProcessKpiValue> {
+  return avgStageDwellDays("%agreement sent%");
+}
+
+// ---------------------------------------------------------------------------
 // Follow-up KPIs (SDR-KPI-11 / SALES-KPI-07 / SALES-KPI-08)
 // ---------------------------------------------------------------------------
 /**
@@ -428,12 +492,38 @@ function businessDaysInWindow(days: number): number {
 }
 
 /** SDR-KPI-01 Calls Per Day — outbound lead calls ÷ (agents × business days). */
+/**
+ * "This call is attached to a CRM record", for the SDR call-volume KPIs.
+ *
+ * These used to require `lead_id IS NOT NULL`. That is a narrowing neither KPI's
+ * definition asks for — SDR-KPI-01 is "total outbound calls per working day per
+ * SDR agent" and SDR-KPI-02 is "percentage of calls that result in a live
+ * conversation"; neither mentions leads.
+ *
+ * It also does not match how this team works. Measured on the live mirror
+ * 2026-08-17, right after the first successful Zoho Calls import: of 236 calls,
+ * 200 were linked to a DEAL and exactly 1 to a Lead. The lead-only filter
+ * discarded 85% of the corpus and left both KPIs permanently "--".
+ *
+ * Accepting either linkage still excludes unlinked/junk rows, which is what the
+ * filter was there to do. SDR-KPI-06 deliberately does NOT use this: "Average
+ * Speed to Lead" measures lead-creation to first contact, so lead linkage is
+ * intrinsic to it rather than incidental.
+ *
+ * Both callers also bound the window at `call_date <= NOW()`. Zoho's Calls
+ * module holds SCHEDULED calls, and the same live check found rows dated into
+ * the future. Counting those as work already done inflates calls-per-day and
+ * would let the metric be raised by booking calls rather than making them.
+ */
+const CALL_LINKED_TO_CRM = "(lead_id IS NOT NULL OR deal_id IS NOT NULL)";
+
 export async function calcSdrCallsPerDay(): Promise<ProcessKpiValue> {
   const res = await pool.query(
     `SELECT COUNT(*)::int AS total, COUNT(DISTINCT agent_email)::int AS agents
        FROM call_records
-      WHERE lower(coalesce(direction,'outbound')) = 'outbound' AND lead_id IS NOT NULL
-        AND call_date >= NOW() - INTERVAL '${CALL_WINDOW_DAYS} days'`,
+      WHERE lower(coalesce(direction,'outbound')) = 'outbound' AND ${CALL_LINKED_TO_CRM}
+        AND call_date >= NOW() - INTERVAL '${CALL_WINDOW_DAYS} days'
+        AND call_date <= NOW()`,
   );
   const total = Number(res.rows[0]?.total || 0);
   const agents = Math.max(1, Number(res.rows[0]?.agents || 0));
@@ -452,8 +542,9 @@ export async function calcSdrContactRate(): Promise<ProcessKpiValue> {
     `SELECT COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE duration_seconds > 0)::int AS connected
        FROM call_records
-      WHERE lower(coalesce(direction,'outbound')) = 'outbound' AND lead_id IS NOT NULL
-        AND call_date >= NOW() - INTERVAL '${CALL_WINDOW_DAYS} days'`,
+      WHERE lower(coalesce(direction,'outbound')) = 'outbound' AND ${CALL_LINKED_TO_CRM}
+        AND call_date >= NOW() - INTERVAL '${CALL_WINDOW_DAYS} days'
+        AND call_date <= NOW()`,
   );
   const total = Number(res.rows[0]?.total || 0);
   const connected = Number(res.rows[0]?.connected || 0);
@@ -866,6 +957,8 @@ export const PROCESS_CALCULATORS: Record<
   // Sales
   "SALES-KPI-01": calcSalesStageAgingCompliance,
   "SALES-KPI-02": calcSalesConversionRate,
+  "SALES-KPI-03": calcSalesProposalCycleTime,
+  "SALES-KPI-04": calcSalesAgreementCycleTime,
   "SALES-KPI-05": calcSalesDocCompliance,
   "SALES-KPI-06": calcSalesCrmAccuracy,
   "SALES-KPI-07": calcSalesFollowUpEffectiveness,
@@ -911,11 +1004,24 @@ export async function computeProcessKPIs(
   // NOT on the interactive Recalculate button, so the button can't hang / time out.
   if (includeCycleTimes) {
     try {
-      Object.assign(out, await computeSalesCycleTimes());
+      // MERGE, don't clobber. SALES-KPI-03/04 now have LOCAL calculators in the
+      // registry above that always produce a value. The Zoho stage-history
+      // sample is a refinement on top — it measures completed dwell per stage
+      // transition, which the local proxy cannot see.
+      //
+      // A blind Object.assign would overwrite good local values with EMPTY
+      // whenever Zoho returns nothing, which is this tenant's normal state:
+      // Stage_History yields no usable Stage_Duration here (the aging endpoint
+      // reports source:"created", i.e. it fell back to the record's creation
+      // time), so the run reports "no synced source data" rather than failing.
+      const zoho = await computeSalesCycleTimes();
+      for (const [code, value] of Object.entries(zoho)) {
+        if (value?.dataAvailable) out[code] = value;
+      }
     } catch (e) {
+      // Leave the local values in place — a Zoho outage must not blank a KPI
+      // that was computed successfully from our own mirror.
       logger.error(`[KPIProcessCalc] cycle-times failed: ${(e as Error).message}`);
-      out["SALES-KPI-03"] = EMPTY;
-      out["SALES-KPI-04"] = EMPTY;
     }
   }
 
