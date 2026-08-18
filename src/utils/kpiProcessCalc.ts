@@ -15,6 +15,7 @@ import {
   pool,
   getDealDocCompliance,
   scanDealStageAgingViolations,
+  scanCsLifecycleViolations,
   openStagePredicate,
   buildSegmentPredicate,
 } from "./duplicateRadarDatabase";
@@ -950,6 +951,165 @@ export async function calcAdhocSalesMeetingConversion(): Promise<ProcessKpiValue
   };
 }
 
+// ─────────── CUSTOMER SUCCESS (B2B) — WP-BU-CS-SOP-003 KPI framework ────────
+/**
+ * The CS SOP defines 33 KPIs (§8.1 Individual, §8.2 Process, §8.3 Governance).
+ * Most name Client-Hub, Jira, the Admin/BI Portal or QA sampling as their
+ * system of record, and QMS mirrors Zoho — so they stay manual until those
+ * feeds exist. Four are computable TODAY from the CS lifecycle engine, which
+ * already evaluates every synced CS deal against the SOP's own phase rules.
+ *
+ * These are Zoho-side measures of a Client-Hub KPI. They are not a substitute
+ * for the SOP's stated source, and each KPI's description says so — the point
+ * is to give CS a live signal now rather than four permanently blank rows.
+ */
+const CS_SLA_CODES = new Set([
+  "onboarding_overdue",
+  "renewal_overdue",
+  "phase_transition_stalled",
+]);
+/** The mandatory client-data fields the lifecycle engine checks per deal. */
+const CS_DATA_GAP_CODES = new Set([
+  "missing_company_domain",
+  "missing_cs_owner",
+  "missing_customer_since",
+  "missing_renewal_date",
+  "missing_health_score",
+  "missing_arr_value",
+]);
+const CS_CHURN_RECORD_CODES = new Set([
+  "termination_missing_churn_date",
+  "termination_missing_churn_reason",
+]);
+
+interface CsKpiAggregates {
+  csDeals: number;
+  slaBreachDeals: number;
+  dataGapDeals: number;
+  terminationDeals: number;
+  churnRecordGapDeals: number;
+}
+
+const CS_CACHE_TTL_MS = 60_000;
+let csCache: { at: number; data: CsKpiAggregates } | null = null;
+let csInFlight: Promise<CsKpiAggregates> | null = null;
+
+/**
+ * One CS lifecycle scan, four KPIs. Counts DISTINCT DEALS per violation family,
+ * not violation rows: a deal can breach several rules at once, and dividing raw
+ * violation counts by deal counts can exceed 100% (or push adherence negative).
+ */
+export async function csKpiAggregates(): Promise<CsKpiAggregates> {
+  if (csCache && Date.now() - csCache.at < CS_CACHE_TTL_MS) return csCache.data;
+  if (csInFlight) return csInFlight;
+  csInFlight = (async () => {
+    // Full (non-summaryOnly) scan: the summary counts violations, and these
+    // KPIs need per-deal grouping, which only the rows carry.
+    const scan = await scanCsLifecycleViolations({ limit: 50000 });
+    const sla = new Set<number>();
+    const gap = new Set<number>();
+    const churnGap = new Set<number>();
+    for (const row of scan.violations as any[]) {
+      const code = String(row?.violation?.code || "");
+      if (CS_SLA_CODES.has(code)) sla.add(row.record_id);
+      if (CS_DATA_GAP_CODES.has(code)) gap.add(row.record_id);
+      if (CS_CHURN_RECORD_CODES.has(code)) churnGap.add(row.record_id);
+    }
+    let termination = 0;
+    for (const [phase, n] of Object.entries(scan.summary.by_phase || {})) {
+      if (/termin|churn/i.test(phase)) termination += Number(n) || 0;
+    }
+    const data: CsKpiAggregates = {
+      csDeals: Number(scan.summary.total_cs_deals || 0),
+      slaBreachDeals: sla.size,
+      dataGapDeals: gap.size,
+      terminationDeals: termination,
+      churnRecordGapDeals: churnGap.size,
+    };
+    csCache = { at: Date.now(), data };
+    return data;
+  })().finally(() => {
+    csInFlight = null;
+  });
+  return csInFlight;
+}
+
+/** Test seam — drop the memo so a test (or a forced recalc) re-reads the scan. */
+export function resetCsKpiCache(): void {
+  csCache = null;
+}
+
+/** CS-KPI-25 SLA / Milestone Adherence — CS deals with no overdue lifecycle step. */
+export async function calcCsSlaAdherence(): Promise<ProcessKpiValue> {
+  const a = await csKpiAggregates();
+  if (a.csDeals === 0) return EMPTY;
+  const onTime = Math.max(0, a.csDeals - a.slaBreachDeals);
+  return {
+    value: Math.round((onTime / a.csDeals) * 1000) / 10,
+    dataAvailable: true,
+    details: {
+      source: "Zoho CS lifecycle scan (SOP names Client-Hub / Dashboard)",
+      cs_deals: a.csDeals,
+      deals_with_an_overdue_step: a.slaBreachDeals,
+      rules_counted: "onboarding overdue, renewal overdue, phase transition stalled",
+    },
+  };
+}
+
+/** CS-KPI-23 Client-Hub Data Accuracy Score — CS deals carrying every mandatory field. */
+export async function calcCsDataAccuracy(): Promise<ProcessKpiValue> {
+  const a = await csKpiAggregates();
+  if (a.csDeals === 0) return EMPTY;
+  const clean = Math.max(0, a.csDeals - a.dataGapDeals);
+  return {
+    value: Math.round((clean / a.csDeals) * 1000) / 10,
+    dataAvailable: true,
+    details: {
+      source: "Zoho CS section (SOP names Client-Hub / QA Records)",
+      cs_deals: a.csDeals,
+      deals_missing_a_mandatory_field: a.dataGapDeals,
+      fields_checked:
+        "company domain, CS owner, customer since, renewal date, health score, ARR value",
+    },
+  };
+}
+
+/** CS-KPI-30 Churn Classification Accuracy — churned deals carrying date AND reason. */
+export async function calcCsChurnClassificationAccuracy(): Promise<ProcessKpiValue> {
+  const a = await csKpiAggregates();
+  // Denominator is churned deals, not all CS deals — with no terminations there
+  // is nothing to classify, so the KPI stays "--" rather than reporting 100%.
+  if (a.terminationDeals === 0) return EMPTY;
+  const accurate = Math.max(0, a.terminationDeals - a.churnRecordGapDeals);
+  return {
+    value: Math.round((accurate / a.terminationDeals) * 1000) / 10,
+    dataAvailable: true,
+    details: {
+      source: "Zoho CS lifecycle scan (SOP names Client-Hub / QA Records)",
+      churned_deals: a.terminationDeals,
+      missing_churn_date_or_reason: a.churnRecordGapDeals,
+    },
+  };
+}
+
+/** CS-KPI-21 Client Churn Rate — churned deals ÷ the CS book. */
+export async function calcCsChurnRate(): Promise<ProcessKpiValue> {
+  const a = await csKpiAggregates();
+  if (a.csDeals === 0) return EMPTY;
+  return {
+    value: Math.round((a.terminationDeals / a.csDeals) * 1000) / 10,
+    dataAvailable: true,
+    details: {
+      source: "Zoho CS lifecycle phases (SOP names Client-Hub)",
+      churned_deals: a.terminationDeals,
+      cs_deals: a.csDeals,
+      // The SOP's target is an ANNUAL ceiling; this is the standing share of
+      // the book currently in a termination phase, which is not the same thing.
+      caveat: "point-in-time share of the book, not an annual rate",
+    },
+  };
+}
+
 // ───────────────────────── GRC — Certification Milestones ───────────────────
 /**
  * GRC-KPI-002 Certification Milestones On-Track — driven by the Document Mapping
@@ -1180,6 +1340,13 @@ export const PROCESS_CALCULATORS: Record<
   "ADHOC-SALES-02": calcAdhocSalesQualifiedPipeline,
   "ADHOC-SALES-03": calcAdhocSalesAvgDealValue,
   "ADHOC-SALES-04": calcAdhocSalesMeetingConversion,
+  // Customer Success (B2B) — the four KPIs of WP-BU-CS-SOP-003 that QMS can
+  // measure from the Zoho mirror. The other 29 name Client-Hub / Jira / the
+  // Admin-BI Portal / QA sampling and stay manual until those feeds exist.
+  "CS-KPI-21": calcCsChurnRate,
+  "CS-KPI-23": calcCsDataAccuracy,
+  "CS-KPI-25": calcCsSlaAdherence,
+  "CS-KPI-30": calcCsChurnClassificationAccuracy,
   // GRC — driven by the Document Mapping framework coverage
   "GRC-KPI-002": calcCertificationMilestones,
   // Quality — driven by the Integrated QMS document lifecycle
