@@ -253,6 +253,58 @@ export function gradeStageAging(
   };
 }
 
+/**
+ * The source document these SLAs come from, so a KPI detail page can name the
+ * process it grades against instead of showing an empty "Data source".
+ *
+ * The SOP is NOT yet a controlled document in Document Control — that register
+ * holds 154 policies across 13 departments and none of them is a Sales or SDR
+ * process (checked 2026-08-18). This block is deliberately silent about control
+ * status rather than asserting "uncontrolled", which would go stale the moment
+ * the document is uploaded.
+ */
+export const SALES_SOP_DOCUMENT = {
+  title: "WalaPlus Sales Management Process",
+  reference: "WP-SOP Sales v1.1",
+  issued: "01.12.2025",
+} as const;
+
+export interface KpiProcessReference {
+  document: string;
+  clauses: Array<{ stage: string; sla: string }>;
+}
+
+/**
+ * KPI code → the SOP stages it grades. Only the three KPIs the spec actually
+ * covers are mapped: stage aging reads every clause, and the two cycle-time
+ * KPIs each read one. The rest of SALES-KPI-* (win rate, document compliance,
+ * CRM accuracy, follow-up, first-contact, duplicates) have no clause in this
+ * SOP, and inventing one would put a citation on screen that an auditor could
+ * not trace to the document.
+ */
+const KPI_TO_STAGES: Record<string, string[] | "all"> = {
+  "SALES-KPI-01": "all",
+  "SALES-KPI-03": ["Proposal"],
+  "SALES-KPI-04": ["Agreement Sent"],
+};
+
+export function getKpiProcessReference(code: string): KpiProcessReference | null {
+  const want = KPI_TO_STAGES[code];
+  if (!want) return null;
+  const specs =
+    want === "all"
+      ? SALES_STAGE_SLA_SPEC
+      : want
+          .map((s) => getStageSlaSpec(s))
+          .filter((s): s is StageSlaSpec => s !== null);
+  if (specs.length === 0) return null;
+  const d = SALES_SOP_DOCUMENT;
+  return {
+    document: `${d.title} (${d.reference}, ${d.issued})`,
+    clauses: specs.map((s) => ({ stage: s.stage, sla: describeSla(s) })),
+  };
+}
+
 /** Used by the dashboard + Adam tool to render the SLA next to a stage. */
 export function describeSla(spec: StageSlaSpec): string {
   const unit = spec.unit === "business_days" ? "business day" : "calendar day";

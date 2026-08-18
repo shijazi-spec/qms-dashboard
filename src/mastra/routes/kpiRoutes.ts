@@ -542,6 +542,13 @@ export const kpiRoutes = [
             kpi,
             can_lock: isHod,
             is_department_kpi: isDepartmentKpi,
+            // The SOP clauses this KPI grades against, where the Sales stage
+            // spec defines them. Pure lookup off a constants module — no DB, no
+            // Document Control dependency, so it works before the SOP is
+            // uploaded and cannot drift from the SLAs the KPI actually applies.
+            process_reference: (
+              await import("../../utils/salesStageSlaSpec")
+            ).getKpiProcessReference(String((kpi as any).kpi_code || "")),
             latest: latest
               ? {
                   actual_value: (latest as any).actual_value,

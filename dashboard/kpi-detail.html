@@ -166,6 +166,21 @@
             return `<div class="divide-y">${rows || '<p class="text-sm text-gray-500">No breakdown returned.</p>'}</div>`;
         }
 
+        /**
+         * The SOP clauses this KPI grades against.
+         *
+         * Rendered only when the server supplies one — a KPI with no clause in
+         * the SOP shows nothing rather than a citation an auditor could not
+         * trace back to the document.
+         */
+        function _processRef(pr) {
+            if (!pr || !pr.document) return '';
+            const rows = (pr.clauses || []).map(c =>
+                `<div class="text-xs text-gray-600 ms-3">${_esc(c.stage)} — ${_esc(c.sla)}</div>`).join('');
+            return `<div><div class="text-gray-500 text-xs">Process reference</div>` +
+                   `<div class="text-gray-900">${_esc(pr.document)}</div>${rows}</div>`;
+        }
+
         function _kvRows(d) {
             return Object.entries(d).map(([k, v]) => {
                 const label = k.replace(/_/g, ' ');
@@ -246,6 +261,7 @@
                   <div class="text-sm space-y-2">
                     <div><div class="text-gray-500 text-xs">Formula</div><div class="text-gray-900">${_esc(k.formula || '—')}</div></div>
                     <div><div class="text-gray-500 text-xs">Data source</div><div class="text-gray-900">${_esc(k.data_source || '—')}</div></div>
+                    ${_processRef(data.process_reference)}
                     <div><div class="text-gray-500 text-xs">Category</div><div class="text-gray-900 capitalize">${_esc(k.category || '—')}</div></div>
                   </div>
                   <h2 class="font-semibold text-gray-900 mt-5 mb-2">History</h2>
