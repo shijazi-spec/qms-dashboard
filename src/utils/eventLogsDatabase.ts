@@ -176,14 +176,55 @@ export function monthPartitionBounds(
  * job with the data safely on disk, not an outage. `partitionInventory()`
  * reports the row count so it stays visible.
  */
+/**
+ * The catch-all partition, so a row whose month has no partition still lands
+ * somewhere instead of being rejected.
+ *
+ * Same two-question check as createMonthlyPartition, and for the same reason:
+ * `CREATE TABLE IF NOT EXISTS event_logs_default PARTITION OF ... DEFAULT` is a
+ * silent NO-OP when a table of that name exists but is not attached to
+ * event_logs. Production was in exactly that state on 2026-08-19 — the default
+ * partition showed up in orphanTables, which meant the safety net added after
+ * the August outage was not actually armed. Had another month gone missing,
+ * events would have been dropped silently all over again.
+ */
 async function ensureDefaultPartition(): Promise<void> {
   try {
+    const check = await pool.query(
+      `SELECT
+         EXISTS (SELECT FROM pg_tables
+                  WHERE schemaname = 'public' AND tablename = 'event_logs_default') AS table_exists,
+         EXISTS (SELECT FROM pg_inherits i
+                   JOIN pg_class c ON c.oid = i.inhrelid
+                   JOIN pg_class p ON p.oid = i.inhparent
+                  WHERE c.relname = 'event_logs_default' AND p.relname = 'event_logs') AS is_attached`,
+    );
+    if (check.rows.length === 0) return;
+    const { table_exists: tableExists, is_attached: isAttached } = check.rows[0];
+    if (isAttached) return;
+
+    if (tableExists) {
+      logger.warn(
+        "📋 [EventLogs] event_logs_default exists but is NOT attached — attaching it",
+      );
+      // DEFAULT, not FOR VALUES — a default partition has no bound. Postgres
+      // scans the table first and refuses if any row belongs to an existing
+      // month partition; that surfaces in the catch below rather than being
+      // silently swallowed.
+      await pool.query(
+        `ALTER TABLE event_logs ATTACH PARTITION event_logs_default DEFAULT`,
+      );
+      logger.info("📋 [EventLogs] Attached the DEFAULT partition");
+      return;
+    }
+
     await pool.query(
       `CREATE TABLE IF NOT EXISTS event_logs_default PARTITION OF event_logs DEFAULT`,
     );
+    logger.info("📋 [EventLogs] Created the DEFAULT partition");
   } catch (error: any) {
     if (!error.message?.includes("already exists")) {
-      logger.error("📋 [EventLogs] Could not create the DEFAULT partition:", {
+      logger.error("📋 [EventLogs] Could not ensure the DEFAULT partition:", {
         code: error?.code,
         detail: error?.detail,
         message: error?.message,

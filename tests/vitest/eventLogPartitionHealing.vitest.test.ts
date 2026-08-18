@@ -212,6 +212,61 @@ describe("createMonthlyPartition adopts an orphaned table", () => {
   });
 });
 
+describe("the DEFAULT partition is armed, not just named", () => {
+  const EVENT = { actionType: "CREATE", entityType: "DOCUMENT", entityId: "1" } as any;
+  const noPartition = () =>
+    Object.assign(new Error('no partition of relation "event_logs" found for row'), {
+      code: "23514",
+    });
+
+  /** `defaultState` drives only the event_logs_default catalog probe. */
+  function routeDefault(tableExists: boolean, isAttached: boolean) {
+    let inserts = 0;
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/INSERT INTO event_logs/i.test(s)) {
+        return ++inserts === 1 ? Promise.reject(noPartition()) : { rows: [{ id: 1 }] };
+      }
+      if (/event_logs_default/.test(s) && /pg_inherits/i.test(s)) {
+        return { rows: [{ table_exists: tableExists, is_attached: isAttached }] };
+      }
+      if (/pg_inherits/i.test(s)) {
+        return { rows: [{ table_exists: false, is_attached: false }] };
+      }
+      return { rows: [] };
+    });
+  }
+  const sqlMatching = (re: RegExp) =>
+    query.mock.calls.filter((c) => re.test(String(c[0])));
+
+  it("ATTACHes an orphaned default partition with DEFAULT, not FOR VALUES", async () => {
+    routeDefault(true, false);
+    await logEvent(EVENT);
+    const attach = sqlMatching(/ATTACH PARTITION event_logs_default/i);
+    expect(attach.length).toBeGreaterThan(0);
+    // A default partition has no bound — FOR VALUES is a syntax error here, and
+    // this is the case production was actually in: the table existed, detached,
+    // so CREATE ... IF NOT EXISTS did nothing and the safety net was inert.
+    expect(String(attach[0][0])).toMatch(/DEFAULT\s*$/);
+    expect(String(attach[0][0])).not.toMatch(/FOR VALUES/i);
+  });
+
+  it("CREATEs it when no such table exists", async () => {
+    routeDefault(false, false);
+    await logEvent(EVENT);
+    expect(sqlMatching(/CREATE TABLE IF NOT EXISTS event_logs_default PARTITION OF/i).length)
+      .toBeGreaterThan(0);
+    expect(sqlMatching(/ATTACH PARTITION event_logs_default/i)).toHaveLength(0);
+  });
+
+  it("leaves an already-attached default alone", async () => {
+    routeDefault(true, true);
+    await logEvent(EVENT);
+    expect(sqlMatching(/ATTACH PARTITION event_logs_default/i)).toHaveLength(0);
+    expect(sqlMatching(/CREATE TABLE IF NOT EXISTS event_logs_default/i)).toHaveLength(0);
+  });
+});
+
 describe("logEvent never throws at its callers", () => {
   const EVENT = { actionType: "UPDATE", entityType: "KPI", entityId: "7" } as any;
 
