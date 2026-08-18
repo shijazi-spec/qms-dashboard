@@ -106,8 +106,10 @@ describe("logEvent self-heals a missing partition", () => {
 
   const inserts = () =>
     query.mock.calls.filter((c) => /INSERT INTO event_logs/i.test(String(c[0]))).length;
+  /** Monthly partitions only — the DEFAULT one is counted separately. */
   const partitionsCreated = () =>
-    query.mock.calls.filter((c) => /PARTITION OF event_logs/i.test(String(c[0]))).length;
+    query.mock.calls.filter((c) => /PARTITION OF event_logs\s+FOR VALUES/i.test(String(c[0])))
+      .length;
 
   it("creates the partition and retries the insert once", async () => {
     route((n) => {
@@ -119,6 +121,21 @@ describe("logEvent self-heals a missing partition", () => {
     expect(inserts()).toBe(2);
     // This month AND next, so the month rollover does not cost another event.
     expect(partitionsCreated()).toBe(2);
+  });
+
+  it("also creates a DEFAULT partition, since the month's own can be refused", async () => {
+    route((n) => {
+      if (n === 1) throw noPartition();
+      return { rows: [{ id: 1 }] };
+    });
+    await logEvent(EVENT);
+    const dflt = query.mock.calls.filter((c) =>
+      /PARTITION OF event_logs DEFAULT/i.test(String(c[0])),
+    );
+    // Confirmed live: the correct August range overlapped a legacy partition
+    // built with the old shifted bounds, so CREATE was rejected and the retry
+    // failed too. DEFAULT accepts the row whatever the legacy bounds are.
+    expect(dflt).toHaveLength(1);
   });
 
   it("does not retry errors that are not about partitioning", async () => {

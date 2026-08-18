@@ -83,8 +83,12 @@ export const eventLogsRoutes = [
             await import("../../utils/rbacMiddleware");
           if (!getSessionUser(c)) return unauthorizedResponse(c);
 
-          const { getEventLogStats, initializeEventLogsTable, getAuditWriteHealth } =
-            await import("../../utils/eventLogsDatabase");
+          const {
+            getEventLogStats,
+            initializeEventLogsTable,
+            getAuditWriteHealth,
+            partitionInventory,
+          } = await import("../../utils/eventLogsDatabase");
           await initializeEventLogsTable();
 
           // `last24Hours: 0` cannot distinguish "quiet day" from "audit trail
@@ -93,7 +97,13 @@ export const eventLogsRoutes = [
           // the answer is readable without shell access to the deployment log.
           const stats = {
             ...(await getEventLogStats()),
-            auditWriteHealth: getAuditWriteHealth(),
+            auditWriteHealth: {
+              ...getAuditWriteHealth(),
+              // The bounds of the real partitions. A gap here is what silently
+              // ate 18 days of audit history, and rows sitting in
+              // event_logs_default are the ones needing a later tidy-up.
+              partitions: await partitionInventory(),
+            },
           };
 
           logger?.info("📋 [EventLogs API] Stats fetched successfully", {

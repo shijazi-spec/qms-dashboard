@@ -155,6 +155,72 @@ export function monthPartitionBounds(
   };
 }
 
+/**
+ * A DEFAULT partition — the catch-all that makes a routing gap impossible.
+ *
+ * Confirmed live 2026-08-18: `23514 no partition of relation "event_logs" found
+ * for row`, partition key 2026-08-18. Fixing the bounds arithmetic was not
+ * enough, because the LEGACY partitions were built with the old shifted bounds,
+ * so the correct August range [2026-08-01, 2026-09-01) overlaps whatever a
+ * previous boot created around it and Postgres refuses it. Chasing the exact
+ * gap would need the existing bounds parsed and a bespoke range computed per
+ * deployment.
+ *
+ * A DEFAULT partition sidesteps all of that: any row no monthly partition
+ * accepts lands here instead of being lost. For an audit trail that is
+ * unambiguously the right trade — the alternative on the table has been silent
+ * data loss.
+ *
+ * The known cost: once a row sits in DEFAULT, creating a monthly partition that
+ * would have contained it fails until those rows are moved. That is a tidy-up
+ * job with the data safely on disk, not an outage. `partitionInventory()`
+ * reports the row count so it stays visible.
+ */
+async function ensureDefaultPartition(): Promise<void> {
+  try {
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS event_logs_default PARTITION OF event_logs DEFAULT`,
+    );
+  } catch (error: any) {
+    if (!error.message?.includes("already exists")) {
+      logger.error("📋 [EventLogs] Could not create the DEFAULT partition:", {
+        code: error?.code,
+        detail: error?.detail,
+        message: error?.message,
+      });
+    }
+  }
+}
+
+/** Existing partitions with their bounds and row counts, for the health probe. */
+export async function partitionInventory(): Promise<
+  Array<{ name: string; bound: string; rows: number }>
+> {
+  try {
+    const res = await pool.query(
+      `SELECT c.relname AS name,
+              pg_get_expr(c.relpartbound, c.oid) AS bound,
+              COALESCE(s.n_live_tup, 0)::int AS rows
+         FROM pg_class p
+         JOIN pg_inherits i ON i.inhparent = p.oid
+         JOIN pg_class c ON c.oid = i.inhrelid
+         LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
+        WHERE p.relname = 'event_logs'
+        ORDER BY c.relname`,
+    );
+    return res.rows.map((r: any) => ({
+      name: String(r.name),
+      bound: String(r.bound ?? ""),
+      rows: Number(r.rows) || 0,
+    }));
+  } catch (error: any) {
+    logger.warn("📋 [EventLogs] Could not read the partition inventory:", {
+      message: error?.message,
+    });
+    return [];
+  }
+}
+
 async function createMonthlyPartition(
   year: number,
   month: number,
@@ -436,6 +502,9 @@ export async function initializeEventLogsTable(): Promise<void> {
     const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
     const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
     await createMonthlyPartition(prevYear, prevMonth);
+    // Belt and braces on every boot: a month whose partition could not be
+    // created (legacy overlapping bounds) still has somewhere to land.
+    await ensureDefaultPartition();
 
     await copyBackupDataToPartitions();
 
@@ -611,6 +680,10 @@ export async function logEvent(input: EventLogInput): Promise<EventLog | null> {
       );
       await createMonthlyPartition(y, m);
       await createMonthlyPartition(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1);
+      // Last resort, and the one that actually holds: the month's own partition
+      // can be refused because a LEGACY partition (built with the old shifted
+      // bounds) already overlaps its range. DEFAULT accepts the row regardless.
+      await ensureDefaultPartition();
       result = await pool.query(insertSql, insertParams);
     }
 
