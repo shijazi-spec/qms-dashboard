@@ -519,6 +519,20 @@ export const kpiRoutes = [
           const history = await getKPIHistory(id, 12);
           const { getKpiInsight } = await import("../../utils/kpiInsight");
           const insight = await getKpiInsight((kpi as any).kpi_code);
+          // A department KPI (SDR Team / Sales Team) was deliberately taken OUT
+          // of the GRQ KPI Engine and lives on its Quality Reports BU page, so
+          // its detail page must not present itself as part of /kpis -- doing
+          // so files it under the "KPIs" nav section and drops "KPIs" into the
+          // sidebar's Recent list, pointing at a page that does not list it.
+          // getDepartmentKpiOwnerNames is cached and never throws (it returns
+          // [] on failure), so a lookup problem degrades to the old behaviour.
+          const { getDepartmentKpiOwnerNames } = await import(
+            "../../utils/qualityReportsDepartments"
+          );
+          const deptOwners = await getDepartmentKpiOwnerNames();
+          const ownerName = String((kpi as any).owner_name || "").trim().toLowerCase();
+          const isDepartmentKpi =
+            !!ownerName && deptOwners.some((n) => n.trim().toLowerCase() === ownerName);
           const role = (user as any).role;
           const isHod = ["head_of_operations_quality", "admin"].includes(role);
           const isManager = ["quality_manager", "grc_manager"].includes(role);
@@ -527,6 +541,7 @@ export const kpiRoutes = [
           return c.json({
             kpi,
             can_lock: isHod,
+            is_department_kpi: isDepartmentKpi,
             latest: latest
               ? {
                   actual_value: (latest as any).actual_value,

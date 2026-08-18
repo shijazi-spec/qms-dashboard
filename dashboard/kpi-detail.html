@@ -24,7 +24,24 @@
     <script src="/js/safe-actions.js?v=2"></script>
     <script src="/js/navigation.js?v=5.7"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function () { WalaPlusNav.init('kpis'); });
+        /**
+         * Nav init is DEFERRED until we know whose KPI this is.
+         *
+         * WalaPlusNav.init() both highlights a section and records a visit into
+         * the sidebar's Recent list. Hard-coding 'kpis' therefore filed every
+         * department KPI (SDR Team / Sales Team) under the GRQ KPI Engine —
+         * the exact page they were deliberately removed from — and pushed a
+         * "KPIs" entry into Recent that leads somewhere the KPI isn't listed.
+         *
+         * Called exactly once, from loadDetail(), including on its error paths:
+         * a failed fetch must still leave the user with a sidebar.
+         */
+        let _navInitDone = false;
+        function _initNav(isDepartmentKpi) {
+            if (_navInitDone) return;
+            _navInitDone = true;
+            WalaPlusNav.init(isDepartmentKpi ? 'quality-reports' : 'kpis');
+        }
     </script>
 
     <div class="max-w-5xl mx-auto px-4 py-6">
@@ -56,19 +73,30 @@
             [/^\/kpi-catalog/, 'Back to KPI Catalog'],
             [/^\/kpis/, 'Back to KPIs'],
         ];
+        let _isDeptKpi = false;
         function _initBackLink() {
             const a = document.getElementById('kpiBackLink');
-            if (!a || !document.referrer) return;
+            if (!a) return;
+            // Fallback for a direct visit (no referrer): a department KPI belongs
+            // to Quality Reports, so /kpis would be a dead end — it doesn't list
+            // department KPIs at all.
+            if (_isDeptKpi) {
+                a.href = '/quality-reports';
+                a.textContent = '← Back to Quality Reports';
+            }
+            if (!document.referrer) return;
             let ref;
             try { ref = new URL(document.referrer); } catch (e) { return; }
             if (ref.origin !== location.origin) return;
             // Coming back from ourselves (a reload, or another /kpi/:id) would
-            // make the link a no-op -- keep the /kpis default in that case.
+            // make the link a no-op -- keep the default in that case.
             if (/^\/kpi\/\d+/.test(ref.pathname)) return;
             const hit = _BACK_LABELS.find(([re]) => re.test(ref.pathname));
             a.href = ref.pathname + ref.search + ref.hash;
             a.textContent = '← ' + (hit ? hit[1] : 'Back');
         }
+        // Run once on load so a referred visit gets the right link immediately,
+        // and again after the fetch resolves _isDeptKpi for direct visits.
         document.addEventListener('DOMContentLoaded', _initBackLink);
 
         function _kpiId() {
@@ -159,7 +187,7 @@
         async function loadDetail() {
             const id = _kpiId();
             const box = document.getElementById('kpiDetail');
-            if (!id) { box.innerHTML = '<p class="text-red-600">Invalid KPI id.</p>'; return; }
+            if (!id) { box.innerHTML = '<p class="text-red-600">Invalid KPI id.</p>'; _initNav(false); return; }
             let data;
             try {
                 const res = await fetch(`/api/kpis/${id}/detail`);
@@ -167,10 +195,15 @@
                     box.innerHTML = res.status === 403
                         ? '<p class="text-red-600">You don’t have permission to view this KPI.</p>'
                         : '<p class="text-red-600">KPI not found.</p>';
+                    _initNav(false);
                     return;
                 }
                 data = await res.json();
-            } catch (e) { box.innerHTML = '<p class="text-red-600">Failed to load.</p>'; return; }
+            } catch (e) { box.innerHTML = '<p class="text-red-600">Failed to load.</p>'; _initNav(false); return; }
+
+            _isDeptKpi = data.is_department_kpi === true;
+            _initNav(_isDeptKpi);
+            _initBackLink();
 
             const k = data.kpi || {};
             const latest = data.latest;
