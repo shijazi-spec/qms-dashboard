@@ -177,8 +177,14 @@
             if (!pr || !pr.document) return '';
             const rows = (pr.clauses || []).map(c =>
                 `<div class="text-xs text-gray-600 ms-3">${_esc(c.stage)} — ${_esc(c.sla)}</div>`).join('');
+            // Section is present when the document defines the KPI in a table
+            // that carries no per-KPI clause number — naming a clause there
+            // would be inventing the citation.
+            const section = pr.section
+                ? `<div class="text-xs text-gray-600 ms-3">Section ${_esc(pr.section)}</div>`
+                : '';
             return `<div><div class="text-gray-500 text-xs">Process reference</div>` +
-                   `<div class="text-gray-900">${_esc(pr.document)}</div>${rows}</div>`;
+                   `<div class="text-gray-900">${_esc(pr.document)}</div>${section}${rows}</div>`;
         }
 
         function _kvRows(d) {

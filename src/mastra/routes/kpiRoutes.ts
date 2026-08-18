@@ -547,7 +547,7 @@ export const kpiRoutes = [
             // Document Control dependency, so it works before the SOP is
             // uploaded and cannot drift from the SLAs the KPI actually applies.
             process_reference: (
-              await import("../../utils/salesStageSlaSpec")
+              await import("../../utils/kpiProcessReference")
             ).getKpiProcessReference(String((kpi as any).kpi_code || "")),
             latest: latest
               ? {

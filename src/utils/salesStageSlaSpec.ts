@@ -269,41 +269,10 @@ export const SALES_SOP_DOCUMENT = {
   issued: "01.12.2025",
 } as const;
 
-export interface KpiProcessReference {
-  document: string;
-  clauses: Array<{ stage: string; sla: string }>;
-}
-
-/**
- * KPI code → the SOP stages it grades. Only the three KPIs the spec actually
- * covers are mapped: stage aging reads every clause, and the two cycle-time
- * KPIs each read one. The rest of SALES-KPI-* (win rate, document compliance,
- * CRM accuracy, follow-up, first-contact, duplicates) have no clause in this
- * SOP, and inventing one would put a citation on screen that an auditor could
- * not trace to the document.
- */
-const KPI_TO_STAGES: Record<string, string[] | "all"> = {
-  "SALES-KPI-01": "all",
-  "SALES-KPI-03": ["Proposal"],
-  "SALES-KPI-04": ["Agreement Sent"],
-};
-
-export function getKpiProcessReference(code: string): KpiProcessReference | null {
-  const want = KPI_TO_STAGES[code];
-  if (!want) return null;
-  const specs =
-    want === "all"
-      ? SALES_STAGE_SLA_SPEC
-      : want
-          .map((s) => getStageSlaSpec(s))
-          .filter((s): s is StageSlaSpec => s !== null);
-  if (specs.length === 0) return null;
-  const d = SALES_SOP_DOCUMENT;
-  return {
-    document: `${d.title} (${d.reference}, ${d.issued})`,
-    clauses: specs.map((s) => ({ stage: s.stage, sla: describeSla(s) })),
-  };
-}
+// The KPI → clause mapping that used to live here now sits in
+// utils/kpiProcessReference.ts, alongside the Customer Success SOP's, so one
+// module owns "which document is this KPI measured against" for every team.
+// This file stays what it is: the Sales stage SLA spec itself.
 
 /** Used by the dashboard + Adam tool to render the SLA next to a stage. */
 export function describeSla(spec: StageSlaSpec): string {
