@@ -66,6 +66,36 @@ describe("create-policy body survives the sanitizer", () => {
   });
 });
 
+describe("the lifecycle endpoints get the field names they actually read", () => {
+  // Each of these was stripped, so the endpoint returned "Missing required
+  // fields" for every request. Derived by grepping body.<field> out of
+  // src/mastra/routes/policyRoutes.ts — the handlers are the contract.
+  const CASES: Array<[string, Record<string, unknown>]> = [
+    ["POST /:id/transition", { new_status: "archived", comments: "x" }],
+    ["PUT /:id/set-owners", {
+      operational_owner: "a", operational_owner_email: "a@x.com",
+      compliance_owner: "b", compliance_owner_email: "b@x.com",
+    }],
+    ["POST /:id/acknowledge", { user_email: "a@x.com" }],
+    ["POST /review-cycles", { policy_id: 1, scheduled_date: "2026-09-01" }],
+  ];
+
+  for (const [label, body] of CASES) {
+    it(`keeps every field ${label} requires`, () => {
+      const out = filterAllowedFields(body, "/api/policies");
+      expect(Object.keys(out).sort()).toEqual(Object.keys(body).sort());
+    });
+  }
+
+  it("archiving a published document is possible at all", () => {
+    // A published document cannot be deleted until it is archived, and
+    // archiving goes through /transition. With new_status stripped, a
+    // published document was permanent.
+    const out = filterAllowedFields({ new_status: "archived" }, "/api/policies");
+    expect(out.new_status).toBe("archived");
+  });
+});
+
 describe("the file-binding gate stays shut", () => {
   it("still drops file fields from a JSON body", () => {
     const out = filterAllowedFields(

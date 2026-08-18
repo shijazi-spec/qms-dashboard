@@ -120,6 +120,17 @@ const ALLOWED_FIELDS: Record<string, Set<string>> = {
     'content', 'scope', 'objectives', 'references', 'revision_notes',
     'grc_comments', 'owners', 'acknowledgment_required',
     'transition_to', 'comments',
+    // The lifecycle endpoints read these NAMES, not the ones above:
+    // /transition requires `new_status` (`transition_to` was never read by any
+    // handler), /set-owners requires operational_owner + compliance_owner,
+    // /acknowledge reads user_email, and the review-cycle routes read
+    // policy_id + scheduled_date. Each was stripped, so every one of those
+    // endpoints answered "Missing required fields" no matter what was sent —
+    // a published document could not even be archived, which is the only route
+    // to deleting one.
+    'new_status', 'operational_owner', 'operational_owner_email',
+    'compliance_owner', 'compliance_owner_email',
+    'user_email', 'policy_id', 'scheduled_date',
     'policy_number', 'document_number', 'document_type',
     'owner_name', 'owner_department', 'approver_name',
     'confidentiality', 'content_text', 'retention_period',

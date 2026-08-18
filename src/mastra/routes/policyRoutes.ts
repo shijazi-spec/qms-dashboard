@@ -6,6 +6,40 @@ import {
 } from "../../utils/rbacMiddleware";
 
 import { logger as safeLogger } from "../../utils/logger";
+import type { logEvent as LogEventFn } from "../../utils/eventLogsDatabase";
+
+/**
+ * Audit-log a document change WITHOUT letting the audit write undo the report
+ * of a change that already committed.
+ *
+ * `logEvent` rethrows, and every call site in this file awaited it unguarded
+ * AFTER its database write. So an event_logs failure turned a successful
+ * create/update/delete into a 500: the document was in the register, the caller
+ * was told it failed, and a retry hit the policy_number UNIQUE constraint and
+ * reported "Policy number already exists". Confirmed live 2026-08-18 — five
+ * orphan rows, one per retry, while filing the CS SOP.
+ *
+ * Swallowing this is the lesser evil, but it IS a gap in the audit trail, so it
+ * is logged at ERROR with the entity so the entry can be reconciled. If audit
+ * writes start failing, this line is the signal.
+ */
+async function auditSafe(input: Parameters<typeof LogEventFn>[0]): Promise<void> {
+  try {
+    const { logEvent } = await import("../../utils/eventLogsDatabase");
+    await logEvent(input);
+  } catch (err) {
+    safeLogger.error(
+      "[PolicyAPI] AUDIT WRITE FAILED - change applied but not logged",
+      {
+        entityType: input.entityType,
+        entityId: input.entityId,
+        actionType: input.actionType,
+        error: err instanceof Error ? err.message : String(err),
+      },
+    );
+  }
+}
+
 const POLICY_READ_ROLES = [
   "admin",
   "grc_manager",
@@ -520,7 +554,6 @@ export const policyRoutes = [
           const logger = mastra?.getLogger();
           const { createPolicy, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { logEvent } = await import("../../utils/eventLogsDatabase");
           await initPolicyTables();
 
           const body = await c.req.json();
@@ -549,7 +582,7 @@ export const policyRoutes = [
             created_by: sessionUser.email,
           });
 
-          await logEvent({
+          await auditSafe({
             entityType: "DOCUMENT",
             entityId: policy.id!.toString(),
             actionType: "CREATE",
@@ -606,7 +639,6 @@ export const policyRoutes = [
           const logger = mastra?.getLogger();
           const { updatePolicy, getPolicyById, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { logEvent } = await import("../../utils/eventLogsDatabase");
           await initPolicyTables();
 
           const id = parseInt(c.req.param("id"));
@@ -648,7 +680,7 @@ export const policyRoutes = [
             sessionUser.email,
           );
 
-          await logEvent({
+          await auditSafe({
             entityType: "DOCUMENT",
             entityId: id.toString(),
             actionType: "UPDATE",
@@ -699,7 +731,6 @@ export const policyRoutes = [
           const logger = mastra?.getLogger();
           const { transitionPolicyStatus, getPolicyById, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { logEvent } = await import("../../utils/eventLogsDatabase");
           await initPolicyTables();
 
           const id = parseInt(c.req.param("id"));
@@ -740,7 +771,7 @@ export const policyRoutes = [
             sessionUser.email,
           );
 
-          await logEvent({
+          await auditSafe({
             entityType: "DOCUMENT",
             entityId: id.toString(),
             actionType: "STATUS_CHANGE",
@@ -784,7 +815,6 @@ export const policyRoutes = [
           const logger = mastra?.getLogger();
           const { acknowledgePolicy, getPolicyById, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { logEvent } = await import("../../utils/eventLogsDatabase");
           await initPolicyTables();
 
           const policyId = parseInt(c.req.param("id"));
@@ -807,7 +837,7 @@ export const policyRoutes = [
           };
           const ack = await acknowledgePolicy(ackData);
 
-          await logEvent({
+          await auditSafe({
             entityType: "DOCUMENT",
             entityId: policyId.toString(),
             actionType: "UPDATE",
@@ -844,7 +874,6 @@ export const policyRoutes = [
           const logger = mastra?.getLogger();
           const { updatePolicy, getPolicyById, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { logEvent } = await import("../../utils/eventLogsDatabase");
           const { checkPermission, getUserByEmail, initRbacTables } =
             await import("../../utils/rbacDatabase");
           await initPolicyTables();
@@ -864,7 +893,7 @@ export const policyRoutes = [
               "🚫 [PolicyAPI] Policy approval blocked - user not registered in system",
               { userEmail },
             );
-            await logEvent({
+            await auditSafe({
               entityType: "DOCUMENT",
               entityId: id.toString(),
               actionType: "UPDATE",
@@ -905,7 +934,7 @@ export const policyRoutes = [
               "🚫 [PolicyAPI] Policy approval blocked - user lacks GRC permission",
               { userEmail, userRole: user.role },
             );
-            await logEvent({
+            await auditSafe({
               entityType: "DOCUMENT",
               entityId: id.toString(),
               actionType: "UPDATE",
@@ -949,7 +978,7 @@ export const policyRoutes = [
             userEmail,
           );
 
-          await logEvent({
+          await auditSafe({
             entityType: "DOCUMENT",
             entityId: id.toString(),
             actionType: "UPDATE",
@@ -1009,7 +1038,6 @@ export const policyRoutes = [
           const logger = mastra?.getLogger();
           const { updatePolicy, getPolicyById, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { logEvent } = await import("../../utils/eventLogsDatabase");
           await initPolicyTables();
 
           const id = parseInt(c.req.param("id"));
@@ -1045,7 +1073,7 @@ export const policyRoutes = [
             sessionUser.email,
           );
 
-          await logEvent({
+          await auditSafe({
             entityType: "DOCUMENT",
             entityId: id.toString(),
             actionType: "UPDATE",
@@ -1097,7 +1125,6 @@ export const policyRoutes = [
           const logger = mastra?.getLogger();
           const { transitionPolicyStatus, getPolicyById, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { logEvent } = await import("../../utils/eventLogsDatabase");
           await initPolicyTables();
 
           const id = parseInt(c.req.param("id"));
@@ -1117,7 +1144,7 @@ export const policyRoutes = [
               "🚫 [PolicyAPI] Policy publish BLOCKED - missing GRC approval",
               { id },
             );
-            await logEvent({
+            await auditSafe({
               entityType: "DOCUMENT",
               entityId: id.toString(),
               actionType: "UPDATE",
@@ -1143,7 +1170,7 @@ export const policyRoutes = [
             sessionUser.email,
           );
 
-          await logEvent({
+          await auditSafe({
             entityType: "DOCUMENT",
             entityId: id.toString(),
             actionType: "STATUS_CHANGE",
@@ -1181,7 +1208,6 @@ export const policyRoutes = [
 
           const { deletePolicy, getPolicyById, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { logEvent } = await import("../../utils/eventLogsDatabase");
           await initPolicyTables();
 
           const id = parseInt(c.req.param("id"));
@@ -1214,7 +1240,7 @@ export const policyRoutes = [
             );
           }
 
-          await logEvent({
+          await auditSafe({
             entityType: "DOCUMENT",
             entityId: id.toString(),
             actionType: "DELETE",
