@@ -762,9 +762,16 @@ export async function computeSalesCycleTimes(
  *    Left alone, those deals would be billed as revenue AND as pipeline. Won
  *    wins: subtracting it from open keeps the win-rate KPI's definition intact.
  *
- * 3. These will NOT tie out to the BI portal. Its window, agent filter and
- *    segment scope are unknown to us, so treat the BI figure as a benchmark to
- *    explain a gap against — never as an expected match.
+ * 3. REVENUE and ASP are CALENDAR YEAR-TO-DATE (Sarah, 2026-08-18), windowed on
+ *    each deal's Closing_Date. Their targets (SAR 41M, SAR 170k) are annual, and
+ *    the KPI engine files every value against the current month
+ *    (kpiAutoCalc.ts), so an all-time total read as a 3x beat when it was really
+ *    a since-inception figure stamped "this month". Pipeline is deliberately NOT
+ *    windowed — it is a point-in-time snapshot of what is open right now.
+ *
+ * 4. These will NOT tie out to the BI portal. Its agent filter and segment scope
+ *    are unknown to us, so treat the BI figure as a benchmark to explain a gap
+ *    against — never as an expected match.
  */
 function wonStagePredicate(alias: string): string {
   // Same stage vocabulary as calcSalesConversionRate's /signed|paid|closed won/,
@@ -785,10 +792,28 @@ const AT_OR_PAST_MEETING_RE =
   "(meeting|meetings|on hold|^hold$|proposal|agreement sent|signed|paid|closed won)";
 const PAST_MEETING_RE = "(proposal|agreement sent|signed|paid|closed won)";
 
+/**
+ * Calendar year-to-date on the deal's Closing_Date. Zoho sends it as a bare
+ * 'YYYY-MM-DD' string inside raw_data, so the shape is checked BEFORE the cast —
+ * an unparseable value must fall out of the window, never abort the whole query.
+ * Future-dated closings are excluded too: a deal closing in November is not
+ * year-TO-DATE revenue.
+ */
+const CLOSING_DATE_SQL =
+  "CASE WHEN r.raw_data->>'Closing_Date' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'" +
+  " THEN (LEFT(r.raw_data->>'Closing_Date', 10))::date END";
+const YTD_SQL =
+  `${CLOSING_DATE_SQL} >= date_trunc('year', CURRENT_DATE)::date` +
+  ` AND ${CLOSING_DATE_SQL} <= CURRENT_DATE`;
+
 interface AdhocSalesAggregates {
-  wonCount: number;
-  wonValue: number;
-  wonWithAmount: number;
+  /** Won deals closing THIS calendar year — the revenue/ASP population. */
+  wonYtdCount: number;
+  wonYtdValue: number;
+  wonYtdWithAmount: number;
+  /** Won deals of any vintage, and how many carry no usable Closing_Date. */
+  wonAllCount: number;
+  wonNoCloseDate: number;
   openCount: number;
   openValue: number;
   reachedMeeting: number;
@@ -815,24 +840,29 @@ export async function adhocSalesAggregates(): Promise<AdhocSalesAggregates> {
     const won = wonStagePredicate("r");
     const open = `(${openStagePredicate("r")}) AND NOT (${won})`;
     const stage = `LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage',''))`;
+    const wonYtd = `${won} AND ${YTD_SQL}`;
     const res = await pool.query(
       `SELECT
-         COUNT(*) FILTER (WHERE ${won})::int                                   AS won_count,
-         COALESCE(SUM(COALESCE(r.deal_value,0)) FILTER (WHERE ${won}), 0)      AS won_value,
-         COUNT(*) FILTER (WHERE ${won} AND COALESCE(r.deal_value,0) > 0)::int  AS won_with_amount,
-         COUNT(*) FILTER (WHERE ${open})::int                                  AS open_count,
-         COALESCE(SUM(COALESCE(r.deal_value,0)) FILTER (WHERE ${open}), 0)     AS open_value,
-         COUNT(*) FILTER (WHERE ${stage} ~ '${AT_OR_PAST_MEETING_RE}')::int    AS reached_meeting,
-         COUNT(*) FILTER (WHERE ${stage} ~ '${PAST_MEETING_RE}')::int          AS past_meeting
+         COUNT(*) FILTER (WHERE ${wonYtd})::int                                    AS won_ytd_count,
+         COALESCE(SUM(COALESCE(r.deal_value,0)) FILTER (WHERE ${wonYtd}), 0)       AS won_ytd_value,
+         COUNT(*) FILTER (WHERE ${wonYtd} AND COALESCE(r.deal_value,0) > 0)::int   AS won_ytd_with_amount,
+         COUNT(*) FILTER (WHERE ${won})::int                                       AS won_all_count,
+         COUNT(*) FILTER (WHERE ${won} AND ${CLOSING_DATE_SQL} IS NULL)::int       AS won_no_close_date,
+         COUNT(*) FILTER (WHERE ${open})::int                                      AS open_count,
+         COALESCE(SUM(COALESCE(r.deal_value,0)) FILTER (WHERE ${open}), 0)         AS open_value,
+         COUNT(*) FILTER (WHERE ${stage} ~ '${AT_OR_PAST_MEETING_RE}')::int        AS reached_meeting,
+         COUNT(*) FILTER (WHERE ${stage} ~ '${PAST_MEETING_RE}')::int              AS past_meeting
        FROM duplicate_records r
       WHERE r.zoho_module = 'Deals'${seg.condition ? ` AND ${seg.condition}` : ""}`,
       seg.params,
     );
     const row = res.rows[0] || {};
     const data: AdhocSalesAggregates = {
-      wonCount: Number(row.won_count || 0),
-      wonValue: Number(row.won_value || 0),
-      wonWithAmount: Number(row.won_with_amount || 0),
+      wonYtdCount: Number(row.won_ytd_count || 0),
+      wonYtdValue: Number(row.won_ytd_value || 0),
+      wonYtdWithAmount: Number(row.won_ytd_with_amount || 0),
+      wonAllCount: Number(row.won_all_count || 0),
+      wonNoCloseDate: Number(row.won_no_close_date || 0),
       openCount: Number(row.open_count || 0),
       openValue: Number(row.open_value || 0),
       reachedMeeting: Number(row.reached_meeting || 0),
@@ -851,14 +881,24 @@ export function resetAdhocSalesCache(): void {
   adhocCache = null;
 }
 
-/** ADHOC-SALES-01 Closed-Won Revenue — SAR value of won corporate deals. */
+/** ADHOC-SALES-01 Closed-Won Revenue — SAR won this calendar year (corporate). */
 export async function calcAdhocSalesWonRevenue(): Promise<ProcessKpiValue> {
   const a = await adhocSalesAggregates();
-  if (a.wonCount === 0) return EMPTY;
+  if (a.wonYtdCount === 0) return EMPTY;
   return {
-    value: Math.round(a.wonValue),
+    value: Math.round(a.wonYtdValue),
     dataAvailable: true,
-    details: { won_deals: a.wonCount, won_deals_with_amount: a.wonWithAmount, segment: "walaplus" },
+    details: {
+      window: "calendar YTD on Closing_Date",
+      won_deals_ytd: a.wonYtdCount,
+      won_deals_ytd_with_amount: a.wonYtdWithAmount,
+      // Surfaced, not hidden: a won deal with no parseable Closing_Date cannot
+      // be placed in any year, so it is out of the window. If this climbs, the
+      // KPI is under-reporting for a data reason, not a commercial one.
+      won_deals_all_time: a.wonAllCount,
+      won_deals_without_closing_date: a.wonNoCloseDate,
+      segment: "walaplus",
+    },
   };
 }
 
@@ -873,21 +913,22 @@ export async function calcAdhocSalesQualifiedPipeline(): Promise<ProcessKpiValue
   };
 }
 
-/** ADHOC-SALES-03 Avg Deal Value (ASP) — won revenue ÷ won deals CARRYING a value. */
+/** ADHOC-SALES-03 Avg Deal Value (ASP) — YTD won revenue ÷ YTD won deals CARRYING a value. */
 export async function calcAdhocSalesAvgDealValue(): Promise<ProcessKpiValue> {
   const a = await adhocSalesAggregates();
   // Divide by the deals that actually carry an Amount, not by every won deal:
   // a won deal with a blank Amount contributes 0 to the numerator, so counting
   // it in the denominator would drag the average down by a data-entry gap
   // rather than by anything commercial. SALES-KPI-06 already tracks that gap.
-  if (a.wonWithAmount === 0) return EMPTY;
+  if (a.wonYtdWithAmount === 0) return EMPTY;
   return {
-    value: Math.round(a.wonValue / a.wonWithAmount),
+    value: Math.round(a.wonYtdValue / a.wonYtdWithAmount),
     dataAvailable: true,
     details: {
-      won_value: Math.round(a.wonValue),
-      won_deals_with_amount: a.wonWithAmount,
-      won_deals_missing_amount: a.wonCount - a.wonWithAmount,
+      window: "calendar YTD on Closing_Date",
+      won_value_ytd: Math.round(a.wonYtdValue),
+      won_deals_ytd_with_amount: a.wonYtdWithAmount,
+      won_deals_ytd_missing_amount: a.wonYtdCount - a.wonYtdWithAmount,
       segment: "walaplus",
     },
   };
