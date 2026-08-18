@@ -160,6 +160,58 @@ describe("logEvent self-heals a missing partition", () => {
   });
 });
 
+describe("createMonthlyPartition adopts an orphaned table", () => {
+  const EVENT = { actionType: "CREATE", entityType: "DOCUMENT", entityId: "1" } as any;
+  const noPartition = () =>
+    Object.assign(new Error('no partition of relation "event_logs" found for row'), {
+      code: "23514",
+    });
+
+  function routeWithCatalog(tableExists: boolean, isAttached: boolean) {
+    let inserts = 0;
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/INSERT INTO event_logs/i.test(s)) {
+        return ++inserts === 1 ? Promise.reject(noPartition()) : { rows: [{ id: 1 }] };
+      }
+      if (/pg_inherits/i.test(s) && /pg_tables/i.test(s)) {
+        return { rows: [{ table_exists: tableExists, is_attached: isAttached }] };
+      }
+      return { rows: [] };
+    });
+  }
+  const sqlMatching = (re: RegExp) =>
+    query.mock.calls.filter((c) => re.test(String(c[0])));
+
+  it("ATTACHes a same-named table that is not part of event_logs", async () => {
+    routeWithCatalog(true, false);
+    await logEvent(EVENT);
+    // The orphan is why August 2026 could never accept a row: the old check saw
+    // the name in pg_tables and skipped creation, silently, forever. CREATE
+    // would fail on the name, so adoption is the only route that keeps its rows.
+    // Two, because the self-heal repairs this month AND next, and this stub
+    // reports both as orphaned. The point is that neither took the CREATE path.
+    expect(sqlMatching(/ALTER TABLE event_logs ATTACH PARTITION/i)).toHaveLength(2);
+    expect(sqlMatching(/CREATE TABLE IF NOT EXISTS event_logs_y\d+m\d+ PARTITION OF/i)).toHaveLength(0);
+  });
+
+  it("CREATEs when no table of that name exists", async () => {
+    routeWithCatalog(false, false);
+    await logEvent(EVENT);
+    expect(sqlMatching(/CREATE TABLE IF NOT EXISTS event_logs_y\d+m\d+ PARTITION OF/i).length)
+      .toBeGreaterThan(0);
+    expect(sqlMatching(/ATTACH PARTITION/i)).toHaveLength(0);
+  });
+
+  it("leaves an already-attached partition alone", async () => {
+    routeWithCatalog(true, true);
+    await logEvent(EVENT);
+    // Re-creating or re-attaching a healthy partition would error every boot.
+    expect(sqlMatching(/ATTACH PARTITION/i)).toHaveLength(0);
+    expect(sqlMatching(/CREATE TABLE IF NOT EXISTS event_logs_y\d+m\d+ PARTITION OF/i)).toHaveLength(0);
+  });
+});
+
 describe("logEvent never throws at its callers", () => {
   const EVENT = { actionType: "UPDATE", entityType: "KPI", entityId: "7" } as any;
 

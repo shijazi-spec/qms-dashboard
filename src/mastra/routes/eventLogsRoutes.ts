@@ -88,6 +88,7 @@ export const eventLogsRoutes = [
             initializeEventLogsTable,
             getAuditWriteHealth,
             partitionInventory,
+            orphanPartitionTables,
           } = await import("../../utils/eventLogsDatabase");
           await initializeEventLogsTable();
 
@@ -103,6 +104,9 @@ export const eventLogsRoutes = [
               // ate 18 days of audit history, and rows sitting in
               // event_logs_default are the ones needing a later tidy-up.
               partitions: await partitionInventory(),
+              // A table named like a partition but not attached to event_logs
+              // disables its entire month while looking present everywhere else.
+              orphanTables: await orphanPartitionTables(),
             },
           };
 

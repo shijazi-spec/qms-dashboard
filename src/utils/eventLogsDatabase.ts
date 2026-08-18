@@ -192,6 +192,36 @@ async function ensureDefaultPartition(): Promise<void> {
   }
 }
 
+/**
+ * Tables named like a partition that are NOT attached to event_logs.
+ *
+ * One of these is invisible in every other view and disables its whole month:
+ * createMonthlyPartition used to treat the name as proof the partition existed.
+ * Reported so the condition can be seen rather than inferred.
+ */
+export async function orphanPartitionTables(): Promise<string[]> {
+  try {
+    const res = await pool.query(
+      `SELECT t.tablename AS name
+         FROM pg_tables t
+        WHERE t.schemaname = 'public'
+          AND (t.tablename LIKE 'event_logs\\_y%' OR t.tablename = 'event_logs_default')
+          AND NOT EXISTS (
+                SELECT 1 FROM pg_inherits i
+                  JOIN pg_class c ON c.oid = i.inhrelid
+                  JOIN pg_class p ON p.oid = i.inhparent
+                 WHERE c.relname = t.tablename AND p.relname = 'event_logs')
+        ORDER BY t.tablename`,
+    );
+    return res.rows.map((r: any) => String(r.name));
+  } catch (error: any) {
+    logger.warn("📋 [EventLogs] Could not check for orphan partitions:", {
+      message: error?.message,
+    });
+    return [];
+  }
+}
+
 /** Existing partitions with their bounds and row counts, for the health probe. */
 export async function partitionInventory(): Promise<
   Array<{ name: string; bound: string; rows: number }>
@@ -229,26 +259,53 @@ async function createMonthlyPartition(
     monthPartitionBounds(year, month);
 
   try {
+    // Ask TWO questions, not one. The original code asked only whether a table
+    // of this name existed (pg_tables), and skipped creation when it did — but
+    // pg_tables lists ANY table, including one that is not attached to
+    // event_logs. A detached table of the right name therefore made this
+    // function a permanent, silent no-op, and the month it covered could never
+    // accept a row.
+    //
+    // That is what happened to August 2026: partitions exist for Jan–Jul and
+    // for September, with a clean gap where August should be, and no error was
+    // ever raised. Eighteen days of audit history had nowhere to go.
     const checkResult = await pool.query(
-      `
-      SELECT EXISTS (
-        SELECT FROM pg_tables 
-        WHERE schemaname = 'public' 
-        AND tablename = $1
-      )
-    `,
+      `SELECT
+         EXISTS (SELECT FROM pg_tables
+                  WHERE schemaname = 'public' AND tablename = $1) AS table_exists,
+         EXISTS (SELECT FROM pg_inherits i
+                   JOIN pg_class c ON c.oid = i.inhrelid
+                   JOIN pg_class p ON p.oid = i.inhparent
+                  WHERE c.relname = $1 AND p.relname = 'event_logs') AS is_attached`,
       [partitionName],
     );
 
     // Defensive: bail out if the catalog query returned no rows (stubbed pool).
     if (checkResult.rows.length === 0) return;
-    if (!checkResult.rows[0].exists) {
-      await pool.query(`
+    const { table_exists: tableExists, is_attached: isAttached } =
+      checkResult.rows[0];
+
+    if (isAttached) return;
+
+    if (tableExists) {
+      // Adopt the orphan rather than ignoring it: ATTACH keeps whatever rows it
+      // already holds, where CREATE would fail on the name.
+      logger.warn(
+        `📋 [EventLogs] ${partitionName} exists but is NOT attached to event_logs — attaching it`,
+      );
+      await pool.query(
+        `ALTER TABLE event_logs ATTACH PARTITION ${partitionName}
+           FOR VALUES FROM ('${startStr}') TO ('${endStr}')`,
+      );
+      logger.info(`📋 [EventLogs] Attached orphan partition: ${partitionName}`);
+      return;
+    }
+
+    await pool.query(`
         CREATE TABLE IF NOT EXISTS ${partitionName} PARTITION OF event_logs
         FOR VALUES FROM ('${startStr}') TO ('${endStr}')
       `);
-      logger.info(`📋 [EventLogs] Created partition: ${partitionName}`);
-    }
+    logger.info(`📋 [EventLogs] Created partition: ${partitionName}`);
   } catch (error: any) {
     if (!error.message?.includes("already exists")) {
       // Loud on purpose. Swallowing this quietly is how eighteen days of audit
