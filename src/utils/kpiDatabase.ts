@@ -78,6 +78,8 @@ export interface KPIValue {
   evidence_ids?: number[];
   ai_confidence?: number;
   ai_insights?: any;
+  /** The calculator's working behind this value (counts, window, exclusions). */
+  calc_details?: Record<string, unknown> | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -175,10 +177,20 @@ export async function initKPITables(): Promise<void> {
       evidence_ids INTEGER[],
       ai_confidence DECIMAL(5,2),
       ai_insights JSONB,
+      -- The calculator's own working: counts, windows and exclusions behind the
+      -- number. Recorded per period so the detail page can show WHY a value is
+      -- what it is, and so an exclusion that suppresses a KPI (e.g. won deals
+      -- with no parseable Closing_Date dropping out of the YTD window) is
+      -- visible instead of computed-then-discarded.
+      calc_details JSONB,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  await pool.query(
+    `ALTER TABLE kpi_values ADD COLUMN IF NOT EXISTS calc_details JSONB`,
+  );
 
   // Widen calculated_by on existing DBs: 'system_auto' (11 chars) overflowed the
   // original VARCHAR(10), so every auto-calc value silently failed to record.
@@ -2070,8 +2082,8 @@ export async function recordKPIValue(value: KPIValue): Promise<KPIValue> {
   // duplicating it (relies on the unique index added in initKPITables).
   const result = await pool.query(
     `
-    INSERT INTO kpi_values (kpi_id, period_start, period_end, actual_value, target_value, status, trend, calculated_by, override_reason, evidence_ids, ai_confidence, ai_insights)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    INSERT INTO kpi_values (kpi_id, period_start, period_end, actual_value, target_value, status, trend, calculated_by, override_reason, evidence_ids, ai_confidence, ai_insights, calc_details)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     ON CONFLICT (kpi_id, period_start, period_end) DO UPDATE SET
       actual_value = EXCLUDED.actual_value,
       target_value = EXCLUDED.target_value,
@@ -2082,6 +2094,10 @@ export async function recordKPIValue(value: KPIValue): Promise<KPIValue> {
       evidence_ids = EXCLUDED.evidence_ids,
       ai_confidence = EXCLUDED.ai_confidence,
       ai_insights = EXCLUDED.ai_insights,
+      -- COALESCE, not a blind overwrite: a manual entry for a period carries no
+      -- calculator working, and it must not erase the breakdown an earlier auto
+      -- run recorded for that same period.
+      calc_details = COALESCE(EXCLUDED.calc_details, kpi_values.calc_details),
       updated_at = NOW()
     RETURNING *
   `,
@@ -2098,6 +2114,7 @@ export async function recordKPIValue(value: KPIValue): Promise<KPIValue> {
       value.evidence_ids,
       value.ai_confidence,
       JSON.stringify(value.ai_insights),
+      value.calc_details ? JSON.stringify(value.calc_details) : null,
     ],
   );
 

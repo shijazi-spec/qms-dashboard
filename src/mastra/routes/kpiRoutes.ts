@@ -533,6 +533,10 @@ export const kpiRoutes = [
                   status: (latest as any).status,
                   trend: (latest as any).trend,
                   period_end: (latest as any).period_end,
+                  // The calculator's working behind this number — counts,
+                  // window and exclusions. Read-only provenance, so it goes to
+                  // every role that can already see the value itself.
+                  calc_details: (latest as any).calc_details ?? null,
                 }
               : null,
             history,

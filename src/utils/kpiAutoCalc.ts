@@ -137,6 +137,7 @@ export async function runKPIAutoCalc(
           period_end: periodEnd,
           actual_value: result.value,
           calculated_by: "system_auto",
+          calc_details: result.details ?? null,
         });
         recorded++;
         details.push({ code, value: result.value });

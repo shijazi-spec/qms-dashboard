@@ -83,9 +83,46 @@
         };
         const TREND = { improving: '↑', declining: '↓', stable: '→' };
 
+        /**
+         * Money in the BI portal's shorthand — SAR 16.4M / SAR 298K — so the
+         * same figure reads the same in both systems. Note the old default
+         * appended "%" to EVERY non-days unit, so a SAR value rendered as
+         * "16373892%": wrong unit as well as unreadable.
+         */
         function _fmtVal(v, unit) {
             if (v === null || v === undefined) return '—';
+            const u = String(unit || '').toUpperCase();
+            if (u === 'SAR') {
+                const n = Number(v);
+                if (!isFinite(n)) return '—';
+                const abs = Math.abs(n);
+                if (abs >= 1e6) return 'SAR ' + (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+                if (abs >= 1e3) return 'SAR ' + Math.round(n / 1e3) + 'K';
+                return 'SAR ' + Math.round(n);
+            }
             return unit === 'days' ? `${v} days` : `${v}%`;
+        }
+
+        /** Thousands separators on counts and money, so 16373892 is readable. */
+        function _cell(v) {
+            if (typeof v === 'number' && isFinite(v)) return _esc(v.toLocaleString());
+            return _esc(v);
+        }
+
+        /**
+         * The calculator's own working for the recorded value: counts, the
+         * window it used, and what it EXCLUDED. Previously computed on every
+         * recalc and thrown away, which hid exclusions that suppress a KPI —
+         * e.g. won deals with no parseable Closing_Date falling out of the YTD
+         * revenue window look identical to deals that were never won.
+         */
+        function _calcWorking(latest) {
+            const d = latest && latest.calc_details;
+            if (!d || typeof d !== 'object' || !Object.keys(d).length) return '';
+            return `
+              <h2 class="font-semibold text-gray-900 mt-5 mb-2">How this was calculated</h2>
+              <div class="divide-y">${_kvRows(d)}</div>
+              <p class="text-xs text-gray-500 mt-2">Recorded by the last recalculation, for the period shown above.</p>`;
         }
 
         /** Turn a calculator's details object into readable "gap" rows. */
@@ -97,22 +134,26 @@
                 return `<p class="text-sm text-amber-700">No source data yet${insight.reason ? ` (${_esc(insight.reason)})` : ''}. This KPI stays blank until its data is entered.</p>`;
             }
             const d = insight.details || {};
-            const rows = Object.entries(d).map(([k, v]) => {
+            const rows = _kvRows(d);
+            return `<div class="divide-y">${rows || '<p class="text-sm text-gray-500">No breakdown returned.</p>'}</div>`;
+        }
+
+        function _kvRows(d) {
+            return Object.entries(d).map(([k, v]) => {
                 const label = k.replace(/_/g, ' ');
                 // nested objects (internal/external halves) → render as a sub-block
                 if (v && typeof v === 'object') {
                     const sub = Object.entries(v).map(([kk, vv]) => {
                         if (vv && typeof vv === 'object') {
-                            const inner = Object.entries(vv).map(([a, b]) => `${a.replace(/_/g, ' ')}: <strong>${_esc(b)}</strong>`).join(' · ');
+                            const inner = Object.entries(vv).map(([a, b]) => `${a.replace(/_/g, ' ')}: <strong>${_cell(b)}</strong>`).join(' · ');
                             return `<div class="text-xs text-gray-600 ms-3">${kk.replace(/_/g, ' ')}: ${inner}</div>`;
                         }
-                        return `<div class="text-xs text-gray-600 ms-3">${kk.replace(/_/g, ' ')}: <strong>${_esc(vv)}</strong></div>`;
+                        return `<div class="text-xs text-gray-600 ms-3">${kk.replace(/_/g, ' ')}: <strong>${_cell(vv)}</strong></div>`;
                     }).join('');
                     return `<div class="py-1"><div class="text-sm font-medium text-gray-800 capitalize">${label}</div>${sub}</div>`;
                 }
-                return `<div class="flex justify-between py-1 text-sm"><span class="text-gray-600 capitalize">${label}</span><span class="font-medium text-gray-900">${_esc(v)}</span></div>`;
+                return `<div class="flex justify-between py-1 text-sm"><span class="text-gray-600 capitalize">${label}</span><span class="font-medium text-gray-900">${_cell(v)}</span></div>`;
             }).join('');
-            return `<div class="divide-y">${rows || '<p class="text-sm text-gray-500">No breakdown returned.</p>'}</div>`;
         }
 
         async function loadDetail() {
@@ -164,6 +205,7 @@
                 <div class="bg-white rounded-lg shadow p-5">
                   <h2 class="font-semibold text-gray-900 mb-3">What's inside &amp; gaps</h2>
                   ${_gaps(data.insight)}
+                  ${_calcWorking(latest)}
                   ${(k.calc_mode === 'checklist') ? `<a href="/kpis" class="inline-block mt-3 text-xs text-indigo-600 hover:underline">Open the full Action Plan on the KPIs page →</a>` : ''}
                 </div>
                 <div class="bg-white rounded-lg shadow p-5">

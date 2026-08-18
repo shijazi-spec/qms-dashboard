@@ -462,11 +462,36 @@
         none: { dot: 'bg-gray-300', text: 'text-gray-500', label: 'Not started' }
     };
 
+    /**
+     * Money in the BI portal's shorthand: SAR 16.4M / SAR 298K / SAR 464.
+     *
+     * "128381005SAR" is unreadable at a glance and unreadable next to
+     * "Target 41000000SAR" — the two can't be compared without counting digits.
+     * Millions keep one decimal (SAR 2.6M), thousands round to whole (SAR 292K),
+     * matching bi-portal-dev.wala.plus/sales-kpis so the same figure looks the
+     * same in both systems.
+     */
+    function qrFmtAmount(n) {
+        var abs = Math.abs(n);
+        if (abs >= 1e6) return 'SAR ' + (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+        if (abs >= 1e3) return 'SAR ' + Math.round(n / 1e3) + 'K';
+        return 'SAR ' + Math.round(n);
+    }
+
+    /** True for units that are a currency rather than a %/day/count suffix. */
+    function qrIsMoney(unit) {
+        return String(unit || '').toUpperCase() === 'SAR';
+    }
+
+    function qrFmtKpiNumber(n, unit) {
+        if (qrIsMoney(unit)) return qrFmtAmount(n);
+        var v = Number.isInteger(n) ? String(n) : n.toFixed(1);
+        return v + (unit && unit !== 'number' ? unit : '');
+    }
+
     function qrKpiValue(k) {
         if (k.current_value === null || k.current_value === undefined) return '--';
-        var n = Number(k.current_value);
-        var v = Number.isInteger(n) ? String(n) : n.toFixed(1);
-        return v + (k.unit && k.unit !== 'number' ? k.unit : '');
+        return qrFmtKpiNumber(Number(k.current_value), k.unit);
     }
 
     /** One KPI row. Shared by the catalog box and the ad-hoc box so the two
@@ -493,7 +518,7 @@
                 '<div class="text-sm font-semibold ' + rag.text + '">' + escapeHtml(qrKpiValue(i)) + '</div>' +
                 '<div class="text-[10px] text-gray-400">' +
                     (i.target_value !== null && i.target_value !== undefined
-                        ? 'Target ' + escapeHtml(String(i.target_value)) + (i.unit && i.unit !== 'number' ? escapeHtml(i.unit) : '')
+                        ? 'Target ' + escapeHtml(qrFmtKpiNumber(Number(i.target_value), i.unit))
                         : escapeHtml(rag.label)) +
                 '</div>' +
             '</div>' +
