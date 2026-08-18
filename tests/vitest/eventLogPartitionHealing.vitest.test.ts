@@ -127,7 +127,7 @@ describe("logEvent self-heals a missing partition", () => {
         code: "23502",
       });
     });
-    await expect(logEvent(EVENT)).rejects.toThrow(/not-null/);
+    expect(await logEvent(EVENT)).toBeNull();
     // A blind retry on any failure would double-write whenever the first
     // insert actually succeeded but its response was lost.
     expect(inserts()).toBe(1);
@@ -138,8 +138,39 @@ describe("logEvent self-heals a missing partition", () => {
     route(() => {
       throw noPartition();
     });
-    await expect(logEvent(EVENT)).rejects.toThrow(/no partition/);
+    expect(await logEvent(EVENT)).toBeNull();
     expect(inserts()).toBe(2);
+  });
+});
+
+describe("logEvent never throws at its callers", () => {
+  const EVENT = { actionType: "UPDATE", entityType: "KPI", entityId: "7" } as any;
+
+  it("returns null instead of rethrowing", async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (/INSERT INTO event_logs/i.test(String(sql))) throw new Error("boom");
+      return { rows: [] };
+    });
+    // 77 call sites awaited this unguarded AFTER their business write. A throw
+    // there turns a committed change into a 500, the caller retries, and the
+    // retry hits a UNIQUE constraint. Throwing cannot undo the committed write,
+    // so it only makes the caller misreport what happened.
+    await expect(logEvent(EVENT)).resolves.toBeNull();
+  });
+
+  it("still reports the failure through the health probe", async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (/INSERT INTO event_logs/i.test(String(sql))) {
+        throw Object.assign(new Error("boom"), { code: "42P01" });
+      }
+      return { rows: [] };
+    });
+    await logEvent(EVENT);
+    // Failing open is only acceptable because the gap stays visible.
+    expect(getAuditWriteHealth()).toMatchObject({
+      healthy: false,
+      lastFailure: { code: "42P01", message: "boom" },
+    });
   });
 });
 
@@ -156,7 +187,7 @@ describe("audit-write health is readable without the deployment log", () => {
       }
       return { rows: [] };
     });
-    await expect(logEvent(EVENT)).rejects.toThrow();
+    expect(await logEvent(EVENT)).toBeNull();
     const h = getAuditWriteHealth();
     // Every caller either swallows this throw or turns it into a 500, so
     // without this the only evidence is a log line nobody is tailing — which

@@ -33,6 +33,12 @@ export default defineConfig({
     // the security-hardening regression it patches around. Per-file
     // `vi.mock("../../src/utils/rbacMiddleware", ...)` calls win over
     // the shim, so suites with their own bespoke rbac mock are unaffected.
-    setupFiles: ["./tests/vitest/_setup/rbacAuthShim.ts"],
+    setupFiles: [
+      // Must run BEFORE anything imports a route graph: src/mastra/storage
+      // throws at module load when DATABASE_URL is unset, which took out any
+      // suite that transitively reached qmsConsultantAgent (mobileRoutes).
+      "./tests/vitest/_setup/testDatabaseUrl.ts",
+      "./tests/vitest/_setup/rbacAuthShim.ts",
+    ],
   },
 });

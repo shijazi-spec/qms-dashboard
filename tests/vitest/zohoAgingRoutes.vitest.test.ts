@@ -131,12 +131,28 @@ function makeFakeFetchers(): AgingFetchers {
   };
 }
 
+/**
+ * Aging is measured against "now", and the fixtures above are fixed 2026 dates,
+ * so this suite only holds still if the clock does. It did not: the fixture
+ * calls D2 the "fresh" deal (entered its stage 2026-04-25), and once real time
+ * passed 2026-07-24 that deal was itself more than 90 days old, so the
+ * `minDays=90` test started returning both deals and failed on a date rather
+ * than on a defect.
+ *
+ * Frozen a week after the newest fixture date: D1 reads ~181 days, D2 ~6, which
+ * is the stale/fresh split every assertion here is written against.
+ */
+const FROZEN_NOW = new Date("2026-05-01T00:00:00Z");
+
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(FROZEN_NOW);
   _clearAgingCaches();
   _setAgingFetchersForTests(makeFakeFetchers());
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   _setAgingFetchersForTests(null);
 });
 

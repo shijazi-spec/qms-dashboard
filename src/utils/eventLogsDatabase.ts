@@ -502,7 +502,25 @@ export async function initializeEventLogsTable(): Promise<void> {
   }
 }
 
-export async function logEvent(input: EventLogInput): Promise<EventLog> {
+/**
+ * Record an audit event. Returns null if it could not be written.
+ *
+ * NON-THROWING BY DESIGN (2026-08-18). It used to rethrow, and the 116 call
+ * sites split three ways: 77 awaited it unguarded, so an audit failure turned
+ * an already-committed business write into a 500 — the change happened, the
+ * caller was told it failed, and the retry hit a UNIQUE constraint. Another 25
+ * wrapped it in `catch {}`, discarding the evidence entirely. Only 14 logged
+ * anything.
+ *
+ * Fail-closed would be the stricter choice for a QMS, but it is not available
+ * here: the audit insert is a separate statement from the business write, so by
+ * the time it fails the change is already committed and throwing cannot undo
+ * it. It only makes the caller misreport what happened. So this fails OPEN and
+ * makes the failure loud instead: ERROR log with SQLSTATE and detail, plus
+ * `getAuditWriteHealth()` (surfaced on /api/logs/stats) so a gap is visible
+ * without shell access. Callers that care can check for null.
+ */
+export async function logEvent(input: EventLogInput): Promise<EventLog | null> {
   logger.info(
     "📋 [EventLogs] Logging event:",
     input.actionType,
@@ -613,12 +631,19 @@ export async function logEvent(input: EventLogInput): Promise<EventLog> {
       message: String(error?.message || error),
       detail: error?.detail ?? null,
     };
-    logger.error("📋 [EventLogs] Error logging event:", {
-      code: error?.code,
-      detail: error?.detail,
-      message: error?.message,
-    });
-    throw error;
+    logger.error(
+      "📋 [EventLogs] AUDIT WRITE FAILED - action applied but not recorded",
+      {
+        actionType: input.actionType,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        module: input.module,
+        code: error?.code,
+        detail: error?.detail,
+        message: error?.message,
+      },
+    );
+    return null;
   }
 }
 
