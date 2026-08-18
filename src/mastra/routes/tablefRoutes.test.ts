@@ -130,9 +130,22 @@ console.log("\n=== tablefPerformance write functions — write-path tests ===\n"
 
 {
   captured.length = 0;
+  // Shape must match TablefPerformanceInsert in src/utils/tablefDatabase.ts:
+  // period_month is a STRING period label, and the row carries target/achieved
+  // plus the derived variance and status columns — not an actual_value/notes
+  // pair. This test only cares that the write reaches pool.query with no
+  // secret-shaped params, but it still has to hand over a valid record.
   await insertTablefPerformance({
-    kpi_id: "kpi-ci-001", period_month: 8, period_year: 2026, actual_value: 91.5,
-    notes: "On track", submitted_by: "ci@example.com",
+    kpi_id: "kpi-ci-001",
+    department_id: "dept-ci-001",
+    period_month: "2026-08",
+    target: 90,
+    achieved: 91.5,
+    variance: 1.5,
+    variance_percent: 1.7,
+    status: "met",
+    trend: "improving",
+    comment: "On track",
   });
   const p = lastWriteParams("INSERT");
   assert(p !== null, "insertTablefPerformance: INSERT issued");
@@ -141,8 +154,18 @@ console.log("\n=== tablefPerformance write functions — write-path tests ===\n"
 
 {
   captured.length = 0;
+  // updateTablefPerformance keys on (kpi_id, period_month) — there is no `id`
+  // column in its WHERE clause, so passing one would not have updated anything.
   await updateTablefPerformance({
-    id: 1, actual_value: 92, notes: "Revised", submitted_by: "ci@example.com",
+    kpi_id: "kpi-ci-001",
+    period_month: "2026-08",
+    target: 90,
+    achieved: 92,
+    variance: 2,
+    variance_percent: 2.2,
+    status: "met",
+    trend: "improving",
+    comment: "Revised",
   });
   const p = lastWriteParams("UPDATE");
   assert(p !== null, "updateTablefPerformance: UPDATE issued");
@@ -157,9 +180,19 @@ console.log("\n=== upsertTablefSnapshot — write-path tests ===\n");
 
 {
   captured.length = 0;
+  // A snapshot is a DEPARTMENT-level roll-up for a period, not a per-KPI row:
+  // TablefSnapshotUpsert carries the KPI counts and the derived percentages.
   await upsertTablefSnapshot({
-    kpi_id: "kpi-ci-001", snapshot_date: "2026-08-01",
-    actual_value: 91.5, target_value: 90,
+    department_id: "dept-ci-001",
+    period: "2026-08",
+    total_kpis: 12,
+    kpis_met: 9,
+    kpis_improving: 2,
+    kpis_not_met: 1,
+    percent_met: 75,
+    percent_met_or_improving: 91.7,
+    copc_status: "compliant",
+    ai_risk_level: "low",
   });
   const writes = captured.filter(c => {
     const u = c.sql.replace(/\s+/g, " ").toUpperCase();
