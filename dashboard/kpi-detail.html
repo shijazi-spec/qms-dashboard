@@ -28,7 +28,7 @@
     </script>
 
     <div class="max-w-5xl mx-auto px-4 py-6">
-        <a href="/kpis" class="text-sm text-indigo-600 hover:underline">&larr; Back to KPIs</a>
+        <a id="kpiBackLink" href="/kpis" class="text-sm text-indigo-600 hover:underline">&larr; Back to KPIs</a>
         <div id="kpiDetail" class="mt-3">
             <div class="text-gray-500 text-sm">Loading…</div>
         </div>
@@ -37,6 +37,39 @@
     <script>
         const _esc = (s) => String(s == null ? '' : s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        /**
+         * Point the back link at wherever the user actually came from.
+         *
+         * A KPI is reachable from /kpis, /kpi-catalog AND a Quality Reports BU
+         * page, so a hard-coded /kpis dumped BU-page visitors on a page that
+         * doesn't even list their KPI (department KPIs are excluded from the
+         * engine). The referrer keeps the query string, so ?bu=sales_b2b
+         * survives -- history.back() would too, but it breaks after an in-page
+         * save adds history entries, and it can't be middle-clicked.
+         *
+         * Same-origin only: an off-site referrer must never become a link
+         * target here, and cross-origin referrers arrive stripped anyway.
+         */
+        const _BACK_LABELS = [
+            [/^\/quality-reports/, 'Back to Quality Reports'],
+            [/^\/kpi-catalog/, 'Back to KPI Catalog'],
+            [/^\/kpis/, 'Back to KPIs'],
+        ];
+        function _initBackLink() {
+            const a = document.getElementById('kpiBackLink');
+            if (!a || !document.referrer) return;
+            let ref;
+            try { ref = new URL(document.referrer); } catch (e) { return; }
+            if (ref.origin !== location.origin) return;
+            // Coming back from ourselves (a reload, or another /kpi/:id) would
+            // make the link a no-op -- keep the /kpis default in that case.
+            if (/^\/kpi\/\d+/.test(ref.pathname)) return;
+            const hit = _BACK_LABELS.find(([re]) => re.test(ref.pathname));
+            a.href = ref.pathname + ref.search + ref.hash;
+            a.textContent = '← ' + (hit ? hit[1] : 'Back');
+        }
+        document.addEventListener('DOMContentLoaded', _initBackLink);
 
         function _kpiId() {
             const m = location.pathname.match(/\/kpi\/(\d+)/);

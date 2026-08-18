@@ -16,6 +16,7 @@ import {
   getDealDocCompliance,
   scanDealStageAgingViolations,
   openStagePredicate,
+  buildSegmentPredicate,
 } from "./duplicateRadarDatabase";
 import { fetchDealStageHistory } from "./zohoCRM";
 import { getAllFrameworkCoverage } from "./obligationDocumentsDatabase";
@@ -739,6 +740,175 @@ export async function computeSalesCycleTimes(
   };
 }
 
+// ──────────────── SALES — ad-hoc KPIs (BI-portal benchmarked) ───────────────
+/**
+ * ADHOC-SALES-01/02/03/04 — the four one-off Sales KPIs Sarah added from the BI
+ * portal's sales-summary (2026-08-17). They were entered manually at first;
+ * these calculators make QMS compute them from its own synced Zoho mirror.
+ *
+ * Scope decisions, all deliberate — they are what makes the numbers mean
+ * something, so do not "simplify" them away:
+ *
+ * 1. CORPORATE (WalaPlus layout) ONLY. The Deals table also holds Marketplace
+ *    partner records — "Partner Active", "Welcome Communications", "Whitelist",
+ *    "Codes Receiving" — which are not the Sales team's pipeline at all and
+ *    would swamp both money figures. (The older SALES-KPI-01..09 are
+ *    unsegmented; that is a pre-existing inconsistency, not a precedent to
+ *    copy. Flagged to Sarah separately.)
+ *
+ * 2. WON and OPEN are made DISJOINT. `openStagePredicate` excludes only
+ *    'agreement signed'/'paid' by name, so the 784 deals sitting in the plain
+ *    "Signed" stage read as open there while SALES-KPI-02 counts them as won.
+ *    Left alone, those deals would be billed as revenue AND as pipeline. Won
+ *    wins: subtracting it from open keeps the win-rate KPI's definition intact.
+ *
+ * 3. These will NOT tie out to the BI portal. Its window, agent filter and
+ *    segment scope are unknown to us, so treat the BI figure as a benchmark to
+ *    explain a gap against — never as an expected match.
+ */
+function wonStagePredicate(alias: string): string {
+  // Same stage vocabulary as calcSalesConversionRate's /signed|paid|closed won/,
+  // expressed in SQL. Keep the two in lockstep or win-rate and revenue will
+  // disagree about which deals were won.
+  const s = `LOWER(COALESCE(NULLIF(${alias}.stage,''), ${alias}.raw_data->>'Stage',''))`;
+  return `${s} ~ '(signed|paid|closed won)'`;
+}
+
+/**
+ * Deals that have reached the meeting step, and the subset that moved past it.
+ * Zoho's Stage_History carries no usable duration in this tenant, so "reached"
+ * is inferred from the CURRENT stage against the Sales SOP ladder. Closed
+ * Lost/Junk therefore sit in NEITHER set — a lost deal's stage says nothing
+ * about how far it got, and guessing would silently move the KPI.
+ */
+const AT_OR_PAST_MEETING_RE =
+  "(meeting|meetings|on hold|^hold$|proposal|agreement sent|signed|paid|closed won)";
+const PAST_MEETING_RE = "(proposal|agreement sent|signed|paid|closed won)";
+
+interface AdhocSalesAggregates {
+  wonCount: number;
+  wonValue: number;
+  wonWithAmount: number;
+  openCount: number;
+  openValue: number;
+  reachedMeeting: number;
+  pastMeeting: number;
+}
+
+const ADHOC_CACHE_TTL_MS = 60_000;
+let adhocCache: { at: number; data: AdhocSalesAggregates } | null = null;
+let adhocInFlight: Promise<AdhocSalesAggregates> | null = null;
+
+/**
+ * One scan, four KPIs. Memoised for a minute so a single recalc pass (which
+ * calls all four in a row) does one full non-sargable segment scan of ~22k
+ * deals instead of four, and so ASP can never disagree with the revenue figure
+ * it is derived from.
+ */
+export async function adhocSalesAggregates(): Promise<AdhocSalesAggregates> {
+  if (adhocCache && Date.now() - adhocCache.at < ADHOC_CACHE_TTL_MS) {
+    return adhocCache.data;
+  }
+  if (adhocInFlight) return adhocInFlight;
+  adhocInFlight = (async () => {
+    const seg = buildSegmentPredicate("walaplus", 1);
+    const won = wonStagePredicate("r");
+    const open = `(${openStagePredicate("r")}) AND NOT (${won})`;
+    const stage = `LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage',''))`;
+    const res = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE ${won})::int                                   AS won_count,
+         COALESCE(SUM(COALESCE(r.deal_value,0)) FILTER (WHERE ${won}), 0)      AS won_value,
+         COUNT(*) FILTER (WHERE ${won} AND COALESCE(r.deal_value,0) > 0)::int  AS won_with_amount,
+         COUNT(*) FILTER (WHERE ${open})::int                                  AS open_count,
+         COALESCE(SUM(COALESCE(r.deal_value,0)) FILTER (WHERE ${open}), 0)     AS open_value,
+         COUNT(*) FILTER (WHERE ${stage} ~ '${AT_OR_PAST_MEETING_RE}')::int    AS reached_meeting,
+         COUNT(*) FILTER (WHERE ${stage} ~ '${PAST_MEETING_RE}')::int          AS past_meeting
+       FROM duplicate_records r
+      WHERE r.zoho_module = 'Deals'${seg.condition ? ` AND ${seg.condition}` : ""}`,
+      seg.params,
+    );
+    const row = res.rows[0] || {};
+    const data: AdhocSalesAggregates = {
+      wonCount: Number(row.won_count || 0),
+      wonValue: Number(row.won_value || 0),
+      wonWithAmount: Number(row.won_with_amount || 0),
+      openCount: Number(row.open_count || 0),
+      openValue: Number(row.open_value || 0),
+      reachedMeeting: Number(row.reached_meeting || 0),
+      pastMeeting: Number(row.past_meeting || 0),
+    };
+    adhocCache = { at: Date.now(), data };
+    return data;
+  })().finally(() => {
+    adhocInFlight = null;
+  });
+  return adhocInFlight;
+}
+
+/** Test seam — drop the memo so a test (or a forced recalc) re-reads the DB. */
+export function resetAdhocSalesCache(): void {
+  adhocCache = null;
+}
+
+/** ADHOC-SALES-01 Closed-Won Revenue — SAR value of won corporate deals. */
+export async function calcAdhocSalesWonRevenue(): Promise<ProcessKpiValue> {
+  const a = await adhocSalesAggregates();
+  if (a.wonCount === 0) return EMPTY;
+  return {
+    value: Math.round(a.wonValue),
+    dataAvailable: true,
+    details: { won_deals: a.wonCount, won_deals_with_amount: a.wonWithAmount, segment: "walaplus" },
+  };
+}
+
+/** ADHOC-SALES-02 Qualified Pipeline — SAR value of OPEN corporate deals. */
+export async function calcAdhocSalesQualifiedPipeline(): Promise<ProcessKpiValue> {
+  const a = await adhocSalesAggregates();
+  if (a.openCount === 0) return EMPTY;
+  return {
+    value: Math.round(a.openValue),
+    dataAvailable: true,
+    details: { open_deals: a.openCount, segment: "walaplus" },
+  };
+}
+
+/** ADHOC-SALES-03 Avg Deal Value (ASP) — won revenue ÷ won deals CARRYING a value. */
+export async function calcAdhocSalesAvgDealValue(): Promise<ProcessKpiValue> {
+  const a = await adhocSalesAggregates();
+  // Divide by the deals that actually carry an Amount, not by every won deal:
+  // a won deal with a blank Amount contributes 0 to the numerator, so counting
+  // it in the denominator would drag the average down by a data-entry gap
+  // rather than by anything commercial. SALES-KPI-06 already tracks that gap.
+  if (a.wonWithAmount === 0) return EMPTY;
+  return {
+    value: Math.round(a.wonValue / a.wonWithAmount),
+    dataAvailable: true,
+    details: {
+      won_value: Math.round(a.wonValue),
+      won_deals_with_amount: a.wonWithAmount,
+      won_deals_missing_amount: a.wonCount - a.wonWithAmount,
+      segment: "walaplus",
+    },
+  };
+}
+
+/** ADHOC-SALES-04 Meeting Conversion — deals past the meeting ÷ deals that reached it. */
+export async function calcAdhocSalesMeetingConversion(): Promise<ProcessKpiValue> {
+  const a = await adhocSalesAggregates();
+  if (a.reachedMeeting === 0) return EMPTY;
+  return {
+    value: Math.round((a.pastMeeting / a.reachedMeeting) * 1000) / 10,
+    dataAvailable: true,
+    details: {
+      reached_meeting: a.reachedMeeting,
+      past_meeting: a.pastMeeting,
+      excluded_closed_lost: "current stage cannot show how far a lost deal got",
+      segment: "walaplus",
+    },
+  };
+}
+
 // ───────────────────────── GRC — Certification Milestones ───────────────────
 /**
  * GRC-KPI-002 Certification Milestones On-Track — driven by the Document Mapping
@@ -964,6 +1134,11 @@ export const PROCESS_CALCULATORS: Record<
   "SALES-KPI-07": calcSalesFollowUpEffectiveness,
   "SALES-KPI-08": calcSalesFirstContactSla,
   "SALES-KPI-09": calcSalesDuplicateRate,
+  // Sales — ad-hoc (added from the BI portal, now QMS-computed)
+  "ADHOC-SALES-01": calcAdhocSalesWonRevenue,
+  "ADHOC-SALES-02": calcAdhocSalesQualifiedPipeline,
+  "ADHOC-SALES-03": calcAdhocSalesAvgDealValue,
+  "ADHOC-SALES-04": calcAdhocSalesMeetingConversion,
   // GRC — driven by the Document Mapping framework coverage
   "GRC-KPI-002": calcCertificationMilestones,
   // Quality — driven by the Integrated QMS document lifecycle
