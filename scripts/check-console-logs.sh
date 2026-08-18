@@ -37,6 +37,12 @@ while IFS= read -r file; do
   case "$file" in
     *".test.ts"|*"__tests__"*|"src/utils/logger.ts") continue ;;
   esac
+  # CLI scripts under src/scripts/ are designed to print to stdout/stderr
+  # as their primary output channel (not a web request handler) — console.*
+  # is the right tool there, not the structured logger.
+  case "$file" in
+    "src/scripts/"*) continue ;;
+  esac
   case "$base" in
     __*) continue ;;
   esac

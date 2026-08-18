@@ -37,7 +37,7 @@
         html.wp-dark .rr-kpi-rich { background: #1E293B; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
         .rr-kpi-rich .rr-kpi-value { font-size: 20px; font-weight: 700; color: var(--rr-accent, #111827); }
         /* Per-card accent as CLASSES, not inline style — the CSP strips inline
-           style="" attributes, so accents must live in this <style> block. */
+           style="" attributes, so accents must live in this <style> block. csp-safe-inline-style: comment text, not an attribute */
         .rr-acc-blue   { --rr-accent: #2563EB; }
         .rr-acc-amber  { --rr-accent: #D97706; }
         .rr-acc-red    { --rr-accent: #DC2626; }
@@ -64,7 +64,7 @@
         html.wp-dark .rr-btn.rr-btn-primary { background: #2563EB; }
         /* Email-to-head preview modal (Quality Reports Phase 3, Task 3) — not
            defined anywhere else on this page, so class-based styles live here
-           rather than as inline style="" (CSP strips inline styles). */
+           rather than as inline style="" (CSP strips inline styles). csp-safe-inline-style: comment text, not an attribute */
         .rr-modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
         .rr-modal { background: #FFFFFF; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.25); padding: 16px; width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto; }
         html.wp-dark .rr-modal { background: #1E293B; color: #F1F5F9; }

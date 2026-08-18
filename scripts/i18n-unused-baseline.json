@@ -237,10 +237,22 @@
     "crm.tab_deals",
     "crm.tab_leads",
     "crm.with_issues",
+    "doctracker.conn_connecting",
+    "duplicates.er_deletable",
+    "duplicates.er_link_account",
+    "duplicates.er_loading",
     "login.admin_key_enter",
     "login.admin_key_label",
     "login.admin_key_note",
     "login.admin_key_placeholder",
-    "login.or"
+    "login.or",
+    "pf_sp_a1",
+    "pf_sp_a1_hint",
+    "pf_sp_a2",
+    "pf_sp_a3",
+    "pf_sp_a4",
+    "pf_sp_dry",
+    "pf_sp_push",
+    "pf_sp_title"
   ]
 }

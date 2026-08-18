@@ -641,7 +641,7 @@
                 // without a horizontal scroll. Colour the % by high/med/low band.
                 const confLevel = getConfidenceLevel(c.confidence_score || 0);
                 const confColor = confLevel === 'high' ? '#15803D' : (confLevel === 'medium' ? '#B45309' : '#B91C1C');
-                const confCell = '<span class="rr-conf"><span class="rr-val" style="color:' + confColor + '">' + _fn(c.confidence_score || 0) + '%</span></span>';
+                const confCell = '<span class="rr-conf"><span class="rr-val" style="color:' + confColor + '">' + _fn(c.confidence_score || 0) + '%</span></span>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 // Follow-up 3: checkbox cell only when the cluster has a
                 // Lead — leads are what the bulk action closes; a row with
                 // no lead has nothing for the action to do.
@@ -650,7 +650,7 @@
                 // still only acts on clusters that contain a Lead (the backend
                 // skips lead-less clusters), but selection itself is universal.
                 const checked = crossModuleSelected.has(c.id) ? 'checked' : '';
-                const checkboxCell = `<td class="rr-num" style="text-align:center"><input type="checkbox" data-on-change="toggleCrossModuleRowSelection" data-args="[${c.id}]" data-cmo-row="${c.id}" ${checked} aria-label="Select cluster ${c.id}" /></td>`;
+                const checkboxCell = `<td class="rr-num" style="text-align:center"><input type="checkbox" data-on-change="toggleCrossModuleRowSelection" data-args="[${c.id}]" data-cmo-row="${c.id}" ${checked} aria-label="Select cluster ${c.id}" /></td>`; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 // The row stays clickable to open the cluster modal, but
                 // the checkbox uses stopPropagation in toggleCrossModuleRowSelection
                 // so clicking it doesn't also open the modal.
@@ -692,7 +692,7 @@
             // Open queue: the two actions. (Handled clusters are excluded from the
             // Open filter, so a row here is genuinely open.)
             if (st === 'active') {
-                return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">'
+                return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark resolved — I converted / linked / closed this in Zoho. Removes it from the open queue (the cluster stays active so any same-module duplicate still shows elsewhere). Reversible." class="rr-btn rr-btn-primary">✓ Resolved</button>'
                     + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🚫</button>'
                     + '</div></td>';
@@ -704,17 +704,17 @@
                 const reopen = isHandled && !isResolvedCluster
                     ? '<button data-on-click="unhandleCrossModule" data-args="[' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>'
                     : '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>';
-                return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">'
+                return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<span class="rr-badge rr-good rr-dot">Resolved</span>' + reopen + '</div></td>';
             }
             if (isDismissed) {
-                return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">'
+                return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<span class="rr-badge rr-neutral">Dismissed</span>'
                     + '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>'
                     + '</div></td>';
             }
             // Fallback (e.g. All view, still-open cluster): the open-queue actions.
-            return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">'
+            return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark resolved — I converted / linked / closed this in Zoho. Reversible." class="rr-btn rr-btn-primary">✓ Resolved</button>'
                 + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🚫</button>'
                 + '</div></td>';
@@ -1789,7 +1789,7 @@
             const glyph = opts.glyph || '—';
             const title = opts.title || 'Nothing here';
             const desc  = opts.desc   ? '<span class="rr-empty-d">' + opts.desc + '</span>' : '';
-            const action = opts.action ? '<div style="margin-top:8px">' + opts.action + '</div>' : '';
+            const action = opts.action ? '<div style="margin-top:8px">' + opts.action + '</div>' : ''; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
             return '<tr><td colspan="' + colspan + '"><div class="rr-empty">'
                 + '<span class="rr-empty-glyph">' + glyph + '</span>'
                 + '<span class="rr-empty-t">' + title + '</span>'
@@ -1801,7 +1801,7 @@
             let out = '';
             for (let i = 0; i < rows; i++) {
                 const w = 55 + ((i * 13) % 40); // vary 55–95% so it reads as content
-                out += '<tr><td colspan="' + colspan + '" style="padding:11px 16px"><div class="rr-skel" style="width:' + w + '%"></div></td></tr>';
+                out += '<tr><td colspan="' + colspan + '" style="padding:11px 16px"><div class="rr-skel" style="width:' + w + '%"></div></td></tr>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
             }
             return out;
         }
@@ -3822,9 +3822,9 @@
             document.getElementById('ooFooter').innerHTML =
                 '<div class="flex flex-wrap items-center gap-3">'
                 + '<label class="text-sm">Action <select id="ooAction" data-on-change="ooActionChanged" class="ms-1 border rounded px-2 py-1 text-sm"><option value="close_lost">Close Lost</option><option value="move">Move to stage…</option></select></label>'
-                + '<span id="ooActionExtra"><label class="text-sm">Lost reason <input id="ooReason" value="Old Data" class="ms-1 border rounded px-2 py-1 text-sm" style="width:120px"></label></span>'
+                + '<span id="ooActionExtra"><label class="text-sm">Lost reason <input id="ooReason" value="Old Data" class="ms-1 border rounded px-2 py-1 text-sm" style="width:120px"></label></span>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '<span id="ooSelCount" class="text-sm text-gray-600 ms-auto">Selected: 0 · SAR 0</span>'
-                + '<button id="ooApplyBtn" data-on-click="ooApply" class="px-3 py-1.5 rounded text-sm font-semibold text-white" style="background:#dc2626">⚑ Apply to Zoho</button>'
+                + '<button id="ooApplyBtn" data-on-click="ooApply" class="px-3 py-1.5 rounded text-sm font-semibold text-white" style="background:#dc2626">⚑ Apply to Zoho</button>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '</div>'
                 + '<div class="text-[11px] text-gray-400 mt-1">Writes to Zoho. Each deal is re-checked (still owned by this rep AND still open) before updating; already-changed deals are skipped. Audit-logged.</div>';
             ooRecalc();
@@ -3833,8 +3833,8 @@
             const a = (document.getElementById('ooAction') || {}).value;
             const ex = document.getElementById('ooActionExtra');
             if (!ex) return;
-            if (a === 'move') ex.innerHTML = '<label class="text-sm">Target stage <input id="ooTargetStage" list="ooStageList" placeholder="e.g. Proposal" class="ms-1 border rounded px-2 py-1 text-sm" style="width:160px"></label><datalist id="ooStageList"><option>New Deal</option><option>Contacted</option><option>Meeting</option><option>Proposal</option><option>On Hold</option><option>Closed Lost</option></datalist>';
-            else ex.innerHTML = '<label class="text-sm">Lost reason <input id="ooReason" value="Old Data" class="ms-1 border rounded px-2 py-1 text-sm" style="width:120px"></label>';
+            if (a === 'move') ex.innerHTML = '<label class="text-sm">Target stage <input id="ooTargetStage" list="ooStageList" placeholder="e.g. Proposal" class="ms-1 border rounded px-2 py-1 text-sm" style="width:160px"></label><datalist id="ooStageList"><option>New Deal</option><option>Contacted</option><option>Meeting</option><option>Proposal</option><option>On Hold</option><option>Closed Lost</option></datalist>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+            else ex.innerHTML = '<label class="text-sm">Lost reason <input id="ooReason" value="Old Data" class="ms-1 border rounded px-2 py-1 text-sm" style="width:120px"></label>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
         }
         function ooRecalc() {
             const cbs = document.querySelectorAll('#ownerOffboardModal .oo-deal-cb:checked');
@@ -5083,7 +5083,7 @@
                     + '</tr>';
                 const memberRows = (g.members || []).map(function (m) {
                     const created = m.createdMs ? new Date(m.createdMs * 1000).toISOString().slice(0, 10) : '—';
-                    return '<tr class="border-t ctcgrp-member-' + gi + ' ' + (m.isSurvivor ? 'bg-emerald-50' : '') + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setContactSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">'
+                    return '<tr class="border-t ctcgrp-member-' + gi + ' ' + (m.isSurvivor ? 'bg-emerald-50' : '') + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setContactSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + '<td class="px-2 py-1 text-center"><span class="ctcgrp-incl-' + gi + ' text-emerald-600 cursor-pointer" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="toggleContactMemberInclude" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' title="Included in the merge — click to EXCLUDE (leave this contact untouched)">☑</span></td>'
                         + '<td class="px-2 py-1"><span class="ctcgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
                         + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="ctcgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
@@ -5092,10 +5092,10 @@
                         + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.account || '—') + '</td>'
                         + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.owner || '—') + '</td>'
                         + '<td class="px-2 py-1 text-gray-500 text-[10px]">' + escapeHtml(m.layout || '—') + '</td>'
-                        + '<td class="px-2 py-1"><div class="flex items-center gap-1"><div class="w-14 h-1.5 bg-gray-200 rounded"><div class="h-1.5 rounded bg-emerald-500" style="width:' + (m.completionPct || 0) + '%"></div></div><span class="text-[10px] text-gray-600">' + (m.completionPct || 0) + '% (' + (m.fieldsPopulated || 0) + '/' + (m.fieldsTotal || 0) + ')</span></div></td>'
+                        + '<td class="px-2 py-1"><div class="flex items-center gap-1"><div class="w-14 h-1.5 bg-gray-200 rounded"><div class="h-1.5 rounded bg-emerald-500" style="width:' + (m.completionPct || 0) + '%"></div></div><span class="text-[10px] text-gray-600">' + (m.completionPct || 0) + '% (' + (m.fieldsPopulated || 0) + '/' + (m.fieldsTotal || 0) + ')</span></div></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + '</tr>';
                 }).join('');
-                const detail = '<tr id="ctcgrp-detail-' + gi + '" style="display:none"><td colspan="4" class="px-2 pb-2 bg-gray-50">'
+                const detail = '<tr id="ctcgrp-detail-' + gi + '" style="display:none"><td colspan="4" class="px-2 pb-2 bg-gray-50">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<div class="text-[10px] text-gray-500 mt-1 mb-1">Click a row to KEEP that contact as the survivor (● = most complete). Untick <strong>Merge?</strong> to EXCLUDE a contact (e.g. a Partner) — it stays untouched and the rest still merge. The non-survivor included contacts are tagged Duplicate-Delete; their email(s) are preserved on the survivor.</div>'
                     + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1 text-start">Merge?</th><th class="px-2 py-1 text-start">Keep</th><th class="px-2 py-1 text-start">Contact</th><th class="px-2 py-1 text-start">Email</th><th class="px-2 py-1 text-start">Phone</th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Layout</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
                     + '</td></tr>';
@@ -5388,7 +5388,7 @@
                         + '</tr>';
                     const memberRows = (g.members || []).map(function (m) {
                         const created = m.createdMs ? new Date(m.createdMs * 1000).toISOString().slice(0, 10) : '—';
-                        return '<tr class="border-t acctgrp-member-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setAccountSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">'
+                        return '<tr class="border-t acctgrp-member-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setAccountSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                             + '<td class="px-2 py-1 text-center"><span class="acctgrp-incl-' + gi + ' text-emerald-600 cursor-pointer" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="toggleAccountMemberInclude" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' title="Included in the merge — click to EXCLUDE (leave this account untouched)">☑</span></td>'
                             + '<td class="px-2 py-1"><span class="acctgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
                             + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="acctgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
@@ -5398,10 +5398,10 @@
                             + '<td class="px-2 py-1 text-center" title="Deals linked to this Account (a bigger Deals book = stronger survivor)">' + ((m.dealCount || 0) > 0 ? '<span class="font-semibold text-indigo-700">💼 ' + m.dealCount + '</span>' : '<span class="text-gray-400">0</span>') + '</td>'
                             + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.country || '—') + '</td>'
                             + '<td class="px-2 py-1 text-gray-500 text-[10px]">' + created + '</td>'
-                            + '<td class="px-2 py-1"><div class="flex items-center gap-1"><div class="w-14 h-1.5 bg-gray-200 rounded"><div class="h-1.5 rounded bg-emerald-500" style="width:' + (m.completionPct || 0) + '%"></div></div><span class="text-[10px] text-gray-600">' + (m.completionPct || 0) + '% (' + (m.fieldsPopulated || 0) + '/' + (m.fieldsTotal || 0) + ')</span></div></td>'
+                            + '<td class="px-2 py-1"><div class="flex items-center gap-1"><div class="w-14 h-1.5 bg-gray-200 rounded"><div class="h-1.5 rounded bg-emerald-500" style="width:' + (m.completionPct || 0) + '%"></div></div><span class="text-[10px] text-gray-600">' + (m.completionPct || 0) + '% (' + (m.fieldsPopulated || 0) + '/' + (m.fieldsTotal || 0) + ')</span></div></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                             + '</tr>';
                     }).join('');
-                    const detailRow = '<tr id="acctgrp-detail-' + gi + '" style="display:none"><td colspan="4" class="px-2 pb-2 bg-gray-50">'
+                    const detailRow = '<tr id="acctgrp-detail-' + gi + '" style="display:none"><td colspan="4" class="px-2 pb-2 bg-gray-50">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + '<div class="text-[10px] text-gray-500 mt-1 mb-1">Click a row to keep that account as the <strong>survivor</strong> (● = highest data completeness). Untick <strong>Merge?</strong> to EXCLUDE an account (e.g. a Partner) — it stays untouched and the rest still merge. The non-survivor included accounts are tagged Duplicate-Delete; their contacts & deals re-parent onto the survivor.</div>'
                         + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1 text-start">Merge?</th><th class="px-2 py-1 text-start">Keep</th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Layout</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Website</th><th class="px-2 py-1 text-center" title="Deals linked to each Account">Deals</th><th class="px-2 py-1 text-start">Country</th><th class="px-2 py-1 text-start">Created</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
                         + '<div class="mt-1"><button data-on-click="dismissAccountGroup" data-args=\'[' + gi + ']\' class="px-2 py-1 text-[11px] font-semibold rounded bg-rose-100 text-rose-700 hover:bg-rose-200" title="These accounts are NOT the same company — exclude this group from this and all future auto-merges.">✕ Not duplicates — dismiss (don\'t merge)</button></div>'
@@ -7688,14 +7688,14 @@
             if (val) { val.textContent = formatCurrencyCompact(headline); val.title = formatCurrency(headline); }
             if (lbl) lbl.textContent = openOnly ? 'Amount at risk — Open pipeline (SAR)' : 'Amount at risk (SAR)';
             var openPct = atRisk > 0 ? Math.round((d.open_sar / atRisk) * 100) : 0;
-            var toggle = '<span data-on-click="toggleInflationOpenOnly" style="cursor:pointer;font-weight:600;color:#4f46e5" title="Switch the headline between at-risk (open + closed-lost, excludes Agreement Signed / Paid) and open-pipeline only.">'
+            var toggle = '<span data-on-click="toggleInflationOpenOnly" style="cursor:pointer;font-weight:600;color:#4f46e5" title="Switch the headline between at-risk (open + closed-lost, excludes Agreement Signed / Paid) and open-pipeline only.">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + (openOnly ? '● Headline: open-only — show at-risk' : '○ Show open-only headline') + '</span>';
             el.innerHTML =
-                '<span style="color:#b45309;font-weight:600">Open ' + formatCurrencyCompact(d.open_sar || 0) + '</span>'
-                + ' <span style="color:#9ca3af">(' + _fn(d.open_deals || 0) + ' · ' + openPct + '%)</span>'
-                + '<br><span style="color:#6b7280;font-weight:600">Closed ' + formatCurrencyCompact(d.closed_sar || 0) + '</span>'
-                + ' <span style="color:#9ca3af">(' + _fn(d.closed_deals || 0) + ')</span>'
-                + '<br><span style="color:#9ca3af">Excluded — Signed/Paid ' + formatCurrencyCompact(d.excluded_signed_paid_sar || 0) + ' (' + _fn(d.excluded_deals || 0) + ')</span>'
+                '<span style="color:#b45309;font-weight:600">Open ' + formatCurrencyCompact(d.open_sar || 0) + '</span>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                + ' <span style="color:#9ca3af">(' + _fn(d.open_deals || 0) + ' · ' + openPct + '%)</span>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                + '<br><span style="color:#6b7280;font-weight:600">Closed ' + formatCurrencyCompact(d.closed_sar || 0) + '</span>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                + ' <span style="color:#9ca3af">(' + _fn(d.closed_deals || 0) + ')</span>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                + '<br><span style="color:#9ca3af">Excluded — Signed/Paid ' + formatCurrencyCompact(d.excluded_signed_paid_sar || 0) + ' (' + _fn(d.excluded_deals || 0) + ')</span>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '<br>' + toggle;
         }
         async function loadInflationBreakdown() {
@@ -7910,7 +7910,7 @@
                     '<td><span class="rr-badge rr-neutral">' + escapeHtml(d.stage) + '</span></td>' +
                     '<td class="rr-muted">' + escapeHtml(d.owner) + '</td>' +
                     '<td class="rr-muted">' + (d.source ? escapeHtml(d.source) : '—') + '</td>' +
-                    '<td class="rr-muted" style="white-space:nowrap">' + _dcFmtDate(d.createdTime) + '</td>' +
+                    '<td class="rr-muted" style="white-space:nowrap">' + _dcFmtDate(d.createdTime) + '</td>' + // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     '<td class="rr-num rr-muted">' + (d.amount != null ? escapeHtml(String(d.amount)) : '—') + '</td>' +
                     '<td><span id="docs-' + escapeHtml(String(d.id)) + '" title="Required: ' + escapeHtml(reqd) + '"><button data-on-click="checkDealDocs" data-args=\'' + docArgs + '\' class="rr-btn rr-btn-ghost">📎 Check documents</button></span></td>' +
                     '</tr>';
@@ -8182,18 +8182,18 @@
                 if (kind === 'deals') {
                     var _stg = (r.extra && r.extra.stage) ? String(r.extra.stage) : '';
                     var _prot = /^(agreement signed|paid)$/i.test(_stg.trim());
-                    stageCell = '<td class="rr-muted"' + (_prot ? ' style="color:#15803D;font-weight:600"' : '') + '>' + escapeHtml(_stg || '—') + (_prot ? ' 🔒' : '') + '</td>';
+                    stageCell = '<td class="rr-muted"' + (_prot ? ' style="color:#15803D;font-weight:600"' : '') + '>' + escapeHtml(_stg || '—') + (_prot ? ' 🔒' : '') + '</td>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     var _cr = (r.extra && r.extra.created) ? new Date(r.extra.created) : null;
                     createdCell = '<td class="rr-muted">' + escapeHtml(_cr && !isNaN(_cr) ? _cr.toLocaleDateString() : '—') + '</td>';
                 }
                 return '<tr>'
                     + '<td>' + cb + '</td>'
                     + '<td>' + erReasonBadge(r.reason) + '</td>'
-                    + '<td class="rr-primary"><a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.name || '(no name)') + '</a></td>'
+                    + '<td class="rr-primary"><a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.name || '(no name)') + '</a></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + stageCell
                     + createdCell
                     + '<td class="rr-muted">' + escapeHtml(r.owner || '—') + '</td>'
-                    + '<td><div class="rr-actions" style="justify-content:flex-start">' + action + dismissBtn + '</div></td>'
+                    + '<td><div class="rr-actions" style="justify-content:flex-start">' + action + dismissBtn + '</div></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '</tr>';
             }).join('');
             // Pagination footer (only when there's more than one page).
@@ -8713,7 +8713,7 @@
             body.innerHTML = pageRows.map(function (r) {
                 const kindMap = { Deals: 'deals', Accounts: 'accounts', Contacts: 'contacts' };
                 const kind = kindMap[r.module] || 'accounts';
-                const link = '<a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.zohoId) + '</a>';
+                const link = '<a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.zohoId) + '</a>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 const statusChip = r.status === 'deleted'
                     ? '<span class="rr-badge rr-good rr-dot">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_deleted')) + '</span>'
                     : r.status === 'dismissed'
@@ -8722,13 +8722,13 @@
                 const taggedAt = r.createdAt ? new Date(r.createdAt).toLocaleString() : '—';
                 // Pending rows get a manual Dismiss (local disposition — no Zoho write).
                 const statusCell = r.status === 'pending_delete'
-                    ? '<div class="rr-actions" style="justify-content:flex-start">' + statusChip + '<button data-on-click="erDismissTagged" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]" class="rr-btn rr-btn-ghost" title="Move to Dismissed without changing Zoho — it will not be deleted by admin">Dismiss</button></div>'
+                    ? '<div class="rr-actions" style="justify-content:flex-start">' + statusChip + '<button data-on-click="erDismissTagged" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]" class="rr-btn rr-btn-ghost" title="Move to Dismissed without changing Zoho — it will not be deleted by admin">Dismiss</button></div>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     : statusChip;
                 // Checkbox only for PENDING rows (the only ones Dismiss acts on).
                 const isPending = r.status === 'pending_delete';
                 const checkCell = isPending
-                    ? '<td class="rr-num" style="text-align:center"><input type="checkbox" data-er-tagged-cb data-zoho-id="' + escapeHtml(r.zohoId) + '" data-on-change="erTaggedToggleRow" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]"' + (window._erTaggedSel && window._erTaggedSel.has(String(r.zohoId)) ? ' checked' : '') + ' aria-label="Select for bulk dismiss"></td>'
-                    : '<td class="rr-num rr-muted" style="text-align:center">—</td>';
+                    ? '<td class="rr-num" style="text-align:center"><input type="checkbox" data-er-tagged-cb data-zoho-id="' + escapeHtml(r.zohoId) + '" data-on-change="erTaggedToggleRow" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]"' + (window._erTaggedSel && window._erTaggedSel.has(String(r.zohoId)) ? ' checked' : '') + ' aria-label="Select for bulk dismiss"></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                    : '<td class="rr-num rr-muted" style="text-align:center">—</td>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 return '<tr>'
                     + checkCell
                     + '<td class="rr-mono">' + link + '</td>'
@@ -9183,7 +9183,7 @@
                     : escapeHtml(h.evidence_contact_email || '—');
                 const conf = Number(h.confidence || 0);
                 const confBarColor = conf >= 80 ? '#15803D' : conf >= 60 ? '#B45309' : '#9CA3AF';
-                const confCell = '<span class="rr-conf"><span class="rr-bar"><i style="width:' + Math.max(0, Math.min(100, conf)) + '%;background:' + confBarColor + '"></i></span><span class="rr-val">' + conf + '%</span></span>';
+                const confCell = '<span class="rr-conf"><span class="rr-bar"><i style="width:' + Math.max(0, Math.min(100, conf)) + '%;background:' + confBarColor + '"></i></span><span class="rr-val">' + conf + '%</span></span>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 // High-confidence rows (≥70%) get the 🤖 Resolve with AI
                 // button — one click writes Account_Name on the Zoho Deal
                 // and flips the hint to Applied. Below the threshold, only
@@ -9196,7 +9196,7 @@
                         : '')
                     + '<button data-on-click="markAccountHintApplied" data-args="[' + h.id + ']" class="rr-btn rr-btn-ghost" title="I fixed the Zoho record — mark applied">Applied</button>'
                     + '<button data-on-click="dismissAccountHint" data-args="[' + h.id + ']" class="rr-btn rr-btn-ghost" title="This suggestion is wrong">Dismiss</button>'
-                    : '<span class="rr-badge rr-neutral" style="text-transform:capitalize">' + escapeHtml(h.status) + '</span>';
+                    : '<span class="rr-badge rr-neutral" style="text-transform:capitalize">' + escapeHtml(h.status) + '</span>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 return '<tr>'
                     + '<td class="rr-primary">' + dealCell + '</td>'
                     + '<td><span class="rr-badge rr-amber">' + escapeHtml(h.deal_account_name || '— missing —') + '</span></td>'
@@ -9415,15 +9415,15 @@
             }[d.disposition] || ('<span class="rr-badge rr-neutral">' + escapeHtml(d.disposition || '—') + '</span>');
             const whoWhen = ((d.by ? escapeHtml(d.by) : '') + (d.at ? (' · ' + escapeHtml(formatDate(d.at))) : '')).trim();
             const reopenBtn = '<button data-on-click="reopenStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Re-open — send this deal back to the Open list (removes the radar record; no Zoho change)." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>';
-            return '<tr style="vertical-align:top">'
+            return '<tr style="vertical-align:top">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '<td class="rr-lead rr-primary">' + dealLink + '</td>'
                 + '<td class="rr-muted">' + acctCell + '</td>'
                 + '<td class="rr-muted">' + ownerCell + '</td>'
-                + '<td class="rr-muted" style="white-space:nowrap">' + createdCell + '</td>'
+                + '<td class="rr-muted" style="white-space:nowrap">' + createdCell + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '<td class="rr-muted">' + layoutCell + '</td>'
                 + '<td><span class="rr-badge rr-amber">' + escapeHtml(d.stage || '—') + '</span></td>'
                 + '<td>' + dispBadge + (whoWhen ? ' <span class="rr-muted text-xs">' + whoWhen + '</span>' : '')
-                + '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">' + reopenBtn + '</div></div></td>'
+                + '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">' + reopenBtn + '</div></div></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '</tr>';
         }
         // ↩ Re-open a handled stale deal back to the Open list. No Zoho change.
@@ -9504,24 +9504,24 @@
                     // ✗ = dismiss (not a stale issue — hides it, no Zoho change).
                     const suggested = d.disposition === 'close' ? 'close' : d.disposition === 'reengage' ? 'reengage' : null;
                     const aiBtn = suggested
-                        ? '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;' + suggested + '&quot;]" title="AI-apply the suggested action (' + suggested + ') in Zoho." class="rr-btn rr-btn-icon" style="color:#7C3AED">🤖</button>'
+                        ? '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;' + suggested + '&quot;]" title="AI-apply the suggested action (' + suggested + ') in Zoho." class="rr-btn rr-btn-icon" style="color:#7C3AED">🤖</button>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         : '';
                     // Consistent action set (mirrors the Cross-Module row: a green
                     // ✓ Resolved for "I handled it in Zoho" + a Dismiss for false
                     // positives). 🤖 / Close / Re-engage WRITE to Zoho; ✓ Resolved
                     // and ✗ Dismiss are radar-only (no Zoho change).
-                    const actions = '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">'
+                    const actions = '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + aiBtn
                         + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;close&quot;]" title="Close — set this deal\'s Stage to Closed Lost in Zoho." class="rr-btn rr-btn-ghost">Close</button>'
                         + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;reengage&quot;]" title="Re-engage — move this deal\'s Stage forward into the active pipeline in Zoho." class="rr-btn rr-btn-ghost">Re-engage</button>'
                         + '<button data-on-click="resolveStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Resolved — I already fixed this deal MANUALLY in Zoho. Records it as resolved (not dismissed) and removes it from this list. No Zoho change." class="rr-btn rr-btn-primary">✓ Resolve</button>'
                         + '<button data-on-click="dismissStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Dismiss — this is not a stale issue (false positive). Hides it from this list. No Zoho change." class="rr-btn rr-btn-ghost rr-btn-icon">✕</button>'
                         + '</div></div>';
-                    return '<tr class="' + dispSev(d.disposition) + '" style="vertical-align:top">'
+                    return '<tr class="' + dispSev(d.disposition) + '" style="vertical-align:top">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + '<td class="rr-lead rr-primary">' + dealLink + '</td>'
                         + '<td class="rr-muted">' + acctCell + '</td>'
                         + '<td class="rr-muted">' + ownerCell + '</td>'
-                        + '<td class="rr-muted" style="white-space:nowrap">' + createdCell + '</td>'
+                        + '<td class="rr-muted" style="white-space:nowrap">' + createdCell + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + '<td class="rr-muted">' + layoutCell + '</td>'
                         + '<td><span class="rr-badge rr-amber">' + escapeHtml(d.stage || '—') + '</span></td>'
                         + '<td>'
@@ -9586,7 +9586,7 @@
             if (!body) return;
             // One-time DELEGATED change handler for the bulk-select checkboxes.
             // The page dispatches every interaction through data-on-click /
-            // delegation; inline onchange="" attributes on the checkboxes never
+            // delegation; inline onchange="" attributes on the checkboxes never // csp-safe-inline-handler: comment text, not an attribute
             // fired, so BOTH the header "select all" and the per-row boxes did
             // nothing (rows never toggled, the bulk bar never un-hid). Mirrors the
             // empty-records er-cb delegation at loadEmptyRecords(). data-rh-type
@@ -9647,7 +9647,7 @@
                     const evidenceCell = escapeHtml(h.evidence_detail || '—');
                     const conf = Number(h.confidence || 0);
                     const confBarColor = conf >= 80 ? '#15803D' : conf >= 60 ? '#B45309' : '#9CA3AF';
-                    const confCell = '<span class="rr-conf"><span class="rr-bar"><i style="width:' + Math.max(0, Math.min(100, conf)) + '%;background:' + confBarColor + '"></i></span><span class="rr-val">' + conf + '%</span></span>';
+                    const confCell = '<span class="rr-conf"><span class="rr-bar"><i style="width:' + Math.max(0, Math.min(100, conf)) + '%;background:' + confBarColor + '"></i></span><span class="rr-val">' + conf + '%</span></span>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     const aiEligible = h.status === 'pending' && conf >= 70;
                     // Compact ICON actions so the table fits without horizontal
                     // scroll (Sarah). Bulk apply/dismiss lives in the bar above.
@@ -9657,7 +9657,7 @@
                             : '')
                         + '<button data-on-click="markRecordHintApplied" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost rr-btn-icon" title="I fixed the Zoho record — mark applied">✓</button>'
                         + '<button data-on-click="dismissRecordHint" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost rr-btn-icon" title="This suggestion is wrong — dismiss">✕</button>'
-                        : '<span class="rr-badge rr-neutral" style="text-transform:capitalize">' + escapeHtml(h.status) + '</span>';
+                        : '<span class="rr-badge rr-neutral" style="text-transform:capitalize">' + escapeHtml(h.status) + '</span>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     // Bulk-select checkbox (pending rows only). data-ai marks the
                     // ≥70% rows so Apply-with-AI can skip the rest.
                     const chkCell = h.status === 'pending'
@@ -9679,10 +9679,10 @@
                     const TRUNC = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
                     return '<tr>'
                         + chkCell
-                        + '<td class="rr-primary" style="max-width:180px;' + TRUNC + '">' + sourceCell + '</td>'
-                        + '<td class="rr-mono" style="max-width:200px;' + TRUNC + '">' + emailCell + '</td>'
+                        + '<td class="rr-primary" style="max-width:180px;' + TRUNC + '">' + sourceCell + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                        + '<td class="rr-mono" style="max-width:200px;' + TRUNC + '">' + emailCell + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + '<td><span class="rr-badge rr-amber">' + escapeHtml(h.current_value || '— missing —') + '</span></td>'
-                        + '<td class="rr-primary" style="max-width:220px;overflow:hidden;">' + suggestedCell + domainSub + '</td>'
+                        + '<td class="rr-primary" style="max-width:220px;overflow:hidden;">' + suggestedCell + domainSub + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + '<td class="rr-num">' + confCell + '</td>'
                         + '<td class="rr-num"><div class="rr-actions">' + actions + '</div></td>'
                         + '</tr>';
@@ -9993,8 +9993,8 @@
                         : '<span class="rr-badge rr-info">' + escapeHtml(c.status) + '</span>';
                     return ''
                         + '<tr class="' + (isMaster ? 'rr-sev-good' : '') + '">'
-                        +   '<td class="rr-lead rr-num" style="text-align:center"><input type="radio" name="cmc-master-' + gi + '" value="' + Number(c.id) + '" data-on-change="_cmcOnMasterChange" data-args="[' + gi + ',' + Number(c.id) + ']" ' + (isMaster ? 'checked' : '') + ' aria-label="Set cluster ' + Number(c.id) + ' as master" /></td>'
-                        +   '<td class="rr-num" style="text-align:center"><input type="checkbox" data-cmc-source-cb data-group="' + gi + '" data-cluster="' + Number(c.id) + '" ' + (isMaster ? 'disabled' : 'checked') + ' aria-label="Include cluster ' + Number(c.id) + ' as a source to merge" /></td>'
+                        +   '<td class="rr-lead rr-num" style="text-align:center"><input type="radio" name="cmc-master-' + gi + '" value="' + Number(c.id) + '" data-on-change="_cmcOnMasterChange" data-args="[' + gi + ',' + Number(c.id) + ']" ' + (isMaster ? 'checked' : '') + ' aria-label="Set cluster ' + Number(c.id) + ' as master" /></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                        +   '<td class="rr-num" style="text-align:center"><input type="checkbox" data-cmc-source-cb data-group="' + gi + '" data-cluster="' + Number(c.id) + '" ' + (isMaster ? 'disabled' : 'checked') + ' aria-label="Include cluster ' + Number(c.id) + ' as a source to merge" /></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         +   '<td class="rr-mono">#' + Number(c.id) + '</td>'
                         +   '<td class="rr-primary">' + escapeHtml(c.company_name || '—') + '</td>'
                         +   '<td>' + (modChips.join('') || '<span class="rr-muted">—</span>') + '</td>'
@@ -10016,8 +10016,8 @@
                     +     '<table class="rr-table min-w-full">'
                     +       '<thead>'
                     +         '<tr>'
-                    +           '<th scope="col" style="text-align:center" title="Pick which cluster to merge the others INTO">Master</th>'
-                    +           '<th scope="col" style="text-align:center" title="Tick the clusters whose records get moved into the master">Merge in?</th>'
+                    +           '<th scope="col" style="text-align:center" title="Pick which cluster to merge the others INTO">Master</th>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                    +           '<th scope="col" style="text-align:center" title="Tick the clusters whose records get moved into the master">Merge in?</th>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     +           '<th scope="col">Cluster</th>'
                     +           '<th scope="col">Company</th>'
                     +           '<th scope="col">Modules</th>'
@@ -10261,10 +10261,10 @@
                 // single Zoho record) — so an external Zoho link would not
                 // have a unique target.
                 const companyCell = r.id
-                    ? '<a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[' + r.id + ']" class="rr-primary hover:underline" style="color:inherit" title="View this cluster\'s underlying records">' + safeCompany + '</a>'
+                    ? '<a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[' + r.id + ']" class="rr-primary hover:underline" style="color:inherit" title="View this cluster\'s underlying records">' + safeCompany + '</a>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     : safeCompany;
                 return '<tr class="' + csVerdictSev(r.cs_overlap_verdict) + '">'
-                    + '<td class="rr-lead" style="white-space:nowrap">' + csVerdictBadge(r.cs_overlap_verdict) + '</td>'
+                    + '<td class="rr-lead" style="white-space:nowrap">' + csVerdictBadge(r.cs_overlap_verdict) + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<td class="rr-mono">' + domainCell + '</td>'
                     + '<td class="rr-primary">' + companyCell + '</td>'
                     + '<td>' + csSectorLabel(r.client_sector) + '</td>'
@@ -11192,16 +11192,16 @@
                 const dealCell = dealNameHtml
                     + (r.account_name ? '<div class="rr-sub">' + escapeHtml(r.account_name) + '</div>' : '');
                 const ownerCell = (r.owner_name ? '<div>' + escapeHtml(r.owner_name) + '</div>' : '<span class="text-gray-400">—</span>')
-                    + (r.owner_email ? '<div class="rr-sub" style="font-family:ui-monospace,Menlo,Consolas,monospace">' + escapeHtml(r.owner_email) + '</div>' : '');
+                    + (r.owner_email ? '<div class="rr-sub" style="font-family:ui-monospace,Menlo,Consolas,monospace">' + escapeHtml(r.owner_email) + '</div>' : ''); // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 const stageCell = '<div class="rr-primary">' + escapeHtml(r.stage) + '</div>'
                     + (r.pipeline ? '<div class="rr-sub">' + escapeHtml(r.pipeline) + '</div>' : '');
                 const agingColor = v.severity === 'critical' ? '#B91C1C' : v.severity === 'warning' ? '#B45309' : '';
-                return '<tr class="' + lifeSeveritySev(v.severity) + '" style="vertical-align:top">'
+                return '<tr class="' + lifeSeveritySev(v.severity) + '" style="vertical-align:top">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<td class="rr-lead">' + dealLifeSeverityBadge(v.severity) + '</td>'
                     + '<td>' + dealCell + '</td>'
                     + '<td>' + stageCell + '</td>'
                     + '<td class="rr-muted">' + ownerCell + '</td>'
-                    + '<td class="rr-num rr-strong"' + (agingColor ? ' style="color:' + agingColor + '"' : '') + '>' + (v.aging_units ?? '—') + ' ' + unitLabel + '<div class="rr-sub" style="text-align:end">' + (v.aging_calendar_days ?? '—') + ' calendar d</div></td>'
+                    + '<td class="rr-num rr-strong"' + (agingColor ? ' style="color:' + agingColor + '"' : '') + '>' + (v.aging_units ?? '—') + ' ' + unitLabel + '<div class="rr-sub" style="text-align:end">' + (v.aging_calendar_days ?? '—') + ' calendar d</div></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<td class="rr-mono">≤ ' + escapeHtml(slaLabel) + '<div class="rr-sub">Sales SOP §' + escapeHtml(v.clause_ref) + '</div></td>'
                     + '<td class="rr-muted">' + escapeHtml(v.suggested_action || v.message || '') + '</td>'
                     + '</tr>';
@@ -11356,7 +11356,7 @@
 
         // Minimal dependency-free SVG line chart — open vs solved, last 30
         // days of duplicate_progress_daily for the Deals module (the report's
-        // burndown headline). No inline style="" attributes (CSP strips
+        // burndown headline). No inline style="" attributes (CSP strips // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
         // them) — every visual is a class or an SVG presentation attribute.
         function renderCleaningTrend(trend) {
             const host = document.getElementById('cpTrend');
@@ -11864,7 +11864,7 @@
                 .filter(k => !known.has(k) && (byPhase[k] || 0) > 0)
                 .sort()
                 .map(k => ({ key: k, label: k.replace(/\b\w/g, c => c.toUpperCase()), accent: 'rr-acc-teal' }));
-            // Class-only styling — the page CSP strips inline style="" attributes
+            // Class-only styling — the page CSP strips inline style="" attributes // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
             // (nonce-based style-src), so sizing must come from classes. Reuse the
             // rr-kpi cards + the same grid as the summary tiles above.
             const rc = _csReconcileStored();
@@ -11953,7 +11953,7 @@
             modal.classList.remove('hidden');
             const s = d.summary || {};
             const notCounted = (s.non_corporate || 0) + (s.not_a_deal || 0) + (s.blank_phase || 0) + (s.not_in_mirror || 0);
-            const stat = function (label, color, val, sub) { return '<div class="border rounded-lg p-3"><div class="text-xs text-gray-500">' + escapeHtml(label) + '</div><div class="text-2xl font-bold" style="color:' + color + '">' + _fn(val) + '</div><div class="text-[11px] text-gray-400">' + escapeHtml(sub) + '</div></div>'; };
+            const stat = function (label, color, val, sub) { return '<div class="border rounded-lg p-3"><div class="text-xs text-gray-500">' + escapeHtml(label) + '</div><div class="text-2xl font-bold" style="color:' + color + '">' + _fn(val) + '</div><div class="text-[11px] text-gray-400">' + escapeHtml(sub) + '</div></div>'; }; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
             const line = function (label, val) { return '<tr><td class="py-0.5 pe-4 text-sm">' + escapeHtml(label) + '</td><td class="py-0.5 text-end text-sm font-semibold">' + _fn(val) + '</td></tr>'; };
             const phaseRows = Object.keys(d.by_phase_corporate || {}).sort().map(function (k) { return line(k, d.by_phase_corporate[k]); }).join('');
             // Per ClientHub phase overlap (uses the file's own Stage column).
@@ -11962,7 +11962,7 @@
             const chpTable = chpKeys.length
                 ? '<div class="text-sm font-semibold mb-1 mt-3">Per ClientHub phase (file\'s own IDs)</div>'
                     + '<table class="w-full mb-3 text-sm"><thead><tr class="text-gray-500"><td class="py-0.5 pe-3">ClientHub phase</td><td class="py-0.5 text-end">File</td><td class="py-0.5 text-end">QMS match</td><td class="py-0.5 text-end">Other phase</td><td class="py-0.5 text-end">Not in CRM</td></tr></thead><tbody>'
-                    + chpKeys.map(function (k) { var b = chp[k]; return '<tr><td class="py-0.5 pe-3">' + escapeHtml(k) + '</td><td class="py-0.5 text-end">' + _fn(b.file_total || 0) + '</td><td class="py-0.5 text-end font-semibold" style="color:#059669">' + _fn(b.in_qms_same_phase || 0) + '</td><td class="py-0.5 text-end">' + _fn(b.in_qms_other_phase || 0) + '</td><td class="py-0.5 text-end" style="color:#dc2626">' + _fn(b.not_in_mirror || 0) + '</td></tr>'; }).join('')
+                    + chpKeys.map(function (k) { var b = chp[k]; return '<tr><td class="py-0.5 pe-3">' + escapeHtml(k) + '</td><td class="py-0.5 text-end">' + _fn(b.file_total || 0) + '</td><td class="py-0.5 text-end font-semibold" style="color:#059669">' + _fn(b.in_qms_same_phase || 0) + '</td><td class="py-0.5 text-end">' + _fn(b.in_qms_other_phase || 0) + '</td><td class="py-0.5 text-end" style="color:#dc2626">' + _fn(b.not_in_mirror || 0) + '</td></tr>'; }).join('') // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '</tbody></table>'
                 : '';
             document.getElementById('csReconcileBody').innerHTML =
@@ -12010,9 +12010,9 @@
                 const lostIds = (r.rows || []).filter(function (x) { return x.verdict === 'lost'; }).map(function (x) { return x.crm_id; });
                 host.innerHTML =
                     '<div class="grid grid-cols-3 gap-2 mb-2">'
-                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">Still in Zoho (sync gap)</div><div class="text-xl font-bold" style="color:#059669">' + _fn(r.in_zoho || 0) + '</div></div>'
-                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">LOST — gone from CRM</div><div class="text-xl font-bold" style="color:#dc2626">' + _fn(r.lost || 0) + '</div></div>'
-                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">Could not verify</div><div class="text-xl font-bold" style="color:#a16207">' + _fn(r.errored || 0) + '</div></div>'
+                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">Still in Zoho (sync gap)</div><div class="text-xl font-bold" style="color:#059669">' + _fn(r.in_zoho || 0) + '</div></div>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">LOST — gone from CRM</div><div class="text-xl font-bold" style="color:#dc2626">' + _fn(r.lost || 0) + '</div></div>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">Could not verify</div><div class="text-xl font-bold" style="color:#a16207">' + _fn(r.errored || 0) + '</div></div>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '</div>'
                     + ((r.lost || 0) > 0
                         ? '<div class="text-[11px] text-gray-600 mb-1">Lost CRM IDs: <span class="font-mono break-all">' + lostIds.slice(0, 40).map(escapeHtml).join(', ') + (lostIds.length > 40 ? ' …' : '') + '</span></div>'
@@ -12138,7 +12138,7 @@
                 // font and 10px so it reads as a secondary label.
                 const accountDomainCell =
                     '<div class="rr-primary leading-tight">' + accountCell + '</div>'
-                    + '<div class="rr-sub leading-tight" style="font-family:ui-monospace,Menlo,Consolas,monospace">' + escapeHtml(g.domain || '—') + '</div>';
+                    + '<div class="rr-sub leading-tight" style="font-family:ui-monospace,Menlo,Consolas,monospace">' + escapeHtml(g.domain || '—') + '</div>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 // Three lifecycle dates stacked with mini labels. Same
                 // pattern as the Created column on the duplicate tabs.
                 const fmtDate = (d) => (d == null || d === '') ? '—' : escapeHtml(String(d));
@@ -12157,14 +12157,14 @@
                 const violationCell =
                     '<div class="flex flex-wrap gap-1 mb-1">' + violationPills + '</div>'
                     + '<div class="text-[11px] text-gray-700 leading-snug">' + messageStack + '</div>';
-                return '<tr class="' + lifeSeveritySev(g.worst_severity) + '" style="vertical-align:top">'
-                    + '<td class="rr-lead" style="white-space:nowrap">' + csLifeSeverityBadge(g.worst_severity) + countSuffix + '</td>'
+                return '<tr class="' + lifeSeveritySev(g.worst_severity) + '" style="vertical-align:top">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                    + '<td class="rr-lead" style="white-space:nowrap">' + csLifeSeverityBadge(g.worst_severity) + countSuffix + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<td>' + accountDomainCell + '</td>'
-                    + '<td class="rr-muted" style="white-space:nowrap">' + escapeHtml(g.current_phase || '—') + '</td>'
+                    + '<td class="rr-muted" style="white-space:nowrap">' + escapeHtml(g.current_phase || '—') + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<td class="rr-muted">' + escapeHtml(g.cs_owner_name || '—') + '</td>'
                     + '<td>' + datesCell + '</td>'
                     + '<td class="rr-muted whitespace-nowrap">' + fmtDate(g.last_contact_date) + '</td>'
-                    + '<td class="rr-mono" style="white-space:nowrap">' + escapeHtml(g.ext_id == null || g.ext_id === '' ? '—' : String(g.ext_id)) + '</td>'
+                    + '<td class="rr-mono" style="white-space:nowrap">' + escapeHtml(g.ext_id == null || g.ext_id === '' ? '—' : String(g.ext_id)) + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<td>' + violationCell + '</td>'
                     + '</tr>';
             }).join('');
@@ -12975,14 +12975,14 @@
                     : '';
                 return '<tr class="' + preflightVerdictSev(r.verdict) + '">'
                     + '<td class="rr-lead rr-num rr-muted">' + (r.row_index + 1) + '</td>'
-                    + '<td style="white-space:nowrap">' + preflightVerdictBadge(r.verdict, r.reason) + '</td>'
+                    + '<td style="white-space:nowrap">' + preflightVerdictBadge(r.verdict, r.reason) + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<td class="rr-mono">' + _preflightDomainCell(r.input.domain) + '</td>'
                     + '<td class="rr-primary">' + _preflightCompanyCell(r.input.company_name) + '</td>'
                     + '<td class="rr-muted">' + ownerStr + '</td>'
                     + '<td>' + _preflightModulesCell(r.module_counts) + '</td>'
                     + '<td class="rr-muted">' + escapeHtml(csPhaseLabel(r.lifecycle_state)) + '</td>'
                     + '<td title="' + escAttr(r.reason || '') + '">' + escapeHtml(execAction) + '</td>'
-                    + '<td style="white-space:nowrap;text-align:center">' + _preflightViewCell(r.cluster_id) + recheckBtn + '</td>'
+                    + '<td style="white-space:nowrap;text-align:center">' + _preflightViewCell(r.cluster_id) + recheckBtn + '</td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '</tr>';
             }).join('');
             const moreNote = rows.length > MAX_VISIBLE_PREFLIGHT
@@ -13761,7 +13761,7 @@
                             + (resp.existing_deals_skipped ? '<div class="text-gray-600">' + resp.existing_deals_skipped + ' company(ies) skipped — already had an open deal.</div>' : '')
                             + (resp.deals_skipped_no_contact ? '<div class="text-amber-700">' + resp.deals_skipped_no_contact + ' skipped — no contact to link (Contact_Name is required). Backfill contacts first, then retry.</div>' : '')
                             + (resp.deals_skipped_gone_account ? '<div class="text-amber-700">' + resp.deals_skipped_gone_account + ' skipped — the account was deleted/merged in Zoho.</div>' : '')
-                            + ((resp.deal_skips && resp.deal_skips.length) ? '<details class="mt-1"><summary class="text-gray-600 cursor-pointer text-[11px]">Why each company got no deal (' + resp.deal_skips.length + ')</summary><div class="mt-1 text-[11px] text-gray-600" style="max-height:200px;overflow:auto">' + resp.deal_skips.map(function (s) { return escapeHtml(String(s.company || '')) + ' — ' + escapeHtml(String(s.reason || '')); }).join('<br>') + '</div></details>' : '')
+                            + ((resp.deal_skips && resp.deal_skips.length) ? '<details class="mt-1"><summary class="text-gray-600 cursor-pointer text-[11px]">Why each company got no deal (' + resp.deal_skips.length + ')</summary><div class="mt-1 text-[11px] text-gray-600" style="max-height:200px;overflow:auto">' + resp.deal_skips.map(function (s) { return escapeHtml(String(s.company || '')) + ' — ' + escapeHtml(String(s.reason || '')); }).join('<br>') + '</div></details>' : '') // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                             + (resp.live_clients_rejected ? '<div class="text-rose-700">' + resp.live_clients_rejected + ' live client(s) skipped.</div>' : '')
                             + ((resp.failed && resp.failed.deals) ? '<div class="text-red-700">' + resp.failed.deals + ' deal(s) failed' + ((resp.error_sample && resp.error_sample.length) ? ' — ' + escapeHtml(resp.error_sample.map(function (e) { return (e.code || '') + ' ' + (e.field || ''); }).join(', ')) : '') + '</div>' : '');
                         var offEl = document.getElementById('spDealsOff');

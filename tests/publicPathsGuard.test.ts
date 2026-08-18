@@ -116,6 +116,12 @@ const PUBLIC_PATH_ALLOWLIST: Record<string, string> = {
   // would have caught the task #447 /api/health-index regression.
   "/api/auth/*":
     "Manifest wildcard for the /api/auth subtree — reachable via the /api/auth/ prefix entry above. Any NEW handler under /api/auth/* MUST self-gate (see authRoutes.ts).",
+
+  // ---- Tech-request assignee response flow (server-to-server / email link) -
+  "/r/":
+    "GET: confirmation page rendered after an assignee clicks the one-click respond link from their email. The token in the URL IS the auth — no platform session exists at that point (src/mastra/routes/techRequestRoutes.ts).",
+  "/api/tech-requests/respond/":
+    "POST: records the assignee's response (accept/decline/info_needed). The action_token path parameter IS the auth — HMAC-verified constant-time in the handler; no platform session required (src/mastra/routes/techRequestRoutes.ts).",
 };
 
 /**

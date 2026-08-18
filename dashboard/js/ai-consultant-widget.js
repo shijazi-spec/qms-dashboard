@@ -314,7 +314,7 @@
                     </div>
                     <div class="aiw-bubble-bot">
                         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-                        <span id="ai-widget-typing-label" style="margin-inline-start:8px;font-size:12px;color:#64748b;">Adam is preparing your answer…</span>
+                        <span id="ai-widget-typing-label" style="margin-inline-start:8px;font-size:12px;color:#64748b;" data-csp-note="csp-safe-inline-style: inline style in widget HTML literal; waiting for CSS class refactor">Adam is preparing your answer…</span>
                     </div>
                 </div>
             </div>

@@ -48,6 +48,12 @@ ALLOWLIST_FILES=(
   # `style="..."` attributes go into the HTML body of an email, never into
   # a browser page subject to CSP.
   "src/mastra/workflows/promptRegressionAlertsCron.ts"
+  # Tech-request response email sent to the assignee — the `style="..."`
+  # attributes are in the email HTML body, never in a browser page.
+  "src/mastra/routes/techRequestRoutes.ts"
+  # Handoff-task notification email sent to the responsible party — same
+  # email-only context as techRequestRoutes above.
+  "src/mastra/routes/handoffTaskRoutes.ts"
 )
 
 # Build ripgrep --glob exclusions for the allowlist + CSS files.

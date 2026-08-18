@@ -80,18 +80,21 @@ const CASES: Case[] = [
     block: LOW_PRIV,
   },
   {
+    // ROUTE_PERMISSION_MAP intentionally widens single-KPI reads to the full
+    // Quality Reports read audience (LOW_PRIV roles) so the BU page can link
+    // to an individual KPI's detail page. This does NOT grant list/summary access.
     label: "GET /api/kpis/42 (single)",
     path: "/api/kpis/42",
     method: "GET",
-    allow: GOVERNANCE_READ,
-    block: LOW_PRIV,
+    allow: [...GOVERNANCE_READ, ...LOW_PRIV],
+    block: [],
   },
   {
     label: "GET /api/kpis/42/history",
     path: "/api/kpis/42/history",
     method: "GET",
-    allow: GOVERNANCE_READ,
-    block: LOW_PRIV,
+    allow: [...GOVERNANCE_READ, ...LOW_PRIV],
+    block: [],
   },
 
   // ─── KPI writes ───

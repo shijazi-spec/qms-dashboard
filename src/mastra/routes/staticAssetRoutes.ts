@@ -56,6 +56,17 @@ export const staticAssetRoutes = [
       serveStaticText("css/navigation.css", "text/css; charset=utf-8"),
   },
   {
+    // Compiled Tailwind stylesheet — built with the Tailwind CLI and shipped
+    // as a static file. Served at the legacy /dashboard/tailwind.css path
+    // that existing page <link> tags reference (changing it would require
+    // updating every dashboard/*.html file). Cache-Control matches the
+    // other CSS assets: 1 hour in production with revalidation.
+    path: "/dashboard/tailwind.css",
+    method: "GET" as const,
+    createHandler: async () =>
+      serveStaticText("tailwind.css", "text/css; charset=utf-8"),
+  },
+  {
     // Semantic-token theme (shadcn-style HSL blocks + hand-written utilities).
     // See dashboard/css/theme.css for the token definitions and why the
     // utilities are hand-written (no build:css script → the shipped

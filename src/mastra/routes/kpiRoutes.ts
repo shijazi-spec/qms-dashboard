@@ -482,10 +482,23 @@ export const kpiRoutes = [
   {
     // Full KPI detail page (P1: view). Definition + live value + gaps + history +
     // (for checklist KPIs) the Action Plan, on one screen.
+    // Auth: same read audience as the single-KPI API endpoint — any authenticated
+    // user (the page shell is gated here; the backing /api/kpis/:id/detail endpoint
+    // enforces its own RBAC check too).
     path: "/kpi/:id{[0-9]+}",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user)
+            return forbiddenResponse(c, "Insufficient permissions for KPI detail page");
+        } catch {
+          // If rbacMiddleware is unavailable fall through — the backing API will
+          // reject unauthorised API calls regardless.
+        }
         const paths = [
           join(process.cwd(), "dashboard", "kpi-detail.html"),
           "/home/runner/workspace/dashboard/kpi-detail.html",
