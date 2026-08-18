@@ -102,12 +102,29 @@ const ALLOWED_FIELDS: Record<string, Set<string>> = {
     'last_assessment_date', 'next_assessment_date', 'notes', 'sla_details',
     'description', 'department', 'location', 'tags',
   ]),
+  // NOTE: this list is applied to EVERY JSON body on /api/policies/* by the
+  // middleware, so a field missing here is silently deleted before the handler
+  // sees it. It was missing `policy_number`, which POST /api/policies REQUIRES
+  // — so every create returned "Missing required fields", from the Document
+  // Control UI as well as the API, and no new controlled document could be
+  // added at all. The names below are the ones the create form actually posts
+  // (dashboard/policies.html) plus the document-control metadata columns.
+  //
+  // Deliberately NOT here: file_path / file_name / file_size / file_mime_type.
+  // Those may only be set by POST /api/policies/:id/upload, so that a JSON body
+  // can never rebind a document to another module's file. The create handler
+  // strips them too — this is the outer of the two gates, keep both.
   policies: new Set([
     'title', 'description', 'category', 'status', 'version', 'effective_date',
     'review_date', 'owner', 'approver', 'department', 'regulation', 'tags',
     'content', 'scope', 'objectives', 'references', 'revision_notes',
     'grc_comments', 'owners', 'acknowledgment_required',
     'transition_to', 'comments',
+    'policy_number', 'document_number', 'document_type',
+    'owner_name', 'owner_department', 'approver_name',
+    'confidentiality', 'content_text', 'retention_period',
+    'requires_acknowledgment', 'acknowledgment_frequency',
+    'expiry_date', 'change_summary', 'supersedes_id', 'parent_policy_id',
   ]),
   audits: new Set([
     'audit_code', 'title', 'audit_type', 'status', 'auditor', 'department',
