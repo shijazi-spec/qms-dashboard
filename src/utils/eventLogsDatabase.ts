@@ -130,16 +130,37 @@ function generateChecksum(data: Partial<EventLogInput>): string {
   return crypto.createHash("sha256").update(checksumData).digest("hex");
 }
 
+/**
+ * Month bounds for a partition, in UTC.
+ *
+ * These MUST be built with Date.UTC. The original code used
+ * `new Date(year, month - 1, 1)` — LOCAL midnight — and then read it back with
+ * `.toISOString()`, which is UTC. On any server running east of UTC (Asia/Riyadh
+ * is UTC+3) that shifts every boundary a day earlier: August became
+ * FROM '2026-07-31', which OVERLAPS a July partition already created as
+ * [2026-07-01, 2026-08-01). Postgres rejects an overlapping partition, the
+ * error was swallowed below, and the month simply had nowhere to write.
+ *
+ * That is consistent with what the register shows: event_logs stops dead at
+ * 2026-07-31 and has taken nothing since, across every module.
+ */
+export function monthPartitionBounds(
+  year: number,
+  month: number,
+): { name: string; start: string; end: string } {
+  return {
+    name: `event_logs_y${year}m${String(month).padStart(2, "0")}`,
+    start: new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10),
+    end: new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10),
+  };
+}
+
 async function createMonthlyPartition(
   year: number,
   month: number,
 ): Promise<void> {
-  const partitionName = `event_logs_y${year}m${String(month).padStart(2, "0")}`;
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 1);
-
-  const startStr = startDate.toISOString().split("T")[0];
-  const endStr = endDate.toISOString().split("T")[0];
+  const { name: partitionName, start: startStr, end: endStr } =
+    monthPartitionBounds(year, month);
 
   try {
     const checkResult = await pool.query(
@@ -164,12 +185,28 @@ async function createMonthlyPartition(
     }
   } catch (error: any) {
     if (!error.message?.includes("already exists")) {
+      // Loud on purpose. Swallowing this quietly is how eighteen days of audit
+      // history went missing without anyone seeing an error.
       logger.error(
-        `📋 [EventLogs] Error creating partition ${partitionName}:`,
-        error,
+        `📋 [EventLogs] Error creating partition ${partitionName} [${startStr} → ${endStr}]:`,
+        { code: error?.code, detail: error?.detail, message: error?.message },
       );
     }
   }
+}
+
+/**
+ * True when Postgres could not route a row to any partition.
+ *
+ * The insert names no timestamp, so the row takes `DEFAULT NOW()` — if the
+ * current month has no partition, the INSERT fails outright and the event is
+ * lost. Matching on the message as well as the SQLSTATE because 23514 is the
+ * generic check-violation code, shared with ordinary CHECK constraints.
+ */
+function isMissingPartitionError(error: any): boolean {
+  const msg = String(error?.message || "");
+  if (/no partition of relation/i.test(msg)) return true;
+  return error?.code === "23514" && /partition/i.test(msg);
 }
 
 async function isTablePartitioned(): Promise<boolean> {
@@ -487,16 +524,15 @@ export async function logEvent(input: EventLogInput): Promise<EventLog> {
       checksum.substring(0, 16) + "...",
     );
 
-    const result = await pool.query(
-      `INSERT INTO event_logs (
+    const insertSql = `INSERT INTO event_logs (
         user_id, user_name, user_email, user_role,
         action_type, entity_type, entity_id, entity_name,
         description, old_value, new_value, ai_involved,
         severity, correlation_id, ip_address, user_agent,
         module, checksum
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-      RETURNING *`,
-      [
+      RETURNING *`;
+    const insertParams = [
         input.userId || null,
         input.userName || null,
         input.userEmail || null,
@@ -515,8 +551,29 @@ export async function logEvent(input: EventLogInput): Promise<EventLog> {
         input.userAgent || null,
         input.module || null,
         checksum,
-      ],
-    );
+      ];
+
+    let result;
+    try {
+      result = await pool.query(insertSql, insertParams);
+    } catch (error: any) {
+      if (!isMissingPartitionError(error)) throw error;
+      // Self-heal: the row's month has no partition, so create this month's
+      // (and next month's, so the rollover doesn't cost another lost event)
+      // and retry ONCE. Without this, a single missing partition silently
+      // swallows every audit event until someone redeploys — which is exactly
+      // what happened from 2026-08-01 onward.
+      const now = new Date();
+      const y = now.getUTCFullYear();
+      const m = now.getUTCMonth() + 1;
+      logger.error(
+        "📋 [EventLogs] No partition for the current month — creating it and retrying",
+        { year: y, month: m, error: error?.message },
+      );
+      await createMonthlyPartition(y, m);
+      await createMonthlyPartition(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1);
+      result = await pool.query(insertSql, insertParams);
+    }
 
     const eventLog = result.rows[0] as EventLog;
     logger.info(

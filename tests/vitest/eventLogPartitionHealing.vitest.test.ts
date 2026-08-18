@@ -1,0 +1,140 @@
+/**
+ * event_logs partition bounds + the self-healing insert.
+ *
+ * The audit trail stopped dead at 2026-07-31 and took nothing for eighteen
+ * days, across every module (last24Hours = 0, verified live 2026-08-18).
+ * `event_logs` is PARTITION BY RANGE (timestamp), so a month with no partition
+ * cannot accept a single row — and createMonthlyPartition swallowed the error
+ * that said so.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const { query } = vi.hoisted(() => ({ query: vi.fn() }));
+
+// This module builds its own `new Pool()` straight from `pg` rather than going
+// through redactedPool, so `pg` is what has to be stubbed — mocking
+// redactedPool here silently does nothing and the test hits a real socket.
+vi.mock("pg", () => ({
+  Pool: class {
+    query(...a: any[]) {
+      return query(...a);
+    }
+    connect() {
+      return Promise.resolve({ query: (...a: any[]) => query(...a), release: () => {} });
+    }
+    on() {}
+    end() {
+      return Promise.resolve();
+    }
+  },
+}));
+vi.mock("../../src/utils/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+import { monthPartitionBounds, logEvent } from "../../src/utils/eventLogsDatabase";
+
+beforeEach(() => query.mockReset().mockResolvedValue({ rows: [] }));
+
+describe("partition bounds are UTC", () => {
+  it("starts on the first of the month and ends on the first of the next", () => {
+    expect(monthPartitionBounds(2026, 8)).toEqual({
+      name: "event_logs_y2026m08",
+      start: "2026-08-01",
+      end: "2026-09-01",
+    });
+  });
+
+  it("rolls the year over in December", () => {
+    expect(monthPartitionBounds(2026, 12)).toMatchObject({
+      start: "2026-12-01",
+      end: "2027-01-01",
+    });
+  });
+
+  it("does not drift with the server timezone", () => {
+    // The original code built LOCAL midnight and read it back as UTC. East of
+    // UTC that yields '2026-07-31' for August — which overlaps a July
+    // partition of [2026-07-01, 2026-08-01), so Postgres refuses to create it
+    // and the month ends up with nowhere to write. Date.UTC removes the shift
+    // regardless of the host's TZ.
+    const naive = new Date(2026, 7, 1).toISOString().slice(0, 10);
+    const bounds = monthPartitionBounds(2026, 8);
+    expect(bounds.start).toBe("2026-08-01");
+    if (new Date().getTimezoneOffset() < 0) {
+      // Host is east of UTC: prove the naive form really was wrong here.
+      expect(naive).not.toBe(bounds.start);
+    }
+  });
+
+  it("leaves no gap between consecutive months", () => {
+    // A gap is unroutable: a row landing in it fails the same way a missing
+    // partition does.
+    for (let m = 1; m <= 11; m++) {
+      expect(monthPartitionBounds(2026, m).end).toBe(
+        monthPartitionBounds(2026, m + 1).start,
+      );
+    }
+  });
+});
+
+describe("logEvent self-heals a missing partition", () => {
+  const EVENT = { actionType: "CREATE", entityType: "DOCUMENT", entityId: "1" } as any;
+  const noPartition = () =>
+    Object.assign(new Error('no partition of relation "event_logs" found for row'), {
+      code: "23514",
+    });
+
+  /**
+   * Route by SQL rather than by call order: importing the module kicks off
+   * initializeEventLogsTable() as a side effect, and its queries land in the
+   * same mock, so a strict mockResolvedValueOnce chain is not reproducible.
+   */
+  function route(onInsert: (n: number) => any) {
+    let inserts = 0;
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/INSERT INTO event_logs/i.test(s)) return onInsert(++inserts);
+      if (/pg_tables/i.test(s)) return { rows: [{ exists: false }] };
+      return { rows: [] };
+    });
+  }
+
+  const inserts = () =>
+    query.mock.calls.filter((c) => /INSERT INTO event_logs/i.test(String(c[0]))).length;
+  const partitionsCreated = () =>
+    query.mock.calls.filter((c) => /PARTITION OF event_logs/i.test(String(c[0]))).length;
+
+  it("creates the partition and retries the insert once", async () => {
+    route((n) => {
+      if (n === 1) throw noPartition();
+      return { rows: [{ id: 99 }] };
+    });
+    const out = await logEvent(EVENT);
+    expect(out).toMatchObject({ id: 99 });
+    expect(inserts()).toBe(2);
+    // This month AND next, so the month rollover does not cost another event.
+    expect(partitionsCreated()).toBe(2);
+  });
+
+  it("does not retry errors that are not about partitioning", async () => {
+    route(() => {
+      throw Object.assign(new Error("null value in column violates not-null"), {
+        code: "23502",
+      });
+    });
+    await expect(logEvent(EVENT)).rejects.toThrow(/not-null/);
+    // A blind retry on any failure would double-write whenever the first
+    // insert actually succeeded but its response was lost.
+    expect(inserts()).toBe(1);
+    expect(partitionsCreated()).toBe(0);
+  });
+
+  it("gives up rather than looping when the retry also fails", async () => {
+    route(() => {
+      throw noPartition();
+    });
+    await expect(logEvent(EVENT)).rejects.toThrow(/no partition/);
+    expect(inserts()).toBe(2);
+  });
+});
