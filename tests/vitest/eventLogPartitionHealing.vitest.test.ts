@@ -32,7 +32,11 @@ vi.mock("../../src/utils/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { monthPartitionBounds, logEvent } from "../../src/utils/eventLogsDatabase";
+import {
+  monthPartitionBounds,
+  logEvent,
+  getAuditWriteHealth,
+} from "../../src/utils/eventLogsDatabase";
 
 beforeEach(() => query.mockReset().mockResolvedValue({ rows: [] }));
 
@@ -136,5 +140,40 @@ describe("logEvent self-heals a missing partition", () => {
     });
     await expect(logEvent(EVENT)).rejects.toThrow(/no partition/);
     expect(inserts()).toBe(2);
+  });
+});
+
+describe("audit-write health is readable without the deployment log", () => {
+  const EVENT = { actionType: "CREATE", entityType: "KPI", entityId: "1" } as any;
+
+  it("captures the Postgres code and detail of the last failure", async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (/INSERT INTO event_logs/i.test(String(sql))) {
+        throw Object.assign(new Error("some constraint blew up"), {
+          code: "23502",
+          detail: "Failing row contains (...)",
+        });
+      }
+      return { rows: [] };
+    });
+    await expect(logEvent(EVENT)).rejects.toThrow();
+    const h = getAuditWriteHealth();
+    // Every caller either swallows this throw or turns it into a 500, so
+    // without this the only evidence is a log line nobody is tailing — which
+    // is exactly how the August 2026 outage ran for eighteen days.
+    expect(h.healthy).toBe(false);
+    expect(h.lastFailure).toMatchObject({
+      code: "23502",
+      message: "some constraint blew up",
+      detail: "Failing row contains (...)",
+    });
+  });
+
+  it("clears once a write succeeds", async () => {
+    query.mockImplementation(async (sql: string) =>
+      /INSERT INTO event_logs/i.test(String(sql)) ? { rows: [{ id: 5 }] } : { rows: [] },
+    );
+    await logEvent(EVENT);
+    expect(getAuditWriteHealth()).toMatchObject({ healthy: true, lastFailure: null });
   });
 });

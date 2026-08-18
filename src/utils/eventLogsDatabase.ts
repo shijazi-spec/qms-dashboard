@@ -203,6 +203,27 @@ async function createMonthlyPartition(
  * lost. Matching on the message as well as the SQLSTATE because 23514 is the
  * generic check-violation code, shared with ordinary CHECK constraints.
  */
+/**
+ * The last audit-write failure, kept in memory so the health of the audit trail
+ * can be read without shell access to the deployment logs.
+ *
+ * The August 2026 outage was invisible for eighteen days precisely because the
+ * only evidence lived in a log nobody was tailing: every caller either
+ * swallowed the throw (`catch {}`) or turned it into an opaque 500. A KPI or
+ * policy write returning 200 tells you nothing about whether it was recorded.
+ * Surfaced on /api/logs/stats as `auditWriteHealth`.
+ */
+let lastWriteFailure:
+  | { at: string; code: string | null; message: string; detail: string | null }
+  | null = null;
+
+export function getAuditWriteHealth(): {
+  healthy: boolean;
+  lastFailure: typeof lastWriteFailure;
+} {
+  return { healthy: lastWriteFailure === null, lastFailure: lastWriteFailure };
+}
+
 function isMissingPartitionError(error: any): boolean {
   const msg = String(error?.message || "");
   if (/no partition of relation/i.test(msg)) return true;
@@ -576,13 +597,27 @@ export async function logEvent(input: EventLogInput): Promise<EventLog> {
     }
 
     const eventLog = result.rows[0] as EventLog;
+    lastWriteFailure = null;
     logger.info(
       "📋 [EventLogs] Event logged successfully with ID:",
       eventLog.id,
     );
     return eventLog;
-  } catch (error) {
-    logger.error("📋 [EventLogs] Error logging event:", error);
+  } catch (error: any) {
+    // Record it where an operator can actually see it. Every caller either
+    // swallows this throw or turns it into a 500, so the log line was the only
+    // evidence — and that is how eighteen days went missing unnoticed.
+    lastWriteFailure = {
+      at: new Date().toISOString(),
+      code: error?.code ?? null,
+      message: String(error?.message || error),
+      detail: error?.detail ?? null,
+    };
+    logger.error("📋 [EventLogs] Error logging event:", {
+      code: error?.code,
+      detail: error?.detail,
+      message: error?.message,
+    });
     throw error;
   }
 }

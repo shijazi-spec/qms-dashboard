@@ -83,11 +83,18 @@ export const eventLogsRoutes = [
             await import("../../utils/rbacMiddleware");
           if (!getSessionUser(c)) return unauthorizedResponse(c);
 
-          const { getEventLogStats, initializeEventLogsTable } =
+          const { getEventLogStats, initializeEventLogsTable, getAuditWriteHealth } =
             await import("../../utils/eventLogsDatabase");
           await initializeEventLogsTable();
 
-          const stats = await getEventLogStats();
+          // `last24Hours: 0` cannot distinguish "quiet day" from "audit trail
+          // is broken", which is what let the August 2026 outage run for
+          // eighteen days. auditWriteHealth carries the last write failure so
+          // the answer is readable without shell access to the deployment log.
+          const stats = {
+            ...(await getEventLogStats()),
+            auditWriteHealth: getAuditWriteHealth(),
+          };
 
           logger?.info("📋 [EventLogs API] Stats fetched successfully", {
             totalLogs: stats.totalLogs,
