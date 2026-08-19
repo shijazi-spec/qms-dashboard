@@ -68,11 +68,39 @@ describe("KPIs the SOP does NOT cover", () => {
     }
   });
 
-  it("returns null for SDR, ad-hoc and unknown codes", () => {
+  it("returns null for unmapped SDR, ad-hoc and unknown codes", () => {
     expect(getKpiProcessReference("SDR-KPI-01")).toBeNull();
     expect(getKpiProcessReference("ADHOC-SALES-01")).toBeNull();
     expect(getKpiProcessReference("")).toBeNull();
     expect(getKpiProcessReference("NOPE-1")).toBeNull();
+  });
+});
+
+describe("SDR — WalaPlus_SDR v2.2", () => {
+  it("cites the document and the table, with the SOP's own calculation", () => {
+    const r = getKpiProcessReference("SDR-KPI-12")!;
+    expect(r.document).toContain("WalaPlus_SDR v2.2");
+    expect(r.document).toContain("08.12.2025");
+    expect(r.section).toBe("Individual KPIs table");
+    expect(r.clauses[0].stage).toBe("Booking Conversion Rate");
+    // The formula and target are quoted from the document, not invented — the
+    // ad-hoc KPI this replaced carried a 20% target that appears nowhere in
+    // governance.
+    expect(r.clauses[0].sla).toMatch(/Booked meetings/);
+    expect(r.clauses[0].sla).toMatch(/40%/);
+  });
+
+  it("cites the SOP's Successful Meetings formula for Show Rate", () => {
+    const r = getKpiProcessReference("SDR-KPI-05")!;
+    expect(r.clauses[0].stage).toBe("Successful Meetings");
+    expect(r.clauses[0].sla).toMatch(/Client attend meeting/);
+  });
+
+  it("does not cite a clause number the SDR table does not carry", () => {
+    // The SDR KPI table is not numbered as a clause. Section only.
+    for (const code of ["SDR-KPI-12", "SDR-KPI-05"]) {
+      expect(getKpiProcessReference(code)!.section).not.toMatch(/\d+\.\d+/);
+    }
   });
 });
 

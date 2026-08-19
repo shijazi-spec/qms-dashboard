@@ -44,6 +44,49 @@ export const CS_SOP_DOCUMENT = {
 } as const;
 
 /**
+ * SDR Governance Document — the controlled source for the SDR KPI framework,
+ * including the two meeting-conversion metrics. Its KPI table is not numbered
+ * as a clause, so entries cite the TABLE, never an invented clause number.
+ */
+export const SDR_SOP_DOCUMENT = {
+  title: "WalaPlus SDR Governance Document",
+  reference: "WalaPlus_SDR",
+  version: "2.2",
+  issued: "08.12.2025",
+} as const;
+
+/**
+ * SDR KPI code → the table of the SDR SOP that defines it, plus the calculation
+ * the document states. Only codes the document actually covers are mapped.
+ *
+ * SDR-KPI-12 Booking Conversion Rate replaced ADHOC-SALES-04 "Meeting
+ * Conversion" (2026-08-19), which came from a BI-portal screenshot rather than
+ * governance: its 20% target appears in no controlled document, and the SOP
+ * files meeting conversion under SDR, not Sales.
+ */
+const SDR_KPI_TABLE: Record<string, { metric: string; calc: string }> = {
+  "SDR-KPI-12": {
+    metric: "Booking Conversion Rate",
+    calc: "(# of Booked meetings / Total leads answered) x 100 — target ≥40%, benchmark 35–45%",
+  },
+  "SDR-KPI-05": {
+    metric: "Successful Meetings",
+    calc: "(# of Client attend meeting / # of Booked meetings) x 100",
+  },
+};
+
+function sdrReference(code: string): KpiProcessReference | null {
+  const row = SDR_KPI_TABLE[code];
+  if (!row) return null;
+  const d = SDR_SOP_DOCUMENT;
+  return {
+    document: `${d.title} (${d.reference} v${d.version}, ${d.issued})`,
+    section: "Individual KPIs table",
+    clauses: [{ stage: row.metric, sla: row.calc }],
+  };
+}
+
+/**
  * CS KPI code → the section of WP-BU-CS-SOP-003 that DEFINES it.
  *
  * Deliberately a section, not a clause. §8's KPI tables carry no per-KPI clause
@@ -114,5 +157,5 @@ function csReference(code: string): KpiProcessReference | null {
 }
 
 export function getKpiProcessReference(code: string): KpiProcessReference | null {
-  return salesReference(code) ?? csReference(code);
+  return salesReference(code) ?? sdrReference(code) ?? csReference(code);
 }
