@@ -21,8 +21,15 @@ describe("KPIs that the SOP actually covers", () => {
   it("cites every stage clause for stage-aging compliance", () => {
     const r = getKpiProcessReference("SALES-KPI-01")!;
     expect(r.document).toBe(
-      `${SALES_SOP_DOCUMENT.title} (${SALES_SOP_DOCUMENT.reference}, ${SALES_SOP_DOCUMENT.issued})`,
+      `${SALES_SOP_DOCUMENT.title} (${SALES_SOP_DOCUMENT.reference} v${SALES_SOP_DOCUMENT.version}, ${SALES_SOP_DOCUMENT.issued})`,
     );
+    // The citation used to read "WP-SOP Sales v1.1, 01.12.2025" — a version
+    // superseded on 08.12.2025 and a document code that does not exist. The
+    // stage durations were identical across both versions, so this was a
+    // citation fix; if the version ever moves again, the table must be
+    // re-diffed before this constant is bumped.
+    expect(r.document).toContain("v1.2");
+    expect(r.document).not.toContain("v1.1");
     // It grades EVERY stage, so it must cite every clause — a partial list
     // would understate what the KPI enforces.
     expect(r.clauses).toHaveLength(SALES_STAGE_SLA_SPEC.length);

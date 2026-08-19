@@ -6,14 +6,20 @@
  * band, or breaching SOP. Each entry carries the reference clause so an
  * auditor can trace every flag back to the document.
  *
- * Source: WalaPlus Sales Management Process (WP-SOP Sales v1.1, 01.12.2025),
- * page 4 — "Stage Duration (Timeframe)" table:
+ * Source: Sales Management Process v1.2 (08.12.2025) — the "Stage Duration
+ * (Timeframe)" table:
  *
  *   Not Attend Meeting   ≤ 5 Business Days   §7.2.8
  *   Meeting              ≤ 10 Business Days  §7.3
  *   On Hold              3 - 6 Months        §7.3.11
  *   Proposal             3 Months            §7.4.2
  *   Agreement Sent       3 Months            §7.5.1
+ *
+ * Verified against v1.1 (01.12.2025) on 2026-08-19: the stage table is
+ * byte-identical between the two — same five stages, same durations, same
+ * clause numbers. v1.2's only change was the Sales Commission Scheme (pages
+ * 31-35), which this spec does not model. So the VALUES below did not move;
+ * only the citation was stale, and nothing here needed recalculating.
  *
  * Terminal stages (Agreement Signed, Closed Won, Closed Lost) have no
  * SLA — once a deal enters them, aging freezes. "Paid" is treated as
@@ -257,16 +263,20 @@ export function gradeStageAging(
  * The source document these SLAs come from, so a KPI detail page can name the
  * process it grades against instead of showing an empty "Data source".
  *
- * The SOP is NOT yet a controlled document in Document Control — that register
- * holds 154 policies across 13 departments and none of them is a Sales or SDR
- * process (checked 2026-08-18). This block is deliberately silent about control
- * status rather than asserting "uncontrolled", which would go stale the moment
- * the document is uploaded.
+ * Now a controlled document: registered in Document Control on 2026-08-19 under
+ * `WalaPlus_Sales`. It predates the WP-BU-<FN>-SOP-<NNN> coding scheme and so
+ * carries no formal code — `reference` is the Document Control number, not an
+ * invented one. Update it here if a code is later assigned.
+ *
+ * `WP-SOP Sales v1.1 / 01.12.2025` was the previous value and was stale: v1.2
+ * superseded it on 08.12.2025. The stage durations were unaffected (see the
+ * file header), so this was a citation fix, not a threshold change.
  */
 export const SALES_SOP_DOCUMENT = {
-  title: "WalaPlus Sales Management Process",
-  reference: "WP-SOP Sales v1.1",
-  issued: "01.12.2025",
+  title: "Sales Management Process",
+  reference: "WalaPlus_Sales",
+  version: "1.2",
+  issued: "08.12.2025",
 } as const;
 
 // The KPI → clause mapping that used to live here now sits in

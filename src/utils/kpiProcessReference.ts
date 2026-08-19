@@ -133,7 +133,7 @@ function salesReference(code: string): KpiProcessReference | null {
   if (specs.length === 0) return null;
   const d = SALES_SOP_DOCUMENT;
   return {
-    document: `${d.title} (${d.reference}, ${d.issued})`,
+    document: `${d.title} (${d.reference} v${d.version}, ${d.issued})`,
     clauses: specs.map((s) => ({ stage: s.stage, sla: describeSla(s) })),
   };
 }
