@@ -1326,9 +1326,17 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       module VARCHAR(50) PRIMARY KEY,
       last_sync_at TIMESTAMP,
       total_synced INTEGER DEFAULT 0,
-      sync_status VARCHAR(50) DEFAULT 'idle'
+      sync_status VARCHAR(50) DEFAULT 'idle',
+      -- When the CURRENT run started. Distinct from last_sync_at, which is the
+      -- incremental watermark and only moves on success; without this a run
+      -- that died could not be aged and looked like one still working.
+      sync_started_at TIMESTAMP
     )
   `);
+
+  await pool.query(
+    `ALTER TABLE zoho_sync_state ADD COLUMN IF NOT EXISTS sync_started_at TIMESTAMP`,
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_record_tasks (
@@ -10851,17 +10859,65 @@ export async function getAllSyncStates(): Promise<ZohoSyncState[]> {
   return result.rows;
 }
 
+/**
+ * Record a module's sync state.
+ *
+ * `last_sync_at` is the INCREMENTAL WATERMARK — the next run asks Zoho for
+ * records modified since it (If-Modified-Since). So it may only advance when a
+ * sync actually COMPLETED.
+ *
+ * It used to be set to NOW() on every call, including the `syncing` mark at the
+ * start of a run and the `failed` mark at the end. A sync that died partway had
+ * therefore already moved the watermark to its own start time, and the next
+ * incremental run asked for "changes since the moment the failed run began" —
+ * so every record modified before that point was silently never fetched. The
+ * same call also zeroed `total_synced`, which is why Accounts sat at
+ * "0 (syncing)" for hours (observed 2026-08-19: Accounts stuck since 18:43
+ * while Contacts, Deals and Leads all completed).
+ *
+ * On a non-completing status the watermark and the count are left exactly as
+ * they were, so a failed run costs nothing but time.
+ */
 export async function upsertSyncState(
   module: string,
   totalSynced: number,
   status: string,
 ): Promise<void> {
+  const completed = status === "completed";
   await pool.query(
-    `INSERT INTO zoho_sync_state (module, last_sync_at, total_synced, sync_status)
-     VALUES ($1, NOW(), $2, $3)
-     ON CONFLICT (module) DO UPDATE SET last_sync_at = NOW(), total_synced = $2, sync_status = $3`,
-    [module, totalSynced, status],
+    `INSERT INTO zoho_sync_state (module, last_sync_at, total_synced, sync_status, sync_started_at)
+     VALUES ($1, CASE WHEN $4 THEN NOW() ELSE NULL END, $2, $3,
+             CASE WHEN $3 = 'syncing' THEN NOW() ELSE NULL END)
+     ON CONFLICT (module) DO UPDATE SET
+       last_sync_at = CASE WHEN $4 THEN NOW() ELSE zoho_sync_state.last_sync_at END,
+       total_synced = CASE WHEN $4 THEN $2 ELSE zoho_sync_state.total_synced END,
+       sync_status  = $3,
+       sync_started_at = CASE
+         WHEN $3 = 'syncing' THEN NOW()
+         ELSE zoho_sync_state.sync_started_at END`,
+    [module, totalSynced, status, completed],
   );
+}
+
+/**
+ * How long a `syncing` row may sit before it is treated as abandoned.
+ *
+ * Nothing gates on sync_status, so a stale row does not block the next run —
+ * but it does tell an operator the module is working when the process behind it
+ * died at a deploy or a timeout. Reported, not silently rewritten.
+ */
+export const SYNC_STALE_AFTER_MS = 30 * 60 * 1000;
+
+export function isSyncStale(row: {
+  sync_status?: string | null;
+  sync_started_at?: Date | string | null;
+}): boolean {
+  if (row?.sync_status !== "syncing") return false;
+  const started = row?.sync_started_at ? new Date(row.sync_started_at).getTime() : NaN;
+  // A `syncing` row with no start time predates that column — treat it as
+  // stale rather than as healthy, since it cannot be aged.
+  if (!Number.isFinite(started)) return true;
+  return Date.now() - started > SYNC_STALE_AFTER_MS;
 }
 
 export async function getDistinctOwners(): Promise<string[]> {

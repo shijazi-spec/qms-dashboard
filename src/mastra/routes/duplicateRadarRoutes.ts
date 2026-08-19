@@ -7280,7 +7280,19 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const states = await getAllSyncStates();
-          return c.json({ syncStates: states });
+          // Flag a run that has been "syncing" long enough to be abandoned.
+          // Without this a process killed by a deploy or a timeout reads as
+          // healthy work in progress indefinitely — Accounts showed
+          // "0 (syncing)" for hours that way.
+          const { isSyncStale } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          return c.json({
+            syncStates: (states as any[]).map((s) => ({
+              ...s,
+              is_stale: isSyncStale(s),
+            })),
+          });
         } catch (error: any) {
           logger.error("Error fetching sync status:", error);
           return c.json({ error: "An internal error occurred" }, 500);
