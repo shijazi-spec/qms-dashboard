@@ -302,7 +302,7 @@ export const complianceRoutes = [
             existing.document_path !== fileInfo.filePath
           ) {
             try {
-              deleteUploadedFile(existing.document_path);
+              await deleteUploadedFile(existing.document_path);
             } catch {
               // ignore
             }
@@ -371,7 +371,7 @@ export const complianceRoutes = [
           // migrated out (any orphan rows whose blobs had already vanished
           // from disk were deleted as part of the cutover), so allowLegacy
           // is no longer needed.
-          const file = getUploadedFileForModule(reg.document_path, 'compliance');
+          const file = await getUploadedFileForModule(reg.document_path, 'compliance');
           if (!file)
             return c.json(
               { error: "Document file is missing on disk" },
@@ -458,7 +458,7 @@ export const complianceRoutes = [
             uploaded_by: null,
           });
           try {
-            deleteUploadedFile(previousPath);
+            await deleteUploadedFile(previousPath);
           } catch {
             // ignore disk-side failure
           }

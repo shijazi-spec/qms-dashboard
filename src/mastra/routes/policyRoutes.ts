@@ -1407,7 +1407,7 @@ export const policyRoutes = [
           );
 
           // Drop any legacy on-disk blob this row used to point at.
-          if (oldFilePath) deleteUploadedFile(oldFilePath);
+          if (oldFilePath) await deleteUploadedFile(oldFilePath);
 
           // Re-sync the Document-Mapping projection now that a file is
           // attached — the bridge extracts the file's text and re-runs the
@@ -1476,7 +1476,7 @@ export const policyRoutes = [
           // is no longer needed.
           const file = dbFile
             ? { buffer: dbFile.data, fileName: dbFile.file_name, mimeType: dbFile.file_mime_type || "application/octet-stream" }
-            : getUploadedFileForModule(policy.file_path!, 'policies');
+            : await getUploadedFileForModule(policy.file_path!, 'policies');
           if (!file) return c.json({ error: "File not found on disk" }, 404);
 
           // Range-aware response so the streaming-download helper can resume
@@ -1540,7 +1540,7 @@ export const policyRoutes = [
 
           const file = dbFile
             ? { buffer: dbFile.data, fileName: dbFile.file_name, mimeType: dbFile.file_mime_type || "application/octet-stream" }
-            : getUploadedFileForModule(policy.file_path!, "policies");
+            : await getUploadedFileForModule(policy.file_path!, "policies");
           if (!file) return c.json({ error: "File not found on disk" }, 404);
 
           const mime = (policy.file_mime_type || "application/octet-stream").toLowerCase();

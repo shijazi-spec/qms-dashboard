@@ -411,7 +411,7 @@ export const qmsDocsRoutes = [
           // legacy library rows live under /data/documents/qms-docs/. Pick the
           // module by provenance so both resolve.
           const module = doc.source_policy_id ? "policies" : "qms-docs";
-          const fileBlob = getUploadedFileForModule(doc.file_path, module);
+          const fileBlob = await getUploadedFileForModule(doc.file_path, module);
           if (!fileBlob) return c.json({ error: "File missing on disk" }, 404);
 
           c.header("Content-Type", doc.mime_type || "application/octet-stream");
@@ -476,7 +476,7 @@ export const qmsDocsRoutes = [
           // logged but does NOT fail the request, since the DB row (the
           // source of truth for what is "in the library") is already gone.
           try {
-            deleteUploadedFile(existing.file_path);
+            await deleteUploadedFile(existing.file_path);
           } catch (e) {
             safeLogger.warn("⚠️ [QmsDocs] file cleanup failed", { e });
           }

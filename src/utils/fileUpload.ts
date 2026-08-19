@@ -2,8 +2,41 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync, unlinkSync, statfsS
 import { join, extname } from 'path';
 import { randomBytes } from 'crypto';
 import { logger } from './logger';
+import { createRedactedPool } from './redactedPool';
 
 const UPLOAD_DIR = join(process.cwd(), 'data', 'documents');
+
+/**
+ * Durable store for every attachment on the platform.
+ *
+ * Keyed by the logical path the owning row already holds, so no owner table
+ * needed a schema change to move off the disappearing disk.
+ */
+const filePool = createRedactedPool({ connectionString: process.env.DATABASE_URL });
+let uploadedFilesTableReady: Promise<void> | null = null;
+function ensureUploadedFilesTable(): Promise<void> {
+  if (!uploadedFilesTableReady) {
+    uploadedFilesTableReady = filePool
+      .query(`
+        CREATE TABLE IF NOT EXISTS uploaded_files (
+          file_key VARCHAR(500) PRIMARY KEY,
+          module VARCHAR(50),
+          file_name VARCHAR(500) NOT NULL,
+          file_size INTEGER NOT NULL,
+          file_mime_type VARCHAR(100),
+          data BYTEA NOT NULL,
+          uploaded_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+      .then(() => undefined)
+      .catch((err) => {
+        // Reset so the next call retries rather than caching a failure.
+        uploadedFilesTableReady = null;
+        throw err;
+      });
+  }
+  return uploadedFilesTableReady;
+}
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
 /**
@@ -181,7 +214,30 @@ export async function saveUploadedFile(
     relPath = `/data/documents/${uniqueName}`;
   }
 
-  writeFileSync(filePath, buffer);
+  // Bytes go to the DATABASE, keyed by the same logical path the owner row
+  // stores. Replit rebuilds the deployment directory from the repo on every
+  // publish and `data/` is untracked, so a disk write is deleted at the next
+  // deploy while the owning row keeps pointing at it — the Customer Success
+  // SOP served "File not found on disk" that way (2026-08-19). Every module
+  // that attaches evidence goes through this function, so fixing it here fixes
+  // compliance, obligation documents, QMS documents and the doc tracker at
+  // once rather than four times.
+  //
+  // `filePath` is now a KEY, not a filesystem location. It keeps the
+  // /data/documents/{ns}/ shape because the module-scoping guard in
+  // getUploadedFileForModule reads that prefix to prove a blob belongs to the
+  // module asking for it — that check is security, not path handling.
+  await ensureUploadedFilesTable();
+  await filePool.query(
+    `INSERT INTO uploaded_files (file_key, module, file_name, file_size, file_mime_type, data)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (file_key) DO UPDATE SET
+       module=EXCLUDED.module, file_name=EXCLUDED.file_name,
+       file_size=EXCLUDED.file_size, file_mime_type=EXCLUDED.file_mime_type,
+       data=EXCLUDED.data`,
+    [relPath, moduleNamespace ?? null, originalName, buffer.length, mimeType, buffer],
+  );
+  void filePath; // retained above only to keep the namespace assertions honest
 
   return {
     filePath: relPath,
@@ -189,6 +245,31 @@ export async function saveUploadedFile(
     fileSize: buffer.length,
     mimeType,
   };
+}
+
+/** Read a stored blob by its key, or null. Disk is the legacy fallback. */
+async function readStoredFile(
+  fileKey: string,
+): Promise<{ buffer: Buffer; fileName: string } | null> {
+  try {
+    await ensureUploadedFilesTable();
+    const r = await filePool.query(
+      `SELECT data, file_name FROM uploaded_files WHERE file_key = $1`,
+      [fileKey],
+    );
+    if (r.rows[0]) {
+      return { buffer: r.rows[0].data as Buffer, fileName: String(r.rows[0].file_name) };
+    }
+  } catch (err) {
+    logger.error('[fileUpload] DB read failed; falling back to disk', {
+      fileKey,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  // Legacy rows written before the move, on a deployment that still has them.
+  const fullPath = join(UPLOAD_DIR, fileKey.replace('/data/documents/', ''));
+  if (!existsSync(fullPath)) return null;
+  return { buffer: readFileSync(fullPath), fileName: fileKey.split('/').pop() || 'file' };
 }
 
 /**
@@ -200,12 +281,12 @@ export async function saveUploadedFile(
  * pivoted into reading another module's attachments. Use
  * getUploadedFileForModule(...) from download routes instead.
  */
-export function getUploadedFile(relativePath: string): { buffer: Buffer; fileName: string } | null {
+export async function getUploadedFile(
+  relativePath: string,
+): Promise<{ buffer: Buffer; fileName: string } | null> {
   const normalizedPath = relativePath.replace(/\.\./g, '').replace(/\/\//g, '/');
   if (!normalizedPath.startsWith('/data/documents/')) return null;
-  const fullPath = join(UPLOAD_DIR, normalizedPath.replace('/data/documents/', ''));
-  if (!existsSync(fullPath)) return null;
-  return { buffer: readFileSync(fullPath), fileName: normalizedPath.split('/').pop() || 'file' };
+  return readStoredFile(normalizedPath);
 }
 
 /**
@@ -221,11 +302,11 @@ export function getUploadedFile(relativePath: string): { buffer: Buffer; fileNam
  * attachments, even if an attacker manages to write Y's file_path into
  * one of X's database rows.
  */
-export function getUploadedFileForModule(
+export async function getUploadedFileForModule(
   relativePath: string,
   moduleNamespace: UploadModuleNamespace,
   opts?: { allowLegacy?: boolean },
-): { buffer: Buffer; fileName: string } | null {
+): Promise<{ buffer: Buffer; fileName: string } | null> {
   assertValidModuleNamespace(moduleNamespace);
   const normalizedPath = relativePath.replace(/\.\./g, '').replace(/\/\//g, '/');
   const namespacedPrefix = `/data/documents/${moduleNamespace}/`;
@@ -247,22 +328,28 @@ export function getUploadedFileForModule(
     return null;
   }
 
-  const fullPath = join(UPLOAD_DIR, normalizedPath.replace(legacyPrefix, ''));
-  if (!existsSync(fullPath)) return null;
-  return { buffer: readFileSync(fullPath), fileName: normalizedPath.split('/').pop() || 'file' };
+  // The prefix checks above are the module-scoping guard and still apply —
+  // only the storage moved.
+  return readStoredFile(normalizedPath);
 }
 
-export function deleteUploadedFile(relativePath: string): boolean {
+export async function deleteUploadedFile(relativePath: string): Promise<boolean> {
   let fullPath: string | null = null;
   try {
     const normalizedPath = relativePath.replace(/\.\./g, '').replace(/\/\//g, '/');
     if (!normalizedPath.startsWith('/data/documents/')) return false;
+    await ensureUploadedFilesTable();
+    const r = await filePool.query(`DELETE FROM uploaded_files WHERE file_key = $1`, [
+      normalizedPath,
+    ]);
+    let removed = (r.rowCount || 0) > 0;
+    // Also clear any legacy blob still on this deployment's disk.
     fullPath = join(UPLOAD_DIR, normalizedPath.replace('/data/documents/', ''));
     if (existsSync(fullPath)) {
       unlinkSync(fullPath);
-      return true;
+      removed = true;
     }
-    return false;
+    return removed;
   } catch (err) {
     // Surface the failure so an orphaned blob in /data/documents is visible
     // to ops instead of silently filling the volume over time. Callers that
