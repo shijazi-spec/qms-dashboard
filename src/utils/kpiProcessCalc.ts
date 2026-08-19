@@ -951,6 +951,81 @@ export async function calcAdhocSalesMeetingConversion(): Promise<ProcessKpiValue
   };
 }
 
+/**
+ * SDR-KPI-12 Booking Conversion Rate — the governed meeting-conversion metric.
+ *
+ * Source: SDR Governance Document (WalaPlus_SDR v2.2, 08.12.2025), Individual
+ * KPIs table: "(# of Booked meetings / Total leads answered) x 100", target
+ * >=40%, benchmark 35-45%. This REPLACED ADHOC-SALES-04, whose 20% target came
+ * from a BI-portal screenshot and appears in no controlled document.
+ *
+ * "Answered" is taken from the SOP's own lead-stage vocabulary (New Lead,
+ * Contacting, No Answer, Qualified Lead, Not Qualified, On Hold, Potential,
+ * Closed Lost): every stage EXCEPT New Lead and No Answer, which are precisely
+ * the two that mean nobody replied. A blank status is not answered either.
+ *
+ * Both sides use ONE window on record creation, so this is a cohort measure:
+ * of the leads received and answered in the period, how many meetings were
+ * booked in that same period. Mixing an all-time denominator with a windowed
+ * numerator is what made the ad-hoc churn and revenue KPIs meaningless.
+ *
+ * A booked meeting includes "Not Attend Meeting" — the meeting WAS booked, the
+ * client did not show. Show-rate is SDR-KPI-05's job, and double-counting it
+ * here would punish the SDR twice for one no-show.
+ */
+const LEAD_UNANSWERED_RE = /^(new lead|new|no answer)$/;
+
+export async function calcSdrBookingConversionRate(): Promise<ProcessKpiValue> {
+  const [leads, deals] = await Promise.all([
+    localRawRecords("Leads"),
+    localRawRecords("Deals"),
+  ]);
+
+  let answered = 0;
+  for (const r of leads) {
+    const d = daysSince(readField(r.Created_Time));
+    if (d === null || d > MEETING_WINDOW_DAYS) continue;
+    const s = (readField(r.Lead_Status) || "").toLowerCase().trim();
+    if (!s || LEAD_UNANSWERED_RE.test(s)) continue;
+    answered++;
+  }
+
+  let booked = 0;
+  for (const r of deals) {
+    const d = daysSince(readField(r.Created_Time));
+    if (d === null || d > MEETING_WINDOW_DAYS) continue;
+    if (classifyMeetingStage(readField(r.Stage))) booked++;
+  }
+
+  if (answered === 0) return EMPTY;
+
+  // Guard. More meetings booked than leads answered in the same window means
+  // the two populations are not the cohort this KPI assumes — most likely
+  // meetings booked against leads received in an EARLIER period. Publishing a
+  // >100% conversion rate would look like a triumph rather than a data problem,
+  // so report nothing and let the detail page say why.
+  if (booked > answered) {
+    logger.warn(
+      `[KPIProcessCalc] SDR-KPI-12 suppressed: ${booked} booked > ${answered} answered in ${MEETING_WINDOW_DAYS}d`,
+    );
+    return EMPTY;
+  }
+
+  return {
+    value: Math.round((booked / answered) * 1000) / 10,
+    dataAvailable: true,
+    details: {
+      source: "SDR SOP v2.2 Individual KPIs table — booked / answered",
+      window_days: MEETING_WINDOW_DAYS,
+      booked_meetings: booked,
+      leads_answered: answered,
+      answered_excludes: "New Lead and No Answer stages, and blank status",
+      booked_includes:
+        "Not Attend Meeting — the meeting was booked; show-rate is SDR-KPI-05",
+    },
+  };
+}
+
 // ─────────── CUSTOMER SUCCESS (B2B) — WP-BU-CS-SOP-003 KPI framework ────────
 /**
  * The CS SOP defines 33 KPIs (§8.1 Individual, §8.2 Process, §8.3 Governance).
@@ -1331,6 +1406,9 @@ export const PROCESS_CALCULATORS: Record<
   "SDR-KPI-09": calcSdrDuplicateRate,
   "SDR-KPI-10": calcSdrPipelineAging,
   "SDR-KPI-11": calcSdrFollowUpCompliance,
+  // The governed meeting-conversion metric (SDR SOP v2.2). Replaced
+  // ADHOC-SALES-04, which was built from a BI-portal screenshot.
+  "SDR-KPI-12": calcSdrBookingConversionRate,
   // Sales
   "SALES-KPI-01": calcSalesStageAgingCompliance,
   "SALES-KPI-02": calcSalesConversionRate,
