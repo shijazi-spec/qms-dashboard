@@ -6,8 +6,8 @@
  * band, or breaching SOP. Each entry carries the reference clause so an
  * auditor can trace every flag back to the document.
  *
- * Source: Sales Management Process v1.2 (08.12.2025) — the "Stage Duration
- * (Timeframe)" table:
+ * Source: Sales Management Process v1.1 (01.12.2025), Document Code
+ * WalaPlus_Sales_1.1_01.12.2025 — the "Stage Duration (Timeframe)" table:
  *
  *   Not Attend Meeting   ≤ 5 Business Days   §7.2.8
  *   Meeting              ≤ 10 Business Days  §7.3
@@ -15,11 +15,14 @@
  *   Proposal             3 Months            §7.4.2
  *   Agreement Sent       3 Months            §7.5.1
  *
- * Verified against v1.1 (01.12.2025) on 2026-08-19: the stage table is
- * byte-identical between the two — same five stages, same durations, same
- * clause numbers. v1.2's only change was the Sales Commission Scheme (pages
- * 31-35), which this spec does not model. So the VALUES below did not move;
- * only the citation was stale, and nothing here needed recalculating.
+ * v1.1 is the last RELEASED version. A v1.2 (08.12.2025) exists as an EN .docx
+ * only — no PDF was ever produced and its Arabic counterpart is named "(lesa)",
+ * "not yet" — so it is an unreleased revision, not the controlled document.
+ * Cite the released version, not merely the newest file on the drive.
+ *
+ * Either way the values below are unaffected: the stage table is identical in
+ * v1.1 and v1.2 (diffed 2026-08-19). v1.2's only change was the Sales
+ * Commission Scheme, pages 31-35, which this spec does not model.
  *
  * Terminal stages (Agreement Signed, Closed Won, Closed Lost) have no
  * SLA — once a deal enters them, aging freezes. "Paid" is treated as
@@ -264,19 +267,18 @@ export function gradeStageAging(
  * process it grades against instead of showing an empty "Data source".
  *
  * Now a controlled document: registered in Document Control on 2026-08-19 under
- * `WalaPlus_Sales`. It predates the WP-BU-<FN>-SOP-<NNN> coding scheme and so
- * carries no formal code — `reference` is the Document Control number, not an
- * invented one. Update it here if a code is later assigned.
+ * the register key `WalaPlus_Sales`. The document's own Document Code is
+ * version-stamped by convention (WalaPlus_Sales_1.1_01.12.2025), so the code
+ * changes with every release while this register key stays stable.
  *
- * `WP-SOP Sales v1.1 / 01.12.2025` was the previous value and was stale: v1.2
- * superseded it on 08.12.2025. The stage durations were unaffected (see the
- * file header), so this was a citation fix, not a threshold change.
+ * The old value `WP-SOP Sales v1.1` was a code the document never carried — its
+ * cover page has a real "Document Code" block. The date and version were right.
  */
 export const SALES_SOP_DOCUMENT = {
   title: "Sales Management Process",
-  reference: "WalaPlus_Sales",
-  version: "1.2",
-  issued: "08.12.2025",
+  reference: "WalaPlus_Sales_1.1_01.12.2025",
+  version: "1.1",
+  issued: "01.12.2025",
 } as const;
 
 // The KPI → clause mapping that used to live here now sits in

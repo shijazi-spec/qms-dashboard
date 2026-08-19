@@ -23,13 +23,14 @@ describe("KPIs that the SOP actually covers", () => {
     expect(r.document).toBe(
       `${SALES_SOP_DOCUMENT.title} (${SALES_SOP_DOCUMENT.reference} v${SALES_SOP_DOCUMENT.version}, ${SALES_SOP_DOCUMENT.issued})`,
     );
-    // The citation used to read "WP-SOP Sales v1.1, 01.12.2025" — a version
-    // superseded on 08.12.2025 and a document code that does not exist. The
-    // stage durations were identical across both versions, so this was a
-    // citation fix; if the version ever moves again, the table must be
-    // re-diffed before this constant is bumped.
-    expect(r.document).toContain("v1.2");
-    expect(r.document).not.toContain("v1.1");
+    // Cite the RELEASED version, not the newest file on the drive. v1.2 exists
+    // as an EN .docx with no PDF and its Arabic marked "(lesa)" — not yet — so
+    // it is an unreleased revision. The old citation also used "WP-SOP Sales",
+    // a code the document never carried; its cover page has a real Document
+    // Code block, which is version-stamped.
+    expect(r.document).toContain("v1.1");
+    expect(r.document).toContain("WalaPlus_Sales_1.1_01.12.2025");
+    expect(r.document).not.toContain("WP-SOP");
     // It grades EVERY stage, so it must cite every clause — a partial list
     // would understate what the KPI enforces.
     expect(r.clauses).toHaveLength(SALES_STAGE_SLA_SPEC.length);
