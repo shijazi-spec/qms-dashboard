@@ -84,11 +84,16 @@ describe("KPIs the SOP does NOT cover", () => {
   });
 });
 
-describe("SDR — WalaPlus_SDR v2.2", () => {
+describe("SDR — WalaPlus_SDR v2.1 (the released version)", () => {
   it("cites the document and the table, with the SOP's own calculation", () => {
     const r = getKpiProcessReference("SDR-KPI-12")!;
-    expect(r.document).toContain("WalaPlus_SDR v2.2");
-    expect(r.document).toContain("08.12.2025");
+    // v2.1 is the released PDF; the v2.2 .docx on the drive was never
+    // published (no PDF, Arabic marked "(lesa)"). Both metrics were verified
+    // identical in v2.1, so this is a citation correction only.
+    expect(r.document).toContain("WalaPlus_SDR_2.1_03.12.2025");
+    expect(r.document).toContain("03.12.2025");
+    // "v2.2", not bare "2.2" — the issue date 03.12.2025 contains "2.2".
+    expect(r.document).not.toContain("v2.2");
     expect(r.section).toBe("Individual KPIs table");
     expect(r.clauses[0].stage).toBe("Booking Conversion Rate");
     // The formula and target are quoted from the document, not invented — the

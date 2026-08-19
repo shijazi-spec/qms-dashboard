@@ -47,12 +47,18 @@ export const CS_SOP_DOCUMENT = {
  * SDR Governance Document — the controlled source for the SDR KPI framework,
  * including the two meeting-conversion metrics. Its KPI table is not numbered
  * as a clause, so entries cite the TABLE, never an invented clause number.
+ *
+ * v2.1 is the RELEASED version (published PDF, cover-page Document Code). A
+ * v2.2 .docx exists on the drive but was never released — no PDF, Arabic marked
+ * "(lesa)". Both metrics below were re-verified against the v2.1 PDF on
+ * 2026-08-19 and are identical in it: same formulas, same >=40% target, same
+ * 35-45% benchmark. Cite the released document, not the newest file.
  */
 export const SDR_SOP_DOCUMENT = {
-  title: "WalaPlus SDR Governance Document",
-  reference: "WalaPlus_SDR",
-  version: "2.2",
-  issued: "08.12.2025",
+  title: "Sales Development Representative Process",
+  reference: "WalaPlus_SDR_2.1_03.12.2025",
+  version: "2.1",
+  issued: "03.12.2025",
 } as const;
 
 /**
@@ -63,6 +69,9 @@ export const SDR_SOP_DOCUMENT = {
  * Conversion" (2026-08-19), which came from a BI-portal screenshot rather than
  * governance: its 20% target appears in no controlled document, and the SOP
  * files meeting conversion under SDR, not Sales.
+ *
+ * The formulas below are quoted from the released v2.1 PDF. Re-verify against
+ * the PDF, not a .docx on the drive, before changing either of them.
  */
 const SDR_KPI_TABLE: Record<string, { metric: string; calc: string }> = {
   "SDR-KPI-12": {
