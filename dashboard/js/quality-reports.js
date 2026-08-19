@@ -465,7 +465,11 @@
             out.push('<div class="space-y-2">');
             policies.slice(0, 6).forEach(function (p) {
                 var num = p.document_number || p.policy_number || '';
-                var hasFile = !!(p.file_name || p.file_path);
+                // has_file means the BYTES are retrievable. file_name is only
+                // metadata and outlives the file: the CS SOP kept its name and
+                // size after a deploy wiped the disk, so the old check offered
+                // an Open button that served "File not found on disk".
+                var hasFile = p.has_file === true;
                 var meta = [];
                 if (p.version) meta.push('v' + escapeHtml(String(p.version)));
                 if (p.status) meta.push(escapeHtml(p.status));

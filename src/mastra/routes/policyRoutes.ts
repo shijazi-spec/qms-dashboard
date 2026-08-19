@@ -1376,24 +1376,38 @@ export const policyRoutes = [
           const oldFilePath = policy.file_path || null;
 
           const buffer = Buffer.from(await file.arrayBuffer());
-          const fileInfo = await saveUploadedFile(buffer, file.name, file.type, 'policies');
+
+          // Bytes go to the DATABASE, not the deployment's disk. Replit rebuilds
+          // that directory from the repo on every publish, so a disk-stored
+          // controlled document is deleted at the next deploy while its row
+          // keeps claiming a file — which is exactly how the CS SOP ended up
+          // with an Open button serving "File not found on disk".
+          const { savePolicyFile } = await import("../../utils/policyDatabase");
+          await savePolicyFile(id, {
+            data: buffer,
+            fileName: file.name,
+            fileSize: buffer.length,
+            mimeType: file.type || null,
+            uploadedBy: sessionUser.email,
+          });
 
           await updatePolicy(
             id,
             {
-              file_path: fileInfo.filePath,
-              file_name: fileInfo.fileName,
-              file_size: fileInfo.fileSize,
-              file_mime_type: fileInfo.mimeType,
+              // file_path is cleared for DB-backed attachments; it survives
+              // only on legacy rows, where /view still falls back to disk.
+              // `as any` because Partial<Policy> types these as string|undefined
+              // while the column is nullable and NULL is the intended value.
+              file_path: null as any,
+              file_name: file.name,
+              file_size: buffer.length,
+              file_mime_type: (file.type || null) as any,
             },
             sessionUser.email,
           );
 
-          // Remove the previous blob so the shared document volume is not
-          // slowly exhausted by repeated attachment replacements.
-          if (oldFilePath && oldFilePath !== fileInfo.filePath) {
-            deleteUploadedFile(oldFilePath);
-          }
+          // Drop any legacy on-disk blob this row used to point at.
+          if (oldFilePath) deleteUploadedFile(oldFilePath);
 
           // Re-sync the Document-Mapping projection now that a file is
           // attached — the bridge extracts the file's text and re-runs the
@@ -1411,7 +1425,15 @@ export const policyRoutes = [
             );
           }
 
-          return c.json({ success: true, file: fileInfo });
+          return c.json({
+            success: true,
+            file: {
+              fileName: file.name,
+              fileSize: buffer.length,
+              mimeType: file.type || null,
+              storage: "database",
+            },
+          });
         } catch (error) {
           safeLogger.error("❌ [PolicyAPI] Error uploading file:", error);
           return c.json({ error: "Failed to upload file" }, 500);
@@ -1435,7 +1457,11 @@ export const policyRoutes = [
 
           const id = parseInt(c.req.param("id"));
           const policy = await getPolicyById(id);
-          if (!policy || !policy.file_path)
+          // DB-backed first, legacy disk row second. Metadata alone (file_name)
+          // proves nothing — the bytes are what has to exist.
+          const { getPolicyFile } = await import("../../utils/policyDatabase");
+          const dbFile = policy ? await getPolicyFile(id) : null;
+          if (!policy || (!dbFile && !policy.file_path))
             return c.json({ error: "No file attached" }, 404);
 
           if (!canAccessConfidentialPolicy(admin.role, policy.confidentiality)) {
@@ -1448,7 +1474,9 @@ export const policyRoutes = [
           // Scoped read: refuse to return a blob outside /data/documents/policies/.
           // The legacy un-prefixed layout has been migrated out, so allowLegacy
           // is no longer needed.
-          const file = getUploadedFileForModule(policy.file_path, 'policies');
+          const file = dbFile
+            ? { buffer: dbFile.data, fileName: dbFile.file_name, mimeType: dbFile.file_mime_type || "application/octet-stream" }
+            : getUploadedFileForModule(policy.file_path!, 'policies');
           if (!file) return c.json({ error: "File not found on disk" }, 404);
 
           // Range-aware response so the streaming-download helper can resume
@@ -1496,7 +1524,11 @@ export const policyRoutes = [
 
           const id = parseInt(c.req.param("id"));
           const policy = await getPolicyById(id);
-          if (!policy || !policy.file_path)
+          // DB-backed first, legacy disk row second. Metadata alone (file_name)
+          // proves nothing — the bytes are what has to exist.
+          const { getPolicyFile } = await import("../../utils/policyDatabase");
+          const dbFile = policy ? await getPolicyFile(id) : null;
+          if (!policy || (!dbFile && !policy.file_path))
             return c.json({ error: "No file attached" }, 404);
 
           if (!canAccessConfidentialPolicy(admin.role, policy.confidentiality)) {
@@ -1506,7 +1538,9 @@ export const policyRoutes = [
             );
           }
 
-          const file = getUploadedFileForModule(policy.file_path, "policies");
+          const file = dbFile
+            ? { buffer: dbFile.data, fileName: dbFile.file_name, mimeType: dbFile.file_mime_type || "application/octet-stream" }
+            : getUploadedFileForModule(policy.file_path!, "policies");
           if (!file) return c.json({ error: "File not found on disk" }, 404);
 
           const mime = (policy.file_mime_type || "application/octet-stream").toLowerCase();

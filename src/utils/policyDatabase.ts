@@ -159,6 +159,30 @@ export async function initPolicyTables(): Promise<void> {
     )
   `);
 
+  // Controlled-document BYTES, in the database.
+  //
+  // They used to be written to <cwd>/data/documents. Replit rebuilds the
+  // deployment directory from the repo on every publish and `data/` is not
+  // tracked, so every uploaded document was destroyed at the next deploy while
+  // its policies row kept claiming a file — the CS SOP's Open button 404'd on
+  // "File not found on disk" (2026-08-19). For a QMS whose job is producing
+  // evidence on demand, storage that does not survive a deploy is not storage.
+  //
+  // Deliberately its OWN TABLE, not a column on policies: every existing query
+  // there is `SELECT *`, and a BYTEA column would have shipped megabytes per
+  // row into the document list and the Quality Reports SOPs box.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS policy_files (
+      policy_id INTEGER PRIMARY KEY REFERENCES policies(id) ON DELETE CASCADE,
+      file_name VARCHAR(500) NOT NULL,
+      file_size INTEGER NOT NULL,
+      file_mime_type VARCHAR(100),
+      data BYTEA NOT NULL,
+      uploaded_by VARCHAR(255),
+      uploaded_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS policy_acknowledgments (
       id SERIAL PRIMARY KEY,
@@ -410,6 +434,58 @@ export async function getPolicyById(id: number): Promise<Policy | null> {
   return result.rows[0] || null;
 }
 
+/**
+ * Store a controlled document's bytes against its policy row.
+ *
+ * One file per policy (policy_id is the PK), so re-uploading replaces rather
+ * than accumulating orphans — the previous behaviour left the old blob on disk.
+ */
+export async function savePolicyFile(
+  policyId: number,
+  file: { data: Buffer; fileName: string; fileSize: number; mimeType?: string | null; uploadedBy?: string | null },
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO policy_files (policy_id, file_name, file_size, file_mime_type, data, uploaded_by, uploaded_at)
+     VALUES ($1,$2,$3,$4,$5,$6,NOW())
+     ON CONFLICT (policy_id) DO UPDATE SET
+       file_name=EXCLUDED.file_name, file_size=EXCLUDED.file_size,
+       file_mime_type=EXCLUDED.file_mime_type, data=EXCLUDED.data,
+       uploaded_by=EXCLUDED.uploaded_by, uploaded_at=NOW()`,
+    [policyId, file.fileName, file.fileSize, file.mimeType ?? null, file.data, file.uploadedBy ?? null],
+  );
+}
+
+export async function getPolicyFile(
+  policyId: number,
+): Promise<{ data: Buffer; file_name: string; file_size: number; file_mime_type: string | null } | null> {
+  const r = await pool.query(
+    `SELECT data, file_name, file_size, file_mime_type FROM policy_files WHERE policy_id = $1`,
+    [policyId],
+  );
+  return r.rows[0] || null;
+}
+
+export async function deletePolicyFile(policyId: number): Promise<void> {
+  await pool.query(`DELETE FROM policy_files WHERE policy_id = $1`, [policyId]);
+}
+
+/**
+ * Which of these policies actually HAVE a retrievable file.
+ *
+ * The policies row's own file_name / file_path are metadata and can outlive the
+ * bytes — that is exactly how the CS SOP came to show an Open button pointing
+ * at a file the deploy had deleted. Callers should decide "is there a document
+ * here" from THIS, never from the metadata columns.
+ */
+export async function policiesWithFiles(ids: number[]): Promise<Set<number>> {
+  if (!ids.length) return new Set();
+  const r = await pool.query(
+    `SELECT policy_id FROM policy_files WHERE policy_id = ANY($1::int[])`,
+    [ids],
+  );
+  return new Set(r.rows.map((x: any) => Number(x.policy_id)));
+}
+
 export async function getAllPolicies(filters?: {
   status?: string;
   category?: string;
@@ -495,8 +571,17 @@ export async function getAllPolicies(filters?: {
     values,
   );
 
-  logger.info("✅ [PolicyDB] Found", result.rows.length, "policies");
-  return { policies: result.rows, total };
+  // has_file = the bytes are actually retrievable, which is NOT the same as
+  // file_name being set. A row whose file was destroyed by a deploy keeps its
+  // metadata, and the SOPs box would otherwise offer an Open button for a
+  // document that no longer exists.
+  const withFiles = await policiesWithFiles(
+    result.rows.map((r: any) => Number(r.id)).filter((n: number) => Number.isFinite(n)),
+  );
+  const policies = result.rows.map((r: any) => ({ ...r, has_file: withFiles.has(Number(r.id)) }));
+
+  logger.info("✅ [PolicyDB] Found", policies.length, "policies");
+  return { policies, total };
 }
 
 export async function getPolicySummaryStats(
