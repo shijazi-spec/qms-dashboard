@@ -435,18 +435,55 @@
         host.innerHTML = parts.join('');
     }
 
+    /** Human file size — "4.7 MB" reads; "4681375" does not. */
+    function qrFileSize(bytes) {
+        var n = Number(bytes);
+        if (!isFinite(n) || n <= 0) return '';
+        if (n >= 1048576) return (n / 1048576).toFixed(1).replace(/\.0$/, '') + ' MB';
+        if (n >= 1024) return Math.round(n / 1024) + ' KB';
+        return n + ' B';
+    }
+
+    /**
+     * The SOPs box lists the CONTROLLED DOCUMENT ITSELF, openable.
+     *
+     * It used to render a plain text line per policy, so a reader could see
+     * that a process existed but not read it — the point of the box is that
+     * the process is in there. Each row is now a link to
+     * /api/policies/:id/view, which streams the file inline for PDFs and as a
+     * download for Office formats.
+     *
+     * A document with NO file attached says so explicitly rather than looking
+     * identical to one you can open. That distinction is the whole difference
+     * between "the process is governed" and "we have a row in a register".
+     */
     function qrSopsHtml(sops) {
         var policies = sops.policies || sops.records || [];
         var total = sops.total != null ? sops.total : policies.length;
         var out = ['<div class="text-sm mb-2">' + total + ' controlled document' + (total === 1 ? '' : 's') + '</div>'];
         if (policies.length) {
-            out.push('<ul class="text-xs text-gray-600 space-y-1">');
+            out.push('<div class="space-y-2">');
             policies.slice(0, 6).forEach(function (p) {
                 var num = p.document_number || p.policy_number || '';
-                out.push('<li>' + (num ? '<span class="rr-kpi-sub">' + escapeHtml(num) + '</span> ' : '') + escapeHtml(p.title || '(untitled)') +
-                    (p.status ? ' <span class="text-gray-400">· ' + escapeHtml(p.status) + '</span>' : '') + '</li>');
+                var hasFile = !!(p.file_name || p.file_path);
+                var meta = [];
+                if (p.version) meta.push('v' + escapeHtml(String(p.version)));
+                if (p.status) meta.push(escapeHtml(p.status));
+                if (hasFile && p.file_size) meta.push(qrFileSize(p.file_size));
+
+                var head = '<div class="text-sm text-gray-900">' + escapeHtml(p.title || '(untitled)') + '</div>' +
+                    (num ? '<div class="rr-kpi-sub font-mono">' + escapeHtml(num) + '</div>' : '') +
+                    (meta.length ? '<div class="rr-kpi-sub">' + meta.join(' · ') + '</div>' : '');
+
+                var action = hasFile
+                    ? '<a href="/api/policies/' + encodeURIComponent(p.id) + '/view" target="_blank" rel="noopener" ' +
+                      'class="rr-btn rr-btn-ghost shrink-0" title="' + escapeHtml(p.file_name || 'Open the document') + '">Open</a>'
+                    : '<span class="rr-kpi-sub shrink-0">No file attached</span>';
+
+                out.push('<div class="flex items-start justify-between gap-3 border-b border-gray-100 last:border-0 pb-2 last:pb-0">' +
+                    '<div class="min-w-0">' + head + '</div>' + action + '</div>');
             });
-            out.push('</ul>');
+            out.push('</div>');
             if (policies.length > 6) out.push('<div class="rr-kpi-sub mt-1">+ ' + (policies.length - 6) + ' more</div>');
         }
         return out.join('');
