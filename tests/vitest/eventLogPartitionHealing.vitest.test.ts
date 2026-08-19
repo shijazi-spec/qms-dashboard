@@ -189,9 +189,12 @@ describe("createMonthlyPartition adopts an orphaned table", () => {
     // The orphan is why August 2026 could never accept a row: the old check saw
     // the name in pg_tables and skipped creation, silently, forever. CREATE
     // would fail on the name, so adoption is the only route that keeps its rows.
-    // Two, because the self-heal repairs this month AND next, and this stub
-    // reports both as orphaned. The point is that neither took the CREATE path.
-    expect(sqlMatching(/ALTER TABLE event_logs ATTACH PARTITION/i)).toHaveLength(2);
+    // Two MONTHLY attaches — this month and next, both reported orphaned by
+    // this stub — and neither took the CREATE path, which would fail on the
+    // existing name. The default partition is repaired by the same self-heal
+    // and is asserted separately below; scoping the regex to the y<year>m<month>
+    // names keeps this test about months only.
+    expect(sqlMatching(/ATTACH PARTITION event_logs_y\d+m\d+/i)).toHaveLength(2);
     expect(sqlMatching(/CREATE TABLE IF NOT EXISTS event_logs_y\d+m\d+ PARTITION OF/i)).toHaveLength(0);
   });
 
