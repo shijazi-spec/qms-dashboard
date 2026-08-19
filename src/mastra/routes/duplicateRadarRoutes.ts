@@ -5655,14 +5655,36 @@ export const duplicateRadarRoutes = [
           // forceFull=true: we just wiped everything, so a full re-pull is
           // mandatory — an incremental (changed-only) fetch here would leave
           // the radar nearly empty.
-          scanZohoCRMForDuplicates("manual", true).catch((err) => {
-            logger.error(
-              "[DuplicateRadar] Background rebuild scan error:",
-              err,
-            );
-            scanState.status = "failed";
-            scanState.error = err?.message || "Background scan failed";
-          });
+          scanZohoCRMForDuplicates("manual", true)
+            .then(async () => {
+              // Re-attach the AI-Applied markers archived before the truncate.
+              // Runs only after a SUCCESSFUL rescan — restoring onto a
+              // half-built mirror would bind them to the wrong clusters.
+              try {
+                const { restoreMergeActions } = await import(
+                  "../../utils/duplicateRadarDatabase"
+                );
+                const restored = await restoreMergeActions();
+                logger.info(
+                  `[DuplicateRadar] Rebuild restored ${restored} merge action(s)`,
+                );
+              } catch (restoreErr) {
+                // Loud: the archive still holds them, but the UI will show the
+                // backlog as untouched until someone re-runs the restore.
+                logger.error(
+                  "[DuplicateRadar] MERGE-ACTION RESTORE FAILED — AI-Applied markers are archived but not re-attached",
+                  restoreErr,
+                );
+              }
+            })
+            .catch((err) => {
+              logger.error(
+                "[DuplicateRadar] Background rebuild scan error:",
+                err,
+              );
+              scanState.status = "failed";
+              scanState.error = err?.message || "Background scan failed";
+            });
 
           return c.json({
             success: true,

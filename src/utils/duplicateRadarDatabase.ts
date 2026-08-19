@@ -1366,6 +1366,33 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     )
   `);
 
+  // Durable archive of duplicate_merge_actions.
+  //
+  // duplicate_merge_actions.cluster_id is ON DELETE CASCADE, so the rebuild's
+  // TRUNCATE ... CASCADE destroys every AI-Applied marker. backfillResolutionLedger
+  // does NOT cover this: it records only the cluster's MASTER id as "resolved",
+  // losing both the pending-vs-verified distinction and which duplicates were
+  // actually tagged. Rebuilding without this archive silently converts ~44
+  // clusters that are still awaiting a Zoho admin deletion into untouched ones,
+  // while the ledger simultaneously credits them as resolved.
+  //
+  // Keyed by Zoho ids, never cluster ids, because the rebuild renumbers clusters.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS duplicate_merge_actions_archive (
+      id SERIAL PRIMARY KEY,
+      module VARCHAR(16) NOT NULL,
+      master_zoho_id VARCHAR(255) NOT NULL,
+      merged_zoho_ids JSONB DEFAULT '[]',
+      action_type VARCHAR(20) NOT NULL,
+      performed_by VARCHAR(255),
+      notes TEXT,
+      original_created_at TIMESTAMP,
+      archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      restored_at TIMESTAMP NULL,
+      UNIQUE (module, master_zoho_id, action_type)
+    )
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS merge_jobs (
       id SERIAL PRIMARY KEY,
@@ -4339,6 +4366,87 @@ export async function restoreLedgerResolvedClusterStatus(): Promise<{
 
 // Hard reset for the "Rebuild Clusters" admin action.
 // Wipes all clusters + records so the next scan starts from a clean slate.
+/**
+ * Snapshot every merge action to Zoho-id keys before a rebuild wipes them.
+ *
+ * Returns how many rows were archived so the caller can refuse to truncate if
+ * the snapshot did not happen — losing the AI-Applied backlog is not something
+ * to discover afterwards.
+ */
+export async function archiveMergeActions(): Promise<number> {
+  const r = await pool.query(
+    `INSERT INTO duplicate_merge_actions_archive
+       (module, master_zoho_id, merged_zoho_ids, action_type, performed_by, notes, original_created_at)
+     SELECT DISTINCT ON (ma.cluster_id, mod.module, ma.action_type)
+       mod.module,
+       pr.zoho_record_id,
+       COALESCE(
+         (SELECT jsonb_agg(dr2.zoho_record_id)
+            FROM duplicate_records dr2
+           WHERE dr2.cluster_id = ma.cluster_id
+             AND dr2.zoho_record_id IS NOT NULL
+             AND dr2.id <> pr.id),
+         '[]'::jsonb),
+       ma.action_type, ma.performed_by, ma.notes, ma.created_at
+     FROM duplicate_merge_actions ma
+     JOIN duplicate_records pr
+       ON pr.id = COALESCE(ma.primary_record_id,
+            (SELECT dr3.id FROM duplicate_records dr3
+              WHERE dr3.cluster_id = ma.cluster_id
+              ORDER BY dr3.is_primary DESC, dr3.id ASC LIMIT 1))
+     JOIN LATERAL (
+       SELECT CASE pr.record_type
+                WHEN 'lead' THEN 'Leads' WHEN 'deal' THEN 'Deals'
+                WHEN 'contact' THEN 'Contacts' WHEN 'account' THEN 'Accounts'
+              END AS module
+     ) mod ON true
+     WHERE pr.zoho_record_id IS NOT NULL AND mod.module IS NOT NULL
+     ORDER BY ma.cluster_id, mod.module, ma.action_type, ma.created_at DESC
+     ON CONFLICT (module, master_zoho_id, action_type) DO UPDATE SET
+       merged_zoho_ids = EXCLUDED.merged_zoho_ids,
+       archived_at = NOW(),
+       restored_at = NULL`,
+  );
+  const n = r.rowCount || 0;
+  logger.info(`🗄️ [DuplicateRadar] Archived ${n} merge action(s) before rebuild`);
+  return n;
+}
+
+/**
+ * Re-attach archived merge actions to the clusters a rescan rebuilt.
+ *
+ * Matches on the master's Zoho id, so a cluster that reformed around the same
+ * surviving record gets its AI-Applied marker back. Records that no longer
+ * exist in Zoho simply do not match — which is correct: if the admin really did
+ * delete them, the cluster should not come back as pending.
+ */
+export async function restoreMergeActions(): Promise<number> {
+  const r = await pool.query(
+    `INSERT INTO duplicate_merge_actions
+       (cluster_id, primary_record_id, merged_record_ids, action_type, performed_by, notes, created_at)
+     SELECT dr.cluster_id, dr.id, a.merged_zoho_ids, a.action_type, a.performed_by,
+            COALESCE(a.notes, '') || ' [restored after rebuild]', a.original_created_at
+       FROM duplicate_merge_actions_archive a
+       JOIN duplicate_records dr
+         ON dr.zoho_record_id = a.master_zoho_id
+        AND dr.cluster_id IS NOT NULL
+        AND CASE dr.record_type
+              WHEN 'lead' THEN 'Leads' WHEN 'deal' THEN 'Deals'
+              WHEN 'contact' THEN 'Contacts' WHEN 'account' THEN 'Accounts'
+            END = a.module
+      WHERE NOT EXISTS (
+        SELECT 1 FROM duplicate_merge_actions ma
+         WHERE ma.cluster_id = dr.cluster_id AND ma.action_type = a.action_type
+      )`,
+  );
+  const n = r.rowCount || 0;
+  await pool.query(
+    `UPDATE duplicate_merge_actions_archive SET restored_at = NOW() WHERE restored_at IS NULL`,
+  );
+  logger.info(`♻️ [DuplicateRadar] Restored ${n} merge action(s) after rebuild`);
+  return n;
+}
+
 export async function truncateAllDuplicateData(): Promise<void> {
   logger.info(
     "🧨 [DuplicateRadar] Truncating all duplicate data for rebuild...",
@@ -4350,6 +4458,10 @@ export async function truncateAllDuplicateData(): Promise<void> {
   // truncate and re-credits "solved" to whatever cluster each survivor lands in
   // after the rescan.
   await backfillResolutionLedger();
+  // Snapshot the AI-Applied backlog to Zoho-id keys. NOT wrapped in a
+  // try/catch: if this fails the truncate must not proceed, because the
+  // markers it protects cannot be reconstructed afterwards.
+  await archiveMergeActions();
   await pool.query(
     "TRUNCATE duplicate_records, duplicate_clusters RESTART IDENTITY CASCADE",
   );
