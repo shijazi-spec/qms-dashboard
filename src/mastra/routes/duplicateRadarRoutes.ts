@@ -3146,18 +3146,35 @@ export const duplicateRadarRoutes = [
 
           const { pool } = await import("../../utils/duplicateRadarDatabase");
           const moduleFilter = moduleCol ? ` AND dc.${moduleCol} > 0` : "";
-          // AI-Applied = active cluster carrying a resolve/module_resolved action.
+
+          // scope=dismissed answers "the admin said they deleted these — did
+          // they?" for the Dismissed tab, which had no CRM verification at all;
+          // only AI-Applied did. It REPORTS and never mutates: a dismissal is a
+          // deliberate human judgement, and auto-resolving one would also
+          // inflate the resolved counters that Data Cleaning Progress reads.
+          const scope =
+            String(body?.scope || "ai_applied").trim() === "dismissed"
+              ? "dismissed"
+              : "ai_applied";
+
           const clustersQ = await pool.query(
-            `SELECT dc.id
-               FROM duplicate_clusters dc
-              WHERE dc.status = 'active'
-                AND EXISTS (
-                  SELECT 1 FROM duplicate_merge_actions ma
-                   WHERE ma.cluster_id = dc.id
-                     AND ma.action_type IN ('resolve','module_resolved')
-                )${moduleFilter}
-              ORDER BY dc.updated_at DESC NULLS LAST
-              LIMIT $1`,
+            scope === "dismissed"
+              ? `SELECT dc.id
+                   FROM duplicate_clusters dc
+                  WHERE dc.status = 'dismissed'${moduleFilter}
+                  ORDER BY dc.updated_at DESC NULLS LAST
+                  LIMIT $1`
+              : // AI-Applied = active cluster carrying a resolve/module_resolved action.
+                `SELECT dc.id
+                   FROM duplicate_clusters dc
+                  WHERE dc.status = 'active'
+                    AND EXISTS (
+                      SELECT 1 FROM duplicate_merge_actions ma
+                       WHERE ma.cluster_id = dc.id
+                         AND ma.action_type IN ('resolve','module_resolved')
+                    )${moduleFilter}
+                  ORDER BY dc.updated_at DESC NULLS LAST
+                  LIMIT $1`,
             [maxClusters + 1],
           );
           const allIds = clustersQ.rows.map((r: any) => Number(r.id));
@@ -3180,12 +3197,23 @@ export const duplicateRadarRoutes = [
           // thousand concurrent Zoho calls); records WITHIN a cluster checked in
           // parallel, bounded to ≤50.
           for (const cid of ids) {
-            const acts = await pool.query(
+            const dbIdSet = new Set<number>();
+            if (scope === "dismissed") {
+              // A dismissed cluster has no tagged subset — the question is
+              // whether the WHOLE group is still in Zoho, so check every member.
+              const all = await pool.query(
+                `SELECT id FROM duplicate_records WHERE cluster_id = $1`,
+                [cid],
+              );
+              for (const r of all.rows) dbIdSet.add(Number(r.id));
+            }
+            const acts = scope === "dismissed"
+              ? { rows: [] as any[] }
+              : await pool.query(
               `SELECT merged_record_ids FROM duplicate_merge_actions
                 WHERE cluster_id = $1 AND action_type IN ('resolve','module_resolved')`,
               [cid],
             );
-            const dbIdSet = new Set<number>();
             for (const r of acts.rows) {
               const raw = r.merged_record_ids;
               const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -3230,7 +3258,23 @@ export const duplicateRadarRoutes = [
                 }
               }),
             );
-            if (total > 0 && alive === 0 && errs === 0 && deleted === total) {
+            if (scope === "dismissed") {
+              // Report only. An all-deleted dismissed cluster is moot and will
+              // disappear once the mirror no longer holds the records — it is
+              // not a resolution anyone performed, so it must not be credited
+              // as one.
+              const gone = total > 0 && alive === 0 && errs === 0 && deleted === total;
+              if (gone) resolved++;
+              else if (errs > 0) errored++;
+              else pending++;
+              perCluster.push({
+                id: cid,
+                outcome: gone ? "all_deleted_in_zoho" : errs > 0 ? "error" : "still_present",
+                deleted,
+                alive,
+                total,
+              });
+            } else if (total > 0 && alive === 0 && errs === 0 && deleted === total) {
               await resolveCluster(
                 cid,
                 "resolve",
@@ -3250,7 +3294,11 @@ export const duplicateRadarRoutes = [
           }
           return c.json({
             success: true,
+            scope,
             checked: ids.length,
+            // In `dismissed` scope nothing is mutated: `resolved` counts
+            // clusters whose records are ALL gone from Zoho, not clusters this
+            // call resolved.
             resolved,
             pending,
             errored,
