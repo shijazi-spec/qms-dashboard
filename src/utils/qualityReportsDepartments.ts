@@ -113,6 +113,16 @@ export async function ensureQualityReportTables(): Promise<void> {
         WHERE bu_key = $1 AND kpi_bu_name IS NULL`,
       [b.bu_key, b.kpi_bu_name],
     );
+    // Re-assert the canonical hub order (SDR → Sales → CS per channel, then
+    // Marketplace). sort_order is NOT editable from the admin panel, so the
+    // seed is its only source of truth and re-asserting it clobbers no one's
+    // choice — it just repairs a row whose order was zeroed by a partial
+    // upsert, which is exactly how CS (B2B) jumped to the front of the hub.
+    await pool.query(
+      `UPDATE quality_report_bus SET sort_order = $2, updated_at = NOW()
+        WHERE bu_key = $1 AND sort_order IS DISTINCT FROM $2`,
+      [b.bu_key, b.sort_order],
+    );
     // Same never-clobber rule for the catalog-KPI owner. Only BUs that carry
     // a seed value are touched (today: sdr_b2b -> "SDR Team"), so an admin
     // who clears or re-points a mapping keeps their choice across restarts.
@@ -249,21 +259,40 @@ export async function upsertBU(input: {
 }): Promise<QualityReportBU> {
   await ensureQualityReportTables();
   const segment = channelToSegment(input.channel); // ALWAYS derived
+
+  // Update ONLY the optional fields the caller actually supplied.
+  //
+  // This used to write `input.x ?? null` for every optional column and then
+  // `SET x = EXCLUDED.x`, so any partial update silently erased everything it
+  // did not mention. Setting policy_department on Customer Success (B2B) that
+  // way wiped its kpi_bu_name and reset sort_order to 0 — which is why the hub
+  // suddenly listed CS before SDR and Sales instead of in funnel order.
+  // An explicit null still clears a field; only `undefined` is left alone.
+  const OPTIONAL = [
+    "head_email",
+    "policy_department",
+    "kpi_bu_name",
+    "kpi_owner_name",
+    "sort_order",
+    "is_active",
+  ] as const;
+
+  const cols = ["bu_key", "bu_name", "channel", "segment", "fn"];
+  const vals: any[] = [input.bu_key, input.bu_name, input.channel, segment, input.fn];
+  const sets = ["bu_name=EXCLUDED.bu_name", "channel=EXCLUDED.channel", "segment=EXCLUDED.segment", "fn=EXCLUDED.fn"];
+  for (const key of OPTIONAL) {
+    if (input[key] === undefined) continue;
+    cols.push(key);
+    vals.push(input[key]);
+    sets.push(`${key}=EXCLUDED.${key}`);
+  }
+
   const r = await pool.query(
-    `INSERT INTO quality_report_bus
-       (bu_key, bu_name, channel, segment, fn, head_email, policy_department, kpi_bu_name, kpi_owner_name, sort_order, is_active, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11,true),NOW())
-     ON CONFLICT (bu_key) DO UPDATE SET
-       bu_name=EXCLUDED.bu_name, channel=EXCLUDED.channel, segment=EXCLUDED.segment,
-       fn=EXCLUDED.fn, head_email=EXCLUDED.head_email, policy_department=EXCLUDED.policy_department,
-       kpi_bu_name=EXCLUDED.kpi_bu_name, kpi_owner_name=EXCLUDED.kpi_owner_name,
-       sort_order=EXCLUDED.sort_order,
-       is_active=EXCLUDED.is_active, updated_at=NOW()
+    `INSERT INTO quality_report_bus (${cols.join(", ")}, updated_at)
+     VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")}, NOW())
+     ON CONFLICT (bu_key) DO UPDATE SET ${sets.join(", ")}, updated_at=NOW()
      RETURNING *`,
-    [input.bu_key, input.bu_name, input.channel, segment, input.fn,
-     input.head_email ?? null, input.policy_department ?? null, input.kpi_bu_name ?? null,
-     input.kpi_owner_name ?? null,
-     input.sort_order ?? 0, input.is_active ?? true],
+    vals,
   );
   const owners = await ownersFor([r.rows[0].id]);
   invalidateDepartmentKpiOwnerCache();
