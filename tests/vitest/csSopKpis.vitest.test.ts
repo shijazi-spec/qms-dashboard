@@ -33,7 +33,6 @@ import {
   calcCsSlaAdherence,
   calcCsDataAccuracy,
   calcCsChurnClassificationAccuracy,
-  calcCsChurnRate,
   PROCESS_CALCULATORS,
 } from "../../src/utils/kpiProcessCalc";
 
@@ -76,11 +75,10 @@ describe("counting rule", () => {
     expect((await calcCsSlaAdherence()).value).toBe(90);
   });
 
-  it("runs ONE scan for all four KPIs", async () => {
+  it("runs ONE scan for all the KPIs it feeds", async () => {
     await calcCsSlaAdherence();
     await calcCsDataAccuracy();
     await calcCsChurnClassificationAccuracy();
-    await calcCsChurnRate();
     expect(scan).toHaveBeenCalledTimes(1);
   });
 
@@ -150,28 +148,28 @@ describe("CS-KPI-30 Churn Classification Accuracy", () => {
   });
 });
 
-describe("CS-KPI-21 Client Churn Rate", () => {
-  it("is churned deals over the CS book", async () => {
-    mockScan({ csDeals: 200, byPhase: { adoption: 170, termination: 30 } });
-    expect((await calcCsChurnRate()).value).toBe(15);
-  });
-
-  it("flags that it is point-in-time, not the SOP's annual rate", async () => {
-    const r = await calcCsChurnRate();
-    expect(String((r.details as any).caveat)).toMatch(/point-in-time/);
+describe("CS-KPI-21 Client Churn Rate stays unwired", () => {
+  it("is NOT registered, because Zoho cannot source it", () => {
+    // Wiring it produced 61% against a 15% annual ceiling: the denominator was
+    // the whole historical CS book rather than the active population, and there
+    // is no per-deal churn date to window a "per year" rate by. Swapping the
+    // denominator gives 156%, so the measure is unavailable, not mis-scaled.
+    expect(PROCESS_CALCULATORS["CS-KPI-21"]).toBeUndefined();
   });
 });
 
 describe("wiring", () => {
-  it("registers the four measurable codes", () => {
-    for (const code of ["CS-KPI-21", "CS-KPI-23", "CS-KPI-25", "CS-KPI-30"]) {
+  it("registers the three measurable codes", () => {
+    for (const code of ["CS-KPI-23", "CS-KPI-25", "CS-KPI-30"]) {
       expect(PROCESS_CALCULATORS[code], `${code} not registered`).toBeTypeOf("function");
     }
   });
 
-  it("does NOT register the Client-Hub-only codes", () => {
-    // Registering one would make it record a value it cannot actually source.
-    for (const code of ["CS-KPI-01", "CS-KPI-12", "CS-KPI-17", "CS-KPI-33"]) {
+  it("does NOT register the codes Zoho cannot source", () => {
+    // Registering one would make it record a value it cannot actually source —
+    // CS-KPI-21 is in this list because it was tried and produced a confident
+    // 61% against a 15% ceiling.
+    for (const code of ["CS-KPI-01", "CS-KPI-12", "CS-KPI-17", "CS-KPI-21", "CS-KPI-33"]) {
       expect(PROCESS_CALCULATORS[code], `${code} must stay manual`).toBeUndefined();
     }
   });

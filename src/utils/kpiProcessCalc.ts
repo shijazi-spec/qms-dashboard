@@ -1092,23 +1092,29 @@ export async function calcCsChurnClassificationAccuracy(): Promise<ProcessKpiVal
   };
 }
 
-/** CS-KPI-21 Client Churn Rate — churned deals ÷ the CS book. */
-export async function calcCsChurnRate(): Promise<ProcessKpiValue> {
-  const a = await csKpiAggregates();
-  if (a.csDeals === 0) return EMPTY;
-  return {
-    value: Math.round((a.terminationDeals / a.csDeals) * 1000) / 10,
-    dataAvailable: true,
-    details: {
-      source: "Zoho CS lifecycle phases (SOP names Client-Hub)",
-      churned_deals: a.terminationDeals,
-      cs_deals: a.csDeals,
-      // The SOP's target is an ANNUAL ceiling; this is the standing share of
-      // the book currently in a termination phase, which is not the same thing.
-      caveat: "point-in-time share of the book, not an annual rate",
-    },
-  };
-}
+/**
+ * CS-KPI-21 Client Churn Rate — DELIBERATELY NOT COMPUTED. Left manual.
+ *
+ * I wired this and it produced 61% against a 15% ceiling (567 churned / 930 CS
+ * deals, 2026-08-19). That number is not the SOP's KPI and never could be:
+ *
+ * - The SOP formula is "Confirmed Churned Accounts / Applicable Active Client
+ *   Population". My denominator was the ENTIRE historical CS book, active and
+ *   churned together, so the figure only ever climbs — every client that has
+ *   ever churned stays counted forever while the active side turns over.
+ * - The target is "<=15% PER YEAR". Windowing needs a churn DATE per deal, and
+ *   the lifecycle scan only carries churn_date on rows it flags as violations,
+ *   not across the whole book. There is no date to window by.
+ *
+ * Swapping the denominator does not rescue it either: churned / non-churned is
+ * 567/363 = 156%. The measure is unavailable from this data, not merely
+ * mis-scaled, so it stays out of PROCESS_CALCULATORS with the other 29
+ * Client-Hub KPIs rather than publishing a confident wrong red.
+ *
+ * To build it properly: a per-deal churn date across all CS records (Client-Hub,
+ * or a Zoho churn-date field synced onto duplicate_records), then
+ * churned-in-trailing-12-months / active-at-period-start.
+ */
 
 // ───────────────────────── GRC — Certification Milestones ───────────────────
 /**
@@ -1343,7 +1349,8 @@ export const PROCESS_CALCULATORS: Record<
   // Customer Success (B2B) — the four KPIs of WP-BU-CS-SOP-003 that QMS can
   // measure from the Zoho mirror. The other 29 name Client-Hub / Jira / the
   // Admin-BI Portal / QA sampling and stay manual until those feeds exist.
-  "CS-KPI-21": calcCsChurnRate,
+  // CS-KPI-21 Client Churn Rate is intentionally absent — see the note above
+  // calcCsDataAccuracy. It cannot be sourced correctly from Zoho.
   "CS-KPI-23": calcCsDataAccuracy,
   "CS-KPI-25": calcCsSlaAdherence,
   "CS-KPI-30": calcCsChurnClassificationAccuracy,
