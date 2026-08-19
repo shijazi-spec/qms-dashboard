@@ -147,6 +147,7 @@
  */
 
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import { readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -171,6 +172,35 @@ const ROOT_DIR = path.resolve(TESTS_DIR, "..");
 // module init so callers can use a single name across platforms.
 const IS_WINDOWS = process.platform === "win32";
 const NPX_CMD = IS_WINDOWS ? "npx.cmd" : "npx";
+
+/**
+ * Launch the local CLIs through NODE rather than npx.
+ *
+ * Node 20.19+ refuses to spawn a `.cmd` without `shell: true` (the
+ * CVE-2024-27980 mitigation), so `spawn("npx.cmd", ...)` dies with
+ * `spawn EINVAL` and the whole 246-file suite never starts on Windows —
+ * silently, since the crash looks like a harness error rather than a test
+ * result. Setting `shell: true` would "fix" it and introduce a worse problem:
+ * this repo lives under "D:\2_QMS Platform\", and an unquoted path with a space
+ * would be split into two arguments.
+ *
+ * Resolving the CLI entrypoints and running them with process.execPath avoids
+ * the shell entirely, so paths with spaces are passed as single argv entries.
+ * Falls back to npx when a package layout does not match.
+ */
+function resolveCli(pkgRelativePath: string): string | null {
+  const p = path.join(process.cwd(), "node_modules", pkgRelativePath);
+  return fs.existsSync(p) ? p : null;
+}
+const TSX_CLI = resolveCli("tsx/dist/cli.mjs");
+const VITEST_CLI = resolveCli("vitest/vitest.mjs");
+
+/** [command, leadingArgs] for running `tsx <file>` / `vitest <args>`. */
+function cliInvocation(kind: "tsx" | "vitest"): [string, string[]] {
+  const direct = kind === "tsx" ? TSX_CLI : VITEST_CLI;
+  if (direct) return [process.execPath, [direct]];
+  return [NPX_CMD, [kind]];
+}
 
 interface RunResult {
   file: string;
@@ -226,7 +256,8 @@ function runOne(file: string): Promise<RunResult> {
   return new Promise((resolve) => {
     const started = Date.now();
     const rel = path.relative(process.cwd(), file);
-    const child = spawn(NPX_CMD, ["tsx", file], {
+    const [tsxCmd, tsxArgs] = cliInvocation("tsx");
+    const child = spawn(tsxCmd, [...tsxArgs, file], {
       stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
     });
@@ -267,7 +298,8 @@ function runVitest(): Promise<RunResult> {
   return new Promise((resolve) => {
     const started = Date.now();
     const label = "tests/vitest/** (vitest)";
-    const child = spawn(NPX_CMD, ["vitest", "run", "--reporter=default"], {
+    const [vitestCmd, vitestArgs] = cliInvocation("vitest");
+    const child = spawn(vitestCmd, [...vitestArgs, "run", "--reporter=default"], {
       stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
     });
