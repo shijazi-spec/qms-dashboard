@@ -90,9 +90,13 @@ describe("SDR — WalaPlus_SDR v2.1 (the released version)", () => {
     // v2.1 is the released PDF; the v2.2 .docx on the drive was never
     // published (no PDF, Arabic marked "(lesa)"). Both metrics were verified
     // identical in v2.1, so this is a citation correction only.
-    expect(r.document).toContain("WalaPlus_SDR_2.1_03.12.2025");
-    expect(r.document).toContain("03.12.2025");
-    // "v2.2", not bare "2.2" — the issue date 03.12.2025 contains "2.2".
+    // Issued 04.12.2025 — confirmed by Sarah 2026-08-20 against the released
+    // PDF now attached to the controlled document. The 03.12.2025 this used to
+    // assert was a transcription slip carried in both the code and the record.
+    expect(r.document).toContain("WalaPlus_SDR_2.1_04.12.2025");
+    expect(r.document).toContain("04.12.2025");
+    // "v2.2", not bare "2.2" — the issue date 04.12.2025 still contains "2.2"
+    // (in "12.2025"), so a bare match would pass on the date alone.
     expect(r.document).not.toContain("v2.2");
     expect(r.section).toBe("Individual KPIs table");
     expect(r.clauses[0].stage).toBe("Booking Conversion Rate");

@@ -56,9 +56,12 @@ export const CS_SOP_DOCUMENT = {
  */
 export const SDR_SOP_DOCUMENT = {
   title: "Sales Development Representative Process",
-  reference: "WalaPlus_SDR_2.1_03.12.2025",
+  // 04.12.2025, not 03 — confirmed by Sarah 2026-08-20 against the released PDF
+  // (WalaPlus_SDR_2.1_04.12.2025_EN.pdf), which is now the file attached to the
+  // controlled document. The earlier 03.12.2025 here was a transcription slip.
+  reference: "WalaPlus_SDR_2.1_04.12.2025",
   version: "2.1",
-  issued: "03.12.2025",
+  issued: "04.12.2025",
 } as const;
 
 /**
