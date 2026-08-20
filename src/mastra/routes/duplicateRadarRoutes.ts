@@ -3159,9 +3159,15 @@ export const duplicateRadarRoutes = [
 
           const clustersQ = await pool.query(
             scope === "dismissed"
-              ? `SELECT dc.id
+              ? // A dismissed cluster is stored as status 'ignored' — that is
+                // what the UI tests (duplicates-app.js: c.status === 'ignored')
+                // and what summary.ignoredCount counts. 'dismissed' appears in
+                // one COUNT elsewhere in this file but matches no rows; querying
+                // it returned checked:0 against 151 visibly dismissed clusters.
+                // Both are accepted so neither spelling silently finds nothing.
+                `SELECT dc.id
                    FROM duplicate_clusters dc
-                  WHERE dc.status = 'dismissed'${moduleFilter}
+                  WHERE dc.status IN ('ignored','dismissed')${moduleFilter}
                   ORDER BY dc.updated_at DESC NULLS LAST
                   LIMIT $1`
               : // AI-Applied = active cluster carrying a resolve/module_resolved action.
