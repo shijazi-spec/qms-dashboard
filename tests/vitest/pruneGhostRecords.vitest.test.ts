@@ -72,6 +72,89 @@ describe("the audit trail", () => {
   });
 });
 
+describe("the cluster counters", () => {
+  // duplicate_clusters.total_* are denormalised and set during clustering, but
+  // every post-sync sweep prunes AFTER that. Leaving them alone meant the
+  // 2026-08-20 full sync wrote 160,614 records while SUM(total_records) still
+  // read 160,987. total_deals is the one that bites: `c.total_deals > 1` gates
+  // the Amount-at-risk query.
+  const withCluster = () =>
+    query.mockReset().mockImplementation((sql: string) =>
+      /SELECT DISTINCT cluster_id/i.test(String(sql))
+        ? Promise.resolve({ rows: [{ cluster_id: 42 }], rowCount: 1 })
+        : Promise.resolve({ rows: [], rowCount: 0 }),
+    );
+
+  it("collects the affected clusters BEFORE deleting the rows", async () => {
+    withCluster();
+    await pruneGhostRecords(["123"]);
+    const order = sqls()
+      .map((s) =>
+        /SELECT DISTINCT cluster_id/i.test(s) ? "collect"
+          : /DELETE FROM duplicate_records/i.test(s) ? "delete" : "other",
+      )
+      .filter((x) => x !== "other");
+    // After the delete there is no row left to join back to, so a collect that
+    // runs second always returns an empty set and silently fixes nothing.
+    expect(order).toEqual(["collect", "delete"]);
+  });
+
+  it("recomputes every counter, not just total_records", async () => {
+    withCluster();
+    await pruneGhostRecords(["123"]);
+    const sql = find(/UPDATE duplicate_clusters/i)!;
+    for (const col of [
+      "total_records",
+      "total_leads",
+      "total_deals",
+      "total_contacts",
+      "total_accounts",
+    ]) {
+      expect(sql).toMatch(new RegExp(`${col}\\s*=`));
+    }
+  });
+
+  it("recomputes from surviving rows rather than decrementing", async () => {
+    withCluster();
+    await pruneGhostRecords(["123"]);
+    const sql = find(/UPDATE duplicate_clusters/i)!;
+    // A decrement only stops the gap growing; recomputing also heals the drift
+    // that earlier prunes already left behind.
+    expect(sql).toMatch(/COUNT\(\*\)/);
+    expect(sql).not.toMatch(/total_records\s*=\s*total_records\s*-/);
+  });
+
+  it("zeroes a cluster whose every record was pruned", async () => {
+    withCluster();
+    await pruneGhostRecords(["123"]);
+    const sql = find(/UPDATE duplicate_clusters/i)!;
+    // An emptied cluster drops out of the GROUP BY entirely, so an inner join
+    // would leave its counters frozen at the pre-prune value.
+    expect(sql).toMatch(/LEFT JOIN/i);
+    expect(sql).toMatch(/COALESCE\(s\.n, 0\)/);
+  });
+
+  it("runs the recompute AFTER the delete", async () => {
+    withCluster();
+    await pruneGhostRecords(["123"]);
+    const order = sqls()
+      .map((s) =>
+        /DELETE FROM duplicate_records/i.test(s) ? "delete"
+          : /UPDATE duplicate_clusters/i.test(s) ? "recount" : "other",
+      )
+      .filter((x) => x !== "other");
+    expect(order).toEqual(["delete", "recount"]);
+  });
+
+  it("skips the recompute when no cluster is affected", async () => {
+    // Orphan records (cluster_id NULL) must not trigger a pointless UPDATE
+    // against an empty id array.
+    query.mockReset().mockResolvedValue({ rows: [], rowCount: 0 });
+    await pruneGhostRecords(["123"]);
+    expect(sqls().some((s) => /UPDATE duplicate_clusters/i.test(s))).toBe(false);
+  });
+});
+
 describe("input handling", () => {
   it("issues no query for an empty list", async () => {
     await pruneGhostRecords([]);

@@ -157,10 +157,54 @@ export function isZohoGhostError(x: unknown): boolean {
  *    proof it had been cleaned, which is why "Empty/messy records deleted (all
  *    layouts)" reads 0 while the tagged list shows 253 deleted. The row is now
  *    MARKED deleted instead of removed.
+ *
+ * 3. It left duplicate_clusters' denormalised counters untouched (2026-08-20).
+ *    Those columns are set during clustering, but every post-sync sweep prunes
+ *    AFTER that — so each run ended with counters higher than the rows behind
+ *    them. Measured on the 2026-08-20 full sync: the scan wrote 160,614 records
+ *    while SUM(total_records) still read 160,987. total_deals matters more than
+ *    the headline: `c.total_deals > 1` gates the Amount-at-risk query, so a
+ *    stale counter keeps a cluster in the money figure after its duplicate
+ *    deals are gone. The counters are recomputed from the surviving rows below.
  */
 export async function pruneGhostRecords(zohoIds: string[]): Promise<void> {
   const ids = (zohoIds || []).map(String).filter(Boolean);
   if (!ids.length) return;
+
+  await deleteMirrorRecords(ids);
+
+  // Confirm the deletion in the ledger rather than erasing the history of it.
+  await pool.query(
+    `UPDATE empty_delete_ledger
+        SET status = 'deleted',
+            deleted_at = COALESCE(deleted_at, NOW()),
+            last_checked_at = NOW()
+      WHERE zoho_record_id = ANY($1::text[])`,
+    [ids],
+  );
+}
+
+/**
+ * Drop mirror rows for records Zoho no longer has, keeping the cluster counters
+ * honest. Shared by every prune path — pruneGhostRecords and the two
+ * reconcileEmptyDeleteDeletions branches, which previously ran a bare DELETE and
+ * so skipped BOTH the foreign-key detach (the "record reappears forever" bug)
+ * and the counter recompute. Ledger handling is the CALLER's job: these paths
+ * disagree about it, which is why it is not folded in here.
+ */
+async function deleteMirrorRecords(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+
+  // Which clusters are about to lose rows — captured BEFORE the delete, since
+  // afterwards there is nothing left to join back to.
+  const affected = await pool.query<{ cluster_id: number }>(
+    `SELECT DISTINCT cluster_id FROM duplicate_records
+      WHERE zoho_record_id = ANY($1::text[]) AND cluster_id IS NOT NULL`,
+    [ids],
+  );
+  const clusterIds = affected.rows
+    .map((r) => Number(r.cluster_id))
+    .filter((n) => Number.isFinite(n));
 
   // Detach the un-cascaded FK before the delete, or Postgres refuses it.
   await pool.query(
@@ -176,15 +220,34 @@ export async function pruneGhostRecords(zohoIds: string[]): Promise<void> {
     [ids],
   );
 
-  // Confirm the deletion in the ledger rather than erasing the history of it.
-  await pool.query(
-    `UPDATE empty_delete_ledger
-        SET status = 'deleted',
-            deleted_at = COALESCE(deleted_at, NOW()),
-            last_checked_at = NOW()
-      WHERE zoho_record_id = ANY($1::text[])`,
-    [ids],
-  );
+  // Recompute rather than decrement: recomputing is idempotent and also heals
+  // drift left behind by earlier prunes, where a decrement would only stop the
+  // gap growing. A cluster emptied completely is not in the GROUP BY at all,
+  // hence the LEFT JOIN + COALESCE 0 rather than an inner join.
+  if (clusterIds.length) {
+    await pool.query(
+      `UPDATE duplicate_clusters c
+          SET total_records  = COALESCE(s.n, 0),
+              total_leads    = COALESCE(s.l, 0),
+              total_deals    = COALESCE(s.d, 0),
+              total_contacts = COALESCE(s.ct, 0),
+              total_accounts = COALESCE(s.a, 0)
+         FROM unnest($1::int[]) AS t(cluster_id)
+         LEFT JOIN (
+           SELECT cluster_id,
+                  COUNT(*)::int AS n,
+                  COUNT(*) FILTER (WHERE record_type = 'lead')::int    AS l,
+                  COUNT(*) FILTER (WHERE record_type = 'deal')::int    AS d,
+                  COUNT(*) FILTER (WHERE record_type = 'contact')::int AS ct,
+                  COUNT(*) FILTER (WHERE record_type = 'account')::int AS a
+             FROM duplicate_records
+            WHERE cluster_id = ANY($1::int[])
+            GROUP BY cluster_id
+         ) s ON s.cluster_id = t.cluster_id
+        WHERE c.id = t.cluster_id`,
+      [clusterIds],
+    );
+  }
 }
 
 // Deals: orphaned (no Account) OR a coarse test-name match. JS classifier refines.
@@ -863,11 +926,12 @@ export async function reconcileEmptyDeleteDeletions(
               WHERE zoho_record_id = $1`,
             [id],
           );
-          // Mirror-only delete — keep the ledger row (do NOT call pruneGhostRecords)
-          await pool.query(
-            `DELETE FROM duplicate_records WHERE zoho_record_id = ANY(ARRAY[$1::text])`,
-            [id],
-          );
+          // Mirror-only delete — the ledger row is written above and MUST be
+          // kept, so this deliberately does not call pruneGhostRecords. It does
+          // go through the shared helper, which detaches the merge-action FK and
+          // recomputes the cluster counters; the bare DELETE that used to be
+          // here did neither.
+          await deleteMirrorRecords([id]);
           nowDeleted++;
           checked++;
           continue;
@@ -889,11 +953,9 @@ export async function reconcileEmptyDeleteDeletions(
             WHERE zoho_record_id = $1`,
           [id],
         );
-        // Mirror-only delete — keep the ledger row (do NOT call pruneGhostRecords)
-        await pool.query(
-          `DELETE FROM duplicate_records WHERE zoho_record_id = ANY(ARRAY[$1::text])`,
-          [id],
-        );
+        // Mirror-only delete — ledger row written above and kept; see the note
+        // on the ghost-error branch for why this uses the shared helper.
+        await deleteMirrorRecords([id]);
         nowDeleted++;
       } else {
         // Still present in Zoho. Did the operator REMOVE the delete tag there?
