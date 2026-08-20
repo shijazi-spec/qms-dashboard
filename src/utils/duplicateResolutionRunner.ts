@@ -174,9 +174,18 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
         const merged = `(COALESCE(ma.r_all, 0) > 0 OR COALESCE(ma.${maCol[o.col]}, 0) > 0 OR COALESCE(lg.${lgCol[o.col]}, 0) > 0)`;
         // SOLVED = the agent acted at all — also counts a bare resolved status.
         const solved = `(dc.status = 'resolved' OR ${merged})`;
-        return `COUNT(*) FILTER (WHERE dc.${o.col} > 0)::int AS ${o.col}_t,
-           COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND ${solved})::int AS ${o.col}_s,
-           COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND ${merged})::int AS ${o.col}_a`;
+        // `> 1`, not `> 0`. A cross-module cluster holding ONE lead and one
+        // account is not a lead duplicate, but `> 0` counted it as one for
+        // every module present — so the Slack digest reported ~58k clusters
+        // "left" while the radar's own true-duplicate count was 10,327, and
+        // the same message contradicted itself: "Duplicate groups to review
+        // (matches the tab footers): 3,034 total" sat directly above
+        // "Clusters per module: 58,476 left". Every other surface in the
+        // platform (getSummary, trueDuplicateClusters, the per-module tabs,
+        // getSegmentLeadDuplicateCount) uses `> 1`; this was the outlier.
+        return `COUNT(*) FILTER (WHERE dc.${o.col} > 1)::int AS ${o.col}_t,
+           COUNT(*) FILTER (WHERE dc.${o.col} > 1 AND ${solved})::int AS ${o.col}_s,
+           COUNT(*) FILTER (WHERE dc.${o.col} > 1 AND ${merged})::int AS ${o.col}_a`;
       })
       .join(",\n");
     const r = await pool.query(

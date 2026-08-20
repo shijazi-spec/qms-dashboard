@@ -2478,10 +2478,16 @@ export async function captureDuplicateProgressSnapshot(): Promise<DuplicateProgr
         ? `AND EXISTS (SELECT 1 FROM duplicate_records r
                         WHERE r.cluster_id = dc.id AND ${p.condition})`
         : "";
+      // `> 1`, not `> 0` — a cluster holding ONE record of this module is not a
+      // duplicate of it. `> 0` counted every cross-module link as a duplicate
+      // for each module present, which is why the Slack digest reported totals
+      // of 25,259 leads / 54,624 deals / 63,902 contacts against a real
+      // duplicate universe of 10,327 clusters (measured 2026-08-20). Matches
+      // getSummary, trueDuplicateClusters and the per-module tabs.
       const segSelects = PROGRESS_MODULES.map(
         (o) =>
-          `COUNT(*) FILTER (WHERE dc.${o.col} > 0 ${exists})::int AS ${o.col}_t,
-           COUNT(*) FILTER (WHERE dc.${o.col} > 0 ${exists} AND dc.status = 'active'
+          `COUNT(*) FILTER (WHERE dc.${o.col} > 1 ${exists})::int AS ${o.col}_t,
+           COUNT(*) FILTER (WHERE dc.${o.col} > 1 ${exists} AND dc.status = 'active'
                             AND NOT EXISTS (SELECT 1 FROM duplicate_merge_actions ma
                               WHERE ma.cluster_id = dc.id
                                 AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending')))::int AS ${o.col}_o`,
@@ -2654,12 +2660,18 @@ export async function getDataCleaningProgress(
     `SELECT to_char(MAX(last_sync_at), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_sync_at FROM zoho_sync_state`,
   );
   const resolveRows = await fetchResolveRowsWithSurvivorSegment();
+  // No module filter. The tile above this figure says "all layouts", and the
+  // old `module IN ('Deals','Accounts')` silently dropped every other module —
+  // in this tenant ALL 253 confirmed deletions are module='Contacts', so the
+  // tile read 0 next to a tagged list showing 253 deleted (verified
+  // 2026-08-20). Deals/Accounts keep their own keys for the per-module cards;
+  // shapeCleaningProgress sums the whole map for the headline.
   const empty = await pool.query(
     `SELECT module, COUNT(*)::text AS n FROM empty_delete_ledger
-      WHERE status = 'deleted' AND module IN ('Deals','Accounts') GROUP BY module`,
+      WHERE status = 'deleted' GROUP BY module`,
   );
-  const emptyMap: Record<"Deals" | "Accounts", number> = { Deals: 0, Accounts: 0 };
-  for (const row of empty.rows) if (row.module in emptyMap) emptyMap[row.module as "Deals" | "Accounts"] = Number(row.n) || 0;
+  const emptyMap: Record<string, number> = { Deals: 0, Accounts: 0 };
+  for (const row of empty.rows) emptyMap[String(row.module)] = Number(row.n) || 0;
 
   const outstanding = { Deals: 0, Accounts: 0 } as Record<"Deals" | "Accounts", number>;
   for (const [mod, rtype] of [["Deals", "deal"], ["Accounts", "account"]] as const) {
@@ -8918,8 +8930,14 @@ export async function getEnhancedSummary(): Promise<{
   // totalClusters here (which includes ~77k singletons) silently diluted
   // the rate to 0% even after hundreds of clusters were closed — singletons
   // are not duplicates and never were.
-  const resolutionDenominator =
-    trueDuplicateClusters + resolvedCount + ignoredCount;
+  //
+  // true_dup_clusters counts EVERY cluster with GREATEST(total_*) > 1 and
+  // applies no status filter, so it ALREADY contains the resolved and ignored
+  // ones. Adding them again double-counted every closed cluster and understated
+  // the rate. Measured live 2026-08-20: active 7,934 + resolved 1,704 +
+  // ignored 689 = 10,327, exactly true_dup_clusters — so the old denominator
+  // was 12,720 instead of 10,327 and the tile read 19% instead of 23%.
+  const resolutionDenominator = trueDuplicateClusters;
   const resolutionRate =
     resolutionDenominator > 0
       ? Math.round(

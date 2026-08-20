@@ -7,13 +7,25 @@ export interface DataCleaningProgress {
   modules: { Deals: CleaningProgressModule; Accounts: CleaningProgressModule };
   unknown_segment: { verified_merges: number; est_records_removed: number };
   empty_deleted_all_segments: true;
+  /**
+   * Empty/junk deletions across EVERY module, not just Deals and Accounts.
+   *
+   * The tile is labelled "Empty/messy records deleted (all layouts)" but was
+   * rendered from the two per-module figures, and the query behind them
+   * filtered `module IN ('Deals','Accounts')`. Every one of the 253 confirmed
+   * deletions in this tenant is module='Contacts' (verified 2026-08-20), so the
+   * tile read 0 while the tagged list beside it said 253 deleted — the single
+   * most confusing number on the page. The per-module fields stay as they are;
+   * this is what the "all layouts" headline should use.
+   */
+  empty_deleted_total: number;
   trend: { days: number; segment: string; series: any[]; first: any | null; latest: any | null };
 }
 
 export function shapeCleaningProgress(input: {
   segment: string; generatedAt: string; lastSyncAt: string | null;
   resolveRows: ResolveRowRaw[];
-  emptyDeleted: Record<"Deals" | "Accounts", number>;
+  emptyDeleted: Record<string, number>;
   outstanding: Record<"Deals" | "Accounts", number>;
   trend: DataCleaningProgress["trend"];
 }): DataCleaningProgress {
@@ -47,6 +59,12 @@ export function shapeCleaningProgress(input: {
     modules,
     unknown_segment: unknown,
     empty_deleted_all_segments: true,
+    // Sum every module the ledger reports, so a Contacts-only cleanup still
+    // shows up under an "all layouts" label.
+    empty_deleted_total: Object.values(input.emptyDeleted).reduce(
+      (a, n) => a + (Number(n) || 0),
+      0,
+    ),
     trend: input.trend,
   };
 }

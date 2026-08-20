@@ -11335,7 +11335,13 @@
             set('cpAcctOutstanding', m.Accounts && m.Accounts.outstanding);
             set('cpAcctMerges',      m.Accounts && m.Accounts.verified_merges);
             set('cpAcctRemoved',     m.Accounts && m.Accounts.est_records_removed);
-            set('cpEmptyDeleted', ((m.Deals && m.Deals.empty_deleted) || 0) + ((m.Accounts && m.Accounts.empty_deleted) || 0));
+            // "all layouts" means every module, not Deals+Accounts. Summing the
+            // two per-module fields showed 0 while the tagged list beside it
+            // said 253 deleted — all of them Contacts. Falls back to the old
+            // sum so a cached/older API response still renders something.
+            set('cpEmptyDeleted', typeof d.empty_deleted_total === 'number'
+                ? d.empty_deleted_total
+                : ((m.Deals && m.Deals.empty_deleted) || 0) + ((m.Accounts && m.Accounts.empty_deleted) || 0));
 
             // Explanations (plain language + honesty footnotes).
             const ex = document.getElementById('cpExplain');
