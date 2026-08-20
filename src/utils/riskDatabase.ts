@@ -455,6 +455,13 @@ export async function updateRisk(
 }
 
 export async function getRiskById(id: number): Promise<EnterpriseRisk | null> {
+  // resolveRiskId returns parseInt(idParam) for anything that isn't a UUID, so
+  // a path like /api/risks/treatments arrives here as NaN. Postgres rejects NaN
+  // for an integer column, the handler's try/catch turned that into a 500, and
+  // the caller saw a server error where the honest answer is "no such risk".
+  // Guarding here rather than in resolveRiskId fixes every route that resolves
+  // a risk by id — the handlers already treat null as a 404.
+  if (!Number.isFinite(id)) return null;
   const result = await pool.query(
     "SELECT * FROM enterprise_risks WHERE id = $1",
     [id],

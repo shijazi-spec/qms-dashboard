@@ -1237,7 +1237,16 @@ async function ratioKpi(
   let res;
   try {
     res = await pool.query(sql);
-  } catch {
+  } catch (e: any) {
+    // A swallowed error made a BROKEN KPI look exactly like an EMPTY one: both
+    // render "no data", so a query against a renamed or missing table (the
+    // `risks` vs `enterprise_risks` class of bug) could sit undiagnosed
+    // indefinitely. The KPI still degrades to EMPTY rather than breaking the
+    // page, but the reason is now recoverable from the logs.
+    logger.warn(
+      `[kpiProcessCalc] ratioKpi query failed — KPI will report no data: ${e?.message || e}`,
+      { sql: sql.replace(/\s+/g, " ").slice(0, 160) },
+    );
     return EMPTY;
   }
   const total = Number(res.rows[0]?.[totalKey] || 0);
