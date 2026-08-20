@@ -5639,11 +5639,22 @@ export const duplicateRadarRoutes = [
             );
           }
 
+          // { full: true } forces a complete re-pull instead of the default
+          // incremental (If-Modified-Since) fetch, WITHOUT truncating anything.
+          //
+          // Previously the only way to get a full pull was /rebuild, which
+          // wipes duplicate_records and duplicate_clusters first — far too
+          // destructive for the common case of repairing a module whose
+          // watermark is wrong. Records upsert on zoho_record_id, so a full
+          // re-pull is safe to run at any time; it is also the only path that
+          // notices records deleted in Zoho, since an incremental fetch by
+          // definition never returns them.
+          const fullPull = body?.full === true;
           logger.info(
-            "🚀 [DuplicateRadar] Zoho CRM scan triggered via API (async)",
+            `🚀 [DuplicateRadar] Zoho CRM scan triggered via API (async)${fullPull ? " [FULL re-pull, no wipe]" : ""}`,
           );
 
-          scanZohoCRMForDuplicates().catch((err) => {
+          scanZohoCRMForDuplicates("manual", fullPull).catch((err) => {
             logger.error("[DuplicateRadar] Background scan error:", err);
             scanState.status = "failed";
             scanState.error = err?.message || "Background scan failed";
