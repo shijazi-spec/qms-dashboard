@@ -3230,7 +3230,25 @@ export const duplicateRadarRoutes = [
                 }
               }
             }
+            if (dbIdSet.size === 0 && scope !== "dismissed") {
+              // The action fired but recorded no merged_record_ids, so there is
+              // nothing to look up and the cluster can NEVER leave "AI-Applied ·
+              // pending Zoho admin delete" — it just sits there forever. Five
+              // clusters were in exactly this state on 2026-08-19.
+              //
+              // A resolve action means "keep the primary, delete the rest", so
+              // fall back to the cluster's non-primary members: that is what the
+              // action asserted even when it failed to write the list down.
+              const fallback = await pool.query(
+                `SELECT id FROM duplicate_records
+                  WHERE cluster_id = $1 AND COALESCE(is_primary, false) = false`,
+                [cid],
+              );
+              for (const r of fallback.rows) dbIdSet.add(Number(r.id));
+            }
             if (dbIdSet.size === 0) {
+              // Genuinely nothing to check — a single-record cluster, or every
+              // member already gone from the mirror.
               noTags++;
               continue;
             }

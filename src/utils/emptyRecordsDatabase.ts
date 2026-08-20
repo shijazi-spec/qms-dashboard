@@ -137,15 +137,52 @@ export function isZohoGhostError(x: unknown): boolean {
 /** Remove ghost records (deleted in Zoho) from the local mirror + the
  * Empty-Delete ledger so they disappear from every Radar view. The platform
  * never deletes in Zoho — this only cleans up our copy of already-gone records. */
+/**
+ * Drop our mirror copy of records Zoho no longer has. Never deletes in Zoho.
+ *
+ * Two bugs lived here, and together they produced "Already deleted in Zoho —
+ * removed. (Mirror prune did not confirm; it may reappear until the next
+ * sweep.)" on records that had genuinely been deleted (2026-08-19):
+ *
+ * 1. duplicate_merge_actions.primary_record_id REFERENCES duplicate_records(id)
+ *    with NO ON DELETE clause. Deleting a mirror row that an AI-Applied action
+ *    pointed at therefore raised a foreign-key violation, the caller logged it
+ *    as a non-fatal warning, and the row survived — so the record reappeared on
+ *    the next refresh, forever. The reference is detached first; the action is
+ *    KEPT, because it is the evidence that someone tagged the record.
+ *
+ * 2. It DELETED the empty_delete_ledger row. That ledger is the durable audit
+ *    trail of cleanup work, and Data Cleaning Progress counts
+ *    status='deleted' from it — so successfully pruning a record erased the
+ *    proof it had been cleaned, which is why "Empty/messy records deleted (all
+ *    layouts)" reads 0 while the tagged list shows 253 deleted. The row is now
+ *    MARKED deleted instead of removed.
+ */
 export async function pruneGhostRecords(zohoIds: string[]): Promise<void> {
   const ids = (zohoIds || []).map(String).filter(Boolean);
   if (!ids.length) return;
+
+  // Detach the un-cascaded FK before the delete, or Postgres refuses it.
+  await pool.query(
+    `UPDATE duplicate_merge_actions SET primary_record_id = NULL
+      WHERE primary_record_id IN (
+        SELECT id FROM duplicate_records WHERE zoho_record_id = ANY($1::text[])
+      )`,
+    [ids],
+  );
+
   await pool.query(
     `DELETE FROM duplicate_records WHERE zoho_record_id = ANY($1::text[])`,
     [ids],
   );
+
+  // Confirm the deletion in the ledger rather than erasing the history of it.
   await pool.query(
-    `DELETE FROM empty_delete_ledger WHERE zoho_record_id = ANY($1::text[])`,
+    `UPDATE empty_delete_ledger
+        SET status = 'deleted',
+            deleted_at = COALESCE(deleted_at, NOW()),
+            last_checked_at = NOW()
+      WHERE zoho_record_id = ANY($1::text[])`,
     [ids],
   );
 }
