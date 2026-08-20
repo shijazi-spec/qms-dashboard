@@ -148,6 +148,20 @@ async function enrichRowsWithExistingAccounts(
   return { rows, via, possibleClientOf };
 }
 
+/**
+ * Valid AI-status chip values. ONE list, shared by every route that accepts the
+ * chip — parseRecordTabFilters had its own copy while /filtered-clusters read
+ * no chip at all, so the per-tab endpoints filtered and the cluster grid did
+ * not.
+ */
+const AI_STATUS_VALUES = [
+  "active",
+  "tagged_pending",
+  "resolved",
+  "dismissed",
+  "all",
+];
+
 // Parse the shared Advanced Filters query params used by the per-tab record
 // endpoints (leads/deals/contacts/accounts). The Module filter is intentionally
 // omitted: each record tab already pins its own module, so module selection is
@@ -178,9 +192,7 @@ function parseRecordTabFilters(url: URL): {
   // AI-status chip: active (untouched) | tagged_pending | resolved | all.
   // Whitelist enforced server-side so the DB query can't see unknown values.
   const rawAi = (url.searchParams.get("ai_status") || "").trim();
-  const ai_status = ["active", "tagged_pending", "resolved", "dismissed", "all"].includes(
-    rawAi,
-  )
+  const ai_status = AI_STATUS_VALUES.includes(rawAi)
     ? rawAi
     : undefined;
   // Corporate/Marketplace segment chip — same whitelist contract as
@@ -7476,6 +7488,20 @@ export const duplicateRadarRoutes = [
             confidence_level:
               url.searchParams.get("confidence_level") || undefined,
             segment,
+            // The AI-status chip (Untouched / AI-Applied / Resolved / Dismissed)
+            // was never read here, so every chip returned the SAME list: all
+            // five values gave an identical total of 88,525 and the identical
+            // first cluster, always status 'active'. The per-row badges are
+            // computed client-side, so the page looked filtered while the
+            // underlying query was not — which is why dismissing a cluster
+            // appeared to do nothing and the Dismissed tab showed active
+            // clusters. The DB layer has implemented this filter all along
+            // (buildAiStatusFilter); only the wiring was missing.
+            ai_status: AI_STATUS_VALUES.includes(
+              (url.searchParams.get("ai_status") || "").trim(),
+            )
+              ? (url.searchParams.get("ai_status") || "").trim()
+              : undefined,
           };
 
           const { clusters, total } = await getFilteredClusters(

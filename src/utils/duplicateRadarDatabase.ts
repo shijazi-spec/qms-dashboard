@@ -174,6 +174,13 @@ export interface DuplicateFilters {
    * not for hiding records.
    */
   segment?: "all" | "marketplace" | "corporate" | "walaplus" | "walaone";
+  /**
+   * AI-status chip: active (untouched) | tagged_pending | resolved | dismissed
+   * | all. Absent from this interface until 2026-08-19, which is why
+   * /filtered-clusters could not pass it and every chip returned the same
+   * unfiltered list.
+   */
+  ai_status?: string;
 }
 
 /**
@@ -11083,9 +11090,45 @@ export async function getFilteredClusters(
   limit = 30,
   offset = 0,
 ): Promise<{ clusters: DuplicateCluster[]; total: number }> {
-  let whereConditions = ["c.status = $1"];
-  let params: any[] = [filters.status || "active"];
-  let paramIdx = 2;
+  // AI-status chip. This function only ever filtered on `c.status`, so the
+  // chip did nothing here: every value returned the same list (verified live
+  // 2026-08-19 — active / dismissed / resolved / tagged_pending / all all gave
+  // a total of 88,525 and the same first cluster). The per-tab record
+  // endpoints implemented the chip; the cluster grid never did, which is why
+  // dismissing a cluster looked like it had no effect.
+  //
+  // Same semantics as that implementation, with `c` as the cluster alias.
+  const HAS_PENDING =
+    "EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = c.id AND ma.action_type = 'auto_merge_pending')";
+  const HAS_RESOLVED_ACTION =
+    "EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = c.id AND ma.action_type IN ('resolve','module_resolved'))";
+
+  let whereConditions: string[] = [];
+  let params: any[] = [];
+  let paramIdx = 1;
+
+  const aiStatus = (filters.ai_status || "").trim();
+  if (aiStatus === "tagged_pending") {
+    // Applied but NOT yet confirmed gone from Zoho.
+    whereConditions.push("c.status NOT IN ('resolved','ignored')");
+    whereConditions.push(`(${HAS_PENDING} OR ${HAS_RESOLVED_ACTION})`);
+  } else if (aiStatus === "resolved") {
+    whereConditions.push("c.status = 'resolved'");
+  } else if (aiStatus === "dismissed") {
+    // Operator false-positive: status 'ignored' with no AI action.
+    whereConditions.push("c.status = 'ignored'");
+    whereConditions.push(`NOT ${HAS_PENDING} AND NOT ${HAS_RESOLVED_ACTION}`);
+  } else if (aiStatus === "active") {
+    whereConditions.push("c.status = 'active'");
+    whereConditions.push(`NOT ${HAS_PENDING} AND NOT ${HAS_RESOLVED_ACTION}`);
+  } else if (aiStatus === "all") {
+    // No status constraint at all.
+  } else {
+    // No chip supplied — preserve the original behaviour exactly.
+    whereConditions.push(`c.status = $${paramIdx}`);
+    params.push(filters.status || "active");
+    paramIdx++;
+  }
 
   // Hide placeholder / junk-name clusters (Sarah 2026-07-14) — same as the
   // direct Domain Clusters load (buildClusterFilterClause) so the Advanced-Filter
