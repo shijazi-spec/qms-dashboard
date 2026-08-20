@@ -2714,6 +2714,31 @@ export async function getSegmentLeadDuplicateCount(
   return { segment: seg, outstanding_leads: Number(res.rows[0]?.n) || 0 };
 }
 
+// Outstanding account-duplicate count for a segment. Same shape as the lead
+// counter above, for record_type='account'.
+//
+// Customer Success maps only to cs_lifecycle, which is a lifecycle report and
+// carries no cleanup figure, so the CS Data cleanup tile read "not mapped"
+// while SDR (leads) and Sales (deals) showed numbers. CS owns the customer
+// ACCOUNT records, so that is what its cleanup burden is measured on
+// (confirmed by Sarah 2026-08-20).
+export async function getSegmentAccountDuplicateCount(
+  segment: DuplicateFilters["segment"],
+): Promise<{ segment: string; outstanding_accounts: number }> {
+  const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
+  const p = buildSegmentPredicate(seg, 1);
+  const segCond = p.condition ? " AND " + p.condition : "";
+  const res = await pool.query(
+    `SELECT COUNT(*)::text AS n
+       FROM duplicate_records r
+       JOIN duplicate_clusters dc ON dc.id = r.cluster_id
+      WHERE r.record_type = 'account' AND dc.status = 'active'
+        AND dc.total_accounts > 1 AND r.is_primary = false${segCond}`,
+    [...p.params],
+  );
+  return { segment: seg, outstanding_accounts: Number(res.rows[0]?.n) || 0 };
+}
+
 /** Deal doc-compliance rolled up to a segment (join to duplicate_records layout).
  *  Counts ONLY deals that have been doc-checked (rows in deal_doc_compliance). */
 export async function getSegmentDealComplianceSummary(

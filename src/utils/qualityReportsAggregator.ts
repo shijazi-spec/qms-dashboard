@@ -5,8 +5,12 @@ export function functionReportKeys(fn: string): string[] {
   switch (fn) {
     case "sdr": return ["leads"];
     case "sales": return ["deals", "deal_compliance", "stage_aging"];
+    // "accounts" drives the Data cleanup tile: cs_lifecycle is a lifecycle
+    // report and carries no cleanup figure, so CS and PartnerSuccess showed
+    // "not mapped" there while SDR (leads) and Sales (deals) showed numbers.
+    // CS owns the customer ACCOUNT records, so that is its cleanup burden.
     case "cs":
-    case "partnersuccess": return ["cs_lifecycle"];
+    case "partnersuccess": return ["cs_lifecycle", "accounts"];
     case "partnership": return ["leads", "deals"];
     case "onboarding": return ["cs_lifecycle_onboarding", "deals"];
     default: return [];
@@ -157,7 +161,7 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
     };
   }, notConfigured, timedOut);
 
-  const cleanup = section("cleanup", keys.some((k) => k === "deals" || k === "leads"), async () => {
+  const cleanup = section("cleanup", keys.some((k) => k === "deals" || k === "leads" || k === "accounts"), async () => {
     const out: any = {};
     if (keys.includes("deals")) out.deals = await DRD.getDataCleaningProgress(bu.segment);
     if (keys.includes("leads")) {
@@ -165,6 +169,14 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
       // dup clusters. getDataCleaningProgress only covers Deals/Accounts, so
       // leads get their own light counter (Step 4 helper below).
       out.leads = await DRD.getSegmentLeadDuplicateCount(bu.segment);
+    }
+    if (keys.includes("accounts")) {
+      // Same light counter for accounts — the CS/PartnerSuccess cleanup
+      // burden. Deliberately NOT getDataCleaningProgress: that reports
+      // VERIFIED completed merges for Deals+Accounts together, which would
+      // credit CS with Sales' deal cleanup and answer a different question
+      // ("what has been done") than the tile asks ("what is outstanding").
+      out.accounts = await DRD.getSegmentAccountDuplicateCount(bu.segment);
     }
     return out;
   }, notConfigured, timedOut);
@@ -261,9 +273,17 @@ export async function getBUHeadline(buKey: string): Promise<BUHeadline | null> {
       }, null as number | null)
     : null;
 
-  // Outstanding dup count — leads for sdr, deals otherwise. Always available.
+  // Outstanding dup count, per the record type the BU actually owns. This must
+  // track functionReportKeys above, or the hub card and the detail page's
+  // Data cleanup tile disagree.
+  //
+  // "deals otherwise" used to cover CS too, so Customer Success (B2B) and
+  // Sales (B2B) both reported the SAME 2,043 — CS was showing Sales' deal
+  // duplicates as its own cleanup burden (spotted 2026-08-20).
   const outstanding = await safe(async () => {
     if (bu.fn === "sdr") return (await DRD.getSegmentLeadDuplicateCount(bu.segment)).outstanding_leads;
+    if (bu.fn === "cs" || bu.fn === "partnersuccess")
+      return (await DRD.getSegmentAccountDuplicateCount(bu.segment)).outstanding_accounts;
     return (await DRD.getSegmentDealDuplicateCount(bu.segment)).outstanding_deals;
   }, 0);
 

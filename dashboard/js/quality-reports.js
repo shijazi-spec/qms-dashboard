@@ -401,8 +401,16 @@
             var dealsMerged = dm && dm.Deals ? (dm.Deals.verified_merges || 0) : 0;
             var acctMerged = dm && dm.Accounts ? (dm.Accounts.verified_merges || 0) : 0;
             var leadsOut = s.cleanup.leads ? (s.cleanup.leads.outstanding_leads || 0) : 0;
+            var acctOut = s.cleanup.accounts ? (s.cleanup.accounts.outstanding_accounts || 0) : 0;
             cleanupTotal = dealsMerged + acctMerged;
-            stats.push(qrStatCard('teal', 'Data cleanup', String(cleanupTotal), (dm ? 'verified merges' : '') + (s.cleanup.leads ? (dm ? ' · ' : '') + leadsOut + ' leads outstanding' : '')));
+            // Headline stays "verified merges"; each mapped record type adds its
+            // own outstanding figure to the sub-label. CS/PartnerSuccess map to
+            // accounts, which previously produced an unlabelled tile.
+            var subParts = [];
+            if (dm) subParts.push('verified merges');
+            if (s.cleanup.leads) subParts.push(leadsOut + ' leads outstanding');
+            if (s.cleanup.accounts) subParts.push(acctOut + ' accounts outstanding');
+            stats.push(qrStatCard('teal', 'Data cleanup', String(cleanupTotal), subParts.join(' · ')));
         } else {
             stats.push(qrStatCard('teal', 'Data cleanup', '—', 'not mapped'));
         }
@@ -650,6 +658,7 @@
             out.push('<div class="text-sm">Deals removed (verified merges): ' + dealsMerged + ' · Accounts: ' + acctMerged + '</div>');
         }
         if (c.leads) out.push('<div class="text-sm">Outstanding duplicate leads: ' + (c.leads.outstanding_leads || 0) + '</div>');
+        if (c.accounts) out.push('<div class="text-sm">Outstanding duplicate accounts: ' + (c.accounts.outstanding_accounts || 0) + '</div>');
         return out.join('') || '<div class="text-xs text-gray-500">No cleanup data.</div>';
     }
 
