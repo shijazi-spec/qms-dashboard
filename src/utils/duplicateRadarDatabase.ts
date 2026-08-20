@@ -11003,16 +11003,22 @@ export async function upsertSyncState(
   status: string,
 ): Promise<void> {
   const completed = status === "completed";
+  // Every placeholder is cast explicitly. $3 is both assigned to sync_status
+  // (varchar, from the column) and compared to a literal (text, from the
+  // operator) — Postgres deduces one type per parameter across the whole
+  // statement and errors with "inconsistent types deduced for parameter $3"
+  // rather than picking one. This is the first query a module sync runs, so
+  // without the casts no sync starts at all.
   await pool.query(
     `INSERT INTO zoho_sync_state (module, last_sync_at, total_synced, sync_status, sync_started_at)
-     VALUES ($1, CASE WHEN $4 THEN NOW() ELSE NULL END, $2, $3,
-             CASE WHEN $3 = 'syncing' THEN NOW() ELSE NULL END)
+     VALUES ($1::text, CASE WHEN $4::boolean THEN NOW() ELSE NULL END, $2::int, $3::text,
+             CASE WHEN $3::text = 'syncing' THEN NOW() ELSE NULL END)
      ON CONFLICT (module) DO UPDATE SET
-       last_sync_at = CASE WHEN $4 THEN NOW() ELSE zoho_sync_state.last_sync_at END,
-       total_synced = CASE WHEN $4 THEN $2 ELSE zoho_sync_state.total_synced END,
-       sync_status  = $3,
+       last_sync_at = CASE WHEN $4::boolean THEN NOW() ELSE zoho_sync_state.last_sync_at END,
+       total_synced = CASE WHEN $4::boolean THEN $2::int ELSE zoho_sync_state.total_synced END,
+       sync_status  = $3::text,
        sync_started_at = CASE
-         WHEN $3 = 'syncing' THEN NOW()
+         WHEN $3::text = 'syncing' THEN NOW()
          ELSE zoho_sync_state.sync_started_at END`,
     [module, totalSynced, status, completed],
   );

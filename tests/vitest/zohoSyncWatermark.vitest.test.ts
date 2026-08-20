@@ -53,16 +53,25 @@ describe("the watermark only moves on success", () => {
   it("guards last_sync_at and total_synced behind that flag", async () => {
     await upsertSyncState("Accounts", 0, "syncing");
     const sql = String(call()![0]);
-    expect(sql).toMatch(/last_sync_at = CASE WHEN \$4 THEN NOW\(\) ELSE zoho_sync_state\.last_sync_at END/);
+    // Casts are optional in these patterns on purpose. Pinning the exact SQL
+    // text made this suite pass while the statement was in fact rejected by
+    // Postgres for "inconsistent types deduced for parameter $3" — a mocked
+    // pool accepts any string. See upsertSyncState.vitest.test.ts, which
+    // asserts the casts themselves.
+    expect(sql).toMatch(
+      /last_sync_at = CASE WHEN \$4(?:::\w+)? THEN NOW\(\) ELSE zoho_sync_state\.last_sync_at END/,
+    );
     // Preserving the count matters too: the old code wrote 0 at the START of
     // every run, so a crash left the badge reading zero records synced.
-    expect(sql).toMatch(/total_synced = CASE WHEN \$4 THEN \$2 ELSE zoho_sync_state\.total_synced END/);
+    expect(sql).toMatch(
+      /total_synced = CASE WHEN \$4(?:::\w+)? THEN \$2(?:::\w+)? ELSE zoho_sync_state\.total_synced END/,
+    );
   });
 
   it("stamps sync_started_at only when a run begins", async () => {
     await upsertSyncState("Accounts", 0, "syncing");
     const sql = String(call()![0]);
-    expect(sql).toMatch(/sync_started_at = CASE\s+WHEN \$3 = 'syncing' THEN NOW\(\)/);
+    expect(sql).toMatch(/sync_started_at = CASE\s+WHEN \$3(?:::\w+)? = 'syncing' THEN NOW\(\)/);
   });
 });
 
