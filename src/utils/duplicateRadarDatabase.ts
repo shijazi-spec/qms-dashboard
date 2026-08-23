@@ -347,15 +347,52 @@ export function buildSegmentPredicate(
 /**
  * OPEN-PIPELINE deal-stage predicate (Sarah 2026-07-29). Amount at risk =
  * OPEN pipeline only: a duplicate deal counts only if it is still live in the
- * sales pipeline — NOT a won customer (Agreement Signed / Paid) and NOT any
- * terminal / closed stage (Closed Lost/Won, Dropped, Cancelled, Transferred to
- * CS, Client Activated). `alias` is the duplicate_records table alias.
+ * sales pipeline — NOT a won customer (see WON_STAGES) and NOT any terminal /
+ * closed stage (Closed Lost/Won, Dropped, Cancelled, Transferred to CS, Client
+ * Activated). `alias` is the duplicate_records table alias.
  * Single source of truth so the exec headline, Adam's digest, the Top Clusters
  * panel and the View-all modal all agree.
+ *
+ * NOT excluded, deliberately, because they are ambiguous rather than clearly
+ * won — flagged for Sarah 2026-08-23 and left as OPEN until confirmed:
+ *   Partner Ready for Activation · Content in Process · Design in Process
+ *     — marketplace production stages that may sit either side of signature.
+ *   Old Data — dead rather than won; excluding it needs a different rationale
+ *     (junk suppression), so it is not folded in here.
  */
+/**
+ * Stages that mean the deal is already WON — the customer signed or is live —
+ * so the money is committed and no longer "open pipeline at risk".
+ *
+ * Extended 2026-08-23. The original list held only 'agreement signed' and
+ * 'paid', with the regex below catching 'closed …', 'client activated' and
+ * 'transferred to cs'. That left five post-win stages counting as open, the
+ * largest by far being Partner Active — 181 live partners carrying SAR 450,984
+ * were being reported as pipeline at risk. The rule was also self-contradictory:
+ * it excluded 'client activated' but admitted 'partner active', and excluded
+ * 'agreement signed' but admitted the bare 'signed'.
+ *
+ * Explicit names rather than regex on purpose: a pattern like /active/ would
+ * also swallow legitimately open stages, and the exact vocabulary is known.
+ */
+const WON_STAGES = [
+  "agreement signed",
+  "paid",
+  // Same family as 'agreement signed' — the win-rate KPI already counts this
+  // as a win, so counting it as open pipeline double-booked the same deal.
+  "signed",
+  // Same family as 'client activated', which was already excluded.
+  "partner active",
+  "new client",
+  // Post-activation onboarding, not pre-sale pipeline.
+  "welcome communications",
+  "registered 40 percent",
+] as const;
+
 export function openStagePredicate(alias: string): string {
   const s = `LOWER(COALESCE(NULLIF(${alias}.stage,''), ${alias}.raw_data->>'Stage',''))`;
-  return `${s} NOT IN ('agreement signed','paid') AND ${s} !~ '(closed|won|lost|drop|cancel|transferred to cs|client activated)'`;
+  const won = WON_STAGES.map((v) => `'${v}'`).join(",");
+  return `${s} NOT IN (${won}) AND ${s} !~ '(closed|won|lost|drop|cancel|transferred to cs|client activated)'`;
 }
 
 /**
