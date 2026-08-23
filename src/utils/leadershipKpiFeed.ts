@@ -1421,8 +1421,18 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
 
   for (const cfg of FEED_KPIS) {
     try {
-      // The 5 GRQ North-Star KPIs mirror the /kpis dashboard value exactly; the
-      // rest keep their live recompute.
+      // Codes in MIRROR_DASHBOARD_CODES read the recorded /kpis value so the
+      // two surfaces cannot disagree; every other code recomputes live here.
+      //
+      // This used to claim "the 5 GRQ North-Star KPIs mirror the dashboard",
+      // which was never true of this set — it holds TWO codes. The rest are
+      // independent by design, because the feed is a SEPARATE KPI namespace:
+      // the same code can name a different metric on each side (feed
+      // GRC-KPI-005 is "Risk Treatment Closure Rate", target 80%, completed ÷
+      // non-cancelled; canonical GRC-KPI-005 is "Risk Treatment ON-TIME
+      // Closure", target 90%, closed-on-time ÷ due). See CANONICAL_TO_FEED in
+      // kpiAutoCalc.ts for the bridge. Do not "fix" a difference between the
+      // two without checking you are comparing the same metric.
       const { value, dataAvailable, details, reason } = MIRROR_DASHBOARD_CODES.has(cfg.code)
         ? await dashboardValueForCode(cfg.code, now)
         : await cfg.calc();
