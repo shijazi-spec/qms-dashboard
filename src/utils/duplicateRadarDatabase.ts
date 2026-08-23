@@ -8101,11 +8101,19 @@ export async function getInflationOpenClosedBreakdown(
   const segCond = seg.condition ? ` AND ${seg.condition}` : "";
   const stageExpr =
     "LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage',''))";
-  // Sarah 2026-07-29: Agreement Signed / Paid = WON customers → EXCLUDED from
-  // Amount at risk. Other terminal stages (closed lost/won/dropped/cancelled/…)
-  // = "closed"; everything else = "open" pipeline. Amount at risk = open + closed.
+  // Sarah 2026-07-29: WON customers → EXCLUDED from Amount at risk. Other
+  // terminal stages (closed lost/won/dropped/cancelled/…) = "closed";
+  // everything else = "open" pipeline. Amount at risk = open + closed.
+  //
+  // Reads WON_STAGES rather than its own copy of the list (2026-08-23). This
+  // expression previously hardcoded IN ('agreement signed','paid'), so when
+  // openStagePredicate learned about partner active / signed / new client /
+  // welcome communications / registered 40 percent, the HEADLINE dropped but
+  // this drill-down still filed those 180+ deals under "open" — the panel
+  // contradicting its own headline, which is exactly the failure the earlier
+  // by_stage-vs-headline confusion was about. One list, both places.
   const bucketExpr = `CASE
-      WHEN ${stageExpr} IN ('agreement signed','paid') THEN 'excluded'
+      WHEN ${stageExpr} IN (${WON_STAGES.map((v) => `'${v}'`).join(",")}) THEN 'excluded'
       WHEN ${stageExpr} ~ '(closed|won|lost|drop|cancel|transferred to cs|client activated)' THEN 'closed'
       ELSE 'open' END`;
   const rows = (
