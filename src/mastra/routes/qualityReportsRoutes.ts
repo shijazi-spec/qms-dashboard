@@ -61,7 +61,16 @@ export const qualityReportsRoutes = [
         try {
           const user = await requireRole(c, READ_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
-          const rep = await getBUReport(c.req.param("buKey"));
+          // ?quarter=1..4&year=YYYY → report the BU as it stood in that period.
+          // Anything outside 1..4, or a missing/implausible year, falls back to
+          // the live view rather than silently reporting a nonsense window.
+          const qn = parseInt(c.req.query("quarter") || "", 10);
+          const yn = parseInt(c.req.query("year") || "", 10);
+          const period =
+            qn >= 1 && qn <= 4 && yn >= 2000 && yn <= 2100
+              ? { year: yn, quarter: qn }
+              : undefined;
+          const rep = await getBUReport(c.req.param("buKey"), period);
           if (!rep) return c.json({ error: "Not found" }, 404);
           return c.json({ success: true, ...rep });
         } catch (e: any) {

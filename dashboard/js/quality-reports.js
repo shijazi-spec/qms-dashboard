@@ -228,6 +228,25 @@
     // default), so hitting this is already the abnormal path.
     var QR_REPORT_TIMEOUT_MS = 45000;
 
+    // Reporting period for the timeframe selector. null = live "Latest" view.
+    // Kept at module scope so ↻ Retry and the section re-renders keep the
+    // period the user picked instead of silently snapping back to Latest.
+    var qrPeriod = null;
+
+    window.qrSetPeriod = function (quarter, year) {
+        qrPeriod = quarter ? { quarter: Number(quarter), year: Number(year) } : null;
+        if (qrCurrentBUKey) qrOpenBU(qrCurrentBUKey);
+    };
+
+    // Changing the year only re-queries when a quarter is actually selected —
+    // "Latest" is not a period, so a year has nothing to apply to.
+    window.qrSetPeriodYear = function (ev) {
+        var y = Number(ev && ev.target ? ev.target.value : 0);
+        if (!y || !qrPeriod) return;
+        qrPeriod = { quarter: qrPeriod.quarter, year: y };
+        if (qrCurrentBUKey) qrOpenBU(qrCurrentBUKey);
+    };
+
     window.qrOpenBU = async function (buKey) {
         qrCurrentBUKey = buKey;
         var host = document.getElementById('qrBU');
@@ -243,7 +262,8 @@
         try {
             var opts = { credentials: 'same-origin' };
             if (ctrl) opts.signal = ctrl.signal;
-            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey), opts);
+            var q = qrPeriod ? ('?quarter=' + qrPeriod.quarter + '&year=' + qrPeriod.year) : '';
+            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey) + q, opts);
             clearTimeout(timer);
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var payload = await res.json();
@@ -376,10 +396,50 @@
         parts.push('<h2 class="text-lg font-bold mb-1 text-gray-900">' + escapeHtml(bu.bu_name || bu.bu_key || '') + '</h2>');
         parts.push('<div class="text-xs text-gray-500 mb-4">' + escapeHtml((CHANNEL_LABEL[bu.channel] || bu.channel || '') + ' · segment ' + (bu.segment || '—') + ' · ' + (bu.fn || '')) + '</div>');
 
+        // ── Timeframe selector ───────────────────────────────────────────────
+        // Only KPIs and Data cleanup have per-period history (kpi_values and
+        // duplicate_progress_daily). Compliance, SOPs and Open actions read
+        // CURRENT state, so the server names them in notTimeScoped and each
+        // tile says so — a Q1 heading must never imply today's numbers are Q1
+        // numbers.
+        var per = d.period || null;
+        var nts = d.notTimeScoped || [];
+        var yrNow = new Date().getUTCFullYear();
+        var selYear = per ? per.year : yrNow;
+        var qBtn = function (label, qv) {
+            var on = qv ? (per && per.quarter === qv && per.year === selYear) : !per;
+            return '<button type="button" class="rr-btn ' + (on ? 'rr-btn-primary' : 'rr-btn-ghost') +
+                '" data-on-click="qrSetPeriod" data-args="' +
+                escAttr(JSON.stringify([qv, selYear])) + '">' + escapeHtml(label) + '</button>';
+        };
+        var yrOpts = [];
+        for (var yy = yrNow; yy >= yrNow - 3; yy--) {
+            yrOpts.push('<option value="' + yy + '"' + (yy === selYear ? ' selected' : '') + '>' + yy + '</option>');
+        }
+        parts.push(
+            '<div class="flex flex-wrap items-center gap-2 mb-4">' +
+            '<span class="text-xs text-gray-500 mr-1">View by quarter:</span>' +
+            qBtn('Latest', 0) + qBtn('Q1', 1) + qBtn('Q2', 2) + qBtn('Q3', 3) + qBtn('Q4', 4) +
+            '<span class="text-xs text-gray-500 ml-2 mr-1">Year:</span>' +
+            '<select class="border rounded px-2 py-1 text-sm" data-on-change="qrSetPeriodYear">' + yrOpts.join('') + '</select>' +
+            (per
+                ? '<span class="rr-kpi-sub ml-2">Showing Q' + per.quarter + ' ' + per.year +
+                  ' · KPIs and Data cleanup only' +
+                  (nts.length ? ' — ' + escapeHtml(nts.join(', ')) + ' show current values' : '') +
+                  '</span>'
+                : '') +
+            '</div>');
+
         // Summary strip — one tile per section, always the same 5 slots so the
         // page layout doesn't jump between BUs with different function maps.
         var stats = [];
-        stats.push(qrStatCard('blue', 'SOPs', isCfg('sops') && s.sops ? String(s.sops.total != null ? s.sops.total : (s.sops.policies || []).length) : '—', 'controlled documents'));
+        // Appended to any tile the server said it could not time-scope, so the
+        // reader can see WHICH numbers the quarter applies to. No suffix in the
+        // Latest view — everything is current there by definition.
+        var tScope = function (name, sub) {
+            return (per && nts.indexOf(name) !== -1) ? (sub + ' · current, not Q' + per.quarter) : sub;
+        };
+        stats.push(qrStatCard('blue', 'SOPs', isCfg('sops') && s.sops ? String(s.sops.total != null ? s.sops.total : (s.sops.policies || []).length) : '—', tScope('sops', 'controlled documents')));
         // KPI card: prefer the PERFORMANCE KPIs (catalog rows for this BU's
         // team) when the BU has them, and fall back to framework-checklist
         // progress otherwise. Previously it always showed the checklist,
@@ -417,11 +477,11 @@
         if (isCfg('compliance') && s.compliance) {
             var csV = s.compliance.cs && s.compliance.cs.summary ? (s.compliance.cs.summary.total_violations || 0) : 0;
             var saV = s.compliance.stageAging && s.compliance.stageAging.summary ? (s.compliance.stageAging.summary.total_violations || 0) : 0;
-            stats.push(qrStatCard('red', 'Compliance', String(csV + saV), 'open violations'));
+            stats.push(qrStatCard('red', 'Compliance', String(csV + saV), tScope('compliance', 'open violations')));
         } else {
             stats.push(qrStatCard('red', 'Compliance', '—', 'not mapped'));
         }
-        stats.push(qrStatCard('indigo', 'Open actions', isCfg('actions') && s.actions ? String(s.actions.openCapas || 0) : '—', isCfg('actions') && s.actions ? 'open CAPAs' : 'not mapped'));
+        stats.push(qrStatCard('indigo', 'Open actions', isCfg('actions') && s.actions ? String(s.actions.openCapas || 0) : '—', isCfg('actions') && s.actions ? tScope('actions', 'open CAPAs') : 'not mapped'));
         parts.push('<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">' + stats.join('') + '</div>');
 
         // Detail cards.

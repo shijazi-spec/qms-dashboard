@@ -27,6 +27,14 @@ export interface BUReport {
    * a slow-but-mapped section as "not configured yet".
    */
   timedOut: string[];
+  /** The requested reporting period, or null for the live "Latest" view. */
+  period: { year: number; quarter: number } | null;
+  /**
+   * Sections that IGNORED `period` because they have no historical store.
+   * Populated only when a period was requested. The UI must label these, or a
+   * past-quarter heading silently implies today's numbers belong to it.
+   */
+  notTimeScoped: string[];
 }
 
 /**
@@ -92,12 +100,25 @@ async function section<T>(
   }
 }
 
-export async function getBUReport(buKey: string): Promise<BUReport | null> {
+export async function getBUReport(
+  buKey: string,
+  /**
+   * Reporting period for the timeframe selector. Only the sections with real
+   * per-period history honour it — KPIs (kpi_values) and cleanup
+   * (duplicate_progress_daily). Compliance and SOPs have NO historical store:
+   * the compliance scans read current CRM state, so a quarter-scoped request
+   * would silently return today's numbers under a past quarter's heading.
+   * Those sections stay current and are named in `notTimeScoped` so the UI can
+   * say so on the tile rather than implying the selector applied.
+   */
+  period?: { year: number; quarter: number },
+): Promise<BUReport | null> {
   const tStart = Date.now();
   const bu = await getBUByKey(buKey);
   if (!bu) return null;
   const notConfigured: string[] = [];
   const timedOut: string[] = [];
+  const notTimeScoped: string[] = [];
   const keys = functionReportKeys(bu.fn);
 
   // Lazy imports keep the module graph light + avoid load-time cycles.
@@ -140,7 +161,7 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
         : Promise.resolve(null),
       bu.kpi_owner_name
         ? import("./kpiDatabase").then((m) =>
-            m.getKPIsWithValuesByOwnerName(bu.kpi_owner_name as string),
+            m.getKPIsWithValuesByOwnerName(bu.kpi_owner_name as string, period),
           )
         : Promise.resolve([]),
     ]);
@@ -177,6 +198,33 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
       // credit CS with Sales' deal cleanup and answer a different question
       // ("what has been done") than the tile asks ("what is outstanding").
       out.accounts = await DRD.getSegmentAccountDuplicateCount(bu.segment);
+    }
+    // Period view: the counters above are LIVE, so under a past quarter's
+    // heading they would show today's burden. duplicate_progress_daily holds a
+    // daily open/solved/total/merged row per module, so report the last
+    // snapshot inside the requested quarter instead — the BU as it stood then.
+    // A quarter with no snapshot (before the table existed, or a gap) reports
+    // null rather than falling back to today, which would be the same lie in a
+    // quieter form.
+    if (period) {
+      const qEnd = new Date(Date.UTC(period.year, period.quarter * 3, 1));
+      const daysBack = Math.ceil((Date.now() - qEnd.getTime()) / 86400000) + 370;
+      const series = await DRD.getDuplicateProgressSeries(
+        Math.max(30, Math.min(daysBack, 365 * 3)),
+        bu.segment,
+      );
+      const qStartStr = new Date(Date.UTC(period.year, (period.quarter - 1) * 3, 1))
+        .toISOString()
+        .slice(0, 10);
+      const qEndStr = qEnd.toISOString().slice(0, 10);
+      const snap: Record<string, any> = {};
+      for (const [mod, entry] of Object.entries(series.byModule || {})) {
+        const inQ = ((entry as any).series || []).filter(
+          (p: any) => p.date >= qStartStr && p.date < qEndStr,
+        );
+        snap[mod] = inQ.length ? { ...inQ[inQ.length - 1] } : null;
+      }
+      out.period = { year: period.year, quarter: period.quarter, byModule: snap };
     }
     return out;
   }, notConfigured, timedOut);
@@ -222,6 +270,16 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
     return { openCapas: capas.length, capas, ownerAccountability: ownerRows };
   }, notConfigured, timedOut);
 
+  // Sections with no historical store. Named explicitly (not inferred from a
+  // missing value) so the UI states "current — not time-scoped" on the tile
+  // instead of letting a Q1 heading imply the number is a Q1 number.
+  //   compliance — cs_lifecycle / deal_compliance / stage_aging all scan
+  //                CURRENT CRM state; nothing is written per period.
+  //   sops       — controlled documents are versioned, not a period measure.
+  //   actions    — open CAPAs are a live count; capa_change_history could
+  //                support "open as of", but that needs its own definition.
+  if (period) notTimeScoped.push("compliance", "sops", "actions");
+
   const [sopsR, kpisR, cleanupR, complianceR, actionsR] =
     await Promise.all([sops, kpis, cleanup, compliance, actions]);
 
@@ -235,6 +293,8 @@ export async function getBUReport(buKey: string): Promise<BUReport | null> {
     sections: { sops: sopsR, kpis: kpisR, cleanup: cleanupR, compliance: complianceR, actions: actionsR },
     notConfigured,
     timedOut,
+    period: period ? { year: period.year, quarter: period.quarter } : null,
+    notTimeScoped,
   };
 }
 

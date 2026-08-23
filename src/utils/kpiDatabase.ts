@@ -1831,6 +1831,15 @@ export async function getOwnerTypeForOwnerName(
  */
 export async function getKPIsWithValuesByOwnerName(
   ownerName: string,
+  /**
+   * Optional reporting period. When given, each KPI reports the value recorded
+   * INSIDE that quarter rather than its most recent value overall, so the
+   * Quality Reports timeframe selector shows what a BU looked like then
+   * instead of silently re-showing today's number under a past quarter's
+   * heading. A KPI with nothing recorded in the window reports null — "not
+   * measured that quarter" — which the UI already renders as "Not started".
+   */
+  quarter?: { year: number; quarter: number },
 ): Promise<CatalogKpiWithValue[]> {
   const defs = await getKPIsByOwnerName(ownerName);
   if (!defs.length) return [];
@@ -1838,12 +1847,22 @@ export async function getKPIsWithValuesByOwnerName(
   // Latest value per KPI in ONE round-trip. DISTINCT ON is the Postgres
   // idiom for "top row per group" and avoids a correlated subquery per KPI.
   const ids = defs.map((d: any) => d.id);
+  // Quarter bounds as a half-open interval [start, nextQuarterStart) so the
+  // last day of the quarter is included whatever time component period_end
+  // carries.
+  const qStart = quarter
+    ? new Date(Date.UTC(quarter.year, (quarter.quarter - 1) * 3, 1))
+    : null;
+  const qEnd = quarter
+    ? new Date(Date.UTC(quarter.year, quarter.quarter * 3, 1))
+    : null;
   const valsRes = await pool.query(
     `SELECT DISTINCT ON (kpi_id) kpi_id, actual_value, period_end
        FROM kpi_values
       WHERE kpi_id = ANY($1::int[])
+        ${qStart ? "AND period_end >= $2 AND period_end < $3" : ""}
       ORDER BY kpi_id, period_end DESC`,
-    [ids],
+    qStart ? [ids, qStart.toISOString(), qEnd!.toISOString()] : [ids],
   );
   const latest = new Map<number, { actual_value: any; period_end: any }>();
   for (const r of valsRes.rows) latest.set(Number(r.kpi_id), r);
