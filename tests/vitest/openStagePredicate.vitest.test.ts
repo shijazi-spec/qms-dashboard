@@ -80,6 +80,36 @@ describe("genuinely open stages are untouched", () => {
   });
 });
 
+describe("the drill-down cannot drift from the headline", () => {
+  /**
+   * getInflationBreakdown's bucket CASE held its own copy of the won list and
+   * the terminal regex. When openStagePredicate gained the five post-win
+   * stages, the headline excluded them while the by_stage panel still filed
+   * 180 partner-active deals under "open" — the panel contradicting its own
+   * headline. Both now build from the same constants; this pins that.
+   */
+  it("uses one won-stage list, not a second copy", () => {
+    const sql = openStagePredicate("r");
+    for (const stage of ["agreement signed", "paid", "signed", "partner active", "new client", "welcome communications", "registered 40 percent"]) {
+      expect(sql).toContain(`'${stage}'`);
+    }
+  });
+
+  it("uses one terminal-stage pattern", () => {
+    // If a second copy is reintroduced, it will not carry these together.
+    const sql = openStagePredicate("r");
+    expect(sql).toContain("closed|won|lost|drop|cancel|transferred to cs|client activated");
+  });
+
+  it("derives the stage column the same way in every alias", () => {
+    for (const alias of ["r", "d", "x"]) {
+      const sql = openStagePredicate(alias);
+      expect(sql).toContain(`NULLIF(${alias}.stage,'')`);
+      expect(sql).toContain(`${alias}.raw_data->>'Stage'`);
+    }
+  });
+});
+
 describe("matching is robust", () => {
   it("is case-insensitive", () => {
     expect(isOpen("PARTNER ACTIVE")).toBe(false);

@@ -389,10 +389,35 @@ const WON_STAGES = [
   "registered 40 percent",
 ] as const;
 
+/**
+ * TERMINAL (dead) stages — the deal ended without becoming a customer, or was
+ * handed off. Distinct from WON_STAGES: those are wins, these are closures.
+ *
+ * A Postgres regex rather than a name list because these arrive with many
+ * suffixes in the wild ("Closed Lost", "Closed-Lost", "Dropped by client"),
+ * unlike the won stages whose exact vocabulary is known and where a loose
+ * pattern would wrongly swallow "Agreement Sent".
+ *
+ * Shared so openStagePredicate and the at-risk breakdown's bucket CASE cannot
+ * drift apart — they held identical copies until 2026-08-23, which is how the
+ * won-stage list ended up fixed in one place and stale in the other.
+ */
+const TERMINAL_STAGE_RE =
+  "(closed|won|lost|drop|cancel|transferred to cs|client activated)";
+
+/** SQL for "this record's stage", with the raw_data fallback. */
+function stageSql(alias: string): string {
+  return `LOWER(COALESCE(NULLIF(${alias}.stage,''), ${alias}.raw_data->>'Stage',''))`;
+}
+
+/** The won stages as a SQL literal list, for an IN (…) clause. */
+function wonStagesSql(): string {
+  return WON_STAGES.map((v) => `'${v}'`).join(",");
+}
+
 export function openStagePredicate(alias: string): string {
-  const s = `LOWER(COALESCE(NULLIF(${alias}.stage,''), ${alias}.raw_data->>'Stage',''))`;
-  const won = WON_STAGES.map((v) => `'${v}'`).join(",");
-  return `${s} NOT IN (${won}) AND ${s} !~ '(closed|won|lost|drop|cancel|transferred to cs|client activated)'`;
+  const s = stageSql(alias);
+  return `${s} NOT IN (${wonStagesSql()}) AND ${s} !~ '${TERMINAL_STAGE_RE}'`;
 }
 
 /**
@@ -8099,8 +8124,7 @@ export async function getInflationOpenClosedBreakdown(
 }> {
   const seg = buildSegmentPredicate(segment, 1);
   const segCond = seg.condition ? ` AND ${seg.condition}` : "";
-  const stageExpr =
-    "LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage',''))";
+  const stageExpr = stageSql("r");
   // Sarah 2026-07-29: WON customers → EXCLUDED from Amount at risk. Other
   // terminal stages (closed lost/won/dropped/cancelled/…) = "closed";
   // everything else = "open" pipeline. Amount at risk = open + closed.
@@ -8113,8 +8137,8 @@ export async function getInflationOpenClosedBreakdown(
   // contradicting its own headline, which is exactly the failure the earlier
   // by_stage-vs-headline confusion was about. One list, both places.
   const bucketExpr = `CASE
-      WHEN ${stageExpr} IN (${WON_STAGES.map((v) => `'${v}'`).join(",")}) THEN 'excluded'
-      WHEN ${stageExpr} ~ '(closed|won|lost|drop|cancel|transferred to cs|client activated)' THEN 'closed'
+      WHEN ${stageExpr} IN (${wonStagesSql()}) THEN 'excluded'
+      WHEN ${stageExpr} ~ '${TERMINAL_STAGE_RE}' THEN 'closed'
       ELSE 'open' END`;
   const rows = (
     await pool.query(
