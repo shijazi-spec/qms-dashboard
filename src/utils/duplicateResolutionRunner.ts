@@ -539,7 +539,6 @@ export async function buildExecutiveBriefText(
   const latestByModule: Record<string, any> = {};
   for (const g of grades) if (!latestByModule[g.module]) latestByModule[g.module] = g;
 
-  const sar = (n: number) => "SAR " + Math.round(n || 0).toLocaleString();
   const totalClusters = agg?.totalClusters || 0;
   const resolved = agg?.resolvedCount || 0;
   const open = agg?.activeCount || 0;
@@ -569,11 +568,12 @@ export async function buildExecutiveBriefText(
     const prev = await getPreviousExecBriefSnapshot().catch(() => null);
     if (prev) {
       const dResolved = resolved - (prev.resolved_count || 0);
-      const dExposure = exposure - Number(prev.exposure || 0);
       const dRate = dupRate != null && prev.dup_rate != null ? dupRate - prev.dup_rate : null;
+      // No exposure delta — see the note on `brief` below. A week-over-week
+      // move on an unstable figure reads as a trend when it is re-clustering
+      // noise, which is worse than not reporting it.
       trendLine =
-        `\n*This week:* ${dResolved >= 0 ? "+" : ""}${dResolved.toLocaleString()} clusters cleared · ` +
-        `exposure ${dExposure <= 0 ? "down" : "up"} ${sar(Math.abs(dExposure))}` +
+        `\n*This week:* ${dResolved >= 0 ? "+" : ""}${dResolved.toLocaleString()} clusters cleared` +
         (dRate != null ? ` · duplicate rate ${dRate <= 0 ? "down" : "up"} ${Math.abs(dRate)} pts` : "") +
         ".\n";
     } else {
@@ -581,13 +581,31 @@ export async function buildExecutiveBriefText(
     }
   }
 
+  // NO SAR EXPOSURE FIGURE IN THIS BRIEF (Sarah 2026-08-23).
+  //
+  // Two reasons, and both matter:
+  //
+  //  1. Standing rule — nothing goes to leadership except the KPIs agreed with
+  //     them. That set is the four codes in leadershipPush's DEFAULT_MAP
+  //     (QM-KPI-002/008/015, GRC-KPI-008). Amount at risk is not among them,
+  //     and this brief is board-framed and posted on a timer, so it was a
+  //     second, unreviewed channel to the same audience.
+  //  2. The figure is not stable enough to report. estimatedPipelineInflation
+  //     read 172,480 → 479,480 → 90,640 → 397,640 within one day (2026-08-23);
+  //     it is gated on `total_deals > 1` in ACTIVE clusters and currently rests
+  //     on 1–2 deals, so ordinary re-clustering swings it several-fold. A
+  //     week-over-week delta on that is noise wearing the costume of a trend.
+  //
+  // The brief keeps what IS sound: cluster counts, cleared progress, and the
+  // duplicate rate against its 2% target. `exposure` is still computed and
+  // returned in `metrics` for the snapshot table so history is unbroken — it
+  // is simply not published.
   const brief =
     `*GRQ — CRM Duplicate Health (Executive Brief)*\n\n` +
-    `*Bottom line:* ~${sar(exposure)} of pipeline value is inflated across ${totalClusters.toLocaleString()} duplicate clusters; ${clearedPct < 1 ? "under 1%" : clearedPct.toFixed(0) + "%"} cleared so far.\n` +
+    `*Bottom line:* ${totalClusters.toLocaleString()} duplicate clusters tracked; ${clearedPct < 1 ? "under 1%" : clearedPct.toFixed(0) + "%"} cleared so far.\n` +
     trendLine +
     `\n` +
     (dupRate != null ? `• *Duplicate rate:* ~${dupRate}% vs the 2% target — our biggest data-quality gap.\n` : "") +
-    `• *Financial exposure:* ${sar(exposure)} of estimated inflated pipeline in duplicates.\n` +
     `• *Progress (merges):* ${resolved.toLocaleString()} duplicate clusters resolved · ${open.toLocaleString()} still open.\n` +
     (emptyTagged > 0
       ? `• *Progress (empty/test cleanup):* ${emptyTagged.toLocaleString()} empty/test records tagged Empty-Delete${emptyDeleted > 0 ? ` · ${emptyDeleted.toLocaleString()} deleted by admin` : " · pending admin delete"}.\n`
@@ -699,7 +717,7 @@ export const ADAM_NOTIFICATION_SCHEDULE: NotificationScheduleEntry[] = [
   { time: "07:00 KSA · daily", cron: "0 4 * * *", envKey: "DUPLICATE_MORNING_SYNC_CRON", channel: "— (background)", what: "Pre-shift incremental sync — radar current before your shift", postsToSlack: false },
   { time: "02:00 KSA · Sat & Tue", cron: "0 23 * * 1,5", envKey: "DUPLICATE_FULL_REBUILD_CRON", channel: "— (background)", what: "Twice-weekly FULL rebuild — clean wipe + re-fetch + re-score off-hours", postsToSlack: false },
   { time: "09:00 & 17:00 KSA · daily", cron: "0 6,14 * * *", envKey: "AUTONOMOUS_RESOLUTION_DIGEST_CRON", channel: "#grq-assistant", what: "Operational apply digest — what the agent applied/queued this shift", postsToSlack: true },
-  { time: "Sunday 06:00 KSA · weekly", cron: "0 3 * * 0", envKey: "AUTONOMOUS_EXEC_BRIEF_CRON", channel: "#grq-assistant + #automatic-audits", what: "Weekly leadership brief — exposure, dup-rate vs 2%, week-over-week trend, recommendation", postsToSlack: true },
+  { time: "Sunday 06:00 KSA · weekly", cron: "0 3 * * 0", envKey: "AUTONOMOUS_EXEC_BRIEF_CRON", channel: "#grq-assistant + #automatic-audits", what: "Weekly leadership brief — cluster counts, dup-rate vs 2%, week-over-week trend, recommendation (NO SAR exposure: leadership sees only the agreed KPIs)", postsToSlack: true },
   { time: "Every 6h (:30)", cron: "30 */6 * * *", channel: "#grq-assistant", what: "Autonomous resolution tick (shadow) — per-tick summary, quiet when nothing changed", postsToSlack: true },
   { time: "1st of month · 09:00 KSA", cron: "0 6 1 * *", envKey: "AUTONOMOUS_SCHEDULE_REVIEW_CRON", channel: "#grq-assistant", what: "Monthly review of THIS notification schedule — edit timings if needed", postsToSlack: true },
 ];
