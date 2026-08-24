@@ -2098,6 +2098,8 @@
                 </label>
                 <button data-on-click="loadActiveDealConflicts" class="rr-btn rr-btn-ghost">🔃 Refresh</button>
                 <button data-on-click="exportActiveDealConflicts" id="adcExportBtn" title="Download the listed conflicts as CSV — account, owners, stages and open value." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+                <button data-on-click="openActiveDealConflictsReport" id="adcReportBtn" title="Open a printable report of exactly these conflicts, written for the Head of Sales. Opens in a new tab — print or save as PDF from there. Nothing is emailed." class="rr-btn rr-btn-ghost">📄 Report for Head of Sales</button>
+                <button data-on-click="expandAllActiveDealConflicts" id="adcExpandBtn" title="Open or close every row at once." class="rr-btn rr-btn-ghost">⤢ Expand all</button>
             </div>
             <div id="adcStats" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4"></div>
             <div id="adcSummary" class="text-xs text-gray-500 mb-2"></div>
@@ -2105,10 +2107,10 @@
               <table class="rr-table w-full">
                 <thead>
                   <tr>
-                    <th>Company</th>
+                    <th>Company — click a row to open its deals</th>
                     <th class="rr-num">Open deals</th>
                     <th class="rr-num">Owners</th>
-                    <th>Deals — suggestion, stage / owner, created &amp; last activity</th>
+                    <th>Latest activity</th>
                     <th class="rr-num">Open value (SAR)</th>
                   </tr>
                 </thead>
@@ -2351,6 +2353,30 @@
             </div>
         </div>
 
+        <!-- ═══ Active Deal Conflicts — printable report for the Head of Sales ═══
+             Preview-first and MANUAL, the same shape as the Quality Reports
+             email preview: the report is rendered in a sandboxed iframe and the
+             operator prints it or copies the text. Nothing is sent from here —
+             this platform does not email Sales on its own (Sarah 2026-08-24). -->
+        <div id="adcReportModal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-50 flex items-center justify-center" data-testid="modal-adc-report">
+            <div class="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[92vh] flex flex-col">
+                <div class="p-4 border-b flex justify-between items-center gap-3">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-900">Report — Active deal conflicts</h2>
+                        <p id="adcReportSubtitle" class="text-xs text-gray-500 mt-1"></p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button data-on-click="printActiveDealConflictsReport" class="rr-btn rr-btn-primary" title="Print, or choose &quot;Save as PDF&quot; in the print dialog.">🖨 Print / Save as PDF</button>
+                        <button data-on-click="copyActiveDealConflictsReport" id="adcReportCopyBtn" class="rr-btn rr-btn-ghost" title="Copy the report as plain text so you can paste it into your own email. Nothing is sent from here.">📋 Copy as text</button>
+                        <button data-on-click="closeActiveDealConflictsReport" data-testid="button-close-adc-report" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-hidden p-3">
+                    <iframe id="adcReportFrame" class="w-full h-full border rounded" data-style="min-height:65vh" sandbox="allow-same-origin allow-modals" title="Active deal conflicts report"></iframe>
+                </div>
+            </div>
+        </div>
+
         <!-- ═══ Open CAPA modal — shared by every actionable tab ═══
              Replaces the retired Auto-CAPA KPIs tab. Quality opens a CAPA
              manually from any row (CS Lifecycle violation, CS Overlap
@@ -2484,7 +2510,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=157"></script>
+    <script src="/js/duplicates-app.js?v=158"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

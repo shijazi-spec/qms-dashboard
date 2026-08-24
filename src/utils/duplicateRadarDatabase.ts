@@ -2876,6 +2876,11 @@ const OPEN_STAGE_RANK: Record<string, number> = {
   "on hold": 10,
   hold: 10,
   unaccounted: 5,
+  // "Old Data" is a parking label for records nobody is working, not a
+  // pipeline position. Left to the default rank it scored 25 and beat a live
+  // "New Deal" — the High Source row recommended KEEPing the dead record and
+  // closing the real one (Sarah 2026-08-24). It must sit at the bottom.
+  "old data": 1,
 };
 const DEFAULT_STAGE_RANK = 25;
 
@@ -2954,6 +2959,8 @@ export interface MultiActiveDealAccount {
     stage: string;
     owner: string;
     amount: number;
+    /** Zoho layout this deal sits on — every deal in a group shares it. */
+    layout: string;
     created: string | null;
     last_activity: string | null;
     /**
@@ -3010,13 +3017,34 @@ export async function getMultiActiveDealAccounts(
               COALESCE(r.deal_value, 0) AS amount,
               r.created_date AS created,
               r.modified_date AS last_activity,
-              r.domain AS domain,
+              COALESCE(NULLIF(BTRIM(r.layout_name), ''), '') AS layout,
+              -- Deal records in this tenant carry NO domain of their own, so
+              -- take the linked ACCOUNT's domain (falling back to its website,
+              -- normalised to a bare host). This does two jobs: it puts the
+              -- domain under the company name in the UI, and it lets the
+              -- domain branch of the grouping below actually fire — merging
+              -- two duplicate Account records for one company into a single
+              -- conflict instead of hiding it as one-deal-each.
+              COALESCE(NULLIF(LOWER(BTRIM(r.domain)), ''), acc.domain) AS domain,
               NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id,
               COALESCE(
                 NULLIF(BTRIM(r.raw_data->'Account_Name'->>'name'), ''),
                 NULLIF(BTRIM(r.company_name), '')
               ) AS account_name
          FROM duplicate_records r
+         LEFT JOIN LATERAL (
+           SELECT NULLIF(
+                    regexp_replace(
+                      regexp_replace(
+                        LOWER(BTRIM(COALESCE(NULLIF(BTRIM(ar.domain), ''), ar.website, ''))),
+                        '^https?://(www\\.)?', ''),
+                      '[/?#].*$', ''),
+                    '') AS domain
+             FROM duplicate_records ar
+            WHERE ar.record_type = 'account'
+              AND ar.zoho_record_id = NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '')
+            LIMIT 1
+         ) acc ON TRUE
         WHERE r.record_type = 'deal'
           AND (${openStagePredicate("r")})${segCond}
      ),
@@ -3049,7 +3077,7 @@ export async function getMultiActiveDealAccounts(
               COALESCE(SUM(amount), 0)::float AS total_open_value,
               json_agg(json_build_object(
                 'id', id, 'name', name, 'stage', stage,
-                'owner', owner, 'amount', amount,
+                'owner', owner, 'amount', amount, 'layout', layout,
                 'created', created, 'last_activity', last_activity
               ) ORDER BY created NULLS LAST) AS deals,
               json_agg(DISTINCT owner) AS owners

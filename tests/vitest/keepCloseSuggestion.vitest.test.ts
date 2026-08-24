@@ -31,6 +31,7 @@ const RANK: Record<string, number> = {
   "on hold": 10,
   hold: 10,
   unaccounted: 5,
+  "old data": 1,
 };
 const DEFAULT_RANK = 25;
 const rankOf = (s: string) => RANK[(s || "").trim().toLowerCase()] ?? DEFAULT_RANK;
@@ -84,6 +85,16 @@ describe("stalled stages rank below early-but-moving ones", () => {
 
   it("still keeps On Hold when it is the only alternative to Unaccounted", () => {
     expect(keeper([{ stage: "Unaccounted" }, { stage: "On Hold" }])).toBe(1);
+  });
+
+  it("never keeps an Old Data record over a live one", () => {
+    // The High Source row: "Old Data" is a parking label, not a pipeline
+    // position. On the default rank it scored 25, beat New Deal (20) and the
+    // tab recommended keeping the dead record. It must lose to every live
+    // stage, including the weakest.
+    for (const live of ["New Deal", "Contacted", "On Hold", "Unaccounted"]) {
+      expect(keeper([{ stage: "Old Data" }, { stage: live }])).toBe(1);
+    }
   });
 });
 

@@ -7523,6 +7523,9 @@
         // grouping (domain → Account id → normalised name) and the OPEN-stage
         // filtering, so this only renders.
         var _adcRows = [];
+        // Headline counts + scope of the last load, so the printable report
+        // quotes the same figures the operator saw on the cards.
+        var _adcMeta = null;
 
         window.loadActiveDealConflicts = async function () {
             var body = document.getElementById('adcBody');
@@ -7546,6 +7549,14 @@
             }
             var rows = data.accounts || [];
             _adcRows = rows;
+            _adcMeta = {
+                segment: seg,
+                multiOwnerOnly: multiOnly,
+                accounts_with_multiple_open_deals: data.accounts_with_multiple_open_deals || 0,
+                accounts_with_multiple_owners: data.accounts_with_multiple_owners || 0,
+                total_open_deals_in_violation: data.total_open_deals_in_violation || 0,
+                total_open_value: data.total_open_value || 0,
+            };
             if (stats) {
                 // Uses the page's own .rr-kpi / .rr-acc-* card language rather
                 // than a helper — duplicates-app.js has no stat-card function.
@@ -7570,31 +7581,77 @@
                 body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">No conflicts found for this layout.</td></tr>';
                 return;
             }
-            body.innerHTML = rows.map(function (a) {
-                var deals = (a.deals || []).map(function (d) {
+            // Summary row per company + one hidden DETAIL row per deal, using
+            // the page's existing collapse helper (toggleDupGroup / the
+            // data-dup-group attribute) so this tab behaves like the four
+            // module tabs rather than inventing a second expand mechanism.
+            body.innerHTML = rows.map(function (a, idx) {
+                var gid = 'adc' + idx;
+                var ownerBadge = a.distinct_owners > 1
+                    ? '<span class="rr-badge rr-warn rr-dot" title="More than one owner — two sellers can be contacting this client.">' + a.distinct_owners + ' owners</span>'
+                    : '<span class="rr-badge rr-neutral">1 owner</span>';
+                // Newest touch across the competing deals — the one date that
+                // says whether this conflict is live or historic.
+                var latest = (a.deals || []).reduce(function (m, d) {
+                    var t = d.last_activity ? new Date(d.last_activity).getTime() : 0;
+                    return t > m ? t : m;
+                }, 0);
+                var keeper = (a.deals || []).filter(function (d) { return d.suggestion === 'keep'; })[0];
+                var head = '<tr class="align-top cursor-pointer hover:bg-gray-50" data-on-click="toggleDupGroup" data-args=\'["' + gid + '"]\' data-testid="row-adc-' + idx + '">' +
+                    '<td class="rr-lead rr-primary">' +
+                        '<span id="dup-chev-' + gid + '" class="text-gray-500 font-mono me-1" aria-hidden="true">▶</span>' +
+                        escapeHtml(String(a.account_name || '—')) +
+                        // Domain under the company name — from the linked
+                        // Account record, since deal rows carry none. Shown as
+                        // the account id only when Zoho holds no domain at all,
+                        // so the row is still traceable back to one Account.
+                        '<div class="rr-sub">' +
+                            (a.domain
+                                ? escapeHtml(String(a.domain))
+                                : '<span class="text-gray-400" title="No Website/Domain on this Account in Zoho — grouped by Account id instead.">no domain in CRM' +
+                                  (a.account_id ? ' · acct ' + escapeHtml(String(a.account_id)) : '') + '</span>') +
+                        '</div></td>' +
+                    '<td class="rr-num">' + (a.open_deals || 0) + '</td>' +
+                    '<td class="rr-num">' + ownerBadge + '</td>' +
+                    '<td class="rr-sub">' + (latest ? _dcFmtDate(new Date(latest).toISOString()) : '—') +
+                        (keeper ? '<div class="rr-sub">keep: ' + escapeHtml(String(keeper.stage || '')) +
+                            ' / ' + escapeHtml(String(keeper.owner || '')) + '</div>' : '') + '</td>' +
+                    '<td class="rr-num">' + Number(a.total_open_value || 0).toLocaleString() + '</td>' +
+                    '</tr>';
+                var details = (a.deals || []).map(function (d) {
                     var keep = d.suggestion === 'keep';
                     var chip = keep
                         ? '<span class="rr-badge rr-good rr-dot" title="' + escapeHtml(String(d.suggestion_reason || '')) + '">KEEP</span>'
                         : '<span class="rr-badge rr-warn" title="' + escapeHtml(String(d.suggestion_reason || '')) + '">close</span>';
-                    return '<div class="mb-1">' + chip + ' ' +
-                        escapeHtml(String(d.stage || '—')) + ' / ' + escapeHtml(String(d.owner || '—')) +
-                        '<div class="rr-sub">created ' + _dcFmtDate(d.created) +
-                        ' · last activity ' + _dcFmtDate(d.last_activity) +
-                        (d.amount ? ' · SAR ' + Number(d.amount).toLocaleString() : '') +
-                        ' — ' + escapeHtml(String(d.suggestion_reason || '')) + '</div></div>';
+                    return '<tr class="hidden align-top bg-gray-50" data-dup-group="' + gid + '">' +
+                        '<td class="ps-8">' + chip + ' ' + escapeHtml(String(d.name || d.id || '—')) +
+                            '<div class="rr-sub">' + escapeHtml(String(d.suggestion_reason || '')) +
+                            (d.layout ? ' · layout ' + escapeHtml(String(d.layout)) : '') + '</div></td>' +
+                        '<td>' + escapeHtml(String(d.stage || '—')) + '</td>' +
+                        '<td>' + escapeHtml(String(d.owner || '—')) + '</td>' +
+                        '<td class="rr-sub">created ' + _dcFmtDate(d.created) +
+                            '<div class="rr-sub">last activity ' + _dcFmtDate(d.last_activity) + '</div></td>' +
+                        '<td class="rr-num">' + (d.amount ? Number(d.amount).toLocaleString() : '—') + '</td>' +
+                        '</tr>';
                 }).join('');
-                var ownerBadge = a.distinct_owners > 1
-                    ? '<span class="rr-badge rr-warn rr-dot" title="More than one owner — two sellers can be contacting this client.">' + a.distinct_owners + '</span>'
-                    : '<span class="rr-badge rr-neutral">' + a.distinct_owners + '</span>';
-                return '<tr class="align-top">' +
-                    '<td class="rr-lead rr-primary">' + escapeHtml(String(a.account_name || '—')) +
-                        (a.domain ? '<div class="rr-sub">' + escapeHtml(String(a.domain)) + '</div>' : '') + '</td>' +
-                    '<td class="rr-num">' + (a.open_deals || 0) + '</td>' +
-                    '<td class="rr-num">' + ownerBadge + '</td>' +
-                    '<td>' + deals + '</td>' +
-                    '<td class="rr-num">' + Number(a.total_open_value || 0).toLocaleString() + '</td>' +
-                    '</tr>';
+                return head + details;
             }).join('');
+        };
+
+        // Open/close every conflict at once — the state is read off the first
+        // row so the button always does the opposite of what is on screen.
+        window.expandAllActiveDealConflicts = function () {
+            var body = document.getElementById('adcBody');
+            if (!body) return;
+            var details = body.querySelectorAll('tr[data-dup-group]');
+            if (!details.length) return;
+            var open = !details[0].classList.contains('hidden');
+            details.forEach(function (tr) { tr.classList.toggle('hidden', open); });
+            body.querySelectorAll('[id^="dup-chev-adc"]').forEach(function (c) {
+                c.textContent = open ? '▶' : '▼';
+            });
+            var btn = document.getElementById('adcExpandBtn');
+            if (btn) btn.textContent = open ? '⤢ Expand all' : '⤡ Collapse all';
         };
 
         // CSV of exactly what is on screen, so the flag email to Sales can cite
@@ -7602,7 +7659,7 @@
         window.exportActiveDealConflicts = function () {
             if (!_adcRows.length) return;
             var head = ['Company', 'Domain', 'Open deals', 'Distinct owners', 'Owners',
-                'Deal', 'Stage', 'Owner', 'Created', 'Last activity', 'Amount (SAR)', 'Suggestion', 'Why'];
+                'Deal', 'Stage', 'Owner', 'Layout', 'Created', 'Last activity', 'Amount (SAR)', 'Suggestion', 'Why'];
             var lines = [head.join(',')];
             var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
             // ONE ROW PER DEAL, not per company: the recipient has to act on
@@ -7613,7 +7670,7 @@
                     lines.push([
                         cell(a.account_name), cell(a.domain || ''), a.open_deals || 0, a.distinct_owners || 0,
                         cell((a.owners || []).join(' | ')),
-                        cell(d.name), cell(d.stage), cell(d.owner),
+                        cell(d.name), cell(d.stage), cell(d.owner), cell(d.layout || ''),
                         cell(d.created || ''), cell(d.last_activity || ''),
                         Math.round(d.amount || 0),
                         cell(d.suggestion || ''), cell(d.suggestion_reason || ''),
@@ -7626,6 +7683,141 @@
             a.href = url; a.download = 'active-deal-conflicts.csv';
             document.body.appendChild(a); a.click(); a.remove();
             URL.revokeObjectURL(url);
+        };
+
+        // ══ Printable report for the Head of Sales ══
+        //
+        // Built from exactly the rows on screen, so the report can never claim
+        // a number the operator did not just see. It is PREVIEW-ONLY: it prints
+        // or copies to the clipboard and sends nothing. The platform does not
+        // email Sales on its own (Sarah 2026-08-24) — the covering note is the
+        // sender's to write.
+        function _adcReportHtml() {
+            var meta = _adcMeta || {};
+            var money = function (n) { return Number(n || 0).toLocaleString('en-US'); };
+            var today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+            var withValue = _adcRows.filter(function (a) { return Number(a.total_open_value || 0) > 0; });
+            var toClose = _adcRows.reduce(function (n, a) {
+                return n + (a.deals || []).filter(function (d) { return d.suggestion === 'close'; }).length;
+            }, 0);
+            var scope = meta.multiOwnerOnly
+                ? 'companies worked by MORE THAN ONE owner'
+                : 'every company with more than one open deal';
+            var rowsHtml = _adcRows.map(function (a, i) {
+                var deals = (a.deals || []).map(function (d) {
+                    var keep = d.suggestion === 'keep';
+                    return '<tr class="' + (keep ? 'keep' : '') + '">' +
+                        '<td class="tag">' + (keep ? 'KEEP' : 'CLOSE') + '</td>' +
+                        '<td>' + escapeHtml(String(d.stage || '—')) + '</td>' +
+                        '<td>' + escapeHtml(String(d.owner || '—')) + '</td>' +
+                        '<td class="num">' + (d.amount ? money(d.amount) : '—') + '</td>' +
+                        '<td>' + _dcFmtDate(d.created) + '</td>' +
+                        '<td>' + _dcFmtDate(d.last_activity) + '</td>' +
+                        '<td class="why">' + escapeHtml(String(d.suggestion_reason || '')) + '</td>' +
+                        '</tr>';
+                }).join('');
+                return '<div class="acct">' +
+                    '<h3>' + (i + 1) + '. ' + escapeHtml(String(a.account_name || '—')) + '</h3>' +
+                    '<div class="sub">' + (a.domain ? escapeHtml(String(a.domain)) + ' · ' : '') +
+                        (a.open_deals || 0) + ' open deals · ' + (a.distinct_owners || 0) + ' owners · SAR ' +
+                        money(a.total_open_value) + ' open</div>' +
+                    '<div class="sub owners">Owners: ' + escapeHtml((a.owners || []).join(', ')) + '</div>' +
+                    '<table><thead><tr><th></th><th>Stage</th><th>Owner</th><th class="num">Amount (SAR)</th>' +
+                        '<th>Created</th><th>Last activity</th><th>Why</th></tr></thead>' +
+                        '<tbody>' + deals + '</tbody></table></div>';
+            }).join('');
+            return '<meta charset="utf-8"><style>' +
+                'body{font:13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;margin:28px;}' +
+                'h1{font-size:20px;margin:0 0 2px;} h2{font-size:15px;margin:22px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px;}' +
+                'h3{font-size:13px;margin:0 0 2px;} .meta{color:#666;font-size:11px;margin-bottom:16px;}' +
+                '.kpis{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 4px;}' +
+                '.kpi{border:1px solid #e2e2e2;border-radius:6px;padding:8px 12px;min-width:120px;}' +
+                '.kpi b{display:block;font-size:18px;} .kpi span{color:#666;font-size:10px;text-transform:uppercase;letter-spacing:.04em;}' +
+                '.acct{margin:14px 0 18px;page-break-inside:avoid;} .sub{color:#555;font-size:11px;} .owners{margin-bottom:5px;}' +
+                'table{border-collapse:collapse;width:100%;font-size:11px;margin-top:4px;}' +
+                'th,td{border:1px solid #e4e4e4;padding:4px 6px;text-align:left;vertical-align:top;}' +
+                'th{background:#f6f6f6;font-weight:600;} .num{text-align:right;} .why{color:#666;}' +
+                'tr.keep td{background:#f2fbf5;} td.tag{font-weight:700;font-size:10px;white-space:nowrap;}' +
+                'tr.keep td.tag{color:#137a3d;} td.tag{color:#a33;}' +
+                'ul{margin:6px 0 0 18px;padding:0;} li{margin:3px 0;}' +
+                '.note{background:#fbfbfb;border:1px solid #eee;border-radius:6px;padding:10px 12px;font-size:11px;color:#555;margin-top:18px;}' +
+                '@media print{body{margin:12mm;}}' +
+                '</style>' +
+                '<h1>Active deal conflicts — ' + escapeHtml(String(meta.segment || 'walaplus')) + ' layout</h1>' +
+                '<div class="meta">Prepared ' + today + ' from the QMS Duplicate Radar · scope: ' + scope + '</div>' +
+                '<h2>Headline</h2>' +
+                '<div class="kpis">' +
+                    '<div class="kpi"><span>Companies listed</span><b>' + _adcRows.length + '</b></div>' +
+                    '<div class="kpi"><span>Open deals involved</span><b>' + money(meta.total_open_deals_in_violation) + '</b></div>' +
+                    '<div class="kpi"><span>Deals to close</span><b>' + toClose + '</b></div>' +
+                    '<div class="kpi"><span>Open value</span><b>SAR ' + money(meta.total_open_value) + '</b></div>' +
+                '</div>' +
+                '<p>Each company below carries more than one OPEN deal on the same ' +
+                escapeHtml(String(meta.segment || 'walaplus')) + ' layout. That means two sellers can be ' +
+                'contacting the same client, and the same opportunity is counted more than once in the pipeline. ' +
+                withValue.length + ' of the ' + _adcRows.length + ' carry a value; the rest are housekeeping.</p>' +
+                '<h2>What we are asking for</h2><ul>' +
+                '<li>Confirm the owner for each company below.</li>' +
+                '<li>Close the deals marked CLOSE, or tell us which one should stay instead.</li>' +
+                '<li>Going forward: one open deal per company per layout.</li></ul>' +
+                '<h2>The conflicts</h2>' + rowsHtml +
+                '<div class="note"><b>How this was produced.</b> Open deals only — closed, lost, won and ' +
+                'activated stages are excluded, so a company with one live deal and five Closed Lost does not appear. ' +
+                'Deals are grouped by domain, then by Zoho Account id, then by company name. ' +
+                'KEEP / CLOSE is a <b>recommendation</b> ranked by pipeline position, then most recent activity, ' +
+                'then whether a value is recorded, then age — nothing has been written to the CRM.</div>';
+        }
+
+        window.openActiveDealConflictsReport = function () {
+            if (!_adcRows.length) { alert('Load the tab first — there is nothing to report yet.'); return; }
+            var modal = document.getElementById('adcReportModal');
+            var frame = document.getElementById('adcReportFrame');
+            var sub = document.getElementById('adcReportSubtitle');
+            if (!modal || !frame) return;
+            frame.srcdoc = _adcReportHtml();
+            if (sub) {
+                sub.textContent = _adcRows.length + ' companies · nothing is sent from here — ' +
+                    'print it, or copy the text into your own email.';
+            }
+            modal.classList.remove('hidden');
+        };
+
+        window.closeActiveDealConflictsReport = function () {
+            var m = document.getElementById('adcReportModal');
+            if (m) m.classList.add('hidden');
+        };
+
+        window.printActiveDealConflictsReport = function () {
+            var frame = document.getElementById('adcReportFrame');
+            if (frame && frame.contentWindow) { frame.contentWindow.focus(); frame.contentWindow.print(); }
+        };
+
+        // Plain text of the same report, for pasting into an email client. The
+        // operator sends it; this platform does not.
+        window.copyActiveDealConflictsReport = function () {
+            var meta = _adcMeta || {};
+            var nl = String.fromCharCode(10);
+            var out = ['Active deal conflicts — ' + (meta.segment || 'walaplus') + ' layout',
+                _adcRows.length + ' companies · ' + (meta.total_open_deals_in_violation || 0) +
+                    ' open deals · SAR ' + Number(meta.total_open_value || 0).toLocaleString(), ''];
+            _adcRows.forEach(function (a, i) {
+                out.push((i + 1) + '. ' + a.account_name + (a.domain ? '  (' + a.domain + ')' : '') +
+                    '  — SAR ' + Number(a.total_open_value || 0).toLocaleString());
+                (a.deals || []).forEach(function (d) {
+                    out.push('   ' + (d.suggestion === 'keep' ? 'KEEP ' : 'CLOSE') + '  ' +
+                        (d.stage || '—') + '  ·  ' + (d.owner || '—') +
+                        '  ·  created ' + String(d.created || '').slice(0, 10) +
+                        '  ·  last activity ' + String(d.last_activity || '').slice(0, 10) +
+                        (d.amount ? '  ·  SAR ' + Number(d.amount).toLocaleString() : ''));
+                });
+                out.push('');
+            });
+            var btn = document.getElementById('adcReportCopyBtn');
+            navigator.clipboard.writeText(out.join(nl)).then(function () {
+                if (btn) { btn.textContent = '✅ Copied'; setTimeout(function () { btn.textContent = '📋 Copy as text'; }, 2000); }
+            }, function () {
+                if (btn) btn.textContent = '⚠ Copy failed';
+            });
         };
 
         function showTab(tab) {
