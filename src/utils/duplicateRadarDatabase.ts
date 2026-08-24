@@ -4779,12 +4779,23 @@ export async function getClusterSummary(): Promise<{
   activeCount: number;
   resolvedCount: number;
 }> {
-  // A REAL duplicate cluster has ≥2 records (a 1-record "cluster" is a lone
-  // company, NOT a duplicate). The module tabs already gate on ≥2; this brief
-  // historically did COUNT(*) over ALL clusters incl. singletons, which massively
-  // overstated the headline count + duplicate rate (Ahmad 2026-06-28). Gate on the
-  // cluster's record count so the executive figure matches what the tabs show.
-  const MULTI = `(COALESCE(dc.total_leads,0)+COALESCE(dc.total_deals,0)+COALESCE(dc.total_contacts,0)+COALESCE(dc.total_accounts,0)) >= 2`;
+  // A REAL duplicate cluster has ≥2 records OF THE SAME MODULE. A 1-record
+  // "cluster" is a lone company, and a cluster holding one lead plus one
+  // account is a CROSS-MODULE LINK — the same company seen in two places, not
+  // a duplicate of either.
+  //
+  // The 2026-06-28 fix removed singletons but summed ACROSS modules
+  // (total_leads + total_deals + total_contacts + total_accounts >= 2), so
+  // every cross-module link still counted. Measured live 2026-08-23: this
+  // reported 26,090 duplicate clusters where the dashboard and the module tabs
+  // report 10,282 — a gap of 15,808 against 15,242 cross_module_link_candidate
+  // signals. The executive brief therefore overstated the duplicate count
+  // ~2.5x AND understated progress, because the inflated figure is also the
+  // denominator of "% cleared" (7% shown against a 23% resolution rate).
+  //
+  // GREATEST(...) > 1 is the definition getSummary's trueDuplicateClusters,
+  // the per-module tabs and getSegment*DuplicateCount all use. One definition.
+  const MULTI = `GREATEST(COALESCE(dc.total_leads,0), COALESCE(dc.total_deals,0), COALESCE(dc.total_contacts,0), COALESCE(dc.total_accounts,0)) > 1`;
   const result = await pool.query(`
     WITH resolved_act AS (
       SELECT DISTINCT cluster_id FROM duplicate_merge_actions

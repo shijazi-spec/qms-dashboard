@@ -779,7 +779,11 @@ export async function buildRadarTabStatus(): Promise<string> {
       // digest contradict its own "do not add these up" rule and the weekly brief
       // (Sarah 2026-07-19).
       parts.push(
-        `›  *Scanned (context — NOT all duplicates):* ${n(agg.totalClusters)} record groups incl. singletons · ~SAR ${n(agg.estimatedPipelineInflation)} exposure at risk · ${n(agg.resolvedCount)} merged so far`,
+        // "incl. singletons" was wrong even before today: getClusterSummary has
+        // excluded 1-record clusters since 2026-06-28. It now also excludes
+        // cross-module links, so this figure is genuinely duplicate clusters
+        // and matches the module tabs.
+        `›  *Duplicate clusters:* ${n(agg.totalClusters)} · ~SAR ${n(agg.estimatedPipelineInflation)} exposure at risk · ${n(agg.resolvedCount)} merged so far`,
       );
     }
   } catch { /* skip */ }
