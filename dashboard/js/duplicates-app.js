@@ -7518,6 +7518,99 @@
             document.getElementById('noSearchResults').classList.add('hidden');
         }
 
+        // ── Active Deal Conflicts ────────────────────────────────────────────
+        // One ACTIVE deal per company, within one layout. The server does the
+        // grouping (domain → Account id → normalised name) and the OPEN-stage
+        // filtering, so this only renders.
+        var _adcRows = [];
+
+        window.loadActiveDealConflicts = async function () {
+            var body = document.getElementById('adcBody');
+            var stats = document.getElementById('adcStats');
+            var summary = document.getElementById('adcSummary');
+            if (!body) return;
+            var seg = (document.getElementById('adcSegment') || {}).value || 'walaplus';
+            var multiOnly = !!(document.getElementById('adcMultiOwnerOnly') || {}).checked;
+            body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">Loading…</td></tr>';
+            var data;
+            try {
+                var url = '/api/duplicates/multi-active-deals?segment=' + encodeURIComponent(seg) +
+                    '&limit=1000' + (multiOnly ? '&multi_owner=1' : '');
+                var res = await fetch(url, { credentials: 'same-origin' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                data = await res.json();
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-amber-700">Could not load: ' +
+                    escapeHtml(String((e && e.message) || e)) + '</td></tr>';
+                return;
+            }
+            var rows = data.accounts || [];
+            _adcRows = rows;
+            if (stats) {
+                // Uses the page's own .rr-kpi / .rr-acc-* card language rather
+                // than a helper — duplicates-app.js has no stat-card function.
+                var card = function (accent, label, value, sub) {
+                    return '<div class="rr-kpi rr-kpi-rich rr-acc-' + accent + '">' +
+                        '<div class="rr-kpi-label">' + escapeHtml(label) + '</div>' +
+                        '<div class="rr-kpi-value">' + escapeHtml(String(value)) + '</div>' +
+                        '<div class="rr-kpi-sub">' + escapeHtml(sub) + '</div></div>';
+                };
+                stats.innerHTML =
+                    card('rose', 'Companies in conflict', data.accounts_with_multiple_open_deals || 0, 'more than one OPEN deal') +
+                    card('amber', 'Multiple owners', data.accounts_with_multiple_owners || 0, 'two or more sellers on one client') +
+                    card('blue', 'Open deals involved', data.total_open_deals_in_violation || 0, 'across those companies') +
+                    card('teal', 'Open value', 'SAR ' + Number(data.total_open_value || 0).toLocaleString(), 'sum of the open deals');
+            }
+            if (summary) {
+                summary.textContent = 'Layout: ' + seg + ' · ' + rows.length + ' shown' +
+                    (multiOnly ? ' (multiple owners only)' : ' (all conflicts)') +
+                    ' · closed, won and activated stages are excluded.';
+            }
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">No conflicts found for this layout.</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(function (a) {
+                var deals = (a.deals || []).map(function (d) {
+                    return '<div class="rr-sub">' + escapeHtml(String(d.stage || '—')) +
+                        ' / ' + escapeHtml(String(d.owner || '—')) + '</div>';
+                }).join('');
+                var ownerBadge = a.distinct_owners > 1
+                    ? '<span class="rr-badge rr-warn rr-dot" title="More than one owner — two sellers can be contacting this client.">' + a.distinct_owners + '</span>'
+                    : '<span class="rr-badge rr-neutral">' + a.distinct_owners + '</span>';
+                return '<tr class="align-top">' +
+                    '<td class="rr-lead rr-primary">' + escapeHtml(String(a.account_name || '—')) +
+                        (a.domain ? '<div class="rr-sub">' + escapeHtml(String(a.domain)) + '</div>' : '') + '</td>' +
+                    '<td class="rr-num">' + (a.open_deals || 0) + '</td>' +
+                    '<td class="rr-num">' + ownerBadge + '</td>' +
+                    '<td>' + deals + '</td>' +
+                    '<td class="rr-num">' + Number(a.total_open_value || 0).toLocaleString() + '</td>' +
+                    '</tr>';
+            }).join('');
+        };
+
+        // CSV of exactly what is on screen, so the flag email to Sales can cite
+        // the same rows the operator is looking at.
+        window.exportActiveDealConflicts = function () {
+            if (!_adcRows.length) return;
+            var head = ['Company', 'Domain', 'Open deals', 'Distinct owners', 'Owners', 'Stages', 'Open value (SAR)'];
+            var lines = [head.join(',')];
+            _adcRows.forEach(function (a) {
+                var stages = (a.deals || []).map(function (d) { return (d.stage || '') + ' / ' + (d.owner || ''); }).join(' | ');
+                var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+                lines.push([
+                    cell(a.account_name), cell(a.domain || ''), a.open_deals || 0, a.distinct_owners || 0,
+                    cell((a.owners || []).join(' | ')), cell(stages), Math.round(a.total_open_value || 0),
+                ].join(','));
+            });
+            var blob = new Blob([lines.join(String.fromCharCode(10))], { type: 'text/csv;charset=utf-8;' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = 'active-deal-conflicts.csv';
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+        };
+
         function showTab(tab) {
             // Track which tab the user is on — buildFilterParams() reads this
             // to look up the per-tab AI-status chip selection.
@@ -7567,6 +7660,7 @@
             if (tab === 'cs-overlap') loadCsOverlap(window._csOverlapFilter || 'all');
             if (tab === 'cs-lifecycle') loadCsLifecycle(window._csLifecycleFilter || 'all');
             if (tab === 'deal-lifecycle') loadDealLifecycle();
+            if (tab === 'active-deal-conflicts') loadActiveDealConflicts();
             if (tab === 'cleaning-progress') {
                 const _cpSeg1 = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : 'all';
                 loadCleaningProgress(_cpSeg1);

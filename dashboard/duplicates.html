@@ -413,6 +413,9 @@
                 <span class="inline-block w-2 h-2 rounded-full bg-orange-500"></span>
                 Deals Lifecycle
             </button>
+            <button data-on-click="showTab" data-args="[&quot;active-deal-conflicts&quot;]" id="tab-active-deal-conflicts" data-testid="tab-active-deal-conflicts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="One ACTIVE deal per company. Flags companies carrying more than one OPEN deal in the same layout — and highlights those worked by more than one owner, where two sellers can be contacting the same client.">
+                <span class="w-2 h-2 rounded-full bg-rose-500"></span> Active Deal Conflicts
+            </button>
             <button data-on-click="showTab" data-args="[&quot;deal-compliance&quot;]" id="tab-deal-compliance" data-testid="tab-deal-compliance" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Deal-stage compliance (Sales SOP 7.5): deals in Proposal / Paid / Agreement Signed must carry the required documents (financial offer, contract, VAT, CR, National Address) and mandatory fields.">
                 <span class="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
                 Deal Compliance
@@ -2073,6 +2076,47 @@
         </div>
 
         <!-- ═══ DEALS LIFECYCLE TAB — Sales SOP stage aging ═══ -->
+        <div id="content-active-deal-conflicts" class="tab-content hidden lg:-mx-8 xl:-mx-16 2xl:-mx-32">
+          <div class="lg:px-8 xl:px-16 2xl:px-32">
+            <div class="bg-rose-50 border border-rose-200 rounded-lg p-3 mb-3 text-sm text-rose-900">
+                <strong>Active Deal Conflicts — one ACTIVE deal per company.</strong>
+                Companies carrying more than one OPEN deal <em>within the same layout</em>. Closed, Lost, Agreement&nbsp;Signed, Paid and Partner&nbsp;Active never count, so an account with one open deal beside old lost ones is clean.
+                Deals are grouped by domain, falling back to the Zoho Account id and then the company name — so two deals sitting on <em>duplicate account records</em> for one company still group together.
+                <strong>Multiple owners</strong> is the case to action first: two sellers can be contacting the same client and the pipeline is counted twice.
+            </div>
+            <div class="flex flex-wrap items-center gap-2 mb-3">
+                <label class="text-xs text-gray-600">Layout:</label>
+                <select id="adcSegment" data-on-change="loadActiveDealConflicts" class="border rounded px-2 py-1 text-sm">
+                    <option value="walaplus" selected>WalaPlus</option>
+                    <option value="walaone">WalaOne</option>
+                    <option value="marketplace">Marketplace</option>
+                </select>
+                <label class="text-xs text-gray-600 ms-2 flex items-center gap-1">
+                    <input type="checkbox" id="adcMultiOwnerOnly" data-on-change="loadActiveDealConflicts" checked />
+                    Multiple owners only
+                </label>
+                <button data-on-click="loadActiveDealConflicts" class="rr-btn rr-btn-ghost">🔃 Refresh</button>
+                <button data-on-click="exportActiveDealConflicts" id="adcExportBtn" title="Download the listed conflicts as CSV — account, owners, stages and open value." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+            </div>
+            <div id="adcStats" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4"></div>
+            <div id="adcSummary" class="text-xs text-gray-500 mb-2"></div>
+            <div class="overflow-x-auto">
+              <table class="rr-table w-full">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th class="rr-num">Open deals</th>
+                    <th class="rr-num">Owners</th>
+                    <th>Deals (stage / owner)</th>
+                    <th class="rr-num">Open value (SAR)</th>
+                  </tr>
+                </thead>
+                <tbody id="adcBody"><tr><td colspan="5" class="px-3 py-4 text-gray-500">Click Refresh to load.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <div id="content-deal-lifecycle" class="tab-content hidden lg:-mx-8 xl:-mx-16 2xl:-mx-32">
           <div class="lg:px-8 xl:px-16 2xl:px-32">
             <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3 text-sm text-orange-900">
@@ -2439,7 +2483,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=155"></script>
+    <script src="/js/duplicates-app.js?v=156"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
