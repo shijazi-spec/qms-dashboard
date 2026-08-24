@@ -854,9 +854,24 @@ export async function runDirectAudit(
         const score = qualityScores.overallScore || 0;
         const scoreEmoji = score >= 90 ? "🟢" : score >= 80 ? "🟡" : score >= 70 ? "🟠" : "🔴";
         const sevSummary = `🔴 Critical: ${criticalIssues}\n🟠 High: ${highIssues}\n🟡 Medium: ${mediumIssues}\n🟢 Low: ${lowIssues}`;
+        // Flag any module that hit MAX_RECORDS_PER_MODULE. Without this the
+        // line reads "Contacts: 50,000 records" — an exact cap presented as a
+        // complete audit. The mirror held 70,327 contacts on 2026-08-24, so
+        // 20,327 records (29%) were never examined and every Contacts issue
+        // count below is a floor, not a total. Sarah flagged that the sales
+        // team was reading these digests as a clean bill of health.
         const moduleSummary = moduleBreakdown
           .filter((m: any) => m.recordsAudited > 0)
-          .map((m: any) => `• *${m.module}*: ${m.recordsAudited.toLocaleString()} records, ${m.issuesFound.toLocaleString()} issues`)
+          .map((m: any) => {
+            const capped = m.recordsAudited >= MAX_RECORDS_PER_MODULE;
+            return (
+              `• *${m.module}*: ${m.recordsAudited.toLocaleString()} records, ` +
+              `${m.issuesFound.toLocaleString()} issues` +
+              (capped
+                ? ` _(capped at ${MAX_RECORDS_PER_MODULE.toLocaleString()} — issue count is a floor, not a total)_`
+                : "")
+            );
+          })
           .join("\n");
         const findingTypeLines = allFindingTypes.map(
           (f) =>
@@ -902,7 +917,15 @@ export async function runDirectAudit(
             (section) =>
               `• *--- ${section.title} ---*\n  - Total ${section.total} (Leads ${section.leads} / Deals ${section.deals})\n  - New ${section.new_in_window}\n  - Progressed ${section.progressed}\n  - Stalled ${section.stalled}\n  - Severity: 🔴 Critical ${section.severity_counts.critical} | 🟠 High ${section.severity_counts.high} | 🟡 Medium ${section.severity_counts.medium} | 🟢 Low ${section.severity_counts.low}`,
           );
-          executiveSectionText = `*Period Covered (KSA):*\n${digestData.window_start} -> ${digestData.window_end}\n\n*Executive Segments (Dashboard-aligned):*\n${sectionLines.join("\n")}\n\n*Definitions:*\n*Progressed = records in advancing stages (Qualified, Proposal, Negotiation, Won/Converted/Contract/Onboarding).*\n*Stalled = records in non-progress stages (On hold, Lost, Not Interested, Junk, Unqualified, Inactive).*`;
+          // The segment health percentages describe ONLY records CREATED inside
+          // the window above — getRecordTimestamp filters on Created_Time. On
+          // 2026-08-24 that was 665 records against 140,380 in the full audit,
+          // i.e. 0.47%, yet the segments read "Health: Excellent 92%" directly
+          // beneath an audit reporting 366,045 issues. The sales team read the
+          // 92% as a clean bill of health for the whole book (Sarah 2026-08-24).
+          // Nothing here is miscalculated — new records genuinely are cleaner —
+          // but the scope has to be stated or the number misleads by omission.
+          executiveSectionText = `*Period Covered (KSA):*\n${digestData.window_start} -> ${digestData.window_end}\n\n*Executive Segments (Dashboard-aligned):*\n_These segments cover ONLY records CREATED in the period above — not the whole CRM. The health percentages describe new records; the module breakdown and issue totals above cover every audited record._\n${sectionLines.join("\n")}\n\n*Definitions:*\n*Progressed = records in advancing stages (Qualified, Proposal, Negotiation, Won/Converted/Contract/Onboarding).*\n*Stalled = records in non-progress stages (On hold, Lost, Not Interested, Junk, Unqualified, Inactive).*`;
         } catch (digestErr) {
           logger?.warn("⚠️ [DirectAudit] Could not build executive sections for Slack message", {
             error: digestErr instanceof Error ? digestErr.message : String(digestErr),
