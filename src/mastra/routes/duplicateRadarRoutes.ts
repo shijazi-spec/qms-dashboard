@@ -169,6 +169,8 @@ const AI_STATUS_VALUES = [
 function parseRecordTabFilters(url: URL): {
   start_date?: string;
   end_date?: string;
+  period_year?: number;
+  period_quarter?: number;
   owners?: string[];
   layouts?: string[];
   pipelines?: string[];
@@ -210,9 +212,20 @@ function parseRecordTabFilters(url: URL): {
   // to exactly ASC/DESC before it ever reaches SQL.
   const rawDir = (url.searchParams.get("dir") || "").trim().toLowerCase();
   const dir = rawDir === "asc" || rawDir === "desc" ? (rawDir as "asc" | "desc") : undefined;
+  // Quarter / year chip — parsed once here so every duplicate tab that goes
+  // through this helper honours it identically. Implausible values are dropped
+  // rather than passed on, so a bad query string falls back to "all time"
+  // instead of silently filtering to an empty window.
+  const pyRaw = parseInt(url.searchParams.get("period_year") || "", 10);
+  const pqRaw = parseInt(url.searchParams.get("period_quarter") || "", 10);
+  const period_year = pyRaw >= 2000 && pyRaw <= 2100 ? pyRaw : undefined;
+  const period_quarter =
+    period_year && pqRaw >= 1 && pqRaw <= 4 ? pqRaw : undefined;
   return {
     start_date: url.searchParams.get("start_date") || undefined,
     end_date: url.searchParams.get("end_date") || undefined,
+    period_year,
+    period_quarter,
     owners: csv("owners"),
     layouts: csv("layouts"),
     pipelines: csv("pipelines"),

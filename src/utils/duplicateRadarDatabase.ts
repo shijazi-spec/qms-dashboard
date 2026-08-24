@@ -160,6 +160,15 @@ export interface DuplicateFilters {
   domain?: string;
   start_date?: string;
   end_date?: string;
+  /**
+   * Quarter / year chip shared by every duplicate tab. Filters on the CRM's
+   * dates (first_record_date), NOT on when our clustering saw the cluster —
+   * see the DATE_BASIS note in buildClusterFilterClause for why that
+   * distinction matters. `period_year` alone means the whole year;
+   * `period_quarter` narrows it to Q1..Q4.
+   */
+  period_year?: number;
+  period_quarter?: number;
   status?: string;
   confidence_level?: string;
   /**
@@ -2117,6 +2126,9 @@ function buildClusterFilterClause(
         owner_email?: string;
         /** Marketplace / WalaPlus / WalaOne product segment. */
         segment?: DuplicateFilters["segment"];
+        /** Quarter / year chip — see the DATE_BASIS note below. */
+        period_year?: number;
+        period_quarter?: number;
       }
     | undefined,
   startIndex: number,
@@ -2142,13 +2154,39 @@ function buildClusterFilterClause(
     clause += ` AND confidence_level = $${paramIndex++}`;
     params.push(filters.confidence_level);
   }
+  // DATE BASIS: first_record_date (when the earliest record in this cluster was
+  // created IN THE CRM), not created_at (when OUR clustering process first saw
+  // it). They are wildly different — a cluster observed live on 2026-08-24 had
+  // first_record_date 2020-04-14 against created_at 2026-04-18, so a date filter
+  // on created_at put a 2020 duplicate in Q2 2026. Worse, "Rebuild Clusters"
+  // recreates these rows, so created_at is reset wholesale and every cluster
+  // looks newly created. Filtering duplicates "by date" means the CRM's dates.
+  // COALESCE keeps rows with no first_record_date reachable rather than
+  // silently dropping them.
+  const DATE_BASIS = "COALESCE(first_record_date, created_at)";
   if (filters?.start_date) {
-    clause += ` AND created_at >= $${paramIndex++}`;
+    clause += ` AND ${DATE_BASIS} >= $${paramIndex++}`;
     params.push(filters.start_date);
   }
   if (filters?.end_date) {
-    clause += ` AND created_at <= $${paramIndex++}`;
+    clause += ` AND ${DATE_BASIS} <= $${paramIndex++}`;
     params.push(filters.end_date + "T23:59:59Z");
+  }
+  // Quarter / year chip. Server-side derivation so every tab agrees on what
+  // "Q3 2026" means, and a half-open [start, nextQuarterStart) interval so the
+  // last day of the quarter is included and no date lands in two quarters —
+  // same arithmetic as the Quality Reports timeframe selector.
+  if (filters?.period_year) {
+    const y = Number(filters.period_year);
+    const q = filters.period_quarter ? Number(filters.period_quarter) : null;
+    if (Number.isFinite(y) && y >= 2000 && y <= 2100) {
+      const startMonth = q && q >= 1 && q <= 4 ? (q - 1) * 3 : 0;
+      const endMonth = q && q >= 1 && q <= 4 ? q * 3 : 12;
+      const start = new Date(Date.UTC(y, startMonth, 1)).toISOString();
+      const end = new Date(Date.UTC(y, endMonth, 1)).toISOString();
+      clause += ` AND ${DATE_BASIS} >= $${paramIndex++} AND ${DATE_BASIS} < $${paramIndex++}`;
+      params.push(start, end);
+    }
   }
   if (filters?.hide_hierarchies) {
     clause += ` AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1`;
