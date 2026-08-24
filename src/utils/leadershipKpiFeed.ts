@@ -995,15 +995,23 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
     description:
       "Percentage of applicable regulatory obligations mapped to a control or policy.",
     methodology:
-      "Applicable obligations with a linked control or policy ÷ total applicable obligations (source: obligations).",
+      "Applicable obligations DUE this quarter that carry a linked control, a named owner AND an evidence requirement ÷ applicable obligations due this quarter (source: obligations).",
     rationale:
       "Shows regulatory obligations (PDPL / ISO 27001 / NCA / PCI) are governed by controls — the audit-readiness foundation.",
     plan_ref: "Quality ↔ GRC RACI (Compliance → GRC = Accountable).",
+    // Corrected 2026-08-23 to match calcComplianceCoverage. The previous text
+    // described a much looser test — "linked_control_ids OR linked_policy_ids"
+    // over ALL applicable obligations — but the query requires a linked CONTROL
+    // *and* an owner *and* an evidence requirement, and scopes the denominator
+    // to obligations with target_date before the quarter end. Leadership reads
+    // these definition strings straight from the feed, so a stale methodology
+    // is a wrong statement sent outward, not just an internal comment.
     numerator:
-      "obligations WHERE status='applicable' AND (linked_control_ids non-empty OR linked_policy_ids non-empty) — see details.mapped_obligations.",
-    denominator: "obligations WHERE status='applicable' — see details.total_applicable.",
+      "obligations WHERE status='applicable' AND target_date < end of current quarter AND linked_control_ids non-empty AND (responsible_department OR responsible_role) non-empty AND evidence_requirements non-empty — see details.mapped.",
+    denominator:
+      "obligations WHERE status='applicable' AND target_date IS NOT NULL AND target_date < end of current quarter — see details.due. Obligations with NO target_date are OUT OF SCOPE until one is set.",
     scope:
-      "Applicable obligations only (status='applicable'); non-applicable/exempt obligations excluded. Cumulative point-in-time snapshot. If 0 applicable obligations are mapped, the KPI is reported in unavailable[] (not value:0).",
+      "Applicable obligations scheduled for this quarter. Non-applicable/exempt obligations and any obligation without a target_date are excluded. If nothing is due this quarter the KPI is reported in unavailable[] (not value:0).",
     rounding: DEFAULT_ROUNDING,
   },
   "GRC-KPI-003": {
