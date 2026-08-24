@@ -2851,6 +2851,102 @@ export async function getSegmentAccountDuplicateCount(
   return { segment: seg, outstanding_accounts: Number(res.rows[0]?.n) || 0 };
 }
 
+export interface MultiActiveDealAccount {
+  account_id: string | null;
+  account_name: string;
+  open_deals: number;
+  distinct_owners: number;
+  total_open_value: number;
+  owners: string[];
+  deals: Array<{
+    id: string;
+    name: string;
+    stage: string;
+    owner: string;
+    amount: number;
+    created: string | null;
+  }>;
+}
+
+/**
+ * Accounts carrying MORE THAN ONE OPEN deal — the "one active deal per Account"
+ * rule (Sarah 2026-08-24). Two open deals on the same customer means two sellers
+ * can be working it, the client can be contacted twice, and the pipeline is
+ * counted twice.
+ *
+ * "Open" is openStagePredicate — the SAME definition as Amount at risk and the
+ * radar tabs, so won and terminal stages (Agreement Signed, Paid, Partner
+ * Active, Closed *, …) never count. An account with one open deal and five
+ * Closed Lost is CLEAN and must not appear.
+ *
+ * `distinct_owners > 1` is the aggravating case Sarah raises with Sales: the
+ * same account worked by two different people. Accounts where one owner holds
+ * both open deals are still violations of the rule, but they are a
+ * housekeeping problem rather than a collision, so the caller can separate them.
+ *
+ * Grouped by the Zoho Account id from raw_data, falling back to the account
+ * name, so two deals pointing at the same account row group together even when
+ * the deal names differ ("stc" vs "STC").
+ */
+export async function getMultiActiveDealAccounts(
+  segment: DuplicateFilters["segment"],
+  opts?: { multiOwnerOnly?: boolean; limit?: number },
+): Promise<MultiActiveDealAccount[]> {
+  const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
+  const p = buildSegmentPredicate(seg, 1);
+  const segCond = p.condition ? " AND " + p.condition : "";
+  const limit = Math.max(1, Math.min(opts?.limit ?? 500, 2000));
+  const res = await pool.query(
+    `WITH open_deals AS (
+       SELECT r.zoho_record_id AS id,
+              COALESCE(NULLIF(BTRIM(r.record_name),''), r.zoho_record_id) AS name,
+              COALESCE(NULLIF(BTRIM(r.stage),''), r.raw_data->>'Stage', '') AS stage,
+              COALESCE(NULLIF(BTRIM(r.owner_name),''), NULLIF(BTRIM(r.owner_email),''), 'Unassigned') AS owner,
+              COALESCE(r.deal_value, 0) AS amount,
+              r.created_date AS created,
+              NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id,
+              COALESCE(
+                NULLIF(BTRIM(r.raw_data->'Account_Name'->>'name'), ''),
+                NULLIF(BTRIM(r.company_name), '')
+              ) AS account_name
+         FROM duplicate_records r
+        WHERE r.record_type = 'deal'
+          AND (${openStagePredicate("r")})${segCond}
+     ),
+     grouped AS (
+       SELECT COALESCE(account_id, 'name:' || LOWER(account_name)) AS group_key,
+              MIN(account_id) AS account_id,
+              MIN(account_name) AS account_name,
+              COUNT(*)::int AS open_deals,
+              COUNT(DISTINCT owner)::int AS distinct_owners,
+              COALESCE(SUM(amount), 0)::float AS total_open_value,
+              json_agg(json_build_object(
+                'id', id, 'name', name, 'stage', stage,
+                'owner', owner, 'amount', amount, 'created', created
+              ) ORDER BY created NULLS LAST) AS deals,
+              json_agg(DISTINCT owner) AS owners
+         FROM open_deals
+        WHERE account_name IS NOT NULL AND account_name <> ''
+        GROUP BY 1
+     )
+     SELECT * FROM grouped
+      WHERE open_deals > 1
+        ${opts?.multiOwnerOnly ? "AND distinct_owners > 1" : ""}
+      ORDER BY distinct_owners DESC, open_deals DESC, total_open_value DESC
+      LIMIT ${limit}`,
+    [...p.params],
+  );
+  return res.rows.map((r: any) => ({
+    account_id: r.account_id || null,
+    account_name: r.account_name,
+    open_deals: Number(r.open_deals) || 0,
+    distinct_owners: Number(r.distinct_owners) || 0,
+    total_open_value: Number(r.total_open_value) || 0,
+    owners: Array.isArray(r.owners) ? r.owners.filter(Boolean) : [],
+    deals: Array.isArray(r.deals) ? r.deals : [],
+  }));
+}
+
 /** Deal doc-compliance rolled up to a segment (join to duplicate_records layout).
  *  Counts ONLY deals that have been doc-checked (rows in deal_doc_compliance). */
 export async function getSegmentDealComplianceSummary(

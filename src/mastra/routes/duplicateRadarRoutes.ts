@@ -12919,6 +12919,47 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Accounts carrying MORE THAN ONE OPEN deal — the "one active deal per
+    // Account" rule. ?multi_owner=1 narrows to the collision case Sales cares
+    // about most: the same account worked by two different people.
+    // GET /api/duplicates/multi-active-deals?segment=&multi_owner=1&limit=
+    path: "/api/duplicates/multi-active-deals",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const url = new URL(c.req.url);
+        const segment = (url.searchParams.get("segment") || "all") as any;
+        const multiOwnerOnly = url.searchParams.get("multi_owner") === "1";
+        const limitRaw = parseInt(url.searchParams.get("limit") || "", 10);
+        const { getMultiActiveDealAccounts } = await import(
+          "../../utils/duplicateRadarDatabase"
+        );
+        const rows = await getMultiActiveDealAccounts(segment, {
+          multiOwnerOnly,
+          limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
+        });
+        const multiOwner = rows.filter((r) => r.distinct_owners > 1);
+        return c.json({
+          success: true,
+          segment,
+          // Both counts, always — "accounts with 2+ open deals" and "…worked by
+          // more than one person" are different problems with different owners.
+          accounts_with_multiple_open_deals: rows.length,
+          accounts_with_multiple_owners: multiOwner.length,
+          total_open_deals_in_violation: rows.reduce((a, r) => a + r.open_deals, 0),
+          total_open_value: Math.round(rows.reduce((a, r) => a + r.total_open_value, 0)),
+          accounts: rows,
+        });
+      } catch (e: any) {
+        logger.error("multi-active-deals failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     // Admin-gated: general deletion-reconcile — verify a rotating batch of
     // records against live Zoho and PRUNE the ones deleted/merged in the CRM
     // (incremental sync never reports deletions, so they linger + keep their
