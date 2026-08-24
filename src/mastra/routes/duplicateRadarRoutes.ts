@@ -12940,18 +12940,26 @@ export const duplicateRadarRoutes = [
         const { getMultiActiveDealAccounts } = await import(
           "../../utils/duplicateRadarDatabase"
         );
-        const rows = await getMultiActiveDealAccounts(segment, {
-          multiOwnerOnly,
+        // ALWAYS fetch unfiltered, then narrow. The headline counts describe the
+        // whole problem — "companies with more than one open deal" and "…worked
+        // by more than one person" — and must not change when the operator
+        // ticks the filter. Computing them from the filtered set made both
+        // cards show the same number whenever the box was ticked (found while
+        // testing the tab, 2026-08-25).
+        const all = await getMultiActiveDealAccounts(segment, {
+          multiOwnerOnly: false,
           limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
         });
-        const multiOwner = rows.filter((r) => r.distinct_owners > 1);
+        const multiOwner = all.filter((r) => r.distinct_owners > 1);
+        const rows = multiOwnerOnly ? multiOwner : all;
         return c.json({
           success: true,
           segment,
-          // Both counts, always — "accounts with 2+ open deals" and "…worked by
-          // more than one person" are different problems with different owners.
-          accounts_with_multiple_open_deals: rows.length,
+          // Both counts, always — different problems with different owners.
+          accounts_with_multiple_open_deals: all.length,
           accounts_with_multiple_owners: multiOwner.length,
+          // Deals and value describe the LISTED rows, so the cards and the
+          // table always add up to each other.
           total_open_deals_in_violation: rows.reduce((a, r) => a + r.open_deals, 0),
           total_open_value: Math.round(rows.reduce((a, r) => a + r.total_open_value, 0)),
           accounts: rows,
@@ -12990,10 +12998,13 @@ export const duplicateRadarRoutes = [
         );
         const { buildMultiActiveDealSheets, multiActiveDealsFilename } =
           await import("../../utils/multiActiveDealsExport");
-        const rows = await getMultiActiveDealAccounts(segment, {
-          multiOwnerOnly,
+        const everything = await getMultiActiveDealAccounts(segment, {
+          multiOwnerOnly: false,
           limit: 2000,
         });
+        const rows = multiOwnerOnly
+          ? everything.filter((r) => r.distinct_owners > 1)
+          : everything;
         const sheets = buildMultiActiveDealSheets(rows, {
           segment: String(segment),
           multiOwnerOnly,

@@ -3018,33 +3018,19 @@ export async function getMultiActiveDealAccounts(
               r.created_date AS created,
               r.modified_date AS last_activity,
               COALESCE(NULLIF(BTRIM(r.layout_name), ''), '') AS layout,
-              -- Deal records in this tenant carry NO domain of their own, so
-              -- take the linked ACCOUNT's domain (falling back to its website,
-              -- normalised to a bare host). This does two jobs: it puts the
-              -- domain under the company name in the UI, and it lets the
-              -- domain branch of the grouping below actually fire — merging
-              -- two duplicate Account records for one company into a single
-              -- conflict instead of hiding it as one-deal-each.
-              COALESCE(NULLIF(LOWER(BTRIM(r.domain)), ''), acc.domain) AS domain,
+              -- Deal records in this tenant carry no domain of their own. The
+              -- Account's domain is fetched in a SECOND, small query keyed on
+              -- the account ids this one returns, and merged in TypeScript —
+              -- see below. A LEFT JOIN LATERAL here looked tidier and took the
+              -- query from ~1s to 13s (measured 2026-08-25), because it runs
+              -- once per open deal instead of once per surviving group.
+              NULLIF(LOWER(BTRIM(r.domain)), '') AS domain,
               NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id,
               COALESCE(
                 NULLIF(BTRIM(r.raw_data->'Account_Name'->>'name'), ''),
                 NULLIF(BTRIM(r.company_name), '')
               ) AS account_name
          FROM duplicate_records r
-         LEFT JOIN LATERAL (
-           SELECT NULLIF(
-                    regexp_replace(
-                      regexp_replace(
-                        LOWER(BTRIM(COALESCE(NULLIF(BTRIM(ar.domain), ''), ar.website, ''))),
-                        '^https?://(www\\.)?', ''),
-                      '[/?#].*$', ''),
-                    '') AS domain
-             FROM duplicate_records ar
-            WHERE ar.record_type = 'account'
-              AND ar.zoho_record_id = NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '')
-            LIMIT 1
-         ) acc ON TRUE
         WHERE r.record_type = 'deal'
           AND (${openStagePredicate("r")})${segCond}
      ),
@@ -3087,23 +3073,138 @@ export async function getMultiActiveDealAccounts(
      )
      SELECT * FROM grouped
       WHERE open_deals > 1
-        ${opts?.multiOwnerOnly ? "AND distinct_owners > 1" : ""}
       ORDER BY distinct_owners DESC, open_deals DESC, total_open_value DESC
       LIMIT ${limit}`,
     [...p.params],
   );
-  return res.rows.map((r: any) => ({
+
+  const raw: MultiActiveDealGroup[] = res.rows.map((r: any) => ({
     domain: r.domain || null,
     account_id: r.account_id || null,
     account_name: r.account_name,
-    open_deals: Number(r.open_deals) || 0,
-    distinct_owners: Number(r.distinct_owners) || 0,
-    total_open_value: Number(r.total_open_value) || 0,
-    owners: Array.isArray(r.owners) ? r.owners.filter(Boolean) : [],
-    // Annotate AFTER grouping: the keep/close call only makes sense between
-    // deals that are actually competing for the same account.
-    deals: annotateKeepClose(Array.isArray(r.deals) ? r.deals : []),
+    deals: Array.isArray(r.deals) ? r.deals : [],
   }));
+
+  // Second query: the Account domains, for the handful of accounts that
+  // survived grouping. Bounded by the number of CONFLICTS (tens), not by the
+  // number of open deals (thousands) — which is what makes it cheap.
+  const acctIds = Array.from(
+    new Set(raw.map((g) => g.account_id).filter((x): x is string => !!x)),
+  );
+  const domains = new Map<string, string>();
+  if (acctIds.length) {
+    const dres = await pool.query(
+      `SELECT zoho_record_id AS id,
+              NULLIF(
+                regexp_replace(
+                  regexp_replace(
+                    LOWER(BTRIM(COALESCE(NULLIF(BTRIM(domain), ''), website, ''))),
+                    '^https?://(www\\.)?', ''),
+                  '[/?#].*$', ''),
+                '') AS domain
+         FROM duplicate_records
+        WHERE record_type = 'account'
+          AND zoho_record_id = ANY($1::text[])`,
+      [acctIds],
+    );
+    for (const row of dres.rows as any[]) {
+      if (row.domain) domains.set(String(row.id), String(row.domain));
+    }
+  }
+  for (const g of raw) {
+    if (!g.domain && g.account_id) g.domain = domains.get(g.account_id) || null;
+  }
+
+  return finaliseMultiActiveDealGroups(raw, { multiOwnerOnly: !!opts?.multiOwnerOnly });
+}
+
+/** A conflict before domains are attached and same-domain groups are merged. */
+export interface MultiActiveDealGroup {
+  domain: string | null;
+  account_id: string | null;
+  account_name: string;
+  deals: Array<{
+    id: string;
+    name: string;
+    stage: string;
+    owner: string;
+    amount: number;
+    layout: string;
+    created: string | null;
+    last_activity: string | null;
+  }>;
+}
+
+/**
+ * Merge groups that share a domain, then count, sort and annotate.
+ *
+ * PURE, so the merge rule is testable without a database.
+ *
+ * Why merge at all: one company can hold TWO Account records — an account
+ * duplicate — and the deals on each should be judged together, not as two
+ * separate conflicts.
+ *
+ * KNOWN LIMIT, stated rather than hidden: the SQL only returns Accounts that
+ * ALREADY carry more than one open deal, so a company split across two Account
+ * records with exactly ONE open deal on each is not surfaced. Catching that
+ * would mean returning every single-deal Account (thousands of rows) to look
+ * up its domain, and the query is already the slowest thing on this tab.
+ * Those cases show up in Account Duplicates instead, which is where the
+ * duplicate Account itself has to be fixed.
+ *
+ * Deal counting, owner counting and the keep/close call all happen AFTER the
+ * merge — a recommendation only makes sense between deals that are actually
+ * competing for the same customer.
+ */
+export function finaliseMultiActiveDealGroups(
+  groups: MultiActiveDealGroup[],
+  opts: { multiOwnerOnly: boolean },
+): MultiActiveDealAccount[] {
+  const merged = new Map<string, MultiActiveDealGroup>();
+  for (const g of groups) {
+    // Domain merges duplicate Accounts; without one, an Account stands alone.
+    const key = g.domain || `acct:${g.account_id || g.account_name}`;
+    const seen = merged.get(key);
+    if (!seen) {
+      merged.set(key, { ...g, deals: [...g.deals] });
+      continue;
+    }
+    seen.deals.push(...g.deals);
+    // Keep the longer name: "Gulf International Bank" reads better than the
+    // "Gulf Intl Bank" duplicate it was merged with.
+    if ((g.account_name || "").length > (seen.account_name || "").length) {
+      seen.account_name = g.account_name;
+    }
+  }
+
+  const out: MultiActiveDealAccount[] = [];
+  for (const g of merged.values()) {
+    // De-duplicate by deal id: two Account records can carry the same deal via
+    // different paths, and counting it twice would invent a conflict.
+    const byId = new Map<string, (typeof g.deals)[number]>();
+    for (const d of g.deals) byId.set(String(d.id), d);
+    const deals = [...byId.values()];
+    if (deals.length < 2) continue;
+    const owners = Array.from(new Set(deals.map((d) => d.owner).filter(Boolean)));
+    if (opts.multiOwnerOnly && owners.length < 2) continue;
+    out.push({
+      domain: g.domain || null,
+      account_id: g.account_id || null,
+      account_name: g.account_name,
+      open_deals: deals.length,
+      distinct_owners: owners.length,
+      total_open_value: deals.reduce((n, d) => n + (Number(d.amount) || 0), 0),
+      owners,
+      deals: annotateKeepClose(deals),
+    });
+  }
+  // Same order the SQL used: the collisions Sales has to arbitrate first.
+  return out.sort(
+    (a, b) =>
+      b.distinct_owners - a.distinct_owners ||
+      b.open_deals - a.open_deals ||
+      b.total_open_value - a.total_open_value,
+  );
 }
 
 /** Deal doc-compliance rolled up to a segment (join to duplicate_records layout).
