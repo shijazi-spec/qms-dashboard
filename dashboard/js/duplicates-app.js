@@ -7702,6 +7702,17 @@
             URL.revokeObjectURL(url);
         };
 
+        // Excel workbook — built SERVER-SIDE so it carries the same rows the
+        // tab is showing plus a per-company summary and a methodology sheet.
+        // One row per deal: the recipient filters to their own name and sorts
+        // by value, which a grouped export makes impossible.
+        window.exportActiveDealConflictsXlsx = function () {
+            var seg = (document.getElementById('adcSegment') || {}).value || 'walaplus';
+            var multiOnly = !!(document.getElementById('adcMultiOwnerOnly') || {}).checked;
+            window.location.href = '/api/duplicates/multi-active-deals.xlsx?segment=' +
+                encodeURIComponent(seg) + (multiOnly ? '&multi_owner=1' : '');
+        };
+
         // ══ Printable report for the Head of Sales ══
         //
         // Built from exactly the rows on screen, so the report can never claim

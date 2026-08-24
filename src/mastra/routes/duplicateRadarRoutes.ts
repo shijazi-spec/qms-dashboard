@@ -12964,6 +12964,72 @@ export const duplicateRadarRoutes = [
   },
 
   {
+    // The same conflicts as an Excel workbook, for attaching to the flag that
+    // goes to the Head of Sales. Two sheets:
+    //   "Duplicated deals" — ONE ROW PER DEAL, because the recipient acts on
+    //      individual deals: they sort by owner, filter to their own name and
+    //      paste rows into a task list. A cell holding three deals cannot be
+    //      sorted or filtered, which is what makes a CSV of grouped text
+    //      useless in practice.
+    //   "Summary"          — one row per company, for the covering read.
+    // GET /api/duplicates/multi-active-deals.xlsx?segment=&multi_owner=1
+    path: "/api/duplicates/multi-active-deals.xlsx",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const url = new URL(c.req.url);
+        const segment = (url.searchParams.get("segment") || "walaplus") as any;
+        const multiOwnerOnly = url.searchParams.get("multi_owner") === "1";
+        const { getMultiActiveDealAccounts } = await import(
+          "../../utils/duplicateRadarDatabase"
+        );
+        const { streamXlsx, stageStreamingExportFromHono } = await import(
+          "../../utils/excelExport"
+        );
+        const { buildMultiActiveDealSheets, multiActiveDealsFilename } =
+          await import("../../utils/multiActiveDealsExport");
+        const rows = await getMultiActiveDealAccounts(segment, {
+          multiOwnerOnly,
+          limit: 2000,
+        });
+        const sheets = buildMultiActiveDealSheets(rows, {
+          segment: String(segment),
+          multiOwnerOnly,
+        });
+        // Audit trail — same table every other export writes to, so "who
+        // pulled the client list and when" stays answerable. Non-blocking.
+        try {
+          await createExportLog({
+            export_type: "multi_active_deals" as any,
+            filter_criteria: { segment, multi_owner: multiOwnerOnly },
+            total_records_exported: rows.reduce((n, r) => n + r.open_deals, 0),
+            file_format: "xlsx",
+            exported_by:
+              (user as any).email ||
+              (user as any).name ||
+              `user:${(user as any).userId ?? "unknown"}`,
+          });
+        } catch (logErr) {
+          logger.warn(
+            "[DuplicateRadar] multi-active-deals export log write failed (non-blocking):",
+            logErr,
+          );
+        }
+        return await stageStreamingExportFromHono(c, async () =>
+          streamXlsx(sheets, multiActiveDealsFilename(String(segment)), {
+            title: `Active deal conflicts — ${segment} layout`,
+          }),
+        );
+      } catch (e: any) {
+        logger.error("multi-active-deals.xlsx failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     // Admin-gated: general deletion-reconcile — verify a rotating batch of
     // records against live Zoho and PRUNE the ones deleted/merged in the CRM
     // (incremental sync never reports deletions, so they linger + keep their

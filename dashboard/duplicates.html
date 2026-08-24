@@ -2097,7 +2097,8 @@
                     Multiple owners only
                 </label>
                 <button data-on-click="loadActiveDealConflicts" class="rr-btn rr-btn-ghost">🔃 Refresh</button>
-                <button data-on-click="exportActiveDealConflicts" id="adcExportBtn" title="Download the listed conflicts as CSV — account, owners, stages and open value." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+                <button data-on-click="exportActiveDealConflictsXlsx" id="adcXlsxBtn" title="Download an Excel workbook — one row per deal (sortable and filterable by owner), plus a per-company summary. This is the file to attach to the flag." class="rr-btn rr-btn-ghost">⬇ Export Excel</button>
+                <button data-on-click="exportActiveDealConflicts" id="adcExportBtn" title="Download the listed conflicts as CSV — account, owners, stages and open value." class="rr-btn rr-btn-ghost">⬇ CSV</button>
                 <button data-on-click="openActiveDealConflictsReport" id="adcReportBtn" title="Open a printable report of exactly these conflicts, written for the Head of Sales. Opens in a new tab — print or save as PDF from there. Nothing is emailed." class="rr-btn rr-btn-ghost">📄 Report for Head of Sales</button>
                 <button data-on-click="expandAllActiveDealConflicts" id="adcExpandBtn" title="Open or close every row at once." class="rr-btn rr-btn-ghost">⤢ Expand all</button>
             </div>
@@ -2510,7 +2511,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=159"></script>
+    <script src="/js/duplicates-app.js?v=160"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
