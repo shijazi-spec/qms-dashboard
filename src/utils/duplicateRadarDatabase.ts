@@ -2994,10 +2994,57 @@ export interface MultiActiveDealAccount {
  * name, so two deals pointing at the same account row group together even when
  * the deal names differ ("stc" vs "STC").
  */
+/**
+ * Short-lived result cache, keyed by layout.
+ *
+ * Viewing the tab and then downloading the Excel ran this query TWICE within
+ * seconds, and a single run was enough to make the Replit instance fail its
+ * healthcheck (2026-08-25). 90s is long enough to cover "look at the tab, then
+ * export it" and short enough that a resolved conflict disappears on the next
+ * refresh. Also collapses concurrent callers onto one in-flight query.
+ */
+const MULTI_ACTIVE_TTL_MS = 90_000;
+const multiActiveCache = new Map<
+  string,
+  { at: number; rows: MultiActiveDealAccount[] }
+>();
+const multiActiveInFlight = new Map<string, Promise<MultiActiveDealAccount[]>>();
+
 export async function getMultiActiveDealAccounts(
   segment: DuplicateFilters["segment"],
   opts?: { multiOwnerOnly?: boolean; limit?: number },
 ): Promise<MultiActiveDealAccount[]> {
+  const cacheKey = `${!segment || segment === "corporate" ? "walaplus" : segment}|${
+    opts?.limit ?? "d"
+  }`;
+  const hit = multiActiveCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < MULTI_ACTIVE_TTL_MS) {
+    // multiOwnerOnly is applied by the caller, so one cached set serves both.
+    return opts?.multiOwnerOnly ? hit.rows.filter((r) => r.distinct_owners > 1) : hit.rows;
+  }
+  const flying = multiActiveInFlight.get(cacheKey);
+  if (flying) {
+    const rows = await flying;
+    return opts?.multiOwnerOnly ? rows.filter((r) => r.distinct_owners > 1) : rows;
+  }
+  const run = queryMultiActiveDealAccounts(segment, opts?.limit)
+    .then((rows) => {
+      multiActiveCache.set(cacheKey, { at: Date.now(), rows });
+      return rows;
+    })
+    .finally(() => {
+      multiActiveInFlight.delete(cacheKey);
+    });
+  multiActiveInFlight.set(cacheKey, run);
+  const rows = await run;
+  return opts?.multiOwnerOnly ? rows.filter((r) => r.distinct_owners > 1) : rows;
+}
+
+async function queryMultiActiveDealAccounts(
+  segment: DuplicateFilters["segment"],
+  limitOpt?: number,
+): Promise<MultiActiveDealAccount[]> {
+  const opts = { multiOwnerOnly: false, limit: limitOpt };
   // The rule is scoped to ONE LAYOUT — WalaPlus today (Sarah 2026-08-24).
   // Two open deals on the same company across DIFFERENT products (a WalaPlus
   // deal and a WalaOne deal) are legitimately separate sales, not a collision,
@@ -3009,7 +3056,15 @@ export async function getMultiActiveDealAccounts(
   const segCond = p.condition ? " AND " + p.condition : "";
   const limit = Math.max(1, Math.min(opts?.limit ?? 500, 2000));
   const res = await pool.query(
-    `WITH open_deals AS (
+    // TWO PASSES, deliberately (2026-08-25). The single-pass version built the
+    // deal JSON for EVERY account in the layout and then threw away all but the
+    // ~25 with more than one open deal. It took 5-6 seconds and repeatedly took
+    // the Replit instance down — health returned 200 five times running, then
+    // 500 immediately after one call. `keys` narrows to the conflicting
+    // accounts on cheap columns first; json_agg then runs over tens of groups
+    // instead of thousands. MATERIALIZED so `open_deals` is scanned once, not
+    // once per reference.
+    `WITH open_deals AS MATERIALIZED (
        SELECT r.zoho_record_id AS id,
               COALESCE(NULLIF(BTRIM(r.record_name),''), r.zoho_record_id) AS name,
               COALESCE(NULLIF(BTRIM(r.stage),''), r.raw_data->>'Stage', '') AS stage,
@@ -3034,7 +3089,25 @@ export async function getMultiActiveDealAccounts(
         WHERE r.record_type = 'deal'
           AND (${openStagePredicate("r")})${segCond}
      ),
+     keyed AS (
+       -- Grouping key only — no aggregation yet, so this stays cheap.
+       SELECT *,
+              COALESCE(
+                NULLIF(LOWER(BTRIM(domain)), ''),
+                'acct:' || account_id,
+                'name:' || LOWER(BTRIM(account_name))
+              ) AS group_key
+         FROM open_deals
+        WHERE account_name IS NOT NULL AND account_name <> ''
+     ),
+     conflicting AS (
+       -- PASS 1: which accounts are actually in conflict. Counting is far
+       -- cheaper than building each account's deal JSON, and this discards
+       -- ~99% of the layout before the expensive pass runs.
+       SELECT group_key FROM keyed GROUP BY group_key HAVING COUNT(*) > 1
+     ),
      grouped AS (
+       -- PASS 2, over the survivors only.
        -- Grouping, in order of reliability (measured against live data
        -- 2026-08-24, after an earlier domain-only version missed 6 of the 13
        -- accounts Sarah had found by hand):
@@ -3050,11 +3123,7 @@ export async function getMultiActiveDealAccounts(
        --      "الاتصالات السعودية", "STC العناية بالموظفين"), so leading with
        --      it splits a single Account into several groups and hides the
        --      very collisions this is meant to surface.
-       SELECT COALESCE(
-                NULLIF(LOWER(BTRIM(domain)), ''),
-                'acct:' || account_id,
-                'name:' || LOWER(BTRIM(account_name))
-              ) AS group_key,
+       SELECT group_key,
               MIN(NULLIF(LOWER(BTRIM(domain)), '')) AS domain,
               MIN(account_id) AS account_id,
               MIN(account_name) AS account_name,
@@ -3067,12 +3136,11 @@ export async function getMultiActiveDealAccounts(
                 'created', created, 'last_activity', last_activity
               ) ORDER BY created NULLS LAST) AS deals,
               json_agg(DISTINCT owner) AS owners
-         FROM open_deals
-        WHERE account_name IS NOT NULL AND account_name <> ''
-        GROUP BY 1
+         FROM keyed
+         JOIN conflicting USING (group_key)
+        GROUP BY group_key
      )
      SELECT * FROM grouped
-      WHERE open_deals > 1
       ORDER BY distinct_owners DESC, open_deals DESC, total_open_value DESC
       LIMIT ${limit}`,
     [...p.params],
