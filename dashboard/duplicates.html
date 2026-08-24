@@ -2083,6 +2083,7 @@
                 Companies carrying more than one OPEN deal <em>within the same layout</em>. Closed, Lost, Agreement&nbsp;Signed, Paid and Partner&nbsp;Active never count, so an account with one open deal beside old lost ones is clean.
                 Deals are grouped by domain, falling back to the Zoho Account id and then the company name — so two deals sitting on <em>duplicate account records</em> for one company still group together.
                 <strong>Multiple owners</strong> is the case to action first: two sellers can be contacting the same client and the pipeline is counted twice.
+                <br><strong>KEEP / close is a suggestion only</strong> — nothing is written to Zoho. The kept deal is the one furthest along the pipeline; ties break on most recent activity, then on having a value, then on being the original. Stalled stages (On&nbsp;Hold, Not&nbsp;Attend&nbsp;Meeting) rank below early-but-moving ones, so an active Proposal is never closed in favour of a dormant record. Sales decides.
             </div>
             <div class="flex flex-wrap items-center gap-2 mb-3">
                 <label class="text-xs text-gray-600">Layout:</label>
@@ -2107,7 +2108,7 @@
                     <th>Company</th>
                     <th class="rr-num">Open deals</th>
                     <th class="rr-num">Owners</th>
-                    <th>Deals (stage / owner)</th>
+                    <th>Deals — suggestion, stage / owner, created &amp; last activity</th>
                     <th class="rr-num">Open value (SAR)</th>
                   </tr>
                 </thead>
@@ -2483,7 +2484,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=156"></script>
+    <script src="/js/duplicates-app.js?v=157"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

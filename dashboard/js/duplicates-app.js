@@ -7572,8 +7572,16 @@
             }
             body.innerHTML = rows.map(function (a) {
                 var deals = (a.deals || []).map(function (d) {
-                    return '<div class="rr-sub">' + escapeHtml(String(d.stage || '—')) +
-                        ' / ' + escapeHtml(String(d.owner || '—')) + '</div>';
+                    var keep = d.suggestion === 'keep';
+                    var chip = keep
+                        ? '<span class="rr-badge rr-good rr-dot" title="' + escapeHtml(String(d.suggestion_reason || '')) + '">KEEP</span>'
+                        : '<span class="rr-badge rr-warn" title="' + escapeHtml(String(d.suggestion_reason || '')) + '">close</span>';
+                    return '<div class="mb-1">' + chip + ' ' +
+                        escapeHtml(String(d.stage || '—')) + ' / ' + escapeHtml(String(d.owner || '—')) +
+                        '<div class="rr-sub">created ' + _dcFmtDate(d.created) +
+                        ' · last activity ' + _dcFmtDate(d.last_activity) +
+                        (d.amount ? ' · SAR ' + Number(d.amount).toLocaleString() : '') +
+                        ' — ' + escapeHtml(String(d.suggestion_reason || '')) + '</div></div>';
                 }).join('');
                 var ownerBadge = a.distinct_owners > 1
                     ? '<span class="rr-badge rr-warn rr-dot" title="More than one owner — two sellers can be contacting this client.">' + a.distinct_owners + '</span>'
@@ -7593,15 +7601,24 @@
         // the same rows the operator is looking at.
         window.exportActiveDealConflicts = function () {
             if (!_adcRows.length) return;
-            var head = ['Company', 'Domain', 'Open deals', 'Distinct owners', 'Owners', 'Stages', 'Open value (SAR)'];
+            var head = ['Company', 'Domain', 'Open deals', 'Distinct owners', 'Owners',
+                'Deal', 'Stage', 'Owner', 'Created', 'Last activity', 'Amount (SAR)', 'Suggestion', 'Why'];
             var lines = [head.join(',')];
+            var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+            // ONE ROW PER DEAL, not per company: the recipient has to act on
+            // individual deals, and a single cell listing four of them cannot
+            // be sorted, filtered or pasted into a task list.
             _adcRows.forEach(function (a) {
-                var stages = (a.deals || []).map(function (d) { return (d.stage || '') + ' / ' + (d.owner || ''); }).join(' | ');
-                var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
-                lines.push([
-                    cell(a.account_name), cell(a.domain || ''), a.open_deals || 0, a.distinct_owners || 0,
-                    cell((a.owners || []).join(' | ')), cell(stages), Math.round(a.total_open_value || 0),
-                ].join(','));
+                (a.deals || []).forEach(function (d) {
+                    lines.push([
+                        cell(a.account_name), cell(a.domain || ''), a.open_deals || 0, a.distinct_owners || 0,
+                        cell((a.owners || []).join(' | ')),
+                        cell(d.name), cell(d.stage), cell(d.owner),
+                        cell(d.created || ''), cell(d.last_activity || ''),
+                        Math.round(d.amount || 0),
+                        cell(d.suggestion || ''), cell(d.suggestion_reason || ''),
+                    ].join(','));
+                });
             });
             var blob = new Blob([lines.join(String.fromCharCode(10))], { type: 'text/csv;charset=utf-8;' });
             var url = URL.createObjectURL(blob);

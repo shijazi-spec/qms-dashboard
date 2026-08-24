@@ -2851,6 +2851,94 @@ export async function getSegmentAccountDuplicateCount(
   return { segment: seg, outstanding_accounts: Number(res.rows[0]?.n) || 0 };
 }
 
+/**
+ * How far along the pipeline an OPEN stage is, for deciding which of two
+ * competing deals should carry the account forward.
+ *
+ * Stalled stages are deliberately ranked BELOW early-but-moving ones: an
+ * On Hold deal has more pipeline history than a fresh Contacted, but keeping
+ * it and closing the active one is the wrong way round. "Not Attend Meeting"
+ * is a setback for the same reason.
+ *
+ * Unknown stages get a middling score rather than 0, so a stage this list has
+ * never seen does not automatically lose to "New Deal".
+ */
+const OPEN_STAGE_RANK: Record<string, number> = {
+  "agreement sent": 70,
+  proposal: 60,
+  meeting: 50,
+  meetings: 50,
+  "follow up": 40,
+  contacted: 30,
+  "in progress": 30,
+  "new deal": 20,
+  "not attend meeting": 15,
+  "on hold": 10,
+  hold: 10,
+  unaccounted: 5,
+};
+const DEFAULT_STAGE_RANK = 25;
+
+function stageRank(stage: string): number {
+  const s = (stage || "").trim().toLowerCase();
+  return OPEN_STAGE_RANK[s] ?? DEFAULT_STAGE_RANK;
+}
+
+/**
+ * Pick the deal that should stay open, and say why.
+ *
+ * Order of preference, each tie broken by the next:
+ *   1. furthest along the pipeline (stageRank)
+ *   2. most recent activity — a live conversation beats a dormant record
+ *   3. has a value on it — a costed deal is the one being negotiated
+ *   4. oldest created — the original, when nothing else separates them
+ *
+ * Returns the SAME array, annotated. Never reorders the caller's data and
+ * never writes anything: Sales decides, this only argues a case.
+ */
+function annotateKeepClose<
+  T extends {
+    stage: string;
+    amount: number;
+    created: string | null;
+    last_activity: string | null;
+  },
+>(deals: T[]): Array<T & { suggestion: "keep" | "close"; suggestion_reason: string }> {
+  const ms = (v: string | null) => (v ? new Date(v).getTime() || 0 : 0);
+  const scored = deals.map((d, i) => ({
+    i,
+    rank: stageRank(d.stage),
+    activity: ms(d.last_activity),
+    amount: Number(d.amount) || 0,
+    created: ms(d.created) || Number.MAX_SAFE_INTEGER,
+  }));
+  const best = [...scored].sort(
+    (a, b) =>
+      b.rank - a.rank ||
+      b.activity - a.activity ||
+      (b.amount > 0 ? 1 : 0) - (a.amount > 0 ? 1 : 0) ||
+      a.created - b.created,
+  )[0];
+  return deals.map((d, i) => {
+    const me = scored[i];
+    if (i === best.i) {
+      const bits = [`furthest along (${d.stage || "unknown stage"})`];
+      if (me.activity) bits.push("most recent activity");
+      if (me.amount > 0) bits.push("has a value");
+      return { ...d, suggestion: "keep" as const, suggestion_reason: bits.join(", ") };
+    }
+    const why =
+      me.rank < best.rank
+        ? `behind ${deals[best.i].stage || "the kept deal"} in the pipeline`
+        : me.activity < best.activity
+          ? "less recent activity"
+          : me.amount === 0 && best.amount > 0
+            ? "no value recorded"
+            : "duplicate of the kept deal";
+    return { ...d, suggestion: "close" as const, suggestion_reason: why };
+  });
+}
+
 export interface MultiActiveDealAccount {
   /** Domain the deals share, or null when they were grouped by company name. */
   domain: string | null;
@@ -2867,6 +2955,15 @@ export interface MultiActiveDealAccount {
     owner: string;
     amount: number;
     created: string | null;
+    last_activity: string | null;
+    /**
+     * RECOMMENDATION ONLY — nothing is written to Zoho. "keep" is the deal the
+     * ranking says should carry the account forward; "close" is everything
+     * else in the conflict. Sales decides.
+     */
+    suggestion: "keep" | "close";
+    /** Why this deal was ranked where it was, in plain words. */
+    suggestion_reason: string;
   }>;
 }
 
@@ -2912,6 +3009,7 @@ export async function getMultiActiveDealAccounts(
               COALESCE(NULLIF(BTRIM(r.owner_name),''), NULLIF(BTRIM(r.owner_email),''), 'Unassigned') AS owner,
               COALESCE(r.deal_value, 0) AS amount,
               r.created_date AS created,
+              r.modified_date AS last_activity,
               r.domain AS domain,
               NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id,
               COALESCE(
@@ -2951,7 +3049,8 @@ export async function getMultiActiveDealAccounts(
               COALESCE(SUM(amount), 0)::float AS total_open_value,
               json_agg(json_build_object(
                 'id', id, 'name', name, 'stage', stage,
-                'owner', owner, 'amount', amount, 'created', created
+                'owner', owner, 'amount', amount,
+                'created', created, 'last_activity', last_activity
               ) ORDER BY created NULLS LAST) AS deals,
               json_agg(DISTINCT owner) AS owners
          FROM open_deals
@@ -2973,7 +3072,9 @@ export async function getMultiActiveDealAccounts(
     distinct_owners: Number(r.distinct_owners) || 0,
     total_open_value: Number(r.total_open_value) || 0,
     owners: Array.isArray(r.owners) ? r.owners.filter(Boolean) : [],
-    deals: Array.isArray(r.deals) ? r.deals : [],
+    // Annotate AFTER grouping: the keep/close call only makes sense between
+    // deals that are actually competing for the same account.
+    deals: annotateKeepClose(Array.isArray(r.deals) ? r.deals : []),
   }));
 }
 
