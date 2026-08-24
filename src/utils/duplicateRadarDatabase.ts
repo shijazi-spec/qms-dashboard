@@ -12128,10 +12128,21 @@ export async function getCsOwners(
     )`;
 
   // These two are independent and each pays for its own scan of the CTE, which
-  // extracts owner and phase out of raw_data across every deal record. Run
-  // sequentially the endpoint cost their sum — 10.8s measured on an idle server
-  // 2026-08-23. Concurrent, it costs the slower one. Identical SQL, identical
-  // results; only the waiting changes.
+  // extracts owner and phase out of raw_data across every deal record. Running
+  // them concurrently is the right shape and cannot change the output —
+  // identical SQL, identical results.
+  //
+  // MEASURED OUTCOME: no speedup. Median of 3 samples before 10,845ms, after
+  // 11,104ms — inside the noise, if anything marginally worse. The change was
+  // made expecting concurrency to halve the wall clock; that was WRONG. The
+  // cost is Postgres doing raw_data JSON extraction across ~27k deal records
+  // twice, and issuing both at once does not reduce that work — it just makes
+  // the two scans compete.
+  //
+  // The real fix is to stop extracting owner and phase out of raw_data on every
+  // request: an expression index, or promoting them to real columns. Note the
+  // house rule that any ALTER TABLE ADD COLUMN must also appear in the
+  // canonical CREATE TABLE, so that is a deliberate schema change, not a tweak.
   //
   // "CS deals" for the no-owner gap = deals that carry a CS Phase (i.e. are on
   // the CS pipeline). Counting every Deal would drown the number in sales deals.

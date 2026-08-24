@@ -291,12 +291,23 @@ export async function getTrendData(periods: number = 12, interval: 'week' | 'mon
     const periodEnd = `DATE_TRUNC('${truncSql}', CURRENT_DATE - INTERVAL '${i} ${interval}s') + INTERVAL '${intervalSql}'`;
     const periodLabel = `CURRENT_DATE - INTERVAL '${i} ${interval}s'`;
 
-    // These seven are independent — different tables, no shared state — but ran
-    // as sequential awaits INSIDE the period loop, so the endpoint cost
-    // 7 × periods round-trips end to end (84 for the 12-period default).
-    // Measured 6.9s on an idle server 2026-08-23. Concurrent per period, it
-    // costs the slowest of seven rather than their sum. Same queries, same
-    // order of results, same output.
+    // These seven are independent — different tables, no shared state — and ran
+    // as sequential awaits INSIDE the period loop, so the endpoint issued
+    // 7 × periods round-trips (84 for the 12-period default). Running them
+    // concurrently per period is structurally better and cannot change the
+    // output: same queries, same order of results.
+    //
+    // MEASURED OUTCOME: it did NOT make the endpoint faster. Median of 3
+    // samples before 6,949ms, after 6,832ms — inside the noise. The change was
+    // made expecting a large win, and that expectation was WRONG: the cost here
+    // is database work, not round-trip latency, so issuing the queries
+    // concurrently against the same Postgres does not reduce the total work.
+    // Contrast /api/agents/performance, where parallelising DID help, because
+    // that one waits on Zoho's NETWORK and concurrency collapses network waits.
+    //
+    // Kept because it is harmless and the right shape; do not expect a speedup
+    // from it. Making this endpoint genuinely fast needs query-level work
+    // (indexes, or fewer scans), not more concurrency.
     const [
       ncCreated,
       ncClosed,
