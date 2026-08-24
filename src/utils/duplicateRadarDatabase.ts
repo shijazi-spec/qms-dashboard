@@ -12127,27 +12127,35 @@ export async function getCsOwners(
          AND r.cleanup_class IS NULL${segmentCond}
     )`;
 
-  const ownersQ = await pool.query<{ owner: string; deals: string; accounts: string }>(
-    `${baseCte}
-     SELECT owner,
-            COUNT(*)::text AS deals,
-            COUNT(DISTINCT NULLIF(BTRIM(account_name), ''))::text AS accounts
-       FROM cs
-      WHERE owner IS NOT NULL
-      GROUP BY owner
-      ORDER BY COUNT(*) DESC, owner ASC
-      LIMIT $${params.length + 1}`,
-    [...params, limit],
-  );
+  // These two are independent and each pays for its own scan of the CTE, which
+  // extracts owner and phase out of raw_data across every deal record. Run
+  // sequentially the endpoint cost their sum — 10.8s measured on an idle server
+  // 2026-08-23. Concurrent, it costs the slower one. Identical SQL, identical
+  // results; only the waiting changes.
+  //
   // "CS deals" for the no-owner gap = deals that carry a CS Phase (i.e. are on
   // the CS pipeline). Counting every Deal would drown the number in sales deals.
-  const gapQ = await pool.query<{ with_owner: string; without_owner: string }>(
-    `${baseCte}
-     SELECT COUNT(*) FILTER (WHERE owner IS NOT NULL)::text AS with_owner,
-            COUNT(*) FILTER (WHERE owner IS NULL AND phase IS NOT NULL)::text AS without_owner
-       FROM cs`,
-    params,
-  );
+  const [ownersQ, gapQ] = await Promise.all([
+    pool.query<{ owner: string; deals: string; accounts: string }>(
+      `${baseCte}
+       SELECT owner,
+              COUNT(*)::text AS deals,
+              COUNT(DISTINCT NULLIF(BTRIM(account_name), ''))::text AS accounts
+         FROM cs
+        WHERE owner IS NOT NULL
+        GROUP BY owner
+        ORDER BY COUNT(*) DESC, owner ASC
+        LIMIT $${params.length + 1}`,
+      [...params, limit],
+    ),
+    pool.query<{ with_owner: string; without_owner: string }>(
+      `${baseCte}
+       SELECT COUNT(*) FILTER (WHERE owner IS NOT NULL)::text AS with_owner,
+              COUNT(*) FILTER (WHERE owner IS NULL AND phase IS NOT NULL)::text AS without_owner
+         FROM cs`,
+      params,
+    ),
+  ]);
   // Cross-reference the derived names against the MAINTAINED roster. The two
   // answer different questions — the roster is who is ON the team, the query is
   // who actually carries deals — and the mismatch in either direction is the
