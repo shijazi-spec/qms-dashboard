@@ -11,9 +11,13 @@
  *   OPEN ONLY   — closed/won deals never count. Most of those accounts carry
  *                 old Closed Lost deals; counting deals-per-account instead of
  *                 OPEN-deals-per-account would flag nearly everything.
- *   BY DOMAIN   — not by Account id. The same company can hold TWO Account
- *                 records with one open deal on each; Account-id grouping sees
- *                 one deal apiece and misses the collision.
+ *   GROUPING    — domain, then Account id, then normalised name. Domain leads
+ *                 because one company can hold TWO Account records with one
+ *                 open deal on each, and only domain merges those. But deal
+ *                 records in this tenant carry NO domain, so Account id does
+ *                 the real work; a domain-only version missed 6 of the 13
+ *                 accounts Sarah found by hand. Name cannot lead — company_name
+ *                 varies per deal for one Account.
  *   ONE LAYOUT  — a WalaPlus deal and a WalaOne deal on the same company are
  *                 two legitimate products, not a collision.
  */
@@ -31,7 +35,14 @@ function isOpen(stage: string): boolean {
   return !listed.includes(s) && !rx.test(s);
 }
 
-type Deal = { stage: string; owner: string; domain?: string; account?: string; layout?: string };
+type Deal = {
+  stage: string;
+  owner: string;
+  domain?: string;
+  accountId?: string;
+  account?: string;
+  layout?: string;
+};
 
 /** The grouping the SQL performs, modelled for assertions. */
 function violations(deals: Deal[], layout = "WalaPlus") {
@@ -40,7 +51,11 @@ function violations(deals: Deal[], layout = "WalaPlus") {
   );
   const groups = new Map<string, Deal[]>();
   for (const d of open) {
-    const key = (d.domain || "").trim().toLowerCase() || "name:" + (d.account || "").toLowerCase();
+    // domain → account id → normalised name, matching the SQL.
+    const key =
+      (d.domain || "").trim().toLowerCase() ||
+      (d.accountId ? "acct:" + d.accountId : "") ||
+      "name:" + (d.account || "").toLowerCase();
     groups.set(key, [...(groups.get(key) || []), d]);
   }
   return [...groups.entries()]
@@ -92,7 +107,7 @@ describe("only OPEN deals count", () => {
   });
 });
 
-describe("grouping is by domain, not Account record", () => {
+describe("domain merges duplicate Account records", () => {
   it("catches two open deals split across DUPLICATE account records", () => {
     // One deal on each of two Account rows for the same company. Account-id
     // grouping sees one deal apiece and reports nothing.
@@ -162,5 +177,48 @@ describe("owner collision is reported separately", () => {
     // decide who owns the client.
     expect(collision).toHaveLength(1);
     expect(housekeeping).toHaveLength(1);
+  });
+});
+
+describe("grouping falls back to the Account id when there is no domain", () => {
+  // Measured 2026-08-24: deal records in this tenant carry NO domain, but do
+  // carry raw_data->Account_Name->id. A domain-only rule found 0 groups by
+  // domain and missed 6 of the 13 accounts Sarah had identified by hand.
+  it("groups two open deals on one Account id", () => {
+    const v = violations([
+      { stage: "Proposal", owner: "Ali AlRajhi", accountId: "5146753000000898665", account: "Stc" },
+      { stage: "On Hold", owner: "Khowla Saeed", accountId: "5146753000000898665", account: "STC" },
+    ]);
+    expect(v).toHaveLength(1);
+    expect(v[0].distinct_owners).toBe(2);
+  });
+
+  it("does NOT merge genuinely different Accounts that share a name fragment", () => {
+    // "Stc" and "stcbank" are separate companies with separate Account ids.
+    expect(
+      violations([
+        { stage: "Proposal", owner: "Ali AlRajhi", accountId: "5146753000000898665", account: "Stc" },
+        { stage: "Contacted", owner: "Ali AlRajhi", accountId: "5146753000185069297", account: "stcbank" },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("keeps one Account together even when company_name differs per deal", () => {
+    // The failure that hid these: company_name varies ("Stc", "الاتصالات
+    // السعودية"), so leading with name splits one Account into several groups.
+    const v = violations([
+      { stage: "Proposal", owner: "A", accountId: "acc-1", account: "Stc" },
+      { stage: "Meeting", owner: "B", accountId: "acc-1", account: "الاتصالات السعودية" },
+    ]);
+    expect(v).toHaveLength(1);
+    expect(v[0].open_deals).toBe(2);
+  });
+
+  it("still lets domain merge two duplicate Account records", () => {
+    const v = violations([
+      { stage: "Contacted", owner: "Bader", domain: "gib.com", accountId: "acc-1" },
+      { stage: "Contacted", owner: "Wafaa", domain: "gib.com", accountId: "acc-2" },
+    ]);
+    expect(v).toHaveLength(1);
   });
 });

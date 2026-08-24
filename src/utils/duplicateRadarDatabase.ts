@@ -2923,14 +2923,24 @@ export async function getMultiActiveDealAccounts(
           AND (${openStagePredicate("r")})${segCond}
      ),
      grouped AS (
-       -- Group by DOMAIN first (Sarah 2026-08-24). The same company can hold
-       -- TWO Account records — an account duplicate — with one open deal on
-       -- each; grouping by Account id would treat those as one deal apiece and
-       -- miss the collision entirely. Domain catches it. Company name is the
-       -- fallback for deals with no domain, normalised so "STC" and "stc"
-       -- group together.
+       -- Grouping, in order of reliability (measured against live data
+       -- 2026-08-24, after an earlier domain-only version missed 6 of the 13
+       -- accounts Sarah had found by hand):
+       --   1. DOMAIN when present. The same company can hold TWO Account
+       --      records — an account duplicate — with one open deal on each;
+       --      only domain merges those into one violation.
+       --   2. ACCOUNT ID otherwise. Deal records carry NO domain in this
+       --      tenant (null on every row sampled) but do carry
+       --      raw_data->Account_Name->id on 14 of 15, and that is how Zoho
+       --      itself groups them — it is the view Sarah was looking at.
+       --   3. Normalised company NAME as the last resort. It cannot lead:
+       --      company_name varies per deal for one Account ("Stc", "stcbank",
+       --      "الاتصالات السعودية", "STC العناية بالموظفين"), so leading with
+       --      it splits a single Account into several groups and hides the
+       --      very collisions this is meant to surface.
        SELECT COALESCE(
                 NULLIF(LOWER(BTRIM(domain)), ''),
+                'acct:' || account_id,
                 'name:' || LOWER(BTRIM(account_name))
               ) AS group_key,
               MIN(NULLIF(LOWER(BTRIM(domain)), '')) AS domain,
