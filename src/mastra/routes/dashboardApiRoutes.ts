@@ -708,6 +708,10 @@ const _dashboardApiRoutesRaw = [
       } = await import("../../data");
       let cache: { ts: number; data: any } | null = null;
       const TTL_MS = 15 * 60 * 1000;
+      // Shared in-flight fetch, keyed by date window — see the note at the
+      // fetch site. Lives in the handler closure alongside `cache`, so it is
+      // per-process, which is the same scope the cache already had.
+      let inFlight: { key: string; p: Promise<any> } | null = null;
       return async (c: any) => {
         try {
           const createdStart = c.req.query("createdStart");
@@ -794,11 +798,44 @@ const _dashboardApiRoutesRaw = [
               400,
             );
           const mode = getDataMode();
-          const { leads, coverage: leadsCoverage } =
-            await getLeadsWithSeparateFilters(dateFilters);
-          const { deals, coverage: dealsCoverage } =
-            await getDealsWithSeparateFilters(dateFilters);
-          const users = await getUsers();
+          // These three were sequential awaits, so the request cost the SUM of
+          // a full Zoho Leads pull, a full Deals pull and the user fetch —
+          // measured at 139s live on 2026-08-23, which is a guaranteed proxy
+          // timeout and the reason the home page's agent panel hangs. They are
+          // independent, so the request now costs the SLOWEST rather than the
+          // total. Results are byte-for-byte identical; only the waiting
+          // changes.
+          //
+          // The fetch is also DE-DUPLICATED across concurrent callers. Without
+          // this, N people opening the dashboard while the cache is cold (a
+          // restart, or the 15-minute TTL expiring) each triggered their own
+          // full Zoho pull — N times the work and N times the rate-limit
+          // pressure, for one identical answer. Callers asking for the same
+          // window now share one in-flight fetch; a different date window still
+          // fetches on its own, because the answers differ.
+          const fetchKey = JSON.stringify(dateFilters);
+          let trio: any;
+          if (inFlight && inFlight.key === fetchKey) {
+            trio = await inFlight.p;
+          } else {
+            const p = Promise.all([
+              getLeadsWithSeparateFilters(dateFilters),
+              getDealsWithSeparateFilters(dateFilters),
+              getUsers(),
+            ]);
+            inFlight = { key: fetchKey, p };
+            try {
+              trio = await p;
+            } finally {
+              // Only clear if still ours — a later request may have replaced it.
+              if (inFlight && inFlight.p === p) inFlight = null;
+            }
+          }
+          const [
+            { leads, coverage: leadsCoverage },
+            { deals, coverage: dealsCoverage },
+            users,
+          ] = trio;
           const { NAME_ALIASES } = await import("../../data/seedUsers");
           type ResolvedUser = {
             id: string;
