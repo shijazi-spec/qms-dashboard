@@ -1204,7 +1204,13 @@ export async function calcCertificationMilestones(): Promise<ProcessKpiValue> {
   let frameworks;
   try {
     frameworks = await getAllFrameworkCoverage();
-  } catch {
+  } catch (e: any) {
+    // Logged, not swallowed: a broken source renders identically to "nothing
+    // recorded yet", so without this a failing query can sit undiagnosed
+    // indefinitely (same flaw fixed in ratioKpi on 2026-08-23).
+    logger.warn(
+      `[kpiProcessCalc] calcCertificationMilestones source failed — KPI will report no data: ${e?.message || e}`,
+    );
     return EMPTY;
   }
   if (!frameworks || frameworks.length === 0) return EMPTY;
@@ -1323,7 +1329,13 @@ export async function calcBuCoverageTracked(): Promise<ProcessKpiValue> {
     const v = await buCoverageRateForFeed();
     if (v === null) return EMPTY;
     return { value: v, dataAvailable: true };
-  } catch {
+  } catch (e: any) {
+    // QM-KPI-008 is PUSHED TO LEADERSHIP, so a silent failure here means the
+    // recorded value keeps going outward with no signal that the live
+    // computation stopped working.
+    logger.warn(
+      `[kpiProcessCalc] calcBuCoverageTracked failed — QM-KPI-008 will report no data: ${e?.message || e}`,
+    );
     return EMPTY;
   }
 }
@@ -1346,7 +1358,10 @@ export async function calcHandoffSlaCompliance(): Promise<ProcessKpiValue> {
            AND EXTRACT(EPOCH FROM (processed_at - created_at)) / 86400.0 <= ${HANDOFF_SLA_DAYS})::int AS within_sla
        FROM handoff_events`,
     );
-  } catch {
+  } catch (e: any) {
+    logger.warn(
+      `[kpiProcessCalc] calcHandoffSlaCompliance query failed — KPI will report no data: ${e?.message || e}`,
+    );
     return EMPTY;
   }
   const total = Number(res.rows[0]?.total || 0);
@@ -1378,7 +1393,10 @@ export async function calcDocumentationLifecycle(): Promise<ProcessKpiValue> {
          COUNT(*) FILTER (WHERE status = 'published' AND review_date < NOW())::int AS overdue
        FROM policies`,
     );
-  } catch {
+  } catch (e: any) {
+    logger.warn(
+      `[kpiProcessCalc] calcDocumentationLifecycle query failed — KPI will report no data: ${e?.message || e}`,
+    );
     return EMPTY;
   }
   const activeTotal = Number(res.rows[0]?.active_total || 0);
