@@ -2852,6 +2852,8 @@ export async function getSegmentAccountDuplicateCount(
 }
 
 export interface MultiActiveDealAccount {
+  /** Domain the deals share, or null when they were grouped by company name. */
+  domain: string | null;
   account_id: string | null;
   account_name: string;
   open_deals: number;
@@ -2892,7 +2894,13 @@ export async function getMultiActiveDealAccounts(
   segment: DuplicateFilters["segment"],
   opts?: { multiOwnerOnly?: boolean; limit?: number },
 ): Promise<MultiActiveDealAccount[]> {
-  const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
+  // The rule is scoped to ONE LAYOUT — WalaPlus today (Sarah 2026-08-24).
+  // Two open deals on the same company across DIFFERENT products (a WalaPlus
+  // deal and a WalaOne deal) are legitimately separate sales, not a collision,
+  // so comparing across layouts would manufacture violations. An explicit
+  // segment is honoured; "all" would compare across products and is therefore
+  // NOT the default here, unlike the rest of the radar.
+  const seg = !segment || segment === "corporate" ? "walaplus" : segment;
   const p = buildSegmentPredicate(seg, 1);
   const segCond = p.condition ? " AND " + p.condition : "";
   const limit = Math.max(1, Math.min(opts?.limit ?? 500, 2000));
@@ -2904,6 +2912,7 @@ export async function getMultiActiveDealAccounts(
               COALESCE(NULLIF(BTRIM(r.owner_name),''), NULLIF(BTRIM(r.owner_email),''), 'Unassigned') AS owner,
               COALESCE(r.deal_value, 0) AS amount,
               r.created_date AS created,
+              r.domain AS domain,
               NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id,
               COALESCE(
                 NULLIF(BTRIM(r.raw_data->'Account_Name'->>'name'), ''),
@@ -2914,7 +2923,17 @@ export async function getMultiActiveDealAccounts(
           AND (${openStagePredicate("r")})${segCond}
      ),
      grouped AS (
-       SELECT COALESCE(account_id, 'name:' || LOWER(account_name)) AS group_key,
+       -- Group by DOMAIN first (Sarah 2026-08-24). The same company can hold
+       -- TWO Account records — an account duplicate — with one open deal on
+       -- each; grouping by Account id would treat those as one deal apiece and
+       -- miss the collision entirely. Domain catches it. Company name is the
+       -- fallback for deals with no domain, normalised so "STC" and "stc"
+       -- group together.
+       SELECT COALESCE(
+                NULLIF(LOWER(BTRIM(domain)), ''),
+                'name:' || LOWER(BTRIM(account_name))
+              ) AS group_key,
+              MIN(NULLIF(LOWER(BTRIM(domain)), '')) AS domain,
               MIN(account_id) AS account_id,
               MIN(account_name) AS account_name,
               COUNT(*)::int AS open_deals,
@@ -2937,6 +2956,7 @@ export async function getMultiActiveDealAccounts(
     [...p.params],
   );
   return res.rows.map((r: any) => ({
+    domain: r.domain || null,
     account_id: r.account_id || null,
     account_name: r.account_name,
     open_deals: Number(r.open_deals) || 0,

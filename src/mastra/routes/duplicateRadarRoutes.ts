@@ -12930,7 +12930,11 @@ export const duplicateRadarRoutes = [
         const user = await requireDuplicateRadarAccess(c);
         if (!user) return unauthorizedResponse(c);
         const url = new URL(c.req.url);
-        const segment = (url.searchParams.get("segment") || "all") as any;
+        // Defaults to walaplus, NOT all: the rule compares deals within ONE
+        // product layout, so an unscoped call would flag a WalaPlus deal and a
+        // WalaOne deal on the same company as a collision when they are two
+        // legitimate sales.
+        const segment = (url.searchParams.get("segment") || "walaplus") as any;
         const multiOwnerOnly = url.searchParams.get("multi_owner") === "1";
         const limitRaw = parseInt(url.searchParams.get("limit") || "", 10);
         const { getMultiActiveDealAccounts } = await import(
