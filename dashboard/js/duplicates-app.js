@@ -7526,6 +7526,12 @@
         // Headline counts + scope of the last load, so the printable report
         // quotes the same figures the operator saw on the cards.
         var _adcMeta = null;
+        // Deep link straight to the deal in Zoho, so every recommendation on
+        // this tab can be checked against the record before anyone acts on it.
+        // Same /tab/Deals/<id> form the stale-deals and CS sections already use.
+        function _adcZohoUrl(id) {
+            return 'https://crm.zoho.com/crm/org766568398/tab/Deals/' + encodeURIComponent(String(id || ''));
+        }
 
         window.loadActiveDealConflicts = async function () {
             var body = document.getElementById('adcBody');
@@ -7623,8 +7629,17 @@
                     var chip = keep
                         ? '<span class="rr-badge rr-good rr-dot" title="' + escapeHtml(String(d.suggestion_reason || '')) + '">KEEP</span>'
                         : '<span class="rr-badge rr-warn" title="' + escapeHtml(String(d.suggestion_reason || '')) + '">close</span>';
+                    // The deal name IS the link — nobody should have to accept a
+                    // KEEP/close call without opening the record first.
+                    var label = escapeHtml(String(d.name || d.id || '—'));
+                    var link = d.id
+                        ? '<a href="' + _adcZohoUrl(d.id) + '" target="_blank" rel="noopener" ' +
+                          'class="text-blue-600 hover:underline" ' +
+                          'title="Open this deal in Zoho CRM (id ' + escapeHtml(String(d.id)) + ')">' +
+                          label + ' <span class="text-xs">↗</span></a>'
+                        : label;
                     return '<tr class="hidden align-top bg-gray-50" data-dup-group="' + gid + '">' +
-                        '<td class="ps-8">' + chip + ' ' + escapeHtml(String(d.name || d.id || '—')) +
+                        '<td class="ps-8">' + chip + ' ' + link +
                             '<div class="rr-sub">' + escapeHtml(String(d.suggestion_reason || '')) +
                             (d.layout ? ' · layout ' + escapeHtml(String(d.layout)) : '') + '</div></td>' +
                         '<td>' + escapeHtml(String(d.stage || '—')) + '</td>' +
@@ -7659,7 +7674,8 @@
         window.exportActiveDealConflicts = function () {
             if (!_adcRows.length) return;
             var head = ['Company', 'Domain', 'Open deals', 'Distinct owners', 'Owners',
-                'Deal', 'Stage', 'Owner', 'Layout', 'Created', 'Last activity', 'Amount (SAR)', 'Suggestion', 'Why'];
+                'Deal', 'Stage', 'Owner', 'Layout', 'Created', 'Last activity', 'Amount (SAR)',
+                'Suggestion', 'Why', 'Deal ID', 'Zoho link'];
             var lines = [head.join(',')];
             var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
             // ONE ROW PER DEAL, not per company: the recipient has to act on
@@ -7674,6 +7690,7 @@
                         cell(d.created || ''), cell(d.last_activity || ''),
                         Math.round(d.amount || 0),
                         cell(d.suggestion || ''), cell(d.suggestion_reason || ''),
+                        cell(d.id || ''), cell(d.id ? _adcZohoUrl(d.id) : ''),
                     ].join(','));
                 });
             });
@@ -7706,8 +7723,16 @@
             var rowsHtml = _adcRows.map(function (a, i) {
                 var deals = (a.deals || []).map(function (d) {
                     var keep = d.suggestion === 'keep';
+                    // Live link in the on-screen/PDF report, and the URL printed
+                    // underneath so it survives being printed on paper.
+                    var deal = d.id
+                        ? '<a href="' + _adcZohoUrl(d.id) + '" target="_blank" rel="noopener">' +
+                          escapeHtml(String(d.name || d.id)) + ' ↗</a>' +
+                          '<div class="url">' + escapeHtml(_adcZohoUrl(d.id)) + '</div>'
+                        : escapeHtml(String(d.name || '—'));
                     return '<tr class="' + (keep ? 'keep' : '') + '">' +
                         '<td class="tag">' + (keep ? 'KEEP' : 'CLOSE') + '</td>' +
+                        '<td>' + deal + '</td>' +
                         '<td>' + escapeHtml(String(d.stage || '—')) + '</td>' +
                         '<td>' + escapeHtml(String(d.owner || '—')) + '</td>' +
                         '<td class="num">' + (d.amount ? money(d.amount) : '—') + '</td>' +
@@ -7722,7 +7747,8 @@
                         (a.open_deals || 0) + ' open deals · ' + (a.distinct_owners || 0) + ' owners · SAR ' +
                         money(a.total_open_value) + ' open</div>' +
                     '<div class="sub owners">Owners: ' + escapeHtml((a.owners || []).join(', ')) + '</div>' +
-                    '<table><thead><tr><th></th><th>Stage</th><th>Owner</th><th class="num">Amount (SAR)</th>' +
+                    '<table><thead><tr><th></th><th>Deal (opens in Zoho)</th><th>Stage</th><th>Owner</th>' +
+                        '<th class="num">Amount (SAR)</th>' +
                         '<th>Created</th><th>Last activity</th><th>Why</th></tr></thead>' +
                         '<tbody>' + deals + '</tbody></table></div>';
             }).join('');
@@ -7737,6 +7763,7 @@
                 'table{border-collapse:collapse;width:100%;font-size:11px;margin-top:4px;}' +
                 'th,td{border:1px solid #e4e4e4;padding:4px 6px;text-align:left;vertical-align:top;}' +
                 'th{background:#f6f6f6;font-weight:600;} .num{text-align:right;} .why{color:#666;}' +
+                'a{color:#1155cc;} .url{color:#999;font-size:9px;word-break:break-all;}' +
                 'tr.keep td{background:#f2fbf5;} td.tag{font-weight:700;font-size:10px;white-space:nowrap;}' +
                 'tr.keep td.tag{color:#137a3d;} td.tag{color:#a33;}' +
                 'ul{margin:6px 0 0 18px;padding:0;} li{margin:3px 0;}' +
@@ -7809,6 +7836,9 @@
                         '  ·  created ' + String(d.created || '').slice(0, 10) +
                         '  ·  last activity ' + String(d.last_activity || '').slice(0, 10) +
                         (d.amount ? '  ·  SAR ' + Number(d.amount).toLocaleString() : ''));
+                    // The link on its own line: pasted into an email body it
+                    // stays clickable, and the recipient can open the record.
+                    if (d.id) out.push('        ' + _adcZohoUrl(d.id));
                 });
                 out.push('');
             });
