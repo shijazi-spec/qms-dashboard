@@ -3635,17 +3635,68 @@ export const duplicateRadarRoutes = [
             : [...DEAL_COMPLIANCE_STAGES];
           const wantedLower = new Set(wanted.map((s: string) => s.toLowerCase()));
 
-          // Fetch recent deals (most-recently-modified first so active/closing
-          // deals are covered) and filter to the wanted stages in code.
+          // SOURCE: the local mirror by default, live Zoho only on request.
+          //
+          // This used to always pull 3,000 deals live from Zoho, which cost
+          // 10.2s measured on 2026-08-24 — on tab open AND on every stage-filter
+          // Apply. The browser was never blocked (0 long tasks, 85ms to render
+          // 976 rows); it was simply waiting, which is what read as the tab
+          // being "heavy" and stopping.
+          //
+          // duplicate_records holds the same deals from the last sync, so the
+          // list comes from there instead. Two deliberate consequences, agreed
+          // with Sarah 2026-08-24:
+          //   FRESHNESS  — a deal created or re-staged since the last sync will
+          //                not appear until the next one. The "Refresh from
+          //                Zoho (live)" button passes ?live=1 and still hits
+          //                Zoho, so there is always a way to see this second.
+          //   COVERAGE   — the mirror holds ALL deals, not the most-recently-
+          //                modified 3,000, so "In scope" can legitimately grow.
+          //                That is more complete, not inflated.
+          // Attachment verification is UNCHANGED and still live per deal — only
+          // the deal LIST moved.
+          const useLive = c.req.query("live") === "1";
           let allDeals: any[] = [];
           try {
-            allDeals = await fetchAllZohoRecords("Deals", {
-              sortBy: "Modified_Time",
-              sortOrder: "desc",
-              maxRecords: 3000,
-            });
+            allDeals = useLive
+              ? await fetchAllZohoRecords("Deals", {
+                  sortBy: "Modified_Time",
+                  sortOrder: "desc",
+                  maxRecords: 3000,
+                })
+              : await (async () => {
+                  const { pool } = await import("../../utils/duplicateRadarDatabase");
+                  const q = await pool.query(
+                    `SELECT zoho_record_id, record_name, stage, owner_name, owner_email,
+                            deal_value, source, created_date, layout_name, raw_data
+                       FROM duplicate_records
+                      WHERE record_type = 'deal'
+                        AND COALESCE(NULLIF(stage,''), raw_data->>'Stage','') <> ''`,
+                  );
+                  // Reshape to the same {id, data:{…}} envelope the live path
+                  // returns, so every consumer below is untouched.
+                  return q.rows.map((r: any) => {
+                    const raw = r.raw_data || {};
+                    return {
+                      id: r.zoho_record_id,
+                      owner: r.owner_name || r.owner_email || "",
+                      data: {
+                        ...raw,
+                        Deal_Name: r.record_name || raw.Deal_Name,
+                        Stage: r.stage || raw.Stage || "",
+                        Amount: r.deal_value != null ? Number(r.deal_value) : (raw.Amount ?? null),
+                        Lead_Source: r.source || raw.Lead_Source || "",
+                        Created_Time: r.created_date
+                          ? new Date(r.created_date).toISOString()
+                          : raw.Created_Time || "",
+                        Owner: raw.Owner || { name: r.owner_name || r.owner_email || "—" },
+                        Layout: raw.Layout || (r.layout_name ? { name: r.layout_name } : undefined),
+                      },
+                    };
+                  });
+                })();
           } catch (e: any) {
-            return c.json({ error: `Zoho fetch failed: ${e?.message || e}` }, 502);
+            return c.json({ error: `Deal fetch failed: ${e?.message || e}` }, 502);
           }
 
           // Distinct stages present (for the UI to know what's available).
@@ -3695,12 +3746,30 @@ export const duplicateRadarRoutes = [
             byStage[r.stage] = byStage[r.stage] || { total: 0 };
             byStage[r.stage].total++;
           }
+          // `source` and `last_sync_at` let the UI state where these deals came
+          // from. A mirror-backed list is only as fresh as the last sync, and a
+          // compliance surface must not imply it is showing this second's CRM.
+          let lastSyncAt: string | null = null;
+          if (!useLive) {
+            try {
+              const { pool } = await import("../../utils/duplicateRadarDatabase");
+              const s = await pool.query(
+                `SELECT last_sync_at FROM zoho_sync_state WHERE module = 'Deals'`,
+              );
+              const v = s.rows[0]?.last_sync_at;
+              lastSyncAt = v ? new Date(v).toISOString() : null;
+            } catch {
+              /* the list is still valid without the timestamp */
+            }
+          }
           return c.json({
             total: rows.length,
             scanned: allDeals.length,
             wanted,
             distinct_stages: distinctStages,
             by_stage: byStage,
+            source: useLive ? "zoho_live" : "mirror",
+            last_sync_at: lastSyncAt,
             deals: rows,
           });
         } catch (e: any) {

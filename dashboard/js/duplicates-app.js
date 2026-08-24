@@ -7862,7 +7862,20 @@
             });
         }
 
-        async function loadDealCompliance() {
+        // `live` = true only when the operator clicks "Refresh from Zoho (live)".
+        // The default load reads the local mirror, which is why the tab no longer
+        // waits ~10s on every open and every stage Apply.
+        // States where the deal LIST came from. A mirror-backed list is only as
+        // fresh as the last sync, and a compliance surface must not imply it is
+        // showing Zoho as of this second. Attachment checks are always live.
+        function _dcSourceLabel(data) {
+            if (!data || data.source === 'zoho_live') return '<span class="text-gray-500">live from Zoho</span>';
+            var when = data.last_sync_at ? _dcFmtDate(data.last_sync_at) : 'unknown';
+            return '<span class="text-gray-500">deal list from last CRM sync (' + escapeHtml(String(when)) +
+                ') — click “Refresh from Zoho (live)” for this second</span>';
+        }
+
+        async function loadDealCompliance(live) {
             var body = document.getElementById('dealComplianceBody');
             var summary = document.getElementById('dealComplianceSummary');
             if (!body) return;
@@ -7874,6 +7887,7 @@
             // Segment chip (Marketplace / WalaPlus / WalaOne) — filter deals by Layout.
             var _dcSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
             if (_dcSeg && _dcSeg !== 'all') url += (url.indexOf('?') >= 0 ? '&' : '?') + 'segment=' + encodeURIComponent(_dcSeg);
+            if (live === true) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'live=1';
             var data;
             try {
                 var res = await fetch(url, { credentials: 'same-origin' });
@@ -7895,6 +7909,7 @@
             summary.innerHTML = 'Stages: <strong>' + escapeHtml((data.wanted || []).join(', ')) + '</strong> · ' +
                 (data.total || 0) + ' deal(s) · ' +
                 Object.keys(bs).map(function (s) { return escapeHtml(s) + ': ' + bs[s].total; }).join(' · ') +
+                ' · ' + _dcSourceLabel(data) +
                 ' · <span class="text-gray-400">Run Scan (or a row button) to verify attachments</span>';
             if (!deals.length) {
                 body.innerHTML = '<tr><td colspan="7" class="px-3 py-4 text-gray-500">No deals in the selected stage(s). Tick stages above and click Apply.</td></tr>';

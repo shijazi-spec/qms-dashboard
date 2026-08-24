@@ -975,7 +975,7 @@
                  docs-verification action so its purpose is obvious. -->
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportDealCompliance" id="dcExportBtn" title="Download a CSV of the deals shown with their document status." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
-                <button data-on-click="loadDealCompliance" id="dcRefreshBtn" title="Re-fetch the deals in the selected stages from Zoho." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="loadDealCompliance" data-args="[true]" id="dcRefreshBtn" title="Re-fetch the deals in the selected stages from Zoho." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
                 <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" title="Fetch each deal's attachments and verify the required documents (financial offer, Service Agreement/Contract, Quotation/PO/Invoice, VAT, CR, National Address)." class="rr-btn rr-btn-primary">📎 Check all documents</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deal-compliance" title="Open a corrective-action record (CAPA) on a non-compliant deal. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
@@ -2439,7 +2439,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=154"></script>
+    <script src="/js/duplicates-app.js?v=155"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
