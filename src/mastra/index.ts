@@ -569,6 +569,19 @@ export const mastra = new Mastra({
         // Zoho deleted from the mirror + pending-delete ledger, so stuck syncs
         // no longer leave deleted data lingering (Sarah 2026-07-23).
         { name: "DeletionFeedSweep", fn: () => runDeletionFeedSweepIfStale() },
+        // Deal document compliance — a rolling slice of Zoho attachment checks
+        // every tick, so the Deal Compliance tab reads stored results instead
+        // of making the operator's browser do hundreds of live calls
+        // (Sarah 2026-08-25). Disable with DEAL_DOC_SWEEP_ENABLED=false.
+        {
+          name: "DealDocComplianceSweep",
+          fn: async () => {
+            const { runDealDocComplianceSweepIfDue } = await import(
+              "../utils/scheduledJobs"
+            );
+            return runDealDocComplianceSweepIfDue();
+          },
+        },
         // Autonomous Duplicate Resolution — 6h fallback. Internally gated by
         // AUTONOMOUS_RESOLUTION_ENABLED/_MODE (default shadow → no Zoho writes).
         { name: "AutonomousResolution", fn: () => runAutonomousResolutionIfStale() },

@@ -3759,6 +3759,53 @@ export const duplicateRadarRoutes = [
             byStage[r.stage] = byStage[r.stage] || { total: 0 };
             byStage[r.stage].total++;
           }
+          // Attach the STORED document-compliance result for each deal.
+          //
+          // Without this the tab had no idea a deal had ever been checked
+          // unless that particular browser still held it in localStorage, so
+          // every fresh session showed hundreds of deals as "not yet checked"
+          // and the only way to populate them was the operator pressing
+          // "Check all documents" and waiting while their browser drove
+          // hundreds of live Zoho calls (Sarah 2026-08-25: "this page is a
+          // disaster, it stopped the whole PC"). The background sweep now
+          // keeps this table current; the page just reads it.
+          //
+          // Best-effort: a compliance-table failure must not cost the operator
+          // the deal list itself.
+          let checkedCount = 0;
+          try {
+            const { pool } = await import("../../utils/duplicateRadarDatabase");
+            const ids = rows.map((r) => String(r.id)).filter(Boolean);
+            if (ids.length) {
+              const dc = await pool.query(
+                `SELECT zoho_deal_id, compliant, present_docs, missing_docs,
+                        attachment_count, checked_at, checked_by
+                   FROM deal_doc_compliance
+                  WHERE zoho_deal_id = ANY($1::text[])`,
+                [ids],
+              );
+              const byId = new Map<string, any>();
+              for (const r of dc.rows as any[]) byId.set(String(r.zoho_deal_id), r);
+              checkedCount = byId.size;
+              for (const row of rows as any[]) {
+                const hit = byId.get(String(row.id));
+                if (!hit) continue;
+                row.compliance = {
+                  compliant: hit.compliant === true,
+                  presentDocs: Array.isArray(hit.present_docs) ? hit.present_docs : [],
+                  missingDocs: Array.isArray(hit.missing_docs) ? hit.missing_docs : [],
+                  attachmentCount: Number(hit.attachment_count) || 0,
+                  checkedAt: hit.checked_at ? new Date(hit.checked_at).toISOString() : null,
+                  checkedBy: hit.checked_by || null,
+                };
+              }
+            }
+          } catch (err) {
+            logger.warn(
+              "[DealCompliance] stored results unavailable — list still returned",
+              { error: err instanceof Error ? err.message : String(err) },
+            );
+          }
           // `source` and `last_sync_at` let the UI state where these deals came
           // from. A mirror-backed list is only as fresh as the last sync, and a
           // compliance surface must not imply it is showing this second's CRM.
@@ -3783,6 +3830,10 @@ export const duplicateRadarRoutes = [
             by_stage: byStage,
             source: useLive ? "zoho_live" : "mirror",
             last_sync_at: lastSyncAt,
+            // How much of the listed set the background sweep has covered, so
+            // the tab can say so instead of implying a human must go and check.
+            checked: checkedCount,
+            unchecked: Math.max(0, rows.length - checkedCount),
             deals: rows,
           });
         } catch (e: any) {

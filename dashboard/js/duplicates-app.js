@@ -8254,7 +8254,15 @@
                 (data.total || 0) + ' deal(s) · ' +
                 Object.keys(bs).map(function (s) { return escapeHtml(s) + ': ' + bs[s].total; }).join(' · ') +
                 ' · ' + _dcSourceLabel(data) +
-                ' · <span class="text-gray-400">Run Scan (or a row button) to verify attachments</span>';
+                // Coverage, not an instruction. Documents are verified by the
+                // background sweep now; the operator only reaches for Run Scan
+                // when they want a specific deal re-checked this second.
+                (data.checked != null
+                    ? ' · <span class="' + (data.unchecked ? 'text-amber-700' : 'text-emerald-700') + '">' +
+                      'documents verified for ' + data.checked + ' of ' + (data.total || 0) + ' deal(s)' +
+                      (data.unchecked ? ' — the remaining ' + data.unchecked + ' are queued for the background check' : '') +
+                      '</span>'
+                    : '');
             if (!deals.length) {
                 body.innerHTML = '<tr><td colspan="7" class="px-3 py-4 text-gray-500">No deals in the selected stage(s). Tick stages above and click Apply.</td></tr>';
                 return;
@@ -9282,7 +9290,7 @@
             // Surface "checked by" alongside the timestamp so a second
             // reviewer can see who already ran the scan on this deal
             // (the server's deal_doc_compliance row carries checkedBy,
-            // overlaid by _dcRehydrateFromServer). Cross-team visibility.
+            // shipped with the deal list). Cross-team visibility.
             var byPart = rec.checkedBy ? ' by ' + escapeHtml(String(rec.checkedBy)) : '';
             var when = rec.checkedAt ? '<div class="text-[10px] text-gray-400 mt-0.5" title="Persisted in deal_doc_compliance. Whoever scans this deal most recently overwrites the checkedBy field.">checked ' + escapeHtml(_dcWhen(rec.checkedAt)) + byPart + '</div>' : '';
             var recheck = '<button data-on-click="checkDealDocs" data-args=\'' + escapeHtml(JSON.stringify([String(id), String(stage || rec.stage || '')])) + '\' class="text-[10px] text-blue-600 hover:underline">↻ re-check</button>';
@@ -9298,7 +9306,23 @@
             var store = _dcStoreLoad();
             var restored = 0;
             deals.forEach(function (d) {
-                var rec = store[String(d.id)];
+                // The list endpoint now ships each deal's STORED compliance
+                // result, kept current by the background sweep. Prefer it over
+                // this browser's localStorage: it is the shared, durable copy,
+                // and it means a fresh browser shows real data immediately
+                // instead of 976 rows of "Check documents" buttons that only
+                // a long live scan could fill in (Sarah 2026-08-25).
+                var rec = d.compliance
+                    ? {
+                        compliant: !!d.compliance.compliant,
+                        present: d.compliance.presentDocs || [],
+                        missing: d.compliance.missingDocs || [],
+                        attachmentCount: d.compliance.attachmentCount || 0,
+                        stage: d.stage,
+                        checkedAt: d.compliance.checkedAt,
+                        checkedBy: d.compliance.checkedBy,
+                    }
+                    : store[String(d.id)];
                 if (!rec) return;
                 window._dcResults[String(d.id)] = rec;
                 var span = document.getElementById('docs-' + d.id);
@@ -9307,35 +9331,9 @@
                 restored++;
             });
             if (restored > 0) _dcUpdateCards();
-            _dcRehydrateFromServer(); // authoritative shared copy (async overlay)
-        }
-
-        // Overlay the server-persisted results (shared, durable) for the
-        // visible deals — so a scan run on another device / by a teammate
-        // shows up here too. Best-effort: localStorage already painted.
-        async function _dcRehydrateFromServer() {
-            var deals = window._dcDeals || [];
-            if (!deals.length) return;
-            var ids = deals.map(function (d) { return String(d.id); });
-            var data;
-            try {
-                var res = await fetch('/api/duplicates/deal-compliance/results?ids=' + encodeURIComponent(ids.join(',')), { credentials: 'same-origin' });
-                if (!res.ok) return;
-                data = await res.json();
-            } catch (e) { return; }
-            var results = (data && data.results) || {};
-            var n = 0;
-            deals.forEach(function (d) {
-                var rec = results[String(d.id)];
-                if (!rec) return;
-                window._dcResults[String(d.id)] = rec;
-                _dcStorePut(d.id, rec); // keep local cache in sync with server
-                var span = document.getElementById('docs-' + d.id);
-                if (span) span.innerHTML = _dcDocCellHtml(d.id, rec, d.stage);
-                _dcSetRowSev(d.id, rec.compliant);
-                n++;
-            });
-            if (n > 0) _dcUpdateCards();
+            // The separate /results?ids=… overlay is gone: with ~976 deals it
+            // built an ~18KB query string, and when the server refused that URL
+            // the failure was silent, so the tab looked permanently unchecked.
         }
 
         // CSV export of the deals shown + their document status.

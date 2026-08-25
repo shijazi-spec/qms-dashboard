@@ -392,6 +392,50 @@ export async function runDeletionFeedSweepIfStale(
   }
 }
 
+// DEAL DOCUMENT COMPLIANCE — rolling background sweep (Sarah 2026-08-25:
+// "this page is a disaster, it stopped the whole PC when it works").
+//
+// Deal Compliance used to learn a deal's document status only when a human sat
+// on the tab and pressed "Check all documents", which walked the loaded rows
+// calling Zoho's attachments API. It capped at 200 of 976 in-scope deals, so
+// it could never finish, and it pinned the browser while running.
+//
+// Now a slice runs here instead, every tick. Deliberately NOT a once-a-day
+// burst: 976 attachment calls back-to-back risks Zoho's rate limit, and this
+// deployment has already shown it falls over under that kind of load. ~60
+// deals per 45-minute tick is ~1,900 checks a day, so every in-scope deal is
+// re-checked daily with the load spread thin.
+let _lastDealDocSweepMs = 0;
+export async function runDealDocComplianceSweepIfDue(
+  minIntervalMinutes = Number(process.env.DEAL_DOC_SWEEP_INTERVAL_MINUTES || 45),
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  if (process.env.DEAL_DOC_SWEEP_ENABLED === "false") {
+    return { ran: false, ageHours: 0 };
+  }
+  const ageHours =
+    _lastDealDocSweepMs === 0
+      ? Infinity
+      : (Date.now() - _lastDealDocSweepMs) / 3600000;
+  if (ageHours * 60 < minIntervalMinutes) return { ran: false, ageHours };
+  try {
+    const { runDealDocComplianceSweep } = await import("./dealDocComplianceSweep");
+    const result = await runDealDocComplianceSweep();
+    _lastDealDocSweepMs = Date.now();
+    if (result.scanned > 0) {
+      logger.info(
+        `[DealDocSweep] checked ${result.scanned} deal(s): ${result.compliant} compliant, ` +
+          `${result.missing} missing docs, ${result.errors} error(s); ${result.remaining} never checked`,
+      );
+    }
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    logger.error("[DealDocSweep] pass failed:", err);
+    // Stamp anyway — a persistent failure must not hammer Zoho every tick.
+    _lastDealDocSweepMs = Date.now();
+    return { ran: false, ageHours };
+  }
+}
+
 /**
  * Returns hours since the last successful Quality Audit.
  */
