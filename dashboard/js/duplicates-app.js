@@ -8384,6 +8384,9 @@
                 present: (data.presentDocs || []).map(function (p) { return p.label; }),
                 missing: (data.missingDocs || []).map(function (m) { return m.label; }),
                 attachmentCount: data.attachmentCount || 0,
+                // Only a LIVE check knows the filenames; the stored row keeps
+                // the verdict, not the file list.
+                attachmentNames: data.attachmentNames || null,
                 stage: stage,
                 // Prefer the server's checkedAt/checkedBy when present so the
                 // row matches the persisted attribution; fall back to "now"
@@ -9294,7 +9297,24 @@
             var byPart = rec.checkedBy ? ' by ' + escapeHtml(String(rec.checkedBy)) : '';
             var when = rec.checkedAt ? '<div class="text-[10px] text-gray-400 mt-0.5" title="Persisted in deal_doc_compliance. Whoever scans this deal most recently overwrites the checkedBy field.">checked ' + escapeHtml(_dcWhen(rec.checkedAt)) + byPart + '</div>' : '';
             var recheck = '<button data-on-click="checkDealDocs" data-args=\'' + escapeHtml(JSON.stringify([String(id), String(stage || rec.stage || '')])) + '\' class="text-[10px] text-blue-600 hover:underline">↻ re-check</button>';
-            return head + present + missing + when + recheck;
+            // What is ACTUALLY attached, by filename.
+            //
+            // "5 missing" is unfalsifiable on its own: a deal with nothing
+            // attached and a deal whose contract is filed under a name the
+            // keyword matcher does not recognise look identical, and they need
+            // opposite responses. Only available after a live re-check — the
+            // stored row keeps the verdict, not the filenames.
+            var files = '';
+            if (rec.attachmentNames && rec.attachmentNames.length) {
+                files = '<div class="text-[10px] text-gray-500 mt-0.5" ' +
+                    'title="The files actually attached in Zoho. If a required document is here but ' +
+                    'shown as missing above, the file name did not match — tell Quality rather than the rep.">' +
+                    'attached: ' + rec.attachmentNames.map(function (f) { return escapeHtml(String(f)); }).join(', ') +
+                    '</div>';
+            } else if (rec.attachmentNames && !rec.attachmentNames.length) {
+                files = '<div class="text-[10px] text-gray-500 mt-0.5">no files attached in Zoho</div>';
+            }
+            return head + present + missing + files + when + recheck;
         }
         // After deals load, restore any previously-scanned results for the
         // visible deals and paint their status cells. localStorage paints

@@ -3862,6 +3862,20 @@ export const duplicateRadarRoutes = [
             return c.json({ error: `Zoho attachments fetch failed: ${e?.message || e}` }, 502);
           }
           const result = evaluateDocCompliance(stage, atts);
+          // The file NAMES of what is actually attached.
+          //
+          // Without these, "missing 5 documents" is unfalsifiable: the operator
+          // cannot tell a deal with nothing attached from a deal whose contract
+          // is attached under a name the keyword matcher does not recognise —
+          // and those two need opposite responses. Verifying the 96-99%
+          // missing-document rate found on Agreement Signed / Paid deals
+          // (2026-08-26) needed exactly this and it was not there.
+          //
+          // Names only, capped: this is a diagnostic, not a file browser.
+          const attachmentNames = (atts || [])
+            .map((a: any) => String(a?.fileName || "").trim())
+            .filter(Boolean)
+            .slice(0, 25);
           // Persist the latest result (shared across users/devices) so the
           // scan survives reloads and can be re-checked / sent to owners.
           // Best-effort: a DB hiccup must not fail the live compliance answer.
@@ -3887,7 +3901,12 @@ export const duplicateRadarRoutes = [
           // reviewer hitting Refresh will see the same attribution.
           const checkedBy =
             user.email || user.userId ? String(user.email || user.userId) : null;
-          return c.json({ ...result, checkedBy, checkedAt: new Date().toISOString() });
+          return c.json({
+            ...result,
+            attachmentNames,
+            checkedBy,
+            checkedAt: new Date().toISOString(),
+          });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }
