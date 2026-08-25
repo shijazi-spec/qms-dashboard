@@ -775,6 +775,76 @@ export async function getDealDocCompliance(
   return r.rows;
 }
 
+/** One checked deal, with the owner and money attached — the unit the Head of
+ *  Sales acts on. Missing docs come from the stored check, not a live call. */
+export interface DealComplianceReportRow {
+  id: string;
+  name: string;
+  stage: string;
+  owner: string;
+  account: string | null;
+  amount: number;
+  created: string | null;
+  compliant: boolean;
+  missing_docs: string[];
+  attachment_count: number;
+  checked_at: string | null;
+}
+
+/**
+ * Row-level document compliance for the report that goes to Sales.
+ *
+ * Joins the stored check to the deal mirror so every row carries an OWNER and
+ * an AMOUNT: "632 deals are missing documents" is not actionable, "these are
+ * yours and they are worth this much" is.
+ *
+ * Only deals that have actually been checked appear — a deal the background
+ * sweep has not reached yet is not evidence of anything, and padding the
+ * report with unknowns would understate compliance.
+ */
+export async function getDealComplianceReportRows(
+  segment: DuplicateFilters["segment"],
+): Promise<DealComplianceReportRow[]> {
+  const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
+  const p = buildSegmentPredicate(seg, 1);
+  const segCond = p.condition ? " AND " + p.condition : "";
+  const res = await pool.query(
+    `SELECT d.zoho_deal_id AS id,
+            COALESCE(NULLIF(BTRIM(r.record_name), ''), d.zoho_deal_id) AS name,
+            COALESCE(NULLIF(BTRIM(d.stage), ''), NULLIF(BTRIM(r.stage), ''), '') AS stage,
+            COALESCE(NULLIF(BTRIM(r.owner_name), ''), NULLIF(BTRIM(r.owner_email), ''), 'Unassigned') AS owner,
+            COALESCE(
+              NULLIF(BTRIM(r.raw_data->'Account_Name'->>'name'), ''),
+              NULLIF(BTRIM(r.company_name), '')
+            ) AS account,
+            COALESCE(r.deal_value, 0)::float AS amount,
+            r.created_date AS created,
+            d.compliant AS compliant,
+            d.missing_docs AS missing_docs,
+            d.attachment_count AS attachment_count,
+            d.checked_at AS checked_at
+       FROM deal_doc_compliance d
+       JOIN duplicate_records r ON r.zoho_record_id = d.zoho_deal_id
+      WHERE r.record_type = 'deal'${segCond}
+      ORDER BY d.compliant ASC, COALESCE(r.deal_value, 0) DESC`,
+    [...p.params],
+  );
+  return (res.rows as any[]).map((x) => ({
+    id: String(x.id),
+    name: String(x.name || ""),
+    stage: String(x.stage || ""),
+    owner: String(x.owner || "Unassigned"),
+    account: x.account || null,
+    amount: Number(x.amount) || 0,
+    created: x.created ? new Date(x.created).toISOString() : null,
+    compliant: x.compliant === true,
+    // pg parses jsonb into a JS array already; guard non-arrays.
+    missing_docs: Array.isArray(x.missing_docs) ? x.missing_docs : [],
+    attachment_count: Number(x.attachment_count) || 0,
+    checked_at: x.checked_at ? new Date(x.checked_at).toISOString() : null,
+  }));
+}
+
 // ── Weekly executive-brief snapshots (for week-over-week trend) ───────────
 export interface ExecBriefSnapshot {
   total_clusters: number;

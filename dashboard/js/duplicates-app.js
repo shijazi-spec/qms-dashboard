@@ -9336,6 +9336,17 @@
             // the failure was silent, so the tab looked permanently unchecked.
         }
 
+        // Excel report for the Head of Sales — built SERVER-SIDE from the
+        // stored checks, so it makes no Zoho calls and downloads immediately.
+        // Sheet per stage (Proposal / Agreement Signed / Paid) plus the
+        // per-owner breakdown, which is the part Sales acts on.
+        window.exportDealComplianceReport = function () {
+            var seg = document.getElementById('filterSegment')
+                ? document.getElementById('filterSegment').value : 'all';
+            window.location.href = '/api/duplicates/deal-compliance.xlsx?segment=' +
+                encodeURIComponent(seg || 'all');
+        };
+
         // CSV export of the deals shown + their document status.
         function exportDealCompliance() {
             var deals = window._dcDeals || [];

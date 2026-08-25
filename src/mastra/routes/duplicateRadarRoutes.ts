@@ -3901,6 +3901,74 @@ export const duplicateRadarRoutes = [
     // 200 separate browser fetches with heavy per-row work, which hung the
     // whole device / crashed the browser. Now the browser sends ~10 light
     // batch calls instead. Body: { deals: [{ id, stage }] }.
+    // Document-compliance report for the Head of Sales: missing-document rate,
+    // which owner it sits with, and one sheet per stage (Proposal / Agreement
+    // Signed / Paid). Reads the STORED checks kept current by the background
+    // sweep, so it makes no Zoho calls and is instant.
+    // GET /api/duplicates/deal-compliance.xlsx?segment=
+    path: "/api/duplicates/deal-compliance.xlsx",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const url = new URL(c.req.url);
+        const segment = (url.searchParams.get("segment") || "all") as any;
+        const { getDealComplianceReportRows } = await import(
+          "../../utils/duplicateRadarDatabase"
+        );
+        // In-memory workbook, not the streaming path — see the note on
+        // /api/duplicates/multi-active-deals.xlsx. Bounded output (hundreds of
+        // rows), and staged exports take this deployment down.
+        const { buildWorkbook } = await import("../../utils/excelExport");
+        const { buildDealComplianceReportSheets, dealComplianceReportFilename } =
+          await import("../../utils/dealComplianceReportExport");
+        const { countNeverChecked } = await import(
+          "../../utils/dealDocComplianceSweep"
+        );
+        const rows = await getDealComplianceReportRows(segment);
+        const neverChecked = await countNeverChecked();
+        const sheets = buildDealComplianceReportSheets(rows, {
+          segment: String(segment),
+          inScope: rows.length + neverChecked,
+        });
+        try {
+          await createExportLog({
+            export_type: "deal_doc_compliance" as any,
+            filter_criteria: { segment },
+            total_records_exported: rows.length,
+            file_format: "xlsx",
+            exported_by:
+              (user as any).email ||
+              (user as any).name ||
+              `user:${(user as any).userId ?? "unknown"}`,
+          });
+        } catch (logErr) {
+          logger.warn(
+            "[DealCompliance] report export log write failed (non-blocking):",
+            logErr,
+          );
+        }
+        const buf = await buildWorkbook(
+          sheets.map((s) => ({ ...s, rows: s.rows as Record<string, any>[] })),
+          { title: `Deal document compliance — ${segment}` },
+        );
+        return new Response(new Uint8Array(buf), {
+          headers: {
+            "Content-Type":
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "Content-Disposition": `attachment; filename="${dealComplianceReportFilename(String(segment))}"`,
+            "Content-Length": String(buf.length),
+          },
+        });
+      } catch (e: any) {
+        logger.error("deal-compliance.xlsx failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     path: "/api/duplicates/deals/doc-compliance-batch",
     method: "POST" as const,
     createHandler: async () => {
