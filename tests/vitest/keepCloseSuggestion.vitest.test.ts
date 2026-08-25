@@ -36,13 +36,29 @@ const RANK: Record<string, number> = {
 const DEFAULT_RANK = 25;
 const rankOf = (s: string) => RANK[(s || "").trim().toLowerCase()] ?? DEFAULT_RANK;
 
-type D = { stage: string; amount?: number; created?: string; activity?: string };
+type D = {
+  stage: string;
+  owner?: string;
+  amount?: number;
+  created?: string;
+  activity?: string;
+};
+
+const UNOWNED = new Set(["", "unassigned", "walaplus", "wala plus"]);
+const PROTECTED_UNOWNED_RANK = 60;
+/** 1 = demoted. A deal nobody owns cannot carry the account forward. */
+const demote = (d: D) =>
+  UNOWNED.has(String(d.owner ?? "x").trim().toLowerCase()) &&
+  rankOf(d.stage) < PROTECTED_UNOWNED_RANK
+    ? 1
+    : 0;
 
 /** Mirrors annotateKeepClose's ordering. */
 function keeper(deals: D[]): number {
   const ms = (v?: string) => (v ? new Date(v).getTime() || 0 : 0);
   return [...deals.map((d, i) => ({ i, d }))].sort(
     (a, b) =>
+      demote(a.d) - demote(b.d) ||
       rankOf(b.d.stage) - rankOf(a.d.stage) ||
       ms(b.d.activity) - ms(a.d.activity) ||
       ((b.d.amount || 0) > 0 ? 1 : 0) - ((a.d.amount || 0) > 0 ? 1 : 0) ||
@@ -132,6 +148,87 @@ describe("ties break on activity, then value, then age", () => {
     // A null created must sort last, not first.
     expect(
       keeper([{ stage: "Contacted" }, { stage: "Contacted", created: "2025-01-01" }]),
+    ).toBe(1);
+  });
+});
+
+describe("a deal nobody owns cannot be the keeper", () => {
+  // Sarah 2026-08-26. Five conflict deals are owned by "WalaPlus" — the
+  // tenant's placeholder owner on imported/unassigned records, not a person.
+  // Ownership is checked BEFORE pipeline position: there is nobody to work an
+  // ownerless deal, so it must not win over one a rep is actually holding.
+
+  it("keeps the owned On Hold over the ownerless New Deal", () => {
+    // The SBAHC and Royal Commission rows exactly. Under stage-first ordering
+    // New Deal (20) beat On Hold (10) and the tab recommended keeping a deal
+    // nobody owns.
+    expect(
+      keeper([
+        { stage: "New Deal", owner: "WalaPlus" },
+        { stage: "On Hold", owner: "Mansour Alqahtani" },
+      ]),
+    ).toBe(1);
+  });
+
+  it("treats the literal 'Unassigned' fallback the same way", () => {
+    expect(
+      keeper([
+        { stage: "Contacted", owner: "Unassigned" },
+        { stage: "On Hold", owner: "Khowla Saeed" },
+      ]),
+    ).toBe(1);
+  });
+
+  it("treats a blank owner the same way", () => {
+    expect(
+      keeper([{ stage: "Meeting", owner: "" }, { stage: "New Deal", owner: "Rayan Saleh" }]),
+    ).toBe(1);
+  });
+
+  it("does NOT demote an ownerless deal that is already at a closing stage", () => {
+    // Closing live commercial progress because of a blank field would be
+    // destructive. The fix for these is to assign an owner, not to close them.
+    expect(
+      keeper([
+        { stage: "Proposal", owner: "WalaPlus" },
+        { stage: "New Deal", owner: "Ali AlRajhi" },
+      ]),
+    ).toBe(0);
+    expect(
+      keeper([
+        { stage: "Agreement Sent", owner: "WalaPlus" },
+        { stage: "Contacted", owner: "Ali AlRajhi" },
+      ]),
+    ).toBe(0);
+  });
+
+  it("falls back to the normal rules when NEITHER deal has an owner", () => {
+    // The وكالة جهة حكومية / نادي ضباط shape: both sides ownerless. The rule
+    // is inert and pipeline position decides as before.
+    expect(
+      keeper([
+        { stage: "Unaccounted", owner: "WalaPlus" },
+        { stage: "Contacted", owner: "Unassigned" },
+      ]),
+    ).toBe(1);
+  });
+
+  it("still ranks normally between two owned deals", () => {
+    expect(
+      keeper([
+        { stage: "On Hold", owner: "A" },
+        { stage: "Proposal", owner: "B" },
+      ]),
+    ).toBe(1);
+  });
+
+  it("does not let a big amount rescue an ownerless deal", () => {
+    // oracle: the ownerless Unaccounted deal carried SAR 89,800.
+    expect(
+      keeper([
+        { stage: "Unaccounted", owner: "WalaPlus", amount: 89800 },
+        { stage: "On Hold", owner: "Yahya Alshehri", amount: 0 },
+      ]),
     ).toBe(1);
   });
 });

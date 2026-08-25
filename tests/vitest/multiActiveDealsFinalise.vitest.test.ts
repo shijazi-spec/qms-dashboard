@@ -125,6 +125,51 @@ describe("domain merges duplicate Account records", () => {
   });
 });
 
+describe("ownership beats pipeline position — through the SHIPPED code", () => {
+  // keepCloseSuggestion.vitest.test.ts models the ordering; this exercises the
+  // real annotateKeepClose via the exported entry point, so the rule cannot
+  // drift between the model and what actually runs.
+
+  it("keeps the rep's On Hold over the placeholder-owned New Deal", () => {
+    // SBAHC / Royal Commission: owner "WalaPlus" is the tenant's placeholder
+    // on unassigned records, not a person.
+    const [a] = run([
+      group({
+        deals: [
+          deal({ id: "unowned", stage: "New Deal", owner: "WalaPlus" }),
+          deal({ id: "owned", stage: "On Hold", owner: "Mansour Alqahtani" }),
+        ],
+      }),
+    ]);
+    expect(a.deals.find((d) => d.suggestion === "keep")?.id).toBe("owned");
+  });
+
+  it("says WHY, so a keeper at an earlier stage does not look like a mistake", () => {
+    const [a] = run([
+      group({
+        deals: [
+          deal({ id: "unowned", stage: "New Deal", owner: "Unassigned" }),
+          deal({ id: "owned", stage: "On Hold", owner: "Khowla Saeed" }),
+        ],
+      }),
+    ]);
+    expect(a.deals.find((d) => d.id === "owned")?.suggestion_reason).toContain("real owner");
+    expect(a.deals.find((d) => d.id === "unowned")?.suggestion_reason).toContain("nobody owns");
+  });
+
+  it("leaves an ownerless deal alone once it reaches a closing stage", () => {
+    const [a] = run([
+      group({
+        deals: [
+          deal({ id: "unowned", stage: "Proposal", owner: "WalaPlus" }),
+          deal({ id: "owned", stage: "Contacted", owner: "Ali AlRajhi" }),
+        ],
+      }),
+    ]);
+    expect(a.deals.find((d) => d.suggestion === "keep")?.id).toBe("unowned");
+  });
+});
+
 describe("recommendation and ordering", () => {
   it("annotates exactly one keeper per conflict", () => {
     const [a] = run([group()]);

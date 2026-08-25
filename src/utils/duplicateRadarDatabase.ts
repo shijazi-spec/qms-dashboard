@@ -2971,9 +2971,39 @@ function stageRank(stage: string): number {
  * Returns the SAME array, annotated. Never reorders the caller's data and
  * never writes anything: Sales decides, this only argues a case.
  */
+/**
+ * Owner values that mean NOBODY is working this deal.
+ *
+ * "WalaPlus" is the tenant's own placeholder owner on records that were
+ * imported or never assigned — it is not a person. "Unassigned" is the
+ * fallback this module substitutes when Zoho has neither an owner name nor an
+ * owner email.
+ */
+const UNOWNED_OWNERS = new Set(["", "unassigned", "walaplus", "wala plus"]);
+
+export function isUnownedDeal(owner: string | null | undefined): boolean {
+  return UNOWNED_OWNERS.has(String(owner || "").trim().toLowerCase());
+}
+
+/**
+ * Below this stage rank, having no owner disqualifies a deal from being the
+ * keeper. At or above it (Proposal, Agreement Sent) the deal represents real,
+ * live commercial progress and closing it would be destructive — the right fix
+ * there is to assign an owner, not to close the deal, so it is left alone.
+ */
+const PROTECTED_UNOWNED_RANK = 60;
+
+/** A deal nobody owns cannot carry the account forward — unless it is already
+ *  at a closing stage. Lower sorts first, so 1 means "demoted". */
+function ownershipDemotion(d: { stage: string; owner?: string }): number {
+  if (!isUnownedDeal(d.owner)) return 0;
+  return stageRank(d.stage) >= PROTECTED_UNOWNED_RANK ? 0 : 1;
+}
+
 function annotateKeepClose<
   T extends {
     stage: string;
+    owner?: string;
     amount: number;
     created: string | null;
     last_activity: string | null;
@@ -2982,6 +3012,15 @@ function annotateKeepClose<
   const ms = (v: string | null) => (v ? new Date(v).getTime() || 0 : 0);
   const scored = deals.map((d, i) => ({
     i,
+    // Ownership is checked FIRST, ahead of pipeline position (Sarah 2026-08-26).
+    // A deal owned by nobody cannot carry the account forward — there is no one
+    // to work it — so it must not win over a deal someone is actually holding,
+    // even when its stage looks livelier. This is what stopped SBAHC and Royal
+    // Commission recommending an ownerless "New Deal" over a rep's "On Hold".
+    // Deals already at Proposal or beyond are exempt: closing live commercial
+    // progress because of a blank field would be destructive, and the right fix
+    // there is to assign an owner.
+    demoted: ownershipDemotion(d),
     rank: stageRank(d.stage),
     activity: ms(d.last_activity),
     amount: Number(d.amount) || 0,
@@ -2989,6 +3028,7 @@ function annotateKeepClose<
   }));
   const best = [...scored].sort(
     (a, b) =>
+      a.demoted - b.demoted ||
       b.rank - a.rank ||
       b.activity - a.activity ||
       (b.amount > 0 ? 1 : 0) - (a.amount > 0 ? 1 : 0) ||
@@ -2997,19 +3037,27 @@ function annotateKeepClose<
   return deals.map((d, i) => {
     const me = scored[i];
     if (i === best.i) {
-      const bits = [`furthest along (${d.stage || "unknown stage"})`];
+      // When the keeper won because the alternative had no owner, say so
+      // FIRST: otherwise the row shows a keeper at an apparently earlier stage
+      // with no explanation, and the recommendation looks wrong.
+      const beatAnUnowned = scored.some((s) => s.i !== best.i && s.demoted === 1);
+      const bits = beatAnUnowned
+        ? [`has a real owner (${d.owner || "assigned"})`]
+        : [`furthest along (${d.stage || "unknown stage"})`];
       if (me.activity) bits.push("most recent activity");
       if (me.amount > 0) bits.push("has a value");
       return { ...d, suggestion: "keep" as const, suggestion_reason: bits.join(", ") };
     }
     const why =
-      me.rank < best.rank
-        ? `behind ${deals[best.i].stage || "the kept deal"} in the pipeline`
-        : me.activity < best.activity
-          ? "less recent activity"
-          : me.amount === 0 && best.amount > 0
-            ? "no value recorded"
-            : "duplicate of the kept deal";
+      me.demoted === 1 && best.demoted === 0
+        ? `nobody owns this deal (${d.owner || "unassigned"}) — assign it or close it`
+        : me.rank < best.rank
+          ? `behind ${deals[best.i].stage || "the kept deal"} in the pipeline`
+          : me.activity < best.activity
+            ? "less recent activity"
+            : me.amount === 0 && best.amount > 0
+              ? "no value recorded"
+              : "duplicate of the kept deal";
     return { ...d, suggestion: "close" as const, suggestion_reason: why };
   });
 }
