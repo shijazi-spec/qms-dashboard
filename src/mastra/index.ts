@@ -2,6 +2,13 @@
 // is constructed. See src/utils/normalizeDatabaseUrl.ts for the rationale.
 import "../utils/normalizeDatabaseUrl";
 
+// Installed as early as possible: an unhandled promise rejection anywhere in
+// the process is fatal by default, and on a single-instance deployment that
+// means every user of every module gets 500s for the next 30-60 seconds.
+// Logs and keeps the server alive. See src/utils/processSafetyNet.ts.
+import { installProcessSafetyNet } from "../utils/processSafetyNet";
+installProcessSafetyNet();
+
 import { Mastra } from "@mastra/core";
 import { PinoLogger } from "@mastra/loggers";
 import { LogLevel, MastraLogger } from "@mastra/core/logger";

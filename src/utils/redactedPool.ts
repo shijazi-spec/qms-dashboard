@@ -45,6 +45,7 @@
 import "./normalizeDatabaseUrl";
 import pg from 'pg';
 import { redactSensitiveDeep } from './eventLogsDatabase';
+import { attachPoolErrorHandler } from './processSafetyNet';
 
 const { Pool } = pg;
 
@@ -145,6 +146,13 @@ function wrapQueryMethod<T extends { query: (...args: unknown[]) => unknown }>(t
 export function wrapPoolForRedaction<P extends pg.Pool>(pool: P): P {
   const tagged = pool as unknown as Record<symbol, unknown>;
   if (tagged[REDACTED_FLAG]) return pool;
+
+  // node-postgres emits 'error' on the POOL when a backend error or network
+  // drop hits an IDLE client, and an unhandled 'error' event is fatal in Node.
+  // These are routine (a Postgres restart, a provider-side idle timeout) and
+  // must never take the instance down. Attached here so every pool built
+  // through this factory is covered by construction.
+  attachPoolErrorHandler(pool as unknown as { on: (e: string, cb: (err: Error) => void) => unknown });
 
   // `pool.query` — the direct path.
   wrapQueryMethod(pool as unknown as { query: (...args: unknown[]) => unknown });
