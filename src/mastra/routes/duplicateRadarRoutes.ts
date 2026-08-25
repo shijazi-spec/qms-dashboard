@@ -3679,43 +3679,89 @@ export const duplicateRadarRoutes = [
                 })
               : await (async () => {
                   const { pool } = await import("../../utils/duplicateRadarDatabase");
+                  // Filter by STAGE in SQL, and never select raw_data.
+                  //
+                  // This used to fetch every deal that had any stage at all —
+                  // 27,281 rows, each carrying its full raw_data JSONB — and
+                  // then filter down to ~1,282 in JavaScript. It took 7.7s and
+                  // shipped 844KB to the browser (measured 2026-08-26), which
+                  // is most of why the tab felt like it hung the machine.
+                  // Only the handful of raw_data fields actually rendered are
+                  // extracted, in SQL.
                   const q = await pool.query(
                     `SELECT zoho_record_id, record_name, stage, owner_name, owner_email,
-                            deal_value, source, created_date, layout_name, raw_data
+                            deal_value, source, created_date, layout_name,
+                            NULLIF(BTRIM(COALESCE(
+                              raw_data->'Account_Name'->>'name',
+                              raw_data->>'Account_Name'
+                            )), '') AS account_name,
+                            NULLIF(BTRIM(raw_data->>'Stage'), '') AS raw_stage
                        FROM duplicate_records
                       WHERE record_type = 'deal'
-                        AND COALESCE(NULLIF(stage,''), raw_data->>'Stage','') <> ''`,
+                        AND LOWER(BTRIM(COALESCE(NULLIF(stage,''), raw_data->>'Stage',''))) = ANY($1::text[])`,
+                    [[...wantedLower]],
                   );
                   // Reshape to the same {id, data:{…}} envelope the live path
                   // returns, so every consumer below is untouched.
-                  return q.rows.map((r: any) => {
-                    const raw = r.raw_data || {};
-                    return {
-                      id: r.zoho_record_id,
-                      owner: r.owner_name || r.owner_email || "",
-                      data: {
-                        ...raw,
-                        Deal_Name: r.record_name || raw.Deal_Name,
-                        Stage: r.stage || raw.Stage || "",
-                        Amount: r.deal_value != null ? Number(r.deal_value) : (raw.Amount ?? null),
-                        Lead_Source: r.source || raw.Lead_Source || "",
-                        Created_Time: r.created_date
-                          ? new Date(r.created_date).toISOString()
-                          : raw.Created_Time || "",
-                        Owner: raw.Owner || { name: r.owner_name || r.owner_email || "—" },
-                        Layout: raw.Layout || (r.layout_name ? { name: r.layout_name } : undefined),
-                      },
-                    };
-                  });
+                  return q.rows.map((r: any) => ({
+                    id: r.zoho_record_id,
+                    owner: r.owner_name || r.owner_email || "",
+                    data: {
+                      Deal_Name: r.record_name || r.zoho_record_id,
+                      Stage: r.stage || r.raw_stage || "",
+                      Amount: r.deal_value != null ? Number(r.deal_value) : null,
+                      Lead_Source: r.source || "",
+                      Created_Time: r.created_date
+                        ? new Date(r.created_date).toISOString()
+                        : "",
+                      Account_Name: r.account_name || null,
+                      Owner: { name: r.owner_name || r.owner_email || "—" },
+                      Layout: r.layout_name ? { name: r.layout_name } : undefined,
+                    },
+                  }));
                 })();
           } catch (e: any) {
             return c.json({ error: `Deal fetch failed: ${e?.message || e}` }, 502);
           }
 
-          // Distinct stages present (for the UI to know what's available).
-          const distinctStages = Array.from(
+          // Distinct stages present, and how many deals exist in total.
+          //
+          // Both used to be derived from the full unfiltered fetch. Now that
+          // the deal query is narrowed to the selected stages in SQL, they need
+          // their own source — otherwise the in-tab stage filter would only
+          // ever offer the stages already selected (no way back to the others),
+          // and the "Scanned" card would silently start reporting the filtered
+          // count while still being labelled as the whole CRM.
+          let distinctStages: string[] = Array.from(
             new Set(allDeals.map((r: any) => (r.data?.Stage || "").trim()).filter(Boolean)),
           ).sort();
+          let scannedTotal = allDeals.length;
+          if (!useLive) {
+            try {
+              const { pool } = await import("../../utils/duplicateRadarDatabase");
+              const meta = await pool.query(
+                `SELECT COALESCE(NULLIF(BTRIM(stage), ''), BTRIM(raw_data->>'Stage')) AS stage,
+                        COUNT(*)::text AS n
+                   FROM duplicate_records
+                  WHERE record_type = 'deal'
+                    AND COALESCE(NULLIF(BTRIM(stage), ''), raw_data->>'Stage', '') <> ''
+                  GROUP BY 1`,
+              );
+              distinctStages = (meta.rows as any[])
+                .map((r) => String(r.stage || "").trim())
+                .filter(Boolean)
+                .sort();
+              scannedTotal = (meta.rows as any[]).reduce(
+                (n, r) => n + (Number(r.n) || 0),
+                0,
+              );
+            } catch (err) {
+              logger.warn(
+                "[DealCompliance] stage metadata unavailable — falling back to the filtered set",
+                { error: err instanceof Error ? err.message : String(err) },
+              );
+            }
+          }
 
           let deals = allDeals.filter((r: any) =>
             wantedLower.has(String(r.data?.Stage || "").trim().toLowerCase()),
@@ -3824,7 +3870,7 @@ export const duplicateRadarRoutes = [
           }
           return c.json({
             total: rows.length,
-            scanned: allDeals.length,
+            scanned: scannedTotal,
             wanted,
             distinct_stages: distinctStages,
             by_stage: byStage,

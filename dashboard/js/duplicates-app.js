@@ -8267,10 +8267,26 @@
                 body.innerHTML = '<tr><td colspan="7" class="px-3 py-4 text-gray-500">No deals in the selected stage(s). Tick stages above and click Apply.</td></tr>';
                 return;
             }
+            var _dcStore = _dcStoreLoad();
             body.innerHTML = deals.map(function (d) {
                 var reqd = (d.requiredDocs || []).map(function (x) { return x.label; }).join(', ');
                 var docArgs = escapeHtml(JSON.stringify([String(d.id), String(d.stage)]));
-                return '<tr class="align-top" data-deal-id="' + escapeHtml(String(d.id)) + '" data-deal-stage="' + escapeHtml(String(d.stage)) + '" data-deal-owner="' + escapeHtml(String(d.owner || '—')) + '">' +
+                // Prefer the server's stored check (shared, kept current by the
+                // background sweep) over this browser's localStorage copy.
+                var _dcRec = d.compliance
+                    ? {
+                        compliant: !!d.compliance.compliant,
+                        present: d.compliance.presentDocs || [],
+                        missing: d.compliance.missingDocs || [],
+                        attachmentCount: d.compliance.attachmentCount || 0,
+                        stage: d.stage,
+                        checkedAt: d.compliance.checkedAt,
+                        checkedBy: d.compliance.checkedBy,
+                    }
+                    : _dcStore[String(d.id)];
+                if (_dcRec) window._dcResults[String(d.id)] = _dcRec;
+                var _sev = _dcRec ? (_dcRec.compliant ? ' rr-sev-good' : ' rr-sev-warn') : '';
+                return '<tr class="align-top' + _sev + '" data-deal-id="' + escapeHtml(String(d.id)) + '" data-deal-stage="' + escapeHtml(String(d.stage)) + '" data-deal-owner="' + escapeHtml(String(d.owner || '—')) + '">' +
                     '<td class="rr-lead rr-primary">' +
                         '<a href="https://crm.zoho.com/crm/org766568398/tab/Deals/' + encodeURIComponent(String(d.id)) + '" target="_blank" rel="noopener" class="rr-primary text-blue-600 hover:underline" title="Open this deal in Zoho CRM to review before acting">' + escapeHtml(d.name) + ' <span class="text-xs">↗</span></a>' +
                         (d.accountName ? '<div class="rr-sub">' + escapeHtml(d.accountName) + '</div>' : '') + '</td>' +
@@ -8279,7 +8295,18 @@
                     '<td class="rr-muted">' + (d.source ? escapeHtml(d.source) : '—') + '</td>' +
                     '<td class="rr-muted" style="white-space:nowrap">' + _dcFmtDate(d.createdTime) + '</td>' + // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     '<td class="rr-num rr-muted">' + (d.amount != null ? escapeHtml(String(d.amount)) : '—') + '</td>' +
-                    '<td><span id="docs-' + escapeHtml(String(d.id)) + '" title="Required: ' + escapeHtml(reqd) + '"><button data-on-click="checkDealDocs" data-args=\'' + docArgs + '\' class="rr-btn rr-btn-ghost">📎 Check documents</button></span></td>' +
+                    // Paint the KNOWN result straight into the cell.
+                    //
+                    // This used to emit a "Check documents" button for every
+                    // row and then patch all 1,282 cells afterwards in a second
+                    // pass — 1,282 getElementById + innerHTML + class writes,
+                    // each able to force layout. Building the final HTML once,
+                    // inside the string that is already being assembled, is
+                    // free (Sarah 2026-08-26: the tab took 34s to open).
+                    '<td><span id="docs-' + escapeHtml(String(d.id)) + '" title="Required: ' + escapeHtml(reqd) + '">' +
+                        (_dcRec ? _dcDocCellHtml(d.id, _dcRec, d.stage)
+                                : '<button data-on-click="checkDealDocs" data-args=\'' + docArgs + '\' class="rr-btn rr-btn-ghost">📎 Check documents</button>') +
+                    '</span></td>' +
                     '</tr>';
             }).join('');
             // Restore previously-scanned results (persisted) so re-opening the
@@ -9320,7 +9347,12 @@
         // visible deals and paint their status cells. localStorage paints
         // instantly; then the SERVER copy (shared across users/devices) is
         // overlaid as the authoritative source.
+        // Rows are painted with their stored result during the initial render
+        // now, so this only has to refresh the summary cards. Walking all 1,282
+        // rows a second time to rewrite cells they already contain was a large
+        // part of the 34-second tab load (Sarah 2026-08-26).
         function _dcRehydrateFromStore() {
+            if (Object.keys(window._dcResults || {}).length) { _dcUpdateCards(); return; }
             var deals = window._dcDeals || [];
             if (!deals.length) return;
             var store = _dcStoreLoad();
