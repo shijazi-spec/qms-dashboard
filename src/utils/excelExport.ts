@@ -628,6 +628,19 @@ export async function streamXlsx(
 ): Promise<Response> {
   const pass = new PassThrough();
 
+  // The workbook writer below starts running BEFORE the ReadableStream that
+  // owns the 'error' listener is constructed — everything up to the first
+  // `await` (addWorksheet, the column spec, the header row) is synchronous.
+  // If any of that throws, `pass.destroy(err)` emits 'error' on a PassThrough
+  // with no listener, and Node treats an unhandled stream 'error' as fatal:
+  // the whole process dies, not just the request. Hold the error here and let
+  // the ReadableStream report it properly once it exists.
+  let earlyError: Error | null = null;
+  const captureEarlyError = (err: Error) => {
+    earlyError = err;
+  };
+  pass.on("error", captureEarlyError);
+
   const { WorkbookWriter } = (ExcelJS as unknown as _ExcelJSWithStream).stream
     .xlsx;
   const wb = new WorkbookWriter({
@@ -691,6 +704,11 @@ export async function streamXlsx(
 
   const webStream = new ReadableStream({
     start(controller) {
+      pass.off("error", captureEarlyError);
+      if (earlyError) {
+        controller.error(earlyError);
+        return;
+      }
       pass.on("data", (chunk: Buffer) =>
         controller.enqueue(
           new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
@@ -2120,6 +2138,15 @@ export async function stageAndServeStreamingExport(
         return { kind: "entry", entry: newEntry };
       })();
       inFlightStaging.set(jobKey, staging);
+      // The promise is stored in a map as well as awaited below. If staging
+      // rejects and the awaiting request has already gone away — a cancelled
+      // download, a piggy-backing caller that timed out — the stored copy is
+      // a rejected promise nobody handles, which Node treats as fatal: the
+      // process exits and every other request on the instance 500s. This
+      // no-op keeps it handled; the real error still reaches whoever awaits.
+      staging.catch(() => {
+        /* handled by the awaiting caller below */
+      });
     }
 
     let result: StagingResult;
@@ -2344,12 +2371,26 @@ export async function stageStreamingExportFromHono(
     routeLabel = `${method} ${c.req.url}`;
   }
 
-  const resp = await stageAndServeStreamingExport(
-    reqHeaders,
-    jobKey,
-    build,
-    { ...options, userIdentityHash },
-  );
+  // Staging is an OPTIMISATION — it buys Range/resume support and lets repeat
+  // downloads of the same export skip regeneration. It is not what the caller
+  // asked for. When it fails, serve the export directly rather than failing
+  // the download: on the Replit deployment every staged export was returning
+  // 500 and taking the whole instance down with it (measured 2026-08-25 —
+  // 28s of healthy checks, one export call, 12s of 500s on every route,
+  // reproduced on the pre-existing /api/duplicates/export-xlsx as well).
+  let resp: Response;
+  try {
+    resp = await stageAndServeStreamingExport(reqHeaders, jobKey, build, {
+      ...options,
+      userIdentityHash,
+    });
+  } catch (err) {
+    logger.error(
+      "[stagedExport] staging failed — serving the export unstaged instead",
+      { route: routeLabel, error: err instanceof Error ? err.message : String(err) },
+    );
+    return await build();
+  }
 
   // Only instrument 2xx/206 responses — passthrough errors (401/403/500)
   // are not export bodies and would skew the latency log.
