@@ -12993,9 +12993,17 @@ export const duplicateRadarRoutes = [
         const { getMultiActiveDealAccounts } = await import(
           "../../utils/duplicateRadarDatabase"
         );
-        const { streamXlsx, stageStreamingExportFromHono } = await import(
-          "../../utils/excelExport"
-        );
+        // DELIBERATE DEVIATION from Engineering SOP §25 ("all new export
+        // endpoints MUST use streamXlsx/streamCsv"). That rule exists to keep
+        // RSS flat for exports of unbounded size. This one is bounded by the
+        // number of CONFLICTS — tens of accounts, ~40 deals, a ~9 KB file — so
+        // the memory argument does not apply, and the streaming path is what
+        // is actually broken here: on this deployment every staged export took
+        // the whole instance down (measured repeatedly 2026-08-25; the same
+        // code produces a correct workbook on a developer machine). Building
+        // the workbook in memory skips the PassThrough, the ReadableStream,
+        // the temp-file staging and its cache entirely.
+        const { buildWorkbook } = await import("../../utils/excelExport");
         const { buildMultiActiveDealSheets, multiActiveDealsFilename } =
           await import("../../utils/multiActiveDealsExport");
         const everything = await getMultiActiveDealAccounts(segment, {
@@ -13028,11 +13036,18 @@ export const duplicateRadarRoutes = [
             logErr,
           );
         }
-        return await stageStreamingExportFromHono(c, async () =>
-          streamXlsx(sheets, multiActiveDealsFilename(String(segment)), {
-            title: `Active deal conflicts — ${segment} layout`,
-          }),
+        const buf = await buildWorkbook(
+          sheets.map((s) => ({ ...s, rows: s.rows as Record<string, any>[] })),
+          { title: `Active deal conflicts — ${segment} layout` },
         );
+        return new Response(new Uint8Array(buf), {
+          headers: {
+            "Content-Type":
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "Content-Disposition": `attachment; filename="${multiActiveDealsFilename(String(segment))}"`,
+            "Content-Length": String(buf.length),
+          },
+        });
       } catch (e: any) {
         logger.error("multi-active-deals.xlsx failed", e);
         return c.json({ error: "An internal error occurred" }, 500);
