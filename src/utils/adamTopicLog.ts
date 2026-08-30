@@ -1,3 +1,11 @@
+import { createRedactedPool } from "./redactedPool";
+import { normalizeSslMode } from "./normalizeDatabaseUrl";
+import { logger } from "./logger";
+
+const pool = createRedactedPool({
+  connectionString: normalizeSslMode(process.env.DATABASE_URL),
+});
+
 export interface SectionDef {
   key: string;
   label: string;
@@ -78,4 +86,97 @@ export function classifyQuestionSection(text: string): string | null {
     }
   }
   return null;
+}
+
+let topicTableReady = false;
+
+/** Idempotent create. Canonical CREATE TABLE — schema-parity source of truth.
+ *  There is deliberately NO column that can hold text from a question. */
+export async function ensureAdamTopicLogTable(): Promise<void> {
+  if (topicTableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS adam_topic_log (
+      id           SERIAL PRIMARY KEY,
+      section_key  VARCHAR(40),
+      surface      VARCHAR(16) NOT NULL,
+      asked_by     VARCHAR(200),
+      asked_at     TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_adam_topic_log_asked_at ON adam_topic_log(asked_at DESC)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_adam_topic_log_section ON adam_topic_log(section_key)`,
+  );
+  topicTableReady = true;
+}
+
+/**
+ * Fire-and-forget. Records WHICH SECTION was asked about — never the question.
+ * Must never throw: a logging failure must not break a chat reply.
+ */
+export async function recordQuestionSection(
+  text: string,
+  opts: { surface: "web" | "slack"; askedBy?: string | null },
+): Promise<void> {
+  try {
+    const sectionKey = classifyQuestionSection(text);
+    await ensureAdamTopicLogTable();
+    await pool.query(
+      `INSERT INTO adam_topic_log (section_key, surface, asked_by) VALUES ($1, $2, $3)`,
+      [sectionKey, opts.surface, opts.askedBy || null],
+    );
+  } catch (e) {
+    logger.warn("[AdamTopicLog] record skipped (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export interface SectionMenuOption { key: string; label: string; href: string; asked: number }
+
+/** PURE. Every section, most-asked first, canonical order breaking ties. */
+export function rankSections(counts: Record<string, number>): SectionMenuOption[] {
+  return PLATFORM_SECTIONS.map((s, i) => ({
+    key: s.key,
+    label: s.label,
+    href: s.href,
+    asked: Number(counts[s.key]) || 0,
+    _i: i,
+  }))
+    .sort((a, b) => (b.asked - a.asked) || (a._i - b._i))
+    .map(({ key, label, href, asked }) => ({ key, label, href, asked }));
+}
+
+/**
+ * The live menu: platform sections ranked by the last 90 days, plus a COUNT of
+ * questions that matched no section. A rising unclassified count is the signal
+ * to extend a section's keyword list — a human edit, never an auto-invented
+ * option, and no text is retained to make that judgement.
+ */
+export async function getSectionMenu(
+  limit = 5,
+): Promise<{ options: SectionMenuOption[]; unclassified: number }> {
+  const counts: Record<string, number> = {};
+  let unclassified = 0;
+  try {
+    await ensureAdamTopicLogTable();
+    const r = await pool.query(
+      `SELECT section_key, COUNT(*)::int AS n
+         FROM adam_topic_log
+        WHERE asked_at >= NOW() - INTERVAL '90 days'
+        GROUP BY section_key`,
+    );
+    for (const row of r.rows) {
+      if (row.section_key === null) unclassified = Number(row.n) || 0;
+      else counts[String(row.section_key)] = Number(row.n) || 0;
+    }
+  } catch (err) {
+    // Ranking is a nicety — an empty count map still yields the full menu.
+    logger.warn("[AdamTopicLog] menu ranking unavailable (non-fatal)", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return { options: rankSections(counts).slice(0, Math.max(1, limit)), unclassified };
 }
