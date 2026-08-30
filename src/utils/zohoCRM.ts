@@ -1449,6 +1449,10 @@ export interface ActiveDealHit {
   stage: string;
   /** open = still being worked in the pipeline; customer = signed/paid and NOT churned. */
   kind: "open" | "customer";
+  /** Product segment of the deal, when it could be determined from the live
+   *  record (layout → pipeline → marketplace-stage). null = unknown; the caller
+   *  refines it from the local mirror before deciding to block. */
+  segment: "marketplace" | "walaone" | "walaplus" | null;
 }
 
 /** Fields + rules shared by every "is this deal active?" check. */
@@ -1498,6 +1502,50 @@ function _classifyActiveDeal(d: any): "open" | "customer" | null {
  * conservative containment guard on deal-search false positives. */
 function _pfNameCore(s: string): string {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** Stages that only exist on the MARKETPLACE pipeline (Sarah 2026-08-30) — the
+ *  last-resort segment signal when a live record carries neither Layout nor
+ *  Pipeline. Env-extendable: PREFLIGHT_MARKETPLACE_STAGES. */
+function _pfMarketplaceStages(): string[] {
+  return (
+    process.env.PREFLIGHT_MARKETPLACE_STAGES ||
+    "Partner Active,Welcome Communications"
+  )
+    .split(",")
+    .map((s) => s.trim().toLowerCase().replace(/\s+/g, ""))
+    .filter(Boolean);
+}
+
+/**
+ * Product segment of a live Zoho Deal (Sarah 2026-08-30). Preflight vets B2B /
+ * WalaPlus-corporate imports, so a deal on the MARKETPLACE or WALAONE (B2C)
+ * motion must NOT block a B2B approach — the same company can legitimately be
+ * approached as a WalaPlus corporate client. Mirrors classifyLayoutSegment's
+ * substring rules (kept local to avoid a duplicateRadarDatabase import cycle).
+ * Returns null when the live record carries no segment signal at all; the
+ * caller then refines from the local mirror rather than guessing.
+ */
+function _pfDealSegment(d: any): "marketplace" | "walaone" | "walaplus" | null {
+  const norm = (v: any) =>
+    String(
+      v && typeof v === "object" ? (v.name ?? v.display_label ?? "") : (v ?? ""),
+    )
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+  const bySubstring = (s: string) => {
+    if (!s) return null;
+    if (s.includes("marketplace") || s.includes("partneraccount")) return "marketplace" as const;
+    if (s.includes("walaone")) return "walaone" as const;
+    return "walaplus" as const;
+  };
+  const layout = norm(d?.$layout) || norm(d?.Layout);
+  if (layout) return bySubstring(layout);
+  const pipeline = norm(d?.Pipeline);
+  if (pipeline) return bySubstring(pipeline);
+  const stage = norm(d?.Stage);
+  if (stage && _pfMarketplaceStages().includes(stage)) return "marketplace";
+  return null; // unknown — caller refines from the mirror
 }
 
 /**
@@ -1552,6 +1600,12 @@ export async function findActiveDealForAccount(
   for (const d of deals) {
     const kind = _classifyActiveDeal(d);
     if (!kind) continue;
+    // SCOPE (Sarah 2026-08-30): Preflight vets B2B / WalaPlus-corporate imports,
+    // so a MARKETPLACE or WALAONE (B2C) deal must NOT block — the company can
+    // still be approached as a WalaPlus B2B client. Skip it and keep scanning
+    // in case the account also carries a real WalaPlus deal.
+    const segment = _pfDealSegment(d);
+    if (segment === "marketplace" || segment === "walaone") continue;
     const hit: ActiveDealHit = {
       accountId: id,
       dealId: String(d?.id || "").trim(),
@@ -1559,6 +1613,7 @@ export async function findActiveDealForAccount(
       owner: d?.Owner?.name || d?.Owner?.id || null,
       stage: String(d?.Stage || "").trim(),
       kind,
+      segment,
     };
     // An OPEN deal (someone is actively working it) is the strongest signal —
     // return it immediately. Otherwise remember a live-customer deal and keep
@@ -1630,6 +1685,9 @@ export async function findActiveDealByCompany(input: {
       continue;
     const kind = _classifyActiveDeal(d);
     if (!kind) continue;
+    // Same B2B scope as the account path — marketplace / WalaOne never blocks.
+    const segment = _pfDealSegment(d);
+    if (segment === "marketplace" || segment === "walaone") continue;
     const hit: ActiveDealHit = {
       accountId: d?.Account_Name?.id ? String(d.Account_Name.id) : null,
       dealId: String(d?.id || "").trim(),
@@ -1637,6 +1695,7 @@ export async function findActiveDealByCompany(input: {
       owner: d?.Owner?.name || d?.Owner?.id || null,
       stage: String(d?.Stage || "").trim(),
       kind,
+      segment,
     };
     if (kind === "open") {
       openHit = hit;

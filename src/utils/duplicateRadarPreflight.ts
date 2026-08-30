@@ -21,6 +21,7 @@ import {
   normalizePhone,
   normalizeCompanyName,
   isPlaceholderName,
+  classifyLayoutSegment,
 } from "./duplicateRadarDatabase";
 import { DOAM_CLIENTS, type DoamClient } from "./doamClients";
 import { logger } from "./logger";
@@ -2207,6 +2208,10 @@ async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
   const rows =
     (
       await queryWithTimeout<any>(
+        // B2B / WALAPLUS-CORPORATE ONLY (Sarah 2026-07-21, WalaOne added
+        // 2026-08-30). A WalaOne (B2C) deal must not block either: the same
+        // company contracting on WalaOne can still be approached as a WalaPlus
+        // B2B client, so only WalaPlus-corporate deals count as a conflict.
         // CORPORATE ONLY (Sarah 2026-07-21). Preflight vets CORPORATE/B2B
         // imports; Marketplace / Partner-Accounts deals are out of scope. The
         // first run flagged 7 rows on stage "Partner Active" and 1 on "Welcome
@@ -2237,6 +2242,7 @@ async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
            FROM d
           WHERE layout_norm NOT LIKE '%marketplace%'
             AND layout_norm NOT LIKE '%partneraccount%'
+            AND layout_norm NOT LIKE '%walaone%'
           LIMIT 200000`,
         [],
         undefined,
@@ -4224,6 +4230,29 @@ async function runPreflightBasic(input: {
           return Array.from(ids).filter(Boolean);
         };
 
+        // Segment of ONE live-found deal, resolved from the local mirror by its
+        // Zoho id. Used only when the live record carried no layout / pipeline /
+        // marketplace-stage signal of its own. null = still unknown (the caller
+        // then treats it as in-scope, i.e. the pre-existing behaviour).
+        const mirrorDealSegment = async (
+          dealId: string,
+        ): Promise<"marketplace" | "walaone" | "walaplus" | null> => {
+          try {
+            const q = await queryWithTimeout<any>(
+              `SELECT COALESCE(NULLIF(layout_name,''), raw_data#>>'{Layout,name}',
+                               raw_data#>>'{$layout,name}', raw_data->>'Layout', '') AS layout
+                 FROM duplicate_records
+                WHERE record_type = 'deal' AND zoho_record_id = $1
+                LIMIT 1`,
+              [dealId],
+            );
+            const layout = (q?.rows?.[0]?.layout || "").toString().trim();
+            return layout ? classifyLayoutSegment(layout) : null;
+          } catch {
+            return null; // best-effort
+          }
+        };
+
         // GLOBAL per-Account cache so an Account shared by several PASS rows is
         // fetched from Zoho ONCE. Value = the active deal on it (or null when
         // checked-and-clean); accountErr = accounts whose live fetch errored.
@@ -4325,6 +4354,19 @@ async function runPreflightBasic(input: {
               /* search backstop is best-effort */
             }
           }
+          // B2B SCOPE (Sarah 2026-08-30). Preflight vets whether a company can
+          // be approached as a WalaPlus B2B client, so a MARKETPLACE deal
+          // (Partner Active / Welcome Communications …) or a WALAONE (B2C) deal
+          // must NOT block — Sales approaches the same company on the corporate
+          // motion instead. The fetchers already skip deals whose live record
+          // carried a layout/pipeline/stage signal; when it carried none, fall
+          // back to the local mirror's layout for that exact deal id.
+          if (hit && hit.segment == null && hit.dealId) {
+            hit.segment = await mirrorDealSegment(String(hit.dealId));
+          }
+          if (hit && (hit.segment === "marketplace" || hit.segment === "walaone")) {
+            hit = null; // out of B2B scope → not a blocker
+          }
           cache.set(key, { hit, checked });
           if (process.env.PREFLIGHT_VERIFY_DEBUG === "true") {
             logger.info(
@@ -4372,31 +4414,49 @@ async function runPreflightBasic(input: {
             }
             continue;
           }
-          // A live active deal exists → this is NOT a safe re-import.
+          // A live WalaPlus active deal exists → this is NOT a safe re-import.
           const ownerTxt = hit.owner ? " owned by " + hit.owner : "";
           const stageTxt = hit.stage ? " (stage: " + hit.stage + ")" : "";
-          const kindTxt =
-            hit.kind === "open" ? "an OPEN pipeline deal" : "a current (active) customer deal";
           summary[row.verdict]--;
-          summary.review++;
-          row.verdict = "review";
-          row.reason = "live_active_deal_" + hit.kind;
-          row.suggested_action =
-            "The CRM shows " +
-            kindTxt +
-            ' — "' +
-            hit.dealName +
-            '"' +
-            stageTxt +
-            ownerTxt +
-            ". This company is NOT a safe re-import: coordinate with the deal owner before adding it back.";
-          row.executive_action =
-            "REVIEW — live " +
-            (hit.kind === "open" ? "open deal" : "active customer") +
-            stageTxt +
-            ownerTxt +
-            ". Verified against the CRM; do not re-import blindly.";
-          row.executive_severity = "high";
+          if (hit.kind === "customer") {
+            // A signed / paid, non-churned deal means the company IS a current
+            // client — that is a BLOCK (existing client), not a review (Sarah
+            // 2026-08-30). Mirrors Rule 2's existing_active_client wording so
+            // both paths read identically on the executive summary.
+            summary.block++;
+            row.verdict = "block";
+            row.reason = "existing_active_client";
+            row.suggested_action =
+              'This company is an EXISTING active client — live customer deal "' +
+              hit.dealName +
+              '"' +
+              stageTxt +
+              ownerTxt +
+              ". Do NOT cold-contact or re-import — route to the Account / CS owner.";
+            row.executive_action =
+              "REJECT — existing client: live customer deal" +
+              stageTxt +
+              ownerTxt +
+              ". Do not cold-contact; route to the Account / CS owner.";
+            row.executive_severity = "critical";
+          } else {
+            summary.review++;
+            row.verdict = "review";
+            row.reason = "live_active_deal_open";
+            row.suggested_action =
+              'The CRM shows an OPEN pipeline deal — "' +
+              hit.dealName +
+              '"' +
+              stageTxt +
+              ownerTxt +
+              ". This company is NOT a safe re-import: coordinate with the deal owner before adding it back.";
+            row.executive_action =
+              "REVIEW — live open deal" +
+              stageTxt +
+              ownerTxt +
+              ". Verified against the CRM; do not re-import blindly.";
+            row.executive_severity = "high";
+          }
           if (hit.owner && !row.owners.includes(hit.owner)) row.owners.push(hit.owner);
           row.crm_links = {
             active_lead: row.crm_links?.active_lead ?? null,
