@@ -4159,7 +4159,10 @@ async function runPreflightBasic(input: {
     }
   }
 
-  // ── RULE 3B — LIVE-CRM verification of EVERY PASS row (Sarah 2026-08-03/04) ─
+  // ── RULE 3B — LIVE-CRM verification, both directions (Sarah 2026-08-03/04/30)
+  // Verifies every would-be PASS row against Zoho, AND re-checks rows the
+  // mirror-based Rule 3 flagged, so a deal closed in Zoho since the last sync
+  // self-heals to PASS instead of waiting for the next sync.
   // A PASS verdict is derived from the LOCAL mirror, which goes stale: a churned
   // client that RE-SIGNED (Riyadh Air), a Termination mis-tag that never joined
   // (PwC Academy), or simply a deal the mirror hasn't caught yet. So EVERY row
@@ -4172,7 +4175,21 @@ async function runPreflightBasic(input: {
   // deal LINK + owner + stage. Deduped per company, account fetches cached
   // globally, best-effort, env-gated (PREFLIGHT_VERIFY_PASS_LIVE=false).
   if (process.env.PREFLIGHT_VERIFY_PASS_LIVE !== "false") {
-    const toVerify = out.filter((r) => r.verdict === "pass");
+    // SELF-HEALING RE-CHECK (Sarah 2026-08-30). Rule 3 flags "active_deal" from
+    // the LOCAL mirror, which goes stale the moment Sales closes a deal in Zoho
+    // — the row then keeps flagging until the next sync, and nothing re-checked
+    // it because this pass only ever looked at PASS rows. So flagged Rule-3 rows
+    // are verified live TOO: if Zoho shows no active WalaPlus deal any more the
+    // row CLEARS to pass; if it still has one the flag is refreshed with the
+    // live owner / stage (and becomes a block when the deal is a live customer).
+    // Only mirror-derived active_deal flags are eligible — duplicate / DOAM /
+    // protected / churn verdicts rest on other evidence and are never cleared.
+    const STALE_FLAG_REASON = "active_deal";
+    const toVerify = out.filter(
+      (r) =>
+        r.verdict === "pass" ||
+        (r.verdict === "review" && r.reason === STALE_FLAG_REASON),
+    );
     if (toVerify.length > 0) {
       try {
         const { findActiveDealForAccount, findActiveDealByCompany, searchZohoRecordsByWord } =
@@ -4391,7 +4408,8 @@ async function runPreflightBasic(input: {
           }),
         );
 
-        // Apply the per-company verdicts back onto every PASS row.
+        // Apply the per-company verdicts back onto every verified row (PASS rows
+        // + the mirror-flagged active_deal rows being re-checked).
         for (const row of toVerify) {
           const { key } = companyKey(row);
           const res = key ? cache.get(key) : undefined;
@@ -4399,6 +4417,28 @@ async function runPreflightBasic(input: {
           const hit = res.hit ?? null;
           const wasChecked = !!res.checked;
           const wasPastClient = row.reason.startsWith("past_cooloff_may_reengage");
+          const wasStaleFlag =
+            row.verdict === "review" && row.reason === STALE_FLAG_REASON;
+          if (!hit && wasStaleFlag) {
+            // Only clear on a SUCCESSFUL live check — a Zoho hiccup must never
+            // un-flag a row (that would hide a real conflict). Unverified rows
+            // keep the mirror's flag untouched.
+            if (wasChecked) {
+              summary[row.verdict]--;
+              summary.pass++;
+              row.verdict = "pass";
+              row.reason = "active_deal_cleared_live";
+              row.suggested_action =
+                "The open deal this was flagged on is no longer active in Zoho (closed / re-staged). Verified live against the CRM — safe to import.";
+              row.executive_action =
+                "Safe to import — the previously-flagged deal is no longer active; verified against the CRM.";
+              row.executive_severity = "info";
+              // Drop the stale deal link so a PASS row can't still advertise an
+              // "Existing Active Deal".
+              if (row.crm_links) row.crm_links = { ...row.crm_links, active_deal: null };
+            }
+            continue;
+          }
           if (!hit) {
             // No live active deal. KEEP the row's existing comment (for a past
             // client that is the detailed "past client, cool-off elapsed, CS
