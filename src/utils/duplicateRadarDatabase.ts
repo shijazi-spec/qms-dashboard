@@ -34,8 +34,14 @@ const STATEMENT_TIMEOUT_MS = (() => {
   return Number.isFinite(n) && n >= 0 ? n : 900000;
 })();
 
+// max:10 overrides createRedactedPool's conservative `max: 3` default — this is
+// the platform's workhorse pool (bulk sync, cluster scans, batched doc/merge
+// jobs run 3-5 concurrent), so it keeps the head-room it has always had while
+// the ~35 low-traffic module pools shrink to relieve the provider's connection
+// cap (see the connection-budget note in redactedPool.ts).
 const pool = createRedactedPool({
   connectionString: normalizeSslMode(process.env.DATABASE_URL),
+  max: 10,
   ...(STATEMENT_TIMEOUT_MS > 0 ? { statement_timeout: STATEMENT_TIMEOUT_MS } : {}),
 });
 

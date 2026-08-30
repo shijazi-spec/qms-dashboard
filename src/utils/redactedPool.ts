@@ -189,6 +189,32 @@ export function wrapPoolForRedaction<P extends pg.Pool>(pool: P): P {
  * Convenience wrapper used by writers that own their own pg.Pool. Returns a
  * freshly-instantiated pool already wrapped with the redaction interceptor.
  */
+/**
+ * Connection-budget defaults (2026-08-30). ~36 modules call this, each getting
+ * its OWN pg.Pool. At node-pg's default `max: 10` that is 360 possible
+ * connections from a single instance — far over the provider's cap. Exhausting
+ * it makes new connects fail with "Connection terminated unexpectedly", which
+ * is what took Adam down (Mastra's PostgresStore.init could not get a
+ * connection while a fan-out request had the pools saturated).
+ *
+ * - `max: 3`      — most of these modules are low-traffic; hot modules override
+ *                   explicitly (duplicateRadarDatabase passes `max: 10`).
+ * - `keepAlive`   — stops idle sockets being silently dropped by the provider,
+ *                   the other source of "Connection terminated unexpectedly".
+ * - `connectionTimeoutMillis` — fail fast with a clear error instead of hanging
+ *                   forever when the pool genuinely is saturated.
+ *
+ * `idleTimeoutMillis` is deliberately left at node-pg's 10s default so idle
+ * connections are returned to the provider quickly. Caller config wins — the
+ * spread comes last.
+ */
 export function createRedactedPool(config?: pg.PoolConfig): pg.Pool {
-  return wrapPoolForRedaction(new Pool(config));
+  return wrapPoolForRedaction(
+    new Pool({
+      max: 3,
+      keepAlive: true,
+      connectionTimeoutMillis: 15_000,
+      ...config,
+    }),
+  );
 }
