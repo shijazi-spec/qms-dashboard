@@ -22,6 +22,7 @@ import { createTrainingTool, getTrainingListTool, assignTrainingTool, getTrainin
 import { duplicateResolutionAssistantTool } from "../tools/duplicateResolutionAssistantTool";
 import { lookupEntityTool } from "../tools/lookupEntityTool";
 import { checkDomainsBatchTool } from "../tools/checkDomainsBatchTool";
+import { checkCompaniesBatchTool } from "../tools/checkCompaniesBatchTool";
 import { rejectionPatternsTool } from "../tools/rejectionPatternsTool";
 import { tagRecordsForRemovalTool } from "../tools/tagRecordsForRemovalTool";
 import { linkRecordToAccountTool } from "../tools/linkRecordToAccountTool";
@@ -436,6 +437,7 @@ export const qmsConsultantAgent = new Agent({
     // matching duplicate clusters. Read-only.
     lookupEntityTool:                 wt(lookupEntityTool, AGENT_NAME),
     checkDomainsBatchTool:            wt(checkDomainsBatchTool, AGENT_NAME),      // batch domain check (read-only)
+    checkCompaniesBatchTool:          wt(checkCompaniesBatchTool, AGENT_NAME),   // bulk company-NAME lookup
     rejectionPatternsTool:            wt(rejectionPatternsTool, AGENT_NAME),      // why proposals get rejected (read-only)
     // "How many deals are in the renewal stage?" / CS Lifecycle tab status —
     // deals by lifecycle phase + CS data-hygiene violations. Read-only.
