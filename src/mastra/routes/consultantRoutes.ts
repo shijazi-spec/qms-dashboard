@@ -922,6 +922,12 @@ export const consultantRoutes = [
             return c.json({ error: "Message is required" }, 400);
           }
 
+          // Section log (fire-and-forget): records WHICH platform section was
+          // asked about, never the question text. Never awaited into the reply.
+          void import("../../utils/adamTopicLog").then(({ recordQuestionSection }) =>
+            recordQuestionSection(message, { surface: "web", askedBy: user?.email || null }),
+          ).catch(() => {});
+
           const agent = mastra?.getAgent("qmsConsultantAgent");
           if (!agent) {
             return c.json({ error: "QMS Consultant agent not available" }, 503);

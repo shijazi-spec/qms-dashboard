@@ -199,6 +199,9 @@ export function registerGrqAssistantSlackRoutes(): ApiRoute[] {
           // withAgentUserContext threads a role into the tool layer so Adam's
           // RBAC-gated platform-data tools actually return data (mirrors what
           // the web /api/consultant/chat route does for a logged-in user).
+          void import("../utils/adamTopicLog").then(({ recordQuestionSection }) =>
+            recordQuestionSection(q, { surface: "slack", askedBy: `slack-${slackUser}` }),
+          ).catch(() => {});
           const res = await generateWithRateLimitRetry(() =>
             withAgentUserContext(
               {

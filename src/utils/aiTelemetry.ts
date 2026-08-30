@@ -1093,6 +1093,18 @@ export async function pruneOldAiMetrics(
       `DELETE FROM ai_call_metrics WHERE started_at < NOW() - MAKE_INTERVAL(days => $1)`,
       [days],
     );
+    // Adam's section log is AI-usage data, so it ages out on the SAME retention
+    // window as the metrics above.
+    try {
+      await pool.query(
+        `DELETE FROM adam_topic_log WHERE asked_at < NOW() - MAKE_INTERVAL(days => $1)`,
+        [days],
+      );
+    } catch (e) {
+      logger.warn("[AI-Metrics] adam_topic_log prune skipped (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
     const deleted = result.rowCount ?? 0;
     await recordPruneRun({
       retention_days: days,
