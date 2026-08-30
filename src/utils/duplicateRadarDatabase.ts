@@ -14,6 +14,7 @@ import {
   type DataCleaningProgress,
 } from "./dataCleaningProgress";
 import { shapeDealCompliance, type DealComplianceSummary } from "./dealComplianceReport";
+import type { CrmNameRow } from "./companyNameBatch";
 
 // Normalize sslmode directly on the connection string (module-scope pool —
 // see src/utils/normalizeDatabaseUrl.ts for why env-var ordering is unreliable
@@ -2900,6 +2901,34 @@ export async function getSegmentLeadDuplicateCount(
     [...p.params],
   );
   return { segment: seg, outstanding_leads: Number(res.rows[0]?.n) || 0 };
+}
+
+/** CRM company names + per-module counts + deal stages for the bulk name matcher.
+ *  Names/counts/stages ONLY — never raw_data (large-payload lesson). */
+export async function getCompanyBatchRows(
+  segment: DuplicateFilters["segment"],
+): Promise<CrmNameRow[]> {
+  const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
+  const p = buildSegmentPredicate(seg, 1);
+  const segCond = p.condition ? " AND " + p.condition : "";
+  const res = await pool.query(
+    `SELECT COALESCE(NULLIF(r.company_name,''), NULLIF(r.account_name,''), r.record_name) AS crm_name,
+            r.record_type AS record_type,
+            COUNT(*)::int AS n,
+            ARRAY_AGG(DISTINCT r.stage) FILTER (
+              WHERE r.record_type = 'deal' AND COALESCE(r.stage,'') <> ''
+            ) AS stages
+       FROM duplicate_records r
+      WHERE COALESCE(NULLIF(r.company_name,''), NULLIF(r.account_name,''), r.record_name) IS NOT NULL${segCond}
+      GROUP BY 1, 2`,
+    [...p.params],
+  );
+  return res.rows.map((x: any) => ({
+    crm_name: String(x.crm_name || ""),
+    record_type: String(x.record_type || ""),
+    n: Number(x.n) || 0,
+    stages: Array.isArray(x.stages) ? x.stages.filter(Boolean) : [],
+  }));
 }
 
 // Outstanding account-duplicate count for a segment. Same shape as the lead
