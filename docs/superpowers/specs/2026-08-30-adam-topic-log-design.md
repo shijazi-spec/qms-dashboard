@@ -90,3 +90,18 @@ CREATE INDEX IF NOT EXISTS idx_adam_topic_log_topic ON adam_topic_log(topic_key)
 
 ## 10. Deployment
 Commit only touched files; push `origin/QMS`; user Pulls -> Republishes. The table is created in the idempotent table-init path on boot — no manual migration, no DROP.
+
+---
+
+## REVISION 1 (Sarah, 2026-08-30) — sections, not keywords
+
+Review of Task 1 surfaced that free-text keywords could still persist a client's company name ("Acme Trading Ltd wants a brochure" -> keywords acme, trading), contradicting the "never store any client name" guarantee in §5. Sarah's direction: **"make the questions general as sections that we have inside the platform."**
+
+This SUPERSEDES §3, §4 (keyword extraction), §5 (keywords column) and §7 (emergingTerms):
+
+- Every question is classified into one of the platform's REAL sections (taken from the sidebar nav) — Duplicates Radar, Quality Reports, KPIs, Internal Audits, CAPA / Audit Reports, Compliance, Risk, Documents & SOPs, Call Evaluation, Handoff Tracker, Vendors, Management Review, Fraud, Team Performance, AI Approvals — plus the radar sub-topics people actually ask about by name (CS Lifecycle, Deal Compliance, Preflight).
+- **NO free text is stored at all.** The `keywords` column is dropped from the design. A question that matches nothing is logged as `section_key = NULL` — a COUNT only, never any words from the question.
+- `emergingTerms` is replaced by `unclassified`: a count of questions that matched no section. A rising count is the signal to extend a section's keyword list (a human edit), which is the same surface-then-promote discipline with zero text retained.
+- The menu therefore ranks the platform's own sections by what the team asks about, and each option carries its `href` so Adam can link straight to the page.
+
+Net effect: strictly more private (no question-derived text in the database at any point) and better aligned to how the team thinks about the platform.
