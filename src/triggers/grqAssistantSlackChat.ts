@@ -33,6 +33,44 @@ import { withAgentUserContext } from "../utils/withApprovalGate";
 // from Slack without landing in the platform AI Approvals queue.
 const SLACK_ADAM_ROLE = process.env.SLACK_ADAM_ROLE || "head_of_operations_quality";
 
+/**
+ * Tool-call iterations Adam gets per Slack question (Sarah 2026-08-30).
+ *
+ * Was 6, which silently capped LIST questions: asked to check ~56 companies,
+ * Adam picked a per-company lookup tool, burned the budget after ~10, then
+ * closed with "let me know if you need checks on additional companies" and
+ * hedged about "limitations in data access". The same question in the web chat
+ * came back complete, which is what made it look like Slack was restricted —
+ * it wasn't permissions (Slack runs at the SAME role, above) or a shorter
+ * budget than the web (Mastra's default is only 5); it was that this surface
+ * needs MORE room, not less, because bulk questions arrive here as one pasted
+ * list. This handler runs as a background job (the webhook already ack'd), so
+ * extra steps cost latency/tokens, not a Slack timeout.
+ */
+const SLACK_AGENT_MAX_STEPS = Number(process.env.SLACK_AGENT_MAX_STEPS) || 14;
+
+/** Slack truncates very long messages; split on line boundaries and post in
+ *  order so a long answer arrives whole instead of being cut mid-list. */
+const SLACK_MAX_CHARS = 3500;
+export function splitForSlack(text: string, limit = SLACK_MAX_CHARS): string[] {
+  const body = String(text ?? "");
+  if (body.length <= limit) return [body];
+  const chunks: string[] = [];
+  let current = "";
+  for (const line of body.split("\n")) {
+    // A single line longer than the limit is hard-split so nothing is dropped.
+    if (line.length > limit) {
+      if (current) { chunks.push(current); current = ""; }
+      for (let i = 0; i < line.length; i += limit) chunks.push(line.slice(i, i + limit));
+      continue;
+    }
+    if (current.length + line.length + 1 > limit) { chunks.push(current); current = line; }
+    else current = current ? current + "\n" + line : line;
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
 // Address-by-name trigger: "Adam" (the agent's name) or "GRQ", optionally greeted.
 const NAME_TRIGGER = /(^|\s)(hey\s+|hi\s+|hello\s+)?@?(adam|grq)(\s+assistant)?\b/i;
 
@@ -176,7 +214,7 @@ export function registerGrqAssistantSlackRoutes(): ApiRoute[] {
                 agent.generate([{ role: "user", content: q }], {
                   threadId: convThreadId,
                   resourceId: convResourceId,
-                  maxSteps: 6,
+                  maxSteps: SLACK_AGENT_MAX_STEPS,
                 }),
             ),
           );
@@ -186,7 +224,9 @@ export function registerGrqAssistantSlackRoutes(): ApiRoute[] {
         }
         if (!reply) reply = "I didn't catch that — could you rephrase?";
 
-        await slack.chat.postMessage({ channel, thread_ts: threadTs, text: reply });
+        for (const part of splitForSlack(reply)) {
+          await slack.chat.postMessage({ channel, thread_ts: threadTs, text: part });
+        }
         return null;
       } catch {
         // Never throw out of the webhook (it would 500 to Slack and trigger retries).
