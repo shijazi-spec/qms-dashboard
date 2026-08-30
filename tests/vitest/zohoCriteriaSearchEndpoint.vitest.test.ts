@@ -65,7 +65,24 @@ describe("fetchZohoRecords criteria routing", () => {
     await fetchZohoRecords("Deals", { ifModifiedSince: "2026-08-01T00:00:00Z" });
     const { url, headers } = lastRequest();
     expect(url).toContain("/crm/v2/Deals?");
-    expect(headers["If-Modified-Since"]).toBe("2026-08-01T00:00:00Z");
+    // Zoho's documented header format: offset, NO milliseconds. This assertion
+    // used to expect the raw `...Z` value passed in — which Zoho cannot parse,
+    // so it SILENTLY ignored the header and returned the whole corpus, turning
+    // the incremental sync into a full pull every run (2026-08-30).
+    expect(headers["If-Modified-Since"]).toBe("2026-08-01T00:00:00+00:00");
+  });
+
+  it("normalises a millisecond timestamp to Zoho's header format", async () => {
+    // Date.toISOString() — what the sync watermark actually produced.
+    await fetchZohoRecords("Deals", { ifModifiedSince: "2026-08-30T14:36:24.442Z" });
+    const { headers } = lastRequest();
+    expect(headers["If-Modified-Since"]).toBe("2026-08-30T14:36:24+00:00");
+  });
+
+  it("drops an unparseable If-Modified-Since instead of sending garbage", async () => {
+    await fetchZohoRecords("Deals", { ifModifiedSince: "not-a-date" });
+    const { headers } = lastRequest();
+    expect(headers["If-Modified-Since"]).toBeUndefined();
   });
 
   it("does NOT send If-Modified-Since on /search, and warns", async () => {

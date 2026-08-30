@@ -11773,6 +11773,38 @@ export async function upsertSyncState(
  */
 export const SYNC_STALE_AFTER_MS = 30 * 60 * 1000;
 
+/**
+ * Mark abandoned `syncing` rows as `failed` (2026-08-30).
+ *
+ * A run killed by a deploy / timeout / instance recycle leaves its module stuck
+ * on `syncing` forever — isSyncStale only REPORTED that, nothing acted on it, so
+ * the chip claimed work was in progress indefinitely (observed: Leads sat
+ * "syncing" while its watermark stayed 6h behind every other module).
+ *
+ * Flipping it to `failed` is purely cosmetic-but-honest: `upsertSyncState` only
+ * advances `last_sync_at` / `total_synced` on a COMPLETED status, so a failed
+ * mark leaves the watermark and the count exactly where they were — the next run
+ * still re-fetches from the last GOOD point and cannot skip records. Returns the
+ * modules it reset so the caller can log them.
+ */
+export async function failStaleSyncingModules(): Promise<string[]> {
+  try {
+    const r = await pool.query(
+      `UPDATE zoho_sync_state
+          SET sync_status = 'failed'
+        WHERE sync_status = 'syncing'
+          AND (sync_started_at IS NULL
+               OR sync_started_at < NOW() - ($1::int * INTERVAL '1 millisecond'))
+        RETURNING module`,
+      [SYNC_STALE_AFTER_MS],
+    );
+    return r.rows.map((x: any) => String(x.module));
+  } catch (e) {
+    logger.warn("[DuplicateRadar] stale-sync recovery skipped (non-fatal)", e);
+    return [];
+  }
+}
+
 export function isSyncStale(row: {
   sync_status?: string | null;
   sync_started_at?: Date | string | null;

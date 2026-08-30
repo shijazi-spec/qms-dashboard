@@ -412,6 +412,29 @@ export function getZohoConnectionStatus(): {
   };
 }
 
+/**
+ * Format a timestamp the way Zoho's date-time HEADERS expect it (2026-08-30).
+ *
+ * Zoho documents If-Modified-Since as ISO8601 WITH a UTC offset and NO
+ * sub-second part, e.g. `2019-07-01T10:00:00+05:30`. JavaScript's
+ * `Date.toISOString()` emits `2026-08-30T14:36:24.442Z` — milliseconds plus a
+ * `Z` — which Zoho does not parse. And when Zoho cannot parse a request
+ * parameter it does NOT error: it SILENTLY IGNORES it and returns everything
+ * (the same trap that made `criteria` a no-op on the list endpoint, proven
+ * 2026-08-17). That turned the Duplicate Radar's "incremental" sync into a FULL
+ * corpus pull on every run — ~70k Contacts in 47 minutes, ~27k Deals in 27 —
+ * which in turn meant the last module (Leads) never finished, so its watermark
+ * never advanced and the backlog compounded.
+ *
+ * Emits `YYYY-MM-DDTHH:MM:SS+00:00`. Returns "" for an unparseable input so a
+ * bad value drops the header (full fetch) rather than sending garbage.
+ */
+export function toZohoDateTimeHeader(value: string | Date): string {
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return "";
+  return d.toISOString().replace(/\.\d{3}Z$/, "+00:00");
+}
+
 export async function fetchZohoRecords(
   module: string,
   params: {
@@ -497,9 +520,16 @@ export async function fetchZohoRecords(
         'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
         'Content-Type': 'application/json',
       };
-      // Only meaningful on the list endpoint; /search ignores it.
+      // Only meaningful on the list endpoint; /search ignores it. MUST be in
+      // Zoho's header format — a value it cannot parse is silently ignored and
+      // the whole corpus comes back (see toZohoDateTimeHeader).
       if (params.ifModifiedSince && !useSearch) {
-        headers['If-Modified-Since'] = params.ifModifiedSince;
+        const since = toZohoDateTimeHeader(params.ifModifiedSince);
+        if (since) headers['If-Modified-Since'] = since;
+        else
+          logger.warn(
+            `⚠️ [ZohoCRM] ${module}: unparseable ifModifiedSince "${params.ifModifiedSince}" — dropping the header (this page will fetch unfiltered).`,
+          );
       }
       return fetch(url, { method: 'GET', headers });
     },
@@ -981,7 +1011,12 @@ export async function fetchDeletedZohoRecords(
               'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
               'Content-Type': 'application/json',
             };
-            if (ifModifiedSince) headers['If-Modified-Since'] = ifModifiedSince;
+            // Zoho header format — see toZohoDateTimeHeader (a value Zoho cannot
+            // parse is silently ignored and every deleted record comes back).
+            if (ifModifiedSince) {
+              const since = toZohoDateTimeHeader(ifModifiedSince);
+              if (since) headers['If-Modified-Since'] = since;
+            }
             return fetch(url, { method: 'GET', headers });
           },
           async (res) => {

@@ -1144,6 +1144,30 @@ async function scanZohoCRMForDuplicates(
       ),
     );
 
+    // ── Recover ORPHANED `syncing` rows ──────────────────────────────────
+    // The single-flight guard above is IN-PROCESS (scanState), so it cannot see
+    // a run that died with its process — a deploy / republish / instance recycle
+    // kills the scan mid-module and leaves that module's zoho_sync_state row on
+    // `syncing` forever. Observed 2026-08-30: Leads sat "syncing" with a
+    // watermark 6h behind every other module. Flip anything abandoned to
+    // `failed` so the chips tell the truth and the module is retried cleanly.
+    // Safe: upsertSyncState only advances the watermark on a COMPLETED status,
+    // so this leaves last_sync_at / total_synced untouched — the next run still
+    // resumes from the last GOOD point and cannot skip records.
+    try {
+      const { failStaleSyncingModules } = await import(
+        "../../utils/duplicateRadarDatabase"
+      );
+      const reset = await failStaleSyncingModules();
+      if (reset.length) {
+        logger.warn(
+          `🧹 [DuplicateRadar] Recovered abandoned sync rows (process died mid-run): ${reset.join(", ")}`,
+        );
+      }
+    } catch {
+      /* best-effort — never blocks a scan */
+    }
+
     // ── Decide FULL vs INCREMENTAL ───────────────────────────────────────
     // Incremental = fetch only records modified since each module's last
     // successful sync (Zoho If-Modified-Since header) and DON'T wipe existing
