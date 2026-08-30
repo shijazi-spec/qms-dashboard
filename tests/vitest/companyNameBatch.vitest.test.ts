@@ -6,6 +6,7 @@ const rows = [
   { crm_name: "KPMG Saudi Arabia", record_type: "deal", n: 2, stages: ["Closed Lost", "Paid"] },
   { crm_name: "Three Lines Trading", record_type: "deal", n: 1, stages: ["Contacted"] },
   { crm_name: "شركة سالم بالحمر القابضة", record_type: "account", n: 1, stages: null },
+  { crm_name: "Aster", record_type: "account", n: 1, stages: null },
 ];
 
 describe("matchCompanyNames", () => {
@@ -28,6 +29,10 @@ describe("matchCompanyNames", () => {
     expect(r.matched).toBe(false);
     expect(r.match_type).toBeNull();
     expect(r.counts).toEqual({ leads: 0, deals: 0, contacts: 0, accounts: 0 });
+  });
+  it("does not fuzzy-match across a word boundary (Aster vs Master Builders)", () => {
+    const [r] = matchCompanyNames(["Master Builders"], rows);
+    expect(r.matched).toBe(false);
   });
   it("matches Arabic names", () => {
     const [r] = matchCompanyNames(["شركة سالم بالحمر القابضة"], rows);

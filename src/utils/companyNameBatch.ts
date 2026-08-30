@@ -35,6 +35,17 @@ function bucketFor(recordType: string): keyof Agg["counts"] | null {
   }
 }
 
+/** True when `needle` sits inside `haystack` on word boundaries. Normalized
+ *  names are space-separated, so this stops "aster" matching "master builders". */
+function containsToken(haystack: string, needle: string): boolean {
+  if (needle === haystack) return true;
+  return (
+    haystack.startsWith(needle + " ") ||
+    haystack.endsWith(" " + needle) ||
+    haystack.includes(" " + needle + " ")
+  );
+}
+
 /**
  * PURE. Resolve each input company name against CRM name rows.
  * strict = normalized equality; fuzzy = containment (flagged, never asserted).
@@ -69,7 +80,10 @@ export function matchCompanyNames(inputs: string[], crmRows: CrmNameRow[]): Comp
     const input = String(raw ?? "").trim();
     if (!input) continue;
     const norm = normalizeCompanyName(input);
-    const dedupeKey = norm || input.toLowerCase();
+    // Key on the RAW input, not the normalized form: "Almarai Company" and
+    // "Almarai Group" are different lines the user pasted and each deserves a
+    // row (normalized dedupe silently shrank the answer below the list length).
+    const dedupeKey = input.toLowerCase();
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 
@@ -77,11 +91,21 @@ export function matchCompanyNames(inputs: string[], crmRows: CrmNameRow[]): Comp
     let type: CompanyMatch["match_type"] = hit ? "strict" : null;
 
     if (!hit && norm && norm.length >= MIN_FUZZY_LEN) {
-      // Containment either way; both sides must clear MIN_FUZZY_LEN.
-      const key = normKeys.find(
-        (k) => k.length >= MIN_FUZZY_LEN && (k.includes(norm) || norm.includes(k)),
+      // Token-aligned containment only, and a DETERMINISTIC pick: the query has
+      // no ORDER BY, so taking whatever arrived first made the same list return
+      // different matches run to run. Closest length wins, ties alphabetical.
+      const candidates = normKeys.filter(
+        (k) => k.length >= MIN_FUZZY_LEN && (containsToken(k, norm) || containsToken(norm, k)),
       );
-      if (key) { hit = byNorm.get(key); type = "fuzzy"; }
+      if (candidates.length) {
+        candidates.sort((a, b) => {
+          const da = Math.abs(a.length - norm.length);
+          const db = Math.abs(b.length - norm.length);
+          return da !== db ? da - db : a.localeCompare(b);
+        });
+        hit = byNorm.get(candidates[0]);
+        type = "fuzzy";
+      }
     }
 
     out.push({

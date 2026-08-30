@@ -17,8 +17,7 @@ export const checkCompaniesBatchTool = createTool({
     companies: z
       .array(z.string())
       .min(1)
-      .max(300)
-      .describe("Company names to check (max 300)"),
+      .describe("Company names to check (only the first 300 are processed)"),
     segment: z
       .enum(["all", "marketplace", "walaplus", "walaone"])
       .optional()
@@ -29,6 +28,7 @@ export const checkCompaniesBatchTool = createTool({
     success: z.boolean(),
     checked: z.number(),
     matchedCount: z.number(),
+    truncated: z.boolean(),
     results: z.array(z.record(z.any())),
     error: z.string().optional(),
   }),
@@ -39,19 +39,22 @@ export const checkCompaniesBatchTool = createTool({
       const { getCompanyBatchRows } = await import("../../utils/duplicateRadarDatabase");
       const { matchCompanyNames } = await import("../../utils/companyNameBatch");
       const companies = (context?.companies || []).slice(0, 300);
+      const truncated = (context?.companies || []).length > 300;
       const rows = await getCompanyBatchRows((context?.segment as any) || "all");
       const results = matchCompanyNames(companies, rows);
       const matchedCount = results.filter((r) => r.matched).length;
       logger?.info("🔎 [checkCompaniesBatchTool] checked companies", {
         checked: results.length,
         matchedCount,
+        truncated,
       });
-      return { success: true, checked: results.length, matchedCount, results };
+      return { success: true, checked: results.length, matchedCount, truncated, results };
     } catch (e: any) {
       return {
         success: false,
         checked: 0,
         matchedCount: 0,
+        truncated: false,
         results: [],
         error: e?.message || String(e),
       };

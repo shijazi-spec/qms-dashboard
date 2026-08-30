@@ -2912,14 +2912,16 @@ export async function getCompanyBatchRows(
   const p = buildSegmentPredicate(seg, 1);
   const segCond = p.condition ? " AND " + p.condition : "";
   const res = await pool.query(
-    `SELECT COALESCE(NULLIF(r.company_name,''), NULLIF(r.account_name,''), r.record_name) AS crm_name,
+    `SELECT COALESCE(NULLIF(r.company_name,''), NULLIF(r.account_name,''),
+                     CASE WHEN r.record_type IN ('account','deal') THEN NULLIF(r.record_name,'') END) AS crm_name,
             r.record_type AS record_type,
             COUNT(*)::int AS n,
             ARRAY_AGG(DISTINCT r.stage) FILTER (
               WHERE r.record_type = 'deal' AND COALESCE(r.stage,'') <> ''
             ) AS stages
        FROM duplicate_records r
-      WHERE COALESCE(NULLIF(r.company_name,''), NULLIF(r.account_name,''), r.record_name) IS NOT NULL${segCond}
+      WHERE COALESCE(NULLIF(r.company_name,''), NULLIF(r.account_name,''),
+                     CASE WHEN r.record_type IN ('account','deal') THEN NULLIF(r.record_name,'') END) IS NOT NULL${segCond}
       GROUP BY 1, 2`,
     [...p.params],
   );
