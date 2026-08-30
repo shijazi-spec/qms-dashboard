@@ -27,16 +27,16 @@ export const PLATFORM_SECTIONS: SectionDef[] = [
     keywords: ["cs lifecycle", "lifecycle", "renewal", "renewals", "churn", "onboarding", "adoption", "customer success"] },
   { key: "deal_compliance", label: "Deals — stage aging and document compliance", href: "/duplicates",
     keywords: ["deal compliance", "deal docs", "required documents", "agreement", "proposal", "stage aging", "deal", "deals"] },
+  { key: "kpis", label: "KPIs — the GRQ scorecard and any red KPIs", href: "/kpis",
+    keywords: ["kpi", "kpis", "scorecard", "target", "red kpi"] },
+  { key: "capa", label: "Open actions — CAPAs and owner accountability", href: "/qms",
+    keywords: ["capa", "capas", "corrective", "corrective action", "open action", "open actions", "owner accountability", "accountability"] },
   { key: "preflight", label: "Preflight — vetting a company before creating it", href: "/duplicates",
     keywords: ["preflight", "existing client", "already a client", "already client", "vet", "cold contact"] },
   { key: "quality_reports", label: "Quality Reports — per-business-unit reporting", href: "/quality-reports",
     keywords: ["quality report", "quality reports", "business unit", "bu report", "per bu"] },
-  { key: "kpis", label: "KPIs — the GRQ scorecard and any red KPIs", href: "/kpis",
-    keywords: ["kpi", "kpis", "scorecard", "target", "red kpi"] },
   { key: "audits", label: "Internal Audits — audit programme and findings", href: "/audits",
     keywords: ["audit", "audits", "internal audit", "finding", "findings", "nonconformity", "nonconformance"] },
-  { key: "capa", label: "Open actions — CAPAs and owner accountability", href: "/qms",
-    keywords: ["capa", "capas", "corrective", "corrective action", "open action", "open actions", "owner accountability", "accountability"] },
   { key: "compliance", label: "Compliance — obligations and audit readiness", href: "/compliance",
     keywords: ["compliance", "obligation", "obligations", "pdpl", "iso", "regulation", "regulatory"] },
   { key: "risks", label: "Risk Management — the risk register", href: "/risks",
@@ -80,8 +80,9 @@ export function classifyQuestionSection(text: string): string | null {
     for (const kw of s.keywords) {
       if (kw.includes(" ")) {
         if (scrubbed.includes(kw)) return s.key;
-      } else if (new RegExp("(^| )" + kw + "( |$)").test(scrubbed)) {
-        return s.key;
+      } else {
+        const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        if (new RegExp("(^| )" + escaped + "( |$)").test(scrubbed)) return s.key;
       }
     }
   }
