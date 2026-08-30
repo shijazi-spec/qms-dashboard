@@ -1,49 +1,64 @@
-export interface TopicDef {
+export interface SectionDef {
   key: string;
   label: string;
+  href: string;
   keywords: string[];
 }
 
 /**
- * The menu Adam offers, and the only place a topic is defined. Promoting a new
- * theme (see emergingTerms) = adding an entry here. Order matters: the first
- * topic whose keyword appears wins, so put the more specific ones first.
+ * The platform's OWN sections (mirrors dashboard/js/navigation.js), which is
+ * what Adam offers as options and what the topic log counts. Order matters:
+ * the first section whose keyword appears wins, so the more specific ones come
+ * first. Extending a keyword list here is the ONLY way a new theme enters the
+ * menu — nothing is auto-invented, and no text from a question is ever stored.
  */
-export const CANONICAL_TOPICS: TopicDef[] = [
-  { key: "data_cleanup", label: "Data cleanup — duplicates merged, what is still open",
+export const PLATFORM_SECTIONS: SectionDef[] = [
+  { key: "duplicates", label: "Duplicates Radar — data cleanup and merges", href: "/duplicates",
     keywords: ["duplicate", "duplicates", "cleanup", "clean up", "merge", "merged", "dedupe", "تكرار"] },
-  { key: "cs_lifecycle", label: "CS Lifecycle — client phases, renewals, violations",
-    keywords: ["cs lifecycle", "lifecycle", "renewal", "churn", "onboarding", "adoption", "customer success"] },
-  { key: "deals", label: "Deals — stage aging and document compliance",
-    keywords: ["deal", "deals", "stage", "aging", "proposal", "agreement", "compliance", "documents attached"] },
-  { key: "kpis", label: "KPIs — the GRQ scorecard and any red KPIs",
+  { key: "cs_lifecycle", label: "CS Lifecycle — client phases, renewals, churn", href: "/duplicates",
+    keywords: ["cs lifecycle", "lifecycle", "renewal", "renewals", "churn", "onboarding", "adoption", "customer success"] },
+  { key: "deal_compliance", label: "Deal Compliance — required documents on deals", href: "/duplicates",
+    keywords: ["deal compliance", "deal docs", "required documents", "agreement", "proposal", "stage aging", "deal", "deals"] },
+  { key: "preflight", label: "Preflight — vetting a company before creating it", href: "/duplicates",
+    keywords: ["preflight", "existing client", "already a client", "already client", "vet", "cold contact"] },
+  { key: "quality_reports", label: "Quality Reports — per-business-unit reporting", href: "/quality-reports",
+    keywords: ["quality report", "quality reports", "business unit", "bu report", "per bu"] },
+  { key: "kpis", label: "KPIs — the GRQ scorecard", href: "/kpis",
     keywords: ["kpi", "kpis", "scorecard", "target", "performance"] },
-  { key: "open_actions", label: "Open actions — CAPAs and owner accountability",
-    keywords: ["capa", "capas", "action", "actions", "accountability", "overdue", "owner"] },
-  { key: "preflight", label: "Preflight — vetting a company before creating it",
-    keywords: ["preflight", "existing client", "already a client", "already client", "vet", "import"] },
-  { key: "documents", label: "Documents — SOPs, policies and document control",
-    keywords: ["sop", "sops", "policy", "policies", "document control", "governance document"] },
-  { key: "sync_status", label: "CRM sync — freshness and scan status",
-    keywords: ["sync", "scan", "refresh", "last sync", "up to date"] },
+  { key: "audits", label: "Internal Audits — audit programme and findings", href: "/audits",
+    keywords: ["audit", "audits", "internal audit", "finding", "findings", "nonconformity", "nonconformance"] },
+  { key: "capa", label: "CAPA — corrective actions and audit reports", href: "/qms",
+    keywords: ["capa", "capas", "corrective", "corrective action"] },
+  { key: "compliance", label: "Compliance — obligations and audit readiness", href: "/compliance",
+    keywords: ["compliance", "obligation", "obligations", "pdpl", "iso", "regulation", "regulatory"] },
+  { key: "risks", label: "Risk Management — the risk register", href: "/risks",
+    keywords: ["risk", "risks", "risk register", "mitigation"] },
+  { key: "documents", label: "Documents — SOPs, policies and document control", href: "/integrated-qms",
+    keywords: ["sop", "sops", "policy", "policies", "document control", "governance document", "procedure"] },
+  { key: "calls", label: "Call Evaluation — call quality scoring", href: "/calls",
+    keywords: ["call", "calls", "call evaluation", "call quality", "recording"] },
+  { key: "handoff", label: "Handoff Tracker — Quality and GRC handoffs", href: "/handoff-tracker",
+    keywords: ["handoff", "handoffs", "hand off"] },
+  { key: "vendors", label: "Vendors — vendor assessments", href: "/vendors",
+    keywords: ["vendor", "vendors", "supplier", "suppliers"] },
+  { key: "reviews", label: "Management Review", href: "/reviews",
+    keywords: ["management review", "mgmt review", "review meeting"] },
+  { key: "fraud", label: "Fraud — rules, incidents and KPIs", href: "/fraud-incidents",
+    keywords: ["fraud", "incident", "incidents", "country risk"] },
+  { key: "team", label: "Team Performance", href: "/team",
+    keywords: ["team performance", "team", "owner accountability", "accountability"] },
+  { key: "approvals", label: "AI Approvals Queue — actions waiting for sign-off", href: "/ai-approvals",
+    keywords: ["approval", "approvals", "approve", "queue", "pending action"] },
 ];
 
-const STOPWORDS = new Set([
-  "what", "when", "where", "which", "about", "there", "their", "these", "those", "have", "has",
-  "with", "from", "that", "this", "your", "please", "could", "would", "should", "give", "show",
-  "tell", "need", "want", "does", "did", "the", "and", "for", "any", "all", "our", "you", "adam",
-  "status", "update", "updates", "regarding", "dear", "hello", "thanks",
-]);
-
 /**
- * PURE. Map a question to a canonical topic by keyword. When nothing matches,
- * return normalized keywords instead so a recurring NEW theme can surface —
- * the raw question is never returned and never stored.
+ * PURE. Which platform section is this question about? Returns the section key,
+ * or null when nothing matches. It returns NO text from the question under any
+ * circumstance — the caller stores only this key, so a client name or contact
+ * detail in the question can never reach the database.
  */
-export function classifyQuestionTopic(text: string): { topic: string | null; keywords: string[] } {
-  const raw = String(text ?? "");
-  // Strip anything that could carry PII before we look at words at all.
-  const scrubbed = raw
+export function classifyQuestionSection(text: string): string | null {
+  const scrubbed = String(text ?? "")
     .toLowerCase()
     .replace(/https?:\/\/\S+/g, " ")
     .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, " ")
@@ -51,32 +66,16 @@ export function classifyQuestionTopic(text: string): { topic: string | null; key
     .replace(/[^a-z0-9\s؀-ۿ]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  if (!scrubbed) return null;
 
-  if (!scrubbed) return { topic: null, keywords: [] };
-
-  for (const t of CANONICAL_TOPICS) {
-    for (const kw of t.keywords) {
+  for (const s of PLATFORM_SECTIONS) {
+    for (const kw of s.keywords) {
       if (kw.includes(" ")) {
-        if (scrubbed.includes(kw)) return { topic: t.key, keywords: [] };
+        if (scrubbed.includes(kw)) return s.key;
       } else if (new RegExp("(^| )" + kw + "( |$)").test(scrubbed)) {
-        return { topic: t.key, keywords: [] };
+        return s.key;
       }
     }
   }
-
-  const tokens = scrubbed.split(" ").filter(Boolean);
-  // Too thin to learn anything from (e.g. "status?") — exactly the vague case
-  // the menu exists to handle, so log the ask without inventing a theme.
-  if (tokens.length < 3) return { topic: null, keywords: [] };
-
-  const keywords: string[] = [];
-  for (const tk of tokens) {
-    if (tk.length < 4) continue;
-    if (/\d/.test(tk)) continue;
-    if (STOPWORDS.has(tk)) continue;
-    if (keywords.includes(tk)) continue;
-    keywords.push(tk);
-    if (keywords.length >= 5) break;
-  }
-  return { topic: null, keywords };
+  return null;
 }

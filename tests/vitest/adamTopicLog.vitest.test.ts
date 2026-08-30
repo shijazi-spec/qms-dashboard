@@ -1,41 +1,34 @@
 import { describe, it, expect } from "vitest";
-import { classifyQuestionTopic, CANONICAL_TOPICS } from "../../src/utils/adamTopicLog";
+import { classifyQuestionSection, PLATFORM_SECTIONS } from "../../src/utils/adamTopicLog";
 
-describe("CANONICAL_TOPICS", () => {
-  it("has unique keys and a label for each", () => {
-    const keys = CANONICAL_TOPICS.map((t) => t.key);
+describe("PLATFORM_SECTIONS", () => {
+  it("has unique keys, a label and a platform href for each", () => {
+    const keys = PLATFORM_SECTIONS.map((s) => s.key);
     expect(new Set(keys).size).toBe(keys.length);
-    for (const t of CANONICAL_TOPICS) expect(t.label.length).toBeGreaterThan(0);
+    for (const s of PLATFORM_SECTIONS) {
+      expect(s.label.length).toBeGreaterThan(0);
+      expect(s.href.startsWith("/")).toBe(true);
+      expect(s.keywords.length).toBeGreaterThan(0);
+    }
   });
 });
 
-describe("classifyQuestionTopic", () => {
-  it("matches a known topic by keyword", () => {
-    expect(classifyQuestionTopic("how many duplicates did we merge?").topic).toBe("data_cleanup");
-    expect(classifyQuestionTopic("any renewal coming up in CS?").topic).toBe("cs_lifecycle");
-    expect(classifyQuestionTopic("show me the KPI scorecard").topic).toBe("kpis");
+describe("classifyQuestionSection", () => {
+  it("maps a question to a platform section", () => {
+    expect(classifyQuestionSection("how many duplicates did we merge?")).toBe("duplicates");
+    expect(classifyQuestionSection("any renewal coming up in CS?")).toBe("cs_lifecycle");
+    expect(classifyQuestionSection("show me the KPI scorecard")).toBe("kpis");
+    expect(classifyQuestionSection("what is open in the risk register?")).toBe("risks");
   });
-  it("returns null plus keywords when nothing matches", () => {
-    const out = classifyQuestionTopic("what about the marketing budget approval workflow");
-    expect(out.topic).toBeNull();
-    expect(out.keywords.length).toBeGreaterThan(0);
-    expect(out.keywords).toContain("marketing");
+  it("returns null when nothing matches — and NEVER any text", () => {
+    expect(classifyQuestionSection("Acme Trading Ltd wants a partnership brochure")).toBeNull();
+    expect(classifyQuestionSection("status?")).toBeNull();
   });
-  it("never keeps emails, urls, or phone numbers in keywords", () => {
-    const out = classifyQuestionTopic("ping ahmad@walaplus.com on +966558733973 see https://x.com/abc regarding onboarding paperwork");
-    const joined = out.keywords.join(" ");
-    expect(joined).not.toContain("walaplus.com");
-    expect(joined).not.toContain("966558733973");
-    expect(joined).not.toContain("https");
-    for (const k of out.keywords) expect(/\d/.test(k)).toBe(false);
+  it("respects canonical order when two sections could match", () => {
+    // 'duplicate' (duplicates) precedes 'deal' (deal_compliance) in PLATFORM_SECTIONS
+    expect(classifyQuestionSection("duplicate deal records")).toBe("duplicates");
   });
-  it("treats a too-short question as unlearnable", () => {
-    const out = classifyQuestionTopic("status?");
-    expect(out.topic).toBeNull();
-    expect(out.keywords).toEqual([]);
-  });
-  it("respects canonical order when two topics could match", () => {
-    // 'duplicate' (data_cleanup) precedes 'deal' (deals) in CANONICAL_TOPICS
-    expect(classifyQuestionTopic("duplicate deal records").topic).toBe("data_cleanup");
+  it("ignores emails, phones and urls when matching", () => {
+    expect(classifyQuestionSection("mail ahmad@walaplus.com about +966558733973")).toBeNull();
   });
 });
