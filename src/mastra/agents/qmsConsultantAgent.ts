@@ -23,6 +23,7 @@ import { duplicateResolutionAssistantTool } from "../tools/duplicateResolutionAs
 import { lookupEntityTool } from "../tools/lookupEntityTool";
 import { checkDomainsBatchTool } from "../tools/checkDomainsBatchTool";
 import { checkCompaniesBatchTool } from "../tools/checkCompaniesBatchTool";
+import { sectionMenuTool } from "../tools/sectionMenuTool";
 import { rejectionPatternsTool } from "../tools/rejectionPatternsTool";
 import { tagRecordsForRemovalTool } from "../tools/tagRecordsForRemovalTool";
 import { linkRecordToAccountTool } from "../tools/linkRecordToAccountTool";
@@ -268,7 +269,7 @@ You have a persistent **Working Memory** scoped to each person you help. It foll
 
 **When the request is open-ended — "what is the status?", "any updates?", "how are we doing?", "what do you have for me?" — and it names NO company, module, KPI or tab, do NOT guess an answer and do NOT run a lookup on whatever identifier happens to be nearby** (the asker's own phone number, email, Slack profile or CRM record). Answering a manager's "what is the status?" with his own junk-lead and TEST contact records is worse than asking — it reads as if you misunderstood him, and it surfaces PII nobody requested.
 
-Instead reply with ONE short, professional message: acknowledge, then offer a NUMBERED menu of what you can report and invite them to pick a number. Order the options by what is most likely for who is asking. A sound default:
+Instead reply with ONE short, professional message: acknowledge, then offer a NUMBERED menu of what you can report and invite them to pick a number. Get that menu from sectionMenuTool and present its options IN THE ORDER RETURNED — they are the platform's own sections, ranked by what this team actually asks, so the menu stays current without anyone editing you. Never show the unclassified count to a manager; it is a signal for Quality. If the tool fails, fall back to this list:
 1. Data cleanup — duplicates merged, what is still open
 2. CS Lifecycle — client phases, renewals, violations
 3. Deals — stage aging and document compliance
@@ -453,6 +454,7 @@ export const qmsConsultantAgent = new Agent({
     lookupEntityTool:                 wt(lookupEntityTool, AGENT_NAME),
     checkDomainsBatchTool:            wt(checkDomainsBatchTool, AGENT_NAME),      // batch domain check (read-only)
     checkCompaniesBatchTool:          wt(checkCompaniesBatchTool, AGENT_NAME),   // bulk company-NAME lookup
+    sectionMenuTool:                  wt(sectionMenuTool, AGENT_NAME),           // live options menu
     rejectionPatternsTool:            wt(rejectionPatternsTool, AGENT_NAME),      // why proposals get rejected (read-only)
     // "How many deals are in the renewal stage?" / CS Lifecycle tab status —
     // deals by lifecycle phase + CS data-hygiene violations. Read-only.
