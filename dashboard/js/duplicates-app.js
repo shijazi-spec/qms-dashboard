@@ -14541,41 +14541,51 @@
                 ? data.pct_actionable
                 : (examined > 0 ? Math.round(actionable / examined * 1000) / 10 : 0);
             const reasons = (Array.isArray(data.top_reasons) ? data.top_reasons : []).slice(0, 5);
+            // One emoji per reason so the list scans at a glance (Sarah 2026-08-31).
+            const emojiFor = function (label) {
+                const l = String(label || '').toLowerCase();
+                if (l.indexOf('duplicate contact') >= 0) return '🔁';
+                if (l.indexOf('active deal') >= 0) return '💼';
+                if (l.indexOf('client') >= 0 && l.indexOf('churn') < 0) return '🏢';
+                if (l.indexOf('churn') >= 0) return '⏳';
+                if (l.indexOf('cool-off') >= 0) return '🔓';
+                if (l.indexOf('no email') >= 0 || l.indexOf('reached') >= 0) return '☎️';
+                return '•';
+            };
             const bullet = reasons.length === 0
-                ? '  (no actionable matches in this batch)'
-                : reasons.map(r => '  • ' + r.label + ' — ' + r.count + ' (' + r.pct + '%)').join('\n');
+                ? '  (nothing flagged in this batch)'
+                : reasons.map(r => '  ' + emojiFor(r.label) + '  ' + r.count + ' — ' + r.label).join('\n');
             const stamp = data.generated_at
                 ? data.generated_at.slice(0, 10)
                 : new Date().toISOString().slice(0, 10);
-            // The do-not-pursue (BLOCK) total splits into existing active clients
-            // vs protected / do-not-contact accounts — the summary lumps both into
-            // `block`, so the protected count is read from the top-reasons list.
-            const allReasons = Array.isArray(data.top_reasons) ? data.top_reasons : [];
-            const protectedCount = ((allReasons.find(function (r) { return /protected/i.test(r.label || ''); }) || {}).count) || 0;
-            const existingCount = Math.max(0, (s.block || 0) - protectedCount);
-            // Body matches the agreed launch format (Ahmad 2026-06-26): a title
-            // line, intro, headline numbers that tie out to the batch total, top
-            // reasons, next steps. Blank lines are KEPT (no filter) for readability.
+            // SIMPLE + CLEAR (Sarah 2026-08-31): two headline numbers, one reason
+            // list, then the actions — no nested "of those" line, and zero-count
+            // categories are dropped so nothing reads as noise. Emojis anchor each
+            // line; Adam signs it off. Blank lines are KEPT for readability.
+            const passCount = (s.pass || 0);
+            const steps = [];
+            steps.push('  ✅  Import the ' + passCount.toLocaleString() + ' safe contacts — the same tab loads them into Zoho on the right Layout.');
+            if (s.duplicate) steps.push('  🔁  Give the ' + s.duplicate + ' duplicates to the owner who already has them — don\'t create a new lead.');
+            if (s.block) steps.push('  🏢  Leave the ' + s.block + ' existing clients to Customer Success — no cold contact.');
+            if (s.review) steps.push('  🔍  Hold the ' + s.review + ' "review" rows until CS or the deal owner confirms.');
+            if (s.no_contact) steps.push('  ☎️  Drop the ' + s.no_contact + ' unreachable rows — no usable phone or email.');
             const lines = [
-                'Preflight check — ' + examined.toLocaleString() + ' records · ' + actionable.toLocaleString() + ' flagged (' + pctAct + '%) — ' + stamp,
-                'I ran a pre-import duplicate check on a batch of ' + examined.toLocaleString() + ' records before handing the list to the Sales floor. Summary below.',
+                '📋 Preflight check — ' + examined.toLocaleString() + ' records · ' + stamp,
                 '',
-                'Headline numbers:',
-                '  • Rejected (would create a duplicate or hit an existing/protected account): ' + actionable.toLocaleString() + ' contacts (' + pctAct + '%)',
-                '  • Of those: ' + (s.block || 0) + ' do-not-pursue (' + existingCount + ' active clients + ' + protectedCount + ' protected) · ' + (s.review || 0) + ' to review (churn cool-off / name-match) · ' + (s.warn || 0) + ' past cool-off · ' + (s.duplicate || 0) + ' already-in-CRM duplicates · ' + (s.no_contact || 0) + ' unreachable',
-                '  • PASS (Safe to import): ' + (s.pass || 0).toLocaleString() + ' contacts',
+                'I checked this batch against the CRM before it goes to the Sales floor.',
                 '',
-                'Top reasons:',
+                '  ✅  Safe to import — ' + passCount.toLocaleString() + ' contacts',
+                '  ⛔  Held back — ' + actionable.toLocaleString() + ' contacts (' + pctAct + '%)',
+                '',
+                'Why they were held back:',
                 bullet,
-                'Full per-row breakdown (domain, company, existing owner, recommended action) is in the attached Preflight Excel report.',
                 '',
-                'Recommended next steps:',
-                '  • Drop the BLOCK rows; active or protected accounts; route the relationship through Customer Success.',
-                '  • Hold the REVIEW rows until CS confirms.',
-                '  • Re-assign the DUPLICATE rows to the existing owner instead of creating a new lead.',
-                '  • Push only the PASS rows (' + (s.pass || 0).toLocaleString() + '); load them into Zoho on the right Layout from the same tab.',
+                'What to do next:',
+                steps.join('\n'),
                 '',
-                'Generated ' + stamp + ' from the Preflight Check tab in WalaPlus QMS.',
+                '📎 Full row-by-row detail (domain, company, current owner, recommended action) is in the attached Excel report.',
+                '',
+                '🤖 Checked by Adam — WalaPlus QMS, Preflight Check tab.',
             ];
             const body = lines.join('\n');
             const ok = (txt) => {
