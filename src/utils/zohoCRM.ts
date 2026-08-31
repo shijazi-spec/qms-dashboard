@@ -426,13 +426,62 @@ export function getZohoConnectionStatus(): {
  * which in turn meant the last module (Leads) never finished, so its watermark
  * never advanced and the backlog compounded.
  *
- * Emits `YYYY-MM-DDTHH:MM:SS+00:00`. Returns "" for an unparseable input so a
- * bad value drops the header (full fetch) rather than sending garbage.
+ * Emits `YYYY-MM-DDTHH:MM:SS±HH:MM` in the ORG's timezone (ZOHO_ORG_TIMEZONE,
+ * default Asia/Riyadh). Returns "" for an unparseable input so a bad value
+ * drops the header (full fetch) rather than sending garbage.
  */
 export function toZohoDateTimeHeader(value: string | Date): string {
   const d = value instanceof Date ? value : new Date(value);
   if (isNaN(d.getTime())) return "";
-  return d.toISOString().replace(/\.\d{3}Z$/, "+00:00");
+  // Emit the ORG's LOCAL wall-clock plus its own offset (Sarah 2026-08-30).
+  // `+00:00` is only correct if Zoho honours the offset; if it ever read the
+  // wall-clock as org-local instead, a UTC value would silently widen the
+  // window by the org's offset (3h for KSA) and re-pull hours of extra records
+  // every run. Local-time-plus-its-own-offset is correct under BOTH readings:
+  // same instant when the offset is honoured, and already-local when it isn't.
+  // Timezone is env-tunable (ZOHO_ORG_TIMEZONE); the offset is derived per
+  // instant, so a DST org stays correct across the change.
+  const tz = process.env.ZOHO_ORG_TIMEZONE || "Asia/Riyadh";
+  try {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: tz,
+        hourCycle: "h23",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+        .formatToParts(d)
+        .map((p) => [p.type, p.value]),
+    ) as Record<string, string>;
+    // Some ICU builds render midnight as "24" — normalise it.
+    const hour = parts.hour === "24" ? "00" : parts.hour;
+    const wall = `${parts.year}-${parts.month}-${parts.day}T${hour}:${parts.minute}:${parts.second}`;
+    // Offset = (that wall-clock read as UTC) − (the real instant).
+    const offsetMin = Math.round(
+      (Date.UTC(
+        Number(parts.year),
+        Number(parts.month) - 1,
+        Number(parts.day),
+        Number(hour),
+        Number(parts.minute),
+        Number(parts.second),
+      ) -
+        d.getTime()) /
+        60000,
+    );
+    const sign = offsetMin >= 0 ? "+" : "-";
+    const abs = Math.abs(offsetMin);
+    const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+    const mm = String(abs % 60).padStart(2, "0");
+    return `${wall}${sign}${hh}:${mm}`;
+  } catch {
+    // Unknown timezone id → fall back to UTC rather than dropping the window.
+    return d.toISOString().replace(/\.\d{3}Z$/, "+00:00");
+  }
 }
 
 export async function fetchZohoRecords(

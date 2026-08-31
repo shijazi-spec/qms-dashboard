@@ -69,14 +69,31 @@ describe("fetchZohoRecords criteria routing", () => {
     // used to expect the raw `...Z` value passed in — which Zoho cannot parse,
     // so it SILENTLY ignored the header and returned the whole corpus, turning
     // the incremental sync into a full pull every run (2026-08-30).
-    expect(headers["If-Modified-Since"]).toBe("2026-08-01T00:00:00+00:00");
+    // Emitted in the ORG timezone (default Asia/Riyadh, +03:00) so the value is
+    // correct whether Zoho honours the offset or reads the wall-clock as local.
+    // 2026-08-01T00:00:00Z === 2026-08-01T03:00:00+03:00 — the same instant.
+    expect(headers["If-Modified-Since"]).toBe("2026-08-01T03:00:00+03:00");
   });
 
   it("normalises a millisecond timestamp to Zoho's header format", async () => {
     // Date.toISOString() — what the sync watermark actually produced.
     await fetchZohoRecords("Deals", { ifModifiedSince: "2026-08-30T14:36:24.442Z" });
     const { headers } = lastRequest();
-    expect(headers["If-Modified-Since"]).toBe("2026-08-30T14:36:24+00:00");
+    expect(headers["If-Modified-Since"]).toBe("2026-08-30T17:36:24+03:00");
+  });
+
+  it("emits UTC when the org timezone is set to UTC", async () => {
+    const prev = process.env.ZOHO_ORG_TIMEZONE;
+    process.env.ZOHO_ORG_TIMEZONE = "UTC";
+    try {
+      await fetchZohoRecords("Deals", { ifModifiedSince: "2026-08-30T14:36:24.442Z" });
+      expect(lastRequest().headers["If-Modified-Since"]).toBe(
+        "2026-08-30T14:36:24+00:00",
+      );
+    } finally {
+      if (prev === undefined) delete process.env.ZOHO_ORG_TIMEZONE;
+      else process.env.ZOHO_ORG_TIMEZONE = prev;
+    }
   });
 
   it("drops an unparseable If-Modified-Since instead of sending garbage", async () => {
