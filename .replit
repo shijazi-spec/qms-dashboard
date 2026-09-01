@@ -9,8 +9,19 @@ channel = "stable-24_05"
 localPort = 5000
 externalPort = 80
 
+# NOTE: PORT is deliberately NOT pinned here.
+#
+# `[env] PORT = "5000"` used to force the port in EVERY environment, including
+# Autoscale deployments. Replit assigns each deployment its own dynamic port and
+# health-checks that port, so pinning 5000 made the container listen on 5000
+# while the prober hit e.g. 127.0.0.1:1104 — "connection refused" — and the
+# deploy failed its healthcheck even though the build and the app were fine.
+#
+# With this unset, `src/mastra/index.ts` uses `Number(process.env.PORT) || 5000`:
+#   - deployment: binds whatever port Replit assigns  ✅
+#   - local dev / workspace: PORT is unset, so it falls back to 5000, matching
+#     the `localPort = 5000 -> externalPort = 80` mapping above, unchanged.
 [env]
-PORT = "5000"
 
 [deployment]
 deploymentTarget = "autoscale"
