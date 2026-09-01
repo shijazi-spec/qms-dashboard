@@ -11101,58 +11101,49 @@
             if (!d) { rrToast('Run the re-engage check first.'); return; }
             const s = d.summary || {};
             const stamp = (d.generated_at || new Date().toISOString()).slice(0, 10);
-            const emojiFor = function (label) {
-                const l = String(label || '').toLowerCase();
-                if (l.indexOf('lost too recently') >= 0) return '⏳';
-                if (l.indexOf('churned') >= 0) return '🔄';
-                if (l.indexOf('existing active client') >= 0) return '🏢';
-                if (l.indexOf('live open deal') >= 0) return '💼';
-                if (l.indexOf('doam') >= 0) return '🏛️';
-                if (l.indexOf('protected') >= 0) return '🚫';
-                if (l.indexOf('cannot verify') >= 0) return '❓';
-                return '•';
-            };
+            // Each blocked bucket carries its own SHORT label + the action the
+            // reader must take, so every line answers "what is this?" AND "what
+            // do I do?" without a separate next-steps section (Sarah's final
+            // format, 2026-09-02). Matched on a keyword so a server-side label
+            // tweak can't silently drop the guidance.
+            const BUCKETS = [
+                { k: 'existing active client', e: '🏢', s: 'Existing active client', n: 'route to Customer Success. No cold contact.' },
+                { k: 'live open deal',         e: '💼', s: 'Live open deal in the CRM', n: 'coordinate with the deal owner; the attached list has the deal link and owner.' },
+                { k: 'churned',                e: '🔄', s: 'Churned client still inside the cool-off', n: 'these were real customers who cancelled; check with Customer Success before approaching.' },
+                { k: 'doam',                   e: '🏛️', s: 'DOAM client (HR-gov subscription)', n: "government entities subscribed to WalaPlus through the HR ministry. They're already our customers under that contract, so don't approach them as new business." },
+                { k: 'protected',              e: '🚫', s: 'Protected / do-not-contact account', n: 'these are on the company do-not-contact list; never approach, regardless of deal history.' },
+                { k: 'cannot verify',          e: '❓', s: 'Cannot verify', n: 'no domain and no usable company name; check this one manually before approaching.' },
+            ];
             // "Safe to re-approach" is the PASS bucket — it belongs in the
             // headline, not in the list of reasons something was held back.
             const blocked = (d.reasons || []).filter(function (r) {
                 return String(r.label || '').toLowerCase().indexOf('safe to re-approach') < 0;
             });
             const why = blocked.length
-                ? blocked.map(function (r) { return '  ' + emojiFor(r.label) + '  ' + _fn(r.count) + ' — ' + r.label; }).join('\n')
+                ? blocked.map(function (r) {
+                    const l = String(r.label || '').toLowerCase();
+                    const b = BUCKETS.find(function (x) { return l.indexOf(x.k) >= 0; });
+                    return b
+                        ? '  ' + b.e + '  ' + _fn(r.count) + ' — ' + b.s + '; ' + b.n
+                        : '  •  ' + _fn(r.count) + ' — ' + r.label;
+                }).join('\n')
                 : '  (nothing held back in this batch)';
-            const byReason = {};
-            (d.reasons || []).forEach(function (r) { byReason[String(r.label || '').toLowerCase()] = r.count; });
-            const find = function (key) {
-                for (const k in byReason) { if (k.indexOf(key) >= 0) return byReason[k]; }
-                return 0;
-            };
-            const live = find('live open deal');
-            const client = find('existing active client');
-            const churned = find('churned');
-            const steps = [];
-            steps.push('  ✅  Work the ' + _fn(s.pass || 0) + ' safe deals — not a current client and no live deal in the CRM.');
-            if (live) steps.push('  💼  For the ' + _fn(live) + ' with a live open deal, talk to the deal owner instead — the attached list has the deal link and owner.');
-            if (client) steps.push('  🏢  Leave the ' + _fn(client) + ' existing clients to Customer Success — no cold contact.');
-            if (churned) steps.push('  🔄  The ' + _fn(churned) + ' churned clients free up once their cool-off passes — re-run this check later.');
             const lines = [
                 '♻️ Lost deals — re-engagement check · ' + _fn(d.examined || 0) + ' deals · ' + stamp,
                 '',
                 'I checked our closed-lost deals against the CRM to see which companies Sales can approach again.',
                 '',
-                '  ✅  Safe to re-approach — ' + _fn(s.pass || 0) + ' deals',
-                '  ⛔  Not yet — ' + _fn(s.block || 0) + ' deals',
+                '  ✅  Safe to re-approach — Re-engage the ' + _fn(s.pass || 0) + ' deals — not a current client and no live deal in the CRM.',
+                '  ⛔  BLOCKED — ' + _fn(s.block || 0) + ' deals',
                 '',
-                'Why the ' + _fn(s.block || 0) + ' are on hold:',
+                'Why the ' + _fn(s.block || 0) + ' are on hold [BLOCKED]:',
                 why,
                 '',
-                'Cool-off (180 days Private Sector / 365 days Government Sector) applies ONLY to clients who onboarded and later churned — a lost deal has no cool-off, Sales can re-engage it whenever.',
-                '',
-                'What to do next:',
-                steps.join('\n'),
+                '>>> Cool-off (180 days Private Sector / 365 days Government Sector) applies ONLY to clients who onboarded and later churned — a lost deal has no cool-off; Sales can re-engage it whenever.',
                 '',
                 '📎 Full row-by-row detail (company, domain, owner, lost date, reason, deal link) is in the attached files.',
                 '',
-                '🤖 Checked by Adam — WalaPlus QMS, Preflight → Lost deals re-engage check.',
+                '🤖 Checked by Adam — WalaPlus QMS, Preflight → Lost Deals Re-engage Check Tool.',
             ];
             const body = lines.join('\n');
             try {
