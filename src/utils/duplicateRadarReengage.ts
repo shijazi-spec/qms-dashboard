@@ -109,11 +109,28 @@ function stripZcrm(id: string | null | undefined): string | null {
   return s.replace(/^zcrm_/i, "") || null;
 }
 
-/** Whole days between a date and now; null when absent/unparseable. */
-function daysSince(value: string | null | undefined): number | null {
+/**
+ * Whole days between a date and now; null when absent/unparseable.
+ *
+ * Must survive THREE shapes, because ExcelJS hands back whatever the cell held:
+ *   • a real Date object            → "Thu Aug 27 2026 00:00:00 GMT+0300 (…)"
+ *   • the sheet's text form         → "2026-08-27 00:00:00"
+ *   • an ISO string                 → "2026-08-27T00:00:00.000Z"
+ * The original version only tried `s.replace(" ", "T")`, which replaces just the
+ * FIRST space — correct for the text form but it mangles a Date's toString into
+ * "ThuTAug 27 2026 …", so every row parsed as null and the lost-date cool-off
+ * rule silently never fired (2026-09-01: 0 of 1,433 rows got a day count).
+ */
+function daysSince(value: string | Date | null | undefined): number | null {
+  if (value instanceof Date) {
+    return isNaN(value.getTime())
+      ? null
+      : Math.floor((Date.now() - value.getTime()) / 86400000);
+  }
   const s = String(value ?? "").trim();
   if (!s) return null;
-  const t = Date.parse(s.replace(" ", "T"));
+  let t = Date.parse(s); // handles ISO and a Date's toString directly
+  if (isNaN(t)) t = Date.parse(s.replace(" ", "T")); // "YYYY-MM-DD HH:MM:SS"
   if (isNaN(t)) return null;
   return Math.floor((Date.now() - t) / 86400000);
 }

@@ -10326,6 +10326,14 @@ export const duplicateRadarRoutes = [
             for (const nme of names) {
               for (const idx of cols[nme] || []) {
                 const v = row.getCell(idx).value;
+                if (v == null) continue;
+                // A date cell comes back as a real Date — normalise it to ISO
+                // here rather than letting String(Date) produce a locale string
+                // downstream (that is what broke the lost-date cool-off).
+                if (v instanceof Date) {
+                  if (!isNaN(v.getTime())) return v.toISOString();
+                  continue;
+                }
                 const s = String((v && (v as any).text) || v || "").trim();
                 if (s) return s;
               }
