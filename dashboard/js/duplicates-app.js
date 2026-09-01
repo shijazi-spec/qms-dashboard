@@ -11035,7 +11035,8 @@
                 modal.innerHTML = '<div class="bg-white rounded-xl shadow-xl w-full max-w-2xl">'
                     + '<div class="flex items-center justify-between px-5 py-3 border-b"><div class="text-lg font-semibold">♻️ Lost deals — re-engagement check</div><button data-on-click="closeReengageModal" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button></div>'
                     + '<div id="reengageBody" class="px-5 py-4"></div>'
-                    + '<div class="px-5 py-3 border-t flex gap-2 justify-end">'
+                    + '<div class="px-5 py-3 border-t flex gap-2 justify-end flex-wrap">'
+                    +   '<button data-on-click="copyReengageEmailBody" id="reengageCopyEmailBtn" class="rr-btn rr-btn-ghost" title="Copy a ready-to-paste email body with the headline numbers, the reasons and the next steps.">📋 Copy email body</button>'
                     +   '<button data-on-click="downloadReengagePass" class="rr-btn rr-btn-primary">&#8595; PASS — re-approach list</button>'
                     +   '<button data-on-click="downloadReengageBlock" class="rr-btn rr-btn-ghost">&#8595; BLOCK list</button>'
                     +   '<button data-on-click="downloadReengageAll" class="rr-btn rr-btn-subtle">&#8595; All rows</button>'
@@ -11090,6 +11091,79 @@
             a.download = base + '__' + suffix + '__' + list.length + '.csv';
             document.body.appendChild(a); a.click();
             setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+        }
+        // Ready-to-paste email for the re-engagement run — same shape as the
+        // Mawsool one (two headline numbers, one reason list, then the actions),
+        // signed off by Adam. Zero-count reasons never appear because the server
+        // only returns buckets it actually used.
+        function copyReengageEmailBody() {
+            const d = window._reengageResult;
+            if (!d) { rrToast('Run the re-engage check first.'); return; }
+            const s = d.summary || {};
+            const stamp = (d.generated_at || new Date().toISOString()).slice(0, 10);
+            const emojiFor = function (label) {
+                const l = String(label || '').toLowerCase();
+                if (l.indexOf('lost too recently') >= 0) return '⏳';
+                if (l.indexOf('churned') >= 0) return '🔄';
+                if (l.indexOf('existing active client') >= 0) return '🏢';
+                if (l.indexOf('live open deal') >= 0) return '💼';
+                if (l.indexOf('doam') >= 0) return '🏛️';
+                if (l.indexOf('protected') >= 0) return '🚫';
+                if (l.indexOf('cannot verify') >= 0) return '❓';
+                return '•';
+            };
+            // "Safe to re-approach" is the PASS bucket — it belongs in the
+            // headline, not in the list of reasons something was held back.
+            const blocked = (d.reasons || []).filter(function (r) {
+                return String(r.label || '').toLowerCase().indexOf('safe to re-approach') < 0;
+            });
+            const why = blocked.length
+                ? blocked.map(function (r) { return '  ' + emojiFor(r.label) + '  ' + _fn(r.count) + ' — ' + r.label; }).join('\n')
+                : '  (nothing held back in this batch)';
+            const byReason = {};
+            (d.reasons || []).forEach(function (r) { byReason[String(r.label || '').toLowerCase()] = r.count; });
+            const find = function (key) {
+                for (const k in byReason) { if (k.indexOf(key) >= 0) return byReason[k]; }
+                return 0;
+            };
+            const live = find('live open deal');
+            const client = find('existing active client');
+            const recent = find('lost too recently');
+            const steps = [];
+            steps.push('  ✅  Work the ' + _fn(s.pass || 0) + ' safe deals — not a current client, no live deal, and past the cool-off.');
+            if (live) steps.push('  💼  For the ' + _fn(live) + ' with a live open deal, talk to the deal owner instead — the attached list has the deal link and owner.');
+            if (client) steps.push('  🏢  Leave the ' + _fn(client) + ' existing clients to Customer Success — no cold contact.');
+            if (recent) steps.push('  ⏳  The ' + _fn(recent) + ' lost too recently free up automatically once their cool-off passes — just re-run this check later.');
+            const lines = [
+                '♻️ Lost deals — re-engagement check · ' + _fn(d.examined || 0) + ' deals · ' + stamp,
+                '',
+                'I checked our closed-lost deals against the CRM to see which companies Sales can approach again.',
+                '',
+                '  ✅  Safe to re-approach — ' + _fn(s.pass || 0) + ' deals',
+                '  ⛔  Not yet — ' + _fn(s.block || 0) + ' deals',
+                '',
+                'Why the ' + _fn(s.block || 0) + ' are on hold:',
+                why,
+                '',
+                'Cool-off applied: 180 days for private, 365 days for government.',
+                '',
+                'What to do next:',
+                steps.join('\n'),
+                '',
+                '📎 Full row-by-row detail (company, domain, owner, lost date, reason, deal link) is in the attached files.',
+                '',
+                '🤖 Checked by Adam — WalaPlus QMS, Preflight → Lost deals re-engage check.',
+            ];
+            const body = lines.join('\n');
+            try {
+                navigator.clipboard.writeText(body);
+                const btn = document.getElementById('reengageCopyEmailBtn');
+                if (btn) {
+                    const o = btn.innerHTML;
+                    btn.innerHTML = '✓ Copied';
+                    setTimeout(function () { btn.innerHTML = o; }, 1800);
+                }
+            } catch (e) { rrToast('Copy failed — select and copy manually.'); }
         }
         function downloadReengagePass() { _reengageCsv('pass', 'RE-APPROACH'); }
         function downloadReengageBlock() { _reengageCsv('block', 'BLOCKED'); }
