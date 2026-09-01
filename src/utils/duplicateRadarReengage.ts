@@ -21,12 +21,12 @@
  *             5. a LIVE OPEN deal exists today — a colleague is already working
  *                the company; the deal LINK + owner + stage are surfaced, the
  *                same way the Mawsool output does it
- *             6. the lost deal itself is still inside the cool-off, measured
- *                from its Closing (lost) Date
  *   PASS  — none of the above; safe to re-approach.
  *
- * Cool-off windows are the agreed sector ones: 180d Private / 365d Government,
- * with the sector inferred from the domain (.gov.sa ⇒ Government).
+ * The 180d Private / 365d Government cool-off is a CHURN rule only — it gates
+ * re-approaching a CUSTOMER who cancelled. A prospect who merely declined a
+ * proposal has NO cool-off (Sarah 2026-09-02), so a lost deal never blocks on
+ * its own age.
  *
  * DELIBERATELY NOT APPLIED HERE: the contact-duplicate rule and the mandatory
  * KSA-phone gate. Both are import-time concerns and meaningless when the company
@@ -203,7 +203,6 @@ const REASON_LABELS: Record<string, string> = {
   existing_active_client: "Existing active client — route to Customer Success",
   client_within_cooloff: "Churned client still inside the cool-off",
   live_open_deal: "Live open deal — coordinate with the deal owner",
-  lost_within_cooloff: "Lost too recently — still inside the cool-off",
   unverifiable: "Cannot verify — no domain and no usable company name",
   safe_to_reengage: "Safe to re-approach",
 };
@@ -262,8 +261,9 @@ export async function runLostDealReengagement(input: {
     const sector =
       detectSector({ domain }) ??
       (looksGovernmentByName(rawName, rawDeal) ? "government" : "private");
+    // Reported as context and used by the CHURN rule below; a lost deal is never
+    // blocked by its own age (see the note at rule 6).
     const coolOff = sector === "government" ? 365 : 180;
-    const sectorLabel = sector === "government" ? "Government" : "Private";
     const lostDays = daysSince(r.closing_date);
 
     const base = {
@@ -391,17 +391,15 @@ export async function runLostDealReengagement(input: {
       continue;
     }
 
-    // 6. The lost deal itself is still inside the cool-off.
-    if (lostDays != null && lostDays < coolOff) {
-      emit(
-        "block",
-        "lost_within_cooloff",
-        `BLOCK — lost ${lostDays}d ago, still inside the ${coolOff}-day ${sectorLabel} cool-off (${coolOff - lostDays}d remaining).`,
-      );
-      continue;
-    }
+    // NOTE (Sarah 2026-09-02): there is deliberately NO cool-off on the LOST
+    // DEAL itself. The 180/365-day windows are a CHURN rule — they govern
+    // re-approaching a CUSTOMER who cancelled (rule 4 above). A prospect who
+    // simply declined a proposal is free to be re-engaged whenever Sales wants,
+    // so a "lost_within_cooloff" rule was wrong and has been removed; it was
+    // holding 692 perfectly approachable companies out of the list.
+    // `days_since_lost` is still reported as context, it just never blocks.
 
-    // 7. UNVERIFIABLE (Sarah 2026-09-01 — "ZERO errors"): no domain AND no name
+    // 6. UNVERIFIABLE (Sarah 2026-09-01 — "ZERO errors"): no domain AND no name
     //    usable for matching means nothing was actually checked against the CRM.
     //    Passing that to Sales would be a guess, so it BLOCKS instead — still
     //    only two statuses, and a human can clear it manually.
@@ -418,10 +416,8 @@ export async function runLostDealReengagement(input: {
     emit(
       "pass",
       "safe_to_reengage",
-      `PASS — safe to re-approach: not a current client, no live deal, ${
-        lostDays != null
-          ? `lost ${lostDays}d ago (past the ${coolOff}-day ${sectorLabel} cool-off)`
-          : "no closing date on file"
+      `PASS — safe to re-approach: not a current client, no live deal in the CRM${
+        lostDays != null ? `, lost ${lostDays}d ago` : ""
       }.`,
     );
   }

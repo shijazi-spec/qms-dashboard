@@ -11128,12 +11128,12 @@
             };
             const live = find('live open deal');
             const client = find('existing active client');
-            const recent = find('lost too recently');
+            const churned = find('churned');
             const steps = [];
-            steps.push('  ✅  Work the ' + _fn(s.pass || 0) + ' safe deals — not a current client, no live deal, and past the cool-off.');
+            steps.push('  ✅  Work the ' + _fn(s.pass || 0) + ' safe deals — not a current client and no live deal in the CRM.');
             if (live) steps.push('  💼  For the ' + _fn(live) + ' with a live open deal, talk to the deal owner instead — the attached list has the deal link and owner.');
             if (client) steps.push('  🏢  Leave the ' + _fn(client) + ' existing clients to Customer Success — no cold contact.');
-            if (recent) steps.push('  ⏳  The ' + _fn(recent) + ' lost too recently free up automatically once their cool-off passes — just re-run this check later.');
+            if (churned) steps.push('  🔄  The ' + _fn(churned) + ' churned clients free up once their cool-off passes — re-run this check later.');
             const lines = [
                 '♻️ Lost deals — re-engagement check · ' + _fn(d.examined || 0) + ' deals · ' + stamp,
                 '',
@@ -11145,7 +11145,7 @@
                 'Why the ' + _fn(s.block || 0) + ' are on hold:',
                 why,
                 '',
-                'Cool-off applied: 180 days for private, 365 days for government.',
+                'Cool-off (180 days Private Sector / 365 days Government Sector) applies ONLY to clients who onboarded and later churned — a lost deal has no cool-off, Sales can re-engage it whenever.',
                 '',
                 'What to do next:',
                 steps.join('\n'),
