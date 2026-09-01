@@ -10266,6 +10266,116 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // LOST-DEAL RE-ENGAGEMENT (Sarah 2026-09-01). Upload a sheet of CLOSED-LOST
+    // deals and get back exactly two verdicts per row — BLOCK (existing client /
+    // inside cool-off / live open deal / protected / DOAM) or PASS (safe to
+    // re-approach). Deliberately NOT the Mawsool ladder: these rows are already
+    // CRM deals, so the contact-duplicate rule and the KSA-phone gate would
+    // reject essentially every row and tell Sales nothing.
+    path: "/api/duplicates/preflight/reengage-excel",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          let buffer: Buffer | null = null;
+          const contentType = c.req.header("content-type") || "";
+          if (contentType.startsWith("multipart/form-data")) {
+            const form = await c.req.parseBody();
+            const file = (form as any).file;
+            if (!file || typeof file === "string") {
+              return c.json({ error: "Send the workbook as a multipart 'file' field." }, 400);
+            }
+            buffer = Buffer.from(await (file as any).arrayBuffer());
+          } else {
+            buffer = Buffer.from(await c.req.arrayBuffer());
+          }
+          if (!buffer || buffer.length === 0) return c.json({ error: "Empty upload." }, 400);
+          if (buffer.length > 15 * 1024 * 1024) {
+            return c.json({ error: "Workbook too large — 15 MB cap." }, 413);
+          }
+
+          // exceljs is CommonJS — the constructor sits on .default under a
+          // dynamic import (same trap as parse-excel above).
+          const ExcelJSMod: any = await import("exceljs");
+          const ExcelJS = ExcelJSMod.default ?? ExcelJSMod;
+          const wb = new ExcelJS.Workbook();
+          try {
+            await wb.xlsx.load(buffer);
+          } catch (pe: any) {
+            return c.json({ error: "Could not parse as .xlsx.", detail: pe?.message || String(pe) }, 400);
+          }
+          const ws = wb.worksheets[0];
+          if (!ws) return c.json({ error: "No worksheet in the workbook." }, 400);
+
+          // Header matching is normalised (lowercase, alphanumerics only) so
+          // spacing / casing variants all land. The export carries "Company"
+          // TWICE, so every header keeps a LIST of column indexes and the first
+          // non-empty cell across them wins.
+          const norm = (s: any) =>
+            String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+          const cols: Record<string, number[]> = {};
+          (ws.getRow(1).values as any[]).forEach((h: any, idx: number) => {
+            const n = norm(h && (h as any).text ? (h as any).text : h);
+            if (!n) return;
+            (cols[n] = cols[n] || []).push(idx);
+          });
+          const pick = (row: any, ...names: string[]): string => {
+            for (const nme of names) {
+              for (const idx of cols[nme] || []) {
+                const v = row.getCell(idx).value;
+                const s = String((v && (v as any).text) || v || "").trim();
+                if (s) return s;
+              }
+            }
+            return "";
+          };
+          if (!cols["recordid"] && !cols["companydomain"] && !cols["email"]) {
+            return c.json(
+              {
+                error:
+                  "Could not find the expected columns. The sheet needs at least a Record Id, Company Domain or Email column (Deal Name, Account Name, Company, Deal Owner, Closing Date and Closed Lost Reason are used when present).",
+              },
+              400,
+            );
+          }
+
+          const inputRows: any[] = [];
+          ws.eachRow((row: any, rowNum: number) => {
+            if (rowNum === 1) return;
+            const rec = {
+              record_id: pick(row, "recordid", "dealid", "id"),
+              deal_name: pick(row, "dealname"),
+              company_name: pick(row, "accountname", "company", "companyname"),
+              domain: pick(row, "companydomain", "domain", "website"),
+              email: pick(row, "email", "businessemail1"),
+              owner: pick(row, "dealowner", "owner"),
+              closing_date: pick(row, "closingdate", "closedate", "lostdate"),
+              lost_reason: pick(row, "closedlostreason", "lostreason", "reasonforloss"),
+            };
+            // Skip a fully blank row; keep anything with an identity to check.
+            if (rec.record_id || rec.domain || rec.email || rec.company_name || rec.deal_name) {
+              inputRows.push(rec);
+            }
+          });
+          if (!inputRows.length) return c.json({ error: "No data rows found." }, 400);
+
+          const { runLostDealReengagement } = await import(
+            "../../utils/duplicateRadarReengage"
+          );
+          const result = await runLostDealReengagement({ rows: inputRows });
+          return c.json({ success: true, ...result });
+        } catch (e: any) {
+          logger.error("preflight/reengage-excel failed", e);
+          const detail = e instanceof Error ? e.message : String(e || "unknown error");
+          return c.json({ error: detail.slice(0, 400) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Populate the Layout picker on the "Push PASS rows to Zoho" modal.
     // Returns one entry per layout configured on the requested Zoho
     // module (default Leads). Admin-gated because it touches Zoho

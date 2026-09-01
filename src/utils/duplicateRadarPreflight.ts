@@ -1968,7 +1968,7 @@ function deriveCsLifecycleState(
 // every client regardless of whether their records were duplicated.
 
 /** The CS standing of one client company, for the verdict + export columns. */
-interface CsClientStatus {
+export interface CsClientStatus {
   active: boolean; // current client (block) vs churned
   churnDate: string | null;
   churnDays: number | null;
@@ -2161,7 +2161,7 @@ interface OpenDealMatch {
   owner: string | null;
   stage: string;
 }
-interface OpenDealDirectory {
+export interface OpenDealDirectory {
   byDomain: Map<string, OpenDealMatch>;
   byName: Map<string, OpenDealMatch>;
   builtAt: number;
@@ -2169,7 +2169,7 @@ interface OpenDealDirectory {
 }
 let _openDealDirCache: OpenDealDirectory | null = null;
 
-async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
+export async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
   const now = Date.now();
   if (_openDealDirCache && now - _openDealDirCache.builtAt < CS_DIR_TTL_MS) {
     return _openDealDirCache;
@@ -2357,7 +2357,7 @@ function _nameSegments(raw: string): string[] {
  * customer-stage deals + accounts in duplicate_records. Cached for 60s so the
  * frontend's chunked 250-row batches of one upload share a single build.
  */
-async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory> {
+export async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory> {
   if (_csDirCache && todayMs - _csDirCache.builtAt < CS_DIR_TTL_MS) return _csDirCache;
 
   const byName = new Map<string, CsClientStatus>();
@@ -3505,7 +3505,7 @@ export async function checkDomainsForClientDeals(
  * client normalized-name, or null. Errs toward catching clients (the cost of a
  * false PASS — cold-calling a live customer — is far higher than a false flag).
  */
-function _csContainmentMatch(inboundNorm: string, dir: CsClientDirectory): string | null {
+export function _csContainmentMatch(inboundNorm: string, dir: CsClientDirectory): string | null {
   const inboundToks = new Set(_csTokens(inboundNorm));
   if (inboundToks.size === 0) return null;
   const inboundDistinct = _csDistinctiveTokens(inboundNorm);

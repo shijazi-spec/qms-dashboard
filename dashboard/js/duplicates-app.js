@@ -10992,6 +10992,109 @@
         // mode='pass' → safe-to-import rows, SAME design. SLIM payload: only the
         // subset's rows + the fields the Findings sheet uses + contacts for only
         // those row_indexes (avoids the browser freeze + the 1 MB body cap).
+        // ── LOST-DEAL RE-ENGAGEMENT (Sarah 2026-09-01) ────────────────────────
+        // Upload a sheet of CLOSED-LOST deals; the server answers "can Sales
+        // approach this company again?" with TWO verdicts only — BLOCK or PASS.
+        // Separate from the import check above: these rows are already CRM deals,
+        // so the contact-duplicate rule and the KSA-phone gate don't apply.
+        function triggerReengageUpload() {
+            const f = document.getElementById('reengageExcelInput');
+            if (f) { f.value = ''; f.click(); }
+        }
+        async function handleReengageExcelChosen(ev) {
+            const input = (ev && ev.target) ? ev.target : document.getElementById('reengageExcelInput');
+            const file = input && input.files && input.files[0];
+            if (!file) return;
+            const btn = document.getElementById('reengageUploadBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Checking…'; }
+            try {
+                const fd = new FormData(); fd.append('file', file);
+                const res = await fetch('/api/duplicates/preflight/reengage-excel', {
+                    method: 'POST', credentials: 'same-origin', body: fd,
+                });
+                const d = await res.json();
+                if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
+                window._reengageResult = d;
+                window._reengageFileName = file.name;
+                showReengageResult(d, file.name);
+            } catch (e) {
+                rrToast('Re-engage check failed: ' + (e && e.message || e));
+            } finally { if (btn) { btn.disabled = false; btn.innerHTML = orig; } }
+        }
+        function closeReengageModal() {
+            const m = document.getElementById('reengageModal');
+            if (m) m.classList.add('hidden');
+        }
+        function showReengageResult(d, fileName) {
+            let modal = document.getElementById('reengageModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'reengageModal';
+                modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4';
+                modal.innerHTML = '<div class="bg-white rounded-xl shadow-xl w-full max-w-2xl">'
+                    + '<div class="flex items-center justify-between px-5 py-3 border-b"><div class="text-lg font-semibold">♻️ Lost deals — re-engagement check</div><button data-on-click="closeReengageModal" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button></div>'
+                    + '<div id="reengageBody" class="px-5 py-4"></div>'
+                    + '<div class="px-5 py-3 border-t flex gap-2 justify-end">'
+                    +   '<button data-on-click="downloadReengagePass" class="rr-btn rr-btn-primary">&#8595; PASS — re-approach list</button>'
+                    +   '<button data-on-click="downloadReengageBlock" class="rr-btn rr-btn-ghost">&#8595; BLOCK list</button>'
+                    +   '<button data-on-click="downloadReengageAll" class="rr-btn rr-btn-subtle">&#8595; All rows</button>'
+                    + '</div></div>';
+                document.body.appendChild(modal);
+            }
+            modal.classList.remove('hidden');
+            const s = d.summary || {};
+            const stat = function (label, color, val, sub) {
+                return '<div class="border rounded-lg p-3"><div class="text-xs text-gray-500">' + escapeHtml(label) + '</div>'
+                    + '<div class="text-2xl font-bold" style="color:' + color + '">' + _fn(val) + '</div>'
+                    + '<div class="text-[11px] text-gray-400">' + escapeHtml(sub) + '</div></div>';
+            };
+            const rows = (d.reasons || []).map(function (r) {
+                return '<tr><td class="py-0.5 pe-4 text-sm">' + escapeHtml(r.label) + '</td>'
+                    + '<td class="py-0.5 text-end text-sm font-semibold">' + _fn(r.count) + '</td>'
+                    + '<td class="py-0.5 text-end text-[11px] text-gray-500">' + r.pct + '%</td></tr>';
+            }).join('');
+            document.getElementById('reengageBody').innerHTML =
+                '<div class="text-xs text-gray-500 mb-3">' + escapeHtml(fileName || '') + ' &middot; ' + _fn(d.examined) + ' lost deals checked</div>'
+                + '<div class="grid grid-cols-2 gap-3 mb-4">'
+                + stat('✅ PASS — safe to re-approach', '#059669', s.pass || 0, 'send these to Sales')
+                + stat('⛔ BLOCK — do not approach', '#dc2626', s.block || 0, 'client / cool-off / live deal')
+                + '</div>'
+                + '<div class="text-sm font-semibold mb-1">Breakdown</div>'
+                + '<table class="w-full"><tbody>' + (rows || '<tr><td class="text-gray-400 text-sm">—</td></tr>') + '</tbody></table>';
+        }
+        function _reengageCsv(subset, suffix) {
+            const d = window._reengageResult;
+            if (!d || !d.rows) { rrToast('Run the re-engage check first.'); return; }
+            const list = subset === 'all' ? d.rows : d.rows.filter(function (r) { return r.verdict === subset; });
+            if (!list.length) { rrToast('No ' + subset.toUpperCase() + ' rows in this run.'); return; }
+            const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+            const head = ['Verdict', 'Company', 'Deal Name', 'Domain', 'Deal Owner', 'Closing Date',
+                'Days Since Lost', 'Sector', 'Cool-off Days', 'Reason', 'Comment',
+                'Blocking Owner', 'Blocking Deal', 'Blocking Deal Stage', 'Blocking Deal Link',
+                'Lost Deal Link', 'Closed Lost Reason', 'Record Id'];
+            const out = [head.join(',')];
+            list.forEach(function (r) {
+                out.push([
+                    r.verdict === 'pass' ? 'PASS' : 'BLOCK', r.company_name, r.deal_name, r.domain,
+                    r.owner, r.closing_date, r.days_since_lost, r.sector, r.cooloff_days,
+                    r.reason, r.comment, r.blocker_owner, r.blocking_deal_name,
+                    r.blocking_deal_stage, r.blocking_deal_url, r.deal_url, r.lost_reason, r.record_id,
+                ].map(esc).join(','));
+            });
+            // BOM so Excel opens the Arabic company names correctly.
+            const blob = new Blob(['﻿' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
+            const base = String(window._reengageFileName || 'lost-deals').replace(/\.[^.]+$/, '');
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = base + '__' + suffix + '__' + list.length + '.csv';
+            document.body.appendChild(a); a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+        }
+        function downloadReengagePass() { _reengageCsv('pass', 'RE-APPROACH'); }
+        function downloadReengageBlock() { _reengageCsv('block', 'BLOCKED'); }
+        function downloadReengageAll() { _reengageCsv('all', 'ALL'); }
+
         async function _exportPreflightXlsx(mode) {
             const isPass = mode === 'pass';
             const data = preflightLastResult || window._preflightLastResult;

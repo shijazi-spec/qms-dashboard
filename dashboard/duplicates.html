@@ -1511,6 +1511,12 @@
                         <button data-on-click="downloadPreflightPassRowsXlsx" id="preflightExportPassXlsxBtn" data-testid="button-preflight-export-pass-xlsx" class="hidden rr-btn rr-btn-ghost" title="Download the PASS (safe-to-import) rows as a native Excel file — same Summary + Findings design as the flagged export, with Company, Contact, Email, Phone columns.">📊 Download PASS Data</button>
                         <!-- Executive toolbar — appears after a successful run. -->
                         <button data-on-click="copyPreflightEmailBody" id="preflightCopyEmailBtn" data-testid="button-preflight-copy-email" class="hidden rr-btn rr-btn-ghost" title="Copy a ready-to-paste email body with the run's headline numbers and top reasons.">📋 Copy email body</button>
+                        <!-- Lost-deal re-engagement (Sarah 2026-09-01): a DIFFERENT
+                             question from the import check above — these rows are
+                             already CRM deals, so it answers "can Sales approach
+                             this company again?" with BLOCK / PASS only. -->
+                        <button data-on-click="triggerReengageUpload" id="reengageUploadBtn" data-testid="button-reengage-upload" class="rr-btn rr-btn-ghost" title="Upload a sheet of CLOSED-LOST deals. Returns two verdicts only: BLOCK (existing client, inside the cool-off, a live open deal, protected or DOAM) or PASS (safe to re-approach).">♻️ Lost deals — re-engage check</button>
+                        <input type="file" id="reengageExcelInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" data-on-change="handleReengageExcelChosen" data-testid="input-reengage-excel" />
                         <span id="preflightParsedCount" class="ml-auto text-xs text-gray-500"></span>
                     </div>
                     <p class="text-[11px] text-gray-500 mt-1">
@@ -2512,7 +2518,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=165"></script>
+    <script src="/js/duplicates-app.js?v=166"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
