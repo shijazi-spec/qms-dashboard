@@ -65,6 +65,8 @@ interface Config {
   cooloffGovernmentDays: number;
   govValues: string[];
   govDomainPatterns: string[];
+  /** PUBLIC (state) university domains — government for cool-off purposes. */
+  govEduDomains: string[];
 }
 
 let cachedConfig: Config | null = null;
@@ -103,6 +105,47 @@ function loadConfig(): Config {
       ".gov",
       ".mil.sa",
     ]),
+    // PUBLIC (state) universities — government for the cool-off, so they get the
+    // 365-day window, not the 180-day private one (Sarah 2026-09-01: Qassim
+    // University came back PASS at 189 days because .edu.sa was treated as
+    // private). Matched EXACTLY or as a sub-domain (med.qu.edu.sa → qu.edu.sa),
+    // never by bare endsWith — "nu.edu.sa" as a suffix would also swallow
+    // "manu.edu.sa". A curated list on purpose: .edu.sa as a whole is a MIX,
+    // and blanket-listing it would wrongly capture the private universities and
+    // أهلية schools (جامعة اليمامة, مدارس أهلية …) that are correctly private.
+    // Env-extendable: DUPLICATE_RADAR_GOV_EDU_DOMAINS (replaces this list).
+    govEduDomains: list(process.env.DUPLICATE_RADAR_GOV_EDU_DOMAINS, [
+      "ksu.edu.sa", // King Saud University
+      "kau.edu.sa", // King Abdulaziz University
+      "kfupm.edu.sa", // King Fahd University of Petroleum & Minerals
+      "iau.edu.sa", // Imam Abdulrahman Bin Faisal University
+      "uqu.edu.sa", // Umm Al-Qura University
+      "qu.edu.sa", // Qassim University
+      "uoh.edu.sa", // University of Ha'il
+      "ju.edu.sa", // Al-Jouf University
+      "nu.edu.sa", // Najran University
+      "seu.edu.sa", // Saudi Electronic University
+      "ksau-hs.edu.sa", // King Saud bin Abdulaziz Univ. for Health Sciences
+      "kaust.edu.sa", // KAUST
+      // Also in the DOAM list (they block earlier as doam_client), kept here so
+      // the sector is still correct wherever the DOAM check does not run.
+      "kku.edu.sa",
+      "jazanu.edu.sa",
+      "taibahu.edu.sa",
+      "ut.edu.sa",
+      "pnu.edu.sa",
+      "imamu.edu.sa",
+      "nbu.edu.sa",
+      "mu.edu.sa",
+      "kfu.edu.sa",
+      "psau.edu.sa",
+      "su.edu.sa",
+      "uhb.edu.sa",
+      "tu.edu.sa",
+      "uj.edu.sa",
+      "bu.edu.sa",
+      "iu.edu.sa",
+    ]),
   };
   return cachedConfig;
 }
@@ -138,6 +181,16 @@ export function detectSector(input: {
   const d = (input.domain ?? "").trim().toLowerCase();
   if (d) {
     if (cfg.govDomainPatterns.some((p) => d.endsWith(p.toLowerCase()))) {
+      return "government";
+    }
+    // PUBLIC universities: exact domain or a sub-domain of it. Deliberately not
+    // a bare endsWith — that would let "nu.edu.sa" swallow "manu.edu.sa".
+    if (
+      cfg.govEduDomains.some((p) => {
+        const g = p.toLowerCase();
+        return d === g || d.endsWith("." + g);
+      })
+    ) {
       return "government";
     }
     return "private";
