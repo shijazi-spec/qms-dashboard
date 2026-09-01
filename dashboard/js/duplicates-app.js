@@ -11046,7 +11046,7 @@
             const s = d.summary || {};
             const stat = function (label, color, val, sub) {
                 return '<div class="border rounded-lg p-3"><div class="text-xs text-gray-500">' + escapeHtml(label) + '</div>'
-                    + '<div class="text-2xl font-bold" style="color:' + color + '">' + _fn(val) + '</div>'
+                    + '<div class="text-2xl font-bold" data-style="color:' + color + '">' + _fn(val) + '</div>'
                     + '<div class="text-[11px] text-gray-400">' + escapeHtml(sub) + '</div></div>';
             };
             const rows = (d.reasons || []).map(function (r) {

@@ -28,9 +28,11 @@ describe("recordQuestionSection", () => {
     expect(JSON.stringify(call?.[1])).not.toContain("duplicates for");
   });
   it("swallows DB errors so a chat turn never breaks", async () => {
-    query.mockRejectedValue(new Error("db down"));
-    await expect(
-      recordQuestionSection("any renewals due?", { surface: "slack", askedBy: null }),
-    ).resolves.toBeUndefined();
+    query.mockRejectedValueOnce(new Error("db down"));
+    const result = await recordQuestionSection("any renewals due?", {
+      surface: "slack",
+      askedBy: null,
+    });
+    expect(result).toBeUndefined();
   });
 });

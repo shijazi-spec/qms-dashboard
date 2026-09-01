@@ -80,11 +80,13 @@ await suite.test(
       "sdr_overall_score column is still projected",
     );
 
-    // The whole list payload must be tiny — proof the binary is gone.
-    const bytes = Buffer.byteLength(JSON.stringify(records));
+    // Measure the isolated sentinel row, not every pre-existing call in the
+    // shared development DB. Live rows may legitimately contain large
+    // transcripts/metadata even when audio_blob is correctly excluded.
+    const bytes = Buffer.byteLength(JSON.stringify(row));
     suite.expect(
       bytes < 100000,
-      `list JSON should be small without the blob, got ${bytes} bytes`,
+      `sentinel row JSON should be small without the blob, got ${bytes} bytes`,
     );
   },
 );

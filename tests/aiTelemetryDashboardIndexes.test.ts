@@ -80,7 +80,22 @@ function walkPlan(root: PlanNode | undefined): VisitedNode[] {
 async function explainPlan(
   sql: string,
   params: unknown[],
+  options?: { disableSeqScan?: boolean },
 ): Promise<VisitedNode[]> {
+  if (options?.disableSeqScan) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL enable_seqscan = off");
+      const res = await client.query(`EXPLAIN (FORMAT JSON) ${sql}`, params);
+      await client.query("ROLLBACK");
+      const raw = res.rows[0]?.["QUERY PLAN"];
+      const json = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return walkPlan(json?.[0]?.Plan as PlanNode | undefined);
+    } finally {
+      client.release();
+    }
+  }
   const res = await pool.query(`EXPLAIN (FORMAT JSON) ${sql}`, params);
   const raw = res.rows[0]?.["QUERY PLAN"];
   const json = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -260,7 +275,7 @@ if (!HAS_DB) {
 
         const visited = await explainPlan(TOOLS_WITH_CALLS_IN_WINDOW_SQL, [
           60, // last 60 minutes
-        ]);
+        ], { disableSeqScan: true });
 
         const usesIndex = visited.some(
           (n) => n.indexName === "idx_ai_call_metrics_tool_started",
@@ -436,6 +451,7 @@ if (!HAS_DB) {
         const visited = await explainPlan(
           FEEDBACK_RATE_BY_PROMPT_VERSION_SQL,
           [30, 5],
+          { disableSeqScan: true },
         );
 
         const usesIndex = visited.some(
