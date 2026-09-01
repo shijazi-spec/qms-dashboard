@@ -263,7 +263,15 @@ export const mastra = new Mastra({
   },
   server: {
     host: "0.0.0.0",
-    port: 5000,
+    // MUST honour the platform-assigned PORT. Replit Autoscale gives each
+    // deployment a dynamic port and health-checks THAT port; a hardcoded 5000
+    // meant the container listened on 5000 while the prober hit e.g.
+    // 127.0.0.1:1104 -> "dial tcp 127.0.0.1:1104: connect: connection refused"
+    // -> healthcheck fails -> promote aborts, even though the build succeeded
+    // and the app was running fine. Falls back to 5000 so local dev and the
+    // `[env] PORT = "5000"` / `localPort = 5000` mapping in .replit behave
+    // exactly as before.
+    port: Number(process.env.PORT) || 5000,
     cors: false,
     middleware: globalMiddleware,
     apiRoutes: [
