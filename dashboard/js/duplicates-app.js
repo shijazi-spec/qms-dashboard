@@ -11026,6 +11026,31 @@
             const m = document.getElementById('reengageModal');
             if (m) m.classList.add('hidden');
         }
+        // SINGLE SOURCE OF TRUTH for the blocked buckets (Sarah 2026-09-02:
+        // "these numbers shall be consistent with the email itself"). The modal
+        // and the copied email both render from this, so a label, emoji or the
+        // guidance text can never say one thing on screen and another in the
+        // email. Matched on a keyword so a server-side label tweak can't
+        // silently drop the guidance.
+        const REENGAGE_BUCKETS = [
+            { k: 'existing active client', e: '🏢', s: 'Existing active client', n: 'route to Customer Success. No cold contact.' },
+            { k: 'live open deal',         e: '💼', s: 'Live open deal in the CRM', n: 'coordinate with the deal owner; the attached list has the deal link and owner.' },
+            { k: 'churned',                e: '🔄', s: 'Churned client still inside the cool-off', n: 'these were real customers who cancelled; check with Customer Success before approaching.' },
+            { k: 'doam',                   e: '🏛️', s: 'DOAM client (HR-gov subscription)', n: "government entities subscribed to WalaPlus through the HR ministry. They're already our customers under that contract, so don't approach them as new business." },
+            { k: 'protected',              e: '🚫', s: 'Protected / do-not-contact account', n: 'these are on the company do-not-contact list; never approach, regardless of deal history.' },
+            { k: 'cannot verify',          e: '❓', s: 'Cannot verify', n: 'no domain and no usable company name; check this one manually before approaching.' },
+        ];
+        function _reengageBucket(label) {
+            const l = String(label || '').toLowerCase();
+            return REENGAGE_BUCKETS.find(function (x) { return l.indexOf(x.k) >= 0; }) || null;
+        }
+        /** Only the BLOCKED reasons — "Safe to re-approach" is the PASS bucket and
+         *  belongs in the headline, never in the "why on hold" list. */
+        function _reengageBlockedReasons(d) {
+            return ((d && d.reasons) || []).filter(function (r) {
+                return String(r.label || '').toLowerCase().indexOf('safe to re-approach') < 0;
+            });
+        }
         function showReengageResult(d, fileName) {
             let modal = document.getElementById('reengageModal');
             if (!modal) {
@@ -11050,8 +11075,11 @@
                     + '<div class="text-2xl font-bold" data-style="color:' + color + '">' + _fn(val) + '</div>'
                     + '<div class="text-[11px] text-gray-400">' + escapeHtml(sub) + '</div></div>';
             };
-            const rows = (d.reasons || []).map(function (r) {
-                return '<tr><td class="py-0.5 pe-4 text-sm">' + escapeHtml(r.label) + '</td>'
+            // Blocked reasons ONLY, same list and labels the email uses, so the
+            // screen and the email can never disagree.
+            const rows = _reengageBlockedReasons(d).map(function (r) {
+                const b = _reengageBucket(r.label);
+                return '<tr><td class="py-0.5 pe-4 text-sm">' + (b ? b.e + '&nbsp; ' + escapeHtml(b.s) : escapeHtml(r.label)) + '</td>'
                     + '<td class="py-0.5 text-end text-sm font-semibold">' + _fn(r.count) + '</td>'
                     + '<td class="py-0.5 text-end text-[11px] text-gray-500">' + r.pct + '%</td></tr>';
             }).join('');
@@ -11061,7 +11089,7 @@
                 + stat('✅ PASS — safe to re-approach', '#059669', s.pass || 0, 'send these to Sales')
                 + stat('⛔ BLOCK — do not approach', '#dc2626', s.block || 0, 'client / cool-off / live deal')
                 + '</div>'
-                + '<div class="text-sm font-semibold mb-1">Breakdown</div>'
+                + '<div class="text-sm font-semibold mb-1">Why the ' + _fn(s.block || 0) + ' are on hold [BLOCKED]</div>'
                 + '<table class="w-full"><tbody>' + (rows || '<tr><td class="text-gray-400 text-sm">—</td></tr>') + '</tbody></table>';
         }
         function _reengageCsv(subset, suffix) {
@@ -11101,28 +11129,12 @@
             if (!d) { rrToast('Run the re-engage check first.'); return; }
             const s = d.summary || {};
             const stamp = (d.generated_at || new Date().toISOString()).slice(0, 10);
-            // Each blocked bucket carries its own SHORT label + the action the
-            // reader must take, so every line answers "what is this?" AND "what
-            // do I do?" without a separate next-steps section (Sarah's final
-            // format, 2026-09-02). Matched on a keyword so a server-side label
-            // tweak can't silently drop the guidance.
-            const BUCKETS = [
-                { k: 'existing active client', e: '🏢', s: 'Existing active client', n: 'route to Customer Success. No cold contact.' },
-                { k: 'live open deal',         e: '💼', s: 'Live open deal in the CRM', n: 'coordinate with the deal owner; the attached list has the deal link and owner.' },
-                { k: 'churned',                e: '🔄', s: 'Churned client still inside the cool-off', n: 'these were real customers who cancelled; check with Customer Success before approaching.' },
-                { k: 'doam',                   e: '🏛️', s: 'DOAM client (HR-gov subscription)', n: "government entities subscribed to WalaPlus through the HR ministry. They're already our customers under that contract, so don't approach them as new business." },
-                { k: 'protected',              e: '🚫', s: 'Protected / do-not-contact account', n: 'these are on the company do-not-contact list; never approach, regardless of deal history.' },
-                { k: 'cannot verify',          e: '❓', s: 'Cannot verify', n: 'no domain and no usable company name; check this one manually before approaching.' },
-            ];
-            // "Safe to re-approach" is the PASS bucket — it belongs in the
-            // headline, not in the list of reasons something was held back.
-            const blocked = (d.reasons || []).filter(function (r) {
-                return String(r.label || '').toLowerCase().indexOf('safe to re-approach') < 0;
-            });
+            // Same bucket list the modal renders (REENGAGE_BUCKETS) — one source
+            // of truth, so the email can never disagree with what was on screen.
+            const blocked = _reengageBlockedReasons(d);
             const why = blocked.length
                 ? blocked.map(function (r) {
-                    const l = String(r.label || '').toLowerCase();
-                    const b = BUCKETS.find(function (x) { return l.indexOf(x.k) >= 0; });
+                    const b = _reengageBucket(r.label);
                     return b
                         ? '  ' + b.e + '  ' + _fn(r.count) + ' — ' + b.s + '; ' + b.n
                         : '  •  ' + _fn(r.count) + ' — ' + r.label;
