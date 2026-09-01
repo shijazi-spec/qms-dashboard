@@ -11069,15 +11069,15 @@
             const list = subset === 'all' ? d.rows : d.rows.filter(function (r) { return r.verdict === subset; });
             if (!list.length) { rrToast('No ' + subset.toUpperCase() + ' rows in this run.'); return; }
             const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
-            const head = ['Verdict', 'Company', 'Deal Name', 'Domain', 'Deal Owner', 'Closing Date',
-                'Days Since Lost', 'Sector', 'Cool-off Days', 'Reason', 'Comment',
+            const head = ['Verdict', 'Company', 'Deal Name', 'Domain', 'Verified via', 'Deal Owner',
+                'Closing Date', 'Days Since Lost', 'Sector', 'Cool-off Days', 'Reason', 'Comment',
                 'Blocking Owner', 'Blocking Deal', 'Blocking Deal Stage', 'Blocking Deal Link',
                 'Lost Deal Link', 'Closed Lost Reason', 'Record Id'];
             const out = [head.join(',')];
             list.forEach(function (r) {
                 out.push([
                     r.verdict === 'pass' ? 'PASS' : 'BLOCK', r.company_name, r.deal_name, r.domain,
-                    r.owner, r.closing_date, r.days_since_lost, r.sector, r.cooloff_days,
+                    r.verified_via, r.owner, r.closing_date, r.days_since_lost, r.sector, r.cooloff_days,
                     r.reason, r.comment, r.blocker_owner, r.blocking_deal_name,
                     r.blocking_deal_stage, r.blocking_deal_url, r.deal_url, r.lost_reason, r.record_id,
                 ].map(esc).join(','));

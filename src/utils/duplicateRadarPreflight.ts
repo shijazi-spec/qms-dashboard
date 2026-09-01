@@ -3578,7 +3578,7 @@ function _diceSim(a: string, b: string): number {
  * brand token must also be present on BOTH sides, so a high Dice driven purely
  * by a long shared generic word can't sneak a match through.
  */
-function _csFuzzyMatch(inboundNorm: string, dir: CsClientDirectory): string | null {
+export function _csFuzzyMatch(inboundNorm: string, dir: CsClientDirectory): string | null {
   const inboundDistinct = _csDistinctiveTokens(inboundNorm);
   if (inboundDistinct.length === 0) return null;
   const inboundDistinctSet = new Set(inboundDistinct);

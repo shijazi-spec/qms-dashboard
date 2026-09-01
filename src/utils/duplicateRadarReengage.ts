@@ -36,6 +36,7 @@ import {
   getCsClientDirectory,
   getOpenDealDirectory,
   _csContainmentMatch,
+  _csFuzzyMatch,
   matchDoamClient,
   matchProtectedAccount,
   buildZohoRecordUrl,
@@ -91,6 +92,11 @@ export interface ReengageResultRow {
   blocking_deal_stage: string | null;
   /** Link back to the lost deal itself. */
   deal_url: string | null;
+  /** HOW this row was checked against the CRM — "domain" is the strongest,
+   *  "name" means company/deal name only (weaker), "none" means nothing to
+   *  match on (those BLOCK as unverifiable). Lets the operator see at a glance
+   *  which PASS rows rest on softer evidence. */
+  verified_via: "domain" | "name" | "none";
 }
 
 export interface ReengageResponse {
@@ -135,6 +141,62 @@ function daysSince(value: string | Date | null | undefined): number | null {
   return Math.floor((Date.now() - t) / 86400000);
 }
 
+/**
+ * GOVERNMENT BY NAME (Sarah 2026-09-01 — "I need ZERO errors").
+ *
+ * detectSector reads the DOMAIN only, so a row with no domain always fell to the
+ * 180-day PRIVATE window. The lost-deal sheet is full of exactly that case:
+ * SDAIA (deal name "سدايا"), the Real Estate Development Fund, the Saudi Water
+ * Authority, the National Housing Company and MODON all arrived with no domain
+ * and were treated as private.
+ *
+ * Only UNAMBIGUOUS public-sector markers are listed. Deliberately excluded:
+ *   • مؤسسة  — used by private establishments ("مؤسسة مطاعم ذوق البهارات")
+ *   • شركة / جمعية / مدرسة — company / charity / school, not government
+ *   • جامعة  — private universities exist (جامعة اليمامة); public ones are
+ *              covered precisely by the govEduDomains list instead.
+ * Erring toward "government" is the SAFE direction here: it lengthens the
+ * cool-off (more likely to BLOCK), so a false positive costs a delayed
+ * approach, never a wrong one. Env-extendable: REENGAGE_GOV_NAME_TOKENS.
+ */
+function govNameTokens(): string[] {
+  const raw = process.env.REENGAGE_GOV_NAME_TOKENS;
+  if (raw && raw.trim()) {
+    return raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  }
+  return [
+    "وزارة",
+    "هيئة",
+    "رئاسة",
+    "أمانة",
+    "امانة",
+    "ديوان",
+    "مصلحة",
+    "صندوق",
+    "المركز الوطني",
+    "مركز المعلومات الوطني",
+    "الهيئة العامة",
+    "ministry",
+    "authority",
+    "commission",
+    "general authority",
+    "national center",
+    "national centre",
+    "royal commission",
+  ];
+}
+
+/** True when a company/deal name carries an unambiguous public-sector marker. */
+function looksGovernmentByName(...names: Array<string | null | undefined>): boolean {
+  const toks = govNameTokens();
+  for (const n of names) {
+    const s = String(n ?? "").toLowerCase();
+    if (!s) continue;
+    if (toks.some((t) => s.includes(t))) return true;
+  }
+  return false;
+}
+
 const REASON_LABELS: Record<string, string> = {
   protected_account: "Protected / do-not-contact account",
   doam_client: "DOAM client (HR-gov subscription)",
@@ -142,6 +204,7 @@ const REASON_LABELS: Record<string, string> = {
   client_within_cooloff: "Churned client still inside the cool-off",
   live_open_deal: "Live open deal — coordinate with the deal owner",
   lost_within_cooloff: "Lost too recently — still inside the cool-off",
+  unverifiable: "Cannot verify — no domain and no usable company name",
   safe_to_reengage: "Safe to re-approach",
 };
 
@@ -180,10 +243,25 @@ export async function runLostDealReengagement(input: {
       extractDomain(String(r.email || "")) ||
       null;
     const rawName = String(r.company_name || r.deal_name || "").trim();
-    const nm =
-      rawName && !isPlaceholderName(rawName) ? normalizeCompanyName(rawName) : "";
+    const rawDeal = String(r.deal_name || "").trim();
+    // Search BOTH the company name AND the deal name (Sarah 2026-09-01): they
+    // often differ, and sometimes ONLY the deal name carries the real identity
+    // — "مركز المعلومات الوطني" has deal name "سدايا" (SDAIA).
+    const nameCandidates = Array.from(
+      new Set(
+        [rawName, rawDeal]
+          .filter((s) => s && !isPlaceholderName(s))
+          .map((s) => normalizeCompanyName(s))
+          .filter((s) => s && s.length >= 4),
+      ),
+    );
     const dealId = stripZcrm(r.record_id);
-    const sector = detectSector({ domain }) ?? "private";
+    // Sector: the domain decides when there is one; otherwise fall back to an
+    // unambiguous public-sector marker in the company OR deal name, so a
+    // domain-less government entity still gets the 365-day window.
+    const sector =
+      detectSector({ domain }) ??
+      (looksGovernmentByName(rawName, rawDeal) ? "government" : "private");
     const coolOff = sector === "government" ? 365 : 180;
     const sectorLabel = sector === "government" ? "Government" : "Private";
     const lostDays = daysSince(r.closing_date);
@@ -205,6 +283,11 @@ export async function runLostDealReengagement(input: {
       blocking_deal_name: null as string | null,
       blocking_deal_stage: null as string | null,
       deal_url: dealId ? buildZohoRecordUrl("Deals", dealId) : null,
+      verified_via: (domain
+        ? "domain"
+        : nameCandidates.length
+          ? "name"
+          : "none") as "domain" | "name" | "none",
     };
     const emit = (
       verdict: "block" | "pass",
@@ -243,22 +326,33 @@ export async function runLostDealReengagement(input: {
     }
 
     // 3 / 4. Existing-client state — active now, or churned inside the cool-off.
+    //    Every name candidate goes through the FULL ladder (exact → containment
+    //    → fuzzy), not just the company name, so a client whose CRM name is
+    //    spelled differently is still caught on a row with no domain.
     let cs: CsClientStatus | null = null;
     if (domain && csDir.byDomain.has(domain)) cs = csDir.byDomain.get(domain)!;
-    else if (nm && csDir.byName.has(nm)) cs = csDir.byName.get(nm)!;
-    else if (nm && nm.length >= 4) {
-      const contained = _csContainmentMatch(nm, csDir);
-      if (contained) cs = csDir.byName.get(contained) ?? null;
+    if (!cs) {
+      for (const cand of nameCandidates) {
+        if (csDir.byName.has(cand)) { cs = csDir.byName.get(cand)!; break; }
+        const contained = _csContainmentMatch(cand, csDir);
+        if (contained) { cs = csDir.byName.get(contained) ?? null; if (cs) break; }
+        const fz = _csFuzzyMatch(cand, csDir);
+        if (fz) { cs = csDir.byName.get(fz) ?? null; if (cs) break; }
+      }
     }
     if (cs) {
-      const csCool = cs.sector === "government" ? 365 : 180;
-      const csSector = cs.sector === "government" ? "Government" : "Private";
+      // Sector + cool-off must agree on the row (Sarah 2026-09-01): when the
+      // matched CLIENT record decides the window, report ITS sector too, so the
+      // sheet never shows "government / 180".
+      const csSectorVal = cs.sector ?? sector;
+      const csCool = csSectorVal === "government" ? 365 : 180;
+      const csSector = csSectorVal === "government" ? "Government" : "Private";
       if (cs.active) {
         emit(
           "block",
           "existing_active_client",
           `BLOCK — existing active client${cs.csOwner ? ` (CS owner: ${cs.csOwner})` : ""}. Route through Customer Success, do not re-approach as new business.`,
-          { blocker_owner: cs.csOwner || null, cooloff_days: csCool },
+          { blocker_owner: cs.csOwner || null, sector: csSectorVal, cooloff_days: csCool },
         );
         continue;
       }
@@ -267,7 +361,7 @@ export async function runLostDealReengagement(input: {
           "block",
           "client_within_cooloff",
           `BLOCK — churned ${cs.churnDays}d ago, still inside the ${csCool}-day ${csSector} cool-off (${csCool - cs.churnDays}d remaining). CS sign-off required first.`,
-          { blocker_owner: cs.csOwner || null, cooloff_days: csCool },
+          { blocker_owner: cs.csOwner || null, sector: csSectorVal, cooloff_days: csCool },
         );
         continue;
       }
@@ -275,10 +369,13 @@ export async function runLostDealReengagement(input: {
 
     // 5. A LIVE OPEN deal today — a colleague is already working this company.
     //    Surface the deal link + owner + stage, exactly as the Mawsool output.
-    const live =
-      (domain ? openDealDir.byDomain.get(domain) : undefined) ??
-      (nm ? openDealDir.byName.get(nm) : undefined) ??
-      null;
+    let live = domain ? openDealDir.byDomain.get(domain) ?? null : null;
+    if (!live) {
+      for (const cand of nameCandidates) {
+        const hit = openDealDir.byName.get(cand);
+        if (hit) { live = hit; break; }
+      }
+    }
     if (live) {
       emit(
         "block",
@@ -304,7 +401,20 @@ export async function runLostDealReengagement(input: {
       continue;
     }
 
-    // 7. Clear — safe to re-approach.
+    // 7. UNVERIFIABLE (Sarah 2026-09-01 — "ZERO errors"): no domain AND no name
+    //    usable for matching means nothing was actually checked against the CRM.
+    //    Passing that to Sales would be a guess, so it BLOCKS instead — still
+    //    only two statuses, and a human can clear it manually.
+    if (!domain && nameCandidates.length === 0) {
+      emit(
+        "block",
+        "unverifiable",
+        "BLOCK — cannot verify: the row has no domain and no company/deal name long enough to match against the CRM. Check this one by hand before approaching.",
+      );
+      continue;
+    }
+
+    // 8. Clear — safe to re-approach.
     emit(
       "pass",
       "safe_to_reengage",
