@@ -196,14 +196,13 @@ const WalaPlusNav = {
         { type: 'subheader', label: 'Risk & Oversight' },
         { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
         { label: 'Risk Mgmt', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
-        { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
         { label: 'Vendors', href: '/vendors', icon: 'users', id: 'vendors' },
-        { label: 'Mgmt Review', href: '/reviews', icon: 'clipboard-list', id: 'reviews' },
-        // Trigger Alerts: previously a stray standalone group at the bottom
-        // of the rail. Folded into GRC because the alert queue is governance/
-        // executive-read scoped (matches the rest of this group's audience)
-        // and gives operators one fewer top-level section to scan past.
-        { label: 'Trigger Alerts', href: '/triggers', icon: 'exclamation-triangle', id: 'triggers' }
+        { label: 'Mgmt Review', href: '/reviews', icon: 'clipboard-list', id: 'reviews' }
+        // Table F and Trigger Alerts used to sit here under Risk & Oversight.
+        // Moved to the Tools group (Sarah 2026-09-02) — both are operator
+        // utilities (a COPC KPI console and a live alert queue you action)
+        // rather than governance registers like Risk Mgmt / Vendors /
+        // Mgmt Review, which are the records this sub-group is for.
       ]
     },
     {
@@ -269,7 +268,15 @@ const WalaPlusNav = {
         { label: 'GRQ Assistant', href: '/consultant', icon: 'brain', id: 'consultant' },
         { label: 'Adam — Scope of Work', href: '/autonomous-resolution', icon: 'duplicate', id: 'autonomous-resolution' },
         { label: 'Data Migration Engine', href: '/migration', icon: 'database', id: 'migration', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] },
-        { label: 'Infographic Generator', href: '/infographic', icon: 'document', id: 'infographic', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] }
+        { label: 'Infographic Generator', href: '/infographic', icon: 'document', id: 'infographic', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] },
+        // Moved here from GRC > Risk & Oversight (Sarah 2026-09-02). Both are
+        // things an operator USES rather than governance records they
+        // maintain: Table F is the COPC KPI console, Trigger Alerts is a live
+        // queue you acknowledge / dismiss / escalate. Deliberately left
+        // UNGATED, matching their previous placement — adding a requiresRole
+        // here would silently remove them for roles that can see them today.
+        { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
+        { label: 'Trigger Alerts', href: '/triggers', icon: 'exclamation-triangle', id: 'triggers' }
       ]
     },
     {
