@@ -21,6 +21,7 @@ import {
 } from "./duplicateRadarDatabase";
 import { fetchDealStageHistory } from "./zohoCRM";
 import { getAllFrameworkCoverage } from "./obligationDocumentsDatabase";
+import { calcCertMilestoneDelivery } from "./northStarSources";
 
 export interface ProcessKpiValue {
   value: number;
@@ -1459,8 +1460,16 @@ export const PROCESS_CALCULATORS: Record<
   "CS-KPI-23": calcCsDataAccuracy,
   "CS-KPI-25": calcCsSlaAdherence,
   "CS-KPI-30": calcCsChurnClassificationAccuracy,
-  // GRC — driven by the Document Mapping framework coverage
-  "GRC-KPI-002": calcCertificationMilestones,
+  // GRC-KPI-002 measures on-time delivery of Certification Milestone Plan
+  // milestones. It previously reported document-mapping clause coverage via
+  // calcCertificationMilestones — kept below but no longer wired here, since
+  // coverage is a useful metric that is simply not this KPI.
+  "GRC-KPI-002": async () => {
+    const r = await calcCertMilestoneDelivery();
+    return r.dataAvailable
+      ? { value: r.value, dataAvailable: true, details: r.details }
+      : EMPTY;
+  },
   // Quality — driven by the Integrated QMS document lifecycle
   "QM-KPI-010": calcDocumentationLifecycle,
   // Quality — % of handoffs processed within the SLA window

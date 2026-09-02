@@ -354,37 +354,69 @@ export async function insertSource(
 
 // ── Calculators (each omits when its capture table is empty) ─────────────────
 
+/**
+ * Pure on-time-delivery math for GRC-KPI-002. Kept out of SQL so it can be
+ * unit-tested. A milestone counts as on time only when it was delivered on or
+ * before its planned date; still-undelivered past-due rows count against us.
+ */
+export function summarizeMilestoneDelivery(
+  rows: Array<{ planned_date: string; delivered_date: string | null; status: string }>,
+  quarterStart: Date,
+  quarterEnd: Date,
+): { due: number; onTime: number; value: number; dataAvailable: boolean } {
+  const inQuarter = rows.filter((r) => {
+    if (r.status === "cancelled" || !r.planned_date) return false;
+    const p = new Date(r.planned_date);
+    return p >= quarterStart && p < quarterEnd;
+  });
+  const due = inQuarter.length;
+  if (due === 0) return { due: 0, onTime: 0, value: 0, dataAvailable: false };
+  const onTime = inQuarter.filter(
+    (r) => r.delivered_date !== null && new Date(r.delivered_date) <= new Date(r.planned_date),
+  ).length;
+  return { due, onTime, value: Math.round((onTime / due) * 1000) / 10, dataAvailable: true };
+}
+
 /** GRC-KPI-002 — (milestones delivered on time / planned) × 100. */
 export async function calcCertMilestoneDelivery() {
   // Scored PER QUARTER, per the deadline model: only certifications whose target
   // (planned) date falls in the CURRENT quarter count. On-time = achieved on/
   // before the target date; a later-quarter certification doesn't affect this
-  // quarter, and one due earlier that's still missing counts against.
-  const r = await pool.query(`
-    SELECT
-      COUNT(*) FILTER (
-        WHERE status <> 'cancelled'
-          AND planned_date IS NOT NULL
-          AND planned_date >= date_trunc('quarter', NOW())::date
-          AND planned_date <  (date_trunc('quarter', NOW()) + interval '3 months')::date
-      )::int AS due,
-      COUNT(*) FILTER (
-        WHERE status <> 'cancelled'
-          AND planned_date IS NOT NULL
-          AND planned_date >= date_trunc('quarter', NOW())::date
-          AND planned_date <  (date_trunc('quarter', NOW()) + interval '3 months')::date
-          AND delivered_date IS NOT NULL AND delivered_date <= planned_date
-      )::int AS on_time
-    FROM certification_milestones
-  `);
-  const due = r.rows[0]?.due ?? 0;
-  const onTime = r.rows[0]?.on_time ?? 0;
-  if (due <= 0)
+  // quarter, and one due earlier that's still missing counts against. ONLY
+  // milestone_type = 'plan' rows may enter the denominator — the 7
+  // framework_target rows and 2 dependency rows must never be counted.
+  // node-postgres parses a DATE column into a JS Date object; String(dateObject)
+  // renders it via the server's locale/timezone (e.g. "Sat Oct 31 2026 00:00:00
+  // GMT+0300 (Arabian Standard Time)"), so slicing the first 10 chars produced
+  // garbage like "Sat Oct 31" instead of an ISO date. Format the dates in SQL
+  // instead so they arrive as plain 'YYYY-MM-DD' strings (or null) and no JS
+  // Date conversion ever happens.
+  const r = await pool.query(
+    `SELECT TO_CHAR(planned_date, 'YYYY-MM-DD')   AS planned_date,
+            TO_CHAR(delivered_date, 'YYYY-MM-DD') AS delivered_date,
+            status
+       FROM certification_milestones
+      WHERE milestone_type = 'plan'
+        AND planned_date IS NOT NULL`,
+  );
+  const now = new Date();
+  const qStart = new Date(Date.UTC(now.getUTCFullYear(), Math.floor(now.getUTCMonth() / 3) * 3, 1));
+  const qEnd = new Date(Date.UTC(qStart.getUTCFullYear(), qStart.getUTCMonth() + 3, 1));
+  const s = summarizeMilestoneDelivery(
+    r.rows.map((x: any) => ({
+      planned_date: x.planned_date as string,
+      delivered_date: (x.delivered_date ?? null) as string | null,
+      status: String(x.status ?? "planned"),
+    })),
+    qStart, qEnd,
+  );
+  if (!s.dataAvailable) {
     return { value: 0, dataAvailable: false, reason: "no_certifications_due_this_quarter" };
+  }
   return {
-    value: Math.round((onTime / due) * 1000) / 10,
+    value: s.value,
     dataAvailable: true,
-    details: { certifications_due_this_quarter: due, achieved_on_time: onTime },
+    details: { certifications_due_this_quarter: s.due, achieved_on_time: s.onTime },
   };
 }
 
