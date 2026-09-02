@@ -335,12 +335,27 @@ export async function sendWeeklyDigest(
   // re-enable is a one-line change rather than a rewrite. The pure
   // renderers (renderDigestText / renderDigestSlackBlocks / renderDigestHtml)
   // remain exported and unit-tested independently of this orchestrator.
-  return {
-    sent: false,
-    slack: { attempted: false, ok: false },
-    email: { attempted: false, ok: false },
-    skipped_reason: "decommissioned_per_amendments_3_and_4",
-  };
+  //
+  // The flag is a `boolean`, not the literal `true`, ON PURPOSE: an
+  // unconditional `return` makes the retained code unreachable, and
+  // TypeScript neither narrows types nor reports errors inside unreachable
+  // code. That is how `postSlackMessage(slackChannel)` below came to fail
+  // `tsc` with "string | null" — the guard above it stopped narrowing — and
+  // it is the same blind spot that would let this retained block rot into
+  // something that no longer compiles when someone finally re-enables it.
+  // Widening the type keeps the whole function type-checked while the
+  // runtime behaviour is identical: this still returns before the flag check
+  // and before forceSend, so every entry point remains a no-op, and
+  // re-enabling is still the one-line change the comment above promises.
+  const DIGEST_DECOMMISSIONED: boolean = true;
+  if (DIGEST_DECOMMISSIONED) {
+    return {
+      sent: false,
+      slack: { attempted: false, ok: false },
+      email: { attempted: false, ok: false },
+      skipped_reason: "decommissioned_per_amendments_3_and_4",
+    };
+  }
 
   if (!forceSend && !isFlagEnabled("weekly_digest", identity)) {
     return {
