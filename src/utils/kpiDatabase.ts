@@ -148,6 +148,8 @@ export async function initKPITables(): Promise<void> {
       approved_by VARCHAR(200),
       approved_at TIMESTAMP,
       navigation_map JSONB,
+      methodology_changed_at DATE,
+      methodology_note TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
@@ -285,6 +287,15 @@ export async function initKPITables(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP`,
+  );
+
+  // A KPI whose calculation method changed has a discontinuity in its history.
+  // We keep every historical value and mark the break instead of deleting.
+  await pool.query(
+    `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS methodology_changed_at DATE`,
+  );
+  await pool.query(
+    `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS methodology_note TEXT`,
   );
 
   // Name normalization: Sarah prefers her name spelled "Sarah" everywhere.

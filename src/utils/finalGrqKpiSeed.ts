@@ -134,6 +134,23 @@ export async function seedFinalGrqKpis(): Promise<void> {
     );
   }
 
+  // GRC-KPI-002 changed what it measures (document-mapping clause coverage ->
+  // Certification Milestone Plan on-time delivery). Keep every historical
+  // kpi_values row and mark the discontinuity instead of deleting anything.
+  // Guarded so an operator's later edit to the annotation is never overwritten.
+  await pool.query(
+    `UPDATE kpi_definitions
+        SET methodology_changed_at = DATE '2026-09-02',
+            methodology_note = $1
+      WHERE kpi_code = 'GRC-KPI-002'
+        AND methodology_changed_at IS NULL`,
+    [
+      "Before 2 Sep 2026 this KPI reported document-mapping clause coverage. " +
+        "From that date it reports on-time delivery of Certification Milestone Plan " +
+        "(GRQ-PLAN-2026-01 v3.0) milestones. Values either side are not comparable.",
+    ],
+  );
+
   // Deactivate older GRQ KPIs not in the final list (old QM/GRC/MAM/SHR codes,
   // the previous composites, etc.). Only the 5 GRQ owner groups — never SDR/Sales.
   // Department-owned KPIs are exempt by owner_name (not just owner_type): a new

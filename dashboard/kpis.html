@@ -420,6 +420,15 @@
             }
             return '';
         }
+        // A methodology change means the series before and after are different metrics.
+        // Show a break so nobody reads the step as progress or regression.
+        function _methodologyBreakBadge(kpi) {
+            if (!kpi.methodology_changed_at) return '';
+            const note = kpi.methodology_note || '';
+            return `<span class="ml-2 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800"
+                          title="${note.replace(/"/g, '&quot;')}"
+                          data-testid="kpi-methodology-break">${WalaPlusI18n.t('kpis.methodology_break')}</span>`;
+        }
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
@@ -656,6 +665,7 @@
                                     <span class="font-medium text-gray-900">${kpi.kpi_name}</span>
                                     <span class="text-xs text-gray-500">${kpi.kpi_code}</span>
                                     ${_kpiCalcModeBadge(kpi.calc_mode)}
+                                    ${_methodologyBreakBadge(kpi)}
                                 </div>
                                 ${kpi.is_north_star ? '<div class="text-xs font-semibold text-amber-600 mt-0.5">⭐ North Star</div>' : ''}
                                 <p class="text-sm text-gray-600 mt-1">${kpi.description || ''}</p>
@@ -711,7 +721,7 @@
                 const navMap = kpi.navigation_map ? (typeof kpi.navigation_map === 'string' ? JSON.parse(kpi.navigation_map) : kpi.navigation_map) : null;
                 const statusLabel = kpi.latestValue?.status || WalaPlusI18n.t('dyn.kpis.no_data_status');
                 
-                document.getElementById('detailTitle').textContent = kpi.kpi_name;
+                document.getElementById('detailTitle').innerHTML = kpi.kpi_name + _methodologyBreakBadge(kpi);
                 document.getElementById('detailContent').innerHTML = `
                     <div class="grid grid-cols-2 gap-6">
                         <div>

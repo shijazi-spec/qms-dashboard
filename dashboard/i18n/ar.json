@@ -1789,7 +1789,8 @@
     "fr_quarterly": "ربع سنوي",
     "fr_annual": "سنوي",
     "d_higher": "الأعلى أفضل",
-    "d_lower": "الأقل أفضل"
+    "d_lower": "الأقل أفضل",
+    "methodology_break": "تغيّرت طريقة الحساب"
   },
   "risks": {
     "title": "سجل مخاطر المؤسسة",

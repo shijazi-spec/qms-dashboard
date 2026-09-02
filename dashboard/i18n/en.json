@@ -1789,7 +1789,8 @@
     "fr_quarterly": "Quarterly",
     "fr_annual": "Annual",
     "d_higher": "Higher is Better",
-    "d_lower": "Lower is Better"
+    "d_lower": "Lower is Better",
+    "methodology_break": "Method changed"
   },
   "risks": {
     "title": "Enterprise Risk Register",
