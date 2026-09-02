@@ -801,25 +801,25 @@ Create `tests/vitest/grcKpi002Definition.vitest.test.ts`:
  */
 import { describe, it, expect } from "vitest";
 
-import { FINAL_GRQ_KPIS } from "../../src/utils/finalGrqKpiSeed";
+import { FINAL_KPIS } from "../../src/utils/finalGrqKpiSeed";
 
 describe("GRC-KPI-002 definition", () => {
   it("is a quarterly percentage targeting 100", () => {
-    const k = FINAL_GRQ_KPIS.find((x: any) => x.code === "GRC-KPI-002")!;
+    const k = FINAL_KPIS.find((x: any) => x.code === "GRC-KPI-002")!;
     expect(k.unit).toBe("%");
     expect(k.target).toBe(100);
-    expect(k.frequency).toBe("Quarterly");
+    expect(k.frequency).toBe("quarterly");
     expect(k.direction).toBe("higher_is_better");
   });
 
   it("declares the milestone plan as its data source", () => {
-    const k = FINAL_GRQ_KPIS.find((x: any) => x.code === "GRC-KPI-002")!;
+    const k = FINAL_KPIS.find((x: any) => x.code === "GRC-KPI-002")!;
     expect(k.data_source).toMatch(/Certification Milestone Plan/i);
   });
 });
 ```
 
-If the seed array is not currently exported, export it (`export const FINAL_GRQ_KPIS = [...]`).
+If the seed array is not currently exported, export it (`export const FINAL_KPIS = [...]`).
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -828,7 +828,7 @@ Expected: FAIL — `frequency` is `"Per Certificate"`
 
 - [ ] **Step 3: Update the authoritative seed**
 
-In `src/utils/finalGrqKpiSeed.ts:72`, change `frequency: "Per Certificate"` → `frequency: "Quarterly"` and `data_source: "Certification Roadmap"` → `data_source: "Certification Milestone Plan (GRQ-PLAN-2026-01)"`. Leave `target: 100`, `unit: "%"`, `direction`, `weight`, `north_star` unchanged.
+In `src/utils/finalGrqKpiSeed.ts:72`, change `frequency: "Per Certificate"` → `frequency: "quarterly"` and `data_source: "Certification Roadmap"` → `data_source: "Certification Milestone Plan (GRQ-PLAN-2026-01)"`. Leave `target: 100`, `unit: "%"`, `direction`, `weight`, `north_star` unchanged.
 
 - [ ] **Step 4: Align the legacy entry**
 
@@ -1362,4 +1362,4 @@ git commit -m "docs: deploy note for certification milestones"
 - **Do not delete `calcCertificationMilestones`.** It is verified to have exactly one consumer (the registration you are changing), and clause coverage remains a useful metric for a future KPI.
 - **SACS-002 will render as a framework card with 0 clauses.** This is expected — its control catalogue is out of scope. Coverage math is guarded against zero (`calculateCoveragePct` returns 0 when `total <= 0`), so it cannot dilute or crash anything.
 - **`compliance_assessments` is empty**, which is why the page shows 0% / 668 Not Assessed. Out of scope here; do not "fix" it as a side quest.
-- Task 5 changes how Maram's North Star composite is computed (frequency `Per Certificate` → `Quarterly`). Flag it in the deploy note rather than burying it.
+- Task 5 changes how Maram's North Star composite is computed (frequency `Per Certificate` → `quarterly`). Flag it in the deploy note rather than burying it.
