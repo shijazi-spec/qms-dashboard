@@ -186,7 +186,7 @@ const WalaPlusNav = {
       items: [
         // ── External Audits sub-group ──
         { type: 'subheader', label: 'External Audits' },
-        { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
+        { label: 'Certification Milestone', href: '/compliance', icon: 'check-circle', id: 'compliance' },
         // Compliance v2 — Audit Readiness lives between Compliance and
         // Document Mapping so the GRC user sees the full lifecycle in
         // order: define obligations -> run audits -> link evidence.
@@ -1293,6 +1293,7 @@ const WalaPlusNav = {
            data-nav-item
            data-item-id="${this.escapeHtml(item.id)}"
            data-label="${this.escapeHtml(label.toLowerCase())}"
+           data-nav-id="${this.escapeHtml(item.id)}"
            data-i18n-nav-item="${this.escapeHtml(item.id)}"
            data-testid="link-nav-${this.escapeHtml(item.id)}${suffix}">
           <span class="flex-shrink-0 ${colors.text}" aria-hidden="true">${this.getItemIcon(item.icon)}</span>
@@ -1557,8 +1558,13 @@ const WalaPlusNav = {
         document.querySelectorAll('.wp-rail-group').forEach(group => {
           let visibleCount = 0;
           group.querySelectorAll('[data-nav-item]').forEach(item => {
+            // Renamed rows keep their old name searchable so muscle memory
+            // still works (e.g. "compliance" finds "Certification Milestone").
+            const NAV_SEARCH_ALIASES = { 'compliance': 'compliance regulatory obligations' };
             const label = item.getAttribute('data-label') || '';
-            const match = !q || label.includes(q);
+            const id = item.getAttribute('data-nav-id') || '';
+            const alias = NAV_SEARCH_ALIASES[id] || '';
+            const match = !q || label.includes(q) || alias.includes(q);
             // Hide the entire row (link + sibling pin slot), not just the
             // anchor — otherwise non-matching rows render as blank/pin-
             // only artifacts when the group has at least one match.
