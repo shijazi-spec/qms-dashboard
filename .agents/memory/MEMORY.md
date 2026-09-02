@@ -18,3 +18,4 @@
 - [Preflight basic vs full dual-path](preflight-rule-mode-dual-path.md) — prod runs BASIC mode; a verdict rule added only to the full classifier silently never fires — wire it into the basic runner too
 - [Deploy image over 8 GiB](deploy-image-size-chromium-crash-dumps.md) — publish can fail AFTER a green build; hidden workspace caches (Chromium crash dumps) count toward the image; du-sweep hidden dirs
 - [Postgres EXPLAIN test determinism](postgres-explain-test-determinism.md) — shared-DB planner statistics can make valid index tests flaky; control scan choice transaction-locally when testing index capability
+- [npm direct dependency overrides](npm-direct-dependency-overrides.md) — when overriding a package that is also direct, keep dependency and override specs identical or npm fails with EOVERRIDE
