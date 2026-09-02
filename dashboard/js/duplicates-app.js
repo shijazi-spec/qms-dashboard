@@ -2752,8 +2752,18 @@
                 if (typeof v === 'object') return [v.name || v.display_label || ''];
                 return String(v).split(/[,;|]/);
             };
+            // Normalise away EVERY separator, not just spaces: Zoho holds the
+            // same product as "WalaOne" in one cell and "Wala One" in another
+            // (and "wala-one" turns up too), so strip to letters+digits.
+            const norm = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            // BOTH product cells are read (Sarah 2026-09-02: "you can fetch from
+            // these 2 cells not just one"). "WalaPlus Products" is a field NAME,
+            // not a verdict — it holds a product name that can perfectly well be
+            // WalaOne, so it is classified by CONTENT alongside "Products".
+            const wpp = raw['WalaPlus_Products'] != null ? raw['WalaPlus_Products'] : raw['WalaPlus Products'];
+            const wppVals = collect(wpp).map(norm).filter(v => v && v !== '-');
             const vals = collect(raw.Products).concat(collect(raw.Product))
-                .map(s => String(s || '').trim().toLowerCase().replace(/\s+/g, '')).filter(Boolean);
+                .map(norm).filter(Boolean).concat(wppVals);
             // The WalaPlus product FAMILY (Sarah 2026-08-12): the "Products" field
             // carries the specific product, and WalaPlus, Wala Offer / WalaOffer
             // and WalaBravo all count as WalaPlus. WalaOne is the only WalaOne
@@ -2768,12 +2778,13 @@
                 ? _cfg.walaoneProductTokens : ['walaone'];
             const hasWO = vals.some(v => WO_TOKENS.some(t => v.includes(t)));
             let hasWP = vals.some(v => WP_TOKENS.some(t => v.includes(t)));
-            if (!hasWP) {
-                // Secondary signal: a populated "WalaPlus Products" sub-field.
-                const wpp = raw['WalaPlus_Products'] != null ? raw['WalaPlus_Products'] : raw['WalaPlus Products'];
-                const wppVals = collect(wpp).map(s => String(s || '').trim()).filter(v => v && v !== '-');
-                if (wppVals.length) hasWP = true;
-            }
+            // Presence fallback, kept ONLY for the case it was written for: a
+            // "WalaPlus Products" value that names neither family (a bare SKU
+            // like "Gold Package"). It must NOT fire when the cells already
+            // identify a product — that presence-means-WalaPlus shortcut is what
+            // labelled the WalaOne account ديمه (Zoho 5146753000131556104,
+            // Products "Wala One" / WalaPlus Products "WalaOne") as WalaPlus.
+            if (!hasWP && !hasWO && wppVals.length) hasWP = true;
             if (hasWO && hasWP) return 'both';
             if (hasWO) return 'walaone';
             if (hasWP) return 'walaplus';
