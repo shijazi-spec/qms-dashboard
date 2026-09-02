@@ -25,6 +25,12 @@
 import { pool } from "./kpiDatabase";
 import { logger } from "./logger";
 import { redactSensitiveDeep } from "./eventLogsDatabase";
+import {
+  CERTIFICATION_MILESTONE_PLAN,
+  PLAN_VERSION,
+  SOURCE_DOC,
+  resolveMilestoneRegulationIds,
+} from "./seeds/certificationMilestonePlan";
 
 export async function initNorthStarSourceTables(): Promise<void> {
   await pool.query(`
@@ -138,6 +144,53 @@ export async function initNorthStarSourceTables(): Promise<void> {
     )
   `);
   logger.info("✅ [NorthStarSources] source tables ready");
+  await seedCertificationMilestonePlan();
+}
+
+/**
+ * Seed the approved Certification Milestone Plan. Idempotent: ON CONFLICT on
+ * milestone_key DO NOTHING, so redeploys never clobber operator edits
+ * (delivered_date, status) made in the UI.
+ *
+ * The index on milestone_key is PARTIAL (WHERE milestone_key IS NOT NULL,
+ * because pre-existing rows from the KPI Source Data form have no key), so the
+ * ON CONFLICT clause MUST repeat that predicate — Postgres cannot infer a
+ * partial unique index from a bare ON CONFLICT (milestone_key).
+ */
+export async function seedCertificationMilestonePlan(): Promise<{ inserted: number }> {
+  const regs = await pool.query(
+    `SELECT id, regulation_code FROM regulations`,
+  );
+  const idByCode: Record<string, number> = {};
+  for (const r of regs.rows) idByCode[r.regulation_code] = Number(r.id);
+
+  const rows = resolveMilestoneRegulationIds(CERTIFICATION_MILESTONE_PLAN, idByCode);
+  let inserted = 0;
+  for (const r of rows) {
+    const res = await pool.query(
+      `INSERT INTO certification_milestones
+         (milestone_key, milestone_type, certification, regulation_id,
+          milestone_name, planned_date, status, owner, notes,
+          plan_version, source_doc)
+       VALUES ($1,$2,$3,$4,$5,$6,'planned',$7,$8,$9,$10)
+       ON CONFLICT (milestone_key) WHERE milestone_key IS NOT NULL DO NOTHING`,
+      [
+        r.milestone_key,
+        r.milestone_type,
+        r.certification,
+        r.regulation_id,
+        r.milestone_name,
+        r.planned_date,
+        r.owner,
+        r.notes,
+        PLAN_VERSION,
+        SOURCE_DOC,
+      ],
+    );
+    inserted += res.rowCount ?? 0;
+  }
+  logger.info(`✅ [NorthStar] Certification Milestone Plan seeded (${inserted} new rows)`);
+  return { inserted };
 }
 
 /**

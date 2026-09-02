@@ -8,6 +8,7 @@ import {
   CERTIFICATION_MILESTONE_PLAN as PLAN,
   PLAN_VERSION,
   SOURCE_DOC,
+  resolveMilestoneRegulationIds,
 } from "../../src/utils/seeds/certificationMilestonePlan";
 
 describe("certification milestone plan seed", () => {
@@ -62,5 +63,24 @@ describe("certification milestone plan seed", () => {
   it("honours the document's one explicit date", () => {
     expect(PLAN.find((r) => r.milestone_key === "PLAN-2026-08-DOCS")!.planned_date)
       .toBe("2026-08-30");
+  });
+});
+
+describe("resolveMilestoneRegulationIds", () => {
+  it("maps framework codes to ids and leaves unmatched rows null", () => {
+    const rows = [
+      { ...PLAN[0], regulation_code: null },
+      { ...PLAN[0], milestone_key: "X-ISO", regulation_code: "ISO-27001" },
+      { ...PLAN[0], milestone_key: "X-GONE", regulation_code: "NOT-SEEDED" },
+    ];
+    const out = resolveMilestoneRegulationIds(rows, { "ISO-27001": 6 });
+    expect(out[0].regulation_id).toBeNull();
+    expect(out[1].regulation_id).toBe(6);
+    expect(out[2].regulation_id).toBeNull();
+  });
+
+  it("never drops rows", () => {
+    const out = resolveMilestoneRegulationIds(PLAN, {});
+    expect(out).toHaveLength(PLAN.length);
   });
 });

@@ -212,3 +212,21 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
       "GRC produces documents, not evidence. From October every milestone depends on material other departments hold — the largest risk to these dates.",
   },
 ];
+
+/**
+ * Attach regulation ids to seed rows. A code the platform does not have yet
+ * resolves to null rather than dropping the row — the milestone still matters
+ * even when its framework record is missing.
+ */
+export function resolveMilestoneRegulationIds(
+  rows: PlanMilestoneSeed[],
+  idByCode: Record<string, number>,
+): Array<PlanMilestoneSeed & { regulation_id: number | null }> {
+  return rows.map((r) => ({
+    ...r,
+    regulation_id:
+      r.regulation_code !== null && idByCode[r.regulation_code] !== undefined
+        ? idByCode[r.regulation_code]
+        : null,
+  }));
+}
