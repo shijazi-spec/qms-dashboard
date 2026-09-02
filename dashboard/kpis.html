@@ -433,7 +433,7 @@
         function _methodologyBreakBadge(kpi) {
             if (!kpi.methodology_changed_at) return '';
             const note = kpi.methodology_note || '';
-            return `<span class="ml-2 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800"
+            return `<span class="ms-2 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800"
                           title="${escapeHtml(note)}"
                           data-testid="kpi-methodology-break">${WalaPlusI18n.t('kpis.methodology_break')}</span>`;
         }
