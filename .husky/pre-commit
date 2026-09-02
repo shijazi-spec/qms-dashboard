@@ -6,3 +6,12 @@ npx lint-staged
 if [ -x .githooks/pre-commit ]; then
   bash .githooks/pre-commit
 fi
+
+# Lockfile registry guard. ONLY runs when package-lock.json is actually staged,
+# so ordinary commits pay nothing. Catches the Replit package-firewall URLs at
+# the moment they would enter history — every dependency change made inside a
+# Replit workspace has needed this cleanup (4 times so far), and the resulting
+# CI failure never points anywhere near the lockfile.
+if git diff --cached --name-only | grep -qx "package-lock.json"; then
+  node scripts/check-lockfile-registry.mjs || exit 1
+fi

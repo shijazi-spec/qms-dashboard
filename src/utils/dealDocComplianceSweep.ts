@@ -68,7 +68,8 @@ export function dueDealsSql(): string {
   const stages = DEAL_COMPLIANCE_STAGES.map((s) => `'${s.toLowerCase()}'`).join(", ");
   return `
     SELECT r.zoho_record_id AS id,
-           COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', '') AS stage
+           COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', '') AS stage,
+           NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id
       FROM duplicate_records r
       LEFT JOIN deal_doc_compliance d ON d.zoho_deal_id = r.zoho_record_id
      WHERE r.record_type = 'deal'
@@ -100,7 +101,34 @@ export async function runDealDocComplianceSweep(
   const deals = (due.rows as any[]).map((r) => ({
     id: String(r.id),
     stage: String(r.stage || ""),
+    accountId: r.account_id ? String(r.account_id) : null,
   }));
+
+  // Company documents (VAT, CR, National Address) live on the ACCOUNT, so the
+  // Account's attachments are needed too — but one Account carries many deals,
+  // and fetching per deal would multiply the Zoho calls for no new information.
+  // Cached for the pass, with nulls cached as well so a company with no
+  // attachments is not re-requested for every one of its deals.
+  // The PROMISE is cached, not the result: the workers run concurrently, and
+  // caching only on completion would let several of them fetch the same
+  // Account at once — precisely the case this cache exists to avoid.
+  const accountCache = new Map<string, Promise<any[]>>();
+  const accountAttachments = (accountId: string | null): Promise<any[]> | undefined => {
+    if (!accountId) return undefined;
+    const hit = accountCache.get(accountId);
+    if (hit) return hit;
+    const p = fetchRecordAttachments("Accounts", accountId).catch((err: unknown) => {
+      // A missing or unreadable Account must not fail the deal's own check —
+      // its deal documents are still worth recording.
+      logger.warn("[DealDocSweep] account attachments unavailable", {
+        account: accountId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return [] as any[];
+    });
+    accountCache.set(accountId, p);
+    return p;
+  };
 
   const out: DealDocSweepResult = {
     scanned: 0,
@@ -120,7 +148,8 @@ export async function runDealDocComplianceSweep(
       const d = deals[cursor++];
       try {
         const atts = await fetchRecordAttachments("Deals", d.id);
-        const r = evaluateDocCompliance(d.stage, atts);
+        const acctAtts = await accountAttachments(d.accountId);
+        const r = evaluateDocCompliance(d.stage, atts, acctAtts);
         await upsertDealDocCompliance({
           zohoDealId: d.id,
           stage: d.stage,

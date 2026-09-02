@@ -3931,7 +3931,29 @@ export const duplicateRadarRoutes = [
           } catch (e: any) {
             return c.json({ error: `Zoho attachments fetch failed: ${e?.message || e}` }, 502);
           }
-          const result = evaluateDocCompliance(stage, atts);
+          // Company documents (VAT, CR, National Address) live on the Account,
+          // so the Account's attachments are consulted for those. Without this
+          // a manual re-check would contradict the background sweep on the same
+          // deal, which is worse than either answer on its own.
+          let acctAtts: any[] | undefined;
+          try {
+            const { pool } = await import("../../utils/duplicateRadarDatabase");
+            const q = await pool.query(
+              `SELECT NULLIF(BTRIM(raw_data->'Account_Name'->>'id'), '') AS account_id
+                 FROM duplicate_records
+                WHERE record_type = 'deal' AND zoho_record_id = $1
+                LIMIT 1`,
+              [String(id)],
+            );
+            const accountId = q.rows[0]?.account_id;
+            if (accountId) acctAtts = await fetchRecordAttachments("Accounts", String(accountId));
+          } catch (acctErr) {
+            logger.warn(
+              `[DealCompliance] account attachments unavailable for deal ${id} — deal documents still checked`,
+              { error: acctErr instanceof Error ? acctErr.message : String(acctErr) },
+            );
+          }
+          const result = evaluateDocCompliance(stage, atts, acctAtts);
           // The file NAMES of what is actually attached.
           //
           // Without these, "missing 5 documents" is unfalsifiable: the operator
@@ -4134,6 +4156,37 @@ export const duplicateRadarRoutes = [
             user.email || user.userId ? String(user.email || user.userId) : null;
           const nowIso = new Date().toISOString();
           const results: any[] = new Array(deals.length);
+          // Account ids for the batch, in ONE query — company documents (VAT,
+          // CR, National Address) are checked against the Account, and this
+          // path must agree with the background sweep on the same deal.
+          const acctByDeal = new Map<string, string>();
+          try {
+            const { pool } = await import("../../utils/duplicateRadarDatabase");
+            const q = await pool.query(
+              `SELECT zoho_record_id AS id,
+                      NULLIF(BTRIM(raw_data->'Account_Name'->>'id'), '') AS account_id
+                 FROM duplicate_records
+                WHERE record_type = 'deal' AND zoho_record_id = ANY($1::text[])`,
+              [deals.map((d: any) => d.id)],
+            );
+            for (const row of q.rows as any[]) {
+              if (row.account_id) acctByDeal.set(String(row.id), String(row.account_id));
+            }
+          } catch {
+            /* deal documents are still checked without it */
+          }
+          // Cache the PROMISE: the workers below run concurrently and several
+          // deals in a batch commonly share one Account.
+          const acctCache = new Map<string, Promise<any[]>>();
+          const acctAttsFor = (dealId: string): Promise<any[]> | undefined => {
+            const accountId = acctByDeal.get(dealId);
+            if (!accountId) return undefined;
+            const hit = acctCache.get(accountId);
+            if (hit) return hit;
+            const p = fetchRecordAttachments("Accounts", accountId).catch(() => [] as any[]);
+            acctCache.set(accountId, p);
+            return p;
+          };
           // Bounded concurrency keeps us under Zoho's attachment rate limit
           // while still finishing a batch in a few seconds.
           const CONC = 3;
@@ -4144,7 +4197,7 @@ export const duplicateRadarRoutes = [
               const d = deals[my];
               try {
                 const atts = await fetchRecordAttachments("Deals", d.id);
-                const r = evaluateDocCompliance(d.stage, atts);
+                const r = evaluateDocCompliance(d.stage, atts, await acctAttsFor(d.id));
                 try {
                   await upsertDealDocCompliance({
                     zohoDealId: d.id,
