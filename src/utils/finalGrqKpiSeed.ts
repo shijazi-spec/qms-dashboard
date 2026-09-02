@@ -27,9 +27,7 @@ interface FinalKpi {
   direction: "higher_is_better" | "lower_is_better";
   // "Per Certificate" is a business cadence (tied to each audit/certification),
   // not a fixed calendar period — display-only; recalc still records normally.
-  // "Quarterly" (Title case) is GRC-KPI-002's cadence: calcCertMilestoneDelivery
-  // (northStarSources.ts) scores the Certification Milestone Plan per quarter.
-  frequency: "daily" | "weekly" | "monthly" | "quarterly" | "annual" | "Per Certificate" | "Quarterly";
+  frequency: "daily" | "weekly" | "monthly" | "quarterly" | "annual" | "Per Certificate";
   calc_mode: "auto" | "checklist" | "manual" | "bu_coverage";
   north_star?: boolean;
   description: string;
@@ -58,7 +56,7 @@ function bands(target: number, dir: "higher_is_better" | "lower_is_better") {
 // Leadership-tracked codes kept STABLE so the pull doesn't break:
 //   QM-KPI-002 = Audit Execution, QM-KPI-015 = BU Framework Readiness ("built"),
 //   QM-KPI-008 = BU Pilot Validation ("audited"), GRC-KPI-008 = Compliance Coverage.
-const FINAL_KPIS: FinalKpi[] = [
+export const FINAL_KPIS: FinalKpi[] = [
   // ───────────── Quality — Sarah Hijazi (6) ─────────────
   { code: "QM-KPI-002", name: "Audit Execution Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "audit", unit: "%", target: 90, weight: 30, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures the percentage of planned internal audits completed within the defined period across in-scope business units", formula: "Completed Audits ÷ Planned Audits × 100", data_source: "QMS Platform" },
   { code: "QM-KPI-015", name: "BU Framework Readiness Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "governance", unit: "%", target: 100, weight: 30, direction: "higher_is_better", frequency: "quarterly", calc_mode: "checklist", north_star: true, description: "Measures the percentage of planned business units that completed all pre-pilot framework preparation steps and achieved Ready-for-Pilot status", formula: "Number of planned BUs reaching “Ready for Pilot” status ÷ total planned BUs × 100", data_source: "QMS Platform" },
@@ -71,7 +69,7 @@ const FINAL_KPIS: FinalKpi[] = [
   { code: "GRC-KPI-008", name: "Compliance Coverage Index", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "compliance", unit: "%", target: 90, weight: 15, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures the percentage of identified compliance obligations (Clauses/Articles) that are mapped to defined controls, owners, and evidence requirements", formula: "Mapped Obligations ÷ Total Obligations × 100", data_source: "Compliance Register" },
   { code: "GRC-KPI-003", name: "Audit / Certification Evidence Readiness", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "audit", unit: "%", target: 95, weight: 10, direction: "higher_is_better", frequency: "Per Certificate", calc_mode: "auto", north_star: false, description: "Measures the percentage of required evidence items that are available, approved, and audit-ready within the defined audit or certification window", formula: "Ready Evidence Items ÷ Required Evidence Items × 100", data_source: "Evidence Repository" },
   { code: "GRC-KPI-005", name: "Risk Treatment On-Time Closure", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "risk", unit: "%", target: 90, weight: 15, direction: "higher_is_better", frequency: "monthly", calc_mode: "auto", north_star: true, description: "Measures the percentage of due risk treatment actions closed within the approved target date", formula: "Closed On Time ÷ Total Treatments Due × 100", data_source: "Risk Register" },
-  { code: "GRC-KPI-002", name: "Certification Milestones On Track", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "compliance", unit: "%", target: 100, weight: 15, direction: "higher_is_better", frequency: "Quarterly", calc_mode: "auto", north_star: true, description: "Measures the percentage of planned certification, regulatory, and compliance roadmap milestones achieved within the approved timeline", formula: "Achieved Milestones ÷ Planned Milestones × 100", data_source: "Certification Milestone Plan (GRQ-PLAN-2026-01)" },
+  { code: "GRC-KPI-002", name: "Certification Milestones On Track", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "compliance", unit: "%", target: 100, weight: 15, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures the percentage of planned certification, regulatory, and compliance roadmap milestones achieved within the approved timeline", formula: "Achieved Milestones ÷ Planned Milestones × 100", data_source: "Certification Milestone Plan (GRQ-PLAN-2026-01)" },
   { code: "GRC-KPI-012", name: "Regulatory Response Timeliness", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "compliance", unit: "%", target: 90, weight: 10, direction: "higher_is_better", frequency: "monthly", calc_mode: "manual", description: "Measures the percentage of regulatory responses submitted within the defined SLA", formula: "Responses Within SLA ÷ Total Regulatory Responses × 100", data_source: "Compliance Log" },
   { code: "GRC-KPI-013", name: "Security Incident On-Time Closure Rate", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "compliance", unit: "%", target: 95, weight: 10, direction: "higher_is_better", frequency: "monthly", calc_mode: "manual", description: "Measures the percentage of security incidents within GRC scope that are closed within the approved target timeline", formula: "Security Incidents Closed Within Target ÷ Total Security Incidents Due for Closure × 100", data_source: "Incident Register" },
   { code: "GRC-KPI-010", name: "Risk Register Quality Index", owner_type: "grc_manager", owner_name: "Maram AlHarbi", category: "risk", unit: "%", target: 95, weight: 10, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", description: "Measures the quality of the risk register across INTERNAL risks (processes / business units) and EXTERNAL risks (vendor / third-party assessments). A record counts only if it is properly owned, scored, review-current (not overdue), and status-valid.", formula: "Average of: (Valid Internal Risk Records ÷ Total Live Internal Risks × 100) and (Valid Assessed Vendors ÷ Total Active Vendors × 100)", data_source: "Risk Register + Vendor Assessments" },
@@ -95,11 +93,6 @@ const FINAL_KPIS: FinalKpi[] = [
 ];
 
 const FINAL_CODES = FINAL_KPIS.map((k) => k.code);
-
-// Test-facing alias: tests/vitest/grcKpi002Definition.vitest.test.ts imports
-// FINAL_GRQ_KPIS. Exported without renaming FINAL_KPIS itself so every other
-// reference in this file (and any other importer) is unaffected.
-export const FINAL_GRQ_KPIS = FINAL_KPIS;
 
 /**
  * Upsert the final GRQ KPI set and deactivate any older GRQ KPIs (the 5 GRQ
