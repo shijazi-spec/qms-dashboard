@@ -1293,7 +1293,6 @@ const WalaPlusNav = {
            data-nav-item
            data-item-id="${this.escapeHtml(item.id)}"
            data-label="${this.escapeHtml(label.toLowerCase())}"
-           data-nav-id="${this.escapeHtml(item.id)}"
            data-i18n-nav-item="${this.escapeHtml(item.id)}"
            data-testid="link-nav-${this.escapeHtml(item.id)}${suffix}">
           <span class="flex-shrink-0 ${colors.text}" aria-hidden="true">${this.getItemIcon(item.icon)}</span>
@@ -1562,7 +1561,7 @@ const WalaPlusNav = {
             // still works (e.g. "compliance" finds "Certification Milestone").
             const NAV_SEARCH_ALIASES = { 'compliance': 'compliance regulatory obligations' };
             const label = item.getAttribute('data-label') || '';
-            const id = item.getAttribute('data-nav-id') || '';
+            const id = item.getAttribute('data-item-id') || '';
             const alias = NAV_SEARCH_ALIASES[id] || '';
             const match = !q || label.includes(q) || alias.includes(q);
             // Hide the entire row (link + sibling pin slot), not just the
