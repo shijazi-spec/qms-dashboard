@@ -610,7 +610,7 @@
         // rendered read-only. Uses escAttr (this file's existing HTML-escape
         // helper) for every value interpolated from the database.
         function _mStatus(m) {
-            if (m.delivered_date) {
+            if (m.delivered_date && m.planned_date) {
                 const onTime = new Date(m.delivered_date) <= new Date(m.planned_date);
                 return onTime
                     ? '<span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">On time</span>'
