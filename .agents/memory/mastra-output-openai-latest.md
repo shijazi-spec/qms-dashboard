@@ -9,6 +9,8 @@ Mastra's generated deployment manifest (.mastra/output/package.json) includes `"
 
 **Why exact:** completion code review rejects a caret range — a fresh install without the lockfile could still pull a Node-22-only release.
 
+The harden script now also fails the build if ANY non-dev package in .mastra/output/package-lock.json has an engines.node range excluding the build's Node version — so a new EBADENGINE mismatch surfaces at `npm run build`, not at publish.
+
 **How to apply:** any time a generated-output dep warns EBADENGINE, pin the exact vetted version in root deps and rebuild; verify `.mastra/output/package-lock.json` resolves it and the prod run command (`node --import=./.mastra/output/instrumentation.mjs .mastra/output/index.mjs`, use PORT to avoid 5000 clash) serves /login.
 
 Also: tests/postRestoreSweepPanel.spec.ts deep-link test can fail against a stale dev server — restart the Start application workflow before trusting the failure.

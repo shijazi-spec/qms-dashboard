@@ -12,7 +12,11 @@
 
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+
+const require = createRequire(import.meta.url);
+const semver = require('semver');
 
 const cwd = process.cwd();
 const outputDir = resolve(cwd, '.mastra/output');
@@ -41,6 +45,29 @@ function assertNoLegacyProviderUtils(lockfile) {
     .map(([path, metadata]) => `${path}@${metadata.version}`);
   if (legacy.length > 0) {
     throw new Error(`legacy provider-utils remains in deployment tree: ${legacy.join(', ')}`);
+  }
+}
+
+function assertEnginesSupportRuntimeNode(lockfile) {
+  const runtimeNodeVersion = process.versions.node;
+  const incompatible = Object.entries(lockfile.packages ?? {})
+    .filter(([path]) => path !== '')
+    .filter(([, metadata]) => !metadata.dev && !metadata.devOptional)
+    .filter(([, metadata]) => {
+      const range = metadata.engines?.node;
+      if (typeof range !== 'string' || range.trim() === '') return false;
+      if (!semver.validRange(range)) return false;
+      return !semver.satisfies(runtimeNodeVersion, range);
+    })
+    .map(([path, metadata]) =>
+      `${path.replace(/^.*node_modules\//, '')}@${metadata.version} requires node ${metadata.engines.node}`,
+    );
+  if (incompatible.length > 0) {
+    throw new Error(
+      `deployment tree contains packages incompatible with runtime Node ${runtimeNodeVersion} ` +
+      `(pin them to a compatible major in root package.json dependencies/overrides):\n  - ` +
+      incompatible.join('\n  - '),
+    );
   }
 }
 
@@ -77,6 +104,7 @@ async function main() {
     await readFile(resolve(outputDir, 'package-lock.json'), 'utf8'),
   );
   assertNoLegacyProviderUtils(lockfile);
+  assertEnginesSupportRuntimeNode(lockfile);
 
   console.log('[harden-mastra-output] auditing generated production dependencies');
   runNpm(['audit', '--omit=dev']);
