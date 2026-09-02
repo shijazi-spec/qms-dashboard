@@ -6,7 +6,7 @@
  *
  * Run: npx vitest run tests/vitest/weeklyDigest.vitest.test.ts
  */
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import {
   buildLastWeekWindow,
   fetchWeeklyAgentRollup,
@@ -171,52 +171,51 @@ describe("renderDigestHtml", () => {
   });
 });
 
-describe("sendWeeklyDigest — flag gating", () => {
-  // sendWeeklyDigest is decommissioned per the 3rd + 4th scope amendments and
-  // short-circuits to { sent:false, skipped_reason:"decommissioned_per_..." }
-  // unless DIGEST_DECOMMISSIONED_OVERRIDE === "true". Set the override so these
-  // tests exercise the real legacy flag/channel gating logic (the meaningful
-  // behaviour under test) rather than the decommission no-op.
-  beforeEach(() => {
-    process.env.DIGEST_DECOMMISSIONED_OVERRIDE = "true";
-  });
+describe("sendWeeklyDigest — hard-disabled (decommissioned)", () => {
+  // The Slack + email digest push was retired in the 3rd + 4th scope
+  // amendments (2026-05-25) and HARD-DISABLED on 2026-09-03: the
+  // DIGEST_DECOMMISSIONED_OVERRIDE escape hatch was removed at the Quality
+  // HOD's request after "0 calls" digests reappeared in #automatic-audits.
+  // These tests lock that guarantee in — NO flag, env var, or forceSend may
+  // re-enable it, and it must never touch the DB or dispatch to any channel.
+  const DECOMMISSIONED = "decommissioned_per_amendments_3_and_4";
+
   afterEach(() => {
     delete process.env.DIGEST_DECOMMISSIONED_OVERRIDE;
+    delete process.env[FLAG_KEY];
   });
 
-  test("returns flag_disabled when flag off and forceSend=false", async () => {
+  test("no-op even if the (removed) override env var is set", async () => {
+    process.env.DIGEST_DECOMMISSIONED_OVERRIDE = "true";
     const pool = { query: async () => ({ rows: [] }) };
     const r = await sendWeeklyDigest(pool);
     expect(r.sent).toBe(false);
-    expect(r.skipped_reason).toBe("flag_disabled");
+    expect(r.skipped_reason).toBe(DECOMMISSIONED);
     expect(r.slack.attempted).toBe(false);
     expect(r.email.attempted).toBe(false);
   });
 
-  test("forceSend=true bypasses flag", async () => {
-    const pool = { query: async () => ({ rows: [] }) };
-    const r = await sendWeeklyDigest(pool, { forceSend: true });
-    expect(r.skipped_reason).not.toBe("flag_disabled");
-  });
-
-  test("with flag on, no channels configured → skipped_reason=all_channels_failed_or_unconfigured", async () => {
+  test("no-op even with forceSend=true AND the flag on", async () => {
     process.env[FLAG_KEY] = "true";
-    // Clean env so neither channel has a destination
-    delete process.env.SLACK_DIGEST_CHANNEL_ID;
-    delete process.env.SLACK_CHANNEL_ID;
-    delete process.env.WEEKLY_DIGEST_RECIPIENTS;
-    const pool = { query: async () => ({ rows: [] }) };
-    const r = await sendWeeklyDigest(pool);
-    expect(r.sent).toBe(false);
-    expect(r.skipped_reason).toBe("all_channels_failed_or_unconfigured");
-    expect(r.slack.reason).toBe("no_channel_configured");
-    expect(r.email.reason).toBe("no_recipients_configured");
-  });
-
-  test("digest_summary included regardless of dispatch outcome", async () => {
+    process.env.DIGEST_DECOMMISSIONED_OVERRIDE = "true";
     const pool = { query: async () => ({ rows: [] }) };
     const r = await sendWeeklyDigest(pool, { forceSend: true });
-    expect(r.digest_summary).toBeDefined();
-    expect(r.digest_summary?.window_label).toBeTruthy();
+    expect(r.sent).toBe(false);
+    expect(r.skipped_reason).toBe(DECOMMISSIONED);
+    expect(r.slack.attempted).toBe(false);
+    expect(r.email.attempted).toBe(false);
+  });
+
+  test("never runs the DB query and produces no digest_summary", async () => {
+    let queried = false;
+    const pool = {
+      query: async () => {
+        queried = true;
+        return { rows: [] };
+      },
+    };
+    const r = await sendWeeklyDigest(pool, { forceSend: true });
+    expect(queried).toBe(false);
+    expect(r.digest_summary).toBeUndefined();
   });
 });

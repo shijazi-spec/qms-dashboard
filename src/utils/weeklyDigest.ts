@@ -315,23 +315,32 @@ export async function sendWeeklyDigest(
 ): Promise<SendDigestResult> {
   const { identity, forceSend = false } = options;
 
-  // DECOMMISSIONED per 3rd + 4th scope amendments (2026-05-25). The Weekly
-  // Report now lives inside the dashboard (in-app, opened Monday morning);
-  // Slack + email push channels were dropped to eliminate operational
-  // complexity without unique value. This guard runs BEFORE the flag check
-  // and BEFORE forceSend, so the function is a no-op no matter how it's
-  // reached — Inngest cron, manual POST, direct import in tests, etc.
+  // HARD-DISABLED — permanent no-op. The Weekly Report lives in the
+  // dashboard (/calls, opened Monday morning); Slack + email push channels
+  // were dropped in the 3rd + 4th scope amendments (2026-05-25).
   //
-  // To re-enable (e.g. if a future amendment re-introduces push channels),
-  // delete this block AND set DIGEST_DECOMMISSIONED_OVERRIDE=true in Replit.
-  if (process.env.DIGEST_DECOMMISSIONED_OVERRIDE !== "true") {
-    return {
-      sent: false,
-      slack: { attempted: false, ok: false },
-      email: { attempted: false, ok: false },
-      skipped_reason: "decommissioned_per_amendments_3_and_4",
-    };
-  }
+  // 2026-09-03: the previous `DIGEST_DECOMMISSIONED_OVERRIDE` env escape
+  // hatch was REMOVED at the Quality HOD's request ("stop these
+  // notifications till we finish the API integration") after "0 calls"
+  // digests reappeared in #automatic-audits. Removing it means NO secret,
+  // feature flag, or Replit-Agent action can re-enable the Slack/email
+  // digest while call-evaluation API work is in flight — the code is now
+  // the single source of truth. This runs BEFORE the flag check and BEFORE
+  // forceSend, so every entry point (cron, manual POST, direct import in
+  // tests) is a no-op. To re-enable later, delete this block in a
+  // deliberate PR.
+  //
+  // NOTE: everything below this return is intentionally unreachable while
+  // the digest is decommissioned; it is retained (not deleted) so a future
+  // re-enable is a one-line change rather than a rewrite. The pure
+  // renderers (renderDigestText / renderDigestSlackBlocks / renderDigestHtml)
+  // remain exported and unit-tested independently of this orchestrator.
+  return {
+    sent: false,
+    slack: { attempted: false, ok: false },
+    email: { attempted: false, ok: false },
+    skipped_reason: "decommissioned_per_amendments_3_and_4",
+  };
 
   if (!forceSend && !isFlagEnabled("weekly_digest", identity)) {
     return {
