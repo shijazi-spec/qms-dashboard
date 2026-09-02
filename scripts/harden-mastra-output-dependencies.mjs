@@ -70,10 +70,15 @@ export function assertEnginesSupportRuntimeNode(lockfile, runtimeNodeVersion = p
   }
 }
 
-async function main() {
-  const rootPackage = JSON.parse(await readFile(resolve(cwd, 'package.json'), 'utf8'));
-  const outputPackage = JSON.parse(await readFile(outputPackagePath, 'utf8'));
-
+/**
+ * Rewrites the generated Mastra output manifest so every dependency the root
+ * package.json audits (dependencies first, then overrides) replaces whatever
+ * spec the generator emitted — most importantly the `openai: "latest"` pin,
+ * which must become the exact Node-compatible version declared at the root.
+ * Dependencies without a root pin pass through untouched. Root overrides are
+ * copied wholesale. Returns the same (mutated) manifest for convenience.
+ */
+export function applyRootDependencyPins(outputPackage, rootPackage) {
   for (const dependencyName of Object.keys(outputPackage.dependencies ?? {})) {
     const rootDependency = rootPackage.dependencies?.[dependencyName];
     const rootOverride = rootPackage.overrides?.[dependencyName];
@@ -84,6 +89,14 @@ async function main() {
     }
   }
   outputPackage.overrides = rootPackage.overrides;
+  return outputPackage;
+}
+
+async function main() {
+  const rootPackage = JSON.parse(await readFile(resolve(cwd, 'package.json'), 'utf8'));
+  const outputPackage = JSON.parse(await readFile(outputPackagePath, 'utf8'));
+
+  applyRootDependencyPins(outputPackage, rootPackage);
   outputPackage.scripts = {
     ...outputPackage.scripts,
     postinstall: 'node scripts/patch-provider-utils-v3-compat.mjs',
