@@ -733,22 +733,25 @@ export async function runWeeklyExecBriefIfDue(): Promise<{ ran: boolean; ageHour
 }
 
 /**
- * Daily push of QMS KPI values to the Leadership Platform webhook.
+ * WEEKLY push of QMS KPI values to the Leadership Platform webhook — every
+ * THURSDAY morning (Ahmad 2026-09-02: changed from daily to weekly-Thursday).
  *
  * QMS is the source of truth; the Leadership Platform only pulls on its own
- * schedule, so this pushes the mapped KPIs every morning so the leadership board
- * reflects the current QMS values daily without waiting on their pull.
+ * schedule, so this posts the mapped KPIs once a week so the board reflects the
+ * current QMS values without waiting on their pull. Weekly (vs daily) also stops
+ * the every-morning churn that made a KPI's row flip on each push.
  *
- * Window: 03:00–06:00 UTC (06:00–09:00 KSA), gated to once per ~20h so only one
- * fire per day actually posts. No-op (and NOT stamped, so it retries next day)
- * when the push isn't configured — pushToLeadership() itself returns
- * {configured:false} unless PLATFORM_WEBHOOK_URL + WEBHOOK_SECRET are set, and
- * it only sends KPIs that map to a real leadership record (skips the rest).
+ * Window: Thursday 03:00–06:00 UTC (06:00–09:00 KSA), gated to once per ~6 days
+ * so only one fire per week actually posts. No-op (and NOT stamped, so it retries
+ * next Thursday) when the push isn't configured — pushToLeadership() returns
+ * {configured:false} unless PLATFORM_WEBHOOK_URL + WEBHOOK_SECRET are set, and it
+ * only sends KPIs that map to a real leadership record (skips the rest).
  */
 export async function runLeadershipPushIfDue(): Promise<{ ran: boolean; ageHours: number }> {
   const now = new Date();
+  const isThursday = now.getUTCDay() === 4; // 0=Sun … 4=Thu
   const hourUTC = now.getUTCHours();
-  if (hourUTC < 3 || hourUTC > 6) return { ran: false, ageHours: 0 };
+  if (!isThursday || hourUTC < 3 || hourUTC > 6) return { ran: false, ageHours: 0 };
 
   const pool = sharedPool;
   await pool.query(`
@@ -761,14 +764,14 @@ export async function runLeadershipPushIfDue(): Promise<{ ran: boolean; ageHours
     );
     CREATE INDEX IF NOT EXISTS idx_scanner_run_log_name_time ON scanner_run_log(scanner_name, ran_at DESC);
   `);
-  const scanner = "leadership-push-daily";
+  const scanner = "leadership-push-weekly";
   const r = await pool.query<{ hours: number | null }>(
     `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ran_at)))/3600 AS hours
      FROM scanner_run_log WHERE scanner_name=$1 AND success=true`,
     [scanner],
   );
   const ageHours = r.rows[0]?.hours == null ? Infinity : Number(r.rows[0].hours);
-  if (ageHours < 20) return { ran: false, ageHours }; // already pushed today
+  if (ageHours < 144) return { ran: false, ageHours }; // already pushed this week (6d)
   try {
     const { pushToLeadership } = await import("./leadershipPush");
     const res = await pushToLeadership();
