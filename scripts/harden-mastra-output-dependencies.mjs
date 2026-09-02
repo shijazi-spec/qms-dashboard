@@ -36,7 +36,7 @@ function runNpm(args) {
   }
 }
 
-function assertNoLegacyProviderUtils(lockfile) {
+export function assertNoLegacyProviderUtils(lockfile) {
   const legacy = Object.entries(lockfile.packages ?? {})
     .filter(([path, metadata]) =>
       path.endsWith('node_modules/@ai-sdk/provider-utils') &&
