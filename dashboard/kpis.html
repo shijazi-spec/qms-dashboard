@@ -356,6 +356,14 @@
     <script>
         let allKPIs = [];
 
+        // kpi_name is admin-editable free text and is interpolated into innerHTML in
+        // several places; escape it so a crafted name cannot inject markup.
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
         function _kpiCategoryLabel(cat, fb) {
             switch (cat) {
                 case 'governance': return WalaPlusI18n.t('kpis.c_governance', fb);
@@ -426,7 +434,7 @@
             if (!kpi.methodology_changed_at) return '';
             const note = kpi.methodology_note || '';
             return `<span class="ml-2 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800"
-                          title="${note.replace(/"/g, '&quot;')}"
+                          title="${escapeHtml(note)}"
                           data-testid="kpi-methodology-break">${WalaPlusI18n.t('kpis.methodology_break')}</span>`;
         }
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
@@ -662,7 +670,7 @@
                             <div class="flex-1">
                                 <div class="flex items-center gap-2">
                                     <span class="w-3 h-3 rounded-full status-${statusClass}"></span>
-                                    <span class="font-medium text-gray-900">${kpi.kpi_name}</span>
+                                    <span class="font-medium text-gray-900">${escapeHtml(kpi.kpi_name)}</span>
                                     <span class="text-xs text-gray-500">${kpi.kpi_code}</span>
                                     ${_kpiCalcModeBadge(kpi.calc_mode)}
                                     ${_methodologyBreakBadge(kpi)}
@@ -721,7 +729,7 @@
                 const navMap = kpi.navigation_map ? (typeof kpi.navigation_map === 'string' ? JSON.parse(kpi.navigation_map) : kpi.navigation_map) : null;
                 const statusLabel = kpi.latestValue?.status || WalaPlusI18n.t('dyn.kpis.no_data_status');
                 
-                document.getElementById('detailTitle').innerHTML = kpi.kpi_name + _methodologyBreakBadge(kpi);
+                document.getElementById('detailTitle').innerHTML = escapeHtml(kpi.kpi_name) + _methodologyBreakBadge(kpi);
                 document.getElementById('detailContent').innerHTML = `
                     <div class="grid grid-cols-2 gap-6">
                         <div>
