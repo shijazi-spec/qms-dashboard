@@ -35,12 +35,39 @@ export async function initNorthStarSourceTables(): Promise<void> {
       planned_date DATE,
       delivered_date DATE,
       status VARCHAR(20) DEFAULT 'planned',
+      milestone_type VARCHAR(20) DEFAULT 'plan',
+      regulation_id INTEGER,
+      milestone_key VARCHAR(100),
+      plan_version VARCHAR(20),
+      source_doc VARCHAR(50),
       owner VARCHAR(255),
       notes TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  // Certification Milestone Plan (GRQ-PLAN-2026-01) support. milestone_type
+  // partitions the plan's three sections; only 'plan' rows score GRC-KPI-002.
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS milestone_type VARCHAR(20) DEFAULT 'plan'`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS regulation_id INTEGER`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS milestone_key VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS plan_version VARCHAR(20)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS source_doc VARCHAR(50)`,
+  );
+  // Idempotency key for the plan seed.
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_certification_milestones_key
+       ON certification_milestones(milestone_key) WHERE milestone_key IS NOT NULL`,
+  );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS evidence_requests (
       id SERIAL PRIMARY KEY,
@@ -158,6 +185,11 @@ const TABLES: Record<string, { table: string; cols: string[] }> = {
       "status",
       "owner",
       "notes",
+      "milestone_type",
+      "regulation_id",
+      "milestone_key",
+      "plan_version",
+      "source_doc",
     ],
   },
   evidence_requests: {
