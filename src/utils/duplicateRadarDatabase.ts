@@ -1205,6 +1205,23 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     );
   `);
 
+  // Scheduled-report send log — the idempotency guard for reports that must go
+  // out exactly ONCE per period. The primary key IS the guard: the sender
+  // inserts (report, period) before sending and treats a conflict as "already
+  // sent". An in-memory stamp would re-send after a restart inside the send
+  // window, which for a monthly email to the Head of Sales is worse than not
+  // sending at all.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scheduled_report_sends (
+      report_key VARCHAR(64) NOT NULL,
+      period VARCHAR(16) NOT NULL,
+      sent_at TIMESTAMP DEFAULT NOW(),
+      recipient_count INTEGER NOT NULL DEFAULT 0,
+      detail JSONB,
+      PRIMARY KEY (report_key, period)
+    );
+  `);
+
   // Weekly executive-brief snapshots — one row per weekly leadership digest, so
   // the next digest can report week-over-week trend (clusters cleared, exposure
   // change, duplicate-rate change). Boot-created in dev & prod.

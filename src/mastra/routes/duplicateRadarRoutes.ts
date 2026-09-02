@@ -3990,6 +3990,61 @@ export const duplicateRadarRoutes = [
     // 200 separate browser fetches with heavy per-row work, which hung the
     // whole device / crashed the browser. Now the browser sends ~10 light
     // batch calls instead. Body: { deals: [{ id, stage }] }.
+    // PREVIEW of the monthly missing-documents email — exactly what the
+    // scheduled job would send, rendered but NOT sent. Nothing about the
+    // recipients is accepted from the request: the list is resolved
+    // server-side and only its COUNT is returned, so this endpoint cannot be
+    // used to discover or redirect who gets the report.
+    // GET /api/duplicates/missing-docs-report/preview
+    path: "/api/duplicates/missing-docs-report/preview",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const { getDealComplianceReportRows } = await import(
+          "../../utils/duplicateRadarDatabase"
+        );
+        const { countNeverChecked } = await import(
+          "../../utils/dealDocComplianceSweep"
+        );
+        const {
+          buildMonthlyMissingDocsEmail,
+          monthlyMissingDocsRecipients,
+          isMonthlyMissingDocsEnabled,
+          periodLabel,
+        } = await import("../../utils/missingDocsMonthlyReport");
+        const rows = await getDealComplianceReportRows("all");
+        const neverChecked = await countNeverChecked();
+        // Preview the month that just ended, matching what the job would send.
+        const nowKsa = new Date(Date.now() + 3 * 3600_000);
+        const covered = new Date(
+          Date.UTC(nowKsa.getUTCFullYear(), nowKsa.getUTCMonth() - 1, 1),
+        );
+        const mail = buildMonthlyMissingDocsEmail(rows, {
+          periodLabel: periodLabel(covered),
+          inScope: rows.length + neverChecked,
+          dashboardUrl: process.env.MISSING_DOCS_REPORT_LINK,
+        });
+        return c.json({
+          success: true,
+          enabled: isMonthlyMissingDocsEnabled(),
+          recipient_count: monthlyMissingDocsRecipients().length,
+          period: periodLabel(covered),
+          checked: rows.length,
+          in_scope: rows.length + neverChecked,
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+        });
+      } catch (e: any) {
+        logger.error("missing-docs-report/preview failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     // Document-compliance report for the Head of Sales: missing-document rate,
     // which owner it sits with, and one sheet per stage (Proposal / Agreement
     // Signed / Paid). Reads the STORED checks kept current by the background

@@ -581,6 +581,18 @@ export const mastra = new Mastra({
         // every tick, so the Deal Compliance tab reads stored results instead
         // of making the operator's browser do hundreds of live calls
         // (Sarah 2026-08-25). Disable with DEAL_DOC_SWEEP_ENABLED=false.
+        // Monthly missing-documents report to the Head of Sales. Off unless
+        // MISSING_DOCS_REPORT_ENABLED=true; sends once per month, enforced by
+        // a primary key rather than an in-memory stamp.
+        {
+          name: "MissingDocsMonthlyReport",
+          fn: async () => {
+            const { runMonthlyMissingDocsReportIfDue } = await import(
+              "../utils/scheduledJobs"
+            );
+            return runMonthlyMissingDocsReportIfDue();
+          },
+        },
         {
           name: "DealDocComplianceSweep",
           fn: async () => {

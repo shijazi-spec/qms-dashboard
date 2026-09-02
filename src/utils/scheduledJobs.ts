@@ -436,6 +436,105 @@ export async function runDealDocComplianceSweepIfDue(
   }
 }
 
+// MONTHLY MISSING-DOCUMENTS REPORT (Sarah 2026-08-25, shipped 2026-09-02).
+//
+// Sends once per calendar month, on the 1st, in a morning KSA window. Three
+// deliberate guards, in order of how much damage skipping them would do:
+//
+//   OFF BY DEFAULT. MISSING_DOCS_REPORT_ENABLED must be "true". A job that
+//   emails the Head of Sales the moment it deploys is an incident, not a
+//   feature.
+//
+//   SEND-ONCE IS ENFORCED IN THE DATABASE, not by an in-memory stamp. The
+//   45-minute loop ticks several times inside the window and the process
+//   restarts freely; the (report_key, period) primary key on
+//   scheduled_report_sends is what makes a second send impossible. The row is
+//   inserted BEFORE the send, so a crash mid-send costs a missed report rather
+//   than a duplicate — the safer failure for something with an audience.
+//
+//   RECIPIENTS COME FROM ENV, never a request. See missingDocsMonthlyReport.ts.
+export async function runMonthlyMissingDocsReportIfDue(): Promise<{
+  ran: boolean;
+  ageHours: number;
+  result?: any;
+}> {
+  const {
+    isMonthlyMissingDocsEnabled,
+    monthlyMissingDocsRecipients,
+    buildMonthlyMissingDocsEmail,
+    periodKey,
+    periodLabel,
+  } = await import("./missingDocsMonthlyReport");
+
+  if (!isMonthlyMissingDocsEnabled()) return { ran: false, ageHours: 0 };
+
+  // KSA is UTC+3 and does not observe DST, so a fixed offset is exact here.
+  const nowKsa = new Date(Date.now() + 3 * 3600_000);
+  const sendDay = Number(process.env.MISSING_DOCS_REPORT_DAY || 1);
+  if (nowKsa.getUTCDate() !== sendDay) return { ran: false, ageHours: 0 };
+  const hour = nowKsa.getUTCHours();
+  if (hour < 7 || hour > 9) return { ran: false, ageHours: 0 };
+
+  // The report covers the month that just ended, not the one just begun.
+  const covered = new Date(
+    Date.UTC(nowKsa.getUTCFullYear(), nowKsa.getUTCMonth() - 1, 1),
+  );
+  const period = periodKey(covered);
+
+  try {
+    const { pool, getDealComplianceReportRows } = await import(
+      "./duplicateRadarDatabase"
+    );
+    const recipients = monthlyMissingDocsRecipients();
+    if (!recipients.length) {
+      logger.warn(
+        "[MissingDocsReport] enabled but no valid recipients configured — not sending",
+      );
+      return { ran: false, ageHours: 0 };
+    }
+
+    // Claim the period FIRST. A conflict means another tick (or another
+    // process) already has it.
+    const claim = await pool.query(
+      `INSERT INTO scheduled_report_sends (report_key, period, recipient_count, detail)
+       VALUES ('missing_docs_monthly', $1, $2, $3::jsonb)
+       ON CONFLICT (report_key, period) DO NOTHING
+       RETURNING period`,
+      [period, recipients.length, JSON.stringify({ claimed_at: new Date().toISOString() })],
+    );
+    if (!claim.rows.length) return { ran: false, ageHours: 0 };
+
+    const { countNeverChecked } = await import("./dealDocComplianceSweep");
+    const rows = await getDealComplianceReportRows("all");
+    const neverChecked = await countNeverChecked();
+    const mail = buildMonthlyMissingDocsEmail(rows, {
+      periodLabel: periodLabel(covered),
+      inScope: rows.length + neverChecked,
+      dashboardUrl: process.env.MISSING_DOCS_REPORT_LINK,
+    });
+
+    const { sendResendEmail } = await import("./resendMail");
+    const sent = await sendResendEmail({
+      to: recipients,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    });
+    logger.info(
+      `[MissingDocsReport] ${period}: ${sent.success ? "sent" : "FAILED"} to ${recipients.length} recipient(s)` +
+        (sent.error ? ` — ${sent.error}` : ""),
+    );
+    return {
+      ran: true,
+      ageHours: 0,
+      result: { period, recipients: recipients.length, sent: sent.success, checked: rows.length },
+    };
+  } catch (err) {
+    logger.error("[MissingDocsReport] failed:", err);
+    return { ran: false, ageHours: 0 };
+  }
+}
+
 /**
  * Returns hours since the last successful Quality Audit.
  */

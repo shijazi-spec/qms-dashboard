@@ -523,6 +523,29 @@
                             <option value="walaone">WalaOne only</option>
                         </select>
                     </div>
+                    <!-- Period (Sarah 2026-08-25): the server has honoured
+                         period_year / period_quarter since 2026-08-25 but there
+                         was no control anywhere in the dashboard, so the filter
+                         was live and unreachable. Scopes every record tab by
+                         when the duplicate was first seen. Quarter needs a year
+                         — the server ignores a quarter without one, so the
+                         quarter select is disabled until a year is chosen. -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Year <span class="text-gray-400 font-normal" title="Filters by when the duplicate was first recorded.">(period)</span></label>
+                        <select id="filterPeriodYear" aria-label="Filter by year" data-on-change="onPeriodYearChange" data-testid="select-filter-period-year" class="rr-input">
+                            <option value="">All time</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Quarter</label>
+                        <select id="filterPeriodQuarter" aria-label="Filter by quarter" data-testid="select-filter-period-quarter" class="rr-input" disabled title="Pick a year first — a quarter on its own has no meaning.">
+                            <option value="">Whole year</option>
+                            <option value="1">Q1 (Jan–Mar)</option>
+                            <option value="2">Q2 (Apr–Jun)</option>
+                            <option value="3">Q3 (Jul–Sep)</option>
+                            <option value="4">Q4 (Oct–Dec)</option>
+                        </select>
+                    </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Module</label>
                         <select id="filterModule" aria-label="Filter by module" data-testid="select-filter-module" multiple class="rr-input" size="4">
@@ -2518,7 +2541,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=172"></script>
+    <script src="/js/duplicates-app.js?v=173"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

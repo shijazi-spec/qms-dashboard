@@ -6852,6 +6852,10 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             _loadRadarConfig();
+            // Fill the period year list before the first tab restore, so the
+            // control is usable without switching tabs first.
+            _initPeriodYears();
+            onPeriodYearChange();
             const lm = document.getElementById('listModal');
             if (lm) lm.addEventListener('click', (e) => { if (e.target === lm) closeListModal(); });
 
@@ -15088,8 +15092,45 @@
             // the request URL stays clean when the operator hasn't picked one.
             const seg = document.getElementById('filterSegment')?.value;
             if (seg && seg !== 'all') params.set('segment', seg);
+            // Period — year, optionally narrowed to a quarter. The server
+            // ignores a quarter without a year, so never send one alone.
+            const py = document.getElementById('filterPeriodYear')?.value;
+            if (py) {
+                params.set('period_year', py);
+                const pq = document.getElementById('filterPeriodQuarter')?.value;
+                if (pq) params.set('period_quarter', pq);
+            }
             return params;
         }
+
+        // Populate the year list once: this year back to 2020, which predates
+        // the oldest deals in the mirror (2020-05-18).
+        function _initPeriodYears() {
+            const sel = document.getElementById('filterPeriodYear');
+            if (!sel || sel.options.length > 1) return;
+            const now = new Date().getFullYear();
+            for (let y = now; y >= 2020; y--) {
+                const o = document.createElement('option');
+                o.value = String(y);
+                o.textContent = String(y);
+                sel.appendChild(o);
+            }
+        }
+
+        // A quarter without a year is meaningless and the server drops it, so
+        // the control is disabled — and cleared — until a year is chosen.
+        // Without the clear, an invisible quarter would survive switching back
+        // to "All time" and silently narrow the next year picked.
+        window.onPeriodYearChange = function () {
+            const y = document.getElementById('filterPeriodYear');
+            const q = document.getElementById('filterPeriodQuarter');
+            if (!y || !q) return;
+            q.disabled = !y.value;
+            if (!y.value) q.value = '';
+            q.title = y.value
+                ? 'Narrow to one quarter of ' + y.value + '.'
+                : 'Pick a year first — a quarter on its own has no meaning.';
+        };
 
         function countActiveFilters() {
             let count = 0;
@@ -15104,6 +15145,10 @@
             if (document.getElementById('filterDateTo').value) count++;
             const seg = document.getElementById('filterSegment')?.value;
             if (seg && seg !== 'all') count++;
+            // Year and quarter count as ONE filter: a quarter cannot be applied
+            // without a year, so counting both would show "2 filters" for what
+            // the operator set as a single period.
+            if (document.getElementById('filterPeriodYear')?.value) count++;
             return count;
         }
 
@@ -15168,6 +15213,8 @@
                 dateFrom:   document.getElementById('filterDateFrom')?.value || '',
                 dateTo:     document.getElementById('filterDateTo')?.value || '',
                 segment:    document.getElementById('filterSegment')?.value || 'all',
+                periodYear:    document.getElementById('filterPeriodYear')?.value || '',
+                periodQuarter: document.getElementById('filterPeriodQuarter')?.value || '',
             };
         }
 
@@ -15183,6 +15230,13 @@
             _filterSetInputValue('filterDateFrom',   s ? s.dateFrom   : '');
             _filterSetInputValue('filterDateTo',     s ? s.dateTo     : '');
             _filterSetInputValue('filterSegment',    s ? s.segment    : 'all');
+            _initPeriodYears();
+            _filterSetInputValue('filterPeriodYear',    s ? s.periodYear    : '');
+            _filterSetInputValue('filterPeriodQuarter', s ? s.periodQuarter : '');
+            // Re-derive the quarter's enabled state from the restored year,
+            // otherwise a tab with no year keeps the previous tab's enabled
+            // quarter select.
+            onPeriodYearChange();
             _syncSegmentChipFromDropdown();
             _refreshActiveFilterCountBadge();
         }
@@ -15396,6 +15450,9 @@
             // Segment dropdown + chip — Clear resets to default 'all'.
             const segEl = document.getElementById('filterSegment');
             if (segEl) segEl.value = 'all';
+            const pyEl = document.getElementById('filterPeriodYear');
+            if (pyEl) pyEl.value = '';
+            onPeriodYearChange(); // clears + disables the quarter with it
             _syncSegmentChipFromDropdown();
             document.getElementById('activeFilterCount').classList.add('hidden');
             // Per-tab Clear All — only forget THIS tab's slot. Other tabs
