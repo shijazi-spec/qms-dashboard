@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 
-import { summarizeMilestoneDelivery } from "../../src/utils/northStarSources";
+import { summarizeMilestoneDelivery, onTimeCountFromSummary } from "../../src/utils/northStarSources";
 
 const Q4_START = new Date("2026-10-01T00:00:00Z");
 const Q4_END = new Date("2027-01-01T00:00:00Z");
@@ -70,5 +70,17 @@ describe("summarizeMilestoneDelivery", () => {
     );
     expect(r.due).toBe(0);
     expect(r.dataAvailable).toBe(false);
+  });
+});
+
+describe("leadership count derivation", () => {
+  it("emits the on-time COUNT, never the percentage", () => {
+    const s = { due: 4, onTime: 3, value: 75, dataAvailable: true };
+    expect(onTimeCountFromSummary(s)).toBe(3);
+  });
+
+  it("emits null when there is no data, so the feed omits rather than sends 0", () => {
+    const s = { due: 0, onTime: 0, value: 0, dataAvailable: false };
+    expect(onTimeCountFromSummary(s)).toBeNull();
   });
 });

@@ -29,6 +29,7 @@ import {
   calcQmsAdoptionRate,
   calcValueRealization,
   makeCaptureCalc,
+  onTimeCountFromSummary,
 } from "./northStarSources";
 
 export type RagStatus = "green" | "amber" | "red";
@@ -704,8 +705,14 @@ async function calcVendorFindingsClosure() {
  */
 async function calcCertMilestoneCount() {
   const r: any = await calcCertMilestoneDelivery();
-  if (!r?.dataAvailable) return r;
-  const count = Number(r?.details?.achieved_on_time ?? 0);
+  // onTimeCountFromSummary is the ONLY sanctioned percentage→count conversion —
+  // it returns null (never 0) when there's no data, so the feed omits the
+  // metric instead of pushing a real zero over leadership's manual value.
+  const count = onTimeCountFromSummary({
+    onTime: Number(r?.details?.achieved_on_time ?? 0),
+    dataAvailable: !!r?.dataAvailable,
+  });
+  if (count === null) return r;
   return {
     value: count,
     dataAvailable: true,

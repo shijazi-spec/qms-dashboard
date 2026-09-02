@@ -377,6 +377,17 @@ export function summarizeMilestoneDelivery(
   return { due, onTime, value: Math.round((onTime / due) * 1000) / 10, dataAvailable: true };
 }
 
+/**
+ * Leadership tracks Certification as a COUNT of certificates (target 2/quarter),
+ * while QMS shows a percentage. Emitting the percentage into the count field is
+ * what produced the historical "995%". This is the only sanctioned conversion.
+ */
+export function onTimeCountFromSummary(
+  s: { onTime: number; dataAvailable: boolean },
+): number | null {
+  return s.dataAvailable ? s.onTime : null;
+}
+
 /** GRC-KPI-002 — (milestones delivered on time / planned) × 100. */
 export async function calcCertMilestoneDelivery() {
   // Scored PER QUARTER, per the deadline model: only certifications whose target
