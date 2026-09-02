@@ -326,9 +326,18 @@ export async function initKPITables(): Promise<void> {
   // early-returns once any KPI exists) backfills them on already-seeded DBs.
   await seedSDRKPIs();
   await seedSalesKPIs();
+  // Customer Success was never seeded, so its Quality Reports page read "No
+  // active KPIs found for CS Team" while three calculators for it sat idle.
+  await seedCSKPIs();
 
   // SDR + Sales KPIs are all process-derived → mark them calc_mode='auto' (the
   // SDR seed pre-dates the calc_mode column so its rows default to 'manual').
+  //
+  // CS is deliberately NOT in this list. Only three of its 33 have calculators;
+  // the rest are sourced from Client-Hub, Jira, the Admin/BI Portal or QA
+  // sampling, and flipping them to 'auto' would present a KPI that can never
+  // produce a value as one that simply has not run yet. seedCSKPIs sets the
+  // mode per KPI instead.
   await pool.query(
     `UPDATE kpi_definitions SET calc_mode = 'auto'
      WHERE owner_type IN ('sdr_team', 'sales_team') AND (calc_mode IS NULL OR calc_mode = 'manual')`,
@@ -1743,6 +1752,102 @@ async function seedSalesKPIs(): Promise<void> {
   );
 
   logger.info("✅ [KPIDB] Seeded 9 Sales Team KPIs");
+}
+
+
+/**
+ * Customer Success KPIs — the 33 defined in §8 of WP-BU-CS-SOP-003 v1.1
+ * (released 13 Aug 2026), transcribed with the SOP's own targets and formulas.
+ *
+ * SDR and Sales were seeded long ago; CS never was, so the Quality Reports CS
+ * page read "No active KPIs found for CS Team" even though three calculators
+ * for it already existed and had been running against nothing (found 2026-09-03).
+ *
+ * calc_mode is per-KPI, unlike Sales where every row is 'auto':
+ *   auto    CS-KPI-23 / 25 / 30 — the three with calculators in kpiProcessCalc.
+ *   manual  everything else. §8 sources them from Client-Hub, Jira, the Admin/BI
+ *           Portal or QA sampling, none of which the QMS has a feed from. They
+ *           are registered anyway so the framework is auditable: a KPI absent
+ *           from the catalog looks like an oversight, one marked manual is a
+ *           documented gap.
+ *
+ * OWNERSHIP. §8 assigns individual KPIs to the CS Owner, process KPIs to the CS
+ * Team Lead / Head of CS / Finance, and governance KPIs to GRQ. All are seeded
+ * under owner_name 'CS Team' because that is what the CS business unit maps to
+ * and it is how Sales and SDR are already modelled; the accountable role from
+ * §8 is preserved in each description so it is not lost.
+ *
+ * Idempotent per row via ON CONFLICT, so added KPIs backfill onto a populated DB.
+ */
+async function seedCSKPIs(): Promise<void> {
+  logger.info("🌱 [KPIDB] Seeding Customer Success KPIs (WP-BU-CS-SOP-003 §8)...");
+
+  type CsSeed = Partial<KPIDefinition> & { calc_mode: "auto" | "manual" };
+  const O = "CS Team";
+  const T = "cs_team";
+  // Higher-is-better percentages dominate §8; amber/red are set at sensible
+  // distances below target since the SOP states only the target.
+  const pct = (target: number, amber: number, red: number) => ({
+    unit: "%", target_value: target, threshold_green: target,
+    threshold_amber: amber, threshold_red: red,
+    threshold_direction: "higher_is_better" as const,
+  });
+  const pctLower = (target: number, amber: number, red: number) => ({
+    unit: "%", target_value: target, threshold_green: target,
+    threshold_amber: amber, threshold_red: red,
+    threshold_direction: "lower_is_better" as const,
+  });
+
+  const csKPIs: CsSeed[] = [
+    // ── Individual (§8, CS Owner) ──────────────────────────────────────────
+    { kpi_code: "CS-KPI-01", kpi_name: "ARR Attainment", category: "quality", frequency: "monthly", calc_mode: "manual", ...pct(100, 90, 80), description: "CS Owner. Validated renewed recurring revenue against the assigned annual ARR target. Source: Client-Hub / Zoho Books.", formula: "Validated Renewed ARR ÷ Assigned ARR Target × 100" },
+    { kpi_code: "CS-KPI-02", kpi_name: "Monthly Customer Interaction Coverage", category: "quality", frequency: "monthly", calc_mode: "manual", ...pct(95, 85, 70), description: "CS Owner. Assigned active accounts with at least one documented monthly client interaction. Source: Client-Hub.", formula: "Accounts with Completed Monthly Interaction ÷ Active Assigned Accounts × 100" },
+    { kpi_code: "CS-KPI-03", kpi_name: "QBR Coverage", category: "quality", frequency: "quarterly", calc_mode: "manual", ...pct(90, 75, 60), description: "CS Owner. Quarterly business reviews completed for Gold and Platinum clients. Source: Client-Hub / Google Calendar.", formula: "Completed QBRs ÷ QBRs Due × 100" },
+    { kpi_code: "CS-KPI-04", kpi_name: "HBR Coverage", category: "quality", frequency: "quarterly", calc_mode: "manual", ...pct(90, 75, 60), description: "CS Owner. Half-yearly business reviews completed for Silver clients. Source: Client-Hub / Google Calendar.", formula: "Completed HBRs ÷ HBRs Due × 100" },
+    { kpi_code: "CS-KPI-05", kpi_name: "Client Health Review Completion", category: "quality", frequency: "monthly", calc_mode: "manual", ...pct(95, 85, 70), description: "CS Owner. Accounts whose monthly health review and action status are complete and documented. Source: Client-Hub.", formula: "Completed Health Reviews ÷ Health Reviews Due × 100" },
+    { kpi_code: "CS-KPI-06", kpi_name: "Renewal Closure Rate", category: "quality", frequency: "monthly", calc_mode: "manual", ...pct(85, 70, 55), description: "CS Owner. Completed renewals against renewals due in the period. Source: Client-Hub / Zoho Books / Zoho Sign.", formula: "Completed Renewals ÷ Renewals Due × 100" },
+    { kpi_code: "CS-KPI-07", kpi_name: "Client-Hub Activity Logging Compliance", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(95, 85, 70), description: "CS Owner. Required client activities, updates and evidence recorded within the required timeframe. Source: Client-Hub.", formula: "Activities Logged on Time ÷ Activities Reviewed × 100" },
+    { kpi_code: "CS-KPI-08", kpi_name: "Churn Record Timeliness", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(95, 85, 70), description: "CS Owner. Confirmed churn cases recorded within five business days of the churn decision. Source: Client-Hub.", formula: "Churn Records Completed on Time ÷ Confirmed Churn Cases × 100" },
+
+    // ── Process (§8, CS Team Lead / Head of CS / Finance) ──────────────────
+    { kpi_code: "CS-KPI-09", kpi_name: "Handover Completeness Rate", category: "quality", frequency: "monthly", calc_mode: "manual", ...pct(90, 75, 60), description: "CS Team Lead / Sales. Sales handovers received complete and accurate at first submission. Source: Zoho CRM / Client-Hub — the strongest candidate for a fourth CS calculator.", formula: "Complete First-Time Handovers ÷ Total Handovers Received × 100" },
+    { kpi_code: "CS-KPI-10", kpi_name: "Account Allocation Timeliness", category: "quality", frequency: "monthly", calc_mode: "manual", ...pct(95, 85, 70), description: "CS Team Lead. Validated accounts allocated within the required timeframe. Source: Client-Hub.", formula: "Accounts Allocated on Time ÷ Validated Accounts × 100" },
+    { kpi_code: "CS-KPI-11", kpi_name: "Onboarding Exit Criteria Achievement Rate", category: "quality", frequency: "monthly", calc_mode: "manual", ...pct(90, 75, 60), description: "CS Owner. Onboarding accounts satisfying the Adoption transition criteria (Clause 7.7.1). Source: Admin Portal / BI Portal / Client-Hub.", formula: "Accounts Meeting Adoption Transition Criteria ÷ Accounts Due for Transition × 100" },
+    { kpi_code: "CS-KPI-12", kpi_name: "Adoption Registration Rate", category: "quality", frequency: "monthly", calc_mode: "manual", ...pct(70, 55, 40), description: "CS Owner. Employee registration across accounts in the Adoption Phase. Source: Admin Portal / BI Portal.", formula: "Registered Employees ÷ Applicable Employee Base × 100" },
+    { kpi_code: "CS-KPI-13", kpi_name: "Adoption Recovery Follow-Up Compliance", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(95, 85, 70), description: "CS Owner. Recovery cases rechecked within ten business days of starting the Adoption Recovery Plan. Source: Client-Hub.", formula: "Recovery Cases Rechecked on Time ÷ Recovery Cases Due × 100" },
+    { kpi_code: "CS-KPI-14", kpi_name: "Average Client Health Score", category: "quality", frequency: "monthly", calc_mode: "manual", unit: "score", target_value: 80, threshold_green: 80, threshold_amber: 70, threshold_red: 60, threshold_direction: "higher_is_better", description: "CS Owner. Average Health Score Index across active accounts reviewed in the period. Source: Client-Hub.", formula: "Total HSI Scores ÷ Active Accounts Reviewed" },
+    { kpi_code: "CS-KPI-15", kpi_name: "Watch / At-Risk Action Plan Coverage", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(100, 90, 75), description: "CS Owner. Watch and At-Risk accounts with a documented action plan, owner, target date and follow-up date. Source: Client-Hub.", formula: "Accounts with Complete Action Plans ÷ Total Watch and At-Risk Accounts × 100" },
+    { kpi_code: "CS-KPI-16", kpi_name: "Bravo Jira Submission Compliance", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(95, 85, 70), description: "CS Team Lead. Complete Bravo Jira fulfilment tickets raised the same business day as payment confirmation or approved exception. Source: Jira / Client-Hub / Zoho Books.", formula: "Tickets Raised on Time ÷ Applicable Bravo Requests × 100" },
+    { kpi_code: "CS-KPI-17", kpi_name: "Bravo Points Fulfilment Cycle", category: "quality", frequency: "monthly", calc_mode: "manual", unit: "days", target_value: 2, threshold_green: 2, threshold_amber: 4, threshold_red: 7, threshold_direction: "lower_is_better", description: "Finance. Time from receipt of a complete Jira ticket until points are loaded. Source: Jira / Zoho Books.", formula: "Total Fulfillment Time ÷ Completed Fulfillment Cases" },
+    { kpi_code: "CS-KPI-18", kpi_name: "Bravo Prepayment / Exception Compliance", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(100, 95, 85), description: "Finance. Bravo fulfilment completed only after payment confirmation or an approved exception (Clause 7.11). Source: Zoho Books / Jira / Client-Hub.", formula: "Compliant Fulfillments ÷ Total Fulfillments × 100" },
+    { kpi_code: "CS-KPI-19", kpi_name: "Renewal Outreach Timeliness", category: "quality", frequency: "monthly", calc_mode: "manual", ...pct(95, 85, 70), description: "CS Team Lead. Renewals whose first documented activity starts within the approved 60–90 calendar-day window. Source: Client-Hub.", formula: "Renewals Initiated Within Window ÷ Renewals Due × 100" },
+    { kpi_code: "CS-KPI-20", kpi_name: "Client Retention Rate", category: "quality", frequency: "quarterly", calc_mode: "manual", ...pct(80, 70, 60), description: "Head of CS. Eligible clients retained through renewal in the period. Source: Client-Hub.", formula: "Renewed Clients ÷ Clients Eligible for Renewal × 100" },
+    { kpi_code: "CS-KPI-21", kpi_name: "Client Churn Rate", category: "quality", frequency: "quarterly", calc_mode: "manual", ...pctLower(15, 20, 25), description: "Head of CS. Confirmed churned accounts against the active portfolio. Deliberately NOT automated: the denominator is the active client population, which lives in Client-Hub and cannot be sourced correctly from Zoho. Source: Client-Hub.", formula: "Confirmed Churned Accounts ÷ Applicable Active Client Population × 100" },
+    { kpi_code: "CS-KPI-22", kpi_name: "Rework Rate", category: "quality", frequency: "monthly", calc_mode: "manual", ...pctLower(10, 15, 25), description: "CS Team Lead. Returned or reworked cases against total cases reviewed. Source: Client-Hub.", formula: "Returned or Reworked Cases ÷ Cases Reviewed × 100" },
+
+    // ── Governance (§8, GRQ Team) ─────────────────────────────────────────
+    { kpi_code: "CS-KPI-23", kpi_name: "Client-Hub Data Accuracy Score", category: "compliance", frequency: "monthly", calc_mode: "auto", ...pct(95, 85, 70), description: "GRQ. Audited records containing accurate mandatory client data. QMS measures the FULL population in the Zoho mirror (company domain, CS owner, customer since, renewal date, health score, ARR value) as a proxy for the SOP's Client-Hub / QA sample.", formula: "Accurate Records ÷ Records Sampled × 100" },
+    { kpi_code: "CS-KPI-24", kpi_name: "Documentation Completeness", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(95, 85, 70), description: "GRQ / CS Team Lead. Audited records containing all required documents, approvals, evidence and references. Source: Client-Hub / QA Records.", formula: "Complete Records ÷ Records Sampled × 100" },
+    { kpi_code: "CS-KPI-25", kpi_name: "SLA / Milestone Adherence", category: "compliance", frequency: "monthly", calc_mode: "auto", ...pct(90, 75, 60), description: "GRQ / CS Team Lead. Applicable activities completed within the approved timeframe (§9 SLA table). QMS measures CS deals with no overdue lifecycle step in the Zoho mirror as a proxy for the SOP's Client-Hub source.", formula: "Activities Completed on Time ÷ Activities Due × 100" },
+    { kpi_code: "CS-KPI-26", kpi_name: "Audit Compliance Score", category: "compliance", frequency: "quarterly", calc_mode: "manual", ...pct(85, 70, 55), description: "GRQ. Weighted compliance with approved Customer Success audit checkpoints. Source: QA Dashboard.", formula: "Compliant Weighted Checkpoints ÷ Total Applicable Weighted Checkpoints × 100" },
+    { kpi_code: "CS-KPI-27", kpi_name: "Discount Approval Compliance", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(100, 95, 85), description: "GRQ / Head of CS. Renewal discount requests approved before quotation issuance. Source: Client-Hub / approval evidence.", formula: "Compliant Discount Cases ÷ Discount Cases Sampled × 100" },
+    { kpi_code: "CS-KPI-28", kpi_name: "Bravo Prepayment / Exception Control Compliance", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(100, 95, 85), description: "GRQ / Finance. Bravo fulfilment cases compliant with payment and approved-exception controls. Source: Zoho Books / Jira / Client-Hub.", formula: "Compliant Cases ÷ Fulfillment Cases Reviewed × 100" },
+    { kpi_code: "CS-KPI-29", kpi_name: "Re-engagement Lockout Compliance", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(100, 95, 85), description: "GRQ. Sales re-engagement performed only after the applicable lockout period and required CS confirmation. Source: Client-Hub.", formula: "Compliant Re-engagement Cases ÷ Cases Reviewed × 100" },
+    { kpi_code: "CS-KPI-30", kpi_name: "Churn Classification Accuracy", category: "compliance", frequency: "monthly", calc_mode: "auto", ...pct(95, 85, 70), description: "GRQ / Head of CS. Churn cases supported by the required classification, reason and evidence. QMS measures churned deals carrying both a churn date and a reason in the Zoho mirror as a proxy for the SOP's Client-Hub / QA sample.", formula: "Accurate Churn Records ÷ Churn Records Sampled × 100" },
+    { kpi_code: "CS-KPI-31", kpi_name: "Rework Cycle Control", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pctLower(5, 10, 20), description: "GRQ / CS Team Lead. Cases exceeding the maximum of two return/rework cycles for the same root cause. Source: Client-Hub.", formula: "Cases Exceeding Two Cycles ÷ Returned Cases Reviewed × 100" },
+    { kpi_code: "CS-KPI-32", kpi_name: "Escalation Documentation Compliance", category: "compliance", frequency: "monthly", calc_mode: "manual", ...pct(95, 85, 70), description: "GRQ / CS Team Lead. Escalations containing the required classification, routing, ownership, dates, status and closure evidence. Source: Client-Hub / Jira.", formula: "Complete Escalation Records ÷ Escalations Sampled × 100" },
+    { kpi_code: "CS-KPI-33", kpi_name: "Access Compliance", category: "compliance", frequency: "quarterly", calc_mode: "manual", ...pct(100, 95, 85), description: "GRQ / Product & IT. Customer Success system access aligned with the approved access matrix. Source: access records.", formula: "Compliant Access Records ÷ Access Records Reviewed × 100" },
+  ];
+
+  for (const k of csKPIs) {
+    await pool.query(
+      `INSERT INTO kpi_definitions
+         (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, calc_mode)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       ON CONFLICT (kpi_code) DO NOTHING`,
+      [k.kpi_name, k.kpi_code, k.description, T, O, k.category, k.formula, k.unit, k.frequency, k.threshold_green, k.threshold_amber, k.threshold_red, k.threshold_direction, k.target_value, k.calc_mode],
+    );
+  }
 }
 
 export async function seedSalesKPIsManual(): Promise<void> {
