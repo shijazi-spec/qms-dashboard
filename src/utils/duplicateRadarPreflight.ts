@@ -1922,7 +1922,18 @@ function _csPhaseToActiveState(
   // "new deal" as the exact phrase (not the bare substring "new").
   if (p.includes("renew")) return "renewal";
   if (p.includes("adopt")) return "adoption";
-  if (p.includes("onboard") || p.includes("new deal")) return "onboarding";
+  // Kickoff (CS team, 2026-09-03) is the post-signature motion that precedes
+  // Onboarding, so it maps onto the same early-lifecycle state. Without this
+  // it fell through to null, which loses the client's lifecycle label in the
+  // Preflight export and the CS phase column. The verdict itself never
+  // depended on this — active/churned is decided by the churn date.
+  if (
+    p.includes("onboard") ||
+    p.includes("new deal") ||
+    p.replace(/[^a-z]/g, "").includes("kickoff")
+  ) {
+    return "onboarding";
+  }
   return null;
 }
 
@@ -3202,12 +3213,18 @@ export async function listActiveClientDomains(opts?: {
     `SELECT LOWER(COALESCE(${domainCoalesce})) AS company_domain
        FROM duplicate_records
       WHERE record_type = 'deal'
-        -- ACTIVE CS Phase — New Deal / Onboarding / Adoption / Renewal.
-        -- Phase MUST be set (a blank phase is NOT an active client) and must
-        -- NOT be Termination (that is a churned client).
+        -- ACTIVE CS Phase — New Deal / Kickoff / Onboarding / Adoption /
+        -- Renewal. Phase MUST be set (a blank phase is NOT an active client)
+        -- and must NOT be Termination (that is a churned client).
+        -- Kickoff (CS team, 2026-09-03) is the post-signature motion before
+        -- Onboarding: the customer HAS signed, so they belong on this
+        -- suppression list. Omitting it would leak signed customers into
+        -- outreach/import lists as if they were fair game.
         AND COALESCE(${phaseCoalesce}) IS NOT NULL
         AND (
           LOWER(COALESCE(${phaseCoalesce})) LIKE '%new deal%'
+          OR LOWER(COALESCE(${phaseCoalesce})) LIKE '%kick%off%'
+          OR LOWER(COALESCE(${phaseCoalesce})) LIKE '%kickoff%'
           OR LOWER(COALESCE(${phaseCoalesce})) LIKE '%onboard%'
           OR LOWER(COALESCE(${phaseCoalesce})) LIKE '%adopt%'
           OR LOWER(COALESCE(${phaseCoalesce})) LIKE '%renew%'

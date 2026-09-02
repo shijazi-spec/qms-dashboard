@@ -79,7 +79,13 @@ function loadConfig(): Config {
       : fallback;
 
   cachedConfig = {
+    // "Kickoff" (CS team, 2026-09-03) is a LIVE client phase — the customer
+    // has signed and the kickoff motion is running — so a Sales deal opened
+    // against them is a genuine cross-module conflict and must BLOCK. It maps
+    // to lifecycle_state "active_other" below, which is the intended fallback
+    // for a non-standard active phase.
     phaseFieldActive: list(process.env.DUPLICATE_RADAR_CS_ACTIVE_PHASES, [
+      "Kickoff",
       "Onboarding",
       "Adoption",
       "Renewal",

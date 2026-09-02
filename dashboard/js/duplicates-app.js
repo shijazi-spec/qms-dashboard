@@ -12305,7 +12305,7 @@
         // it, then triggers a render with the existing in-memory dataset (no
         // Zoho re-fetch — phase filtering is purely client-side over the data
         // we already loaded).
-        const CS_LIFECYCLE_CANONICAL_PHASES = ['New Deal', 'Onboarding', 'Adoption', 'Renewal', 'Termination'];
+        const CS_LIFECYCLE_CANONICAL_PHASES = ['New Deal', 'Kickoff', 'Onboarding', 'Adoption', 'Renewal', 'Termination'];
         function _normCsPhase(p) {
             return String(p == null ? '' : p).trim().toLowerCase();
         }
@@ -12463,8 +12463,13 @@
         // Zoho returns that isn't listed here still renders (appended after the
         // known ones, alphabetically) so a new picklist value can't silently
         // vanish from the census.
+        // Kickoff (CS team, 2026-09-03) sits between New Deal and Onboarding:
+        // the post-signature kickoff motion, before onboarding proper starts.
+        // Listed here so it renders in LIFECYCLE order — the extras fallback
+        // below would otherwise append it after Termination, alphabetically.
         const CS_PHASE_CENSUS_ORDER = [
             { key: 'new deal',    label: 'New deal',    accent: 'rr-acc-blue'   },
+            { key: 'kickoff',     label: 'Kickoff',     accent: 'rr-acc-teal'   },
             { key: 'onboarding',  label: 'Onboarding',  accent: 'rr-acc-indigo' },
             { key: 'adoption',    label: 'Adoption',    accent: 'rr-acc-green'  },
             { key: 'renewal',     label: 'Renewal',     accent: 'rr-acc-purple' },
