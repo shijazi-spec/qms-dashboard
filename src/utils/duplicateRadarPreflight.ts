@@ -204,7 +204,7 @@ export interface PreflightResultRow {
    * owner X" instead of guessing from the generic owner list.
    */
   cs_owner?: string | null;
-  /** Raw CS Lifecycle phase verbatim (New Deal / Onboarding / Adoption /
+  /** Raw CS Lifecycle phase verbatim (New Deal / Kickoff / Onboarding / Adoption /
    *  Renewal / Termination) for the export's CS Phase column. */
   cs_phase?: string | null;
   /**
@@ -3119,7 +3119,7 @@ export function cleanClientDomain(raw: string | null | undefined): string | null
  * CORPORATE current-client domains (Sarah 2026-07-26, FINAL definition).
  *
  * The authoritative rule, straight from the CRM Deal's Customer Success section:
- *   • CS Phase ∈ {New Deal, Onboarding, Adoption, Renewal} — phase MUST be set
+ *   • CS Phase ∈ {New Deal, Kickoff, Onboarding, Adoption, Renewal} — phase MUST be set
  *     (blank phase = NOT an active client) and MUST NOT be Termination, AND
  *   • NOT churned — Churn Date is EMPTY, OR a Renewal Date LATER than the Churn
  *     Date (Sarah 2026-07-26: renewal after churn = the client came back; a
@@ -3310,7 +3310,7 @@ export async function listActiveClientDomains(opts?: {
     dropped_junk: droppedJunk,
     built_at_iso: new Date().toISOString(),
     criteria:
-      "WalaPlus = CRM Deal Phase in (New Deal, Onboarding, Adoption, Renewal) AND NOT Termination AND (Churn Date empty OR Renewal Date > Churn Date), domain = CS-section Company_Domain, corporate scope. DOAM = active DOAM entities; overlaps labelled DOAM.",
+      "WalaPlus = CRM Deal Phase in (New Deal, Kickoff, Onboarding, Adoption, Renewal) AND NOT Termination AND (Churn Date empty OR Renewal Date > Churn Date), domain = CS-section Company_Domain, corporate scope. DOAM = active DOAM entities; overlaps labelled DOAM.",
   };
 }
 

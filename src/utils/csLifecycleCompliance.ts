@@ -99,6 +99,17 @@ function loadConfig(): Config {
       process.env.CS_LIFECYCLE_STALLED_TRANSITION_DAYS,
       7,
     ),
+    // "Kickoff" (CS team, 2026-09-03) is DELIBERATELY ABSENT — Sarah's call:
+    // "exempt like New Deal". Kickoff precedes Onboarding, and the rules gated
+    // on this list are the data-completeness ones (missing CS owner = CRITICAL,
+    // missing renewal date / domain / health score / ARR). The CS team has not
+    // filled the section fields that early; the data arrives across the
+    // sales→CS handoff, which is exactly why New Deal is exempt too. Adding
+    // Kickoff here would fire a violation wave on every brand-new customer.
+    // NOTE the same env var is read by duplicateRadarCsOverlap, which DOES
+    // need Kickoff (a live client must still block a competing Sales deal) —
+    // it unions Kickoff in for that reason. Setting this env var therefore
+    // changes compliance scope only; it cannot un-block a Kickoff conflict.
     activePhases: list(
       process.env.DUPLICATE_RADAR_CS_ACTIVE_PHASES,
       ["Onboarding", "Adoption", "Renewal"],

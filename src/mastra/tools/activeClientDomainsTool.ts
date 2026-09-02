@@ -6,7 +6,7 @@ import { z } from "zod";
  *
  * "Collect all the domains of existing clients with no churn." Returns the
  * CORPORATE current-client domains (listActiveClientDomains): CRM Deals whose
- * CS Phase is New Deal / Onboarding / Adoption / Renewal (NOT Termination, not
+ * CS Phase is New Deal / Kickoff / Onboarding / Adoption / Renewal (NOT Termination, not
  * blank) AND that are not churned — Churn Date empty OR a Renewal Date later
  * than the Churn Date — taking the domain from the CS-section Company_Domain
  * field (Sarah 2026-07-26 final rule). Marketplace / WalaOne / Partner-Accounts
@@ -20,7 +20,7 @@ export const activeClientDomainsTool = createTool({
   id: "active-client-domains",
 
   description:
-    "List the DOMAINS of corporate current clients: CRM Deals whose CS Phase is New Deal / Onboarding / Adoption / Renewal (not Termination, not blank) and that are not churned (Churn Date empty, or a Renewal Date later than the Churn Date), using the CS-section Company_Domain field as the domain. Marketplace / WalaOne / merchant layouts are excluded, and ACTIVE DOAM (HR-ministry) government clients are merged in. Use whenever the user asks to collect / list / export the domains of current clients, active clients, no-churn clients, or a suppression / exclusion list for outreach or imports. Returns the total count and the sorted domains; for very large lists a preview is returned with a note to use the Preflight tab download or GET /api/duplicates/preflight/active-client-domains?format=csv for the full file.",
+    "List the DOMAINS of corporate current clients: CRM Deals whose CS Phase is New Deal / Kickoff / Onboarding / Adoption / Renewal (not Termination, not blank) and that are not churned (Churn Date empty, or a Renewal Date later than the Churn Date), using the CS-section Company_Domain field as the domain. Marketplace / WalaOne / merchant layouts are excluded, and ACTIVE DOAM (HR-ministry) government clients are merged in. Use whenever the user asks to collect / list / export the domains of current clients, active clients, no-churn clients, or a suppression / exclusion list for outreach or imports. Returns the total count and the sorted domains; for very large lists a preview is returned with a note to use the Preflight tab download or GET /api/duplicates/preflight/active-client-domains?format=csv for the full file.",
 
   inputSchema: z.object({
     fresh: z

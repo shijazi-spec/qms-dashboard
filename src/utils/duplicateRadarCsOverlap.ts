@@ -82,14 +82,28 @@ function loadConfig(): Config {
     // "Kickoff" (CS team, 2026-09-03) is a LIVE client phase — the customer
     // has signed and the kickoff motion is running — so a Sales deal opened
     // against them is a genuine cross-module conflict and must BLOCK. It maps
-    // to lifecycle_state "active_other" below, which is the intended fallback
-    // for a non-standard active phase.
-    phaseFieldActive: list(process.env.DUPLICATE_RADAR_CS_ACTIVE_PHASES, [
-      "Kickoff",
-      "Onboarding",
-      "Adoption",
-      "Renewal",
-    ]),
+    // to lifecycle_state "active_other" below, the intended fallback for a
+    // non-standard active phase.
+    //
+    // Kickoff is UNIONED IN rather than merely added to the default, because
+    // DUPLICATE_RADAR_CS_ACTIVE_PHASES is SHARED with csLifecycleCompliance —
+    // where Kickoff is deliberately EXCLUDED (Sarah 2026-09-03: exempt from the
+    // data-completeness rules, like New Deal, since CS has not filled the
+    // section fields yet). The two modules ask different questions of the same
+    // variable: "is this a live client?" (yes) vs "must its data be complete?"
+    // (not yet). Relying on the default alone would silently drop Kickoff here
+    // the moment anyone sets that env var to the old three phases.
+    phaseFieldActive: (() => {
+      const base = list(process.env.DUPLICATE_RADAR_CS_ACTIVE_PHASES, [
+        "Onboarding",
+        "Adoption",
+        "Renewal",
+      ]);
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+      return base.some((p) => norm(p) === "kickoff")
+        ? base
+        : [...base, "Kickoff"];
+    })(),
     phaseTermination:
       process.env.DUPLICATE_RADAR_CS_TERMINATION_PHASE?.trim() || "Termination",
     cooloffPrivateDays: Number.parseInt(
