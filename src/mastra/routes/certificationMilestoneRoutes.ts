@@ -46,8 +46,13 @@ export const certificationMilestoneRoutes = [
         }
 
         const r = await pool.query(
+          // pg returns DATE as a JS Date at local midnight; JSON-serialising it with
+          // toISOString() shifts the day in any non-UTC server timezone. Format in SQL
+          // instead so plain 'YYYY-MM-DD' strings (or null) come back, as in
+          // calcCertMilestoneDelivery() in src/utils/northStarSources.ts.
           `SELECT cm.milestone_key, cm.milestone_type, cm.certification,
-                  cm.milestone_name, cm.planned_date, cm.delivered_date,
+                  cm.milestone_name, TO_CHAR(cm.planned_date, 'YYYY-MM-DD')   AS planned_date,
+                  TO_CHAR(cm.delivered_date, 'YYYY-MM-DD') AS delivered_date,
                   cm.status, cm.owner, cm.notes, reg.regulation_code
              FROM certification_milestones cm
              LEFT JOIN regulations reg ON reg.id = cm.regulation_id

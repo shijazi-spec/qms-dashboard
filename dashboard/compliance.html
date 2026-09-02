@@ -613,14 +613,14 @@
             if (m.delivered_date && m.planned_date) {
                 const onTime = new Date(m.delivered_date) <= new Date(m.planned_date);
                 return onTime
-                    ? '<span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">On time</span>'
-                    : '<span class="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">Late</span>';
+                    ? `<span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">${_ct('compliance.ms_on_time', 'On time')}</span>`
+                    : `<span class="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">${_ct('compliance.ms_late', 'Late')}</span>`;
             }
-            if (!m.planned_date) return '<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">No date</span>';
+            if (!m.planned_date) return `<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">${_ct('compliance.ms_no_date', 'No date')}</span>`;
             const overdue = new Date(m.planned_date) < new Date();
             return overdue
-                ? '<span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800">Overdue</span>'
-                : '<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">Planned</span>';
+                ? `<span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800">${_ct('compliance.ms_overdue', 'Overdue')}</span>`
+                : `<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">${_ct('compliance.ms_planned', 'Planned')}</span>`;
         }
 
         function _mRow(m) {
@@ -634,21 +634,28 @@
             </div>`;
         }
 
+        function _mLoadError() {
+            const msg = escAttr(_ct('compliance.ms_load_error', 'Could not load milestones.'));
+            document.getElementById('milestoneTimeline').innerHTML = `<div class="text-sm text-red-500">${msg}</div>`;
+            document.getElementById('milestoneFrameworks').innerHTML = `<div class="text-sm text-red-500">${msg}</div>`;
+            document.getElementById('milestoneDependencies').innerHTML = `<div class="text-sm text-red-500">${msg}</div>`;
+        }
         async function loadMilestones() {
             try {
                 const res = await fetch('/api/certification-milestones');
-                if (!res.ok) return;
+                if (!res.ok) { _mLoadError(); return; }
                 const d = await res.json();
                 document.getElementById('milestonePlanProvenance').textContent =
                     `${d.source_doc} v${d.plan_version}`;
                 document.getElementById('milestoneTimeline').innerHTML =
-                    (d.plan || []).map(_mRow).join('') || '<div class="text-sm text-gray-500">No milestones.</div>';
+                    (d.plan || []).map(_mRow).join('') || `<div class="text-sm text-gray-500">${_ct('compliance.ms_empty_plan', 'No milestones.')}</div>`;
                 document.getElementById('milestoneFrameworks').innerHTML =
-                    (d.framework_target || []).map(_mRow).join('') || '<div class="text-sm text-gray-500">No framework targets.</div>';
+                    (d.framework_target || []).map(_mRow).join('') || `<div class="text-sm text-gray-500">${_ct('compliance.ms_empty_frameworks', 'No framework targets.')}</div>`;
                 document.getElementById('milestoneDependencies').innerHTML =
-                    (d.dependency || []).map(_mRow).join('') || '<div class="text-sm text-gray-500">No open dependencies.</div>';
+                    (d.dependency || []).map(_mRow).join('') || `<div class="text-sm text-gray-500">${_ct('compliance.ms_empty_deps', 'No open dependencies.')}</div>`;
             } catch (e) {
                 console.error('Error loading milestones:', e);
+                _mLoadError();
             }
         }
         function getLifecycleClass(status) {

@@ -205,6 +205,31 @@ export async function seedCertificationMilestonePlan(): Promise<{ inserted: numb
     );
     inserted += res.rowCount ?? 0;
   }
+
+  // The seeder runs at boot, but SACS-002 is only added to `regulations` later by
+  // initComplianceTables() (request-scoped). On first boot its milestone row is
+  // therefore inserted with regulation_id NULL, and ON CONFLICT DO NOTHING means a
+  // later boot would never repair it. Backfill explicitly. certification_milestones
+  // has no code column to join on, so iterate the seed rows (which carry
+  // regulation_code) instead. Idempotent: only touches rows still NULL.
+  let repaired = 0;
+  for (const r of rows) {
+    if (r.regulation_code === null) continue;
+    const res = await pool.query(
+      `UPDATE certification_milestones cm
+          SET regulation_id = reg.id
+         FROM regulations reg
+        WHERE cm.milestone_key = $1
+          AND cm.regulation_id IS NULL
+          AND reg.regulation_code = $2`,
+      [r.milestone_key, r.regulation_code],
+    );
+    repaired += res.rowCount ?? 0;
+  }
+  if (repaired > 0) {
+    logger.info(`🔗 [NorthStar] Backfilled regulation_id on ${repaired} milestone row(s)`);
+  }
+
   logger.info(`✅ [NorthStar] Certification Milestone Plan seeded (${inserted} new rows)`);
   return { inserted };
 }

@@ -40,7 +40,7 @@ const DEFAULT_MAP: Record<string, string> = {
   // uncommenting once the full strategyItem UUID is confirmed against the
   // leadership platform — the historical "995%" came from pushing an
   // unverified mapping.
-  // { code: "GRC-KPI-002", strategyItemId: "2f11d78d-____-____-____-____________" },
+  // "GRC-KPI-002": "2f11d78d-____-____-____-____________",
 };
 
 function getMap(): Record<string, string> {

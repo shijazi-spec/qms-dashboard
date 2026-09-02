@@ -4,7 +4,7 @@
 
 ## Why this deploy exists
 
-GRC-KPI-002 was displaying document-mapping clause coverage (~19.9%) — a proxy metric nobody asked for. The Certification Milestone Plan (GRQ-PLAN-2026-01 v3.0) is the actual document leadership tracks, and the platform already had everything needed to measure it for real: a `certification_milestones` table, a delivery calculator (`calcCertMilestoneDelivery`), and a data-entry form on `/compliance`. None of it was fed — the table was empty and the entry form was orphaned from the nav, so the correct machinery sat unused while the KPI reported a different metric entirely.
+GRC-KPI-002 was displaying document-mapping clause coverage (~19.9%) — a proxy metric nobody asked for. The Certification Milestone Plan (GRQ-PLAN-2026-01 v3.0) is the actual document leadership tracks, and the platform already had everything needed to measure it for real: a `certification_milestones` table, a delivery calculator (`calcCertMilestoneDelivery`), and a data-entry form at `/leadership-kpis/data` (`dashboard/northstar-data.html`). None of it was fed — the table was empty and the entry form was orphaned from the nav, so the correct machinery sat unused while the KPI reported a different metric entirely. (`/compliance` shows the new milestone section READ-ONLY — see the file/area table below.)
 
 This deploy seeds the 16-row plan, extends the schema to carry it, repoints GRC-KPI-002 at the real calculator, annotates the resulting baseline break so historical values aren't misread as a regression, surfaces the plan on a renamed `/compliance` page, and stages (but does not enable) a leadership feed count.
 
@@ -25,7 +25,7 @@ This deploy seeds the 16-row plan, extends the schema to carry it, repoints GRC-
 | Leadership push | `src/utils/leadershipPush.ts` | GRC-KPI-002 entry added **commented out** — see Known limitations below. |
 | Sidebar rename | `dashboard/i18n/{en,ar}.json`, `dashboard/js/navigation.js` | `nav.items.compliance` value changed to "Certification Milestone" / "معالم الشهادات". `id`, `href` (`/compliance`), and the i18n **key** are untouched. A nav-search alias map keeps "compliance" resolving to the renamed row (muscle memory preserved) via a reused `data-item-id` attribute. |
 | `/compliance` milestone section | `src/mastra/routes/certificationMilestoneRoutes.ts` (new), `src/mastra/index.ts`, `dashboard/compliance.html`, `dashboard/i18n/{en,ar}.json` | New `GET /api/certification-milestones` returning the plan grouped by section (`plan` / `framework_target` / `dependency`) plus provenance (`plan_version`, `source_doc`). New page section rendered above the existing framework/obligation area: Milestone Timeline, Compliant-From-by-Framework, Dependencies & Blockers. |
-| RBAC registration | `src/mastra/index.ts` (`ROUTE_PERMISSION_MAP`) | `/api/certification-milestones` registered explicitly. **This was a blocking bug caught in review**: `enforceRoutePermission` denies by default, and admin bypass only applies inside a matched rule — an unregistered route 403s for everyone, including admins. Fixed before merge; the whole milestone section would otherwise have rendered empty in prod. |
+| RBAC registration | `src/utils/rbacMiddleware.ts` (`ROUTE_PERMISSION_MAP`, ~line 731) | `/api/certification-milestones` registered explicitly. **This was a blocking bug caught in review**: `enforceRoutePermission` denies by default, and admin bypass only applies inside a matched rule — an unregistered route 403s for everyone, including admins. Fixed before merge; the whole milestone section would otherwise have rendered empty in prod. |
 
 ## Behaviour changes operators will notice
 
@@ -40,6 +40,7 @@ This deploy seeds the 16-row plan, extends the schema to carry it, repoints GRC-
 1. **Commit + push to `origin/QMS` first** (standing rule — local-only edits deploy stale code), then Republish.
 2. **Schema auto-migrates.** All new columns are added via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`; the 16 plan rows are seeded on boot via `seedCertificationMilestonePlan()` using `ON CONFLICT (milestone_key) WHERE milestone_key IS NOT NULL DO NOTHING`. No manual SQL required.
 3. **⛔ Do NOT approve any `DROP TABLE` in the Replit publish schema diff.** Approve code-only changes, as always.
+4. **Before trusting GRC-KPI-002's value, run `SELECT count(*) FROM certification_milestones;`.** If this is non-zero from BEFORE this deploy (i.e. rows pre-dating the `milestone_type` column), `ALTER TABLE ... ADD COLUMN milestone_type ... DEFAULT 'plan'` will have backfilled them all to `'plan'` — and `calcCertMilestoneDelivery()` counts every `milestone_type='plan'` row in its denominator. Those pre-existing rows would silently distort the KPI. Set their `milestone_type` explicitly (to whatever it should actually be) before trusting the KPI.
 
 ## Post-deploy smoke test
 
@@ -54,7 +55,7 @@ This deploy seeds the 16-row plan, extends the schema to carry it, repoints GRC-
 
 - **Leadership push for GRC-KPI-002 is committed commented out.** The production `strategyItemId` UUID in the codebase is truncated (`2f11d78d…`) and unverified — pushing an unconfirmed mapping is exactly what produced the historical "995%" leadership-feed bug on a different KPI. **What unblocks it:** confirm the full strategyItem UUID against the leadership platform, then uncomment the entry in `src/utils/leadershipPush.ts`. The count math itself (`onTimeCountFromSummary`) is already tested and correct — this is purely a data-verification gate, not a code gap.
 - **`compliance_assessments` is empty**, which is why the compliance framework section below the new milestone blocks still shows 0% / 668 Not Assessed. This is a separate, pre-existing problem, out of scope for this deploy — do not treat it as something this change was meant to fix.
-- **`kpi.description` in `dashboard/kpis.html` is still interpolated raw into innerHTML** — a pre-existing stored-XSS exposure found during this work's review. `kpi_name` was fixed (both the badge-adjacent renderer and a second pre-existing unescaped sink at the card renderer), but `description` was logged as out-of-scope for this task and was **not** fixed. Flagging here so it isn't lost.
+- **`kpi.description` in `dashboard/kpis.html` was raw-interpolated into innerHTML** — a pre-existing stored-XSS exposure found during this work's review. `kpi_name` was fixed earlier (both the badge-adjacent renderer and a second pre-existing unescaped sink at the card renderer); `description` was initially logged as out-of-scope and left unfixed, but was fixed in the final-review pass (both sinks — card renderer and detail-panel renderer — now go through `escapeHtml`).
 - **SACS-002 has no obligations sourced yet**, so it will not appear in Document Mapping (clause-coverage view) until its control catalogue is sourced and loaded — it only appears as a framework card in Compliance and as a milestone target in the new plan section.
 
 ## Verification
