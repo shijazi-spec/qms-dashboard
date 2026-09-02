@@ -749,6 +749,21 @@ export async function runWeeklyExecBriefIfDue(): Promise<{ ran: boolean; ageHour
  */
 export async function runLeadershipPushIfDue(): Promise<{ ran: boolean; ageHours: number }> {
   const now = new Date();
+  // ONLY the production deployment may run the automatic push. The dev workspace
+  // and any preview deploy run this same fallback loop but read a DIFFERENT
+  // database (Replit dev/prod split), so if they also push, the leadership board
+  // flip-flops between each instance's value (seen 2026-08/09: BU Pilot bouncing
+  // 75/66.7/0 on every push, across all KPIs). We BLOCK only when positively
+  // identified as the dev workspace (REPLIT_DEV_DOMAIN set and NOT a deployment),
+  // so production is never accidentally silenced if the env vars ever change.
+  // LEADERSHIP_PUSH_FORCE=true forces this instance to push regardless.
+  const inDeployment =
+    process.env.REPLIT_DEPLOYMENT === "1" || !!process.env.REPLIT_DEPLOYMENT_ID;
+  const isDevWorkspace = !inDeployment && !!process.env.REPLIT_DEV_DOMAIN;
+  const forced =
+    String(process.env.LEADERSHIP_PUSH_FORCE || "").toLowerCase() === "true";
+  if (isDevWorkspace && !forced) return { ran: false, ageHours: 0 };
+
   const isThursday = now.getUTCDay() === 4; // 0=Sun … 4=Thu
   const hourUTC = now.getUTCHours();
   if (!isThursday || hourUTC < 3 || hourUTC > 6) return { ran: false, ageHours: 0 };
