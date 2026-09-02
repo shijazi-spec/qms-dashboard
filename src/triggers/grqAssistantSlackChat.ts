@@ -20,6 +20,8 @@
 import type { ApiRoute } from "@mastra/core/server";
 import { registerSlackTrigger, getClient } from "./slackTriggers";
 import { withAgentUserContext } from "../utils/withApprovalGate";
+import { buildAiCallTelemetryMetadata, withAiTelemetry } from "../utils/aiTelemetry";
+import { QMS_CONSULTANT_PROMPT_VERSION } from "../mastra/agents/qmsConsultantAgent";
 
 // Role Adam runs AS when answering in Slack. The platform's data tools are
 // RBAC-gated by the caller's role (via withAgentUserContext); without a context
@@ -202,25 +204,56 @@ export function registerGrqAssistantSlackRoutes(): ApiRoute[] {
           void import("../utils/adamTopicLog").then(({ recordQuestionSection }) =>
             recordQuestionSection(q, { surface: "slack", askedBy: `slack-${slackUser}` }),
           ).catch(() => {});
-          const res = await generateWithRateLimitRetry(() =>
-            withAgentUserContext(
+          const res = await generateWithRateLimitRetry(async () => {
+            // Record the CALL in ai_call_metrics — tokens, latency, cost and,
+            // critically, the 429s. The web chat route has always done this;
+            // Slack did not, so every Slack question was invisible to AI
+            // Operations and a rate-limit burst here left nothing to diagnose
+            // (Sarah 2026-09-02, after Adam answered "I'm hitting the AI rate
+            // limit" in #grq-assistant and the table held no row for it).
+            //
+            // Wrapped INSIDE the retry on purpose: each attempt gets its own
+            // row, so a rate-limited turn shows all three tries rather than
+            // only the one that finally succeeded.
+            //
+            // NO promptText is passed. Slack questions carry client company
+            // names, phone numbers and pasted lists; we record that a call
+            // happened and what it cost, never the words — the same rule as
+            // adam_topic_log. Telemetry failures are swallowed inside
+            // openAiCallMetric/finalizeAiCallMetric, so this can never break
+            // a chat turn.
+            const { result } = await withAiTelemetry(
               {
-                user: {
-                  userId: null,
-                  email: `slack-${slackUser}`,
-                  role: SLACK_ADAM_ROLE,
-                  autoApproveTier: "never",
-                },
-                threadId: convThreadId,
+                agentName: "WalaPlus QMS Consultant",
+                model: "gpt-4o",
+                userId: `slack-${slackUser}`,
+                sessionId: convThreadId,
+                metadata: buildAiCallTelemetryMetadata({
+                  promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
+                  clientSurface: "slack",
+                }),
               },
               () =>
-                agent.generate([{ role: "user", content: q }], {
-                  threadId: convThreadId,
-                  resourceId: convResourceId,
-                  maxSteps: SLACK_AGENT_MAX_STEPS,
-                }),
-            ),
-          );
+                withAgentUserContext(
+                  {
+                    user: {
+                      userId: null,
+                      email: `slack-${slackUser}`,
+                      role: SLACK_ADAM_ROLE,
+                      autoApproveTier: "never",
+                    },
+                    threadId: convThreadId,
+                  },
+                  () =>
+                    agent.generate([{ role: "user", content: q }], {
+                      threadId: convThreadId,
+                      resourceId: convResourceId,
+                      maxSteps: SLACK_AGENT_MAX_STEPS,
+                    }),
+                ),
+            );
+            return result;
+          });
           reply = (await extractAgentText(res)).trim();
         } catch (e: any) {
           reply = friendlyAgentError(e);
