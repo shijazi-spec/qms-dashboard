@@ -590,6 +590,19 @@ async function seedDefaultRegulations(): Promise<void> {
       version: "4.0",
       source_url: "https://www.pcisecuritystandards.org/document_library/",
     },
+    {
+      regulation_code: "SACS-002",
+      name: "SACS-002 Saudi Aramco Cybersecurity Standard",
+      description:
+        "Saudi Aramco third-party cybersecurity certification. Tracked for certification milestones; control catalogue not yet sourced.",
+      jurisdiction: "saudi",
+      category: "cybersecurity",
+      issuing_body: "Saudi Aramco",
+      effective_date: undefined,
+      status: "active",
+      version: "002",
+      source_url: undefined,
+    },
   ];
 
   for (const reg of saudiRegulations) {

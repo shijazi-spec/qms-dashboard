@@ -25,6 +25,12 @@
 import { pool } from "./kpiDatabase";
 import { logger } from "./logger";
 import { redactSensitiveDeep } from "./eventLogsDatabase";
+import {
+  CERTIFICATION_MILESTONE_PLAN,
+  PLAN_VERSION,
+  SOURCE_DOC,
+  resolveMilestoneRegulationIds,
+} from "./seeds/certificationMilestonePlan";
 
 export async function initNorthStarSourceTables(): Promise<void> {
   await pool.query(`
@@ -35,12 +41,39 @@ export async function initNorthStarSourceTables(): Promise<void> {
       planned_date DATE,
       delivered_date DATE,
       status VARCHAR(20) DEFAULT 'planned',
+      milestone_type VARCHAR(20) DEFAULT 'plan',
+      regulation_id INTEGER,
+      milestone_key VARCHAR(100),
+      plan_version VARCHAR(20),
+      source_doc VARCHAR(50),
       owner VARCHAR(255),
       notes TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  // Certification Milestone Plan (GRQ-PLAN-2026-01) support. milestone_type
+  // partitions the plan's three sections; only 'plan' rows score GRC-KPI-002.
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS milestone_type VARCHAR(20) DEFAULT 'plan'`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS regulation_id INTEGER`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS milestone_key VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS plan_version VARCHAR(20)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS source_doc VARCHAR(50)`,
+  );
+  // Idempotency key for the plan seed.
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_certification_milestones_key
+       ON certification_milestones(milestone_key) WHERE milestone_key IS NOT NULL`,
+  );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS evidence_requests (
       id SERIAL PRIMARY KEY,
@@ -111,6 +144,69 @@ export async function initNorthStarSourceTables(): Promise<void> {
     )
   `);
   logger.info("✅ [NorthStarSources] source tables ready");
+  await seedCertificationMilestonePlan();
+}
+
+/**
+ * Seed the approved Certification Milestone Plan. Idempotent: ON CONFLICT on
+ * milestone_key DO NOTHING, so redeploys never clobber operator edits
+ * (delivered_date, status) made in the UI.
+ *
+ * The index on milestone_key is PARTIAL (WHERE milestone_key IS NOT NULL,
+ * because pre-existing rows from the KPI Source Data form have no key), so the
+ * ON CONFLICT clause MUST repeat that predicate — Postgres cannot infer a
+ * partial unique index from a bare ON CONFLICT (milestone_key).
+ */
+export async function seedCertificationMilestonePlan(): Promise<{ inserted: number }> {
+  // `regulations` is created lazily by complianceDatabase.initComplianceTables(),
+  // which only runs inside compliance request handlers — never at boot. On a cold
+  // database this seeder would otherwise throw and be swallowed by the caller's
+  // generic catch, silently seeding nothing. Skip explicitly and retry next boot,
+  // rather than seeding rows with null regulation_id that ON CONFLICT DO NOTHING
+  // would never backfill.
+  const regsReady = await pool.query(
+    `SELECT to_regclass('public.regulations') AS t`,
+  );
+  if (!regsReady.rows[0]?.t) {
+    logger.warn(
+      "⏭️ [NorthStar] Certification Milestone Plan seed SKIPPED — `regulations` table does not exist yet (compliance module not initialised). Will retry on next boot.",
+    );
+    return { inserted: 0 };
+  }
+
+  const regs = await pool.query(
+    `SELECT id, regulation_code FROM regulations`,
+  );
+  const idByCode: Record<string, number> = {};
+  for (const r of regs.rows) idByCode[r.regulation_code] = Number(r.id);
+
+  const rows = resolveMilestoneRegulationIds(CERTIFICATION_MILESTONE_PLAN, idByCode);
+  let inserted = 0;
+  for (const r of rows) {
+    const res = await pool.query(
+      `INSERT INTO certification_milestones
+         (milestone_key, milestone_type, certification, regulation_id,
+          milestone_name, planned_date, status, owner, notes,
+          plan_version, source_doc)
+       VALUES ($1,$2,$3,$4,$5,$6,'planned',$7,$8,$9,$10)
+       ON CONFLICT (milestone_key) WHERE milestone_key IS NOT NULL DO NOTHING`,
+      [
+        r.milestone_key,
+        r.milestone_type,
+        r.certification,
+        r.regulation_id,
+        r.milestone_name,
+        r.planned_date,
+        r.owner,
+        r.notes,
+        PLAN_VERSION,
+        SOURCE_DOC,
+      ],
+    );
+    inserted += res.rowCount ?? 0;
+  }
+  logger.info(`✅ [NorthStar] Certification Milestone Plan seeded (${inserted} new rows)`);
+  return { inserted };
 }
 
 /**
@@ -158,6 +254,11 @@ const TABLES: Record<string, { table: string; cols: string[] }> = {
       "status",
       "owner",
       "notes",
+      "milestone_type",
+      "regulation_id",
+      "milestone_key",
+      "plan_version",
+      "source_doc",
     ],
   },
   evidence_requests: {
