@@ -158,6 +158,22 @@ export async function initNorthStarSourceTables(): Promise<void> {
  * partial unique index from a bare ON CONFLICT (milestone_key).
  */
 export async function seedCertificationMilestonePlan(): Promise<{ inserted: number }> {
+  // `regulations` is created lazily by complianceDatabase.initComplianceTables(),
+  // which only runs inside compliance request handlers — never at boot. On a cold
+  // database this seeder would otherwise throw and be swallowed by the caller's
+  // generic catch, silently seeding nothing. Skip explicitly and retry next boot,
+  // rather than seeding rows with null regulation_id that ON CONFLICT DO NOTHING
+  // would never backfill.
+  const regsReady = await pool.query(
+    `SELECT to_regclass('public.regulations') AS t`,
+  );
+  if (!regsReady.rows[0]?.t) {
+    logger.warn(
+      "⏭️ [NorthStar] Certification Milestone Plan seed SKIPPED — `regulations` table does not exist yet (compliance module not initialised). Will retry on next boot.",
+    );
+    return { inserted: 0 };
+  }
+
   const regs = await pool.query(
     `SELECT id, regulation_code FROM regulations`,
   );
