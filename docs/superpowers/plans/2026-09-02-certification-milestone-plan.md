@@ -533,6 +533,11 @@ import {
  * Seed the approved Certification Milestone Plan. Idempotent: ON CONFLICT on
  * milestone_key DO NOTHING, so redeploys never clobber operator edits
  * (delivered_date, status) made in the UI.
+ *
+ * The index on milestone_key is PARTIAL (WHERE milestone_key IS NOT NULL,
+ * because pre-existing rows from the KPI Source Data form have no key), so the
+ * ON CONFLICT clause MUST repeat that predicate — Postgres cannot infer a
+ * partial unique index from a bare ON CONFLICT (milestone_key).
  */
 export async function seedCertificationMilestonePlan(): Promise<{ inserted: number }> {
   const regs = await pool.query(
@@ -550,7 +555,7 @@ export async function seedCertificationMilestonePlan(): Promise<{ inserted: numb
           milestone_name, planned_date, status, owner, notes,
           plan_version, source_doc)
        VALUES ($1,$2,$3,$4,$5,$6,'planned',$7,$8,$9,$10)
-       ON CONFLICT (milestone_key) DO NOTHING`,
+       ON CONFLICT (milestone_key) WHERE milestone_key IS NOT NULL DO NOTHING`,
       [
         r.milestone_key,
         r.milestone_type,
