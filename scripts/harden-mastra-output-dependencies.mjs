@@ -48,8 +48,7 @@ function assertNoLegacyProviderUtils(lockfile) {
   }
 }
 
-function assertEnginesSupportRuntimeNode(lockfile) {
-  const runtimeNodeVersion = process.versions.node;
+export function assertEnginesSupportRuntimeNode(lockfile, runtimeNodeVersion = process.versions.node) {
   const incompatible = Object.entries(lockfile.packages ?? {})
     .filter(([path]) => path !== '')
     .filter(([, metadata]) => !metadata.dev && !metadata.devOptional)
@@ -111,7 +110,11 @@ async function main() {
   console.log('[harden-mastra-output] deployment dependency tree is clean');
 }
 
-main().catch(error => {
-  console.error('[harden-mastra-output] failed:', error.message);
-  process.exit(1);
-});
+// Only run the full harden pipeline when executed directly (not when the
+// engines-check helper is imported by tests).
+if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href) {
+  main().catch(error => {
+    console.error('[harden-mastra-output] failed:', error.message);
+    process.exit(1);
+  });
+}
