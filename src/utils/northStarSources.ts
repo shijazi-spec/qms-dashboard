@@ -385,8 +385,16 @@ export async function calcCertMilestoneDelivery() {
   // quarter, and one due earlier that's still missing counts against. ONLY
   // milestone_type = 'plan' rows may enter the denominator — the 7
   // framework_target rows and 2 dependency rows must never be counted.
+  // node-postgres parses a DATE column into a JS Date object; String(dateObject)
+  // renders it via the server's locale/timezone (e.g. "Sat Oct 31 2026 00:00:00
+  // GMT+0300 (Arabian Standard Time)"), so slicing the first 10 chars produced
+  // garbage like "Sat Oct 31" instead of an ISO date. Format the dates in SQL
+  // instead so they arrive as plain 'YYYY-MM-DD' strings (or null) and no JS
+  // Date conversion ever happens.
   const r = await pool.query(
-    `SELECT planned_date, delivered_date, status
+    `SELECT TO_CHAR(planned_date, 'YYYY-MM-DD')   AS planned_date,
+            TO_CHAR(delivered_date, 'YYYY-MM-DD') AS delivered_date,
+            status
        FROM certification_milestones
       WHERE milestone_type = 'plan'
         AND planned_date IS NOT NULL`,
@@ -396,8 +404,8 @@ export async function calcCertMilestoneDelivery() {
   const qEnd = new Date(Date.UTC(qStart.getUTCFullYear(), qStart.getUTCMonth() + 3, 1));
   const s = summarizeMilestoneDelivery(
     r.rows.map((x: any) => ({
-      planned_date: String(x.planned_date).slice(0, 10),
-      delivered_date: x.delivered_date ? String(x.delivered_date).slice(0, 10) : null,
+      planned_date: x.planned_date as string,
+      delivered_date: (x.delivered_date ?? null) as string | null,
       status: String(x.status ?? "planned"),
     })),
     qStart, qEnd,

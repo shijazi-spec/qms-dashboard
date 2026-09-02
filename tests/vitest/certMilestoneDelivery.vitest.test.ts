@@ -53,4 +53,22 @@ describe("summarizeMilestoneDelivery", () => {
     expect(r.due).toBe(1);
     expect(r.value).toBe(100);
   });
+
+  it("includes a milestone falling exactly on the quarter start", () => {
+    const r = summarizeMilestoneDelivery(
+      [{ planned_date: "2026-10-01", delivered_date: "2026-10-01", status: "delivered" }],
+      Q4_START, Q4_END,
+    );
+    expect(r.due).toBe(1);
+    expect(r.onTime).toBe(1);
+  });
+
+  it("excludes a milestone falling on the next quarter's first day", () => {
+    const r = summarizeMilestoneDelivery(
+      [{ planned_date: "2027-01-01", delivered_date: null, status: "planned" }],
+      Q4_START, Q4_END,
+    );
+    expect(r.due).toBe(0);
+    expect(r.dataAvailable).toBe(false);
+  });
 });
