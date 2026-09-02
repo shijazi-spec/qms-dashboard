@@ -2039,6 +2039,11 @@
   "compliance": {
     "title": "Regulatory Compliance",
     "subtitle": "PDPL, NCA/ECC, ISO standards tracking and obligation management",
+    "title_milestones": "Certification Milestones",
+    "milestone_timeline": "Milestone Timeline",
+    "compliant_from": "Compliant From, by Framework",
+    "dependencies": "Dependencies & Blockers",
+    "framework_section": "Framework Compliance & Obligations",
     "export_csv": "Export CSV",
     "overall_score_label": "Overall Compliance",
     "score_label": "Score",

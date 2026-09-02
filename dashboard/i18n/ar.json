@@ -2039,6 +2039,11 @@
   "compliance": {
     "title": "الامتثال التنظيمي",
     "subtitle": "تتبع معايير PDPL وNCA/ECC وISO وإدارة الالتزامات",
+    "title_milestones": "معالم الشهادات",
+    "milestone_timeline": "الجدول الزمني للمعالم",
+    "compliant_from": "تاريخ الامتثال حسب الإطار",
+    "dependencies": "الاعتماديات والعوائق",
+    "framework_section": "الامتثال للأطر والالتزامات",
     "export_csv": "تصدير CSV",
     "overall_score_label": "الامتثال الإجمالي",
     "score_label": "النتيجة",

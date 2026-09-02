@@ -57,6 +57,7 @@ import { onboardingRoutes } from "./routes/onboardingRoutes";
 import { riskRoutes } from "./routes/riskRoutes";
 import { policyRoutes } from "./routes/policyRoutes";
 import { complianceRoutes } from "./routes/complianceRoutes";
+import { certificationMilestoneRoutes } from "./routes/certificationMilestoneRoutes";
 import { obligationDocumentsRoutes } from "./routes/obligationDocumentsRoutes";
 import { fraudRoutes } from "./routes/fraudRoutes";
 import { auditRoutes } from "./routes/auditRoutes";
@@ -316,6 +317,7 @@ export const mastra = new Mastra({
       ...riskRoutes,
       ...policyRoutes,
       ...complianceRoutes,
+      ...certificationMilestoneRoutes,
       ...obligationDocumentsRoutes,
       ...fraudRoutes,
       ...auditRoutes,

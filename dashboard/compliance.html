@@ -84,7 +84,7 @@
         <!-- ─── Header ──────────────────────────────────────────────── -->
         <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900" data-i18n="compliance.title">Regulatory Compliance</h1>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="compliance.title_milestones">Certification Milestones</h1>
                 <p class="text-sm text-gray-500 mt-1" data-i18n="compliance.subtitle">PDPL, NCA/ECC, ISO standards tracking and obligation management</p>
             </div>
             <div class="flex gap-3">
@@ -102,6 +102,24 @@
                 </button>
             </div>
         </div>
+
+        <!-- ─── Certification Milestone Plan (GRQ-PLAN-2026-01) ───── -->
+        <section data-testid="section-cert-milestones" class="mb-6 space-y-4">
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <h2 class="font-semibold text-gray-800" data-i18n="compliance.milestone_timeline">Milestone Timeline</h2>
+                <p class="text-xs text-gray-500" id="milestonePlanProvenance"></p>
+                <div id="milestoneTimeline" class="mt-3"></div>
+            </div>
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <h2 class="font-semibold text-gray-800" data-i18n="compliance.compliant_from">Compliant From, by Framework</h2>
+                <div id="milestoneFrameworks" class="mt-3"></div>
+            </div>
+            <div class="bg-white rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <h2 class="font-semibold text-amber-900" data-i18n="compliance.dependencies">Dependencies &amp; Blockers</h2>
+                <div id="milestoneDependencies" class="mt-3"></div>
+            </div>
+        </section>
+        <h2 class="text-lg font-semibold text-gray-800 mb-2" data-i18n="compliance.framework_section">Framework Compliance &amp; Obligations</h2>
 
         <!-- ─── Sticky filter bar (drives every section below) ────── -->
         <div class="filter-bar mb-6 px-4 py-3" data-testid="filter-bar">
@@ -585,6 +603,53 @@
         function _td(prefix, value) {
             if (!value) return '';
             return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic) ? (window.WalaPlusI18n.tDynamic(prefix, value) || value) : value;
+        }
+
+        // ─── Certification Milestone Plan (GRQ-PLAN-2026-01). Only 'plan'
+        // rows score GRC-KPI-002; the other two sections are context,
+        // rendered read-only. Uses escAttr (this file's existing HTML-escape
+        // helper) for every value interpolated from the database.
+        function _mStatus(m) {
+            if (m.delivered_date) {
+                const onTime = new Date(m.delivered_date) <= new Date(m.planned_date);
+                return onTime
+                    ? '<span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">On time</span>'
+                    : '<span class="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">Late</span>';
+            }
+            if (!m.planned_date) return '<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">No date</span>';
+            const overdue = new Date(m.planned_date) < new Date();
+            return overdue
+                ? '<span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800">Overdue</span>'
+                : '<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">Planned</span>';
+        }
+
+        function _mRow(m) {
+            return `<div class="flex items-start gap-3 py-2 border-b border-gray-100 last:border-0">
+                <div class="w-24 shrink-0 text-xs text-gray-500">${escAttr(m.planned_date || '—')}</div>
+                <div class="flex-1">
+                    <div class="text-sm text-gray-800">${escAttr(m.milestone_name)}</div>
+                    <div class="text-xs text-gray-500">${escAttr(m.certification)}${m.owner ? ' · ' + escAttr(m.owner) : ''}</div>
+                </div>
+                <div class="shrink-0">${_mStatus(m)}</div>
+            </div>`;
+        }
+
+        async function loadMilestones() {
+            try {
+                const res = await fetch('/api/certification-milestones');
+                if (!res.ok) return;
+                const d = await res.json();
+                document.getElementById('milestonePlanProvenance').textContent =
+                    `${d.source_doc} v${d.plan_version}`;
+                document.getElementById('milestoneTimeline').innerHTML =
+                    (d.plan || []).map(_mRow).join('') || '<div class="text-sm text-gray-500">No milestones.</div>';
+                document.getElementById('milestoneFrameworks').innerHTML =
+                    (d.framework_target || []).map(_mRow).join('') || '<div class="text-sm text-gray-500">No framework targets.</div>';
+                document.getElementById('milestoneDependencies').innerHTML =
+                    (d.dependency || []).map(_mRow).join('') || '<div class="text-sm text-gray-500">No open dependencies.</div>';
+            } catch (e) {
+                console.error('Error loading milestones:', e);
+            }
         }
         function getLifecycleClass(status) {
             const classes = {
@@ -1554,7 +1619,7 @@
 
         // ──────────────────────── Boot ─────────────────────────────────
         async function reloadAll() {
-            await Promise.all([loadSummary(), loadAllData(), loadDeadlines()]);
+            await Promise.all([loadSummary(), loadMilestones(), loadAllData(), loadDeadlines()]);
         }
 
         document.addEventListener('walaPlusLanguageChange', function () {
