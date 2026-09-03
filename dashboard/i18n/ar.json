@@ -2208,6 +2208,8 @@
     "roadmap_no_readiness": "لا توجد أهداف أطر.",
     "roadmap_no_date_set": "لا يوجد تاريخ محدد",
     "roadmap_preparer": "أعدّه مرام الحربي، مديرة الحوكمة والمخاطر والامتثال",
+    "roadmap_print_source": "المصدر:",
+    "roadmap_print_generated": "تاريخ الإصدار:",
     "ms_lbl_docs": "المستندات",
     "ms_lbl_approve": "الاعتماد",
     "ms_lbl_saqa": "تقييم SAQ A والتدريب",

@@ -2208,6 +2208,8 @@
     "roadmap_no_readiness": "No framework targets.",
     "roadmap_no_date_set": "No date set",
     "roadmap_preparer": "Prepared by Maram Alharbi, GRC Manager",
+    "roadmap_print_source": "Source:",
+    "roadmap_print_generated": "Generated on:",
     "ms_lbl_docs": "Documents",
     "ms_lbl_approve": "Approval",
     "ms_lbl_saqa": "SAQ A + Training",

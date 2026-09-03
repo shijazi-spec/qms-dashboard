@@ -168,6 +168,53 @@
         }
         .roadmap-bar-track { background: #E5E7EB; border-radius: 9999px; height: 8px; overflow: hidden; flex: 1; }
         .roadmap-bar-fill { background: #10B981; height: 100%; border-radius: 9999px; }
+
+        /* ─── Roadmap print/PDF hand-over (Task 6) ───────────────────── */
+        .roadmap-print-only { display: none; }
+        @media print {
+            @page { size: A4 landscape; margin: 12mm; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            html, body { background: #FFFFFF !important; }
+            body { padding: 0 !important; margin: 0 !important; }
+            /* Show only the roadmap section — everything else that lives
+               inside <main> (header/actions, stray section heading, filter
+               bar, KPI cards, status counters, frameworks grid, framework
+               detail, analytics/charts row, obligations table) is hidden by
+               this single rule instead of an enumerated list, so nothing
+               new added to <main> later silently leaks into print. */
+            main > *:not([data-testid="section-cert-milestones"]) { display: none !important; }
+            main { max-width: none !important; margin: 0 !important; padding: 0 !important; }
+            /* Elements outside <main>: nav rail + top bar, every modal, the
+               floating AI consultant widget. */
+            #walaplus-nav,
+            .modal,
+            #ai-consultant-widget {
+                display: none !important;
+            }
+            /* Inside the roadmap section: the on-screen document header
+               (title/provenance/preparer + the Print button) is replaced by
+               the self-identifying .roadmap-print-only header below. */
+            .roadmap-header-screen { display: none !important; }
+            .roadmap-print-only { display: block !important; }
+            [data-testid="section-cert-milestones"] { margin: 0 !important; }
+            /* Never clip the horizontal chain — let it wrap instead of
+               scrolling off the printed page. */
+            .roadmap-chain {
+                overflow: visible !important;
+                flex-wrap: wrap !important;
+            }
+            .roadmap-chain,
+            .roadmap-node,
+            .roadmap-connector,
+            .roadmap-today {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            [data-testid="roadmap-risk-banner"] {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+        }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
@@ -212,8 +259,8 @@
         <!-- ─── Certification Roadmap (GRQ-PLAN-2026-01) ───── -->
         <section data-testid="section-cert-milestones" class="mb-6">
             <div class="bg-white rounded-lg border border-gray-200 p-4 md:p-5">
-                <!-- Document header -->
-                <div class="flex flex-wrap items-start justify-between gap-3 pb-3 mb-2 border-b border-gray-100">
+                <!-- Document header (screen only — replaced in print by .roadmap-print-only below) -->
+                <div class="roadmap-header-screen flex flex-wrap items-start justify-between gap-3 pb-3 mb-2 border-b border-gray-100">
                     <div>
                         <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.roadmap_title">Certification Milestone Plan</h2>
                         <p class="text-xs text-gray-500 mt-0.5" id="roadmapProvenance">—</p>
@@ -223,6 +270,15 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m10-10V5a2 2 0 00-2-2H9a2 2 0 00-2 2v2m10 0H7m10 0h2M7 17h10v4H7v-4z"/></svg>
                         <span data-i18n="compliance.roadmap_print">Print / PDF</span>
                     </button>
+                </div>
+
+                <!-- Print-only header — hidden on screen, shown in @media print so the
+                     hand-over PDF self-identifies even printed on its own. -->
+                <div class="roadmap-print-only pb-3 mb-2 border-b border-gray-300" data-testid="roadmap-print-header">
+                    <h1 class="text-lg font-semibold text-gray-900" data-i18n="compliance.roadmap_title">Certification Milestone Plan</h1>
+                    <p class="text-xs text-gray-700 mt-0.5"><span data-i18n="compliance.roadmap_print_source">Source:</span> <span id="roadmapPrintSource">—</span></p>
+                    <p class="text-xs text-gray-700 mt-0.5" id="roadmapPrintPreparer">—</p>
+                    <p class="text-xs text-gray-500 mt-0.5"><span data-i18n="compliance.roadmap_print_generated">Generated on:</span> <span id="roadmapPrintGenerated">—</span></p>
                 </div>
 
                 <!-- Chain -->
@@ -964,11 +1020,19 @@
             }).join('');
         }
 
-        // Task 6 wires the print-optimised (@media print) layout. This
-        // handler is deliberately safe/no-op-risk today: it just opens the
-        // browser print dialog against the current page.
+        // Task 6: the @media print stylesheet hides everything except the
+        // roadmap section and swaps in the .roadmap-print-only header. The
+        // generated-on date is refreshed right before printing so it always
+        // reflects the moment the PDF was produced, not when the page loaded.
+        function _setRoadmapPrintGeneratedDate() {
+            const el = document.getElementById('roadmapPrintGenerated');
+            if (el) el.textContent = new Date().toISOString().slice(0, 10);
+        }
         function printRoadmap() {
-            try { window.print(); } catch (e) { /* no-op if unsupported */ }
+            try {
+                _setRoadmapPrintGeneratedDate();
+                window.print();
+            } catch (e) { /* no-op if unsupported */ }
         }
 
         function _mLoadError() {
@@ -989,6 +1053,12 @@
                     (d.source_doc || '') + ' v' + (d.plan_version || '');
                 document.getElementById('roadmapPreparer').textContent =
                     _ct('compliance.roadmap_preparer', 'Prepared by Maram Alharbi, GRC Manager');
+                // Print-only header (Task 6) — same data, no re-fetch.
+                document.getElementById('roadmapPrintSource').textContent =
+                    (d.source_doc || '') + ' v' + (d.plan_version || '');
+                document.getElementById('roadmapPrintPreparer').textContent =
+                    _ct('compliance.roadmap_preparer', 'Prepared by Maram Alharbi, GRC Manager');
+                _setRoadmapPrintGeneratedDate();
                 _renderRoadmapChain(d.chain || [], d.dependency || []);
                 _renderRoadmapUnlocks(d.chain || []);
                 _renderRoadmapReadiness(d.readiness || []);
