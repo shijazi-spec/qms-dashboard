@@ -49,9 +49,15 @@ export type MilestoneState =
  * the end in `planned_date` order. Row count in === row count out, always.
  */
 export function orderChain(rows: RoadmapRow[]): RoadmapRow[] {
+  // `byKey` is used only for parent/predecessor lookup — first-wins on a
+  // duplicate key is fine there. Membership/emission below is tracked by
+  // row IDENTITY (array index), never by key string, so two rows that
+  // happen to share a milestone_key are both still emitted exactly once.
   const byKey = new Map<string, RoadmapRow>();
   for (const r of rows) {
-    byKey.set(r.milestone_key, r);
+    if (!byKey.has(r.milestone_key)) {
+      byKey.set(r.milestone_key, r);
+    }
   }
 
   // Children indexed by the key they depend on.
@@ -64,12 +70,15 @@ export function orderChain(rows: RoadmapRow[]): RoadmapRow[] {
     }
   }
 
-  const visited = new Set<string>();
+  const visited = new Set<number>(); // row indices, not milestone_key strings
+  const indexOf = new Map<RoadmapRow, number>();
+  rows.forEach((r, i) => indexOf.set(r, i));
   const ordered: RoadmapRow[] = [];
 
   const visit = (r: RoadmapRow): void => {
-    if (visited.has(r.milestone_key)) return; // cycle guard
-    visited.add(r.milestone_key);
+    const idx = indexOf.get(r)!;
+    if (visited.has(idx)) return; // cycle guard
+    visited.add(idx);
     ordered.push(r);
     const children = childrenOf.get(r.milestone_key) ?? [];
     for (const child of children) {
@@ -86,9 +95,10 @@ export function orderChain(rows: RoadmapRow[]): RoadmapRow[] {
   }
 
   // Anything still unvisited (e.g. trapped entirely inside a cycle with no
-  // reachable root) is appended in planned_date order, never dropped.
+  // reachable root, or a duplicate-key row never reached as anyone's child)
+  // is appended in planned_date order, never dropped.
   const remainder = rows
-    .filter((r) => !visited.has(r.milestone_key))
+    .filter((r) => !visited.has(indexOf.get(r)!))
     .sort((a, b) => {
       const ad = a.planned_date ?? "";
       const bd = b.planned_date ?? "";
@@ -99,6 +109,33 @@ export function orderChain(rows: RoadmapRow[]): RoadmapRow[] {
   }
 
   return ordered;
+}
+
+/**
+ * True when some undelivered `dependency` row gates `row` via `gates_keys`.
+ * Extracted so both the main precedence chain and the `active` candidate
+ * pool below use the exact same definition of "blocked".
+ */
+function isBlocked(row: RoadmapRow, all: RoadmapRow[]): boolean {
+  return all.some(
+    (r) =>
+      r.milestone_type === "dependency" &&
+      r.gates_keys.includes(row.milestone_key) &&
+      r.delivered_date == null,
+  );
+}
+
+/**
+ * True when `row` is undelivered and its planned_date has passed. Extracted
+ * so both the main precedence chain and the `active` candidate pool below
+ * use the exact same definition of "overdue".
+ */
+function isOverdue(row: RoadmapRow, today: string): boolean {
+  return (
+    row.delivered_date == null &&
+    row.planned_date != null &&
+    row.planned_date < today
+  );
 }
 
 /**
@@ -119,26 +156,34 @@ export function milestoneState(
     return "delivered_late";
   }
 
-  const isBlocked = all.some(
-    (r) =>
-      r.milestone_type === "dependency" &&
-      r.gates_keys.includes(row.milestone_key) &&
-      r.delivered_date == null,
-  );
-  if (isBlocked) {
+  if (isBlocked(row, all)) {
     return "blocked";
   }
 
-  if (row.planned_date != null && row.planned_date < today) {
+  if (isOverdue(row, today)) {
     return "overdue";
   }
 
-  // "active" = the earliest non-delivered milestone by planned_date.
-  const undelivered = all.filter((r) => r.delivered_date == null);
+  // "active" = the earliest milestone actually still in play: the earliest
+  // undelivered `plan` row (not `dependency`/`framework_target` rows, which
+  // aren't part of the plan chain a user walks) that is neither overdue nor
+  // blocked. Restricting the pool this way matters because a single
+  // past-due or blocked milestone anywhere in the data must not suppress
+  // the "you are here" marker for the entire roadmap — without it, the
+  // earliest-by-date row across ALL undelivered rows (including overdue/
+  // blocked ones, which can never themselves be "active") would win the
+  // comparison and no row would ever be marked active.
+  const candidates = all.filter(
+    (r) =>
+      r.milestone_type === "plan" &&
+      r.delivered_date == null &&
+      r.planned_date != null &&
+      !isOverdue(r, today) &&
+      !isBlocked(r, all),
+  );
   let earliest: RoadmapRow | null = null;
-  for (const r of undelivered) {
-    if (r.planned_date == null) continue;
-    if (earliest == null || r.planned_date < (earliest.planned_date as string)) {
+  for (const r of candidates) {
+    if (earliest == null || r.planned_date! < earliest.planned_date!) {
       earliest = r;
     }
   }
@@ -167,11 +212,18 @@ export interface FrameworkReadiness {
  * paper over.
  */
 export function frameworkReadiness(rows: RoadmapRow[]): FrameworkReadiness[] {
-  const targets = rows.filter((r) => r.milestone_type === "framework_target");
+  // A framework_target with no regulation_code carries no framework to
+  // report readiness for, so it's skipped rather than surfaced as a "null"
+  // code entry. The type predicate narrows regulation_code to `string`
+  // below, so no unsafe cast is needed to read it.
+  const targets = rows.filter(
+    (r): r is RoadmapRow & { regulation_code: string } =>
+      r.milestone_type === "framework_target" && !!r.regulation_code,
+  );
   const planRows = rows.filter((r) => r.milestone_type === "plan");
 
   return targets.map((target) => {
-    const code = target.regulation_code as string;
+    const code = target.regulation_code;
     const unlocking = planRows.filter((r) => r.unlocks_codes.includes(code));
     const total = unlocking.length;
     const delivered = unlocking.filter((r) => r.delivered_date != null).length;

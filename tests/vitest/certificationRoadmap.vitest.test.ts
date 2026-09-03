@@ -30,6 +30,19 @@ describe("orderChain", () => {
                   row({ milestone_key: "B", depends_on_key: "A" })];
     expect(orderChain(rows)).toHaveLength(2);
   });
+
+  it("keeps both rows when two share a milestone_key", () => {
+    const rows = [
+      row({ milestone_key: "A", depends_on_key: null, planned_date: "2026-01-01" }),
+      row({ milestone_key: "A", depends_on_key: null, planned_date: "2026-02-01" }),
+    ];
+    expect(orderChain(rows)).toHaveLength(2);
+  });
+
+  it("terminates on a self-referencing row", () => {
+    const rows = [row({ milestone_key: "A", depends_on_key: "A" })];
+    expect(orderChain(rows)).toHaveLength(1);
+  });
 });
 
 describe("milestoneState", () => {
@@ -69,6 +82,21 @@ describe("milestoneState", () => {
     expect(milestoneState(a, [a, b], today)).toBe("active");
     expect(milestoneState(b, [a, b], today)).toBe("planned");
   });
+
+  it("still marks a later milestone active when an earlier one is overdue", () => {
+    const overdue = row({ milestone_key: "AUG", planned_date: "2026-08-30" });
+    const next = row({ milestone_key: "SEP", planned_date: "2026-09-30" });
+    const all = [overdue, next];
+    expect(milestoneState(overdue, all, "2026-09-03")).toBe("overdue");
+    expect(milestoneState(next, all, "2026-09-03")).toBe("active");
+  });
+
+  it("does not let a dependency or framework_target row steal the active marker", () => {
+    const plan = row({ milestone_key: "SEP", planned_date: "2026-09-30" });
+    const dep = row({ milestone_key: "DEP", milestone_type: "dependency", planned_date: "2026-09-01" });
+    const ft = row({ milestone_key: "FT", milestone_type: "framework_target", planned_date: "2026-09-02" });
+    expect(milestoneState(plan, [plan, dep, ft], "2026-08-01")).toBe("active");
+  });
 });
 
 describe("frameworkReadiness", () => {
@@ -94,5 +122,10 @@ describe("frameworkReadiness", () => {
     expect(nca.unreachable).toBe(true);
     expect(nca.total).toBe(0);
     expect(nca.pct).toBe(0);
+  });
+
+  it("skips a framework_target with no regulation_code", () => {
+    const rows = [row({ milestone_key: "FT", milestone_type: "framework_target", regulation_code: null })];
+    expect(frameworkReadiness(rows)).toHaveLength(0);
   });
 });
