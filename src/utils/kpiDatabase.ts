@@ -349,6 +349,9 @@ export async function initKPITables(): Promise<void> {
     );
   }
 
+  // Prove the seeded KPIs are actually VISIBLE, not merely inserted.
+  await verifySeededKpiVisibility();
+
   // SDR + Sales KPIs are all process-derived → mark them calc_mode='auto' (the
   // SDR seed pre-dates the calc_mode column so its rows default to 'manual').
   //
@@ -1924,6 +1927,81 @@ export interface CatalogKpiWithValue {
  * Reports BU registry maps to the human-facing team name, which is what the
  * /kpis "KPI Catalog" dropdown shows.
  */
+/**
+ * Teams whose KPIs are seeded in code, and how many rows each seeder writes.
+ *
+ * Checked at boot against what the page can actually SEE. Update this when a
+ * seeder is added or its list changes — a mismatch is the alarm, so a stale
+ * expectation here is itself worth catching.
+ */
+export const SEEDED_KPI_EXPECTATIONS: ReadonlyArray<{
+  ownerName: string;
+  minimum: number;
+}> = [
+  { ownerName: "SDR Team", minimum: 11 },
+  { ownerName: "Sales Team", minimum: 9 },
+  { ownerName: "CS Team", minimum: 33 },
+];
+
+export interface SeededKpiVisibility {
+  ownerName: string;
+  expected: number;
+  visible: number;
+  ok: boolean;
+}
+
+/**
+ * Confirm every seeded team's KPIs are RETRIEVABLE, using the exact query the
+ * Quality Reports page uses — not a count of rows in the table.
+ *
+ * This exists because "the rows are in the table" and "the page can see them"
+ * turned out to be different things, and nothing anywhere reported the
+ * difference. All 33 Customer Success KPIs were inserted successfully and were
+ * invisible for days because `is_active` was NULL: every read path filters
+ * `is_active = true`, `ON CONFLICT (kpi_code)` refused to re-create them, and
+ * the page said "No active KPIs found" — indistinguishable from a seeder that
+ * had never run. Four republishes were spent on that wrong theory
+ * (Sarah, 2026-09-03: "it was already there, we built it before").
+ *
+ * So the check deliberately goes through `getKPIsByOwnerName`. A row that
+ * exists but cannot be read is exactly the failure being guarded against, and
+ * a `SELECT COUNT(*)` would have reported everything healthy throughout.
+ *
+ * Never throws: a broken self-check must not stop the platform booting.
+ */
+export async function verifySeededKpiVisibility(): Promise<SeededKpiVisibility[]> {
+  const results: SeededKpiVisibility[] = [];
+  for (const { ownerName, minimum } of SEEDED_KPI_EXPECTATIONS) {
+    let visible = 0;
+    try {
+      visible = (await getKPIsByOwnerName(ownerName)).length;
+    } catch (err) {
+      logger.error(`[KPIDB] visibility check failed for "${ownerName}"`, err);
+      results.push({ ownerName, expected: minimum, visible: -1, ok: false });
+      continue;
+    }
+    const ok = visible >= minimum;
+    results.push({ ownerName, expected: minimum, visible, ok });
+    if (!ok) {
+      // ERROR, not warn: a business unit silently losing its KPIs is the exact
+      // condition that went unnoticed for days.
+      logger.error(
+        `❌ [KPIDB] "${ownerName}" should show at least ${minimum} KPIs but the page can see ${visible}. ` +
+          `The rows may exist while being unreadable — check is_active for NULL, and the owner_name spelling.`,
+      );
+    }
+  }
+  const broken = results.filter((r) => !r.ok);
+  if (!broken.length) {
+    logger.info(
+      `✅ [KPIDB] KPI visibility verified: ${results
+        .map((r) => `${r.ownerName} ${r.visible}`)
+        .join(", ")}`,
+    );
+  }
+  return results;
+}
+
 export async function getKPIsByOwnerName(
   ownerName: string,
 ): Promise<KPIDefinition[]> {

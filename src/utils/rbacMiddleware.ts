@@ -1084,6 +1084,14 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin"],
   },
+  // KPI seed health — READ-ONLY diagnostic: per-team counts of how many
+  // seeded KPIs the pages can actually see. Returns no KPI content, so it
+  // carries the same read set as the rest of the KPI surface.
+  {
+    pattern: /^\/api\/kpis\/seed-health$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
   // KPI auto-calc recompute — governance write roles only.
   {
     pattern: /^\/api\/kpis\/recalc$/,

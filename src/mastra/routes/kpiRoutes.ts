@@ -813,6 +813,42 @@ export const kpiRoutes = [
   {
     // Recompute live KPI values (leadership-feed-backed Quality/GRC + checklist
     // KPIs) and record them into kpi_values so /kpis shows real numbers.
+    // Are the seeded KPIs actually VISIBLE to the pages that render them?
+    //
+    // Answers in one call the question that took four republishes to settle:
+    // "the CS KPIs are gone again". Runs the same read path the Quality
+    // Reports page uses, so a row that exists but cannot be read counts as
+    // MISSING here — which is the failure that went unnoticed for days.
+    // GET /api/kpis/seed-health
+    path: "/api/kpis/seed-health",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { verifySeededKpiVisibility } = await import(
+            "../../utils/kpiDatabase"
+          );
+          const teams = await verifySeededKpiVisibility();
+          const broken = teams.filter((t) => !t.ok);
+          return c.json({
+            success: true,
+            healthy: broken.length === 0,
+            teams,
+            ...(broken.length
+              ? {
+                  problem:
+                    "A team is showing fewer KPIs than its seeder writes. The rows may exist but be unreadable — check is_active for NULL and the owner_name spelling.",
+                }
+              : {}),
+          });
+        } catch (error) {
+          safeLogger.error("Error checking KPI seed health:", error);
+          return c.json({ error: "Failed to check KPI seed health" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/kpis/recalc",
     method: "POST" as const,
     createHandler: async () => {
