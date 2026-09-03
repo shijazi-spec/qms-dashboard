@@ -96,12 +96,12 @@ describe("listDealsAging — end-to-end through defaultAgingFetchers", () => {
         owner: "Alice",
         createdTime: "2026-01-01T00:00:00Z",
         modifiedTime: "2026-04-01T00:00:00Z",
-        data: { Deal_Name: "Mega Deal", Stage: "Negotiation", Owner: { name: "Alice" } },
+        <REDACTED_SCHEME> { Deal_Name: "Mega Deal", Stage: "Negotiation", Owner: { name: "Alice" } },
       },
     ]);
     // Per-record record fetch (defaultDealRecord) and the Stage_History fetch.
     fetchAllCRMProviderRecordsMock.mockResolvedValueOnce([
-      { id: "D1", data: { Deal_Name: "Mega Deal", Stage: "Negotiation", Owner: { name: "Alice" }, Created_Time: "2026-01-01T00:00:00Z" } },
+      { id: "D1", <REDACTED_SCHEME> { Deal_Name: "Mega Deal", Stage: "Negotiation", Owner: { name: "Alice" }, Created_Time: "2026-01-01T00:00:00Z" } },
     ]);
     fetchDealStageHistoryMock.mockResolvedValueOnce([
       { Stage: "Negotiation", Modified_Time: "2025-11-01T00:00:00Z" },
@@ -127,11 +127,11 @@ describe("listDealsAging — end-to-end through defaultAgingFetchers", () => {
       owner: "X",
       createdTime: "2026-04-01T00:00:00Z",
       modifiedTime: "2026-04-01T00:00:00Z",
-      data: { Deal_Name: `D${i}`, Stage: "Qualification", Owner: { name: "X" } },
+      <REDACTED_SCHEME> { Deal_Name: `D${i}`, Stage: "Qualification", Owner: { name: "X" } },
     }));
     fetchCRMProviderRecordsMock.mockResolvedValueOnce(records);
     fetchAllCRMProviderRecordsMock.mockResolvedValue([
-      { id: "D0", data: { Deal_Name: "D0", Stage: "Qualification", Owner: { name: "X" }, Created_Time: "2026-04-01T00:00:00Z" } },
+      { id: "D0", <REDACTED_SCHEME> { Deal_Name: "D0", Stage: "Qualification", Owner: { name: "X" }, Created_Time: "2026-04-01T00:00:00Z" } },
     ]);
     fetchDealStageHistoryMock.mockResolvedValue([
       { Stage: "Qualification", Modified_Time: "2026-04-01T00:00:00Z" },
@@ -150,11 +150,11 @@ describe("listLeadsAging — end-to-end through defaultAgingFetchers", () => {
         owner: "Dan",
         createdTime: "2026-04-23T00:00:00Z",
         modifiedTime: "2026-04-23T00:00:00Z",
-        data: { Full_Name: "Sample User", Lead_Status: "New", Owner: { name: "Dan" } },
+        <REDACTED_SCHEME> { Full_Name: "Sample User", Lead_Status: "New", Owner: { name: "Dan" } },
       },
     ]);
     fetchAllCRMProviderRecordsMock.mockResolvedValueOnce([
-      { id: "L1", data: { Full_Name: "Sample User", Lead_Status: "New", Owner: { name: "Dan" }, Created_Time: "2026-04-23T00:00:00Z" } },
+      { id: "L1", <REDACTED_SCHEME> { Full_Name: "Sample User", Lead_Status: "New", Owner: { name: "Dan" }, Created_Time: "2026-04-23T00:00:00Z" } },
     ]);
     fetchLeadStatusChangelogMock.mockResolvedValueOnce([]); // never modified
 
@@ -169,7 +169,7 @@ describe("listLeadsAging — end-to-end through defaultAgingFetchers", () => {
 describe("getDealStageAging / getLeadStatusAging — single-record live path", () => {
   test("getDealStageAging surfaces history-sourced aging", async () => {
     fetchAllCRMProviderRecordsMock.mockResolvedValueOnce([
-      { id: "D9", data: { Deal_Name: "Stale", Stage: "Negotiation", Owner: { name: "Eve" }, Created_Time: "2025-01-01T00:00:00Z" } },
+      { id: "D9", <REDACTED_SCHEME> { Deal_Name: "Stale", Stage: "Negotiation", Owner: { name: "Eve" }, Created_Time: "2025-01-01T00:00:00Z" } },
     ]);
     fetchDealStageHistoryMock.mockResolvedValueOnce([
       { Stage: "Negotiation", Modified_Time: "2025-12-01T00:00:00Z" },
@@ -184,7 +184,7 @@ describe("getDealStageAging / getLeadStatusAging — single-record live path", (
 
   test("getLeadStatusAging picks the latest matching Lead_Status entry", async () => {
     fetchAllCRMProviderRecordsMock.mockResolvedValueOnce([
-      { id: "L7", data: { Full_Name: "Sample User", Lead_Status: "Working", Owner: { name: "Sam" }, Created_Time: "2025-01-01T00:00:00Z" } },
+      { id: "L7", <REDACTED_SCHEME> { Full_Name: "Sample User", Lead_Status: "Working", Owner: { name: "Sam" }, Created_Time: "2025-01-01T00:00:00Z" } },
     ]);
     fetchLeadStatusChangelogMock.mockResolvedValueOnce([
       { audited_time: "2026-01-01T00:00:00Z", field: { api_name: "Lead_Status" }, value: { current: "Working" } },

@@ -548,7 +548,7 @@ export async function backfillToCopc(
       const aiResult = await generateChatText({
         model: "gpt-4o-mini",
         prompt,
-        maxTokens: 8000,
+        maxTokens: <REDACTED_SECRET>
         responseFormat: "json_object",
       });
       recordSpend(COST.GPT4O_MINI_SDR_EVAL, "backfill_to_copc");

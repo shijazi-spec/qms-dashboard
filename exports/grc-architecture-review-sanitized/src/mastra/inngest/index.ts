@@ -1701,7 +1701,7 @@ const aiFeedbackDigestFunction = inngest.createFunction(
       const digest = await getWeeklyFeedbackDigest();
       const trend = Array.isArray(digest.trend) ? digest.trend : [];
       const trendSummary = summarizeFeedbackTrend(trend);
-      logger.info("[AIFeedbackDigest] Digest data:", digest);
+      logger.info("[AIFeedbackDigest] Digest <REDACTED_SCHEME>", digest);
       logger.info("[AIFeedbackDigest] Trend summary:", trendSummary);
 
       if (!digest || digest.total === 0) {

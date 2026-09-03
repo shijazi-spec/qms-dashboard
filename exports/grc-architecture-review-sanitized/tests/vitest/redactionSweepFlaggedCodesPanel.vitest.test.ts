@@ -54,7 +54,7 @@ interface SweepPayload {
     capa_change_history_change_reason_updated: number;
     ai_pending_actions: { scanned: number; rows_updated: number };
     ai_pending_actions_credential_warnings:
-      | CredentialWarningsSnapshot
+     <REDACTED_SECRET>
       | { skipped: string };
     ai_call_metrics: { scanned: number; rows_updated: number };
     total_rows_updated: number;
@@ -75,7 +75,7 @@ function basePayload(
       capa_change_history_updated: 0,
       capa_change_history_change_reason_updated: 0,
       ai_pending_actions: { scanned: 0, rows_updated: 0 },
-      ai_pending_actions_credential_warnings: credWarn,
+      ai_pending_actions_credential_warnings: <REDACTED_SECRET>
       ai_call_metrics: { scanned: 294, rows_updated: 0 },
       total_rows_updated: totalRowsUpdated,
     },

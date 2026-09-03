@@ -29,7 +29,7 @@ vi.mock("../../src/utils/eventLogsDatabase", () => ({
   initializeEventLogsTable: vi.fn(async () => undefined),
   logEvent: vi.fn(async () => ({ id: 1 })),
   redactSensitiveDeep: vi.fn(<T,>(x: T) => x),
-  redactSecretLikeStrings: vi.fn(<T,>(x: T) => x),
+  redactSecretLikeStrings: <REDACTED_SECRET>
   getActionViewers: vi.fn(async () => []),
   getActionViewersBatch: vi.fn(async () => ({})),
 }));
@@ -413,9 +413,9 @@ describe("GET /api/integrations/status", () => {
     await withEnv(
       {
         CRMProvider_CLIENT_ID: "cid",
-        CRMProvider_CLIENT_SECRET: "<REDACTED_SECRET>",
-        CRMProvider_REFRESH_TOKEN: "<REDACTED_SECRET>",
-        CRMProvider_ACCESS_TOKEN: undefined,
+        CRMProvider_CLIENT_SECRET: <REDACTED_SECRET>
+        CRMProvider_REFRESH_TOKEN: <REDACTED_SECRET>
+        CRMProvider_ACCESS_TOKEN: <REDACTED_SECRET>
         IdentityProvider_CLIENT_ID: "IdentityProvider-cid",
         IdentityProvider_CLIENT_EMAIL: undefined,
       },
@@ -437,9 +437,9 @@ describe("GET /api/integrations/status", () => {
     await withEnv(
       {
         CRMProvider_CLIENT_ID: undefined,
-        CRMProvider_CLIENT_SECRET: undefined,
-        CRMProvider_REFRESH_TOKEN: undefined,
-        CRMProvider_ACCESS_TOKEN: undefined,
+        CRMProvider_CLIENT_SECRET: <REDACTED_SECRET>
+        CRMProvider_REFRESH_TOKEN: <REDACTED_SECRET>
+        CRMProvider_ACCESS_TOKEN: <REDACTED_SECRET>
         IdentityProvider_CLIENT_ID: undefined,
         IdentityProvider_CLIENT_EMAIL: undefined,
       },

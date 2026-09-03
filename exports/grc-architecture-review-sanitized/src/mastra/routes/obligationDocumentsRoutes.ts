@@ -129,7 +129,7 @@ export const obligationDocumentsRoutes = [
               const { inngest } = await import("../inngest/client");
               await inngest.send({
                 name: "compliance.mapping.applied",
-                data: {
+                <REDACTED_SCHEME> {
                   obligation_id: id,
                   document_id: documentId,
                   applied_by: g.user?.email || "manual-link",
@@ -466,7 +466,7 @@ export const obligationDocumentsRoutes = [
             const { inngest } = await import("../inngest/client");
             await inngest.send({
               name: "compliance.mapping.applied",
-              data: {
+              <REDACTED_SCHEME> {
                 obligation_id: obligationId,
                 document_id: documentId,
                 applied_by: g.user?.email || "ai-suggest",

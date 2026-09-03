@@ -823,7 +823,7 @@ interface AdhocSalesAggregates {
 }
 
 const ADHOC_CACHE_TTL_MS = 60_000;
-let adhocCache: { at: number; data: AdhocSalesAggregates } | null = null;
+let adhocCache: { at: number; <REDACTED_SCHEME> AdhocSalesAggregates } | null = null;
 let adhocInFlight: Promise<AdhocSalesAggregates> | null = null;
 
 /**
@@ -859,7 +859,7 @@ export async function adhocSalesAggregates(): Promise<AdhocSalesAggregates> {
       seg.params,
     );
     const row = res.rows[0] || {};
-    const data: AdhocSalesAggregates = {
+    const <REDACTED_SCHEME> AdhocSalesAggregates = {
       wonYtdCount: Number(row.won_ytd_count || 0),
       wonYtdValue: Number(row.won_ytd_value || 0),
       wonYtdWithAmount: Number(row.won_ytd_with_amount || 0),
@@ -1067,7 +1067,7 @@ interface CsKpiAggregates {
 }
 
 const CS_CACHE_TTL_MS = 60_000;
-let csCache: { at: number; data: CsKpiAggregates } | null = null;
+let csCache: { at: number; <REDACTED_SCHEME> CsKpiAggregates } | null = null;
 let csInFlight: Promise<CsKpiAggregates> | null = null;
 
 /**
@@ -1095,7 +1095,7 @@ export async function csKpiAggregates(): Promise<CsKpiAggregates> {
     for (const [phase, n] of Object.entries(scan.summary.by_phase || {})) {
       if (/termin|churn/i.test(phase)) termination += Number(n) || 0;
     }
-    const data: CsKpiAggregates = {
+    const <REDACTED_SCHEME> CsKpiAggregates = {
       csDeals: Number(scan.summary.total_cs_deals || 0),
       slaBreachDeals: sla.size,
       dataGapDeals: gap.size,
@@ -1210,7 +1210,7 @@ export async function calcCertificationMilestones(): Promise<ProcessKpiValue> {
     // recorded yet", so without this a failing query can sit undiagnosed
     // indefinitely (same flaw fixed in ratioKpi on 2026-08-23).
     logger.warn(
-      `[kpiProcessCalc] calcCertificationMilestones source failed — KPI will report no data: ${e?.message || e}`,
+      `[kpiProcessCalc] calcCertificationMilestones source failed — KPI will report no <REDACTED_SCHEME> ${e?.message || e}`,
     );
     return EMPTY;
   }
@@ -1251,7 +1251,7 @@ async function ratioKpi(
     // indefinitely. The KPI still degrades to EMPTY rather than breaking the
     // page, but the reason is now recoverable from the logs.
     logger.warn(
-      `[kpiProcessCalc] ratioKpi query failed — KPI will report no data: ${e?.message || e}`,
+      `[kpiProcessCalc] ratioKpi query failed — KPI will report no <REDACTED_SCHEME> ${e?.message || e}`,
       { sql: sql.replace(/\s+/g, " ").slice(0, 160) },
     );
     return EMPTY;
@@ -1335,7 +1335,7 @@ export async function calcBuCoverageTracked(): Promise<ProcessKpiValue> {
     // recorded value keeps going outward with no signal that the live
     // computation stopped working.
     logger.warn(
-      `[kpiProcessCalc] calcBuCoverageTracked failed — QM-KPI-008 will report no data: ${e?.message || e}`,
+      `[kpiProcessCalc] calcBuCoverageTracked failed — QM-KPI-008 will report no <REDACTED_SCHEME> ${e?.message || e}`,
     );
     return EMPTY;
   }
@@ -1361,7 +1361,7 @@ export async function calcHandoffSlaCompliance(): Promise<ProcessKpiValue> {
     );
   } catch (e: any) {
     logger.warn(
-      `[kpiProcessCalc] calcHandoffSlaCompliance query failed — KPI will report no data: ${e?.message || e}`,
+      `[kpiProcessCalc] calcHandoffSlaCompliance query failed — KPI will report no <REDACTED_SCHEME> ${e?.message || e}`,
     );
     return EMPTY;
   }
@@ -1396,7 +1396,7 @@ export async function calcDocumentationLifecycle(): Promise<ProcessKpiValue> {
     );
   } catch (e: any) {
     logger.warn(
-      `[kpiProcessCalc] calcDocumentationLifecycle query failed — KPI will report no data: ${e?.message || e}`,
+      `[kpiProcessCalc] calcDocumentationLifecycle query failed — KPI will report no <REDACTED_SCHEME> ${e?.message || e}`,
     );
     return EMPTY;
   }

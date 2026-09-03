@@ -107,7 +107,7 @@ interface Check {
    */
   extract: () => string | null;
   /** Verbatim token(s) the doc must contain for this check. */
-  docTokens: (extracted: string) => string[];
+  docTokens: <REDACTED_SECRET>
   /** Where in the source the literal lives (for failure messages). */
   sourceLocation: string;
   /** Where in the doc the operator-facing reference lives. */
@@ -136,7 +136,7 @@ const checks: Check[] = [
   {
     name: "notification.module",
     extract: extractFirstGroup(/module:\s*"([^"]+)"/),
-    docTokens: (v) => [`module="${v}"`],
+    docTokens: <REDACTED_SECRET>
     sourceLocation:
       'createNotification({ module: "..." }) inside dispatchPostRestoreSweepAlert',
     docSection:
@@ -145,7 +145,7 @@ const checks: Check[] = [
   {
     name: "notification.priority",
     extract: extractFirstGroup(/priority:\s*"([^"]+)"/),
-    docTokens: (v) => [`priority="${v}"`],
+    docTokens: <REDACTED_SECRET>
     sourceLocation:
       'createNotification({ priority: "..." }) inside dispatchPostRestoreSweepAlert',
     docSection:
@@ -154,7 +154,7 @@ const checks: Check[] = [
   {
     name: "notification.action_url",
     extract: extractFirstGroup(/action_url:\s*"([^"]+)"/),
-    docTokens: (v) => [`action_url="${v}"`],
+    docTokens: <REDACTED_SECRET>
     sourceLocation:
       'createNotification({ action_url: "..." }) inside dispatchPostRestoreSweepAlert',
     docSection:
@@ -163,7 +163,7 @@ const checks: Check[] = [
   {
     name: "ChatProvider.rotating_light_prefix",
     extract: extractLiteral(":rotating_light:"),
-    docTokens: () => [":rotating_light:"],
+    docTokens: <REDACTED_SECRET>
     sourceLocation:
       "ChatProviderBody.text template inside dispatchPostRestoreSweepAlert",
     docSection:
@@ -178,7 +178,7 @@ const checks: Check[] = [
       // — match exactly that to detect a rename of either the column or the
       // template variable.
       extract: extractLiteral(`${counter}=\${triggers.${counter}}`),
-      docTokens: () => [`${counter}=`],
+      docTokens: <REDACTED_SECRET>
       sourceLocation:
         "detailLine template inside dispatchPostRestoreSweepAlert " +
         `(\`${counter}=\${triggers.${counter}}\`)`,

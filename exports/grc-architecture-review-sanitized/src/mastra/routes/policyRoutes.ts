@@ -1384,7 +1384,7 @@ export const policyRoutes = [
           // with an Open button serving "File not found on disk".
           const { savePolicyFile } = await import("../../utils/policyDatabase");
           await savePolicyFile(id, {
-            data: buffer,
+            <REDACTED_SCHEME> buffer,
             fileName: file.name,
             fileSize: buffer.length,
             mimeType: file.type || null,
@@ -1568,7 +1568,7 @@ export const policyRoutes = [
               "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${safeName}"`,
               "Content-Length": String(file.buffer.length),
               "X-Content-Type-Options": "nosniff",
-              "Content-Security-Policy": "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'self'",
+              "Content-Security-Policy": "default-src 'none'; img-src 'self' <REDACTED_SCHEME>; style-src 'unsafe-inline'; object-src 'self'",
               "Cache-Control": "private, max-age=60",
             },
           });

@@ -1375,13 +1375,13 @@
                 const dupClustersAligned = labelDates.map((_, i) => dups[i]?.clusters ?? null);
                 qualityTrendChart = new Chart(ctx, {
                     type: 'line',
-                    data: {
+                    <REDACTED_SCHEME> {
                         labels: labelDates,
                         datasets: [
 
                             {
                                 label: 'Compliance %',
-                                data: audits.map(a => a.compliance_pct),
+                                <REDACTED_SCHEME> audits.map(a => a.compliance_pct),
                                 borderColor: '#16a34a',
                                 backgroundColor: 'rgba(22, 163, 74, 0.1)',
                                 yAxisID: 'y',
@@ -1390,7 +1390,7 @@
                             },
                             {
                                 label: 'Records with Issues',
-                                data: audits.map(a => a.records_with_issues),
+                                <REDACTED_SCHEME> audits.map(a => a.records_with_issues),
                                 borderColor: '#ea580c',
                                 backgroundColor: 'rgba(234, 88, 12, 0.1)',
                                 yAxisID: 'y1',
@@ -1399,7 +1399,7 @@
                             },
                             {
                                 label: 'Duplicate Clusters',
-                                data: dupClustersAligned,
+                                <REDACTED_SCHEME> dupClustersAligned,
                                 borderColor: '#9333ea',
                                 backgroundColor: 'rgba(147, 51, 234, 0.1)',
                                 yAxisID: 'y1',
@@ -1409,7 +1409,7 @@
                             },
                             {
                                 label: 'Pipeline Inflation (SAR)',
-                                data: labelDates.map((_, i) => dups[i]?.pipeline_inflation_sar ?? null),
+                                <REDACTED_SCHEME> labelDates.map((_, i) => dups[i]?.pipeline_inflation_sar ?? null),
                                 borderColor: '#dc2626',
                                 backgroundColor: 'rgba(220, 38, 38, 0.1)',
                                 borderDash: [4, 4],
@@ -2465,7 +2465,7 @@
                 allDashboardData = data;
                 return { ok: true, data };
             } catch (error) {
-                console.error('Error fetching dashboard data:', error);
+                console.error('Error fetching dashboard <REDACTED_SCHEME>', error);
                 return { ok: false, status: 0, error: (error && error.message) || 'network' };
             }
         }
@@ -2800,7 +2800,7 @@
                 ? theme.doughnutConfig({ labels, data, colors, legend: false, cutout: '60%' })
                 : {
                     type: 'doughnut',
-                    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                    <REDACTED_SCHEME> { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
@@ -2912,10 +2912,10 @@
                 const _layoutData = entries.map(e => e[1]);
                 const _layoutColors = entries.map((_, i) => colorFor(i));
                 issuesLayoutChart = new Chart(ctx, window.ExampleOrgChartTheme
-                    ? window.ExampleOrgChartTheme.doughnutConfig({ labels: _layoutLabels, data: _layoutData, colors: _layoutColors })
+                    ? window.ExampleOrgChartTheme.doughnutConfig({ labels: _layoutLabels, <REDACTED_SCHEME> _layoutData, colors: _layoutColors })
                     : {
                         type: 'doughnut',
-                        data: { labels: _layoutLabels, datasets: [{ data: _layoutData, backgroundColor: _layoutColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                        <REDACTED_SCHEME> { labels: _layoutLabels, datasets: [{ <REDACTED_SCHEME> _layoutData, backgroundColor: _layoutColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
                         options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
                 );
@@ -2964,10 +2964,10 @@
                 const values = allModules.map(m => normalized[m] || 0);
                 const _moduleColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
                 issuesChart = new Chart(ctx, window.ExampleOrgChartTheme
-                    ? window.ExampleOrgChartTheme.doughnutConfig({ labels: categories, data: values, colors: _moduleColors })
+                    ? window.ExampleOrgChartTheme.doughnutConfig({ labels: categories, <REDACTED_SCHEME> values, colors: _moduleColors })
                     : {
                         type: 'doughnut',
-                        data: { labels: categories, datasets: [{ data: values, backgroundColor: _moduleColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                        <REDACTED_SCHEME> { labels: categories, datasets: [{ <REDACTED_SCHEME> values, backgroundColor: _moduleColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
                         options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
                 );
@@ -2992,10 +2992,10 @@
                 const values = allModules.map(m => normalized[m] || 0);
                 const _modTotColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
                 issuesTotalChart = new Chart(ctx, window.ExampleOrgChartTheme
-                    ? window.ExampleOrgChartTheme.doughnutConfig({ labels: allModules, data: values, colors: _modTotColors })
+                    ? window.ExampleOrgChartTheme.doughnutConfig({ labels: allModules, <REDACTED_SCHEME> values, colors: _modTotColors })
                     : {
                         type: 'doughnut',
-                        data: { labels: allModules, datasets: [{ data: values, backgroundColor: _modTotColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                        <REDACTED_SCHEME> { labels: allModules, datasets: [{ <REDACTED_SCHEME> values, backgroundColor: _modTotColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
                         options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
                 );
@@ -3042,12 +3042,12 @@
                 const showPoints = sortedHistory.length <= 3;
                 trendChart = new Chart(ctx, {
                     type: 'line',
-                    data: {
+                    <REDACTED_SCHEME> {
                         labels: labels,
                         datasets: [
                             {
                                 label: 'Overall',
-                                data: sortedHistory.map(h => parseFloat(h.overall_score) || 0),
+                                <REDACTED_SCHEME> sortedHistory.map(h => parseFloat(h.overall_score) || 0),
                                 borderColor: '#6366f1',
                                 backgroundColor: 'rgba(99, 102, 241, 0.1)',
                                 fill: true,
@@ -3057,7 +3057,7 @@
                             },
                             {
                                 label: 'People',
-                                data: sortedHistory.map(h => parseFloat(h.people_score) || 0),
+                                <REDACTED_SCHEME> sortedHistory.map(h => parseFloat(h.people_score) || 0),
                                 borderColor: '#3b82f6',
                                 tension: 0.4,
                                 pointRadius: showPoints ? 5 : 2,
@@ -3065,7 +3065,7 @@
                             },
                             {
                                 label: 'Process',
-                                data: sortedHistory.map(h => parseFloat(h.process_score) || 0),
+                                <REDACTED_SCHEME> sortedHistory.map(h => parseFloat(h.process_score) || 0),
                                 borderColor: '#8b5cf6',
                                 tension: 0.4,
                                 pointRadius: showPoints ? 5 : 2,
@@ -3073,7 +3073,7 @@
                             },
                             {
                                 label: 'Governance',
-                                data: sortedHistory.map(h => parseFloat(h.governance_score) || 0),
+                                <REDACTED_SCHEME> sortedHistory.map(h => parseFloat(h.governance_score) || 0),
                                 borderColor: '#22c55e',
                                 tension: 0.4,
                                 pointRadius: showPoints ? 5 : 2,
@@ -3422,7 +3422,7 @@
                 const response = await fetch(`${API_BASE}/audit/trigger`, { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>'
+                    credentials: <REDACTED_SECRET>
                 });
                 const result = await response.json();
                 
@@ -3494,7 +3494,7 @@
                 const response = await fetch('/api/audit/trigger', { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ 
                         manualTrigger: true,
                         dateFilters: currentDateFilters

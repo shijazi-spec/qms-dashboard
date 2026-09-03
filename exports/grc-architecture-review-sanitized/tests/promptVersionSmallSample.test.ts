@@ -36,7 +36,7 @@ import { buildHandler, makeContext } from "./_helpers/fakeContext";
 import { makeCookieForRole } from "./_helpers/sessionAuth";
 
 const suite = new TestSuite("promptVersionSmallSample");
-const ADMIN_KEY = "integration-test-prompt-version-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 // Signed ExampleOrg_session cookie for an active admin platform user. The
 // prompt-versions route uses requireRole(), which now always performs a live
 // getPlatformUser() lookup — the shared helper also registers an active

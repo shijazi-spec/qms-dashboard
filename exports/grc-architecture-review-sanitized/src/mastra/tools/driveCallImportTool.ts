@@ -36,7 +36,7 @@ export const driveCallImportTool = createTool({
       .optional()
       .describe("Optional Drive query expression (Drive v3 q syntax) appended with AND."),
     page_size: z.number().int().positive().max(200).optional(),
-    page_token: z.string().optional(),
+    page_token: <REDACTED_SECRET>
     agent_email: z
       .string()
       .describe(
@@ -51,7 +51,7 @@ export const driveCallImportTool = createTool({
     created: z.number(),
     skipped: z.number(),
     failed: z.number(),
-    next_page_token: z.string().optional(),
+    next_page_token: <REDACTED_SECRET>
     rows: z.array(DriveImportRowSchema),
     note: z.string().optional(),
   }),
@@ -74,7 +74,7 @@ export const driveCallImportTool = createTool({
       folder_id: context.folder_id,
       query: context.query,
       page_size: context.page_size,
-      page_token: context.page_token,
+      page_token: <REDACTED_SECRET>
       audio_only: true,
     });
 
@@ -85,7 +85,7 @@ export const driveCallImportTool = createTool({
         created: 0,
         skipped: listing.files.length,
         failed: 0,
-        next_page_token: listing.next_page_token,
+        next_page_token: <REDACTED_SECRET>
         rows: listing.files.map((f) => ({
           drive_file_id: f.id,
           drive_file_name: f.name,
@@ -150,7 +150,7 @@ export const driveCallImportTool = createTool({
       created,
       skipped,
       failed,
-      next_page_token: listing.next_page_token,
+      next_page_token: <REDACTED_SECRET>
       rows,
       note:
         "Records created with status='pending'. Trigger transcription via the existing call upload-audio / Whisper path with the recording_url, then call reconcile-call to merge governance.",

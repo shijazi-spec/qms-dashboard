@@ -18,12 +18,12 @@ export type DriveAuthMode = "HostingPlatform_connector" | "service_account" | "o
 
 export interface DriveAuthResult {
   mode: DriveAuthMode;
-  access_token: string;
+  access_token: <REDACTED_SECRET>
 }
 
 interface CachedToken {
   mode: DriveAuthMode;
-  access_token: string;
+  access_token: <REDACTED_SECRET>
   expires_at: number;
 }
 
@@ -119,8 +119,8 @@ async function getOAuthRefreshToken(): Promise<string | null> {
 
   const body = new URLSearchParams({
     client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: refreshToken,
+    client_secret: <REDACTED_SECRET>
+    refresh_token: <REDACTED_SECRET>
     grant_type: "refresh_token",
   });
   const res = await fetch(DRIVE_TOKEN_URL, {
@@ -151,7 +151,7 @@ export async function resolveDriveAuth(): Promise<DriveAuthResult> {
   for (const a of attempts) {
     const token = await a.fn();
     if (token) {
-      cachedToken = <REDACTED_SECRET> mode: a.mode, access_token: token, expires_at: nowSec() + 50 * 60 };
+      cachedToken = <REDACTED_SECRET>
       return { mode: a.mode, access_token: token };
     }
   }
@@ -229,7 +229,7 @@ export async function listDriveAudioFiles(opts: {
     files,
     auth_mode: auth.mode,
     scope: folderId ? "folder" : "query",
-    next_page_token: data.nextPageToken,
+    next_page_token: <REDACTED_SECRET>
   };
 }
 

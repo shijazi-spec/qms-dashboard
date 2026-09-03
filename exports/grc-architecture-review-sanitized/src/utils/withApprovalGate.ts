@@ -206,7 +206,7 @@ export function withApprovalGate<
         complianceRefs: policy.complianceRefs,
         // Persist the warning structure (paths only, no raw values) so the
         // audit trail records WHY this row was flagged at submission time.
-        credentialWarnings: pending.credential_warnings ?? [],
+        credentialWarnings: <REDACTED_SECRET>
       },
     }).catch(() => {
       /* non-fatal */
@@ -230,7 +230,7 @@ export function withApprovalGate<
         requested_by_user_id: pending.requested_by_user_id,
         requested_by_email: pending.requested_by_email,
         requested_by_name: pending.requested_by_name,
-        credential_warnings: pending.credential_warnings ?? [],
+        credential_warnings: <REDACTED_SECRET>
       }).catch((err) => {
         logger.error(
           `[withApprovalGate] notifyCredentialFlaggedApproval threw for ${pending.action_code}:`,
@@ -334,7 +334,7 @@ export async function executeApprovedAction(
       success,
       entityType: entry.policy.entityType,
       entityId,
-      data: result,
+      <REDACTED_SCHEME> result,
       error: success
         ? undefined
         : result?.error || result?.message || "Tool returned success=false",
@@ -360,7 +360,7 @@ export async function executeApprovedAction(
       ok: success,
       entityType: entry.policy.entityType,
       entityId,
-      data: result,
+      <REDACTED_SCHEME> result,
     };
   } catch (err: any) {
     const message = err?.message || String(err);

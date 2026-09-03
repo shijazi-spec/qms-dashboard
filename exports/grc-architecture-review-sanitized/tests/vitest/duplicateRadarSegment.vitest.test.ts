@@ -9,8 +9,8 @@ describe("classifySegmentFromLayout", () => {
   });
   it("classifies Example Organization variants", () => {
     expect(classifySegmentFromLayout("Example Organization")).toBe("Example Organization");
-    expect(classifySegmentFromLayout("Wala One")).toBe("Example Organization");
-    expect(classifySegmentFromLayout("wala-one corporate")).toBe("Example Organization");
+    expect(classifySegmentFromLayout("ExampleOrg One")).toBe("Example Organization");
+    expect(classifySegmentFromLayout("ExampleOrg-one corporate")).toBe("Example Organization");
   });
   it("defaults blank/other to ExampleOrg", () => {
     expect(classifySegmentFromLayout("")).toBe("ExampleOrg");

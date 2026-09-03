@@ -136,9 +136,9 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
 
 {
   const r = redactSensitiveFields({
-    access_token: "<REDACTED_SECRET>",
-    refresh_token: "<REDACTED_SECRET>",
-    CRMProvider_refresh_token: "<REDACTED_SECRET>",
+    access_token: <REDACTED_SECRET>
+    refresh_token: <REDACTED_SECRET>
+    CRMProvider_refresh_token: <REDACTED_SECRET>
   });
   assert(r.access_token === REDACTED_SENTINEL, "suffix _token: access_token redacted");
   assert(r.refresh_token === REDACTED_SENTINEL, "suffix _token: refresh_token redacted");
@@ -168,7 +168,7 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
 {
   const r = redactSensitiveFields({
     mfa_code: "123456",
-    mfa_token: "<REDACTED_SECRET>",
+    mfa_token: <REDACTED_SECRET>
     mfa_enabled: true,
     role: "user",
   });
@@ -327,14 +327,14 @@ console.log("\n=== deepRedactSecretLikeStrings — unit tests ===\n");
 console.log("\n=== logEvent — write-path integration test ===\n");
 
 const SECRETS = {
-  password_hash: "<REDACTED_SECRET>",
-  plain_password: "<REDACTED_SECRET>",
-  mfa_secret: "<REDACTED_SECRET>",
-  access_token: "<REDACTED_SECRET>",
-  refresh_token: "<REDACTED_SECRET>",
-  api_key: "<REDACTED_SECRET>",
-  bot_token: "<REDACTED_SECRET>",
-  client_secret: "<REDACTED_SECRET>",
+  password_hash: <REDACTED_SECRET>
+  plain_password: <REDACTED_SECRET>
+  mfa_secret: <REDACTED_SECRET>
+  access_token: <REDACTED_SECRET>
+  refresh_token: <REDACTED_SECRET>
+  api_key: <REDACTED_SECRET>
+  bot_token: <REDACTED_SECRET>
+  client_secret: <REDACTED_SECRET>
 } as const;
 
 function findInsertCallParams(): unknown[] | null {
@@ -389,16 +389,16 @@ await runWritePathTest(
       id: 42,
       email: "<REDACTED_EMAIL>",
       full_name: "Sample User",
-      password_hash: SECRETS.password_hash,
-      mfa_secret: SECRETS.mfa_secret,
+      password_hash: <REDACTED_SECRET>
+      mfa_secret: <REDACTED_SECRET>
       role: "department_viewer",
     },
     newValue: {
       id: 42,
       email: "<REDACTED_EMAIL>",
       full_name: "Sample User",
-      password_hash: SECRETS.password_hash,
-      mfa_secret: SECRETS.mfa_secret,
+      password_hash: <REDACTED_SECRET>
+      mfa_secret: <REDACTED_SECRET>
       role: "department_viewer",
       updated_at: "2026-04-24T00:00:00Z",
     },
@@ -417,11 +417,11 @@ await runWritePathTest(
     module: "integrations",
     newValue: {
       provider: "CRMProvider",
-      access_token: SECRETS.access_token,
-      refresh_token: SECRETS.refresh_token,
-      api_key: SECRETS.api_key,
-      bot_token: SECRETS.bot_token,
-      client_secret: SECRETS.client_secret,
+      access_token: <REDACTED_SECRET>
+      refresh_token: <REDACTED_SECRET>
+      api_key: <REDACTED_SECRET>
+      bot_token: <REDACTED_SECRET>
+      client_secret: <REDACTED_SECRET>
       account_id: "acct-public-123",
     },
   },
@@ -445,11 +445,11 @@ await runWritePathTest(
     newValue: {
       integration: "ChatProvider",
       config: {
-        bot_token: SECRETS.bot_token,
-        api_key: SECRETS.api_key,
+        bot_token: <REDACTED_SECRET>
+        api_key: <REDACTED_SECRET>
         nested: {
-          access_token: SECRETS.access_token,
-          refresh_token: SECRETS.refresh_token,
+          access_token: <REDACTED_SECRET>
+          refresh_token: <REDACTED_SECRET>
         },
       },
       installed_at: "2026-04-24T00:00:00Z",

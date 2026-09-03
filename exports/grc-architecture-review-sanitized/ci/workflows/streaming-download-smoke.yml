@@ -31,7 +31,7 @@ jobs:
         id: gate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          SESSION_SECRET: <REDACTED_SECRET>
         run: |
           if [ -z "${DATABASE_URL}" ] || [ -z "${SESSION_SECRET}" ]; then
             echo "run_e2e=false" >> "$SourceControlProvider_OUTPUT"
@@ -48,7 +48,7 @@ jobs:
         if: steps.gate.outputs.run_e2e == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          SESSION_SECRET: <REDACTED_SECRET>
         run: |
           nohup npm run dev > /tmp/dev-server.log 2>&1 &
 
@@ -74,7 +74,7 @@ jobs:
         if: steps.gate.outputs.run_e2e == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          SESSION_SECRET: <REDACTED_SECRET>
           BASE_URL: <REDACTED_URL>
         run: npx tsx tests/streamingExportLatency.integration.ts
 

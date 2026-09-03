@@ -498,7 +498,7 @@
       const res = await fetch('/api/external-audits/' + auditId + '/checklist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: '<REDACTED_SECRET>',
+        credentials: <REDACTED_SECRET>
         body: JSON.stringify({
           requirement: fd.get('requirement'),
           category: fd.get('category'),
@@ -516,7 +516,7 @@
       const res = await fetch('/api/external-audits/checklist/' + itemId, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        credentials: '<REDACTED_SECRET>',
+        credentials: <REDACTED_SECRET>
         body: JSON.stringify({ status }),
       });
       if (res.ok) {
@@ -538,7 +538,7 @@
       const res = await fetch('/api/external-audits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: '<REDACTED_SECRET>',
+        credentials: <REDACTED_SECRET>
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -566,7 +566,7 @@
       const res = await fetch('/api/external-audits/' + auditId + '/certificates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: '<REDACTED_SECRET>',
+        credentials: <REDACTED_SECRET>
         body: JSON.stringify(payload),
       });
       if (res.ok) {

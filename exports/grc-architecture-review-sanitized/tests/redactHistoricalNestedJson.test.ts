@@ -122,7 +122,7 @@ const MFA_SECRET_UUID = "<REDACTED_SECRET>";
   // re-parse step added in Task #744.
   const nestedDescription = JSON.stringify({
     user: "alice",
-    mfa_secret: MFA_SECRET_UUID,
+    mfa_secret: <REDACTED_SECRET>
     note: "Enrolled on 2026-01-12",
   });
 
@@ -302,7 +302,7 @@ const MFA_SECRET_UUID = "<REDACTED_SECRET>";
       old_value: null,
       new_value: JSON.stringify({
         action: "rotate",
-        api_key: "<REDACTED_SECRET>",
+        api_key: <REDACTED_SECRET>
       }),
       change_reason: "scheduled rotation",
     },
@@ -379,7 +379,7 @@ const MFA_SECRET_UUID = "<REDACTED_SECRET>";
       // plain UUID that the regex pass cannot catch alone.
       payload_preview: JSON.stringify({
         op: "deploy",
-        api_key: "<REDACTED_SECRET>",
+        api_key: <REDACTED_SECRET>
       }),
       execution_result: null,
     },

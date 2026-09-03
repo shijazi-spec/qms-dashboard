@@ -937,13 +937,13 @@ const PAGES = {
       view_steps: 'View Steps',
     },
     ar: {
-      title: 'محمد المزيني',
+      title: 'Sample User',
       subtitle: 'مسؤول حوكمة الجودة وGRC',
       mission: 'ضمان انضباط الحوكمة عبر وحدات الجودة وGRC.',
       weighted_score: 'الدرجة المرجّحة',
       overall_score: 'الدرجة الإجمالية',
       kpi_summary: 'ملخص حالة المؤشرات',
-      kpis_section: 'مؤشرات محمد الستة (إطار 2026)',
+      kpis_section: 'مؤشرات Sample User الستة (إطار 2026)',
       navigation_map: 'خريطة التنقل',
       weighted_pct: 'النسبة المرجّحة',
       avg_pct: 'النسبة المتوسطة',
@@ -1287,7 +1287,7 @@ const PAGES = {
       email_recipients: 'Email Recipients',
     },
     ar: {
-      title: 'لوحة إدارة جودة ولاء بلس',
+      title: 'لوحة إدارة جودة Sample User',
       tab_governance: 'وثائق الحوكمة',
       tab_scorecard: 'بطاقة التقييم',
       tab_settings: 'الإعدادات',
@@ -1396,8 +1396,8 @@ const PAGES = {
       col_latency: 'Latency',
       col_error: 'Error / Prompt preview',
       col_model: 'Model',
-      col_input_tokens: '<REDACTED_SECRET>',
-      col_output_tokens: '<REDACTED_SECRET>',
+      col_input_tokens: <REDACTED_SECRET>
+      col_output_tokens: <REDACTED_SECRET>
     },
     ar: {
       title: 'عمليات الذكاء الاصطناعي',
@@ -1432,8 +1432,8 @@ const PAGES = {
       col_latency: 'الكمون',
       col_error: 'الخطأ / معاينة الموجّه',
       col_model: 'النموذج',
-      col_input_tokens: '<REDACTED_SECRET>',
-      col_output_tokens: '<REDACTED_SECRET>',
+      col_input_tokens: <REDACTED_SECRET>
+      col_output_tokens: <REDACTED_SECRET>
     },
   },
   health: {
@@ -1576,7 +1576,7 @@ const PAGES = {
       skipped: 'Skipped',
     },
     ar: {
-      title: 'مرحباً في نظام جودة واستثمار ولاء بلس',
+      title: 'مرحباً في نظام جودة واستثمار Sample User',
       subtitle: 'مقدمتك الموجهة لإدارة الجودة وتقييم العائد على الاستثمار.',
       sec_progress: 'تقدم انضمامك',
       sec_what_learn: 'ما الذي ستتعلمه:',
@@ -1615,7 +1615,7 @@ const PAGES = {
     },
     ar: {
       title: 'مركز ملاحظات الفريق',
-      subtitle: 'عرض وتحليل ملاحظات سارة ومرام وأعضاء فريقك عبر جميع لوحات التحكم.',
+      subtitle: 'عرض وتحليل ملاحظات Sample User وSample User وأعضاء فريقك عبر جميع لوحات التحكم.',
       sec_by_dashboard: 'الملاحظات حسب اللوحة',
       sec_rating_dist: 'توزيع التقييمات',
       sec_all_feedback: 'جميع الملاحظات',
@@ -1863,7 +1863,7 @@ const PAGES = {
       sec_faq: 'FAQ',
     },
     ar: {
-      title: 'مرحباً بكم في ولاء بلس',
+      title: 'مرحباً بكم في Sample User',
       subtitle: 'منصة الحوكمة والمخاطر والامتثال وإدارة الجودة',
       toc: 'جدول المحتويات',
       sec_overview: '1. نظرة عامة على المنصة',
@@ -1937,7 +1937,7 @@ const PAGES = {
       return_dashboard: 'Return to Dashboard',
     },
     ar: {
-      title: 'منصة ولاء بلس',
+      title: 'منصة Sample User',
       subtitle: 'الحوكمة والمخاطر والامتثال وإدارة الجودة',
       welcome: 'مرحباً!',
       invalid: 'دعوة غير صالحة',
@@ -1961,7 +1961,7 @@ const PAGES = {
     },
     ar: {
       title: 'بيان إمكانية الوصول',
-      subtitle: 'نظام إدارة جودة ولاء بلس',
+      subtitle: 'نظام إدارة جودة Sample User',
       sec_commitment: 'التزامنا',
       sec_conformance: 'حالة المطابقة',
       sec_what_we_did: 'ما الذي قمنا به',

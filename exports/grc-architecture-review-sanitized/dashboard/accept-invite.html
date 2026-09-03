@@ -213,9 +213,9 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        token: token,
+                        token: <REDACTED_SECRET>
                         full_name: document.getElementById('full_name').value,
-                        password: password,
+                        password: <REDACTED_SECRET>
                         access_reason: document.getElementById('access_reason').value
                     })
                 });

@@ -39,7 +39,7 @@ const PROVIDER: string = "linear"; // e.g., "linear", "SourceControlProvider", e
 const mockWebhookPayload = {
   action: "create", // Linear webhook action (create/update/remove)
   type: "Issue", // Linear webhook type (Issue/Comment/Project)
-  data: {
+  <REDACTED_SCHEME> {
     id: "mock-issue-999",
     title: "MOCK: Test Issue for Validation",
     description: "MOCK: This is test data to validate the webhook flow",
@@ -84,7 +84,7 @@ async function testWebhookTrigger() {
       name: eventName,
 
       // Data structure matches what HostingPlatform Webhook Service sends to Inngest
-      data: {
+      <REDACTED_SCHEME> {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(mockWebhookPayload),

@@ -40,8 +40,8 @@ const COLD_BUT_CONFIGURED = {
   configured: true,
   connected: false,
   autoRefresh: true,
-  tokenCached: false,
-  tokenExpired: true,
+  tokenCached: <REDACTED_SECRET>
+  tokenExpired: <REDACTED_SECRET>
   rateLimited: false,
   cooldownMsRemaining: 0,
   message: "",
@@ -96,8 +96,8 @@ describe("runCRMProviderCallsImport precondition guard", () => {
     getCRMProviderConnectionStatus.mockReturnValue({
       ...COLD_BUT_CONFIGURED,
       connected: true,
-      tokenCached: true,
-      tokenExpired: false,
+      tokenCached: <REDACTED_SECRET>
+      tokenExpired: <REDACTED_SECRET>
     });
     await runCRMProviderCallsImport({ maxRecords: 10 });
     expect(fetchAllCRMProviderRecords).toHaveBeenCalledTimes(1);

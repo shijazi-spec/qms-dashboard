@@ -1891,11 +1891,11 @@ export const callIntelligenceRoutes = [
               present: !!process.env.CRMProvider_CLIENT_ID_NEW,
               length: (process.env.CRMProvider_CLIENT_ID_NEW || "").length,
             },
-            CRMProvider_CLIENT_SECRET: {
+            CRMProvider_CLIENT_SECRET: <REDACTED_SECRET>
               present: !!process.env.CRMProvider_CLIENT_SECRET,
               length: (process.env.CRMProvider_CLIENT_SECRET || "").length,
             },
-            CRMProvider_REFRESH_TOKEN: {
+            CRMProvider_REFRESH_TOKEN: <REDACTED_SECRET>
               present: !!process.env.CRMProvider_REFRESH_TOKEN,
               length: (process.env.CRMProvider_REFRESH_TOKEN || "").length,
             },
@@ -1903,7 +1903,7 @@ export const callIntelligenceRoutes = [
               process.env.CRMProvider_ACCOUNTS_URL || "(default: <REDACTED_URL>",
             CRMProvider_API_DOMAIN:
               process.env.CRMProvider_API_DOMAIN || "(default: <REDACTED_URL>",
-            CRMProvider_ACCESS_TOKEN_static: {
+            CRMProvider_ACCESS_TOKEN_static: <REDACTED_SECRET>
               present: !!process.env.CRMProvider_ACCESS_TOKEN,
               length: (process.env.CRMProvider_ACCESS_TOKEN || "").length,
             },
@@ -1931,7 +1931,7 @@ export const callIntelligenceRoutes = [
             errorMessage: null,
             errorHttpStatus: null,
             isCRMProviderRateLimited: false,
-            tokenLength: 0,
+            tokenLength: <REDACTED_SECRET>
           };
           try {
             activeProbe.attempted = true;
@@ -1983,7 +1983,7 @@ export const callIntelligenceRoutes = [
           return c.json({
             success: true,
             diagnosis,
-            env_secrets: envReport,
+            env_secrets: <REDACTED_SECRET>
             passive_status_before_probe: passiveStatus,
             passive_status_after_probe: passiveStatusAfter,
             rate_limit_cooldown: rateLimit,
@@ -2646,7 +2646,7 @@ export const callIntelligenceRoutes = [
           const callId = parseInt(c.req.param("callId"));
 
           // Handle empty or missing request body
-          let data: any = {};
+          let <REDACTED_SCHEME> any = {};
           try {
             const bodyText = await c.req.text();
             if (bodyText && bodyText.trim()) {
@@ -2696,7 +2696,7 @@ export const callIntelligenceRoutes = [
 
           const LLMProvider = createLLMProvider({
             baseURL: getLLMProviderBaseUrl(),
-            apiKey: getLLMProviderApiKey(),
+            apiKey: <REDACTED_SECRET>
           });
 
           const analysisPrompt = `Analyze this sales call transcript and provide JSON:
@@ -2723,7 +2723,7 @@ Respond with JSON only:
           const aiResult = await generateChatText({
             model: "gpt-4o",
             prompt: analysisPrompt,
-            maxTokens: 2000,
+            maxTokens: <REDACTED_SECRET>
             responseFormat: "json_object",
           });
 
@@ -3460,7 +3460,7 @@ Respond with JSON only:
 
           const LLMProvider = createLLMProvider({
             baseURL: getLLMProviderBaseUrl(),
-            apiKey: getLLMProviderApiKey(),
+            apiKey: <REDACTED_SECRET>
           });
 
           const momPrompt = `Analyze this meeting and generate Minutes of Meeting (MoM):
@@ -3490,7 +3490,7 @@ Respond with JSON only:
           const aiResult = await _gctMom({
             model: "gpt-4o",
             prompt: momPrompt,
-            maxTokens: 2000,
+            maxTokens: <REDACTED_SECRET>
           });
 
           let momData;
@@ -3899,7 +3899,7 @@ Respond with JSON only:
 
               const LLMProvider = (await import("LLMProvider")).default;
               const LLMProvider = new LLMProvider({
-                apiKey: getLLMProviderApiKey(),
+                apiKey: <REDACTED_SECRET>
                 baseURL: getLLMProviderBaseUrl(),
               });
 
@@ -3999,7 +3999,7 @@ ${transcriptText}
               const aiResult = await generateChatText({
                 model: "gpt-4o-mini",
                 prompt: analysisPrompt,
-                maxTokens: 4000,
+                maxTokens: <REDACTED_SECRET>
                 responseFormat: "json_object",
               });
               recordAiSpend(AI_COST.GPT4O_MINI_ANALYZE, "gpt4o_mini_analyze");
@@ -4401,7 +4401,7 @@ ${transcriptText}
 
               const LLMProvider = (await import("LLMProvider")).default;
               const LLMProvider = new LLMProvider({
-                apiKey: getLLMProviderApiKey(),
+                apiKey: <REDACTED_SECRET>
                 baseURL: getLLMProviderBaseUrl(),
               });
 
@@ -4464,7 +4464,7 @@ ${transcriptText}
 
               const aiSdk = createLLMProvider({
                 baseURL: getLLMProviderBaseUrl(),
-                apiKey: getLLMProviderApiKey(),
+                apiKey: <REDACTED_SECRET>
               });
 
               logger?.info("🔬 [API] Starting comprehensive call analysis");
@@ -4517,7 +4517,7 @@ ${transcriptText}
               const aiResult = await _gctInline({
                 model: "gpt-4o-mini",
                 prompt: analysisPrompt,
-                maxTokens: 4000,
+                maxTokens: <REDACTED_SECRET>
                 responseFormat: "json_object",
               });
               recordAiSpend(AI_COST.GPT4O_MINI_ANALYZE, "gpt4o_mini_analyze");
@@ -5163,7 +5163,7 @@ ${transcriptText}
 
           const aiSdk = createLLMProvider({
             baseURL: getLLMProviderBaseUrl(),
-            apiKey: getLLMProviderApiKey(),
+            apiKey: <REDACTED_SECRET>
           });
 
           logger?.info("🔬 [API] Sending evaluation to AI");
@@ -5179,7 +5179,7 @@ ${transcriptText}
           const aiResult = await _gctEval({
             model: "gpt-4o-mini",
             prompt: evaluationPrompt,
-            maxTokens: 8000,
+            maxTokens: <REDACTED_SECRET>
           });
 
           let evaluationData;

@@ -46,7 +46,7 @@ await suite.test("POST /api/admin/auth — 200 with correct ADMIN_API_KEY (no co
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/auth", "POST");
     const res = await handler(
-      makeContext({ method: "POST", body: { key: "integration-test-secret-2026" } }),
+      makeContext({ method: "POST", body: { key: "<REDACTED_SECRET>" } }),
     );
     suite.expectEqual(res.status, 200, "status");
     suite.expectEqual(res.body?.success, true, "body.success");

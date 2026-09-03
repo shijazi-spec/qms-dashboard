@@ -171,7 +171,7 @@ async function authenticateAdmin(
   adminKey: string,
 ): Promise<void> {
   const res = await context.request.post(`${BASE_URL}/api/admin/auth`, {
-    data: { key: adminKey },
+    <REDACTED_SCHEME> { key: adminKey },
     headers: { 'Content-Type': 'application/json' },
   });
   expect(

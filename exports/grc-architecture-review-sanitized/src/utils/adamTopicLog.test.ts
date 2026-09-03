@@ -51,11 +51,11 @@ const { recordQuestionSection } = await import("./adamTopicLog");
 
 const REDACTED = "***REDACTED***";
 const SECRETS = {
-  password_hash: "<REDACTED_SECRET>",
-  mfa_secret: "<REDACTED_SECRET>",
-  access_token: "<REDACTED_SECRET>",
-  refresh_token: "<REDACTED_SECRET>",
-  api_key: "<REDACTED_SECRET>",
+  password_hash: <REDACTED_SECRET>
+  mfa_secret: <REDACTED_SECRET>
+  access_token: <REDACTED_SECRET>
+  refresh_token: <REDACTED_SECRET>
+  api_key: <REDACTED_SECRET>
 } as const;
 
 function lastInsertParams(): unknown[] | null {

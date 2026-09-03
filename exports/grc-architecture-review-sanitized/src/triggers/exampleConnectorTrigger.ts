@@ -25,7 +25,7 @@ import { logger as safeLogger } from "../utils/logger";
 export type LinearWebhookPayload = {
   action: string; // e.g., "create", "update", "remove"
   type: string; // e.g., "Issue", "Comment", "Project"
-  data: {
+  <REDACTED_SCHEME> {
     id: string;
     title: string;
     description?: string;

@@ -413,11 +413,11 @@
 
             dashboardChart = new Chart(ctx, {
                 type: 'bar',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: labels.length ? labels : ['No data yet'],
                     datasets: [{
                         label: 'Feedback Count',
-                        data: counts.length ? counts : [0],
+                        <REDACTED_SCHEME> counts.length ? counts : [0],
                         backgroundColor: 'rgba(13, 148, 136, 0.7)',
                         borderColor: 'rgb(13, 148, 136)',
                         borderWidth: 1
@@ -452,10 +452,10 @@
 
             ratingChart = new Chart(ctx, {
                 type: 'doughnut',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: ['1 Star', '2 Stars', '3 Stars', '4 Stars', '5 Stars'],
                     datasets: [{
-                        data: distribution.some(d => d > 0) ? distribution : [1, 0, 0, 0, 0],
+                        <REDACTED_SCHEME> distribution.some(d => d > 0) ? distribution : [1, 0, 0, 0, 0],
                         backgroundColor: [
                             '#EF4444',
                             '#F97316',

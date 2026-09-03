@@ -229,7 +229,7 @@
     return fetch(PREF_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: '<REDACTED_SECRET>',
+      credentials: <REDACTED_SECRET>
       body: JSON.stringify({ lang: lang })
     }).then(function (r) {
       if (r && r.ok) {

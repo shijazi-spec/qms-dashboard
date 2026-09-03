@@ -22,7 +22,7 @@ import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext, type FakeContext } from "./_helpers/fakeContext";
 
 const suite = new TestSuite("pmpRoutes");
-const ADMIN_KEY = "integration-test-pmp-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 
 console.log("\n=== pmpRoutes integration tests ===\n");
 

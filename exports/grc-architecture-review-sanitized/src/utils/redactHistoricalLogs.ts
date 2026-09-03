@@ -1161,7 +1161,7 @@ export interface SweepResult {
    * waitForTablesReady, but kept symmetric for direct CLI invocations).
    */
   ai_pending_actions_credential_warnings:
-    | AiPendingActionsCredentialWarningsBackfillSnapshot
+   <REDACTED_SECRET>
     | { skipped: string };
   ai_call_metrics: AiCallMetricsSnapshot | { skipped: string };
   total_rows_updated: number;
@@ -1387,7 +1387,7 @@ export async function runSweepWithClient(
           rows_updated: aiResult.rowsUpdated,
         }
       : { skipped: aiSkipReason ?? "unknown" },
-    ai_pending_actions_credential_warnings: credWarnResult
+    ai_pending_actions_credential_warnings: <REDACTED_SECRET>
       ? {
           scanned: credWarnResult.scanned,
           rows_updated: credWarnResult.rowsUpdated,

@@ -291,7 +291,7 @@ export async function runSemanticAutoMap(
       const r = await generateChatText({
         model: "gpt-4o-mini",
         prompt,
-        maxTokens: 1500,
+        maxTokens: <REDACTED_SECRET>
       });
       resultText = r.text || "";
     } catch (err) {

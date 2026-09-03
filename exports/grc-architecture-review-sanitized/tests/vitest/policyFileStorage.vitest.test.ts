@@ -44,7 +44,7 @@ describe("bytes are stored in the database", () => {
   });
 
   it("replaces rather than accumulating on re-upload", async () => {
-    await savePolicyFile(7, { data: Buffer.from("v2"), fileName: "sop.pdf", fileSize: 2 });
+    await savePolicyFile(7, { <REDACTED_SCHEME> Buffer.from("v2"), fileName: "sop.pdf", fileSize: 2 });
     // policy_id is the primary key — one file per document. The old behaviour
     // left the previous blob orphaned on disk with every replacement.
     expect(lastSql()).toMatch(/ON CONFLICT \(policy_id\) DO UPDATE/i);
@@ -53,7 +53,7 @@ describe("bytes are stored in the database", () => {
 
   it("reads the bytes back for a single policy", async () => {
     query.mockResolvedValue({
-      rows: [{ data: Buffer.from("x"), file_name: "sop.pdf", file_size: 1, file_mime_type: "application/pdf" }],
+      rows: [{ <REDACTED_SCHEME> Buffer.from("x"), file_name: "sop.pdf", file_size: 1, file_mime_type: "application/pdf" }],
     });
     const f = await getPolicyFile(7);
     expect(f?.file_name).toBe("sop.pdf");

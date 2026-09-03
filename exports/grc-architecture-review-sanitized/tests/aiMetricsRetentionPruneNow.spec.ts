@@ -107,7 +107,7 @@ async function getRetention(): Promise<any> {
 
 async function putRetention(retention_days: number | null, note?: string): Promise<void> {
   const res = await apiCtx.put(RETENTION_PATH, {
-    data: { retention_days, ...(note ? { note } : {}) },
+    <REDACTED_SCHEME> { retention_days, ...(note ? { note } : {}) },
     headers: { 'Content-Type': 'application/json' },
   });
   expect(
@@ -126,7 +126,7 @@ test.describe('AI metrics retention — Prune now flow (Task #558 / #646)', () =
     // Single suite-level login; per-test logins would trip the
     // /api/admin/auth rate limiter (5 attempts / minute).
     const authRes = await apiCtx.post('/api/admin/auth', {
-      data: { key: ADMIN_KEY },
+      <REDACTED_SCHEME> { key: ADMIN_KEY },
       headers: { 'Content-Type': 'application/json' },
     });
     if (authRes.status() !== 200) {
@@ -369,7 +369,7 @@ test.describe('AI metrics retention — Prune now flow (Task #558 / #646)', () =
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            data: {
+            <REDACTED_SCHEME> {
               default_days: 90,
               env_baseline_days: 60,
               env_var_set: true,

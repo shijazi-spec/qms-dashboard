@@ -62,7 +62,7 @@ declare module 'pdf-parse' {
     version: string;
   }
   function pdfParse(
-    data: Buffer | Uint8Array,
+    <REDACTED_SCHEME> Buffer | Uint8Array,
     options?: Record<string, unknown>,
   ): Promise<PdfParseResult>;
   export default pdfParse;

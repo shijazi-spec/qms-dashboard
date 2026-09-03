@@ -15,9 +15,9 @@ import { autoLinkCallToCrm } from "../../src/utils/sdrCallLinking";
 
 describe("autoLinkCallToCrm phase-1", () => {
   const saved = {
-    token: process.env.CRMProvider_ACCESS_TOKEN,
+    token: <REDACTED_SECRET>
     id: process.env.CRMProvider_CLIENT_ID,
-    secret: process.env.CRMProvider_CLIENT_SECRET,
+    secret: <REDACTED_SECRET>
     refresh: process.env.CRMProvider_REFRESH_TOKEN,
   };
   beforeEach(() => {
@@ -30,10 +30,10 @@ describe("autoLinkCallToCrm phase-1", () => {
   });
   afterEach(() => {
     for (const [k, v] of Object.entries({
-      CRMProvider_ACCESS_TOKEN: saved.token,
+      CRMProvider_ACCESS_TOKEN: <REDACTED_SECRET>
       CRMProvider_CLIENT_ID: saved.id,
-      CRMProvider_CLIENT_SECRET: saved.secret,
-      CRMProvider_REFRESH_TOKEN: saved.refresh,
+      CRMProvider_CLIENT_SECRET: <REDACTED_SECRET>
+      CRMProvider_REFRESH_TOKEN: <REDACTED_SECRET>
     })) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;

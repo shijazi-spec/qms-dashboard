@@ -77,7 +77,7 @@ process.env.LLMProvider_API_KEY = "<REDACTED_SECRET>";
 (globalThis as unknown as { fetch: unknown }).fetch = async () => ({
   ok: true,
   status: 200,
-  json: async () => ({ data: [{ embedding: [0.11, 0.22, 0.33] }] }),
+  json: async () => ({ <REDACTED_SCHEME> [{ embedding: [0.11, 0.22, 0.33] }] }),
 });
 
 // Import AFTER the mocks are in place.
@@ -86,8 +86,8 @@ const mod = await import("./clauseEmbeddings");
 const REDACTED_SENTINEL = "***REDACTED***";
 
 const SECRETS = {
-  api_key: "<REDACTED_SECRET>",
-  access_token: "<REDACTED_SECRET>",
+  api_key: <REDACTED_SECRET>
+  access_token: <REDACTED_SECRET>
   SourceControlProvider_pat: "<REDACTED_TOKEN>",
   jwt: "<REDACTED_TOKEN>",
 } as const;

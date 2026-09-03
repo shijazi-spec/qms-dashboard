@@ -20,7 +20,7 @@ import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
 
 const suite = new TestSuite("sandboxApiRoutes");
-const ADMIN_KEY = "integration-test-sandbox-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 
 console.log("\n=== sandboxApiRoutes integration tests ===\n");
 

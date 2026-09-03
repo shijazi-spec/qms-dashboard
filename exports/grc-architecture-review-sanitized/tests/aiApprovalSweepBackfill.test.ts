@@ -184,7 +184,7 @@ async function run(): Promise<void> {
       id: 10,
       payload: { api_key: SECRET_KEY, note: SAFE_PROSE },
       payload_preview: `Issued key ${SECRET_GH}`,
-      execution_result: { data: { access_token: "<REDACTED_SECRET>" } },
+      execution_result: { <REDACTED_SCHEME> { access_token: "<REDACTED_SECRET>" } },
     },
   ];
   const stub3 = makeStubClient(combined);
@@ -332,7 +332,7 @@ async function run(): Promise<void> {
       payload_preview: innocuousSafe,
       // `curl_example` and `error_detail` are NOT in the key deny-list.
       execution_result: {
-        data: {
+        <REDACTED_SCHEME> {
           curl_example: `curl -H 'Authorization: Bearer ${innocuousGh}' <REDACTED_URL>`,
           error_detail: `JWT was ${innocuousJwt}`,
           audit_note: innocuousSafe,
@@ -344,7 +344,7 @@ async function run(): Promise<void> {
       // Clean row — no credentials anywhere; must not be touched.
       payload: { target: "PaymentProvider", description: "webhook re-registration" },
       payload_preview: "Register PaymentProvider webhook (id=we_def456)",
-      execution_result: { data: { status: "ok", hook_id: "we_def456" } },
+      execution_result: { <REDACTED_SCHEME> { status: "ok", hook_id: "we_def456" } },
     },
   ];
 
@@ -431,7 +431,7 @@ async function run(): Promise<void> {
       payload: { action: "rotate", description: "noop" },
       payload_preview: "Rotate key (failed)",
       execution_result: {
-        data: null,
+        <REDACTED_SCHEME> null,
         error: `Upstream rejected: Bearer <REDACTED_TOKEN> ${errorJwt} for key ${errorSecret}`,
       },
     },
@@ -440,7 +440,7 @@ async function run(): Promise<void> {
       // Clean error — no credential-shaped content.
       payload: { action: "rotate", description: "noop" },
       payload_preview: "Rotate key (failed)",
-      execution_result: { data: null, error: "Network timeout after 30s" },
+      execution_result: { <REDACTED_SCHEME> null, error: "Network timeout after 30s" },
     },
   ];
 

@@ -209,7 +209,7 @@ export interface DigestDeliveryHealth {
   run_key_email: string;
   ChatProvider_enabled: boolean;
   direct_audit_ChatProvider_enabled: boolean;
-  has_ChatProvider_credentials: boolean;
+  has_ChatProvider_credentials: <REDACTED_SECRET>
   ChatProvider_channel_resolved: string | null;
   has_digest_email_recipient: boolean;
   idempotent_run_exists_ChatProvider: boolean;
@@ -1868,7 +1868,7 @@ export function buildSopGapHtml(sop: SopGapSummary): string {
 </div>`;
 }
 
-export function buildDigestHTML(data: DigestData): string {
+export function buildDigestHTML(<REDACTED_SCHEME> DigestData): string {
   const trendIcon =
     data.audit_summary.trend === "improving"
       ? "UP"
@@ -1999,7 +1999,7 @@ ${buildSopGapHtml(data.sop_gap_summary)}
 </body></html>`;
 }
 
-export function buildDigestChatProviderBlocks(data: DigestData): any[] {
+export function buildDigestChatProviderBlocks(<REDACTED_SCHEME> DigestData): any[] {
   const healthEmoji = (score: number): string =>
     score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Needs Attention" : "At Risk";
   const hasAbsoluteDashboardUrl = /^https?:\/\//i.test(DIGEST_DASHBOARD_LINK);
@@ -2391,7 +2391,7 @@ export async function getDigestDeliveryHealth(
     run_key_email: runKeyEmail,
     ChatProvider_enabled: ChatProviderEnabled,
     direct_audit_ChatProvider_enabled: directAuditChatProviderEnabled,
-    has_ChatProvider_credentials: hasChatProviderCredentials,
+    has_ChatProvider_credentials: <REDACTED_SECRET>
     ChatProvider_channel_resolved: ChatProviderChannelResolved,
     has_digest_email_recipient: hasDigestEmailRecipient,
     idempotent_run_exists_ChatProvider: idempotentRunExistsChatProvider,

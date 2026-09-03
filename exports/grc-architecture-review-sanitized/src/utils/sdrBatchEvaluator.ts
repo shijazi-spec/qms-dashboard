@@ -209,7 +209,7 @@ export function buildBatchJsonl(
         // applies on top of the already-cheap mini pricing.
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 8000,
+        max_tokens: <REDACTED_SECRET>
       },
     });
   });

@@ -921,7 +921,7 @@ export const teamRoutes = [
 
           const LLMProvider = createLLMProvider({
             baseURL: getLLMProviderBaseUrl(),
-            apiKey: getLLMProviderApiKey(),
+            apiKey: <REDACTED_SECRET>
           });
 
           const prompt = `You are a Quality Management expert. Based on the following project information, generate a comprehensive project scope document.
@@ -957,7 +957,7 @@ Respond ONLY with valid JSON, no additional text.`;
           const { text } = await generateChatText({
             model: "gpt-4o",
             prompt,
-            maxTokens: 2000,
+            maxTokens: <REDACTED_SECRET>
           });
 
           let scopeResult;

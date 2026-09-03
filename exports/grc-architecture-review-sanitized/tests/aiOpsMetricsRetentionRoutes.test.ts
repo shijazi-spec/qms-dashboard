@@ -154,7 +154,7 @@ const { AI_METRICS_RETENTION_AUDIT_MAX_LIMIT } = await import(
 );
 
 const suite = new TestSuite("aiOpsMetricsRetentionRoutes");
-const ADMIN_KEY = "integration-test-ai-ops-retention-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 // Signed ExampleOrg_session cookie for an active admin platform user (requireRole()
 // now always performs a live getPlatformUser() lookup — the shared helper also
 // registers an active platform_users row for this session's email).

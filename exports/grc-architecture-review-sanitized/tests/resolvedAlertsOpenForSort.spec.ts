@@ -145,7 +145,7 @@ async function cleanupAlerts(): Promise<void> {
 
 async function authenticateAsAdmin(page: Page): Promise<void> {
   const res = await page.request.post(`${BASE_URL}/api/admin/auth`, {
-    data: { key: ADMIN_KEY },
+    <REDACTED_SCHEME> { key: ADMIN_KEY },
     headers: { 'Content-Type': 'application/json' },
   });
   expect(res.status(), 'admin /api/admin/auth login should succeed').toBe(200);
@@ -162,7 +162,7 @@ test.describe('Resolved-alerts feed: open-for line and sort control (Task #417)'
     });
     try {
       const authRes = await apiCtx.post('/api/admin/auth', {
-        data: { key: ADMIN_KEY },
+        <REDACTED_SCHEME> { key: ADMIN_KEY },
         headers: { 'Content-Type': 'application/json' },
       });
       if (authRes.status() !== 200) {

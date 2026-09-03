@@ -772,7 +772,7 @@ export async function deleteROIInitiative(id: number): Promise<boolean> {
   return (result.rowCount || 0) > 0;
 }
 
-export async function createManpowerBreakdown(data: Partial<ManpowerBreakdown>): Promise<ManpowerBreakdown> {
+export async function createManpowerBreakdown(<REDACTED_SCHEME> Partial<ManpowerBreakdown>): Promise<ManpowerBreakdown> {
   const fullyLoaded = calculateFullyLoadedSalary(data);
   const costPerHour = calculateCostPerHour(fullyLoaded);
   const monthlyLoss = calculateMonthlyTimeLossCost(data, costPerHour);
@@ -802,7 +802,7 @@ export async function getManpowerBreakdown(initiativeId: number): Promise<Manpow
   return result.rows[0] || null;
 }
 
-export async function updateManpowerBreakdown(initiativeId: number, data: Partial<ManpowerBreakdown>): Promise<ManpowerBreakdown | null> {
+export async function updateManpowerBreakdown(initiativeId: number, <REDACTED_SCHEME> Partial<ManpowerBreakdown>): Promise<ManpowerBreakdown | null> {
   const current = await getManpowerBreakdown(initiativeId);
   if (!current) return null;
 
@@ -828,7 +828,7 @@ export async function updateManpowerBreakdown(initiativeId: number, data: Partia
   return result.rows[0] || null;
 }
 
-export async function createPlatformCost(data: Partial<PlatformCost>): Promise<PlatformCost> {
+export async function createPlatformCost(<REDACTED_SCHEME> Partial<PlatformCost>): Promise<PlatformCost> {
   const result = await pool.query(
     `INSERT INTO roi_platform_costs 
      (initiative_id, tool_name, cost_per_month, seats_impacted, to_be_removed, vendor_support_cost)
@@ -855,7 +855,7 @@ export async function deletePlatformCost(id: number): Promise<boolean> {
   return (result.rowCount || 0) > 0;
 }
 
-export async function createErrorCosts(data: Partial<ErrorCosts>): Promise<ErrorCosts> {
+export async function createErrorCosts(<REDACTED_SCHEME> Partial<ErrorCosts>): Promise<ErrorCosts> {
   const savings = calculateErrorSavings(data);
 
   const result = await pool.query(
@@ -881,7 +881,7 @@ export async function getErrorCosts(initiativeId: number): Promise<ErrorCosts | 
   return result.rows[0] || null;
 }
 
-export async function updateErrorCosts(initiativeId: number, data: Partial<ErrorCosts>): Promise<ErrorCosts | null> {
+export async function updateErrorCosts(initiativeId: number, <REDACTED_SCHEME> Partial<ErrorCosts>): Promise<ErrorCosts | null> {
   const current = await getErrorCosts(initiativeId);
   if (!current) return null;
 
@@ -903,7 +903,7 @@ export async function updateErrorCosts(initiativeId: number, data: Partial<Error
   return result.rows[0] || null;
 }
 
-export async function createRevenueImpact(data: Partial<RevenueImpact>): Promise<RevenueImpact> {
+export async function createRevenueImpact(<REDACTED_SCHEME> Partial<RevenueImpact>): Promise<RevenueImpact> {
   const impact = calculateRevenueImpactValue(data);
 
   const result = await pool.query(
@@ -929,7 +929,7 @@ export async function getRevenueImpact(initiativeId: number): Promise<RevenueImp
   return result.rows[0] || null;
 }
 
-export async function updateRevenueImpact(initiativeId: number, data: Partial<RevenueImpact>): Promise<RevenueImpact | null> {
+export async function updateRevenueImpact(initiativeId: number, <REDACTED_SCHEME> Partial<RevenueImpact>): Promise<RevenueImpact | null> {
   const current = await getRevenueImpact(initiativeId);
   if (!current) return null;
 
@@ -951,7 +951,7 @@ export async function updateRevenueImpact(initiativeId: number, data: Partial<Re
   return result.rows[0] || null;
 }
 
-export async function createImplementationBreakdown(data: Partial<ImplementationBreakdown>): Promise<ImplementationBreakdown> {
+export async function createImplementationBreakdown(<REDACTED_SCHEME> Partial<ImplementationBreakdown>): Promise<ImplementationBreakdown> {
   const total = calculateTotalImplementationCost(data);
 
   const result = await pool.query(
@@ -981,7 +981,7 @@ export async function getImplementationBreakdown(initiativeId: number): Promise<
   return result.rows[0] || null;
 }
 
-export async function updateImplementationBreakdown(initiativeId: number, data: Partial<ImplementationBreakdown>): Promise<ImplementationBreakdown | null> {
+export async function updateImplementationBreakdown(initiativeId: number, <REDACTED_SCHEME> Partial<ImplementationBreakdown>): Promise<ImplementationBreakdown | null> {
   const current = await getImplementationBreakdown(initiativeId);
   if (!current) return null;
 
@@ -1007,7 +1007,7 @@ export async function updateImplementationBreakdown(initiativeId: number, data: 
   return result.rows[0] || null;
 }
 
-export async function createRiskInputs(data: Partial<RiskInputs>): Promise<RiskInputs> {
+export async function createRiskInputs(<REDACTED_SCHEME> Partial<RiskInputs>): Promise<RiskInputs> {
   const result = await pool.query(
     `INSERT INTO roi_risk_inputs 
      (initiative_id, confidence_level, probability_of_success, dependencies, risk_adjustment_factor)
@@ -1030,7 +1030,7 @@ export async function getRiskInputs(initiativeId: number): Promise<RiskInputs | 
   return result.rows[0] || null;
 }
 
-export async function updateRiskInputs(initiativeId: number, data: Partial<RiskInputs>, npv?: number): Promise<RiskInputs | null> {
+export async function updateRiskInputs(initiativeId: number, <REDACTED_SCHEME> Partial<RiskInputs>, npv?: number): Promise<RiskInputs | null> {
   const current = await getRiskInputs(initiativeId);
   if (!current) return null;
 
@@ -1053,7 +1053,7 @@ export async function updateRiskInputs(initiativeId: number, data: Partial<RiskI
   return result.rows[0] || null;
 }
 
-export async function createAIValidationLog(data: Partial<AIValidationLog>): Promise<AIValidationLog> {
+export async function createAIValidationLog(<REDACTED_SCHEME> Partial<AIValidationLog>): Promise<AIValidationLog> {
   const result = await pool.query(
     `INSERT INTO roi_ai_validation_logs 
      (initiative_id, validation_type, field_name, original_value, suggested_value,

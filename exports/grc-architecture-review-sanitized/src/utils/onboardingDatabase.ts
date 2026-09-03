@@ -279,7 +279,7 @@ export async function getUserOnboardingStatus(userId: string): Promise<any> {
   return result.rows[0] || null;
 }
 
-export async function createOrUpdateOnboardingStatus(data: {
+export async function createOrUpdateOnboardingStatus(<REDACTED_SCHEME> {
   user_id: string;
   user_email?: string;
   user_name?: string;
@@ -389,7 +389,7 @@ export async function getOnboardingStats(): Promise<any> {
 }
 
 // Demo links functions
-export async function createDemoLink(data: {
+export async function createDemoLink(<REDACTED_SCHEME> {
   created_by?: string;
   created_by_email?: string;
   description?: string;

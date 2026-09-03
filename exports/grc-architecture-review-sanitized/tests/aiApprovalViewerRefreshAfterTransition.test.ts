@@ -151,7 +151,7 @@ const aiStubQuery: StubQuery = async <R extends QueryResultRow>(
       result_entity_id: null,
       created_at: new Date(),
       expires_at: new Date(Date.now() + 24 * 3600 * 1000),
-      credential_warnings: [],
+      credential_warnings: <REDACTED_SECRET>
     };
     storedRows.set(code, row);
     return {
@@ -556,7 +556,7 @@ async function runApproveScenario(): Promise<void> {
     success: true,
     entityType: 'integration',
     entityId: 'CRMProvider_books',
-    data: { rotated: true, audit_note: 'ok' },
+    <REDACTED_SCHEME> { rotated: true, audit_note: 'ok' },
   });
   const stored = storedRows.get(action.action_code);
   assert(stored?.status === 'executed', 'recordExecutionResult flips status to executed');

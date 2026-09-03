@@ -49,7 +49,7 @@ async function printValueDiagnostics() {
       let clean = 0;
       for (const row of r.rows) {
         const issues = analyzeRecordHygiene(
-          { id: "", module, data: row.raw_data || {} } as any,
+          { id: "", module, <REDACTED_SCHEME> row.raw_data || {} } as any,
           DEFAULT_GOVERNANCE_RULES,
         );
         if (issues.length === 0) clean++;

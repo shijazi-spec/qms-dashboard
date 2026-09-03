@@ -136,7 +136,7 @@ const outputResults = createStep({
 🤖 Agent Response:
 ${inputData.agentResponse}
 
-📝 Processed Data:
+📝 Processed <REDACTED_SCHEME>
 ${
   inputData.processedData
     ? `

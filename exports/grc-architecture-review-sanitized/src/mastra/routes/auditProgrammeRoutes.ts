@@ -503,7 +503,7 @@ export const auditProgrammeRoutes = [
           success: true,
           entityType: "audit_programme",
           entityId: String(id),
-          data: { programme_code: programme.programme_code },
+          <REDACTED_SCHEME> { programme_code: programme.programme_code },
         });
 
         await logEvent({

@@ -33,7 +33,7 @@ vi.mock("../../src/utils/rbacMiddleware", async (orig) => {
     requireRoleOrKey: vi.fn(async (c: any) => {
       return c.req.header("x-admin-key") === "test-key" ? { role: "admin" } : null;
     }),
-    hasValidAdminApiKey: vi.fn((c: any) => c.req.header("x-admin-key") === "test-key"),
+    hasValidAdminApiKey: <REDACTED_SECRET>
     unauthorizedResponse: (c: any) => c.json({ error: "Unauthorized" }, 401),
   };
 });
@@ -47,7 +47,7 @@ function makeFakeFetchers(): AgingFetchers {
       owner: "Alice",
       createdTime: "2026-01-01T00:00:00Z",
       modifiedTime: "2026-04-01T00:00:00Z",
-      data: { Deal_Name: "Stalled Mega Deal", Stage: "Negotiation", Owner: { name: "Alice" } },
+      <REDACTED_SCHEME> { Deal_Name: "Stalled Mega Deal", Stage: "Negotiation", Owner: { name: "Alice" } },
     },
     {
       id: "D2",
@@ -55,7 +55,7 @@ function makeFakeFetchers(): AgingFetchers {
       owner: "Bob",
       createdTime: "2026-04-15T00:00:00Z",
       modifiedTime: "2026-04-25T00:00:00Z",
-      data: { Deal_Name: "Fresh Deal", Stage: "Qualification", Owner: { name: "Bob" } },
+      <REDACTED_SCHEME> { Deal_Name: "Fresh Deal", Stage: "Qualification", Owner: { name: "Bob" } },
     },
     {
       id: "D3",
@@ -63,7 +63,7 @@ function makeFakeFetchers(): AgingFetchers {
       owner: "Carol",
       createdTime: "2026-01-01T00:00:00Z",
       modifiedTime: "2026-02-01T00:00:00Z",
-      data: { Deal_Name: "Won Deal", Stage: "Closed Won", Owner: { name: "Carol" } },
+      <REDACTED_SCHEME> { Deal_Name: "Won Deal", Stage: "Closed Won", Owner: { name: "Carol" } },
     },
   ];
 
@@ -83,7 +83,7 @@ function makeFakeFetchers(): AgingFetchers {
       owner: "Dan",
       createdTime: "2026-01-01T00:00:00Z",
       modifiedTime: "2026-04-01T00:00:00Z",
-      data: {
+      <REDACTED_SCHEME> {
         Full_Name: "Sample User",
         Lead_Status: "Working",
         Owner: { name: "Dan" },

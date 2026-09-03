@@ -56,7 +56,7 @@ vi.mock("../../src/utils/rbacMiddleware", () => {
     // Pass-through outer gate; aiApprovalGate inside the route file already
     // enforces per-route role lists via the mocked requireRole above.
     gateApiRoute: <T,>(route: T): T => route,
-    hasValidAdminApiKey: (c: any) => {
+    hasValidAdminApiKey: <REDACTED_SECRET>
       const key = c?.req?.header?.("X-Admin-Key");
       return !!(key && key === process.env.ADMIN_API_KEY);
     },
@@ -86,7 +86,7 @@ vi.mock("../../src/utils/aiApprovalDatabase", () => ({
   claimForApproval: vi.fn(),
   rejectAction: vi.fn(),
   countPendingForUser: vi.fn(),
-  countPendingWithCredentialWarnings: vi.fn(),
+  countPendingWithCredentialWarnings: <REDACTED_SECRET>
   countByReviewStatus: vi.fn(),
 }));
 
@@ -126,7 +126,7 @@ vi.mock("../../src/utils/eventLogsDatabase", () => ({
   initializeEventLogsTable: vi.fn(async () => undefined),
   logEvent: vi.fn(async () => ({ id: 1 })),
   redactSensitiveDeep: vi.fn(<T,>(x: T) => x),
-  redactSecretLikeStrings: vi.fn(<T,>(x: T) => x),
+  redactSecretLikeStrings: <REDACTED_SECRET>
   getActionViewers: vi.fn(async () => []),
   getActionViewersBatch: vi.fn(async () => ({})),
 }));
@@ -174,7 +174,7 @@ function makeAction(overrides: Partial<PendingAction> = {}): PendingAction {
     result_entity_id: null,
     created_at: new Date("2026-04-22T12:00:00Z"),
     expires_at: new Date("2026-04-23T12:00:00Z"),
-    credential_warnings: [],
+    credential_warnings: <REDACTED_SECRET>
     ...overrides,
   };
 }
@@ -408,7 +408,7 @@ describe("POST /api/ai/approvals/:code/approve", () => {
     vi.mocked(approvalDb.claimForApproval).mockResolvedValueOnce(claimed);
     vi.mocked(approvalGate.executeApprovedAction).mockResolvedValueOnce({
       ok: true,
-      data: { rotated: true, fingerprint: "abc123" },
+      <REDACTED_SCHEME> { rotated: true, fingerprint: "abc123" },
       entityType: "ApiKey",
       entityId: "key-1",
     });

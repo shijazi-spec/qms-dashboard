@@ -51,7 +51,7 @@ interface RowState {
   payload: any;
   payload_preview: string;
   /** Stored as the parsed JS array, mirroring how `pg` hydrates JSONB. */
-  credential_warnings: any[];
+  credential_warnings: <REDACTED_SECRET>
 }
 
 interface CapturedUpdate {
@@ -69,7 +69,7 @@ function makeStubClient(initialRows: RowState[]): {
   const rows = initialRows.map((r) => ({
     ...r,
     payload: structuredClone(r.payload),
-    credential_warnings: structuredClone(r.credential_warnings),
+    credential_warnings: <REDACTED_SECRET>
   }));
   const updates: CapturedUpdate[] = [];
 
@@ -143,7 +143,7 @@ async function run(): Promise<void> {
         note: `previous=${SECRET_KEY}`,
       },
       payload_preview: `${SAFE_PROSE} (gh=${SECRET_GH})`,
-      credential_warnings: [],
+      credential_warnings: <REDACTED_SECRET>
     },
     {
       // Legacy row: clean payload, only a JWT in the preview.
@@ -151,7 +151,7 @@ async function run(): Promise<void> {
       action_code: "act_legacy_002",
       payload: { target: "auth_session" },
       payload_preview: `Replay session token=${SECRET_JWT}`,
-      credential_warnings: [],
+      credential_warnings: <REDACTED_SECRET>
     },
     {
       // Legacy row: clean — nothing for the detector to flag.
@@ -159,7 +159,7 @@ async function run(): Promise<void> {
       action_code: "act_legacy_003_clean",
       payload: { target_integration: "PaymentProvider", note: "no secret here" },
       payload_preview: "Rotate PaymentProvider webhook signing key (id=we_abc123)",
-      credential_warnings: [],
+      credential_warnings: <REDACTED_SECRET>
     },
     {
       // Post-Task-#477 row that already has a non-empty warning array —
@@ -168,7 +168,7 @@ async function run(): Promise<void> {
       action_code: "act_modern_004",
       payload: { target: "CRMProvider_books", note: SAFE_PROSE },
       payload_preview: SAFE_PROSE,
-      credential_warnings: [{ path: "payload.api_key", kind: "sensitive-key" }],
+      credential_warnings: <REDACTED_SECRET>
     },
   ];
 
@@ -290,7 +290,7 @@ async function run(): Promise<void> {
       action_code: "act_racy_050",
       payload: { note: `previous=${SECRET_KEY}` },
       payload_preview: SAFE_PROSE,
-      credential_warnings: [],
+      credential_warnings: <REDACTED_SECRET>
     },
   ];
   const racyStub = makeStubClient(racy);
@@ -358,7 +358,7 @@ async function run(): Promise<void> {
       action_code: `act_bulk_${String(id).padStart(5, "0")}`,
       payload: { note: `previous=${SECRET_KEY}` },
       payload_preview: SAFE_PROSE,
-      credential_warnings: [] as any[],
+      credential_warnings: <REDACTED_SECRET>
     };
   });
   const overflowStub = makeStubClient(overflow);

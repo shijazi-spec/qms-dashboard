@@ -543,7 +543,7 @@ let sseClients: Array<{
   controller: ReadableStreamDefaultController;
 }> = [];
 
-function broadcastSSE(event: string, data: any) {
+function broadcastSSE(event: string, <REDACTED_SCHEME> any) {
   // Heartbeat: a "progress" emit (fetch %/scoring) OR a "module" emit (fired
   // every 200 records during the per-record write loop) means the scan is alive
   // and moving forward. blockOrClearScan reads lastProgressAt so a long-but-
@@ -1812,7 +1812,7 @@ export const duplicateRadarRoutes = [
           // Shared deterministic builder (same one the weekly digest uses);
           // withTrend shows week-over-week vs the last weekly snapshot.
           const { brief, metrics } = await buildExecutiveBriefText({ withTrend: true });
-          return c.json({ brief, generated_at: new Date().toISOString(), data: metrics });
+          return c.json({ brief, generated_at: new Date().toISOString(), <REDACTED_SCHEME> metrics });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }
@@ -2826,12 +2826,12 @@ export const duplicateRadarRoutes = [
             .slice(0, 25); // bound the CRMProvider calls
           const counts: Record<string, number> = {};
           await Promise.all(
-            ids.map(async (zid) => {
+            ids.map(async (Sample User) => {
               try {
-                const atts = await fetchRecordAttachments(module, zid);
-                counts[zid] = Array.isArray(atts) ? atts.length : 0;
+                const atts = await fetchRecordAttachments(module, Sample User);
+                counts[Sample User] = Array.isArray(atts) ? atts.length : 0;
               } catch {
-                counts[zid] = -1; // unknown (CRMProvider error) — UI shows a neutral dash
+                counts[Sample User] = -1; // unknown (CRMProvider error) — UI shows a neutral dash
               }
             }),
           );
@@ -2867,17 +2867,17 @@ export const duplicateRadarRoutes = [
             .slice(0, 25); // bound the CRMProvider fan-out per click
           const counts: Record<string, number> = {};
           await Promise.all(
-            accountIds.map(async (zid) => {
+            accountIds.map(async (Sample User) => {
               try {
                 const deals = await fetchCRMProviderRelatedRecords(
                   "Accounts",
-                  zid,
+                  Sample User,
                   "Deals",
                   { perPage: 200 },
                 );
-                counts[zid] = Array.isArray(deals) ? deals.length : 0;
+                counts[Sample User] = Array.isArray(deals) ? deals.length : 0;
               } catch {
-                counts[zid] = -1;
+                counts[Sample User] = -1;
               }
             }),
           );
@@ -3725,12 +3725,12 @@ export const duplicateRadarRoutes = [
                         AND LOWER(BTRIM(COALESCE(NULLIF(stage,''), raw_data->>'Stage',''))) = ANY($1::text[])`,
                     [[...wantedLower]],
                   );
-                  // Reshape to the same {id, data:{…}} envelope the live path
+                  // Reshape to the same {id, <REDACTED_SCHEME>{…}} envelope the live path
                   // returns, so every consumer below is untouched.
                   return q.rows.map((r: any) => ({
                     id: r.CRMProvider_record_id,
                     owner: r.owner_name || r.owner_email || "",
-                    data: {
+                    <REDACTED_SCHEME> {
                       Deal_Name: r.record_name || r.CRMProvider_record_id,
                       Stage: r.stage || r.raw_stage || "",
                       Amount: r.deal_value != null ? Number(r.deal_value) : null,
@@ -5864,7 +5864,7 @@ export const duplicateRadarRoutes = [
             );
           return c.json({
             success: true,
-            ExampleOrgProductTokens: norm(
+            ExampleOrgProductTokens: <REDACTED_SECRET>
               process.env.RADAR_ExampleOrg_PRODUCT_TOKENS || "",
               "ExampleOrg,walaoffer,walabravo",
             ),
@@ -6306,7 +6306,7 @@ export const duplicateRadarRoutes = [
           await clearMockData();
           return c.json({ success: true, message: "Mock data cleared" });
         } catch (error: any) {
-          logger.error("Error clearing mock data:", error);
+          logger.error("Error clearing mock <REDACTED_SCHEME>", error);
           return c.json({ error: "An internal error occurred" }, 500);
         }
       };
@@ -6586,7 +6586,7 @@ export const duplicateRadarRoutes = [
             ),
           );
         } catch (error: any) {
-          logger.error("Error exporting data:", error);
+          logger.error("Error exporting <REDACTED_SCHEME>", error);
           return c.json({ error: "An internal error occurred" }, 500);
         }
       };

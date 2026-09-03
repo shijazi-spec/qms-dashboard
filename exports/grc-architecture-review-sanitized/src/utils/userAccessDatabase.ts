@@ -270,8 +270,8 @@ export interface UserInvitation {
   full_name?: string;
   team: TeamScope;
   role: UserRole;
-  token: string;
-  token_expires_at: Date;
+  token: <REDACTED_SECRET>
+  token_expires_at: <REDACTED_SECRET>
   require_mfa: boolean;
   invited_by: string;
   used: boolean;
@@ -666,7 +666,7 @@ export async function createInvitation(
 }
 
 export async function validateInvitationToken(
-  token: string,
+  token: <REDACTED_SECRET>
 ): Promise<UserInvitation | null> {
   const result = await pool.query(
     `SELECT * FROM user_invitations WHERE token = $1 AND used = false AND token_expires_at > NOW()`,
@@ -676,7 +676,7 @@ export async function validateInvitationToken(
 }
 
 export async function acceptInvitation(
-  token: string,
+  token: <REDACTED_SECRET>
   userData: {
     full_name: string;
     password_hash?: string;

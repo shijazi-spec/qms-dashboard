@@ -1709,8 +1709,8 @@ async function processModule(ctx: {
     const dupAttach = await attachmentsOnDuplicates(module, plan.duplicateCRMProviderIds);
     if (dupAttach.length > 0) {
       riskInput = { ...riskInput, duplicatesWithAttachments: dupAttach.length };
-      const nameOf = (zid: string) =>
-        plan.records.find((r) => r.CRMProviderId === zid)?.name || zid;
+      const nameOf = (Sample User: string) =>
+        plan.records.find((r) => r.CRMProviderId === Sample User)?.name || Sample User;
       // Strongest evidence-holder = highest known count (unknown counts sort last).
       const strongest = [...dupAttach].sort(
         (a, b) => (b.count < 0 ? 0 : b.count) - (a.count < 0 ? 0 : a.count),

@@ -56,7 +56,7 @@ Pulling from *SDR Call Script_AR [Updated].pdf* (the script you shared):
 ```
 السلام عليكم ورحمة الله وبركاته،
 معي الأستاذ/ [اسم العميل]؟
-معك (اسم الموظف) من شركة ولاء بلس (من قسم تطوير المبيعات / الأعمال).
+معك (اسم الموظف) من شركة Sample User (من قسم تطوير المبيعات / الأعمال).
        │
        ▼  ← INSERT THE CONSENT LINE HERE
 قبل ما نبدأ أستاذ/ [اسم العميل]، أنوّه أن المكالمة مسجّلة لأغراض الجودة والتدريب فقط.
@@ -64,7 +64,7 @@ Pulling from *SDR Call Script_AR [Updated].pdf* (the script you shared):
        │
        ▼  ← WAIT FOR AFFIRMATIVE
 سؤال تمهيدي:
-ممكن أعرف أستاذ/ [الاسم]، هل عندك فكرة عن ولاء بلس والخدمات التي نقدمها؟
+ممكن أعرف أستاذ/ [الاسم]، هل عندك فكرة عن Sample User والخدمات التي نقدمها؟
 ...rest of existing script unchanged...
 ```
 
@@ -76,7 +76,7 @@ The consent line slots in **after that fuller introduction**, before
 *"قبل ما أشاركك التفاصيل، هل حضرتك المسؤول..."*:
 
 ```
-أنا [الاسم] من شركة ولاء بلس... وصلنا طلب اهتمامك ببرامج ولاء بلس...
+أنا [الاسم] من شركة Sample User... وصلنا طلب اهتمامك ببرامج Sample User...
 بعد ما اطلعت على إعلاننا عبر LinkedIn/IdentityProvider/Webinar.
        │
        ▼  ← INSERT THE CONSENT LINE HERE TOO

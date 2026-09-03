@@ -352,7 +352,7 @@ interface BucketSummary {
   kind: DetectorKind;
   count: number;
   uniqueRowCount: number;
-  uniqueTokenCount: number;
+  uniqueTokenCount: <REDACTED_SECRET>
   /** Min/max length / entropy seen — gives the reviewer thresholds at a
    *  glance to decide whether to widen / tighten. */
   minLength: number;
@@ -377,7 +377,7 @@ interface Report {
 function summarise(hits: RawHit[]): BucketSummary[] {
   const map = new Map<string, BucketSummary & {
     rows: Set<string>;
-    tokens: Set<string>;
+    tokens: <REDACTED_SECRET>
   }>();
   for (const h of hits) {
     const key = `${h.table}|${h.path}|${h.kind}`;
@@ -389,14 +389,14 @@ function summarise(hits: RawHit[]): BucketSummary[] {
         kind: h.kind,
         count: 0,
         uniqueRowCount: 0,
-        uniqueTokenCount: 0,
+        uniqueTokenCount: <REDACTED_SECRET>
         minLength: h.length,
         maxLength: h.length,
         minEntropy: h.entropy,
         maxEntropy: h.entropy,
         exampleHashPrefixes: [],
         rows: new Set(),
-        tokens: new Set(),
+        tokens: <REDACTED_SECRET>
       };
       map.set(key, b);
     }
@@ -516,7 +516,7 @@ async function main(): Promise<void> {
     rowsWithExistingRedaction,
     totalHits: hits.length,
     hitsByKind: {
-      password: hits.filter((h) => h.kind === 'password').length,
+      password: <REDACTED_SECRET>
       entropy: hits.filter((h) => h.kind === 'entropy').length,
     },
     buckets: summarise(hits),

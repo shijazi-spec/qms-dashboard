@@ -134,7 +134,7 @@ async function generateReviewNumber(): Promise<string> {
 }
 
 export async function createReview(
-  data: Partial<ManagementReview>,
+  <REDACTED_SCHEME> Partial<ManagementReview>,
 ): Promise<ManagementReview> {
   await initManagementReviewTables();
   const reviewNumber = data.review_number || (await generateReviewNumber());
@@ -217,7 +217,7 @@ export async function getReviewById(
 
 export async function updateReview(
   id: number,
-  data: Partial<ManagementReview>,
+  <REDACTED_SCHEME> Partial<ManagementReview>,
 ): Promise<ManagementReview | null> {
   const fields: string[] = [];
   const params: any[] = [];
@@ -288,7 +288,7 @@ export async function deleteReview(id: number): Promise<boolean> {
 
 export async function addReviewAction(
   reviewId: number,
-  data: Partial<ReviewAction>,
+  <REDACTED_SCHEME> Partial<ReviewAction>,
 ): Promise<ReviewAction> {
   const countRows = await safeQuery(
     `SELECT COALESCE(MAX(action_number), 0) + 1 as next FROM management_review_actions WHERE review_id = $1`,
@@ -315,7 +315,7 @@ export async function addReviewAction(
 
 export async function updateReviewAction(
   actionId: number,
-  data: Partial<ReviewAction>,
+  <REDACTED_SCHEME> Partial<ReviewAction>,
 ): Promise<ReviewAction | null> {
   const fields: string[] = [];
   const params: any[] = [];

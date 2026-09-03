@@ -146,7 +146,7 @@
                 // summary / logs / owners / search tabs need no extra work —
                 // summary essentials above already populated them.
             } catch (error) {
-                console.error('Error refreshing data:', error);
+                console.error('Error refreshing <REDACTED_SCHEME>', error);
             }
             // Load sparkline outside the try so it still renders even if summary calls fail
             loadClustersTrendSparkline();
@@ -1183,12 +1183,12 @@
             if (creationTrendChart) creationTrendChart.destroy();
             creationTrendChart = new Chart(canvas, {
                 type: 'line',
-                data: {
+                <REDACTED_SCHEME> {
                     labels,
                     datasets: [
                         {
                             label: 'New duplicates',
-                            data: dupCounts,
+                            <REDACTED_SCHEME> dupCounts,
                             borderColor: '#DC2626',
                             backgroundColor: 'rgba(220, 38, 38, 0.12)',
                             fill: true,
@@ -1198,7 +1198,7 @@
                         },
                         {
                             label: 'New records (total)',
-                            data: totalCounts,
+                            <REDACTED_SCHEME> totalCounts,
                             borderColor: '#94A3B8',
                             backgroundColor: 'rgba(148, 163, 184, 0.08)',
                             borderDash: [4, 4],
@@ -1209,7 +1209,7 @@
                         },
                         {
                             label: 'Duplicate rate %',
-                            data: rates,
+                            <REDACTED_SCHEME> rates,
                             borderColor: '#2563EB',
                             backgroundColor: 'transparent',
                             fill: false,
@@ -1425,7 +1425,7 @@
             if (sourceChart) sourceChart.destroy();
             sourceChart = new Chart(document.getElementById('sourceChart'), {
                 type: 'bar',
-                data: { labels: sourceData.map(s => s.source || ExampleOrgI18n.t('dyn.duplicates.unknown')), datasets: [{ label: ExampleOrgI18n.t('dyn.duplicates.duplicates_chart_label'), data: sourceData.map(s => parseInt(s.total) || 0), backgroundColor: ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4'] }] },
+                <REDACTED_SCHEME> { labels: sourceData.map(s => s.source || ExampleOrgI18n.t('dyn.duplicates.unknown')), datasets: [{ label: ExampleOrgI18n.t('dyn.duplicates.duplicates_chart_label'), <REDACTED_SCHEME> sourceData.map(s => parseInt(s.total) || 0), backgroundColor: ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4'] }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
             });
 
@@ -1434,7 +1434,7 @@
             if (confidenceChart) confidenceChart.destroy();
             confidenceChart = new Chart(document.getElementById('confidenceChart'), {
                 type: 'doughnut',
-                data: { labels: [ExampleOrgI18n.t('dyn.duplicates.conf_strong'), ExampleOrgI18n.t('dyn.duplicates.conf_moderate'), ExampleOrgI18n.t('dyn.duplicates.conf_weak')], datasets: [{ data: [data.highConfidence||0, data.mediumConfidence||0, data.lowConfidence||0], backgroundColor: ['#EF4444','#F59E0B','#22C55E'] }] },
+                <REDACTED_SCHEME> { labels: [ExampleOrgI18n.t('dyn.duplicates.conf_strong'), ExampleOrgI18n.t('dyn.duplicates.conf_moderate'), ExampleOrgI18n.t('dyn.duplicates.conf_weak')], datasets: [{ <REDACTED_SCHEME> [data.highConfidence||0, data.mediumConfidence||0, data.lowConfidence||0], backgroundColor: ['#EF4444','#F59E0B','#22C55E'] }] },
                 options: { responsive: true, maintainAspectRatio: false }
             });
             if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('confidenceChart', confidenceChart, 'Similarity Score Distribution');
@@ -2061,10 +2061,10 @@
                             const j = await r.json();
                             for (const rec of (j.records || [])) {
                                 const mod = RECORD_TYPE_TO_MODULE[String(rec.record_type || '').toLowerCase()];
-                                const zid = rec.CRMProvider_record_id;
-                                if (!mod || !zid || typeof zid !== 'string') continue;
-                                if (zid.startsWith('test_') || zid.startsWith('LEAD_') || zid.startsWith('DEAL_')) continue;
-                                byModule[mod].add(zid);
+                                const Sample User = rec.CRMProvider_record_id;
+                                if (!mod || !Sample User || typeof Sample User !== 'string') continue;
+                                if (Sample User.startsWith('test_') || Sample User.startsWith('LEAD_') || Sample User.startsWith('DEAL_')) continue;
+                                byModule[mod].add(Sample User);
                             }
                         } catch (_) { /* skip individual cluster failures */ }
                     }
@@ -2752,8 +2752,8 @@
                 return String(v).split(/[,;|]/);
             };
             // Normalise away EVERY separator, not just spaces: CRMProvider holds the
-            // same product as "Example Organization" in one cell and "Wala One" in another
-            // (and "wala-one" turns up too), so strip to letters+digits.
+            // same product as "Example Organization" in one cell and "ExampleOrg One" in another
+            // (and "ExampleOrg-one" turns up too), so strip to letters+digits.
             const norm = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
             // BOTH product cells are read (Sample User 2026-09-02: "you can fetch from
             // these 2 cells not just one"). "ExampleOrg Products" is a field NAME,
@@ -2764,7 +2764,7 @@
             const vals = collect(raw.Products).concat(collect(raw.Product))
                 .map(norm).filter(Boolean).concat(wppVals);
             // The ExampleOrg product FAMILY (Sample User 2026-08-12): the "Products" field
-            // carries the specific product, and ExampleOrg, Wala Offer / WalaOffer
+            // carries the specific product, and ExampleOrg, ExampleOrg Offer / WalaOffer
             // and WalaBravo all count as ExampleOrg. Example Organization is the only Example Organization
             // signal. Tokens come from env via /api/duplicates/config so a new
             // ExampleOrg sub-product needs NO code change (env
@@ -2782,7 +2782,7 @@
             // like "Gold Package"). It must NOT fire when the cells already
             // identify a product — that presence-means-ExampleOrg shortcut is what
             // labelled the Example Organization account ديمه (CRMProvider <REDACTED_ID>,
-            // Products "Wala One" / ExampleOrg Products "Example Organization") as ExampleOrg.
+            // Products "ExampleOrg One" / ExampleOrg Products "Example Organization") as ExampleOrg.
             if (!hasWP && !hasWO && wppVals.length) hasWP = true;
             if (hasWO && hasWP) return 'both';
             if (hasWO) return 'Example Organization';
@@ -4260,12 +4260,12 @@
                 // synchronously from raw_data; no fetch needed.
                 (records || []).forEach(function (r) {
                     if (String(r.record_type || '').toLowerCase() !== 'lead') return;
-                    const zid = r.CRMProvider_record_id;
-                    if (!zid) return;
+                    const Sample User = r.CRMProvider_record_id;
+                    if (!Sample User) return;
                     const raw = r.raw_data || {};
                     const status = raw.Lead_Status || r.status || r.stage || '';
                     if (!status) return;
-                    modal.querySelectorAll('a[data-testid="link-CRMProvider-' + zid + '"]').forEach(function (a) {
+                    modal.querySelectorAll('a[data-testid="link-CRMProvider-' + Sample User + '"]').forEach(function (a) {
                         if (a.nextSibling && a.nextSibling.classList && a.nextSibling.classList.contains('leadstatus-chip')) return;
                         const chip = document.createElement('span');
                         chip.className = 'leadstatus-chip ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800';
@@ -4287,10 +4287,10 @@
                         if (!res.ok) continue;
                         counts = ((await res.json()) || {}).counts || {};
                     } catch (_) { continue; }
-                    Object.keys(counts).forEach(function (zid) {
-                        const n = counts[zid] | 0;
+                    Object.keys(counts).forEach(function (Sample User) {
+                        const n = counts[Sample User] | 0;
                         if (n <= 0) return; // only badge records that actually carry files
-                        modal.querySelectorAll('a[data-testid="link-CRMProvider-' + zid + '"]').forEach(function (a) {
+                        modal.querySelectorAll('a[data-testid="link-CRMProvider-' + Sample User + '"]').forEach(function (a) {
                             if (a.nextSibling && a.nextSibling.classList && a.nextSibling.classList.contains('att-chip')) return;
                             const chip = document.createElement('span');
                             chip.className = 'att-chip ms-1 text-xs font-semibold text-amber-700';
@@ -4822,7 +4822,7 @@
             try {
                 res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/plan', {
                     method: 'POST',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(reqBody),
                 });
@@ -4874,12 +4874,12 @@
             const callApi = async (confirmFlag, limitOverride) => {
                 const res = await fetch('/api/duplicates/bulk-split-contacts', {
                     method: 'POST',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ confirm: !!confirmFlag, limit: limitOverride || 500 }),
                 });
                 const j = await res.json().catch(() => null);
-                return { ok: res.ok, status: res.status, data: j };
+                return { ok: res.ok, status: res.status, <REDACTED_SCHEME> j };
             };
 
             let preview;
@@ -6025,7 +6025,7 @@
             try {
                 res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/execute', {
                     method: 'POST',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body || {}),
                 });
@@ -8137,12 +8137,12 @@
             var agg = _dcAggregate(dimKey);
             var cfg = {
                 type: 'bar',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: agg.labels,
                     datasets: [
-                        { label: 'Compliant', data: agg.compliant, backgroundColor: '#16a34a', stack: 's' },
-                        { label: 'Missing docs', data: agg.missing, backgroundColor: '#dc2626', stack: 's' },
-                        { label: 'Not checked', data: agg.unchecked, backgroundColor: '#d1d5db', stack: 's' }
+                        { label: 'Compliant', <REDACTED_SCHEME> agg.compliant, backgroundColor: '#16a34a', stack: 's' },
+                        { label: 'Missing docs', <REDACTED_SCHEME> agg.missing, backgroundColor: '#dc2626', stack: 's' },
+                        { label: 'Not checked', <REDACTED_SCHEME> agg.unchecked, backgroundColor: '#d1d5db', stack: 's' }
                     ]
                 },
                 options: {
@@ -9017,7 +9017,7 @@
             try {
                 const res = await fetch('/api/duplicates/empty-records/dismiss-tagged', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>', body: JSON.stringify({ CRMProviderId: CRMProviderId }),
+                    credentials: <REDACTED_SECRET>
                 });
                 const j = await res.json();
                 if (!res.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + res.status));
@@ -9080,7 +9080,7 @@
                 // ONE request for the whole selection (this is the 429 fix).
                 const res = await fetch('/api/duplicates/empty-records/dismiss-tagged', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>', body: JSON.stringify({ CRMProviderIds: ids }),
+                    credentials: <REDACTED_SECRET>
                 });
                 const j = await res.json();
                 if (!res.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + res.status));
@@ -9731,7 +9731,7 @@
             try {
                 const res = await fetch('/api/duplicates/account-hints/resolve-all-with-ai', {
                     method: 'POST',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({}),
                 });
@@ -9767,7 +9767,7 @@
             try {
                 const res = await fetch('/api/duplicates/account-hints/' + id + '/resolve-with-ai', {
                     method: 'POST',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({}),
                 });
@@ -9835,7 +9835,7 @@
         }
         // A row in a handled bucket — disposition badge + who/when + Reopen.
         function _sdHandledRow(d) {
-            const dealZid = escapeHtml(String(d.dealCRMProviderId));
+            const dealSample User = escapeHtml(String(d.dealCRMProviderId));
             const dealLink = '<a href="' + erCRMProviderUrl('deals', d.dealCRMProviderId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in CRMProvider CRM">' + escapeHtml(d.dealName) + ' <span class="text-xs">↗</span></a>';
             const acctCell = d.accountName ? escapeHtml(d.accountName) : '<span class="text-gray-400">— none —</span>';
             const ownerCell = d.ownerName ? escapeHtml(d.ownerName) : '<span class="text-gray-400">—</span>';
@@ -9848,7 +9848,7 @@
                 dismissed: '<span class="rr-badge rr-neutral">Dismissed</span>',
             }[d.disposition] || ('<span class="rr-badge rr-neutral">' + escapeHtml(d.disposition || '—') + '</span>');
             const whoWhen = ((d.by ? escapeHtml(d.by) : '') + (d.at ? (' · ' + escapeHtml(formatDate(d.at))) : '')).trim();
-            const reopenBtn = '<button data-on-click="reopenStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Re-open — send this deal back to the Open list (removes the radar record; no CRMProvider change)." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>';
+            const reopenBtn = '<button data-on-click="reopenStaleDeal" data-args="[&quot;' + dealSample User + '&quot;]" title="Re-open — send this deal back to the Open list (removes the radar record; no CRMProvider change)." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>';
             return '<tr style="vertical-align:top">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '<td class="rr-lead rr-primary">' + dealLink + '</td>'
                 + '<td class="rr-muted">' + acctCell + '</td>'
@@ -9927,7 +9927,7 @@
                     return 'rr-sev-info';
                 };
                 body.innerHTML = deals.map(function (d) {
-                    const dealZid = escapeHtml(String(d.dealCRMProviderId));
+                    const dealSample User = escapeHtml(String(d.dealCRMProviderId));
                     const dealLink = '<a href="' + erCRMProviderUrl('deals', d.dealCRMProviderId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in CRMProvider CRM to review before acting">' + escapeHtml(d.dealName) + ' <span class="text-xs">↗</span></a>';
                     const acctCell = d.accountName ? escapeHtml(d.accountName) : '<span class="text-gray-400">— none —</span>';
                     const ownerCell = d.ownerName ? escapeHtml(d.ownerName) : '<span class="text-gray-400">—</span>';
@@ -9938,7 +9938,7 @@
                     // ✗ = dismiss (not a stale issue — hides it, no CRMProvider change).
                     const suggested = d.disposition === 'close' ? 'close' : d.disposition === 'reengage' ? 'reengage' : null;
                     const aiBtn = suggested
-                        ? '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;' + suggested + '&quot;]" title="AI-apply the suggested action (' + suggested + ') in CRMProvider." class="rr-btn rr-btn-icon" style="color:#7C3AED">🤖</button>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                        ? '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealSample User + '&quot;,&quot;' + suggested + '&quot;]" title="AI-apply the suggested action (' + suggested + ') in CRMProvider." class="rr-btn rr-btn-icon" style="color:#7C3AED">🤖</button>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         : '';
                     // Consistent action set (mirrors the Cross-Module row: a green
                     // ✓ Resolved for "I handled it in CRMProvider" + a Dismiss for false
@@ -9946,10 +9946,10 @@
                     // and ✗ Dismiss are radar-only (no CRMProvider change).
                     const actions = '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + aiBtn
-                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;close&quot;]" title="Close — set this deal\'s Stage to Closed Lost in CRMProvider." class="rr-btn rr-btn-ghost">Close</button>'
-                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;reengage&quot;]" title="Re-engage — move this deal\'s Stage forward into the active pipeline in CRMProvider." class="rr-btn rr-btn-ghost">Re-engage</button>'
-                        + '<button data-on-click="resolveStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Resolved — I already fixed this deal MANUALLY in CRMProvider. Records it as resolved (not dismissed) and removes it from this list. No CRMProvider change." class="rr-btn rr-btn-primary">✓ Resolve</button>'
-                        + '<button data-on-click="dismissStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Dismiss — this is not a stale issue (false positive). Hides it from this list. No CRMProvider change." class="rr-btn rr-btn-ghost rr-btn-icon">✕</button>'
+                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealSample User + '&quot;,&quot;close&quot;]" title="Close — set this deal\'s Stage to Closed Lost in CRMProvider." class="rr-btn rr-btn-ghost">Close</button>'
+                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealSample User + '&quot;,&quot;reengage&quot;]" title="Re-engage — move this deal\'s Stage forward into the active pipeline in CRMProvider." class="rr-btn rr-btn-ghost">Re-engage</button>'
+                        + '<button data-on-click="resolveStaleDeal" data-args="[&quot;' + dealSample User + '&quot;]" title="Resolved — I already fixed this deal MANUALLY in CRMProvider. Records it as resolved (not dismissed) and removes it from this list. No CRMProvider change." class="rr-btn rr-btn-primary">✓ Resolve</button>'
+                        + '<button data-on-click="dismissStaleDeal" data-args="[&quot;' + dealSample User + '&quot;]" title="Dismiss — this is not a stale issue (false positive). Hides it from this list. No CRMProvider change." class="rr-btn rr-btn-ghost rr-btn-icon">✕</button>'
                         + '</div></div>';
                     return '<tr class="' + dispSev(d.disposition) + '" style="vertical-align:top">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + '<td class="rr-lead rr-primary">' + dealLink + '</td>'
@@ -10175,7 +10175,7 @@
             try {
                 const res = await fetch('/api/duplicates/record-hints/' + id + '/resolve-with-ai', {
                     method: 'POST',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({}),
                 });
@@ -10906,7 +10906,7 @@
                 const res = await fetch('/api/duplicates/preflight/parse-excel', {
                     method: 'POST',
                     body: fd,
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                 });
                 let body = null;
                 try { body = await res.json(); } catch { body = null; }
@@ -11796,11 +11796,11 @@
                 // Deal name links straight to the CRMProvider deal (Sample User 2026-07-14:
                 // open the deal from here to review before acting). Guards against
                 // synthetic ids so a test/placeholder row stays plain text.
-                const _dealZid = String(r.CRMProvider_record_id || '').trim();
-                const _dealOpenable = _dealZid && !_dealZid.startsWith('test_') && !_dealZid.startsWith('LEAD_');
+                const _dealSample User = String(r.CRMProvider_record_id || '').trim();
+                const _dealOpenable = _dealSample User && !_dealSample User.startsWith('test_') && !_dealSample User.startsWith('LEAD_');
                 const dealNameHtml = r.deal_name
                     ? (_dealOpenable
-                        ? '<a href="<REDACTED_URL>' + encodeURIComponent(_dealZid) + '" target="_blank" rel="noopener" class="rr-primary text-blue-600 hover:underline" title="Open this deal in CRMProvider CRM to review before acting">' + escapeHtml(r.deal_name) + ' <span class="text-xs">↗</span></a>'
+                        ? '<a href="<REDACTED_URL>' + encodeURIComponent(_dealSample User) + '" target="_blank" rel="noopener" class="rr-primary text-blue-600 hover:underline" title="Open this deal in CRMProvider CRM to review before acting">' + escapeHtml(r.deal_name) + ' <span class="text-xs">↗</span></a>'
                         : '<div class="rr-primary">' + escapeHtml(r.deal_name) + '</div>')
                     : '';
                 const dealCell = dealNameHtml
@@ -13039,19 +13039,19 @@
         function recordTabPayloadFor(module, summary) {
             if (!summary || !summary.primary) return null;
             const primary = summary.primary;
-            const zid = String(primary.CRMProvider_record_id || '').trim();
+            const Sample User = String(primary.CRMProvider_record_id || '').trim();
             const moduleCRMProvider = module === 'leads' ? 'Leads'
                              : module === 'deals' ? 'Deals'
                              : module === 'contacts' ? 'Contacts'
                              : 'Accounts';
-            const sourceId = zid
-                ? (module + ':' + zid)
+            const sourceId = Sample User
+                ? (module + ':' + Sample User)
                 : (module + ':' + (primary.record_name || primary.email || 'group') + ':' + (summary.count || 0));
             const subject = primary.record_name || primary.company_name || primary.email || ('group of ' + (summary.count || 0));
             const sharedDesc = (summary.sharedKeys || []).map(s => s.label + '=' + (s.value || '')).join(' · ') || '(chained match — no single shared field)';
             const description = [
                 'Module: ' + moduleCRMProvider + ' (page-level duplicate group)',
-                'Primary record: ' + subject + (zid ? ' (CRMProvider id ' + zid + ')' : ''),
+                'Primary record: ' + subject + (Sample User ? ' (CRMProvider id ' + Sample User + ')' : ''),
                 'Members in group: ' + (summary.count || 0),
                 'Shared signals: ' + sharedDesc,
                 '',
@@ -14127,7 +14127,7 @@
             window._pfRubbishData = rubbish;
             var rej = document.getElementById('spRejectedNote');
             if (rej) rej.textContent = rubbish.length
-                ? ('🗑 Rubbish Data: ' + rubbish.length + ' contact(s) rejected (email domain contradicts the company, or corporate email at an unverifiable company) — NOT pushed.')
+                ? ('🗑 Rubbish <REDACTED_SCHEME> ' + rubbish.length + ' contact(s) rejected (email domain contradicts the company, or corporate email at an unverifiable company) — NOT pushed.')
                 : '';
             var dlBtn = document.getElementById('spRubbishDownloadBtn');
             if (dlBtn) dlBtn.classList.toggle('hidden', rubbish.length === 0);
@@ -15011,7 +15011,7 @@
                 const isMarketplace = vals.some(v =>
                     v === 'marketplace' || v === 'partner accounts'
                 );
-                // Example Organization = its own layout (normalise so "Wala One"/"wala-one"
+                // Example Organization = its own layout (normalise so "ExampleOrg One"/"ExampleOrg-one"
                 // all match). ExampleOrg (= legacy "corporate") = NOT marketplace
                 // AND NOT Example Organization; rows with no layout default to ExampleOrg so
                 // legacy data isn't hidden. Mirrors server buildSegmentPredicate.
@@ -15620,7 +15620,7 @@
             try {
                 const doSync = (force) => fetch('/api/duplicates/scan-CRMProvider', {
                     method: 'POST',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ force: !!force }),
                 });

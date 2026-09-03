@@ -82,9 +82,9 @@ assert(_sanitiseForTest(true) === true, 'boolean passes through unchanged');
 {
   const result = _sanitiseForTest({
     provider: 'CRMProvider',
-    access_token: '<REDACTED_SECRET>',
-    refresh_token: '<REDACTED_SECRET>',
-    client_secret: '<REDACTED_SECRET>',
+    access_token: <REDACTED_SECRET>
+    refresh_token: <REDACTED_SECRET>
+    client_secret: <REDACTED_SECRET>
     account_id: 'acct-public-123',
   }) as any;
   assert(result.access_token === REDACTED_SENTINEL, 'access_token redacted');

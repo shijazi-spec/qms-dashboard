@@ -10,7 +10,7 @@ await exerciseAllKeys(h, "createInvitation", async (secret, key, payload) => {
     full_name: JSON.stringify({ [key]: secret, marker: NON_SENSITIVE_MARKER, payload }),
     team: "qa" as never,
     role: "bu_user" as never,
-    token_expires_at: new Date(Date.now() + 86_400_000),
+    token_expires_at: <REDACTED_SECRET>
     require_mfa: true,
     invited_by: "<REDACTED_EMAIL>",
     used: false,

@@ -947,7 +947,7 @@ const _pmpRoutesRaw = [
           logger?.info("✅ [PMP API] Gantt data fetched", { projectId });
           return c.json(ganttData);
         } catch (error) {
-          safeLogger.error("Error fetching Gantt data:", error);
+          safeLogger.error("Error fetching Gantt <REDACTED_SCHEME>", error);
           return c.json({ error: "Failed to fetch Gantt data" }, 500);
         }
       };
@@ -970,7 +970,7 @@ const _pmpRoutesRaw = [
 
           const LLMProvider = createLLMProvider({
             baseURL: getLLMProviderBaseUrl(),
-            apiKey: getLLMProviderApiKey(),
+            apiKey: <REDACTED_SECRET>
           });
 
           const prompt = `Generate a comprehensive PMP-compliant Project Charter for the following project:

@@ -30,7 +30,7 @@ import { SDR_QUALITY_PROMPT_VERSION } from "../src/mastra/agents/sdrQualityAgent
 import { SALES_QUALITY_PROMPT_VERSION } from "../src/mastra/agents/salesQualityAgent";
 
 const suite = new TestSuite("aiOpsPromptVersions");
-const ADMIN_KEY = "integration-test-prompt-versions-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 // Signed ExampleOrg_session cookie for an active admin platform user (requireRole()
 // now always performs a live getPlatformUser() lookup — the shared helper also
 // registers an active platform_users row for this session's email).
@@ -139,7 +139,7 @@ await suite.test(
       );
       suite.expectEqual(res.status, 200, "status");
 
-      const data: Array<{ agent_name: string; prompt_version: string }> =
+      const <REDACTED_SCHEME> Array<{ agent_name: string; prompt_version: string }> =
         res.body?.data ?? [];
 
       suite.expect(Array.isArray(data) && data.length >= 4, "at least 4 agent entries");
@@ -257,7 +257,7 @@ if (!HAS_DB) {
         );
         suite.expectEqual(res.body?.min_feedback, 0, "min_feedback=0 honoured");
 
-        const data: Array<{ agent_name: string; prompt_version: string; call_count: number }> =
+        const <REDACTED_SCHEME> Array<{ agent_name: string; prompt_version: string; call_count: number }> =
           res.body?.data ?? [];
 
         const agentRows = data.filter((r) => r.agent_name === TEST_AGENT);
@@ -299,7 +299,7 @@ if (!HAS_DB) {
         );
         suite.expectEqual(res.status, 200, "status");
 
-        const data: Array<{ agent_name: string; prompt_version: string }> =
+        const <REDACTED_SCHEME> Array<{ agent_name: string; prompt_version: string }> =
           res.body?.data ?? [];
 
         // TEST_AGENT is not a real agent and must never appear in /active.
@@ -373,10 +373,10 @@ if (!HAS_DB) {
   );
 
   // Contract: when the table has no rows, the route must return
-  // { data: null } (not 404, not [], not undefined). This locks the
+  // { <REDACTED_SCHEME> null } (not 404, not [], not undefined). This locks the
   // shape the dashboard's renderLastPurgeStrip(null) branch depends on.
   await suite.test(
-    "contract: GET /api/ai-ops/prompt-versions/last-purge returns data:null when no purge runs exist",
+    "contract: GET /api/ai-ops/prompt-versions/last-purge returns <REDACTED_SCHEME>null when no purge runs exist",
     async () => {
       const pgMod = await import("pg");
       const pool = new pgMod.default.Pool({
@@ -474,7 +474,7 @@ if (!HAS_DB) {
         );
         suite.expectEqual(res.status, 200, "status");
 
-        const data: Array<{
+        const <REDACTED_SCHEME> Array<{
           agent_name: string;
           prompt_version: string;
           call_count: number;

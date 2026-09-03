@@ -747,7 +747,7 @@
                 populateModalRegulationDropdown();
                 applyFilters();
             } catch (e) {
-                console.error('Error loading data:', e);
+                console.error('Error loading <REDACTED_SCHEME>', e);
                 document.getElementById('obligationsTableBody').innerHTML =
                     '<tr><td colspan="10" class="px-4 py-8 text-center text-red-500">Failed to load obligations.</td></tr>';
             }
@@ -1349,7 +1349,7 @@
                 const r = await fetch('/api/compliance/imports', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ document_id: documentId, regulation_id: regulationId })
                 });
                 const data = await r.json();

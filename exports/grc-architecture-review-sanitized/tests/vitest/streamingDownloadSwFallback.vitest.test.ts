@@ -27,7 +27,7 @@ const SW_SOURCE = readFileSync(SW_PATH, 'utf8');
 type Listener = (event: any) => void;
 
 interface SWHarness {
-  message(data: any, ports?: any[]): void;
+  message(<REDACTED_SCHEME> any, ports?: any[]): void;
   fetch(path: string): Response | undefined;
   listeners: Record<string, Listener[]>;
   self: any;
@@ -60,7 +60,7 @@ function loadSW(origin = '<REDACTED_URL>'): SWHarness {
   return {
     self: fakeSelf,
     listeners,
-    message(data: any, ports: any[] = []) {
+    message(<REDACTED_SCHEME> any, ports: any[] = []) {
       for (const fn of listeners.message) fn({ data, ports });
     },
     fetch(path: string): Response | undefined {

@@ -861,7 +861,7 @@
             const res = await fetch('/api/audit-programme', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: '<REDACTED_SECRET>',
+                credentials: <REDACTED_SECRET>
                 body: JSON.stringify({ programme_year: year, title: title }),
             });
             if (res.ok) {
@@ -877,7 +877,7 @@
             const res = await fetch('/api/audit-programme/' + id + '/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: '<REDACTED_SECRET>',
+                credentials: <REDACTED_SECRET>
                 body: JSON.stringify({}),
             });
             if (res.ok) {
@@ -950,7 +950,7 @@
             const fd = new FormData(form);
             const res = await fetch('/api/manual-audit-intake', {
                 method: 'POST',
-                credentials: '<REDACTED_SECRET>',
+                credentials: <REDACTED_SECRET>
                 body: fd,
             });
             if (!res.ok) {

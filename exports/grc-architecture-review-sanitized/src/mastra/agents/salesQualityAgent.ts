@@ -14,7 +14,7 @@ const AGENT_NAME = "ExampleOrg Sales Quality Specialist";
 
 const LLMProvider = createLLMProvider({
   baseURL: getLLMProviderBaseUrl(),
-  apiKey: getLLMProviderApiKey(),
+  apiKey: <REDACTED_SECRET>
 });
 
 const SALES_QUALITY_INSTRUCTIONS = `

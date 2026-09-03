@@ -253,7 +253,7 @@ const provider = "linear";  // The webhook provider (e.g., "linear", "SourceCont
 const mockWebhookPayload = {
   action: "create",
   type: "Issue",
-  data: {
+  <REDACTED_SCHEME> {
     id: "mock-issue-999",
     title: "MOCK: Test Issue Title",
     description: "MOCK: This is fake test data for validation",
@@ -283,7 +283,7 @@ if (provider === "ChatProvider" || provider === "telegram") {
 
 await inngest.send({
   name: eventName,  // Must match what registerApiRoute creates
-  data: {
+  <REDACTED_SCHEME> {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(mockWebhookPayload)

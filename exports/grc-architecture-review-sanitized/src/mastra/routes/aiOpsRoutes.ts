@@ -628,7 +628,7 @@ export const aiOpsRoutes = [
         try {
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
-          return c.json({ data: ACTIVE_PROMPT_VERSIONS });
+          return c.json({ <REDACTED_SCHEME> ACTIVE_PROMPT_VERSIONS });
         } catch (error) {
           logger.error("[AI-Ops] active prompt-versions error:", error);
           return c.json(
@@ -643,7 +643,7 @@ export const aiOpsRoutes = [
   {
     // Returns the most-recent prompt-version purge run so the AI Operations
     // panel can show a "Last purge" info strip (deleted count, when it ran,
-    // retention window, live versions). Returns { data: null } when the cron
+    // retention window, live versions). Returns { <REDACTED_SCHEME> null } when the cron
     // has never run on this database (e.g. fresh install) — the UI renders a
     // "no purge yet" hint in that case rather than treating it as an error.
     path: "/api/ai-ops/prompt-versions/last-purge",
@@ -654,7 +654,7 @@ export const aiOpsRoutes = [
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const run = await getLastPromptVersionPurgeRun();
-          return c.json({ data: run });
+          return c.json({ <REDACTED_SCHEME> run });
         } catch (error) {
           logger.error("[AI-Ops] last-purge error:", error);
           return c.json({ error: "Failed to fetch last purge run" }, 500);
@@ -1018,7 +1018,7 @@ export const aiOpsRoutes = [
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const days = safeInt(c.req.query("days"), 14, 1, 90);
           const trend = await getToolHealthAlertTrend(days);
-          return c.json({ data: trend });
+          return c.json({ <REDACTED_SCHEME> trend });
         } catch (error) {
           logger.error("[AI-Ops] tool-health-alerts trend error:", error);
           return c.json(
@@ -1404,7 +1404,7 @@ export const aiOpsRoutes = [
             expiresAt != null && new Date(expiresAt).getTime() <= Date.now();
 
           return c.json({
-            data: {
+            <REDACTED_SCHEME> {
               defaults: TOOL_HEALTH_DEFAULTS,
               env_baseline: TOOL_HEALTH_ENV_BASELINE,
               overrides: row.overrides,
@@ -1788,7 +1788,7 @@ export const aiOpsRoutes = [
           const effective = mergePromptRegressionOverrides(row.overrides);
 
           return c.json({
-            data: {
+            <REDACTED_SCHEME> {
               defaults: PROMPT_REGRESSION_DEFAULTS,
               env_baseline: PROMPT_REGRESSION_ENV_BASELINE,
               overrides: row.overrides,
@@ -2163,7 +2163,7 @@ export const aiOpsRoutes = [
           // proposed windows differ. The UI surfaces this so operators
           // know the diff compares two different aggregation horizons.
           return c.json({
-            data: {
+            <REDACTED_SCHEME> {
               effective_current,
               effective_proposed,
               window_minutes_changed: !sameWindow,
@@ -2351,7 +2351,7 @@ export const aiOpsRoutes = [
           }
 
           return c.json({
-            data: {
+            <REDACTED_SCHEME> {
               default_days: DEFAULT_AI_METRICS_RETENTION_DAYS,
               env_baseline_days: envBaseline,
               env_var_set:
@@ -2582,7 +2582,7 @@ export const aiOpsRoutes = [
           const history = await getAiMetricsPruneRunHistory(limit);
 
           return c.json({
-            data: {
+            <REDACTED_SCHEME> {
               limit,
               count: history.length,
               entries: history,
@@ -2651,7 +2651,7 @@ export const aiOpsRoutes = [
           const impact = await previewAiMetricsPruneImpact(parsed);
 
           return c.json({
-            data: {
+            <REDACTED_SCHEME> {
               candidate_days: impact.candidateDays,
               rows_to_delete: impact.rowCount,
               oldest_row_age_days: impact.oldestRowAgeDays,

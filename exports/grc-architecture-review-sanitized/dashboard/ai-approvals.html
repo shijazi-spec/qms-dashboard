@@ -1355,7 +1355,7 @@
         if (adminKey) headers['x-admin-key'] = adminKey;
         fetch('/api/ai/approvals/' + encodeURIComponent(code) + '/' + act, {
             method: 'POST',
-            credentials: '<REDACTED_SECRET>',
+            credentials: <REDACTED_SECRET>
             headers: headers,
             body: JSON.stringify(payload)
         })

@@ -35,7 +35,7 @@ export function clientCount(): number {
 }
 
 /** Fan out one event. Controllers that throw are closed and dropped. */
-export function broadcast(event: string, data: unknown): void {
+export function broadcast(event: string, <REDACTED_SCHEME> unknown): void {
   if (clients.length === 0) return;
   const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   const encoded = new TextEncoder().encode(msg);

@@ -703,9 +703,9 @@ export function buildCRMProviderRecordUrl(
  * this directly to populate hyperlink cells.
  */
 function _buildCrmLinks(c: any): PreflightResultRow["crm_links"] {
-  const mk = (mod: "Leads" | "Deals" | "Accounts", zid?: string | null, name?: string | null) =>
-    zid
-      ? { url: buildCRMProviderRecordUrl(mod, zid), label: (name || "").trim() || zid }
+  const mk = (mod: "Leads" | "Deals" | "Accounts", Sample User?: string | null, name?: string | null) =>
+    Sample User
+      ? { url: buildCRMProviderRecordUrl(mod, Sample User), label: (name || "").trim() || Sample User }
       : null;
   return {
     active_lead:  mk("Leads",    c?.active_lead_CRMProvider_id,  c?.active_lead_name),
@@ -1998,7 +1998,7 @@ interface CsClientDirectory {
   byName: Map<string, CsClientStatus>;
   byDomain: Map<string, CsClientStatus>;
   /** token → set of client normalized-names that contain it (for containment). */
-  tokenIndex: Map<string, Set<string>>;
+  tokenIndex: <REDACTED_SECRET>
   builtAt: number;
 }
 
@@ -2204,10 +2204,10 @@ export async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
         )
       )?.rows ?? [];
     for (const a of acct) {
-      const zid = (a.CRMProvider_record_id || "").toString().trim();
-      if (!zid) continue;
+      const Sample User = (a.CRMProvider_record_id || "").toString().trim();
+      if (!Sample User) continue;
       const raw = (a.company_name || a.record_name || "").toString();
-      accountById.set(zid, {
+      accountById.set(Sample User, {
         domain: (a.domain || "").toString().trim().toLowerCase() || null,
         norm: raw && !isPlaceholderName(raw) ? normalizeCompanyName(raw) : null,
       });
@@ -2413,11 +2413,11 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
       )
     )?.rows ?? [];
   for (const a of acctRows) {
-    const zid = (a.CRMProvider_record_id || "").toString().trim();
-    if (!zid) continue;
+    const Sample User = (a.CRMProvider_record_id || "").toString().trim();
+    if (!Sample User) continue;
     const norm = normalizeCompanyName(a.record_name || a.company_name || "");
     const dom = (a.domain || "").toString().trim().toLowerCase() || null;
-    accountById.set(zid, { domain: dom, norm: norm || null });
+    accountById.set(Sample User, { domain: dom, norm: norm || null });
   }
 
   // 1) Every CLIENT deal — a deal with a CS phase OR a customer Stage. Extract
@@ -2472,7 +2472,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
   // NON-CORPORATE layouts whose deals must NOT make a company a CS client —
   // ExampleOrg Sales MAY contact merchant / app accounts (Sample User 2026-06-24).
   // Comparison is space/punctuation-insensitive (lowercased, non-alphanumerics
-  // stripped) so "Wala One" / "Example Organization" / "wala-one" all match — but "ExampleOrg"
+  // stripped) so "ExampleOrg One" / "Example Organization" / "ExampleOrg-one" all match — but "ExampleOrg"
   // (the corporate layout) never does. Extend with DUPLICATE_RADAR_CS_EXCLUDE_LAYOUTS.
   const _normLayout = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const csExcludeLayouts = Array.from(
@@ -2806,7 +2806,7 @@ export async function debugDirectoryMatch(
   inbound: string;
   inboundDomain: string | null;
   normalized: string;
-  distinctiveTokens: string[];
+  distinctiveTokens: <REDACTED_SECRET>
   byNameSize: number;
   domainHit: { key: string; client: string | null } | null;
   exact: boolean;
@@ -2865,7 +2865,7 @@ export async function debugDirectoryMatch(
     inbound: companyName,
     inboundDomain: dom,
     normalized: nm,
-    distinctiveTokens: _csDistinctiveTokens(nm),
+    distinctiveTokens: <REDACTED_SECRET>
     byNameSize: dir.byName.size,
     domainHit,
     exact,
@@ -2899,7 +2899,7 @@ export async function auditPassNamesLoose(
     status: "active" | "in_cooloff";
     churnDays: number | null;
     dice: number;
-    sharedTokens: string[];
+    sharedTokens: <REDACTED_SECRET>
     band: "leak_strict" | "short_name_skip" | "near_miss";
   }>
 > {
@@ -2912,7 +2912,7 @@ export async function auditPassNamesLoose(
     status: "active" | "in_cooloff";
     churnDays: number | null;
     dice: number;
-    sharedTokens: string[];
+    sharedTokens: <REDACTED_SECRET>
     band: "leak_strict" | "short_name_skip" | "near_miss";
     _score: number;
   };
@@ -2971,7 +2971,7 @@ export async function auditPassNamesLoose(
           status,
           churnDays: st.churnDays,
           dice: Math.round(dice * 100) / 100,
-          sharedTokens: shared,
+          sharedTokens: <REDACTED_SECRET>
           band,
           _score: score,
         };
@@ -2987,7 +2987,7 @@ export async function auditPassNamesLoose(
 export async function getCsClientDirectoryStats(): Promise<{
   names: number;
   domains: number;
-  tokens: number;
+  tokens: <REDACTED_SECRET>
   active: number;
   churned: number;
   built_at_iso: string;
@@ -3003,7 +3003,7 @@ export async function getCsClientDirectoryStats(): Promise<{
   return {
     names: dir.byName.size,
     domains: dir.byDomain.size,
-    tokens: dir.tokenIndex.size,
+    tokens: <REDACTED_SECRET>
     active,
     churned,
     built_at_iso: new Date(dir.builtAt).toISOString(),

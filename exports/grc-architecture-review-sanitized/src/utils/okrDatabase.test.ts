@@ -11,7 +11,7 @@
  *     runs idempotent UPDATEs that set `kpi_code` from a HARDCODED map.
  *   - getOkrs() — read-only (SELECT).
  *
- * Neither writer accepts caller-supplied data: every value that reaches an
+ * Neither writer accepts caller-supplied <REDACTED_SCHEME> every value that reaches an
  * INSERT/UPDATE params vector is a literal from the in-module `SEED` constant
  * or the hardcoded `KR_KPI_MAP`. There is therefore nothing to redact at the
  * call site (per the Step-2 seed-only note in the session plan).

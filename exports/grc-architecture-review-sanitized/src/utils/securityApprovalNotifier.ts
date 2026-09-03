@@ -76,7 +76,7 @@ export interface CredentialFlaggedApprovalNotification {
    * to the notification — the raw secret values are already redacted in
    * the persisted row and must NOT be re-leaked into ChatProvider/email.
    */
-  credential_warnings: CredentialWarning[];
+  credential_warnings: <REDACTED_SECRET>
 }
 
 export interface NotifyCredentialFlaggedApprovalResult {

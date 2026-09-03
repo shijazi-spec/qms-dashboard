@@ -115,7 +115,7 @@ export async function getRequest(id: number): Promise<TechRequest | null> {
  * only ever accepts the three safe outcomes and never trusts an arbitrary status.
  */
 export async function recordResponse(
-  token: string,
+  token: <REDACTED_SECRET>
   action: "accept" | "done" | "info",
   note?: string,
 ): Promise<TechRequest | null> {

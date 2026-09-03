@@ -116,7 +116,7 @@ async function authenticate(context: BrowserContext): Promise<boolean> {
   const adminKey = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
   if (!adminKey) return false;
   const res = await context.request.post(`${BASE_URL}/api/admin/auth`, {
-    data: { key: adminKey },
+    <REDACTED_SCHEME> { key: adminKey },
     headers: { 'Content-Type': 'application/json' },
   });
   return res.status() === 200;

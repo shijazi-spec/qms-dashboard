@@ -23,7 +23,7 @@ const NON_GHOST_400_MSG = "400 — required field missing";
 // vi.mock() is hoisted, so the factory must construct everything inline.
 vi.mock("../../src/utils/CRMProviderCRM", () => ({
   updateCRMProviderRecord: vi.fn(async () => undefined),
-  fetchCRMProviderRelatedRecords: vi.fn(async () => [] as Array<{ id: string; data: any }>),
+  fetchCRMProviderRelatedRecords: vi.fn(async () => [] as Array<{ id: string; <REDACTED_SCHEME> any }>),
   addCRMProviderTags: vi.fn(async () => undefined),
   addCRMProviderNote: vi.fn(async () => undefined),
   CRMProviderWritesAllowedInEnv: vi.fn(() => true),

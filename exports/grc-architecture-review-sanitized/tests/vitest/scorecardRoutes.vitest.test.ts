@@ -38,7 +38,7 @@ vi.mock("../../src/utils/rbacMiddleware", () => ({
   requireAuthOrKey: vi.fn((_c: FakeContext) => FAKE_USER),
   unauthorizedResponse: vi.fn((c: FakeContext): CapturedResponse => c.json({ error: "Unauthorized" }, 401)),
   gateApiRoute: <T>(r: T): T => r,
-  hasAdminApiKeyConfigured: vi.fn(() => true),
+  hasAdminApiKeyConfigured: <REDACTED_SECRET>
 }));
 
 let scorecardDb: typeof import("../../src/utils/scorecardDatabase");
@@ -55,7 +55,7 @@ async function getRoutes() {
 }
 
 describe("GET /api/scorecard/Sample User — real data path", () => {
-  test("200 returns { success: true, data: scorecard } when found", async () => {
+  test("200 returns { success: true, <REDACTED_SCHEME> scorecard } when found", async () => {
     const kpis: MohammedKPI[] = [makeMohammedKPI({ kpi_id: "MAM-KPI-01" })];
     const scorecard = {
       employee: {
@@ -75,7 +75,7 @@ describe("GET /api/scorecard/Sample User — real data path", () => {
     const res = await handler(makeContext({ method: "GET" }));
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, data: scorecard });
+    expect(res.body).toEqual({ success: true, <REDACTED_SCHEME> scorecard });
     expect(scorecardDb.getMohammedScorecard).toHaveBeenCalledTimes(1);
   });
 
@@ -103,7 +103,7 @@ describe("GET /api/scorecard/kpi/:kpiNumber — real data path", () => {
     const res = await handler(makeContext({ method: "GET", params: { kpiNumber: "1" } }));
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, kpi_number: 1, data: result });
+    expect(res.body).toEqual({ success: true, kpi_number: 1, <REDACTED_SCHEME> result });
     expect(scorecardDb.calculateKPI1_GovernanceDocLifecycle).toHaveBeenCalledTimes(1);
   });
 
@@ -116,7 +116,7 @@ describe("GET /api/scorecard/kpi/:kpiNumber — real data path", () => {
     const res = await handler(makeContext({ method: "GET", params: { kpiNumber: "3" } }));
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, kpi_number: 3, data: result });
+    expect(res.body).toEqual({ success: true, kpi_number: 3, <REDACTED_SCHEME> result });
     expect(scorecardDb.calculateKPI3_AuditEvidencePackReadiness).toHaveBeenCalledTimes(1);
   });
 
@@ -129,7 +129,7 @@ describe("GET /api/scorecard/kpi/:kpiNumber — real data path", () => {
     const res = await handler(makeContext({ method: "GET", params: { kpiNumber: "6" } }));
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, kpi_number: 6, data: result });
+    expect(res.body).toEqual({ success: true, kpi_number: 6, <REDACTED_SCHEME> result });
     expect(scorecardDb.calculateKPI6_ExecutiveReportingReadiness).toHaveBeenCalledTimes(1);
   });
 
@@ -144,7 +144,7 @@ describe("GET /api/scorecard/kpi/:kpiNumber — real data path", () => {
 });
 
 describe("POST /api/scorecard/snapshot — real data path", () => {
-  test("200 returns { success: true, message, data: saved } when snapshot is saved", async () => {
+  test("200 returns { success: true, message, <REDACTED_SCHEME> saved } when snapshot is saved", async () => {
     const kpis: MohammedKPI[] = [makeMohammedKPI()];
     const scorecard = {
       employee: {
@@ -182,7 +182,7 @@ describe("POST /api/scorecard/snapshot — real data path", () => {
 });
 
 describe("GET /api/scorecard/history — real data path", () => {
-  test("200 returns { success: true, data: history } with default name and limit", async () => {
+  test("200 returns { success: true, <REDACTED_SCHEME> history } with default name and limit", async () => {
     const history = [makeScorecardSnapshot({ id: 1, overall_score: 85 })];
     vi.mocked(scorecardDb.getScorecardHistory).mockResolvedValueOnce(history);
 
@@ -191,7 +191,7 @@ describe("GET /api/scorecard/history — real data path", () => {
     const res = await handler(makeContext({ method: "GET" }));
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, data: history });
+    expect(res.body).toEqual({ success: true, <REDACTED_SCHEME> history });
     expect(scorecardDb.getScorecardHistory).toHaveBeenCalledWith("Sample User", 12);
   });
 

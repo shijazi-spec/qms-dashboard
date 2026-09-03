@@ -21,7 +21,7 @@ import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProv
  */
 const LLMProvider = createLLMProvider({
   baseURL: getLLMProviderBaseUrl(),
-  apiKey: getLLMProviderApiKey(),
+  apiKey: <REDACTED_SECRET>
 });
 /*
  * OPTION 2: Standard LLMProvider Setup (Your Own API Key)

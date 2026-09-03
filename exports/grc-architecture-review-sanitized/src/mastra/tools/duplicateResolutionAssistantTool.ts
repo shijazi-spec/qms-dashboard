@@ -69,7 +69,7 @@ export const duplicateResolutionAssistantTool = createTool({
   outputSchema: z.object({
     success: z.boolean(),
     summary: z.string(),
-    data: z.any().optional(),
+    <REDACTED_SCHEME> z.any().optional(),
     error: z.string().optional(),
   }),
   execute: async ({ context }) => {
@@ -135,7 +135,7 @@ export const duplicateResolutionAssistantTool = createTool({
                   : " — nothing was merged in the last week. ")
               : "") +
             `Agent maturity — ${gradeLine}.`,
-          data: {
+          <REDACTED_SCHEME> {
             config: cfg,
             grades: latest,
             aggregate: summaryStats,
@@ -161,7 +161,7 @@ export const duplicateResolutionAssistantTool = createTool({
               )
               .join("; ")
           : "No learning rules yet.";
-        return { success: true, summary, data: { rules } };
+        return { success: true, summary, <REDACTED_SCHEME> { rules } };
       }
 
       if (action === "make_rule") {
@@ -198,7 +198,7 @@ export const duplicateResolutionAssistantTool = createTool({
         return {
           success: true,
           summary: `Learned rule #${id}: for ${module}, ${decision} when the case matches ${JSON.stringify(caseSignature)}. I won't re-ask similar cases.`,
-          data: { id },
+          <REDACTED_SCHEME> { id },
         };
       }
 
@@ -229,7 +229,7 @@ export const duplicateResolutionAssistantTool = createTool({
             `Plan for ${module} cluster #${clusterId}: survivor "${plan.masterName}" (${plan.masterReason}). ` +
             `Would tag ${plan.duplicateCRMProviderIds.length} duplicate(s), migrate ${plan.fieldDecisions.length} field(s). ` +
             (plan.warnings.length ? `Warnings: ${plan.warnings.join("; ")}.` : "No warnings."),
-          data: { plan },
+          <REDACTED_SCHEME> { plan },
         };
       }
 

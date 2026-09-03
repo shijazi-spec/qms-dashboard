@@ -5,7 +5,7 @@
 
 set -u
 BASE="${BASE:-<REDACTED_URL>"
-KEY="X-Admin-Key: ${ADMIN_API_KEY:-ExampleOrg-QMS-Admin-2026}"
+KEY="X-Admin-Key: ${ADMIN_API_KEY:-Sample User}"
 REPORT="ExampleOrg_TEST_REPORT.md"
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -219,7 +219,7 @@ check T-SOP-01   "Platform SOP is public"                T3 200 GET /sop
 echo
 echo "▶ Database sanity"
 db_count() {
-  PGPASSWORD=<REDACTED_SECRET> "$DATABASE_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|') \
+  PGPASSWORD=<REDACTED_SECRET>
     psql "$DATABASE_URL" -t -c "SELECT COUNT(*)::int FROM $1;" 2>/dev/null | tr -d ' \n' || echo "0"
 }
 DB_AUDITS=$(db_count quality_audit_results)

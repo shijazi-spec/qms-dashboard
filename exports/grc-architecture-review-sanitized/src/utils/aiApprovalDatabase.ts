@@ -83,7 +83,7 @@ export interface PendingAction {
    * `[]`) on rows enqueued after the migration; legacy rows hydrate to
    * `[]` through the column default.
    */
-  credential_warnings: CredentialWarning[];
+  credential_warnings: <REDACTED_SECRET>
 }
 
 export interface EnqueueInput {
@@ -996,7 +996,7 @@ export async function recordExecutionResult(
   //      field containing a Bearer <REDACTED_TOKEN>, or an `error_detail` that echoes
   //      the new secret).
   const safeExecutionResult = JSON.stringify({
-    data: redactSensitiveDeep(result.data),
+    <REDACTED_SCHEME> redactSensitiveDeep(result.data),
     // `error` is a plain string but can still contain credential-shaped text —
     // e.g. an upstream runtime error that echoes a Bearer <REDACTED_TOKEN> or new key.
     // Apply the same regex deny-list used for payload_preview so the string

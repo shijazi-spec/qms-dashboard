@@ -825,7 +825,7 @@ export const consultantRoutes = [
               },
               body: JSON.stringify({
                 model,
-                max_tokens: 1,
+                max_tokens: <REDACTED_SECRET>
                 messages: [{ role: "user", content: "ping" }],
               }),
             });
@@ -1236,7 +1236,7 @@ export const consultantRoutes = [
                       firstChunkSeen = true;
                       streamController.enqueue(
                         encoder.encode(
-                          `data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`,
+                          `<REDACTED_SCHEME> ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`,
                         ),
                       );
                     }
@@ -1251,7 +1251,7 @@ export const consultantRoutes = [
                       firstChunkSeen = true;
                       streamController.enqueue(
                         encoder.encode(
-                          `data: ${JSON.stringify({ text: txt, threadId: resolvedThreadId })}\n\n`,
+                          `<REDACTED_SCHEME> ${JSON.stringify({ text: txt, threadId: resolvedThreadId })}\n\n`,
                         ),
                       );
                     } else {
@@ -1302,7 +1302,7 @@ export const consultantRoutes = [
                 );
                 streamController.enqueue(
                   encoder.encode(
-                    `data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId, callId: span.callId ?? undefined, promptVersion: QMS_CONSULTANT_PROMPT_VERSION })}\n\n`,
+                    `<REDACTED_SCHEME> ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId, callId: span.callId ?? undefined, promptVersion: QMS_CONSULTANT_PROMPT_VERSION })}\n\n`,
                   ),
                 );
                 streamController.close();
@@ -1316,7 +1316,7 @@ export const consultantRoutes = [
                     : "Stream error";
                 streamController.enqueue(
                   encoder.encode(
-                    `data: ${JSON.stringify({ error: errMsg })}\n\n`,
+                    `<REDACTED_SCHEME> ${JSON.stringify({ error: errMsg })}\n\n`,
                   ),
                 );
                 streamController.close();
@@ -1354,10 +1354,10 @@ export const consultantRoutes = [
                       const pt = u.promptTokens ?? u.prompt_tokens;
                       const ct = u.completionTokens ?? u.completion_tokens;
                       const tt = u.totalTokens ?? u.total_tokens;
-                      promptTokens = <REDACTED_SECRET> pt === "number" ? pt : undefined;
+                      promptTokens = <REDACTED_SECRET>
                       completionTokens =
-                        <REDACTED_SECRET> ct === "number" ? ct : undefined;
-                      totalTokens = <REDACTED_SECRET> tt === "number" ? tt : undefined;
+                        <REDACTED_SECRET>
+                      totalTokens = <REDACTED_SECRET>
                     }
                   } catch {
                     /* usage unavailable */
@@ -1940,7 +1940,7 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
               for (const step of steps) {
                 streamController.enqueue(
                   encoder.encode(
-                    `data: ${JSON.stringify({ step: step.label, pct: step.pct })}\n\n`,
+                    `<REDACTED_SCHEME> ${JSON.stringify({ step: step.label, pct: step.pct })}\n\n`,
                   ),
                 );
               }
@@ -1948,13 +1948,13 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
               const result = await runBackgroundScan();
               streamController.enqueue(
                 encoder.encode(
-                  `data: ${JSON.stringify({ done: true, pct: 100, result })}\n\n`,
+                  `<REDACTED_SCHEME> ${JSON.stringify({ done: true, pct: 100, result })}\n\n`,
                 ),
               );
             } catch (err) {
               streamController.enqueue(
                 encoder.encode(
-                  `data: ${JSON.stringify({ error: err instanceof Error ? err.message : "Scan failed" })}\n\n`,
+                  `<REDACTED_SCHEME> ${JSON.stringify({ error: err instanceof Error ? err.message : "Scan failed" })}\n\n`,
                 ),
               );
             }

@@ -154,7 +154,7 @@ test.describe('Language preference API', () => {
 
   test('POST /api/user/language-preference persists language', async ({ page }) => {
     const res = await page.request.post(`${BASE_URL}/api/user/language-preference`, {
-      data: { lang: 'ar' },
+      <REDACTED_SCHEME> { lang: 'ar' },
       headers: { 'Content-Type': 'application/json' },
     });
     expect(res.status()).toBe(200);
@@ -164,7 +164,7 @@ test.describe('Language preference API', () => {
 
   test('POST with unsupported lang returns 400', async ({ page }) => {
     const res = await page.request.post(`${BASE_URL}/api/user/language-preference`, {
-      data: { lang: 'fr' },
+      <REDACTED_SCHEME> { lang: 'fr' },
       headers: { 'Content-Type': 'application/json' },
     });
     expect(res.status()).toBe(400);
@@ -498,7 +498,7 @@ async function authenticate(page: Page): Promise<boolean> {
   const adminKey = process.env.TEST_ADMIN_KEY;
   if (!adminKey) return false;
   const res = await page.request.post(`${BASE_URL}/api/admin/auth`, {
-    data: { key: adminKey },
+    <REDACTED_SCHEME> { key: adminKey },
     headers: { 'Content-Type': 'application/json' },
   });
   return res.status() === 200;

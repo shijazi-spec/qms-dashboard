@@ -303,7 +303,7 @@ export const suggestObligationMappingTool = createTool({
       const { generateText } = await import("ai");
       const LLMProvider = createLLMProvider({
         baseURL: getLLMProviderBaseUrl(),
-        apiKey: getLLMProviderApiKey(),
+        apiKey: <REDACTED_SECRET>
       });
 
       // Raw-fetch /chat/completions — `.chat()` adapter emits v3 spec
@@ -312,7 +312,7 @@ export const suggestObligationMappingTool = createTool({
       const result = await generateChatText({
         model: "gpt-4o-mini",
         prompt,
-        maxTokens: 1500,
+        maxTokens: <REDACTED_SECRET>
       });
 
       const llmSuggestions = parseSuggestResponse(result.text, candidates);

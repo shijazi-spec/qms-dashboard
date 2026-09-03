@@ -229,7 +229,7 @@
       try {
         const res = await fetch('/api/manual-audit-intake', {
           method: 'POST',
-          credentials: '<REDACTED_SECRET>',
+          credentials: <REDACTED_SECRET>
           body: fd,
         });
         if (!res.ok) {
@@ -363,7 +363,7 @@
         const res = await fetch('/api/manual-audit-intake/' + currentIntake.id + '/extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: '<REDACTED_SECRET>',
+          credentials: <REDACTED_SECRET>
           body: JSON.stringify(body),
         });
         if (!res.ok) {
@@ -382,7 +382,7 @@
       const res = await fetch('/api/manual-audit-intake/findings/' + id + '/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: '<REDACTED_SECRET>',
+        credentials: <REDACTED_SECRET>
         body: JSON.stringify({ action, ...extra }),
       });
       if (!res.ok) {
@@ -418,7 +418,7 @@
       if (!confirm(ExampleOrgI18n.t('dyn.intake.confirm_finalize'))) return;
       const res = await fetch('/api/manual-audit-intake/' + currentIntake.id + '/finalize', {
         method: 'POST',
-        credentials: '<REDACTED_SECRET>',
+        credentials: <REDACTED_SECRET>
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

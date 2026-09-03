@@ -50,7 +50,7 @@ async function generateWithRetry(
       return await generateChatText({
         model: "gpt-4o-mini",
         prompt,
-        maxTokens: 8000,
+        maxTokens: <REDACTED_SECRET>
         // Force structured JSON output so the downstream JSON.parse can't
         // trip on fenced code blocks or stray prose — the failure mode
         // that left every attribute showing "NA" with skipReason
@@ -157,7 +157,7 @@ export async function triggerSDREvaluationForCall(
 
     const aiSdk = createLLMProvider({
       baseURL: getLLMProviderBaseUrl(),
-      apiKey: getLLMProviderApiKey(),
+      apiKey: <REDACTED_SECRET>
     });
 
     let aiResult;

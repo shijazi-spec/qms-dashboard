@@ -146,7 +146,7 @@ function buildSyntheticResult(
       execution_result_changed: 0,
       rows_updated: ai,
     },
-    ai_pending_actions_credential_warnings: {
+    ai_pending_actions_credential_warnings: <REDACTED_SECRET>
       scanned: 0,
       rows_updated: 0,
       warnings_added: 0,

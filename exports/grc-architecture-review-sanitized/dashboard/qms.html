@@ -807,7 +807,7 @@
 
             async function apiCall(endpoint) {
                 const res = await fetch(endpoint, {
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                 });
                 if (res.status === 401 && !useSessionAuth) {
                     window.location.href = '/login';

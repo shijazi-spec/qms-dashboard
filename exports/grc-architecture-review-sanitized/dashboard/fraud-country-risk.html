@@ -402,14 +402,14 @@
                     res = await fetch('/api/fraud/countries/' + encodeURIComponent(editIso), {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: '<REDACTED_SECRET>',
+                        credentials: <REDACTED_SECRET>
                         body: JSON.stringify(payload),
                     });
                 } else {
                     res = await fetch('/api/fraud/countries', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: '<REDACTED_SECRET>',
+                        credentials: <REDACTED_SECRET>
                         body: JSON.stringify(payload),
                     });
                 }

@@ -130,7 +130,7 @@ async function authenticateAsAdmin(page: Page): Promise<void> {
   // (set via context.extraHTTPHeaders) is what actually authorizes both
   // the page request and the AJAX calls fired by ai-ops.html.
   const res = await page.request.post(`${BASE_URL}/api/admin/auth`, {
-    data: { key: ADMIN_KEY },
+    <REDACTED_SCHEME> { key: ADMIN_KEY },
     headers: { 'Content-Type': 'application/json' },
   });
   expect(res.status(), 'admin /api/admin/auth login should succeed').toBe(200);

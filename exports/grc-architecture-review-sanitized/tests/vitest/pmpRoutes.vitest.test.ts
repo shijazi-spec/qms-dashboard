@@ -31,7 +31,7 @@ vi.mock("../../src/utils/rbacMiddleware", () => ({
   requireRoleOrKey: vi.fn(async () => FAKE_USER),
   requireAuthOrKey: vi.fn((_c: FakeContext) => FAKE_USER),
   unauthorizedResponse: vi.fn((c: FakeContext): CapturedResponse => c.json({ error: "Unauthorized" }, 401)),
-  hasAdminApiKeyConfigured: vi.fn(() => true),
+  hasAdminApiKeyConfigured: <REDACTED_SECRET>
 }));
 
 vi.mock("../../src/utils/teamDatabase", () => ({

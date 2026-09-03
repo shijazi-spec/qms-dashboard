@@ -690,7 +690,7 @@
                     markSelected(cachedRating);
                 } else {
                     fetch('/api/consultant/feedback/' + encodeURIComponent(messageId), {
-                        credentials: '<REDACTED_SECRET>'
+                        credentials: <REDACTED_SECRET>
                     }).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
                         if (data && data.rating) {
                             ratingCacheSet(messageId, data.rating);
@@ -772,7 +772,7 @@
                 fetch('/api/consultant/feedback', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify(item)
                 }).then(function(r) {
                     if (r.ok) feedbackQueueRemove(item.messageId);
@@ -806,7 +806,7 @@
             fetch('/api/consultant/feedback', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: '<REDACTED_SECRET>',
+                credentials: <REDACTED_SECRET>
                 body: JSON.stringify(payload)
             }).then(function(r) {
                 if (r.ok) feedbackQueueRemove(messageId);
@@ -822,7 +822,7 @@
                         if (!item) return;
                         fetch('/api/consultant/feedback', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            credentials: '<REDACTED_SECRET>', body: JSON.stringify(item)
+                            credentials: <REDACTED_SECRET>
                         }).then(function(r) {
                             if (r.ok) feedbackQueueRemove(messageId);
                             else if (retries < 4) retry();
@@ -861,7 +861,7 @@
                 var res = await fetch('/api/ai-ops/feedback', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify(payload)
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1077,7 +1077,7 @@
                 var response = await fetch('/api/consultant/chat/stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ message: text, threadId: getThreadId() })
                 });
 
@@ -1122,7 +1122,7 @@
 
                     for (var i = 0; i < lines.length; i++) {
                         var line = lines[i];
-                        if (line.startsWith('data: ')) {
+                        if (line.startsWith('<REDACTED_SCHEME> ')) {
                             var data = line.substring(6);
                             if (data === '[DONE]') continue;
                             try {
@@ -1143,7 +1143,7 @@
                     }
                 }
 
-                if (buffer.trim() && buffer.startsWith('data: ') && buffer.substring(6) !== '[DONE]') {
+                if (buffer.trim() && buffer.startsWith('<REDACTED_SCHEME> ') && buffer.substring(6) !== '[DONE]') {
                         fullText += buffer.substring(6);
                         bubble.innerHTML = renderMarkdown(fullText);
                     }
@@ -1167,7 +1167,7 @@
                     try {
                         var fallback = await fetch('/api/consultant/chat', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            credentials: '<REDACTED_SECRET>',
+                            credentials: <REDACTED_SECRET>
                             body: JSON.stringify({ message: text, threadId: getThreadId() })
                         });
                         // 429 — same per-user limiter that hit the
@@ -1452,7 +1452,7 @@
                 }
                 var res = await fetch('/api/consultant/alerts/' + id + '/' + action, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>', body: JSON.stringify(bodyPayload)
+                    credentials: <REDACTED_SECRET>
                 });
                 if (res.ok) { loadAlerts(); updateAlertBadge(); }
             } catch(e) {}
@@ -1518,7 +1518,7 @@
                 // follows the user across devices (fire-and-forget).
                 fetch('/api/consultant/threads/' + encodeURIComponent(tid) + '/meta', {
                     method: 'POST',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title: title, messages: msgs.length })
                 }).catch(function(){});
@@ -1600,7 +1600,7 @@
                 // (fire-and-forget; ownership is enforced on the server).
                 fetch('/api/consultant/threads/' + encodeURIComponent(tid), {
                     method: 'DELETE',
-                    credentials: '<REDACTED_SECRET>'
+                    credentials: <REDACTED_SECRET>
                 }).catch(function(){});
                 // If the deleted chat is the one on screen, reset to a fresh chat
                 // WITHOUT re-saving it (clearChat would re-add it to history).
@@ -2077,7 +2077,7 @@
             if (!tid) return;
             try {
                 var res = await fetch('/api/consultant/history/' + encodeURIComponent(tid), {
-                    credentials: '<REDACTED_SECRET>'
+                    credentials: <REDACTED_SECRET>
                 });
                 if (!res.ok) return;
                 var data = await res.json();
@@ -2530,7 +2530,7 @@
         if (adminKey) headers['x-admin-key'] = adminKey;
         fetch('/api/ai/approvals/' + encodeURIComponent(code) + '/' + action, {
             method: 'POST',
-            credentials: '<REDACTED_SECRET>',
+            credentials: <REDACTED_SECRET>
             headers: headers,
             body: JSON.stringify(payload)
         })

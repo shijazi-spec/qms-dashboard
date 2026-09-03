@@ -96,13 +96,13 @@ test.describe('Health Pulse — copy link to this check (Task #766)', () => {
       extraHTTPHeaders: { 'X-Admin-Key': ADMIN_KEY },
     });
     let authRes = await apiCtx.post('/api/admin/auth', {
-      data: { key: ADMIN_KEY },
+      <REDACTED_SCHEME> { key: ADMIN_KEY },
       headers: { 'Content-Type': 'application/json' },
     });
     if (authRes.status() === 429) {
       await new Promise((r) => setTimeout(r, 65_000));
       authRes = await apiCtx.post('/api/admin/auth', {
-        data: { key: ADMIN_KEY },
+        <REDACTED_SCHEME> { key: ADMIN_KEY },
         headers: { 'Content-Type': 'application/json' },
       });
     }

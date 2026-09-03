@@ -735,7 +735,7 @@ export const kpiRoutes = [
           const data = await generateMBRData();
           return c.json(data);
         } catch (error) {
-          safeLogger.error("Error generating MBR data:", error);
+          safeLogger.error("Error generating MBR <REDACTED_SCHEME>", error);
           return c.json({ error: "Failed to generate MBR data" }, 500);
         }
       };

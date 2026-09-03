@@ -75,7 +75,7 @@ Respond ONLY with the JSON, no additional text.`;
 
       const LLMProvider = createLLMProvider({
         baseURL: getLLMProviderBaseUrl(),
-        apiKey: getLLMProviderApiKey()
+        apiKey: <REDACTED_SECRET>
       });
 
       // Raw-fetch /chat/completions — `.chat()` adapter emits v3 spec
@@ -84,7 +84,7 @@ Respond ONLY with the JSON, no additional text.`;
       const result = await generateChatText({
         model: "gpt-4o",
         prompt: momPrompt,
-        maxTokens: 2000,
+        maxTokens: <REDACTED_SECRET>
       });
 
       let momData;

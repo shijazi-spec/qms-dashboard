@@ -122,13 +122,13 @@ test.describe('Health Pulse — copy filtered link (Task #747)', () => {
     // first call from this suite. Back off and retry once so a noisy
     // neighbour doesn't fail an otherwise-correct suite run.
     let authRes = await apiCtx.post('/api/admin/auth', {
-      data: { key: ADMIN_KEY },
+      <REDACTED_SCHEME> { key: ADMIN_KEY },
       headers: { 'Content-Type': 'application/json' },
     });
     if (authRes.status() === 429) {
       await new Promise((r) => setTimeout(r, 65_000));
       authRes = await apiCtx.post('/api/admin/auth', {
-        data: { key: ADMIN_KEY },
+        <REDACTED_SCHEME> { key: ADMIN_KEY },
         headers: { 'Content-Type': 'application/json' },
       });
     }

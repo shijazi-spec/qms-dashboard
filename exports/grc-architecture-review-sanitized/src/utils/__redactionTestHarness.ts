@@ -25,11 +25,11 @@ export const REQUIRED_DENY_KEYS = [
 export type DenyKey = (typeof REQUIRED_DENY_KEYS)[number];
 
 export const SECRETS: Record<DenyKey, string> = {
-  password_hash: "<REDACTED_SECRET>",
-  mfa_secret: "<REDACTED_SECRET>",
-  access_token: "<REDACTED_SECRET>",
-  refresh_token: "<REDACTED_SECRET>",
-  api_key: "<REDACTED_SECRET>",
+  password_hash: <REDACTED_SECRET>
+  mfa_secret: <REDACTED_SECRET>
+  access_token: <REDACTED_SECRET>
+  refresh_token: <REDACTED_SECRET>
+  api_key: <REDACTED_SECRET>
 };
 
 export const NON_SENSITIVE_MARKER = "non-secret marker NSF-XYZ";
@@ -75,7 +75,7 @@ function installMock(): void {
           public_id: "P-1",
           job_code: "JOB-1",
           name: "stub",
-          token: "<REDACTED_SECRET>",
+          token: <REDACTED_SECRET>
           permissions: [],
           expires_at: null,
         },

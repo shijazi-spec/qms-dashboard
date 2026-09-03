@@ -131,8 +131,8 @@
  * path) and POST /api/ai/approvals/:code/approve (throw path), asserting
  * that no plaintext secret leaks into any response body. The two synthetic
  * canary tools required by the POST /approve assertions
- * (`integration-test-redaction-canary__ok` and
- * `integration-test-redaction-canary__throws`) are registered in the
+ * (`<REDACTED_SECRET>__ok` and
+ * `<REDACTED_SECRET>__throws`) are registered in the
  * server at startup whenever NODE_ENV !== 'production'
  * (src/utils/integrationTestFixtureTools.ts), so no extra runtime setup
  * is needed beyond `npm run dev`. The dedicated CI workflow

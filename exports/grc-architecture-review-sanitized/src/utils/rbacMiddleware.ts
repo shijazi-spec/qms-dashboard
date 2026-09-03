@@ -75,7 +75,7 @@ export function invalidatePlatformUserCache(email: string): void {
 
 export async function getVerifiedRole(
   email: string,
-  tokenRole: string,
+  tokenRole: <REDACTED_SECRET>
 ): Promise<string> {
   const cached = dbRoleCache.get(email);
   if (cached && Date.now() - cached.fetchedAt < DB_ROLE_CACHE_TTL) {

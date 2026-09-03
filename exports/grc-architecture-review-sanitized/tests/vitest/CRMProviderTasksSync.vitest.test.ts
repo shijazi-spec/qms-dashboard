@@ -40,8 +40,8 @@ const CONFIGURED_COLD = {
   configured: true,
   connected: false, // token not warm — the post-restart state
   autoRefresh: true,
-  tokenCached: false,
-  tokenExpired: true,
+  tokenCached: <REDACTED_SECRET>
+  tokenExpired: <REDACTED_SECRET>
   rateLimited: false,
   cooldownMsRemaining: 0,
   message: "",
@@ -49,7 +49,7 @@ const CONFIGURED_COLD = {
 
 const task = (over: any = {}) => ({
   id: over.id ?? "T1",
-  data: {
+  <REDACTED_SCHEME> {
     Subject: "Follow up",
     Status: "Not Started",
     Due_Date: "2026-08-20",
@@ -111,9 +111,9 @@ describe("runCRMProviderTasksSync — linkage census", () => {
   it("classifies Who / What / both / none", async () => {
     fetchAll.mockResolvedValue([
       task({ id: "T1" }), // Who only
-      task({ id: "T2", data: { Who_Id: null, What_Id: { id: "D1", name: "A Deal" } } }),
-      task({ id: "T3", data: { What_Id: { id: "D2", name: "Deal 2" } } }), // both
-      task({ id: "T4", data: { Who_Id: null, What_Id: null } }), // none
+      task({ id: "T2", <REDACTED_SCHEME> { Who_Id: null, What_Id: { id: "D1", name: "A Deal" } } }),
+      task({ id: "T3", <REDACTED_SCHEME> { What_Id: { id: "D2", name: "Deal 2" } } }), // both
+      task({ id: "T4", <REDACTED_SCHEME> { Who_Id: null, What_Id: null } }), // none
     ]);
     const r = await runCRMProviderTasksSync({});
     expect(r.scanned).toBe(4);
@@ -153,7 +153,7 @@ describe("runCRMProviderTasksSync — linkage census", () => {
   });
 
   it("skips a task with no id rather than writing a null key", async () => {
-    fetchAll.mockResolvedValue([{ id: "", data: {} }]);
+    fetchAll.mockResolvedValue([{ id: "", <REDACTED_SCHEME> {} }]);
     const r = await runCRMProviderTasksSync({});
     expect(r.scanned).toBe(0);
     expect(query.mock.calls.some((c) => /INSERT INTO CRMProvider_tasks/i.test(String(c[0])))).toBe(false);

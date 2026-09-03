@@ -622,7 +622,7 @@ CRMProvider does not allow merging records that live in different modules. The R
 - **Quick Actions Sidebar:** Pre-built prompts for common queries (full platform scan, PDPL compliance check, NC analysis, risk register review, KPI status, improvement suggestions)
 - **23 AI Tools:** Query platform data across 11 modules, analyze nonconformities, suggest improvements, check regulation compliance, monitor KPIs, monitor risks, create alerts (supports sla_breach type), review documents, create/list NCs, create/update/list/detail CAPAs, add CAPA actions, run/manage compliance checklists, search knowledge base, create/list/assign/complete training
 - **Streaming Responses:** Server-Sent Events (SSE) for real-time streaming chat and scan progress, with standard response fallback
-- **XSS-Safe Markdown:** Rendered with escapeHtml + placeholder tokens for code/tables, URL protocol sanitization (blocks javascript:/data: URLs)
+- **XSS-Safe Markdown:** Rendered with escapeHtml + placeholder tokens for code/tables, URL protocol sanitization (blocks javascript:/<REDACTED_SCHEME> URLs)
 - **Alert Management:** Sidebar alert list with severity icons, relative timestamps, and inline action buttons (Acknowledge/Resolve/Dismiss). "View All" modal with status/severity filters
 - **Chat History:** Conversations saved to localStorage, restorable from sidebar panel (up to 20 sessions)
 - **Knowledge Base Integration:** Document search from sidebar, file upload (PDF/DOCX/TXT, 10MB limit)
@@ -1257,7 +1257,7 @@ Default (global) endpoints work for most other regions:
 
 ### 9.3 Data Protection
 - **CSP:** Content Security Policy with `'unsafe-inline'` for `script-src` to support inline event handlers (`onclick` attributes used throughout dashboard HTML). `unsafe-eval` removed. `style-src` retains `unsafe-inline` for CDN Tailwind CSS compatibility. Nonce-based CSP was previously implemented but removed in v3.5 because CSP Level 3 browsers ignore `'unsafe-inline'` when a nonce is present — this silently blocked all `onclick` handlers across the dashboard (login button, audit triggers, filter buttons).
-- **CSP directive:** `default-src 'self'; script-src 'self' 'unsafe-inline' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> style-src 'self' 'unsafe-inline' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> font-src 'self' <REDACTED_URL> <REDACTED_URL> img-src 'self' data: https:; connect-src 'self' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> frame-ancestors 'none'; form-action 'self'`
+- **CSP directive:** `default-src 'self'; script-src 'self' 'unsafe-inline' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> style-src 'self' 'unsafe-inline' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> font-src 'self' <REDACTED_URL> <REDACTED_URL> img-src 'self' <REDACTED_SCHEME> <REDACTED_SCHEME>; connect-src 'self' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> frame-ancestors 'none'; form-action 'self'`
 - **SQL injection prevention (v3.6):** All dynamic SQL interval expressions use parameterized `make_interval(days => $N)` with integer clamping (1–365 days) instead of string interpolation. Affected functions: `getTrendData()`, `getRiskTrends()`, `getUpcomingDeadlines()`.
 - **Path traversal prevention (v3.6):** Screenshot endpoint (`/docs/screenshots/:filename`) validates filenames against `..`, `/`, `\\` traversal characters and enforces image extension allowlist (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`).
 - **Input sanitization** (`inputSanitizer.ts`):

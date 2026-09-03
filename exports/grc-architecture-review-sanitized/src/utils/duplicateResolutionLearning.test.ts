@@ -73,11 +73,11 @@ const { recordResolutionEvent } = await import("./duplicateResolutionLearning");
 const REDACTED_SENTINEL = "***REDACTED***";
 
 const SECRETS = {
-  password_hash: "<REDACTED_SECRET>",
-  mfa_secret: "<REDACTED_SECRET>",
-  access_token: "<REDACTED_SECRET>",
-  refresh_token: "<REDACTED_SECRET>",
-  api_key: "<REDACTED_SECRET>",
+  password_hash: <REDACTED_SECRET>
+  mfa_secret: <REDACTED_SECRET>
+  access_token: <REDACTED_SECRET>
+  refresh_token: <REDACTED_SECRET>
+  api_key: <REDACTED_SECRET>
 } as const;
 
 const REQUIRED_DENY_KEYS = [
@@ -131,7 +131,7 @@ for (const key of REQUIRED_DENY_KEYS) {
     },
     report: {
       summary: "merged 2 records",
-      credentials_used: { [key]: rawSecret },
+      credentials_used: <REDACTED_SECRET>
     },
     performedBy: "operator-1",
   });

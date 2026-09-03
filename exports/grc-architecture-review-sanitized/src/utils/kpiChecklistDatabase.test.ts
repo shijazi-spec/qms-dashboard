@@ -78,11 +78,11 @@ const REDACTED_SENTINEL = "***REDACTED***";
 // the regex pass reliably catches them in prose. The key-based deny list is
 // additionally exercised by the JSON-object test in Section 3.
 const SECRETS = {
-  password_hash: "<REDACTED_SECRET>",
-  mfa_secret: "<REDACTED_SECRET>",
-  access_token: "<REDACTED_SECRET>",
-  refresh_token: "<REDACTED_SECRET>",
-  api_key: "<REDACTED_SECRET>",
+  password_hash: <REDACTED_SECRET>
+  mfa_secret: <REDACTED_SECRET>
+  access_token: <REDACTED_SECRET>
+  refresh_token: <REDACTED_SECRET>
+  api_key: <REDACTED_SECRET>
 } as const;
 
 const REQUIRED_DENY_KEYS = [
@@ -274,8 +274,8 @@ console.log("\n=== key-based deny list via JSON-serialised value ===\n");
   const plainRefresh = "1//0gREFRESHTOKENvalueXYZ";
   const snapshot = JSON.stringify({
     actor: "alice",
-    mfa_secret: plainMfa,
-    refresh_token: plainRefresh,
+    mfa_secret: <REDACTED_SECRET>
+    refresh_token: <REDACTED_SECRET>
     note: "rotation complete",
   });
   await addChecklistItem(1, snapshot, "alice", "IT");

@@ -63,14 +63,14 @@ function parseArg(name: string): string | undefined {
   return process.argv[idx + 1];
 }
 
-function loadScenarioFiles(filterName?: string): Array<{ file: string; data: ScenarioFile }> {
+function loadScenarioFiles(filterName?: string): Array<{ file: string; <REDACTED_SCHEME> ScenarioFile }> {
   const entries = readdirSync(SCENARIOS_DIR).filter((f) => f.endsWith(".json"));
   const filtered = filterName
     ? entries.filter((f) => f.replace(/\.json$/, "") === filterName)
     : entries;
   return filtered.map((file) => ({
     file,
-    data: JSON.parse(readFileSync(join(SCENARIOS_DIR, file), "utf8")) as ScenarioFile,
+    <REDACTED_SCHEME> JSON.parse(readFileSync(join(SCENARIOS_DIR, file), "utf8")) as ScenarioFile,
   }));
 }
 

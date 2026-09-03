@@ -34,8 +34,8 @@
  * synthetic no-op canary tools are registered in the server at startup
  * when NODE_ENV !== 'production' (src/utils/integrationTestFixtureTools.ts):
  *
- *   integration-test-redaction-canary__ok     — returns credential-shaped values
- *   integration-test-redaction-canary__throws — throws Error with secret message
+ *   <REDACTED_SECRET>__ok     — returns credential-shaped values
+ *   <REDACTED_SECRET>__throws — throws Error with secret message
  *
  * These tools are present in the running dev/test server's wrappedRegistry so
  * the integration test can drive the full approve execution path without
@@ -293,10 +293,10 @@ async function main(): Promise<void> {
       toolLabel: 'Rotate API Key (integration leak guard)',
       payload: {
         target_integration: 'CRMProvider_books',
-        api_key: PAYLOAD_API_KEY,
-        refresh_token: PAYLOAD_REFRESH,
+        api_key: <REDACTED_SECRET>
+        refresh_token: <REDACTED_SECRET>
         nested: {
-          password_hash: PAYLOAD_BCRYPT,
+          password_hash: <REDACTED_SECRET>
           username: '<REDACTED_EMAIL>',
         },
         reason: 'integration-leak-guard',
@@ -388,10 +388,10 @@ async function main(): Promise<void> {
       success: true,
       entityType: 'integration',
       entityId: 'CRMProvider_books',
-      data: {
+      <REDACTED_SCHEME> {
         rotated: true,
-        new_api_key: RESULT_API_KEY,
-        access_token: RESULT_ACCESS_TOKEN,
+        new_api_key: <REDACTED_SECRET>
+        access_token: <REDACTED_SECRET>
         audit_note: 'Integration rotation completed successfully',
       },
     });

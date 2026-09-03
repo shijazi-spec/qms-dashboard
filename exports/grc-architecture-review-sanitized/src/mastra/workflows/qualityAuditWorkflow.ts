@@ -983,7 +983,7 @@ RECOMMENDATIONS:
   },
 });
 
-function getDefaultRecommendations(data: any): string[] {
+function getDefaultRecommendations(<REDACTED_SCHEME> any): string[] {
   const recommendations: string[] = [];
   
   if (data.crmAudit.criticalIssues > 0) {

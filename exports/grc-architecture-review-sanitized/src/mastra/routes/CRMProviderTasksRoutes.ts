@@ -8,7 +8,7 @@
  * which cannot use the per-record activities reader — that costs one CRMProvider
  * request per parent record. See CRMProviderTasksSync.ts.
  *
- * /stats exists to answer a question BEFORE anyone builds on this data: are
+ * /stats exists to answer a question BEFORE anyone builds on this <REDACTED_SCHEME> are
  * tasks actually linked to leads and deals in this tenant? A large `total` with
  * near-zero linkage means the follow-up KPIs would measure nothing, and the
  * honest response is to redefine them rather than ship 0%.

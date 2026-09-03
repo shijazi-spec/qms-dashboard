@@ -49,7 +49,7 @@ function header(title: string) {
 
   header("rich Arabic transcript scores §2 checkpoints + sentiment_label");
   const transcript = [
-    "السلام عليكم، معك أحمد من شركة ولاء بلس.",
+    "السلام عليكم، معك أحمد من شركة Sample User.",
     "هل لديك دقيقة لمناقشة احتياجاتك الحالية؟",
     "ما هو نظام إدارة الجودة الذي تستخدمونه حاليا؟",
     "كم عدد المراجعات السنوية التي تقومون بها؟",

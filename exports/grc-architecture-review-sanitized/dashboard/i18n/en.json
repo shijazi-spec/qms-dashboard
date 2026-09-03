@@ -3416,7 +3416,7 @@
     "create_initiative": "Create Initiative",
     "ai_help": "AI Help",
     "how_to_calc": "How to calculate:",
-    "where_data": "Where to find data:",
+    "where_data": "Where to find <REDACTED_SCHEME>",
     "tool_name": "Tool Name",
     "cost_per_month": "Cost/Month (SAR)",
     "seats_impacted": "Seats Impacted",

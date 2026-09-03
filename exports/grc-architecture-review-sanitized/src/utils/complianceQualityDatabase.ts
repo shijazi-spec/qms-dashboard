@@ -32,7 +32,7 @@ export interface EvidenceQualityRow {
   judged_at: string;
   judged_by: string | null;
   llm_model: string | null;
-  tokens_used: number | null;
+  tokens_used: <REDACTED_SECRET>
 }
 
 let initialized = false;
@@ -97,7 +97,7 @@ export async function upsertEvidenceQuality(input: {
   missing_aspects: string[] | null;
   judged_by: string | null;
   llm_model: string | null;
-  tokens_used: number | null;
+  tokens_used: <REDACTED_SECRET>
 }): Promise<EvidenceQualityRow> {
   await initEvidenceQualityTable();
   const result = await pool.query(

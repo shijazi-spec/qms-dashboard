@@ -123,7 +123,7 @@ sequentially:
 
 ```sh
 DATABASE_URL=<REDACTED_DSN> \
-SESSION_SECRET=<REDACTED_SECRET> \
+SESSION_SECRET=<REDACTED_SECRET>
 bash scripts/run-rbac-integration-tests.sh
 ```
 
@@ -145,7 +145,7 @@ dev server reachable at `BASE_URL`):
 ```sh
 RUN_RBAC_INTEGRATION_E2E=1 \
 DATABASE_URL=<REDACTED_DSN> \
-SESSION_SECRET=<REDACTED_SECRET> \
+SESSION_SECRET=<REDACTED_SECRET>
 npm test
 ```
 
@@ -175,9 +175,9 @@ to false-positives.
 The wrapper script checks env vars upfront and runs both files sequentially:
 
 ```sh
-ADMIN_API_KEY=<REDACTED_SECRET> \
+ADMIN_API_KEY=<REDACTED_SECRET>
 DATABASE_URL=<REDACTED_DSN> \
-SESSION_SECRET=<REDACTED_SECRET> \
+SESSION_SECRET=<REDACTED_SECRET>
 bash scripts/run-rate-limiter-integration-tests.sh
 ```
 
@@ -197,8 +197,8 @@ server reachable at `RATE_LIMIT_TEST_URL`, default `<REDACTED_URL>`):
 
 ```sh
 RUN_RATE_LIMITER_INTEGRATION_E2E=1 \
-ADMIN_API_KEY=<REDACTED_SECRET> \
+ADMIN_API_KEY=<REDACTED_SECRET>
 DATABASE_URL=<REDACTED_DSN> \
-SESSION_SECRET=<REDACTED_SECRET> \
+SESSION_SECRET=<REDACTED_SECRET>
 npm test
 ```

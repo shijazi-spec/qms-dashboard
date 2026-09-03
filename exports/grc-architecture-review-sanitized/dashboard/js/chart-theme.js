@@ -85,10 +85,10 @@
 
     var cfg = {
       type: opts.type || 'doughnut',
-      data: {
+      <REDACTED_SCHEME> {
         labels: labels,
         datasets: [{
-          data: data,
+          <REDACTED_SCHEME> data,
           backgroundColor: palette,
           borderColor: '#ffffff',
           borderWidth: 2,

@@ -48,7 +48,7 @@ import { makeCookieForRole } from "./_helpers/sessionAuth";
 
 const suite = new TestSuite("estimateEndpoints");
 const HAS_DB = !!process.env.DATABASE_URL;
-const ADMIN_KEY = "integration-test-estimate-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 // Signed ExampleOrg_session cookie for an active admin platform user. These
 // export/estimate routes authenticate via getSessionUser()/requireRole(); the
 // shared helper also registers an active platform_users row for the session.

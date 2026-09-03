@@ -634,7 +634,7 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 | script-src | 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> | Restricts scripts to same origin + specific nonce (Tailwind CDN allowed) |
 | style-src | 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> | Restricts styles to same origin + nonce-tagged `<style>` blocks (no inline `style="..."` attributes) + Tailwind CDN + IdentityProvider Fonts |
 | font-src | 'self' <REDACTED_URL> | Restricts fonts to same origin + IdentityProvider Fonts |
-| img-src | 'self' data: https: | Allows local images + data URIs + https images |
+| img-src | 'self' <REDACTED_SCHEME> <REDACTED_SCHEME> | Allows local images + data URIs + https images |
 | frame-ancestors | 'none' | Equivalent to X-Frame-Options: DENY; prevents clickjacking |
 | base-uri | 'self' | Prevents base tag hijacking |
 | form-action | 'self' | Restricts form submissions to the same origin |

@@ -186,7 +186,7 @@
                 const res = await fetch('/api/triggers/' + triggerId + '/action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ action: 'acknowledge' })
                 });
                 if (res.ok) loadTriggers();
@@ -205,7 +205,7 @@
                 const res = await fetch('/api/triggers/' + triggerId + '/action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ action: 'dismiss', dismiss_reason: reason.trim() })
                 });
                 if (res.ok) loadTriggers();
@@ -223,7 +223,7 @@
                 const res = await fetch('/api/triggers/' + triggerId + '/action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ action: 'propose_hitl', decision: 'approve_action', notes: notes || null })
                 });
                 if (res.ok) {
@@ -245,7 +245,7 @@
                 const res = await fetch('/api/triggers/' + triggerId + '/action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ action: 'decide', decision: decision, decided_by: decidedBy, notes: notes || null })
                 });
                 if (res.ok) loadTriggers();

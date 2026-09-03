@@ -91,7 +91,7 @@ const _dashboardApiRoutesRaw = [
           });
           return c.json(data);
         } catch (error) {
-          safeLogger.error("Error fetching dashboard data:", error);
+          safeLogger.error("Error fetching dashboard <REDACTED_SCHEME>", error);
           return c.json({ error: "Failed to fetch dashboard data" }, 500);
         }
       };
@@ -101,7 +101,7 @@ const _dashboardApiRoutesRaw = [
     path: "/api/dashboard/layouts-breakdown",
     method: "GET",
     createHandler: async () => {
-      let cache: { ts: number; data: any } | null = null;
+      let cache: { ts: number; <REDACTED_SCHEME> any } | null = null;
       const TTL_MS = 15 * 60 * 1000;
       return async (c: any) => {
         try {
@@ -624,7 +624,7 @@ const _dashboardApiRoutesRaw = [
           try {
             await inngest.send({
               name: "HostingPlatform/cron.trigger",
-              data: {
+              <REDACTED_SCHEME> {
                 workflowId: "quality-audit-workflow",
                 manualTrigger: true,
                 triggeredBy: userEmail,
@@ -706,7 +706,7 @@ const _dashboardApiRoutesRaw = [
         getUsers,
         getDataMode,
       } = await import("../../data");
-      let cache: { ts: number; data: any } | null = null;
+      let cache: { ts: number; <REDACTED_SCHEME> any } | null = null;
       const TTL_MS = 15 * 60 * 1000;
       // Shared in-flight fetch, keyed by date window — see the note at the
       // fetch site. Lives in the handler closure alongside `cache`, so it is
@@ -1135,7 +1135,7 @@ const _dashboardApiRoutesRaw = [
             },
           };
           if (noFilters) {
-            cache = { ts: Date.now(), data: responseBody };
+            cache = { ts: Date.now(), <REDACTED_SCHEME> responseBody };
             return c.json({
               ...shapeResponse(responseBody),
               cached: false,

@@ -117,7 +117,7 @@ function buildSeededAction(
     requested_by_name: 'Test Requester',
     requested_by_email: '<REDACTED_EMAIL>',
     prior_viewers: SEED_VIEWERS,
-    credential_warnings: [],
+    credential_warnings: <REDACTED_SECRET>
     compliance_refs: [],
     ...overrides,
   };

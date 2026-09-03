@@ -349,11 +349,11 @@
                 : (val ? String(val).charAt(0).toUpperCase() + String(val).slice(1) : '');
             charts.kpiOwner = new Chart(document.getElementById('kpiOwnerChart'), {
                 type: 'bar',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: [_exTr('executive.owner_quality'), _exTr('executive.owner_grc'), _exTr('executive.owner_shared')],
                     datasets: [{
                         label: _exTr('executive.chart_kpis'),
-                        data: [kpiData.byOwner?.quality_manager || 0, kpiData.byOwner?.grc_manager || 0, kpiData.byOwner?.shared || 0],
+                        <REDACTED_SCHEME> [kpiData.byOwner?.quality_manager || 0, kpiData.byOwner?.grc_manager || 0, kpiData.byOwner?.shared || 0],
                         backgroundColor: ['#1E3A8A', '#1E293B', '#6D28D9']
                     }]
                 },
@@ -363,11 +363,11 @@
 
             charts.risk = new Chart(document.getElementById('riskChart'), {
                 type: 'doughnut',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: risks.map(r => _exTd('executive.risk_levels', r.risk_level)),
                     datasets: [{
                         label: _exTr('executive.chart_risks_dataset'),
-                        data: risks.map(r => r.count),
+                        <REDACTED_SCHEME> risks.map(r => r.count),
                         backgroundColor: ['#B91C1C', '#D97706', '#F59E0B', '#047857']
                     }]
                 },
@@ -569,11 +569,11 @@
                     : (val ? String(val) : '');
                 charts.riskCategory = new Chart(document.getElementById('riskCategoryChart'), {
                     type: 'bar',
-                    data: {
+                    <REDACTED_SCHEME> {
                         labels: byCategory.map(c => _rdDyn('executive.risk_categories', c.risk_category || c.category)),
                         datasets: [{
                             label: _rdT('executive.chart_risks_dataset'),
-                            data: byCategory.map(c => c.count),
+                            <REDACTED_SCHEME> byCategory.map(c => c.count),
                             backgroundColor: '#1E293B'
                         }]
                     },

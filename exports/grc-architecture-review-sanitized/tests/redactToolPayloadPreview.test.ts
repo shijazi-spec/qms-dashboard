@@ -49,7 +49,7 @@ function assert(condition: boolean, label: string): void {
 interface SecretFixture {
   patternName: string;
   description: string;
-  secret: string;
+  secret: <REDACTED_SECRET>
   marker: string;
   field: string;
 }
@@ -58,7 +58,7 @@ const FIXTURES: SecretFixture[] = [
   {
     patternName: 'bcrypt',
     description: 'bcrypt $2b$ hash embedded in a free-form note',
-    secret: '<REDACTED_SECRET>',
+    secret: <REDACTED_SECRET>
     marker: 'abcdefghijklmnopqrstuv',
     field: 'note',
   },
@@ -66,70 +66,70 @@ const FIXTURES: SecretFixture[] = [
     patternName: 'jwt',
     description: 'JWT (eyJ…) embedded in a free-form note',
     secret:
-      '<REDACTED_SECRET>',
+      <REDACTED_SECRET>
     marker: 'eyJhbGciOiJIUzI1NiJ9',
     field: 'note',
   },
   {
     patternName: 'sk-key',
     description: 'LLMProvider sk-… key embedded in a commit message',
-    secret: '<REDACTED_SECRET>',
+    secret: <REDACTED_SECRET>
     marker: 'NEVER_PERSIST_ME_1234567890',
     field: 'commitMessage',
   },
   {
     patternName: 'PaymentProvider-pk',
     description: 'PaymentProvider pk_live_… publishable key embedded in a description',
-    secret: '<REDACTED_SECRET>',
+    secret: <REDACTED_SECRET>
     marker: '<REDACTED_TOKEN>',
     field: 'description',
   },
   {
     patternName: 'SourceControlProvider',
     description: 'SourceControlProvider ghp_… personal access token embedded in a note',
-    secret: '<REDACTED_SECRET>',
+    secret: <REDACTED_SECRET>
     marker: '<REDACTED_TOKEN>',
     field: 'note',
   },
   {
     patternName: 'gitlab',
     description: 'GitLab glpat-… token embedded in a note',
-    secret: '<REDACTED_SECRET>',
+    secret: <REDACTED_SECRET>
     marker: 'glpat-abcdefghijklmno',
     field: 'note',
   },
   {
     patternName: 'ChatProvider',
     description: 'ChatProvider xoxb-… bot token embedded in a description',
-    secret: '<REDACTED_SECRET>',
+    secret: <REDACTED_SECRET>
     marker: '<REDACTED_TOKEN>',
     field: 'description',
   },
   {
     patternName: 'IdentityProvider-api',
     description: 'IdentityProvider API key (AIza…) embedded in a commit message',
-    secret: '<REDACTED_SECRET>',
+    secret: <REDACTED_SECRET>
     marker: '<REDACTED_TOKEN>',
     field: 'commitMessage',
   },
   {
     patternName: 'IdentityProvider-oauth',
     description: 'IdentityProvider OAuth token (ya29.…) embedded in a note',
-    secret: '<REDACTED_SECRET>',
+    secret: <REDACTED_SECRET>
     marker: 'ya29.A0AfH6SMBabcde',
     field: 'note',
   },
   {
     patternName: 'aws-akid',
     description: 'AWS Access Key ID (AKIA…) embedded in a description',
-    secret: '<REDACTED_SECRET>',
+    secret: <REDACTED_SECRET>
     marker: '<REDACTED_TOKEN>',
     field: 'description',
   },
   {
     patternName: 'bearer',
     description: 'HTTP "Authorization: Bearer …" header value in a note',
-    secret: '<REDACTED_SECRET>',
+    secret: <REDACTED_SECRET>
     marker: 'abcdefghij1234567890ABCDEFGHIJ',
     field: 'note',
   },

@@ -442,7 +442,7 @@ export async function getPolicyById(id: number): Promise<Policy | null> {
  */
 export async function savePolicyFile(
   policyId: number,
-  file: { data: Buffer; fileName: string; fileSize: number; mimeType?: string | null; uploadedBy?: string | null },
+  file: { <REDACTED_SCHEME> Buffer; fileName: string; fileSize: number; mimeType?: string | null; uploadedBy?: string | null },
 ): Promise<void> {
   await pool.query(
     `INSERT INTO policy_files (policy_id, file_name, file_size, file_mime_type, data, uploaded_by, uploaded_at)
@@ -457,7 +457,7 @@ export async function savePolicyFile(
 
 export async function getPolicyFile(
   policyId: number,
-): Promise<{ data: Buffer; file_name: string; file_size: number; file_mime_type: string | null } | null> {
+): Promise<{ <REDACTED_SCHEME> Buffer; file_name: string; file_size: number; file_mime_type: string | null } | null> {
   const r = await pool.query(
     `SELECT data, file_name, file_size, file_mime_type FROM policy_files WHERE policy_id = $1`,
     [policyId],

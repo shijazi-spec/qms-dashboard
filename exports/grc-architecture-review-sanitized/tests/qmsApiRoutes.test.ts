@@ -24,7 +24,7 @@ import { buildHandler, makeContext } from "./_helpers/fakeContext";
 
 const suite = new TestSuite("qmsApiRoutes");
 const HAS_DB = !!process.env.DATABASE_URL;
-const ADMIN_KEY = "integration-test-qms-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 
 console.log("\n=== qmsApiRoutes integration tests ===\n");
 

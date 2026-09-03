@@ -278,7 +278,7 @@
             </div>
         </section>
 
-        <!-- Learning curve (below the rules — reflects the rules data: refreshes
+        <!-- Learning curve (below the rules — reflects the rules <REDACTED_SCHEME> refreshes
              whenever a rule is added/toggled) -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <div class="flex items-center justify-between mb-1">
@@ -486,7 +486,7 @@
             var datasets = modules.map(function (m) {
                 return {
                     label: m,
-                    data: hist.map(function (h) { return h.module === m ? h.grade : null; }),
+                    <REDACTED_SCHEME> hist.map(function (h) { return h.module === m ? h.grade : null; }),
                     borderColor: colors[m], backgroundColor: colors[m],
                     stepped: true, spanGaps: true, tension: 0
                 };
@@ -496,7 +496,7 @@
             if (curveChart) curveChart.destroy();
             curveChart = new Chart(ctx, {
                 type: 'line',
-                data: { labels: labels, datasets: datasets },
+                <REDACTED_SCHEME> { labels: labels, datasets: datasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     scales: { y: { min: 1, max: 4, ticks: { stepSize: 1, callback: function (v) { return 'G' + v; } } } },
@@ -879,7 +879,7 @@
                 ((b && b.series) || []).forEach(function (p) { map[p.date] = p.solved; });
                 return {
                     label: m + ' solved',
-                    data: dates.map(function (dt) { return map[dt] != null ? map[dt] : null; }),
+                    <REDACTED_SCHEME> dates.map(function (dt) { return map[dt] != null ? map[dt] : null; }),
                     borderColor: colors[m], backgroundColor: colors[m],
                     spanGaps: true, tension: 0.25, pointRadius: 2, borderWidth: 2,
                 };
@@ -887,7 +887,7 @@
             if (_progressChart) { _progressChart.destroy(); }
             _progressChart = new Chart(canvas.getContext('2d'), {
                 type: 'line',
-                data: { labels: dates, datasets: datasets },
+                <REDACTED_SCHEME> { labels: dates, datasets: datasets },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
             });
         }

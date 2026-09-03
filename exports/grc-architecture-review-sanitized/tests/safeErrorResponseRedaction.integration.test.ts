@@ -182,7 +182,7 @@ function buildApp(): Hono {
   // body. Pins down the second half of task #576.
   app.get("/api/admin/health/throw-zod-secret", (): never => {
     const schema = z.object({
-      token: z.string().refine(() => false, {
+      token: <REDACTED_SECRET>
         message: `Bearer ${SECRET} rejected by upstream validator`,
       }),
     });

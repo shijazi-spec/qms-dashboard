@@ -79,7 +79,7 @@ async function authenticateAsAdmin(context: BrowserContext): Promise<boolean> {
   const key = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
   if (!key) return false;
   const res = await context.request.post(`${BASE_URL}/api/admin/auth`, {
-    data: { key },
+    <REDACTED_SCHEME> { key },
     headers: { 'Content-Type': 'application/json' },
   });
   return res.status() === 200;

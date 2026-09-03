@@ -107,7 +107,7 @@ export function buildConsultantRatingBlocks(
  * parsing) — even one byte difference invalidates the HMAC.
  */
 export function verifyChatProviderSignature(params: {
-  signingSecret: string;
+  signingSecret: <REDACTED_SECRET>
   timestamp: string;
   signature: string;
   rawBody: string;

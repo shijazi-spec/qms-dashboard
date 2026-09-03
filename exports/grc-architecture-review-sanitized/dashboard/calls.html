@@ -1883,7 +1883,7 @@
                 const res = await fetch(`/api/calls/${callId}/status`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ status: requested }),
                 });
                 if (res.status === 401 || res.status === 403) {
@@ -2105,12 +2105,12 @@
             try {
                 const res = await fetch(url, { signal: ctrl.signal });
                 if (!res.ok) {
-                    return { ok: false, data: null, status: res.status, error: `HTTP ${res.status}` };
+                    return { ok: false, <REDACTED_SCHEME> null, status: res.status, error: `HTTP ${res.status}` };
                 }
                 const data = await res.json();
                 return { ok: true, data };
             } catch (err) {
-                return { ok: false, data: null, error: (err && err.message) || String(err) };
+                return { ok: false, <REDACTED_SCHEME> null, error: (err && err.message) || String(err) };
             } finally {
                 clearTimeout(timer);
             }
@@ -2218,7 +2218,7 @@
                     renderOverview();
                 }
             } catch (error) {
-                console.error('Error loading data:', error);
+                console.error('Error loading <REDACTED_SCHEME>', error);
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('noData').classList.remove('hidden');
             }
@@ -3721,7 +3721,7 @@
                     const res = await fetch('/api/calls/retry-unlinked-auto-link', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: '<REDACTED_SECRET>',
+                        credentials: <REDACTED_SECRET>
                         body: JSON.stringify({ limit: 50, after_id: cursor }),
                     });
                     if (!res.ok) {
@@ -3801,7 +3801,7 @@
                     const res = await fetch('/api/calls/backfill-via-contact-names', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: '<REDACTED_SECRET>',
+                        credentials: <REDACTED_SECRET>
                         body: JSON.stringify({ limit: 50, after_id: cursor }),
                     });
                     if (!res.ok) {
@@ -4370,10 +4370,10 @@
             const sourceCtx = document.getElementById('callsBySourceChart').getContext('2d');
             callsBySourceChart = new Chart(sourceCtx, {
                 type: 'doughnut',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: sourceData.map(s => s.source || ExampleOrgI18n.t('dyn.calls.unknown_contact')),
                     datasets: [{
-                        data: sourceData.map(s => parseInt(s.count)),
+                        <REDACTED_SCHEME> sourceData.map(s => parseInt(s.count)),
                         backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
                     }]
                 },
@@ -4387,11 +4387,11 @@
             const agentCtx = document.getElementById('callsByAgentChart').getContext('2d');
             callsByAgentChart = new Chart(agentCtx, {
                 type: 'bar',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: agentData.slice(0, 10).map(a => a.agent_email?.split('@')[0] || ExampleOrgI18n.t('dyn.calls.unknown')),
                     datasets: [{
                         label: ExampleOrgI18n.t('dyn.calls.calls_label'),
-                        data: agentData.slice(0, 10).map(a => parseInt(a.count)),
+                        <REDACTED_SCHEME> agentData.slice(0, 10).map(a => parseInt(a.count)),
                         backgroundColor: '#6366f1'
                     }]
                 },
@@ -4905,14 +4905,14 @@
                 : fallback;
             sentimentChart = new Chart(sentimentCtx, {
                 type: 'pie',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: [
                         _t('dyn.calls.sentiment_positive', 'Positive'),
                         _t('dyn.calls.sentiment_neutral', 'Neutral'),
                         _t('dyn.calls.sentiment_negative', 'Negative'),
                     ],
                     datasets: [{
-                        data: sentimentTotal > 0
+                        <REDACTED_SCHEME> sentimentTotal > 0
                             ? [sentimentBuckets.positive, sentimentBuckets.neutral, sentimentBuckets.negative]
                             : [0, 0, 0],
                         backgroundColor: ['#10b981', '#6366f1', '#ef4444']
@@ -4955,11 +4955,11 @@
             const qaTrendCtx = qaCanvas.getContext('2d');
             qaTrendChart = new Chart(qaTrendCtx, {
                 type: 'line',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: trendLabels,
                     datasets: [{
                         label: _t('dyn.calls.avg_qa_score', 'Avg QA Score'),
-                        data: trendData,
+                        <REDACTED_SCHEME> trendData,
                         borderColor: '#6366f1',
                         backgroundColor: 'rgba(99, 102, 241, 0.1)',
                         fill: true,
@@ -7913,7 +7913,7 @@
                 const res = await fetch(`/api/calls/${callId}/sdr-evaluation/review`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ review_status: 'approved', review_notes: null }),
                 });
                 if (res.status === 401 || res.status === 403) {
@@ -7995,7 +7995,7 @@
                 try {
                     const evalRes = await fetch(`/api/calls/${callId}/sdr-evaluation`, {
                         cache: 'no-store',
-                        credentials: '<REDACTED_SECRET>',
+                        credentials: <REDACTED_SECRET>
                     });
                     if (evalRes.ok) {
                         const evalData = await evalRes.json();
@@ -9054,7 +9054,7 @@
                 const res = await fetch('/api/quality-scorecards', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({
                         name: document.getElementById('sc-name').value,
                         description: document.getElementById('sc-description').value,
@@ -9082,7 +9082,7 @@
                 const res = await fetch(`/api/quality-scorecards/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ is_active: active })
                 });
                 const data = await res.json();

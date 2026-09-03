@@ -79,7 +79,7 @@ async function getRetention(): Promise<any> {
 
 async function putRetention(retention_days: number | null, note?: string): Promise<void> {
   const res = await apiCtx.put(RETENTION_PATH, {
-    data: { retention_days, ...(note ? { note } : {}) },
+    <REDACTED_SCHEME> { retention_days, ...(note ? { note } : {}) },
     headers: { 'Content-Type': 'application/json' },
   });
   // Either succeeds (200) or — when the env lock is engaged — 409. We
@@ -102,7 +102,7 @@ test.describe('AI metrics retention — admin dashboard flow (Task #551)', () =>
     // Single suite-level login; per-test logins would trip the
     // /api/admin/auth rate limiter (5 attempts / minute).
     const authRes = await apiCtx.post('/api/admin/auth', {
-      data: { key: ADMIN_KEY },
+      <REDACTED_SCHEME> { key: ADMIN_KEY },
       headers: { 'Content-Type': 'application/json' },
     });
     if (authRes.status() !== 200) {
@@ -291,7 +291,7 @@ test.describe('AI metrics retention — admin dashboard flow (Task #551)', () =>
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            data: {
+            <REDACTED_SCHEME> {
               default_days: 90,
               env_baseline_days: 60,
               env_var_set: true,
@@ -380,7 +380,7 @@ test.describe('AI metrics retention — admin dashboard flow (Task #551)', () =>
     const putStatus = await page.evaluate(async (path) => {
       const r = await fetch(path, {
         method: 'PUT',
-        credentials: '<REDACTED_SECRET>',
+        credentials: <REDACTED_SECRET>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ retention_days: 42, note: 'task-551 lock probe' }),
       });

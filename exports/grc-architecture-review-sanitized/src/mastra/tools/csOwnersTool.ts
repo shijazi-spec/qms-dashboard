@@ -19,7 +19,7 @@ export const csOwnersTool = createTool({
   id: "cs-owners",
 
   description:
-    "List the Customer Success (CS) team — the maintained roster of CS members (name + ExampleOrg email) cross-referenced with live CRMProvider data: how many deals and accounts each one owns, which roster members carry NO deals, which owner names on deals are NOT on the roster (typo / ex-employee / non-CS person), and how many CS deals have no owner at all. Use whenever the user asks who the CS owners or CS team are, who owns a CS book, who has the most CS deals, who is unassigned, or whether a CS Owner name in the CRM is valid.",
+    "List the Customer Success (CS) team — the maintained roster of CS members (name + ExampleOrg email) cross-referenced with live CRMProvider <REDACTED_SCHEME> how many deals and accounts each one owns, which roster members carry NO deals, which owner names on deals are NOT on the roster (typo / ex-employee / non-CS person), and how many CS deals have no owner at all. Use whenever the user asks who the CS owners or CS team are, who owns a CS book, who has the most CS deals, who is unassigned, or whether a CS Owner name in the CRM is valid.",
 
   inputSchema: z.object({
     segment: z

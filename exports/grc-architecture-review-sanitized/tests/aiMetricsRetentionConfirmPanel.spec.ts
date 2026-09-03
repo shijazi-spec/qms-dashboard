@@ -97,7 +97,7 @@ async function getRetention(): Promise<any> {
 
 async function putRetention(retention_days: number | null, note?: string): Promise<void> {
   const res = await apiCtx.put(RETENTION_PATH, {
-    data: { retention_days, ...(note ? { note } : {}) },
+    <REDACTED_SCHEME> { retention_days, ...(note ? { note } : {}) },
     headers: { 'Content-Type': 'application/json' },
   });
   expect(
@@ -116,7 +116,7 @@ test.describe('AI metrics retention — inline confirm panel (Task #561 / Task #
     // Single suite-level login; per-test logins would trip the
     // /api/admin/auth rate limiter (5 attempts / minute).
     const authRes = await apiCtx.post('/api/admin/auth', {
-      data: { key: ADMIN_KEY },
+      <REDACTED_SCHEME> { key: ADMIN_KEY },
       headers: { 'Content-Type': 'application/json' },
     });
     if (authRes.status() !== 200) {
@@ -183,7 +183,7 @@ test.describe('AI metrics retention — inline confirm panel (Task #561 / Task #
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          data: {
+          <REDACTED_SCHEME> {
             candidate_days: days,
             rows_to_delete: STUB_PREVIEW_ROWS,
             oldest_row_age_days: STUB_PREVIEW_OLDEST_AGE_DAYS,
@@ -355,7 +355,7 @@ test.describe('AI metrics retention — inline confirm panel (Task #561 / Task #
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          data: {
+          <REDACTED_SCHEME> {
             candidate_days: days,
             rows_to_delete: STUB_PREVIEW_ROWS,
             oldest_row_age_days: STUB_PREVIEW_OLDEST_AGE_DAYS,

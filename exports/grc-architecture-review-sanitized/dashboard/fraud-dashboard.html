@@ -285,11 +285,11 @@
                 if (trendChart) trendChart.destroy();
                 trendChart = new Chart(document.getElementById('trendCanvas').getContext('2d'), {
                     type: 'line',
-                    data: {
+                    <REDACTED_SCHEME> {
                         labels,
                         datasets: [{
                             label: METRIC_LABELS[metric] || metric,
-                            data: values,
+                            <REDACTED_SCHEME> values,
                             borderColor: '#DC2626',
                             backgroundColor: 'rgba(220, 38, 38, 0.1)',
                             tension: 0.2,
@@ -356,7 +356,7 @@
                 const res = await fetch('/api/fraud/kpis/thresholds/' + encodeURIComponent(metric), {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ target_value: Number(target), alert_value: Number(alertV), direction: dir }),
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -408,7 +408,7 @@
                 const res = await fetch('/api/fraud/kpis/' + month, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify(payload),
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);

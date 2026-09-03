@@ -24,7 +24,7 @@ import {
 
 const LLMProvider = createLLMProvider({
   baseURL: getLLMProviderBaseUrl(),
-  apiKey: getLLMProviderApiKey(),
+  apiKey: <REDACTED_SECRET>
 });
 
 const INSTRUCTIONS = `

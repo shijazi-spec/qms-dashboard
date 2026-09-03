@@ -1719,10 +1719,10 @@
             if (statusChart) statusChart.destroy();
             statusChart = new Chart(document.getElementById('statusChart'), {
                 type: 'doughnut',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: Object.keys(analytics.byStatus).map(s => s.replace('_', ' ').toUpperCase()),
                     datasets: [{
-                        data: Object.values(analytics.byStatus),
+                        <REDACTED_SCHEME> Object.values(analytics.byStatus),
                         backgroundColor: ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#059669', '#6B7280', '#EF4444']
                     }]
                 },
@@ -1732,11 +1732,11 @@
             if (priorityChart) priorityChart.destroy();
             priorityChart = new Chart(document.getElementById('priorityChart'), {
                 type: 'bar',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: ['Critical', 'High', 'Medium', 'Low'],
                     datasets: [{
                         label: 'Projects',
-                        data: [analytics.byPriority?.critical || 0, analytics.byPriority?.high || 0, analytics.byPriority?.medium || 0, analytics.byPriority?.low || 0],
+                        <REDACTED_SCHEME> [analytics.byPriority?.critical || 0, analytics.byPriority?.high || 0, analytics.byPriority?.medium || 0, analytics.byPriority?.low || 0],
                         backgroundColor: ['#EF4444', '#F97316', '#3B82F6', '#6B7280']
                     }]
                 },
@@ -1746,11 +1746,11 @@
             if (budgetChart) budgetChart.destroy();
             budgetChart = new Chart(document.getElementById('budgetChart'), {
                 type: 'bar',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: ['Approved', 'Spent', 'Remaining'],
                     datasets: [{
                         label: 'Budget ($)',
-                        data: [analytics.totalBudget || 0, analytics.totalSpent || 0, (analytics.totalBudget || 0) - (analytics.totalSpent || 0)],
+                        <REDACTED_SCHEME> [analytics.totalBudget || 0, analytics.totalSpent || 0, (analytics.totalBudget || 0) - (analytics.totalSpent || 0)],
                         backgroundColor: ['#3B82F6', '#F59E0B', '#10B981']
                     }]
                 },
@@ -1760,10 +1760,10 @@
             if (milestoneMetricsChart) milestoneMetricsChart.destroy();
             milestoneMetricsChart = new Chart(document.getElementById('milestoneChart'), {
                 type: 'pie',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: ['On Time', 'Delayed', 'Upcoming'],
                     datasets: [{
-                        data: [analytics.milestoneMetrics?.onTime || 0, analytics.milestoneMetrics?.delayed || 0, analytics.milestoneMetrics?.upcoming || 0],
+                        <REDACTED_SCHEME> [analytics.milestoneMetrics?.onTime || 0, analytics.milestoneMetrics?.delayed || 0, analytics.milestoneMetrics?.upcoming || 0],
                         backgroundColor: ['#10B981', '#EF4444', '#3B82F6']
                     }]
                 },

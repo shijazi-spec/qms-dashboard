@@ -1259,7 +1259,7 @@ export const complianceRoutes = [
             const { inngest } = await import("../inngest/client");
             await inngest.send({
               name: "compliance.ingest.requested",
-              data: {
+              <REDACTED_SCHEME> {
                 import_id: run.id,
                 document_id: documentId,
                 regulation_id: regulationId,

@@ -10,9 +10,9 @@
  * is expected to run.
  *
  * Two tools are registered when the guard passes:
- *   1. integration-test-redaction-canary__ok     — returns credential-shaped
+ *   1. <REDACTED_SECRET>__ok     — returns credential-shaped
  *      values (key-based + regex-based deny lists exercised).
- *   2. integration-test-redaction-canary__throws — throws an Error whose
+ *   2. <REDACTED_SECRET>__throws — throws an Error whose
  *      message embeds a credential; verifies the catch branch scrubs it.
  *
  * The tool IDs are prefixed with "integration-test-" so they are trivially
@@ -32,9 +32,9 @@ import { withApprovalGate } from './withApprovalGate';
 /* ------------------------------------------------------------------ */
 
 export const INT_TEST_OK_TOOL_ID =
-  'integration-test-redaction-canary__ok';
+  '<REDACTED_SECRET>__ok';
 export const INT_TEST_THROW_TOOL_ID =
-  'integration-test-redaction-canary__throws';
+  '<REDACTED_SECRET>__throws';
 
 /* ------------------------------------------------------------------ */
 /* Secret constants embedded in tool results                          */
@@ -90,11 +90,11 @@ if (process.env.NODE_ENV !== 'production') {
     execute: async () => ({
       success: true,
       rotated: true,
-      new_api_key: INT_APPROVE_RESULT_SK_KEY,
-      access_token: INT_APPROVE_RESULT_ACCESS,
+      new_api_key: <REDACTED_SECRET>
+      access_token: <REDACTED_SECRET>
       nested: {
         free_form_note: `Vendor returned token: ${INT_APPROVE_RESULT_GH_TOKEN}`,
-        legacy_password_hash_blob: INT_APPROVE_RESULT_BCRYPT,
+        legacy_password_hash_blob: <REDACTED_SECRET>
       },
       audit_note: 'Integration-test canary rotation completed',
     }),

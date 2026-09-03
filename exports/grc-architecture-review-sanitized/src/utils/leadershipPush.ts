@@ -103,7 +103,7 @@ export async function pushToLeadership(): Promise<PushResult> {
         headers: { "content-type": "application/json", "x-webhook-secret": secret },
         body: JSON.stringify({
           event: "kpi.update",
-          data: {
+          <REDACTED_SCHEME> {
             kpiId,
             value: Number(fr.value),
             periodType: "QUARTERLY",

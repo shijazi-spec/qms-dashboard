@@ -585,7 +585,7 @@
                 const res = await fetch('/api/fraud/incidents', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify(payload),
                 });
                 if (!res.ok) {
@@ -639,7 +639,7 @@
                 const res = await fetch('/api/fraud/incidents/' + encodeURIComponent(idRef) + '/close', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify(payload),
                 });
                 if (!res.ok) {

@@ -42,7 +42,7 @@ export const SESSION_COOKIE_NAME = "ExampleOrg_session";
  * the application code reads; otherwise fall back to a fixed test secret.
  */
 export const TEST_SESSION_SECRET =
-  process.env.SESSION_SECRET || "test-session-secret-shared-rbac-2026";
+  process.env.SESSION_SECRET || "<REDACTED_SECRET>";
 
 // Ensure authRoutes.signSession()/verifySession() use the same secret we sign
 // with. verifySession() reads process.env.SESSION_SECRET at call time, so
@@ -94,7 +94,7 @@ export function registerPlatformUser(
 
 function signFakeSession(
   payload: Record<string, unknown>,
-  secret: string,
+  secret: <REDACTED_SECRET>
 ): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = crypto

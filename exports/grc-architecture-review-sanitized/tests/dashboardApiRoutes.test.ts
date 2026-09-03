@@ -104,9 +104,9 @@ await suite.test("GET /api/integrations/status — 200 with full body shape (no 
 await suite.test("GET /api/crm/data — 400 with structured error when CRMProvider not configured", async () => {
   const snapshot = {
     CRMProvider_CLIENT_ID: process.env.CRMProvider_CLIENT_ID,
-    CRMProvider_CLIENT_SECRET: process.env.CRMProvider_CLIENT_SECRET,
-    CRMProvider_REFRESH_TOKEN: process.env.CRMProvider_REFRESH_TOKEN,
-    CRMProvider_ACCESS_TOKEN: process.env.CRMProvider_ACCESS_TOKEN,
+    CRMProvider_CLIENT_SECRET: <REDACTED_SECRET>
+    CRMProvider_REFRESH_TOKEN: <REDACTED_SECRET>
+    CRMProvider_ACCESS_TOKEN: <REDACTED_SECRET>
   };
   delete process.env.CRMProvider_CLIENT_ID;
   delete process.env.CRMProvider_CLIENT_SECRET;

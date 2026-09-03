@@ -23,8 +23,8 @@
 # single most dangerous secret-exposure point in the approval flow.
 #
 # The two synthetic canary tools required by the POST /approve assertions
-# (`integration-test-redaction-canary__ok` and
-# `integration-test-redaction-canary__throws`) are registered in the server
+# (`<REDACTED_SECRET>__ok` and
+# `<REDACTED_SECRET>__throws`) are registered in the server
 # at startup whenever NODE_ENV !== 'production'
 # (src/utils/integrationTestFixtureTools.ts), so no extra runtime setup is
 # required beyond starting the normal `npm run dev` process.

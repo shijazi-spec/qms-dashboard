@@ -88,7 +88,7 @@ async function main(): Promise<void> {
     await wrappedHappy.execute!({
       query: 'lookup user',
       email: '<REDACTED_EMAIL>',
-      token: '<REDACTED_SECRET>',
+      token: <REDACTED_SECRET>
       // Richer secret embedded under an innocuous key — only the regex
       // deny-list inside `redactSensitiveDeep()` can scrub this on the
       // INPUT side.

@@ -376,7 +376,7 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
 async function liveDataReason(
   module: "Deals" | "Accounts" | "Contacts",
   id: string,
-  data: any,
+  <REDACTED_SCHEME> any,
 ): Promise<string | null> {
   const { fetchCRMProviderRelatedRecords, fetchRecordAttachments } = await import("./CRMProviderCRM");
   const d: any = data || {};

@@ -384,11 +384,11 @@
             
             activityChart = new Chart(ctx, {
                 type: 'line',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: labels,
                     datasets: [{
                         label: 'Log Events',
-                        data: data,
+                        <REDACTED_SCHEME> data,
                         borderColor: '#2563EB',
                         backgroundColor: 'rgba(37, 99, 235, 0.1)',
                         fill: true,
@@ -1536,7 +1536,7 @@
                 const response = await fetch('/api/admin/alert-recipients', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ channel: ALERT_CHANNEL_POST_RESTORE, email: email }),
                 });
                 const data = await response.json().catch(function () { return {}; });
@@ -1566,7 +1566,7 @@
                 const response = await fetch('/api/admin/alert-recipients', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     body: JSON.stringify({ channel: ALERT_CHANNEL_POST_RESTORE, email: email }),
                 });
                 const data = await response.json().catch(function () { return {}; });

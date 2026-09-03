@@ -35,7 +35,7 @@ async function seedData() {
     
     process.exit(0);
   } catch (error) {
-    console.error('❌ Error seeding data:', error);
+    console.error('❌ Error seeding <REDACTED_SCHEME>', error);
     process.exit(1);
   }
 }

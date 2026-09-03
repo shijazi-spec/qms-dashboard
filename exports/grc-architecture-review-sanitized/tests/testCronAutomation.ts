@@ -55,7 +55,7 @@ async function testCronTrigger() {
       name: "HostingPlatform/cron.trigger",
 
       // Cron workflows don't receive external input, so data is empty
-      data: {},
+      <REDACTED_SCHEME> {},
     });
 
     console.log(`✅ Cron trigger event sent successfully!`);

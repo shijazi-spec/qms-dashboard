@@ -47,7 +47,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
   test('POST /leads/match-phone unauthenticated returns 401', async ({ request }) => {
     const res = await request.post(`${BASE_URL}/api/calls/evaluation/leads/match-phone`, {
       headers: { 'Content-Type': 'application/json' },
-      data: { phone: '<REDACTED_PHONE>' },
+      <REDACTED_SCHEME> { phone: '<REDACTED_PHONE>' },
     });
     // 429 acceptable when the global rate limiter fires before auth check.
     expect([401, 429]).toContain(res.status());
@@ -61,7 +61,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
   test('POST /:id/auto-link-lead unauthenticated returns 401', async ({ request }) => {
     const res = await request.post(`${BASE_URL}/api/calls/1/auto-link-lead`, {
       headers: { 'Content-Type': 'application/json' },
-      data: {},
+      <REDACTED_SCHEME> {},
     });
     // 401 is the happy path. 429 is acceptable when this test runs after a
     // burst of unauth POSTs in the same suite — the global rate limiter fires
@@ -100,7 +100,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
 
     const res = await request.post(`${BASE_URL}/api/calls/evaluation/leads/match-phone`, {
       headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key! },
-      data: { phone: '<REDACTED_PHONE>', max_records: 10 },
+      <REDACTED_SCHEME> { phone: '<REDACTED_PHONE>', max_records: 10 },
     });
     expect(res.status(), `expected 401, got ${res.status()}`).toBe(401);
   });
@@ -121,7 +121,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
 
     const res = await request.post(`${BASE_URL}/api/calls/99999999/auto-link-lead`, {
       headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key! },
-      data: {},
+      <REDACTED_SCHEME> {},
     });
     expect(res.status(), `expected 401, got ${res.status()}`).toBe(401);
   });

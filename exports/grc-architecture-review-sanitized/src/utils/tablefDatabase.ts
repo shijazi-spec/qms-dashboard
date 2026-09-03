@@ -46,7 +46,7 @@ export interface TablefKpiInput {
   calculation_definition?: string;
 }
 
-export async function updateTablefKpi(data: TablefKpiInput): Promise<any> {
+export async function updateTablefKpi(<REDACTED_SCHEME> TablefKpiInput): Promise<any> {
   const result = await pool.query(
     `UPDATE tablef_kpis SET
        department_id = $1, name = $2, description = $3, category = $4,
@@ -74,7 +74,7 @@ export async function updateTablefKpi(data: TablefKpiInput): Promise<any> {
 
 export async function insertTablefKpi(
   kpiId: string,
-  data: TablefKpiInput,
+  <REDACTED_SCHEME> TablefKpiInput,
 ): Promise<any> {
   const result = await pool.query(
     `INSERT INTO tablef_kpis
@@ -120,7 +120,7 @@ export interface TablefPerformanceUpdate {
 }
 
 export async function updateTablefPerformance(
-  data: TablefPerformanceUpdate,
+  <REDACTED_SCHEME> TablefPerformanceUpdate,
 ): Promise<void> {
   await pool.query(
     `UPDATE tablef_performance SET
@@ -148,7 +148,7 @@ export interface TablefPerformanceInsert extends TablefPerformanceUpdate {
 }
 
 export async function insertTablefPerformance(
-  data: TablefPerformanceInsert,
+  <REDACTED_SCHEME> TablefPerformanceInsert,
 ): Promise<void> {
   await pool.query(
     `INSERT INTO tablef_performance
@@ -185,7 +185,7 @@ export interface TablefSnapshotUpsert {
 }
 
 export async function upsertTablefSnapshot(
-  data: TablefSnapshotUpsert,
+  <REDACTED_SCHEME> TablefSnapshotUpsert,
 ): Promise<void> {
   await pool.query(
     `INSERT INTO tablef_snapshots
@@ -221,7 +221,7 @@ export interface TablefUserUpdate {
   active?: boolean;
 }
 
-export async function updateTablefUser(data: TablefUserUpdate): Promise<void> {
+export async function updateTablefUser(<REDACTED_SCHEME> TablefUserUpdate): Promise<void> {
   await pool.query(
     `UPDATE tablef_users SET
        name = $1, email = $2, role = $3, departments = $4,
@@ -246,7 +246,7 @@ export interface TablefUserInsert {
   departments?: string[];
 }
 
-export async function insertTablefUser(data: TablefUserInsert): Promise<void> {
+export async function insertTablefUser(<REDACTED_SCHEME> TablefUserInsert): Promise<void> {
   await pool.query(
     `INSERT INTO tablef_users (user_id, name, email, role, departments)
      VALUES ($1, $2, $3, $4, $5)`,

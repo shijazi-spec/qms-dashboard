@@ -779,12 +779,12 @@
                 const ctx1 = canvas1.getContext('2d');
                 charts.deptCompliance = new Chart(ctx1, {
                     type: 'bar',
-                    data: {
+                    <REDACTED_SCHEME> {
                         labels: snapshots.map(s => s.name.split(' ')[0].substring(0, 10)),
                         datasets: [
-                            { label: 'Met', data: snapshots.map(s => s.kpis_met), backgroundColor: '#10b981' },
-                            { label: 'Improving', data: snapshots.map(s => s.kpis_improving), backgroundColor: '#3b82f6' },
-                            { label: 'Not Met', data: snapshots.map(s => s.kpis_not_met), backgroundColor: '#ef4444' }
+                            { label: 'Met', <REDACTED_SCHEME> snapshots.map(s => s.kpis_met), backgroundColor: '#10b981' },
+                            { label: 'Improving', <REDACTED_SCHEME> snapshots.map(s => s.kpis_improving), backgroundColor: '#3b82f6' },
+                            { label: 'Not Met', <REDACTED_SCHEME> snapshots.map(s => s.kpis_not_met), backgroundColor: '#ef4444' }
                         ]
                     },
                     options: {
@@ -806,10 +806,10 @@
                 const ctx2 = canvas2.getContext('2d');
                 charts.kpiStatus = new Chart(ctx2, {
                     type: 'doughnut',
-                    data: {
+                    <REDACTED_SCHEME> {
                         labels: ['Met', 'Improving', 'Not Met'],
                         datasets: [{
-                            data: [totalMet, totalImproving, totalNotMet],
+                            <REDACTED_SCHEME> [totalMet, totalImproving, totalNotMet],
                             backgroundColor: ['#10b981', '#3b82f6', '#ef4444']
                         }]
                     },

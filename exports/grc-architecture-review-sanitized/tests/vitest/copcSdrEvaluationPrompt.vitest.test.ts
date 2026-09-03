@@ -152,7 +152,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
       ],
     };
     const p = buildCopcSDREvaluationPrompt(SAMPLE_TRANSCRIPT, card);
-    expect(p).toContain("[DATA: deferred");
+    expect(p).toContain("[<REDACTED_SCHEME> deferred");
   });
 
   test("requires the JSON status mapping rule (2→PASS, 0|1→FAIL, null→NA)", () => {

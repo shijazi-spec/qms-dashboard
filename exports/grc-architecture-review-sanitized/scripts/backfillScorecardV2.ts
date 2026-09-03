@@ -231,7 +231,7 @@ async function run(): Promise<void> {
         const aiResult = await generateChatText({
           model: "gpt-4o-mini",
           prompt,
-          maxTokens: 8000,
+          maxTokens: <REDACTED_SECRET>
           responseFormat: "json_object",
         });
         recordSpend(COST.GPT4O_MINI_SDR_EVAL, "scorecard_backfill");

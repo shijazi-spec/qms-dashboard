@@ -35,7 +35,7 @@ vi.mock("../../src/utils/eventLogsDatabase", () => ({
   initializeEventLogsTable: vi.fn(async () => undefined),
   logEvent: vi.fn(async () => ({ id: 1 })),
   redactSensitiveDeep: vi.fn(<T,>(x: T) => x),
-  redactSecretLikeStrings: vi.fn(<T,>(x: T) => x),
+  redactSecretLikeStrings: <REDACTED_SECRET>
   getActionViewers: vi.fn(async () => []),
   getActionViewersBatch: vi.fn(async () => ({})),
 }));
@@ -421,8 +421,8 @@ describe("GET /api/crm/data", () => {
     vi.mocked(CRMProvider.getCRMProviderConnectionStatus).mockReturnValue({
       configured: false,
       autoRefresh: false,
-      tokenCached: false,
-      tokenExpired: false,
+      tokenCached: <REDACTED_SECRET>
+      tokenExpired: <REDACTED_SECRET>
       rateLimited: false,
       cooldownMsRemaining: 0,
       message: "CRM integration not configured.",
@@ -444,8 +444,8 @@ describe("GET /api/crm/data", () => {
     vi.mocked(CRMProvider.getCRMProviderConnectionStatus).mockReturnValue({
       configured: true,
       autoRefresh: true,
-      tokenCached: true,
-      tokenExpired: false,
+      tokenCached: <REDACTED_SECRET>
+      tokenExpired: <REDACTED_SECRET>
       rateLimited: false,
       cooldownMsRemaining: 0,
       message: "ok",
@@ -456,7 +456,7 @@ describe("GET /api/crm/data", () => {
         owner: "u1",
         createdTime: "2026-04-22",
         modifiedTime: "2026-04-22",
-        data: { Email: "<REDACTED_EMAIL>", Stage: "Won" },
+        <REDACTED_SCHEME> { Email: "<REDACTED_EMAIL>", Stage: "Won" },
       },
     ] as any);
 
@@ -494,8 +494,8 @@ describe("GET /api/crm/data", () => {
     vi.mocked(CRMProvider.getCRMProviderConnectionStatus).mockReturnValue({
       configured: true,
       autoRefresh: true,
-      tokenCached: true,
-      tokenExpired: false,
+      tokenCached: <REDACTED_SECRET>
+      tokenExpired: <REDACTED_SECRET>
       rateLimited: false,
       cooldownMsRemaining: 0,
       message: "ok",

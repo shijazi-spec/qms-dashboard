@@ -803,10 +803,10 @@
 
             departmentChart = new Chart(ctx, {
                 type: 'doughnut',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: departments.map(d => d.department),
                     datasets: [{
-                        data: departments.map(d => d.count),
+                        <REDACTED_SCHEME> departments.map(d => d.count),
                         backgroundColor: ['#2563EB', '#047857', '#D97706', '#6D28D9', '#B91C1C', '#0EA5E9'],
                         borderWidth: 0
                     }]
@@ -826,10 +826,10 @@
 
             projectStatusChart = new Chart(ctx, {
                 type: 'doughnut',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: ['Assigned', 'In Progress', 'Completed', 'On Hold'],
                     datasets: [{
-                        data: [status.assigned || 0, status.in_progress || 0, status.completed || 0, status.on_hold || 0],
+                        <REDACTED_SCHEME> [status.assigned || 0, status.in_progress || 0, status.completed || 0, status.on_hold || 0],
                         backgroundColor: ['#2563EB', '#F59E0B', '#22C55E', '#6B7280'],
                         borderWidth: 0
                     }]
@@ -849,10 +849,10 @@
 
             statusChart = new Chart(ctx, {
                 type: 'doughnut',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: ['Active', 'Inactive', 'On Leave', 'Probation'],
                     datasets: [{
-                        data: [status.active || 0, status.inactive || 0, status.on_leave || 0, status.probation || 0],
+                        <REDACTED_SCHEME> [status.active || 0, status.inactive || 0, status.on_leave || 0, status.probation || 0],
                         backgroundColor: ['#22C55E', '#EF4444', '#F59E0B', '#A855F7'],
                         borderWidth: 0
                     }]
@@ -872,11 +872,11 @@
 
             performanceDeptChart = new Chart(ctx, {
                 type: 'bar',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: departments.map(d => d.department),
                     datasets: [{
                         label: 'Avg Performance',
-                        data: departments.map(d => d.avg_performance || 0),
+                        <REDACTED_SCHEME> departments.map(d => d.avg_performance || 0),
                         backgroundColor: '#2563EB',
                         borderRadius: 8
                     }]

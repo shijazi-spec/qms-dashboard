@@ -146,7 +146,7 @@ async function extractFindingsFromText(text: string): Promise<any[]> {
   const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
   const { generateText } = await import("ai");
   const LLMProvider = createLLMProvider({
-    apiKey: getLLMProviderApiKey(),
+    apiKey: <REDACTED_SECRET>
   });
 
   // Truncate if absurdly long (GPT-4o handles ~128k tokens but the intake

@@ -8,8 +8,8 @@
  * and the credential-warning-count badge whenever
  * `process.env.NODE_ENV !== 'test'`. The two synthetic redaction-canary
  * tools registered by `src/utils/integrationTestFixtureTools.ts`
- * (`integration-test-redaction-canary__ok` /
- *  `integration-test-redaction-canary__throws`) are the live-HTTP
+ * (`<REDACTED_SECRET>__ok` /
+ *  `<REDACTED_SECRET>__throws`) are the live-HTTP
  * integration test's only legitimate use of that prefix. Without this
  * filter, an operator who pointed the integration test at a non-test
  * environment — or otherwise seeded a row for those IDs — would see
@@ -136,7 +136,7 @@ function seedRow(overrides: Partial<PendingAction>): PendingAction {
     result_entity_id: null,
     created_at: new Date(NOW),
     expires_at: FUTURE,
-    credential_warnings: [
+    credential_warnings: <REDACTED_SECRET>
       {
         path: "payload.note",
         kind: "api_key",
@@ -355,7 +355,7 @@ interface Snapshot {
   listTotal: number;
   listRows: PendingAction[];
   pendingCount: number;
-  credentialWarningCount: number;
+  credentialWarningCount: <REDACTED_SECRET>
 }
 
 async function snapshotForEnv(nodeEnv: string): Promise<Snapshot> {
@@ -382,7 +382,7 @@ async function snapshotForEnv(nodeEnv: string): Promise<Snapshot> {
     listTotal: Number(listRes.body?.total ?? -1),
     listRows: (listRes.body?.rows ?? []) as PendingAction[],
     pendingCount: Number(pendingRes.body?.count ?? -1),
-    credentialWarningCount: Number(credRes.body?.count ?? -1),
+    credentialWarningCount: <REDACTED_SECRET>
   };
 }
 

@@ -5,7 +5,7 @@ export const ExampleOrgSalesGovernanceRules = {
     version: "1.1",
     effectiveDate: "2025-12-01",
     preparedBy: "Sample User / Quality Manager",
-    approvedBy: ["Ziad Abbas / Head of Sales", "Sample User / Head of Operations & Quality", "Osama Harfoush / Chief Commercial Officer"]
+    approvedBy: ["Sample User / Head of Sales", "Sample User / Head of Operations & Quality", "Sample User / Chief Commercial Officer"]
   },
   
   dealStages: {
@@ -164,7 +164,7 @@ export const ExampleOrgSDRGovernanceRules = {
     version: "2.1",
     effectiveDate: "2025-12-04",
     preparedBy: "Sample User / Quality Manager",
-    approvedBy: ["Ziad Abbas / Head of Sales", "Sample User / Head of Operations & Quality"]
+    approvedBy: ["Sample User / Head of Sales", "Sample User / Head of Operations & Quality"]
   },
 
   leadStages: {

@@ -577,7 +577,7 @@
      * "128381005SAR" is unreadable at a glance and unreadable next to
      * "Target 41000000SAR" — the two can't be compared without counting digits.
      * Millions keep one decimal (SAR 2.6M), thousands round to whole (SAR 292K),
-     * matching bi-portal-dev.wala.plus/sales-kpis so the same figure looks the
+     * matching bi-portal-dev.ExampleOrg.plus/sales-kpis so the same figure looks the
      * same in both systems.
      */
     function qrFmtAmount(n) {

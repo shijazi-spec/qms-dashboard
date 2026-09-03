@@ -491,7 +491,7 @@ async function seedDefaultData(): Promise<void> {
   }
 }
 
-function generatePdplChecksum(data: any): string {
+function generatePdplChecksum(<REDACTED_SCHEME> any): string {
   return crypto
     .createHash("sha256")
     .update(JSON.stringify(data) + new Date().toISOString())

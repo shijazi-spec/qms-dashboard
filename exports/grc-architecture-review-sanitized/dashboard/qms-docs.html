@@ -351,7 +351,7 @@
                 try {
                     const r = await fetch('/api/qms-docs/upload', {
                         method: 'POST',
-                        credentials: '<REDACTED_SECRET>',
+                        credentials: <REDACTED_SECRET>
                         body: fd
                     });
                     const data = await r.json().catch(() => ({}));
@@ -424,7 +424,7 @@
                     try {
                         const r = await fetch('/api/qms-docs/bulk-upload', {
                             method: 'POST',
-                            credentials: '<REDACTED_SECRET>',
+                            credentials: <REDACTED_SECRET>
                             body: fd
                         });
                         const data = await r.json().catch(() => ({}));
@@ -513,7 +513,7 @@
             try {
                 const res = await fetch('/api/compliance/documents/' + documentId + '/suggest-mappings', {
                     method: 'POST',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ top_n: 8 }),
                 });
@@ -567,7 +567,7 @@
             try {
                 const res = await fetch('/api/compliance/documents/' + _suggestState.documentId + '/apply-mapping', {
                     method: 'POST',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ obligation_id: obligationId }),
                 });

@@ -33,8 +33,8 @@ beforeEach(() => {
   fetchMock.mockReset().mockResolvedValue({
     ok: true,
     status: 200,
-    text: async () => JSON.stringify({ data: [] }),
-    json: async () => ({ data: [] }),
+    text: async () => JSON.stringify({ <REDACTED_SCHEME> [] }),
+    json: async () => ({ <REDACTED_SCHEME> [] }),
   });
   warn.mockReset();
   vi.stubGlobal("fetch", fetchMock);

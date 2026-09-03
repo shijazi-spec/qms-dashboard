@@ -19,7 +19,7 @@ const AGENT_NAME = "ExampleOrg SDR Quality Specialist";
 
 const LLMProvider = createLLMProvider({
   baseURL: getLLMProviderBaseUrl(),
-  apiKey: getLLMProviderApiKey(),
+  apiKey: <REDACTED_SECRET>
 });
 
 const SDR_QUALITY_INSTRUCTIONS = `

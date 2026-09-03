@@ -26,7 +26,7 @@ import { buildHandler, makeContext, type FakeContext } from "./_helpers/fakeCont
 import { makeCookieForRole } from "./_helpers/sessionAuth";
 
 const suite = new TestSuite("aiOpsRoutes");
-const ADMIN_KEY = "integration-test-ai-ops-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 // Signed ExampleOrg_session cookie for an active admin platform user. requireRole()
 // now always does a live getPlatformUser() lookup, so the shared helper also
 // registers an active platform_users row for this session's email.

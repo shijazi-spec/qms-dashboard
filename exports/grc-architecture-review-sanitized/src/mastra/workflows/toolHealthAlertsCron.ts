@@ -926,7 +926,7 @@ export async function runSilentToolSweep(
       deps.getToolsWithCallsInWindow(silentCooldownMinutes),
     ]);
   } catch (err) {
-    logger.error("[ToolHealth] Silent-tool sweep: failed to load data:", err);
+    logger.error("[ToolHealth] Silent-tool sweep: failed to load <REDACTED_SCHEME>", err);
     return;
   }
 

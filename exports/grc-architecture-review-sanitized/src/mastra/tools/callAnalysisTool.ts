@@ -141,7 +141,7 @@ Respond ONLY with the JSON.` : '';
 
       const LLMProvider = createLLMProvider({
         baseURL: getLLMProviderBaseUrl(),
-        apiKey: getLLMProviderApiKey()
+        apiKey: <REDACTED_SECRET>
       });
 
       // Raw-fetch /chat/completions — `.chat()` now also returns v3-spec
@@ -151,7 +151,7 @@ Respond ONLY with the JSON.` : '';
       const analysisResult = await generateChatText({
         model: "gpt-4o",
         prompt: analysisPrompt,
-        maxTokens: 2000,
+        maxTokens: <REDACTED_SECRET>
       });
 
       let analysisData;
@@ -194,7 +194,7 @@ Respond ONLY with the JSON.` : '';
         const qaResult = await generateChatText({
           model: "gpt-4o",
           prompt: qaPrompt,
-          maxTokens: 1000,
+          maxTokens: <REDACTED_SECRET>
         });
 
         try {

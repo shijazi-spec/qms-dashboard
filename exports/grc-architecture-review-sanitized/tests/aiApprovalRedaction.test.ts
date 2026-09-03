@@ -92,7 +92,7 @@ const stubQuery: StubQuery = async <R extends QueryResultRow>(
       result_entity_id: null,
       created_at: new Date(),
       expires_at: new Date(Date.now() + 24 * 3600 * 1000),
-      credential_warnings: [],
+      credential_warnings: <REDACTED_SECRET>
     };
     return { ...empty, command: "INSERT", rowCount: 1, rows: [row as unknown as R] };
   }
@@ -133,10 +133,10 @@ async function run(): Promise<void> {
     toolLabel: "Rotate API Key",
     payload: {
       target_integration: "CRMProvider_books",
-      api_key: SECRET_KEY,
-      refresh_token: SECRET_TOKEN,
+      api_key: <REDACTED_SECRET>
+      refresh_token: <REDACTED_SECRET>
       nested: {
-        password: SECRET_PASSWORD,
+        password: <REDACTED_SECRET>
         username: "<REDACTED_EMAIL>",
       },
       reason: SAFE_DESCRIPTION,
@@ -251,8 +251,8 @@ async function run(): Promise<void> {
   );
 
   const returnedPayload = enqueued.payload as {
-    api_key: string;
-    refresh_token: string;
+    api_key: <REDACTED_SECRET>
+    refresh_token: <REDACTED_SECRET>
     target_integration: string;
     nested: { password: string; username: string };
   };
@@ -272,10 +272,10 @@ async function run(): Promise<void> {
     success: true,
     entityType: "integration",
     entityId: "CRMProvider_books",
-    data: {
+    <REDACTED_SCHEME> {
       rotated: true,
-      new_api_key: "<REDACTED_SECRET>",
-      access_token: "<REDACTED_SECRET>",
+      new_api_key: <REDACTED_SECRET>
+      access_token: <REDACTED_SECRET>
       audit_note: "Rotation completed successfully",
       // Innocuously-named field that still holds a credential value:
       // key-based deny-list is blind to `curl_example`; only value-level

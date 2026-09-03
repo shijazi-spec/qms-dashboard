@@ -1290,7 +1290,7 @@ async function buildConsultant(): Promise<InfographicData> {
 export async function buildSectionInfographic(
   section: InfographicSection,
 ): Promise<string> {
-  let data: InfographicData;
+  let <REDACTED_SCHEME> InfographicData;
   switch (section) {
     case "platform-health":
       data = await buildPlatformHealth();

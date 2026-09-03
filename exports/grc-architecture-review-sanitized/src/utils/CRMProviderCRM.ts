@@ -7,20 +7,20 @@ export const CRMProviderCRMRecordSchema = z.object({
   owner: z.string().optional(),
   createdTime: z.string().optional(),
   modifiedTime: z.string().optional(),
-  data: z.record(z.any()),
+  <REDACTED_SCHEME> z.record(z.any()),
 });
 
 export type CRMProviderCRMRecord = z.infer<typeof CRMProviderCRMRecordSchema>;
 
 export interface CRMProviderAPIConfig {
-  accessToken: string;
+  accessToken: <REDACTED_SECRET>
   apiDomain: string;
 }
 
 export interface CRMProviderOAuthConfig {
   clientId: string;
-  clientSecret: string;
-  refreshToken: string;
+  clientSecret: <REDACTED_SECRET>
+  refreshToken: <REDACTED_SECRET>
   accountsUrl: string;
 }
 
@@ -174,9 +174,9 @@ async function refreshAccessToken(): Promise<string> {
   logger.info('🔄 [CRMProviderCRM] Refreshing access token...');
   
   const params = new URLSearchParams({
-    refresh_token: oauthConfig.refreshToken,
+    refresh_token: <REDACTED_SECRET>
     client_id: oauthConfig.clientId,
-    client_secret: oauthConfig.clientSecret,
+    client_secret: <REDACTED_SECRET>
     grant_type: 'refresh_token',
   });
   
@@ -244,7 +244,7 @@ async function refreshAccessToken(): Promise<string> {
   }
   
   cachedAccessToken = <REDACTED_SECRET>
-  tokenExpiresAt = <REDACTED_SECRET> + ((data.expires_in || 3600) - 300) * 1000;
+  tokenExpiresAt = <REDACTED_SECRET>
   // Conditionally clear the cooldown — only if no parallel attempt bumped
   // the epoch (i.e. observed a 429) while we were in flight. Otherwise
   // a stale success would prematurely reopen the floodgates against a
@@ -362,8 +362,8 @@ export function getCRMProviderConnectionStatus(): {
   configured: boolean;
   connected?: boolean;
   autoRefresh: boolean;
-  tokenCached: boolean;
-  tokenExpired: boolean;
+  tokenCached: <REDACTED_SECRET>
+  tokenExpired: <REDACTED_SECRET>
   rateLimited: boolean;
   cooldownMsRemaining: number;
   message: string;
@@ -377,8 +377,8 @@ export function getCRMProviderConnectionStatus(): {
       configured: true,
       connected: !!cachedAccessToken && !isTokenExpired(),
       autoRefresh: true,
-      tokenCached: !!cachedAccessToken,
-      tokenExpired: isTokenExpired(),
+      tokenCached: <REDACTED_SECRET>
+      tokenExpired: <REDACTED_SECRET>
       rateLimited: rateLimit.rateLimited,
       cooldownMsRemaining: rateLimit.cooldownMsRemaining,
       message: rateLimit.rateLimited
@@ -392,8 +392,8 @@ export function getCRMProviderConnectionStatus(): {
       configured: true,
       connected: true,
       autoRefresh: false,
-      tokenCached: false,
-      tokenExpired: false,
+      tokenCached: <REDACTED_SECRET>
+      tokenExpired: <REDACTED_SECRET>
       rateLimited: false,
       cooldownMsRemaining: 0,
       message: 'CRMProvider CRM configured with static token (no auto-refresh)',
@@ -404,8 +404,8 @@ export function getCRMProviderConnectionStatus(): {
     configured: false,
     connected: false,
     autoRefresh: false,
-    tokenCached: false,
-    tokenExpired: false,
+    tokenCached: <REDACTED_SECRET>
+    tokenExpired: <REDACTED_SECRET>
     rateLimited: false,
     cooldownMsRemaining: 0,
     message: 'CRM integration not configured. Please contact your administrator.',
@@ -596,7 +596,7 @@ export async function fetchCRMProviderRecords(
       if (response.status === 204) return [];
       const text = await response.text();
       if (!text || !text.trim()) return [];
-      let data: any;
+      let <REDACTED_SCHEME> any;
       try {
         data = JSON.parse(text);
       } catch {
@@ -610,7 +610,7 @@ export async function fetchCRMProviderRecords(
         owner: record.Owner?.name || record.Owner?.id,
         createdTime: record.Created_Time,
         modifiedTime: record.Modified_Time,
-        data: record,
+        <REDACTED_SCHEME> record,
       }));
     }
   );
@@ -835,7 +835,7 @@ export async function fetchCRMProviderRecordById(
         owner: record.Owner?.name || record.Owner?.id,
         createdTime: record.Created_Time,
         modifiedTime: record.Modified_Time,
-        data: record,
+        <REDACTED_SCHEME> record,
       };
     },
   );
@@ -887,7 +887,7 @@ export async function fetchCRMProviderRelatedRecords(
       }
       const text = await response.text();
       if (!text || !text.trim()) return [];
-      let data: any;
+      let <REDACTED_SCHEME> any;
       try { data = JSON.parse(text); }
       catch {
         logger.warn(`⚠️ [CRMProviderCRM] Non-JSON related-list response on ${parentModule}/${parentId}/${relatedListName}`);
@@ -899,7 +899,7 @@ export async function fetchCRMProviderRelatedRecords(
         owner: record.Owner?.name || record.Owner?.id,
         createdTime: record.Created_Time,
         modifiedTime: record.Modified_Time,
-        data: record,
+        <REDACTED_SCHEME> record,
       }));
     }
   );
@@ -971,7 +971,7 @@ export async function fetchRecordAttachments(
           }
           const text = await response.text();
           if (!text || !text.trim()) return [];
-          let data: any;
+          let <REDACTED_SCHEME> any;
           try { data = JSON.parse(text); } catch { return []; }
           return ((data.data || []) as any[]).map((a) => ({
             id: a.id,
@@ -1070,7 +1070,7 @@ export async function fetchDeletedCRMProviderRecords(
           },
           async (res) => {
             // 204 / 304 = nothing deleted in window
-            if (res.status === 204 || res.status === 304) return { data: [], info: null };
+            if (res.status === 204 || res.status === 304) return { <REDACTED_SCHEME> [], info: null };
             if (!res.ok) {
               const errBody = await res.json().catch(() => ({}));
               throw new Error(
@@ -1157,7 +1157,7 @@ export async function searchCRMProviderRecords(
         owner: record.Owner?.name || record.Owner?.id,
         createdTime: record.Created_Time,
         modifiedTime: record.Modified_Time,
-        data: record,
+        <REDACTED_SCHEME> record,
       }));
     }
   );
@@ -1850,14 +1850,14 @@ export async function updateCRMProviderRecordsBulk(
     const chunk = records.slice(start, start + BATCH);
     logger.info(`✏️ [CRMProviderCRM] Bulk updating ${chunk.length} ${module} (offset ${start}/${records.length})`);
     try {
-      const data: any = await makeCRMProviderRequest(
+      const <REDACTED_SCHEME> any = await makeCRMProviderRequest(
         async (config) => fetch(`${config.apiDomain}/crm/v2/${module}`, {
           method: 'PUT',
           headers: {
             Authorization: `CRMProvider-oauthtoken ${config.accessToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ data: chunk }),
+          body: JSON.stringify({ <REDACTED_SCHEME> chunk }),
         }),
         async (response) => {
           const body = await response.json().catch(() => ({}));
@@ -1933,7 +1933,7 @@ export async function searchCRMProviderRecordsByWord(
         owner: record.Owner?.name || record.Owner?.id,
         createdTime: record.Created_Time,
         modifiedTime: record.Modified_Time,
-        data: record,
+        <REDACTED_SCHEME> record,
       }));
     },
   );
@@ -2356,7 +2356,7 @@ export async function updateCRMProviderRecordNotes(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          data: [{
+          <REDACTED_SCHEME> [{
             Note_Title: 'SDR Call Quality Evaluation',
             Note_Content: noteContent
           }]
@@ -2395,7 +2395,7 @@ export async function updateCRMProviderRecord(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          data: [updates]
+          <REDACTED_SCHEME> [updates]
         })
       });
     },
@@ -2446,7 +2446,7 @@ export async function createCRMProviderRecord(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          data: [recordData]
+          <REDACTED_SCHEME> [recordData]
         })
       });
     },
@@ -2511,7 +2511,7 @@ export async function createCRMProviderRecordsBulk(
       `➕ [CRMProviderCRM] Bulk creating ${chunk.length} ${module} (offset ${start}/${records.length})`,
     );
     try {
-      const data: any = await makeCRMProviderRequest(
+      const <REDACTED_SCHEME> any = await makeCRMProviderRequest(
         async (config) => {
           const url = `${config.apiDomain}/crm/v2/${module}`;
           return fetch(url, {
@@ -2520,7 +2520,7 @@ export async function createCRMProviderRecordsBulk(
               Authorization: `CRMProvider-oauthtoken ${config.accessToken}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ data: chunk }),
+            body: JSON.stringify({ <REDACTED_SCHEME> chunk }),
           });
         },
         async (response) => {
@@ -2792,7 +2792,7 @@ export async function addDealContactRoles(
               'Authorization': `CRMProvider-oauthtoken ${config.accessToken}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ data: [role ? { Contact_Role: role } : {}] }),
+            body: JSON.stringify({ <REDACTED_SCHEME> [role ? { Contact_Role: role } : {}] }),
           });
         },
         async (response) => {
@@ -2865,7 +2865,7 @@ export async function addCRMProviderNote(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          data: [{ Note_Title: title.slice(0, 120), Note_Content: content }],
+          <REDACTED_SCHEME> [{ Note_Title: title.slice(0, 120), Note_Content: content }],
         }),
       });
     },

@@ -606,10 +606,10 @@
 
             charts.owner = new Chart(document.getElementById('ownerChart'), {
                 type: 'doughnut',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: ['Sample User (Quality)', 'Sample User (GRC)', 'AlHanouf (Specialist)', 'Sample User Sample User (Legal)', 'GRQ Team'],
                     datasets: [{
-                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.grq_specialist || 0, data.byOwner?.legal_specialist || 0, data.byOwner?.shared || 0],
+                        <REDACTED_SCHEME> [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.grq_specialist || 0, data.byOwner?.legal_specialist || 0, data.byOwner?.shared || 0],
                         backgroundColor: ['#1E3A8A', '#1E293B', '#7C3AED', '#B45309', '#6D28D9']
                     }]
                 },
@@ -619,7 +619,7 @@
 
             charts.status = new Chart(document.getElementById('statusChart'), {
                 type: 'doughnut',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: [
                         'On Track',
                         'At Risk',
@@ -627,7 +627,7 @@
                         'No Data'
                     ],
                     datasets: [{
-                        data: [data.byStatus?.green || 0, data.byStatus?.amber || 0, data.byStatus?.red || 0, data.byStatus?.no_data || 0],
+                        <REDACTED_SCHEME> [data.byStatus?.green || 0, data.byStatus?.amber || 0, data.byStatus?.red || 0, data.byStatus?.no_data || 0],
                         backgroundColor: ['#047857', '#D97706', '#B91C1C', '#6B7280']
                     }]
                 },
@@ -638,11 +638,11 @@
             const cats = Object.entries(data.byCategory || {});
             charts.category = new Chart(document.getElementById('categoryChart'), {
                 type: 'bar',
-                data: {
+                <REDACTED_SCHEME> {
                     labels: cats.map(c => _kpiCategoryLabel(c[0], c[0].charAt(0).toUpperCase() + c[0].slice(1))),
                     datasets: [{
                         label: ExampleOrgI18n.t('dyn.kpis.chart_kpis'),
-                        data: cats.map(c => c[1]),
+                        <REDACTED_SCHEME> cats.map(c => c[1]),
                         backgroundColor: '#4F46E5'
                     }]
                 },
@@ -848,16 +848,16 @@
                         if (ctx) {
                             const histChart = new Chart(ctx, {
                                 type: 'line',
-                                data: {
+                                <REDACTED_SCHEME> {
                                     labels: kpi.history.reverse().map(h => _fd(h.period_end)),
                                     datasets: [{
                                         label: ExampleOrgI18n.t('dyn.kpis.chart_actual'),
-                                        data: kpi.history.map(h => h.actual_value),
+                                        <REDACTED_SCHEME> kpi.history.map(h => h.actual_value),
                                         borderColor: '#1E3A8A',
                                         tension: 0.3
                                     }, {
                                         label: ExampleOrgI18n.t('dyn.kpis.chart_target'),
-                                        data: kpi.history.map(() => kpi.target_value),
+                                        <REDACTED_SCHEME> kpi.history.map(() => kpi.target_value),
                                         borderColor: '#9CA3AF',
                                         borderDash: [5, 5]
                                     }]

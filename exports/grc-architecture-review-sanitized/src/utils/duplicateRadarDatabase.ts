@@ -296,8 +296,8 @@ export function buildSegmentPredicate(
   // populated STILL segments by its true layout instead of defaulting to ExampleOrg.
   const LAYOUT =
     "LOWER(COALESCE(NULLIF(r.layout_name,''), r.raw_data#>>'{Layout,name}', r.raw_data#>>'{$layout,name}', r.raw_data->>'Layout', ''))";
-  // Normalized layout (non-alphanumeric stripped) so "Example Organization" / "Wala One" /
-  // "wala-one" all match 'Example Organization' and "Doam Marketplace" matches '%marketplace%'.
+  // Normalized layout (non-alphanumeric stripped) so "Example Organization" / "ExampleOrg One" /
+  // "ExampleOrg-one" all match 'Example Organization' and "Doam Marketplace" matches '%marketplace%'.
   const NORM = `regexp_replace(${LAYOUT}, '[^a-z0-9]', '', 'g')`;
   const mktMatch = (offset: number) =>
     markers.map((_, i) => `${NORM} LIKE $${offset + i}`).join(" OR ");
@@ -311,7 +311,7 @@ export function buildSegmentPredicate(
     }
     if (segment === "Example Organization") {
       // Example Organization product — layout CONTAINS "Example Organization" (substring, so "Example Organization",
-      // "Wala One", "Example Organization Corporate" all match). No bind params (literal).
+      // "ExampleOrg One", "Example Organization Corporate" all match). No bind params (literal).
       return { condition: `${NORM} LIKE '%Example Organization%'`, params: [] };
     }
     // "ExampleOrg" (renamed "corporate") + legacy "corporate" = NOT marketplace
@@ -5734,9 +5734,9 @@ ${cmSegExists}      GROUP BY domain
             AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''`,
         [allClusterIds],
       );
-      const clusterOfZid = new Map<string, number>();
+      const clusterOfSample User = new Map<string, number>();
       for (const r of recQ.rows) {
-        clusterOfZid.set(String(r.CRMProvider_record_id), Number(r.cluster_id));
+        clusterOfSample User.set(String(r.CRMProvider_record_id), Number(r.cluster_id));
       }
       const sepQ = await pool.query<{
         CRMProvider_id_low: string;
@@ -5744,8 +5744,8 @@ ${cmSegExists}      GROUP BY domain
       }>(`SELECT CRMProvider_id_low, CRMProvider_id_high FROM duplicate_separation_ledger`);
       const separatedPairs = new Set<string>();
       for (const p of sepQ.rows) {
-        const a = clusterOfZid.get(String(p.CRMProvider_id_low));
-        const b = clusterOfZid.get(String(p.CRMProvider_id_high));
+        const a = clusterOfSample User.get(String(p.CRMProvider_id_low));
+        const b = clusterOfSample User.get(String(p.CRMProvider_id_high));
         if (a != null && b != null && a !== b) {
           separatedPairs.add(a < b ? `${a}|${b}` : `${b}|${a}`);
         }
@@ -12730,7 +12730,7 @@ export interface CsLifecycleScanResult {
  * CS OWNER ROSTER (Sample User 2026-07-20). The platform stores no CS team list — the
  * owner lives per-deal in CRMProvider's "CS Owner Name" field, so nothing could answer
  * "who are the CS owners?" (AssistantPersona included). This derives the roster from the
- * data: the DISTINCT CS Owner Name values across Deal records, with how many
+ * <REDACTED_SCHEME> the DISTINCT CS Owner Name values across Deal records, with how many
  * deals/accounts each owns, plus how many CS deals have NO owner (the
  * missing_cs_owner gap). Tolerates CRMProvider's key variants and the lookup-object
  * shape ({name}) exactly like duplicateRadarCsOverlap's extractor.

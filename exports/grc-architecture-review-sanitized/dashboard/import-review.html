@@ -240,7 +240,7 @@
             const r = await fetch('/api/compliance/imports/' + importId, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: '<REDACTED_SECRET>',
+                credentials: <REDACTED_SECRET>
                 body: JSON.stringify({ draft_clauses: importRow.draft_clauses })
             });
             const data = await r.json().catch(function () { return {}; });
@@ -264,7 +264,7 @@
             const r = await fetch('/api/compliance/imports/' + importId + '/apply', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: '<REDACTED_SECRET>',
+                credentials: <REDACTED_SECRET>
                 body: JSON.stringify({ regulation_id: regulationId })
             });
             const data = await r.json().catch(function () { return {}; });

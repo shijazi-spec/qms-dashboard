@@ -116,7 +116,7 @@ export interface EventLogFilters {
   correlationId?: string;
 }
 
-function generateChecksum(data: Partial<EventLogInput>): string {
+function generateChecksum(<REDACTED_SCHEME> Partial<EventLogInput>): string {
   const checksumData = JSON.stringify({
     userId: data.userId,
     actionType: data.actionType,

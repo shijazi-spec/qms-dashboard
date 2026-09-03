@@ -8,7 +8,7 @@
   "pf_sp_push": "دفع",
   "pf_sp_dry": "تشغيل تجريبي",
   "nav": {
-    "brand": "ولاء بلس",
+    "brand": "Sample User",
     "tagline": "حوكمة المخاطر والامتثال وإدارة الجودة",
     "search_placeholder": "بحث في القائمة...",
     "refresh": "تحديث",
@@ -81,12 +81,12 @@
     }
   },
   "login": {
-    "title": "ولاء بلس",
+    "title": "Sample User",
     "subtitle": "منصة إدارة الجودة والحوكمة المؤسسية",
     "status_online": "التطبيق متاح · سجّل دخولك للمتابعة",
     "welcome": "أهلاً بعودتك",
     "welcome_sub": "سجّل دخولك للوصول إلى لوحة التحكم",
-    "sign_in_btn": "تسجيل الدخول إلى ولاء بلس",
+    "sign_in_btn": "تسجيل الدخول إلى Sample User",
     "sign_in_options": "سجّل الدخول عبر جوجل أو SourceControlProvider أو IdentityProvider أو البريد الإلكتروني",
     "or": "أو",
     "admin_key_label": "الدخول بمفتاح المشرف",
@@ -96,7 +96,7 @@
     "open_new_tab": "فتح في تبويب جديد",
     "iframe_title": "سجّل دخولك في تبويب جديد",
     "iframe_body": "افتح التطبيق في تبويب منفصل لتسجيل الدخول. بعد ذلك، سيتم تحميل لوحة التحكم تلقائياً في المرة القادمة.",
-    "footer": "© 2026 ولاء بلس. إدارة الجودة المؤسسية.",
+    "footer": "© 2026 Sample User. إدارة الجودة المؤسسية.",
     "errors": {
       "auth_denied": "تم إلغاء تسجيل الدخول. يرجى المحاولة مرة أخرى.",
       "no_code": "فشل المصادقة. لم يتم استلام رمز التفويض.",
@@ -170,8 +170,8 @@
     "kpi_insight_excellent": "أداء مؤشرات الأداء ممتاز بنسبة +80٪ في الهدف. يُنصح برفع الأهداف للتحسين المستمر.",
     "insight_no_issues": "اكتمل تحليل النظام. لم يتم اكتشاف مشاكل حرجة.",
     "chart_kpis": "مؤشرات الأداء",
-    "owner_quality": "سارة (الجودة)",
-    "owner_grc": "مرام (الحوكمة)",
+    "owner_quality": "Sample User (الجودة)",
+    "owner_grc": "Sample User (الحوكمة)",
     "owner_shared": "مشترك",
     "chart_risks_dataset": "المخاطر",
     "risk_levels": {
@@ -304,7 +304,7 @@
   "consultant": {
     "resolve_note_prompt": "اختياري: أضف ملاحظة حل (سبب/كيفية إغلاق هذا التنبيه). اتركه فارغاً للتخطي.",
     "title": "AssistantPersona",
-    "subtitle": "مدعوم بذكاء ولاء بلس",
+    "subtitle": "مدعوم بذكاء Sample User",
     "quick_actions": "الإجراءات السريعة",
     "full_scan": "فحص شامل للمنصة",
     "check_pdpl": "فحص امتثال نظام حماية البيانات",
@@ -818,15 +818,15 @@
     "kpis": {
       "no_kpis": "لا توجد مؤشرات أداء",
       "owners": {
-        "quality_manager": "سارة",
-        "grc_manager": "مرام",
-        "governance_officer": "محمد",
+        "quality_manager": "Sample User",
+        "grc_manager": "Sample User",
+        "governance_officer": "Sample User",
         "shared": "مشترك"
       },
       "owners_full": {
-        "quality_manager": "سارة (مدير الجودة)",
-        "grc_manager": "مرام (مدير GRC)",
-        "governance_officer": "محمد (مسؤول الحوكمة)",
+        "quality_manager": "Sample User (مدير الجودة)",
+        "grc_manager": "Sample User (مدير GRC)",
+        "governance_officer": "Sample User (مسؤول الحوكمة)",
         "shared": "مشترك"
       },
       "owner_label": "المالك: {name}",
@@ -2632,7 +2632,7 @@
     "sec_compliance_matrix": "مصفوفة الامتثال التدريبي"
   },
   "scorecard": {
-    "title": "محمد المزيني",
+    "title": "Sample User",
     "sec_weighted": "الدرجة الموزونة",
     "kpi_weighted_pct": "النسبة الموزونة",
     "sec_overall": "الدرجة الإجمالية",
@@ -2645,7 +2645,7 @@
     "emp_mission": "\"ضمان انضباط الحوكمة والرؤية والجاهزية — وليس التنفيذ\"",
     "save_snapshot": "حفظ لقطة",
     "kpi_status_summary": "ملخص حالة المؤشرات",
-    "six_kpis_title": "مؤشرات محمد الستة (إطار 2026)",
+    "six_kpis_title": "مؤشرات Sample User الستة (إطار 2026)",
     "six_kpis_subtitle": "جميع المؤشرات تقيس المتابعة والجاهزية، وليس التنفيذ أو اتخاذ القرار",
     "on_track": "على المسار",
     "at_risk": "في خطر",
@@ -3289,7 +3289,7 @@
     "f_job_name": "اسم المهمة *"
   },
   "onboarding": {
-    "title": "مرحباً في نظام جودة واستثمار ولاء بلس",
+    "title": "مرحباً في نظام جودة واستثمار Sample User",
     "sec_progress": "تقدم الإلحاق الخاص بك",
     "sec_what_learn": "ما الذي ستتعلمه:",
     "sec_stats": "إحصائيات الإلحاق (عرض المسؤول)",
@@ -3309,7 +3309,7 @@
   },
   "feedback": {
     "title": "مركز ملاحظات الفريق",
-    "subtitle": "عرض وتحليل ملاحظات سارة ومرام وأعضاء فريقك عبر جميع لوحات التحكم.",
+    "subtitle": "عرض وتحليل ملاحظات Sample User وSample User وأعضاء فريقك عبر جميع لوحات التحكم.",
     "submit_feedback": "إرسال الملاحظات",
     "total_feedback": "إجمالي الملاحظات",
     "avg_rating": "متوسط التقييم",
@@ -3478,7 +3478,7 @@
     "h3_email": "إرسال عبر البريد الإلكتروني"
   },
   "guide": {
-    "title": "مرحباً بكم في ولاء بلس"
+    "title": "مرحباً بكم في Sample User"
   },
   "index": {
     "title": "لوحة الجودة",
@@ -3493,7 +3493,7 @@
     "trend_empty": "لا يوجد سجل تدقيق كافٍ بعد. سيظهر الاتجاه عند تشغيل المزيد من التدقيقات."
   },
   "accept_invite": {
-    "title": "منصة ولاء بلس",
+    "title": "منصة Sample User",
     "welcome": "مرحباً!",
     "invalid": "دعوة غير صالحة"
   },

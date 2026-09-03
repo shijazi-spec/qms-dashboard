@@ -162,7 +162,7 @@ async function researchClauseWeb(clause: {
     const r = await generateChatText({
       model: WEB_SEARCH_MODEL,
       prompt: buildResearchPrompt(clause),
-      maxTokens: 700,
+      maxTokens: <REDACTED_SECRET>
       timeoutMs: 45_000,
     });
     // Web-search-preview models attach cited URLs as message annotations.
@@ -233,7 +233,7 @@ export async function recommendForClause(
     const r = await generateChatText({
       model: RECOMMEND_MODEL,
       prompt: buildRecommendationPrompt(clause, research.text),
-      maxTokens: 900,
+      maxTokens: <REDACTED_SECRET>
       responseFormat: "json_object",
       timeoutMs: 45_000,
     });
@@ -462,7 +462,7 @@ export async function draftDocumentForClause(
     const r = await generateChatText({
       model: DRAFT_MODEL,
       prompt: buildDraftPrompt(clause, rec),
-      maxTokens: 2800,
+      maxTokens: <REDACTED_SECRET>
       timeoutMs: 60_000,
     });
     draft = (r.text || "").trim();

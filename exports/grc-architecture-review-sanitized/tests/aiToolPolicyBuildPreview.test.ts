@@ -117,7 +117,7 @@ const stubQuery: StubQuery = async <R extends QueryResultRow>(
       created_at: new Date(),
       expires_at: new Date(Date.now() + 24 * 3600 * 1000),
       credential_warnings:
-        params[13] != null ? JSON.parse(String(params[13])) : [],
+        <REDACTED_SECRET>
     };
     return {
       ...empty,
@@ -150,7 +150,7 @@ aiApprovalPool.query = stubQuery as typeof aiApprovalPool.query;
 
 const SECRETS = {
   // sk-key regex requires:  sk[-_](live|test|proj|ant)?[-_]?[A-Za-z0-9_-]{20,}
-  apiKey: "<REDACTED_SECRET>",
+  apiKey: <REDACTED_SECRET>
   // SourceControlProvider regex requires:  gh[porsu]_[A-Za-z0-9]{30,}
   ghPat: "<REDACTED_TOKEN>",
   // bcrypt regex requires:  $2[aby]$NN$ + exactly 53 [./A-Za-z0-9] chars
@@ -208,11 +208,11 @@ function buildPayloadWithSecretsFor(
   const tainted = `${SECRETS.apiKey} / ${SECRETS.ghPat} / ${SECRETS.jwt}`;
   return {
     // Generic credential keys — deny-list catches these by field name.
-    api_key: SECRETS.apiKey,
-    refresh_token: SECRETS.ghPat,
-    password: PLAIN_PASSWORD,
-    secret: SECRETS.bcrypt,
-    access_token: SECRETS.jwt,
+    api_key: <REDACTED_SECRET>
+    refresh_token: <REDACTED_SECRET>
+    password: <REDACTED_SECRET>
+    secret: <REDACTED_SECRET>
+    access_token: <REDACTED_SECRET>
 
     // Fields actually read by current `buildPreview` callbacks. We embed a
     // credential-shaped value into each so any naive `${p.x}` interpolation
@@ -506,7 +506,7 @@ async function run(): Promise<void> {
    * -------------------------------------------------------------- */
   console.log(`\n[detector] standalone detectCredentialLikeFields() smoke test`);
   const detectorPayload = {
-    api_key: SECRETS.apiKey, // key-name match
+    api_key: <REDACTED_SECRET>
     note: `rotated to ${SECRETS.ghPat}`, // regex match (gh PAT)
     handoff_summary: `creds: ${HEURISTIC_PASSWORD}`, // password heuristic
     session_blob: HEURISTIC_ENTROPY, // entropy heuristic

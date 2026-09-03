@@ -28,7 +28,7 @@ Without all three, the lead is **not qualified** and shouldn't be passed to Sale
 
 ## The three questions — Arabic (primary)
 
-These slot in **after the PDPL consent line and the prospect agreeing to continue**, **before** the qualifying / discovery question (*"هل عندك فكرة عن ولاء بلس..."*).
+These slot in **after the PDPL consent line and the prospect agreeing to continue**, **before** the qualifying / discovery question (*"هل عندك فكرة عن Sample User..."*).
 
 Conversational delivery, not a checklist read-out. The framing is *"let me make sure I have your details right"* — service-first, not interrogative.
 
@@ -63,12 +63,12 @@ Pulling from *SDR Call Script_AR [Updated].pdf* v2.1, with the consent insert fr
 ```
 1. السلام عليكم ورحمة الله وبركاته،
 2. معي الأستاذ/ [اسم العميل]؟
-3. معك (اسم الموظف) من شركة ولاء بلس (من قسم تطوير المبيعات / الأعمال).
+3. معك (اسم الموظف) من شركة Sample User (من قسم تطوير المبيعات / الأعمال).
 4. [PDPL CONSENT LINE]                    ← from the consent doc
 5. [WAIT FOR AFFIRMATIVE]
 6. [3-POINT VERIFICATION STEP]            ← INSERT HERE  ← this doc
 7. [WAIT, CAPTURE THE 3 VALUES]
-8. سؤال تمهيدي: ممكن أعرف أستاذ/ [الاسم]، هل عندك فكرة عن ولاء بلس...؟
+8. سؤال تمهيدي: ممكن أعرف أستاذ/ [الاسم]، هل عندك فكرة عن Sample User...؟
 9. ...rest of existing script unchanged...
 ```
 

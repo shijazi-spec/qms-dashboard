@@ -82,7 +82,7 @@ function buildSweepResult(
       execution_result_changed: 0,
       rows_updated: 0,
     },
-    ai_pending_actions_credential_warnings: {
+    ai_pending_actions_credential_warnings: <REDACTED_SECRET>
       scanned: 0,
       rows_updated: 0,
       warnings_added: 0,
@@ -232,7 +232,7 @@ function buildStub(
           ? {}
           : {
               EmailProvider_API_KEY:
-                options.EmailProviderApiKey ?? STUB_EmailProvider_KEY,
+                <REDACTED_SECRET>
             }),
       },
       logger: {
@@ -835,7 +835,7 @@ async function run(): Promise<void> {
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "<REDACTED_EMAIL>",
-      EmailProviderApiKey: null, // omit EmailProvider_API_KEY entirely
+      EmailProviderApiKey: <REDACTED_SECRET>
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({ event_logs_updated: 2 }),
@@ -880,7 +880,7 @@ async function run(): Promise<void> {
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "<REDACTED_EMAIL>",
-      EmailProviderApiKey: "<REDACTED_SECRET>",
+      EmailProviderApiKey: <REDACTED_SECRET>
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({ event_logs_updated: 1 }),
@@ -947,7 +947,7 @@ async function run(): Promise<void> {
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({
         event_logs_updated: 1,
-        ai_pending_actions_credential_warnings: {
+        ai_pending_actions_credential_warnings: <REDACTED_SECRET>
           scanned: 100,
           rows_updated: 3,
           warnings_added: 5,
@@ -1018,7 +1018,7 @@ async function run(): Promise<void> {
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({
         nc_change_history_updated: 1,
-        ai_pending_actions_credential_warnings: {
+        ai_pending_actions_credential_warnings: <REDACTED_SECRET>
           scanned: 200,
           rows_updated: 57,
           warnings_added: 70,
@@ -1073,7 +1073,7 @@ async function run(): Promise<void> {
         event_logs_updated: 4,
         // Default builder already supplies an empty flagged codes list,
         // but be explicit so this test documents the contract.
-        ai_pending_actions_credential_warnings: {
+        ai_pending_actions_credential_warnings: <REDACTED_SECRET>
           scanned: 50,
           rows_updated: 0,
           warnings_added: 0,
@@ -1123,7 +1123,7 @@ async function run(): Promise<void> {
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({
         capa_change_history_updated: 2,
-        ai_pending_actions_credential_warnings: { skipped: "table_missing" },
+        ai_pending_actions_credential_warnings: <REDACTED_SECRET>
       }),
       stub.deps,
     );

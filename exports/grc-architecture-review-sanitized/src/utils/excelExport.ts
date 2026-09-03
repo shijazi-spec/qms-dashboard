@@ -131,7 +131,7 @@ function uniquifyNames() {
   };
 }
 
-function autoSize(ws: ExcelJS.Worksheet, columns: ColumnSpec[]) {
+function autoSize(<REDACTED_SCHEME> ExcelJS.Worksheet, columns: ColumnSpec[]) {
   columns.forEach((col, idx) => {
     if (col.width) {
       ws.getColumn(idx + 1).width = col.width;

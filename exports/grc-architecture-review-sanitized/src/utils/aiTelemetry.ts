@@ -59,8 +59,8 @@ export const MODEL_PRICE_TABLE: Record<
 
 function computeCost(
   model: string,
-  promptTokens: number,
-  completionTokens: number,
+  promptTokens: <REDACTED_SECRET>
+  completionTokens: <REDACTED_SECRET>
 ): number {
   const key =
     Object.keys(MODEL_PRICE_TABLE).find((k) => model.startsWith(k)) ?? "gpt-4o";
@@ -648,9 +648,9 @@ export async function startTelemetrySpan(
       await finalizeAiCallMetric(callId, {
         latencyMs: Date.now() - startedAt,
         model: params.model,
-        promptTokens: opts.promptTokens,
-        completionTokens: opts.completionTokens,
-        totalTokens: opts.totalTokens,
+        promptTokens: <REDACTED_SECRET>
+        completionTokens: <REDACTED_SECRET>
+        totalTokens: <REDACTED_SECRET>
         success: opts.success,
         errorClass: opts.errorClass,
         errorMessage: opts.errorMessage,
@@ -913,10 +913,10 @@ export async function recordStreamTelemetry(params: RecordStreamTelemetryParams)
         new Promise<null>((res) => setTimeout(() => res(null), 2000)),
       ]);
       if (usage) {
-        promptTokens = <REDACTED_SECRET> ?? usage.prompt_tokens ?? undefined;
+        promptTokens = <REDACTED_SECRET>
         completionTokens =
-          <REDACTED_SECRET> ?? usage.completion_tokens ?? undefined;
-        totalTokens = <REDACTED_SECRET> ?? usage.total_tokens ?? undefined;
+          <REDACTED_SECRET>
+        totalTokens = <REDACTED_SECRET>
       }
     } catch {
       // Usage unavailable — record without token counts
@@ -926,9 +926,9 @@ export async function recordStreamTelemetry(params: RecordStreamTelemetryParams)
   return insertAiCallMetric({
     agent_name: params.agentName,
     model: params.model,
-    prompt_tokens: promptTokens,
-    completion_tokens: completionTokens,
-    total_tokens: totalTokens,
+    prompt_tokens: <REDACTED_SECRET>
+    completion_tokens: <REDACTED_SECRET>
+    total_tokens: <REDACTED_SECRET>
     latency_ms: latencyMs,
     success: params.success,
     error_class: params.errorClass,
@@ -1748,8 +1748,8 @@ export async function getChildToolCallsForParent(parentId: number): Promise<
     agent_name: string;
     tool_name: string | null;
     model: string | null;
-    prompt_tokens: number | null;
-    completion_tokens: number | null;
+    prompt_tokens: <REDACTED_SECRET>
+    completion_tokens: <REDACTED_SECRET>
     estimated_cost_usd: number | null;
     latency_ms: number;
     success: boolean;
@@ -1899,8 +1899,8 @@ export async function getRecentSlowFailedCalls(limit = 20): Promise<
     tool_input_preview: string | null;
     tool_output_preview: string | null;
     started_at: string;
-    prompt_tokens: number | null;
-    completion_tokens: number | null;
+    prompt_tokens: <REDACTED_SECRET>
+    completion_tokens: <REDACTED_SECRET>
   }[]
 > {
   await ensureAiMetricsTable();
@@ -1931,8 +1931,8 @@ export async function getCallById(callId: number): Promise<{
   // the preview reflects a retroactive cleanup, not the original write.
   previews_redacted_at: string | null;
   started_at: string;
-  prompt_tokens: number | null;
-  completion_tokens: number | null;
+  prompt_tokens: <REDACTED_SECRET>
+  completion_tokens: <REDACTED_SECRET>
 } | null> {
   await ensureAiMetricsTable();
   const result = await pool.query(

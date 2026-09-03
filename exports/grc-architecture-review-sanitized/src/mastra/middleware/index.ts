@@ -297,7 +297,7 @@ function applySecurityHeaders(c: any, cspNonce: string): void {
   //     uses connect-src, not script-src, so the existing script-src
   //     allowance for those CDNs doesn't cover it. Mirrored the CDN list
   //     into connect-src so developers see clean console output.
-  c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> style-src 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> font-src 'self' <REDACTED_URL> <REDACTED_URL> img-src 'self' data: https:; connect-src 'self' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> frame-ancestors 'none'; form-action 'self'`);
+  c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> style-src 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> font-src 'self' <REDACTED_URL> <REDACTED_URL> img-src 'self' <REDACTED_SCHEME> <REDACTED_SCHEME>; connect-src 'self' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> frame-ancestors 'none'; form-action 'self'`);
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   (c as any)._cspNonce = cspNonce;
 }

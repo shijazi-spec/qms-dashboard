@@ -1,6 +1,6 @@
 # Sanitized Repository Structure
 
-This inventory contains project architecture-review source only. Binary assets, runtime data, exports, logs, backups, live-data utilities, operational customer/user rosters, seeded identities, bundled third-party documentation, agent metadata, and all environment files except `.env.example` were excluded.
+This inventory contains project architecture-review source only. Binary assets, runtime data, exports, logs, backups, live-data utilities, operational customer/user rosters, seeded identity/domain datasets, bundled third-party documentation, agent metadata, and all environment files except `.env.example` were excluded.
 
 ```text
 .env.example
@@ -208,7 +208,6 @@ scripts/patch-provider-utils-v3-compat.mjs
 scripts/post-merge.sh
 scripts/probeDirectory.ts
 scripts/quantifyAutoMerge.ts
-scripts/resyncCorrectedDeals.ts
 scripts/run-ai-approval-redaction-integration.sh
 scripts/run-kpi-autocalc.ts
 scripts/run-leadership-kpis.ts
@@ -230,8 +229,6 @@ scripts/verifyPostRestoreSweepEmail.ts
 src/config/copc-scorecard-checkpoints.json
 src/config/sdr-coaching-map.json
 src/config/sdr-governance-2.1.rules.json
-src/data/index.ts
-src/data/scorecardV2CopcCanonical.ts
 src/global.d.ts
 src/mastra/agents/duplicateResolutionAgent.ts
 src/mastra/agents/exampleAgent.ts

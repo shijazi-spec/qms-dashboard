@@ -51,7 +51,7 @@ function makeCtx(opts: { adminKey?: string; cookie?: string } = {}): any {
         return undefined;
       },
     },
-    json: (data: any, status?: number) => {
+    json: (<REDACTED_SCHEME> any, status?: number) => {
       capturedStatus = status ?? 200;
       capturedBody = data;
       return { status: capturedStatus, body: capturedBody };
@@ -195,7 +195,7 @@ console.log("10. /api/inngest exemption — dashboardGate skips inngest path");
   const gated = dashboardGate(inngestRoute);
   assert(gated === inngestRoute, "/api/inngest route is returned unchanged (no gate applied)");
 
-  const otherRoute = { path: "/api/dashboard/summary", createHandler: async () => async (c: any) => c.json({ data: "summary" }) };
+  const otherRoute = { path: "/api/dashboard/summary", createHandler: async () => async (c: any) => c.json({ <REDACTED_SCHEME> "summary" }) };
   const gatedOther = dashboardGate(otherRoute);
   assert(gatedOther !== otherRoute, "non-inngest route gets a new createHandler wrapper");
 

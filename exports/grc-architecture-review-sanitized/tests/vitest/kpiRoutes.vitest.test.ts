@@ -87,7 +87,7 @@ vi.mock("../../src/utils/rbacMiddleware", () => ({
   requireAuthOrKey: vi.fn((_c: FakeContext) => FAKE_USER),
   unauthorizedResponse: vi.fn((c: FakeContext): CapturedResponse => c.json({ error: "Unauthorized" }, 401)),
   gateApiRoute: <T>(r: T): T => r,
-  hasAdminApiKeyConfigured: vi.fn(() => true),
+  hasAdminApiKeyConfigured: <REDACTED_SECRET>
 }));
 
 vi.mock("../../src/utils/eventLogsDatabase", () => ({

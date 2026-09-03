@@ -70,7 +70,7 @@ function scrubMessage(msg: string): string {
   return typeof result === "string" ? result : msg;
 }
 
-function mergePayloads(data: LogPayload[]): Record<string, unknown> {
+function mergePayloads(<REDACTED_SCHEME> LogPayload[]): Record<string, unknown> {
   const merged: Record<string, unknown> = {};
   for (const item of data) {
     if (item === null || item === undefined) continue;
@@ -99,7 +99,7 @@ function mergePayloads(data: LogPayload[]): Record<string, unknown> {
 const useConsoleSink = process.env.NODE_ENV !== "production";
 
 export const logger = {
-  info(message: string, ...data: LogPayload[]): void {
+  info(message: string, ...<REDACTED_SCHEME> LogPayload[]): void {
     const msg = scrubMessage(message);
     const merged = data.length === 0 ? undefined : mergePayloads(data);
     if (useConsoleSink) {
@@ -111,7 +111,7 @@ export const logger = {
     else pinoInstance.info(msg);
   },
 
-  error(message: string, ...data: LogPayload[]): void {
+  error(message: string, ...<REDACTED_SCHEME> LogPayload[]): void {
     const msg = scrubMessage(message);
     const merged = data.length === 0 ? undefined : mergePayloads(data);
     if (useConsoleSink) {
@@ -123,7 +123,7 @@ export const logger = {
     else pinoInstance.error(msg);
   },
 
-  warn(message: string, ...data: LogPayload[]): void {
+  warn(message: string, ...<REDACTED_SCHEME> LogPayload[]): void {
     const msg = scrubMessage(message);
     const merged = data.length === 0 ? undefined : mergePayloads(data);
     if (useConsoleSink) {
@@ -135,7 +135,7 @@ export const logger = {
     else pinoInstance.warn(msg);
   },
 
-  debug(message: string, ...data: LogPayload[]): void {
+  debug(message: string, ...<REDACTED_SCHEME> LogPayload[]): void {
     const msg = scrubMessage(message);
     const merged = data.length === 0 ? undefined : mergePayloads(data);
     if (useConsoleSink) {
@@ -148,7 +148,7 @@ export const logger = {
   },
 };
 
-export function safeLog(message: string, ...data: LogPayload[]): void {
+export function safeLog(message: string, ...<REDACTED_SCHEME> LogPayload[]): void {
   logger.info(message, ...data);
 }
 

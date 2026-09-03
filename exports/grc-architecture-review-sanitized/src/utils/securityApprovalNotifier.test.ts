@@ -95,7 +95,7 @@ function makeNotification(
     requested_by_user_id: 42,
     requested_by_email: "<REDACTED_EMAIL>",
     requested_by_name: "Alice Auditor",
-    credential_warnings: [
+    credential_warnings: <REDACTED_SECRET>
       { path: "evidenceUrl", kind: "regex", patternName: "LLMProvider-sk" },
       { path: "description", kind: "regex", patternName: "SourceControlProvider-pat" },
     ],
@@ -228,7 +228,7 @@ async function testChatProviderSentOnSuccess(): Promise<void> {
   if (buttonBlock) {
     const button = (buttonBlock.elements as any[])[0];
     assert(
-      typeof button?.url === "string" && /^https:\/\/wala\.example\.com\//.test(button.url),
+      typeof button?.url === "string" && /^<REDACTED_SCHEME>\/\/ExampleOrg\.example\.com\//.test(button.url),
       "button.url is the absolute approval-card link",
     );
     assert(

@@ -64,11 +64,11 @@ const { insertSource } = await import("./northStarSources");
 const REDACTED_SENTINEL = "***REDACTED***";
 
 const SECRETS = {
-  password_hash: "<REDACTED_SECRET>",
-  mfa_secret: "<REDACTED_SECRET>",
-  access_token: "<REDACTED_SECRET>",
-  refresh_token: "<REDACTED_SECRET>",
-  api_key: "<REDACTED_SECRET>",
+  password_hash: <REDACTED_SECRET>
+  mfa_secret: <REDACTED_SECRET>
+  access_token: <REDACTED_SECRET>
+  refresh_token: <REDACTED_SECRET>
+  api_key: <REDACTED_SECRET>
 } as const;
 
 /** Return the params from the most-recent INSERT captured. */

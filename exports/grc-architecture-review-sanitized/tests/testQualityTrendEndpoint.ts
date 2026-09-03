@@ -32,7 +32,7 @@ async function main() {
     process.exit(1);
   }
 
-  const data: any = await res.json();
+  const <REDACTED_SCHEME> any = await res.json();
   if (!Array.isArray(data.audits) || !Array.isArray(data.duplicates)) {
     console.error("❌ payload missing audits[] or duplicates[]");
     console.error(data);

@@ -85,7 +85,7 @@ async function fetchAttachmentsFor(
   module: ModuleName,
   recordId: string,
   recordName: string,
-  token: string,
+  token: <REDACTED_SECRET>
   apiDomain: string
 ): Promise<AttachmentMeta[]> {
   const url = `${apiDomain}/crm/v2/${module}/${recordId}/Attachments?per_page=200`;
@@ -142,7 +142,7 @@ async function fetchAttachmentsFor(
 
 async function processModule(
   module: ModuleName,
-  token: string,
+  token: <REDACTED_SECRET>
   apiDomain: string
 ): Promise<{
   attachments: AttachmentMeta[];

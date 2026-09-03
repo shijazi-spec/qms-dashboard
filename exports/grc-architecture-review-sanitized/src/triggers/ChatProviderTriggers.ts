@@ -102,7 +102,7 @@ export async function getClient() {
       new Date(connectionSettings.settings.expires_at).getTime() > Date.now()
     ) {
       return {
-        token: connectionSettings.settings.access_token,
+        token: <REDACTED_SECRET>
         user: connectionSettings.settings.oauth?.credentials?.raw?.authed_user
           ?.id,
       };
@@ -134,7 +134,7 @@ export async function getClient() {
           connectionSettings = resJson?.items?.[0];
           if (connectionSettings?.settings?.access_token) {
             return {
-              token: connectionSettings.settings.access_token,
+              token: <REDACTED_SECRET>
               user: connectionSettings.settings.oauth?.credentials?.raw
                 ?.authed_user?.id,
             };
@@ -451,7 +451,7 @@ export function registerChatProviderTrigger<
           };
           const updateDiagnosisSteps = async (event: string) =>
             stream.writeSSE({
-              data: JSON.stringify([
+              <REDACTED_SCHEME> JSON.stringify([
                 diagnosisStepAuth,
                 diagnosisStepConversation,
                 diagnosisStepPostMessage,

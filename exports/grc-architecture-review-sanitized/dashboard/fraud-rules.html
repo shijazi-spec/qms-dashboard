@@ -455,14 +455,14 @@
                     res = await fetch('/api/fraud/rules/' + encodeURIComponent(editId), {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: '<REDACTED_SECRET>',
+                        credentials: <REDACTED_SECRET>
                         body: JSON.stringify(payload),
                     });
                 } else {
                     res = await fetch('/api/fraud/rules', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: '<REDACTED_SECRET>',
+                        credentials: <REDACTED_SECRET>
                         body: JSON.stringify(payload),
                     });
                 }
@@ -483,7 +483,7 @@
             try {
                 const res = await fetch('/api/fraud/rules/' + encodeURIComponent(idOrPublic), {
                     method: 'DELETE',
-                    credentials: '<REDACTED_SECRET>',
+                    credentials: <REDACTED_SECRET>
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 await loadFraudRules();

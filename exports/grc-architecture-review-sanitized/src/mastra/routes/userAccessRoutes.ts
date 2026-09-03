@@ -235,7 +235,7 @@ export const userAccessRoutes = [
           const invitations = await userDb.getInvitations();
           const masked = invitations.map((inv: any) => ({
             ...inv,
-            token: inv.token ? `${inv.token.substring(0, 8)}...` : undefined,
+            token: <REDACTED_SECRET>
           }));
           return c.json({
             success: true,
@@ -306,7 +306,7 @@ export const userAccessRoutes = [
             full_name: body.full_name,
             team: body.team,
             role: body.role,
-            token_expires_at: expiresAt,
+            token_expires_at: <REDACTED_SECRET>
             require_mfa: body.require_mfa || false,
             invited_by: sessionUser.email,
             used: false,
@@ -367,7 +367,7 @@ export const userAccessRoutes = [
 
           const maskedInvitation = {
             ...invitation,
-            token: invitation.token
+            token: <REDACTED_SECRET>
               ? `${invitation.token.substring(0, 8)}...`
               : undefined,
           };
@@ -462,7 +462,7 @@ export const userAccessRoutes = [
 
           const user = await userDb.acceptInvitation(body.token, {
             full_name: body.full_name,
-            password_hash: passwordHash,
+            password_hash: <REDACTED_SECRET>
             access_reason: body.access_reason,
           });
 

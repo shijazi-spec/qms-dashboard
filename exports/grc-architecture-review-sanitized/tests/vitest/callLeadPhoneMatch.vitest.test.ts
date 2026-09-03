@@ -65,9 +65,9 @@ describe("phonesShareSubscriberNumber", () => {
 
 describe("findLeadsByPhoneMatch — input guards (no CRMProvider needed)", () => {
   const saved = {
-    token: process.env.CRMProvider_ACCESS_TOKEN,
+    token: <REDACTED_SECRET>
     id: process.env.CRMProvider_CLIENT_ID,
-    secret: process.env.CRMProvider_CLIENT_SECRET,
+    secret: <REDACTED_SECRET>
     refresh: process.env.CRMProvider_REFRESH_TOKEN,
   };
   afterEach(() => {

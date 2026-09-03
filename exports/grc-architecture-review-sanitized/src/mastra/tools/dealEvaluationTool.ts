@@ -25,7 +25,7 @@ export const evaluateDealsTool = createTool({
     "and identifies findings that may require CAPA or nonconformance tracking.",
 
   inputSchema: z.object({
-    source: z.enum(["crm", "csv", "manual"]).describe("Source of deal data: 'crm' fetches from CRMProvider CRM API, 'csv' uses uploaded CSV data, 'manual' uses provided deal data"),
+    source: z.enum(["crm", "csv", "manual"]).describe("Source of deal <REDACTED_SCHEME> 'crm' fetches from CRMProvider CRM API, 'csv' uses uploaded CSV data, 'manual' uses provided deal data"),
     dealIds: z.array(z.string()).optional().describe("Specific deal IDs to evaluate (optional, evaluates all if not provided)"),
     manualDeals: z.array(z.record(z.any())).optional().describe("Array of deal data objects when source is 'manual'"),
     csvData: z.string().optional().describe("CSV string of deal data when source is 'csv'"),

@@ -75,7 +75,7 @@ export const scorecardRoutes = [
             "📊 [Scorecard] Fetching Sample User...",
           );
           const scorecard = await getMohammedScorecard();
-          return c.json({ success: true, data: scorecard });
+          return c.json({ success: true, <REDACTED_SCHEME> scorecard });
         } catch (error: any) {
           logger.error("❌ [Scorecard] Error fetching scorecard:", error);
           return c.json(
@@ -130,7 +130,7 @@ export const scorecardRoutes = [
               );
           }
 
-          return c.json({ success: true, kpi_number: kpiNumber, data: result });
+          return c.json({ success: true, kpi_number: kpiNumber, <REDACTED_SCHEME> result });
         } catch (error: any) {
           logger.error("❌ [Scorecard] Error fetching KPI:", error);
           return c.json(
@@ -175,7 +175,7 @@ export const scorecardRoutes = [
           return c.json({
             success: true,
             message: "Scorecard snapshot saved",
-            data: saved,
+            <REDACTED_SCHEME> saved,
           });
         } catch (error: any) {
           logger.error("❌ [Scorecard] Error saving snapshot:", error);
@@ -207,7 +207,7 @@ export const scorecardRoutes = [
           logger.info("📊 [Scorecard] Fetching scorecard history for:", name);
           const history = await getScorecardHistory(name, limit);
 
-          return c.json({ success: true, data: history });
+          return c.json({ success: true, <REDACTED_SCHEME> history });
         } catch (error: any) {
           logger.error("❌ [Scorecard] Error fetching history:", error);
           return c.json(

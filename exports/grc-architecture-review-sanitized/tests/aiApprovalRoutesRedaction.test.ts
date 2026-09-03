@@ -133,7 +133,7 @@ const stubQuery: StubQuery = async <R extends QueryResultRow>(
       result_entity_id: null,
       created_at: new Date(),
       expires_at: new Date(Date.now() + 24 * 3600 * 1000),
-      credential_warnings: [],
+      credential_warnings: <REDACTED_SECRET>
     };
     return {
       ...empty,
@@ -567,14 +567,14 @@ function registerFakeGatedTools(): void {
       success: true,
       rotated: true,
       // Key-deny-list path: `_key` suffix and `access_token` exact match.
-      new_api_key: APPROVE_RESULT_SK_KEY,
-      access_token: APPROVE_RESULT_ACCESS_TOKEN,
+      new_api_key: <REDACTED_SECRET>
+      access_token: <REDACTED_SECRET>
       nested: {
         // String-deny-list path: a non-sensitive key whose VALUE happens to
         // contain a credential-shaped substring (the most realistic leak —
         // a tool author dumps the response body into a `notes` field).
         free_form_note: `Vendor returned: ${APPROVE_RESULT_GH_TOKEN}`,
-        legacy_password_hash_blob: APPROVE_RESULT_BCRYPT,
+        legacy_password_hash_blob: <REDACTED_SECRET>
       },
       audit_note: 'Approve-response rotation completed',
     }),
@@ -748,10 +748,10 @@ async function run(): Promise<void> {
     toolLabel: 'Rotate API Key',
     payload: {
       target_integration: 'CRMProvider_books',
-      api_key: PAYLOAD_API_KEY,
-      refresh_token: PAYLOAD_REFRESH,
+      api_key: <REDACTED_SECRET>
+      refresh_token: <REDACTED_SECRET>
       nested: {
-        password_hash: PAYLOAD_BCRYPT,
+        password_hash: <REDACTED_SECRET>
         username: '<REDACTED_EMAIL>',
       },
       reason: 'rotate-CRMProvider-books-key',
@@ -1001,10 +1001,10 @@ async function run(): Promise<void> {
     success: true,
     entityType: 'integration',
     entityId: 'CRMProvider_books',
-    data: {
+    <REDACTED_SCHEME> {
       rotated: true,
-      new_api_key: RESULT_API_KEY,
-      access_token: RESULT_ACCESS_TOKEN,
+      new_api_key: <REDACTED_SECRET>
+      access_token: <REDACTED_SECRET>
       audit_note: 'Rotation completed successfully',
     },
   });

@@ -484,7 +484,7 @@
         try {
             fetch(RECENT_DOWNLOADS_API, {
                 method: 'POST',
-                credentials: '<REDACTED_SECRET>',
+                credentials: <REDACTED_SECRET>
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ entries: entries }),
             }).catch(function () { /* ignore network errors */ });
@@ -496,7 +496,7 @@
         try {
             fetch(RECENT_DOWNLOADS_API, {
                 method: 'DELETE',
-                credentials: '<REDACTED_SECRET>',
+                credentials: <REDACTED_SECRET>
             }).catch(function () { /* ignore network errors */ });
         } catch (_) { /* ignore */ }
     }
@@ -542,7 +542,7 @@
         try {
             fetch(RECENT_DOWNLOADS_API, {
                 method: 'GET',
-                credentials: '<REDACTED_SECRET>',
+                credentials: <REDACTED_SECRET>
             }).then(function (res) {
                 if (!res.ok) return null;
                 return res.json();

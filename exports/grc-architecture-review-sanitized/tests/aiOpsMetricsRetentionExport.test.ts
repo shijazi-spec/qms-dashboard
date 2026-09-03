@@ -122,7 +122,7 @@ const {
 } = await import("../src/utils/aiMetricsRetentionConfig");
 
 const suite = new TestSuite("aiOpsMetricsRetentionExport");
-const ADMIN_KEY = "integration-test-ai-ops-retention-export-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 // Signed ExampleOrg_session cookie for an active admin platform user (requireRole()
 // now always performs a live getPlatformUser() lookup — the shared helper also
 // registers an active platform_users row for this session's email).

@@ -2433,7 +2433,7 @@ export async function getAgentDrillData(
 }
 
 export async function createOrUpdateQAScore(
-  data: Omit<CallQAScore, "id" | "created_at">,
+  <REDACTED_SCHEME> Omit<CallQAScore, "id" | "created_at">,
 ): Promise<CallQAScore> {
   logger.info(
     "📝 [CallDB] Creating/updating QA score for call",
@@ -3000,9 +3000,9 @@ export function buildCopcSDREvaluationPrompt(
           const metric = (a as any).metric || a.evaluation_logic || "";
           const dep = (a as any).data_dependency || "";
           const deferTag = dep.includes("ContactCenterProvider_real_ingest")
-            ? " [DATA: deferred — score null]"
+            ? " [<REDACTED_SCHEME> deferred — score null]"
             : dep.includes("NEW")
-              ? " [DATA: not yet available — score null if no evidence]"
+              ? " [<REDACTED_SCHEME> not yet available — score null if no evidence]"
               : "";
           return `  ${i + 1}. ${a.name} (${a.id})${deferTag}
      Metric: ${metric}
@@ -3022,7 +3022,7 @@ Scoring rubric (per checkpoint):
   null = Cannot Score (no evidence in the transcript — do NOT penalise)
 
 Rules:
-  • Use \`null\` for checkpoints tagged [DATA: deferred] or [DATA: not yet available] — you cannot score ContactCenterProvider login gaps, idle ratios, conversion funnels, etc. from a transcript alone.
+  • Use \`null\` for checkpoints tagged [<REDACTED_SCHEME> deferred] or [<REDACTED_SCHEME> not yet available] — you cannot score ContactCenterProvider login gaps, idle ratios, conversion funnels, etc. from a transcript alone.
   • Provide a one-sentence evidence quote from the transcript when scoring 0 or 1, so the operator sees WHY.
   • Treat Arabic / Saudi-dialect transcripts as first-class input. Polite phrasing and indirect requests count as evidence — do not over-penalise.
   • Be consistent: the same behavior gets the same score across calls.

@@ -168,7 +168,7 @@ async function authenticateAsAdmin(page: Page): Promise<void> {
   // (set via context.extraHTTPHeaders below) is what actually authorizes
   // both the page request and the AJAX calls fired by the dashboards.
   const res = await page.request.post(`${BASE_URL}/api/admin/auth`, {
-    data: { key: ADMIN_KEY },
+    <REDACTED_SCHEME> { key: ADMIN_KEY },
     headers: { 'Content-Type': 'application/json' },
   });
   expect(res.status(), 'admin /api/admin/auth login should succeed').toBe(200);
@@ -191,7 +191,7 @@ test.describe('Auto-resolved vs manually-resolved alert badges (Task #325)', () 
       // (5 attempts / minute), so a per-test login would turn this
       // suite flaky on repeated runs.
       const authRes = await apiCtx.post('/api/admin/auth', {
-        data: { key: ADMIN_KEY },
+        <REDACTED_SCHEME> { key: ADMIN_KEY },
         headers: { 'Content-Type': 'application/json' },
       });
       if (authRes.status() !== 200) {

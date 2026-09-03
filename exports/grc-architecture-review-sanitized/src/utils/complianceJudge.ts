@@ -235,7 +235,7 @@ export async function judgeEvidence(
       missing_aspects: verdict.missing_aspects,
       judged_by: judgedBy ?? "ai-judge-v1",
       llm_model: null,
-      tokens_used: null,
+      tokens_used: <REDACTED_SECRET>
     });
     return { ...verdict, persisted: true };
   }
@@ -271,7 +271,7 @@ export async function judgeEvidence(
           missing_aspects: verdict.missing_aspects,
           judged_by: judgedBy ?? "ai-judge-v1",
           llm_model: null,
-          tokens_used: null,
+          tokens_used: <REDACTED_SECRET>
         });
         return { ...verdict, persisted: true };
       }
@@ -324,7 +324,7 @@ export async function judgeEvidence(
           (Number(usage.completionTokens || usage.completion_tokens) || 0) ||
         0;
     }
-    tokensUsed = <REDACTED_SECRET> || null;
+    tokensUsed = <REDACTED_SECRET>
   } catch (err) {
     llmError = (err as Error).message;
     logger.warn(
@@ -341,7 +341,7 @@ export async function judgeEvidence(
   await logLlmCall({
     caller: JUDGE_CALLER,
     model: JUDGE_MODEL,
-    tokens_used: tokensUsed,
+    tokens_used: <REDACTED_SECRET>
     latency_ms: elapsed,
     success: !llmError,
     error: llmError,
@@ -355,7 +355,7 @@ export async function judgeEvidence(
     missing_aspects: verdict.missing_aspects,
     judged_by: judgedBy ?? "ai-judge-v1",
     llm_model: JUDGE_MODEL,
-    tokens_used: tokensUsed,
+    tokens_used: <REDACTED_SECRET>
   });
 
   return { ...verdict, persisted: true };

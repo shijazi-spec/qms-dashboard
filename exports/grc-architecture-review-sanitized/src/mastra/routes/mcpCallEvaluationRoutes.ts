@@ -162,7 +162,7 @@ export const mcpCallEvaluationRoutes = [
             folder_id: body.folder_id,
             query: body.query,
             page_size: body.page_size,
-            page_token: body.page_token,
+            page_token: <REDACTED_SECRET>
             agent_email,
             default_direction: body.default_direction ?? "outbound",
             dry_run: body.dry_run ?? false,

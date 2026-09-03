@@ -62,7 +62,7 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
+          POSTGRES_PASSWORD: <REDACTED_SECRET>
           POSTGRES_DB: qms_test
         ports:
           - 5432:5432
@@ -221,8 +221,8 @@ jobs:
           # Setting them explicitly means the suite runs against known values
           # rather than per-file fallbacks that drift over time.
           DATABASE_URL: <REDACTED_DSN>
-          SESSION_SECRET: ci-test-session-secret-not-a-real-secret
-          ADMIN_API_KEY: ci-test-admin-key-not-a-real-secret
+          SESSION_SECRET: <REDACTED_SECRET>
+          ADMIN_API_KEY: <REDACTED_SECRET>
           HostingPlatform_DOMAINS: <REDACTED_HOST>:5000
           # Bounded so a runaway suite can't eat the whole 30-minute budget
           # on a 2-core runner.

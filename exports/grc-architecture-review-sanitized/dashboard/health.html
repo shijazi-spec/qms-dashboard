@@ -1097,12 +1097,12 @@
             if (historyChart) historyChart.destroy();
             historyChart = new Chart(ctx, {
                 type: 'line',
-                data: {
+                <REDACTED_SCHEME> {
                     labels,
                     datasets: [
-                        { label: ExampleOrgI18n.t('dyn.health.chart_pass'), data: passData, borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
-                        { label: ExampleOrgI18n.t('dyn.health.chart_warn'), data: warnData, borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
-                        { label: ExampleOrgI18n.t('dyn.health.chart_fail'), data: failData, borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: ExampleOrgI18n.t('dyn.health.chart_pass'), <REDACTED_SCHEME> passData, borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: ExampleOrgI18n.t('dyn.health.chart_warn'), <REDACTED_SCHEME> warnData, borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: ExampleOrgI18n.t('dyn.health.chart_fail'), <REDACTED_SCHEME> failData, borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.3, pointRadius: 2 },
                     ]
                 },
                 options: {

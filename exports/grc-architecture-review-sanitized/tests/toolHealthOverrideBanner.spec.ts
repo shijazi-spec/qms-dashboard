@@ -73,7 +73,7 @@ async function putConfig(
   body: Record<string, unknown>,
 ) {
   const res = await apiCtx.put(TOOL_HEALTH_CONFIG_PATH, {
-    data: body,
+    <REDACTED_SCHEME> body,
     headers: { 'Content-Type': 'application/json' },
   });
   expect(
@@ -99,7 +99,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
     // Single suite-level login; per-test logins would trip the
     // /api/admin/auth rate limiter (5 attempts / minute).
     const authRes = await apiCtx.post('/api/admin/auth', {
-      data: { key: ADMIN_KEY },
+      <REDACTED_SCHEME> { key: ADMIN_KEY },
       headers: { 'Content-Type': 'application/json' },
     });
     if (authRes.status() !== 200) {
@@ -113,7 +113,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
       // Wipe the override + any scheduled expiry so subsequent runs and
       // ambient dev usage don't inherit our seed values.
       await apiCtx.put(TOOL_HEALTH_CONFIG_PATH, {
-        data: {
+        <REDACTED_SCHEME> {
           overrides: { [SEEDED_OVERRIDE_FIELD]: null },
           expires_at: null,
           note: 'tests/toolHealthOverrideBanner.spec.ts teardown',

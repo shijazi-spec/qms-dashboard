@@ -131,9 +131,9 @@ async function seedRow(): Promise<void> {
   // re-validate it on read, it's only used by the writer.
   const payload = {
     [`fixture_${RUN_ID}`]: {
-      api_key: "<REDACTED_SECRET>",
+      api_key: <REDACTED_SECRET>
       note: "[REDACTED:STRING]",
-      password_blob: "<REDACTED_SECRET>",
+      password_blob: <REDACTED_SECRET>
     },
   };
   const checksum = crypto
@@ -188,7 +188,7 @@ async function authenticateAsAdmin(page: Page): Promise<void> {
   // is a courtesy: it drops the admin_key cookie on the browser context so
   // a human watching headed mode is signed in as well.
   const res = await page.request.post(`${BASE_URL}/api/admin/auth`, {
-    data: { key: ADMIN_KEY },
+    <REDACTED_SCHEME> { key: ADMIN_KEY },
     headers: { "Content-Type": "application/json" },
   });
   expect(res.status(), "admin /api/admin/auth login should succeed").toBe(200);
@@ -214,7 +214,7 @@ test.describe("AI Approvals — credential-warning banner", () => {
     });
     try {
       const authRes = await apiCtx.post("/api/admin/auth", {
-        data: { key: ADMIN_KEY },
+        <REDACTED_SCHEME> { key: ADMIN_KEY },
         headers: { "Content-Type": "application/json" },
       });
       if (authRes.status() === 401 || authRes.status() === 403) {

@@ -155,8 +155,8 @@ function canSeeAll(role: string | null | undefined): boolean {
  * approvals dashboard outside of the dedicated `test` NODE_ENV.
  *
  * Task #116 permanently registered two synthetic redaction-canary tools
- * (`integration-test-redaction-canary__ok` /
- *  `integration-test-redaction-canary__throws`) so the live-HTTP
+ * (`<REDACTED_SECRET>__ok` /
+ *  `<REDACTED_SECRET>__throws`) so the live-HTTP
  * integration test (`tests/aiApprovalRoutesRedaction.integration.ts`)
  * can exercise the POST /approve redaction path. If a developer or QA
  * operator ever pointed that test at production — or otherwise seeded
