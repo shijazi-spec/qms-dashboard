@@ -236,6 +236,12 @@
                     <p class="text-xs text-gray-500 text-center mt-2" id="roadmapRuleText" data-i18n="compliance.roadmap_rule">This chain cannot be shortened: documents approved → staff trained → audit worth running → management review.</p>
                 </div>
 
+                <!-- Standing risk banner (the plan document's own warning) -->
+                <div class="flex items-start gap-2 mt-4 px-3 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800" data-testid="roadmap-risk-banner">
+                    <span aria-hidden="true">⚠</span>
+                    <p data-i18n="compliance.roadmap_risk_banner">GRC produces documents. It does not produce evidence. From October onward every remaining milestone depends on material that other departments hold — the largest risk to the dates in this plan.</p>
+                </div>
+
                 <!-- Footer: Unlocks + Framework readiness -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-5 pt-4 border-t border-gray-100">
                     <div>
@@ -768,10 +774,39 @@
             return p ? p.month : '—';
         }
 
-        // Short per-node code derived from the real milestone_key (e.g.
-        // "PLAN-2026-09-APPROVE" -> "Approve") — not invented text.
+        // Explicit label map for the plan's known milestone_keys, routed
+        // through _ct so both locales render real copy instead of a slug
+        // derived from the key suffix (e.g. "Saqa", "Mgmtrev").
+        const ROADMAP_LABEL_KEYS = {
+            'PLAN-2026-08-DOCS': 'compliance.ms_lbl_docs',
+            'PLAN-2026-09-APPROVE': 'compliance.ms_lbl_approve',
+            'PLAN-2026-10-SAQA': 'compliance.ms_lbl_saqa',
+            'PLAN-2026-11-AUDIT': 'compliance.ms_lbl_audit',
+            'PLAN-2026-12-MGMTREV': 'compliance.ms_lbl_mgmtrev',
+            'PLAN-2027-01-PENTEST': 'compliance.ms_lbl_pentest',
+            'PLAN-2027-02-SURV': 'compliance.ms_lbl_surv'
+        };
+        const ROADMAP_LABEL_FALLBACKS = {
+            'compliance.ms_lbl_docs': 'Documents',
+            'compliance.ms_lbl_approve': 'Approval',
+            'compliance.ms_lbl_saqa': 'SAQ A + Training',
+            'compliance.ms_lbl_audit': 'Internal Audit',
+            'compliance.ms_lbl_mgmtrev': 'Management Review',
+            'compliance.ms_lbl_pentest': 'Penetration Test',
+            'compliance.ms_lbl_surv': 'Surveillance Audit'
+        };
+
+        // Short per-node label. Known milestone_keys resolve through the
+        // explicit map above (real i18n copy, not a slug). Any milestone_key
+        // NOT in the map — e.g. an operator-added row — falls back to the
+        // previous suffix-derivation (e.g. "PLAN-2026-09-APPROVE" ->
+        // "Approve") so nothing crashes or renders blank.
         function _roadmapShortLabel(m) {
             const key = String(m.milestone_key || '');
+            const i18nKey = ROADMAP_LABEL_KEYS[key];
+            if (i18nKey) {
+                return _ct(i18nKey, ROADMAP_LABEL_FALLBACKS[i18nKey]);
+            }
             const idx = key.lastIndexOf('-');
             const seg = (idx >= 0 ? key.slice(idx + 1) : key).toLowerCase();
             return seg ? seg.charAt(0).toUpperCase() + seg.slice(1) : (m.certification || '');
