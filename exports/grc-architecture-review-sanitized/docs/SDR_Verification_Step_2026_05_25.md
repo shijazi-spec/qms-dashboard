@@ -2,7 +2,7 @@
 
 **Audience:** ExampleOrg SDR team
 **Effective from:** [pick a rollout date, recommend coordinating with the PDPL consent rollout]
-**Owner:** user@example.invalid
+**Owner:** <REDACTED_EMAIL>
 **Status:** Draft v1 — review with SDR ops + sales leadership before adoption
 **Pairs with:** `SDR_PDPL_Consent_Script_2026_05_25.md`
 
@@ -102,7 +102,7 @@ A lead is verified when **all three** are captured AND the email passes a domain
 
 ### 2. Work email
 
-- **Verified:** ends with the company's domain (e.g. `user@example.invalid`), OR a domain that obviously belongs to a real business (e.g. `<REDACTED_HOST>`, `<REDACTED_HOST>`, `<REDACTED_HOST>`)
+- **Verified:** ends with the company's domain (e.g. `<REDACTED_EMAIL>`), OR a domain that obviously belongs to a real business (e.g. `<REDACTED_HOST>`, `<REDACTED_HOST>`, `<REDACTED_HOST>`)
 - **Not verified:** any of the following:
   - `@<REDACTED_HOST>`, `@<REDACTED_HOST>`, `@<REDACTED_HOST>`, `@<REDACTED_HOST>`, `@<REDACTED_HOST>`, `@<REDACTED_HOST>`
   - Free-tier domain (`@mail.ru`, etc.)

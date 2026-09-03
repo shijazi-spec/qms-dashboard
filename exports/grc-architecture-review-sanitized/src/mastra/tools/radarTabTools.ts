@@ -2,7 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
 /**
- * Read tools for the remaining Duplicate Radar data tabs, so Adam can answer
+ * Read tools for the remaining Duplicate Radar data tabs, so AssistantPersona can answer
  * questions about each one with real numbers (all read-only, reusing the same
  * engines the dashboard tabs use).
  *   - executive-summary    : platform-wide KPI tiles (clusters, dup rate, pipeline inflation, resolution rate)
@@ -334,7 +334,7 @@ export const dealComplianceStatusTool = createTool({
       const compliant = rows.filter((r) => r.compliant === true).length;
       const missingDocs = totalChecked - compliant;
 
-      // Per-stage breakdown so Adam can say "Proposal: 12 of 30 missing docs"
+      // Per-stage breakdown so AssistantPersona can say "Proposal: 12 of 30 missing docs"
       const byStage: Record<string, { total: number; compliant: number; missing: number }> = {};
       for (const r of rows) {
         const stage = String(r.stage || "unknown");
@@ -344,7 +344,7 @@ export const dealComplianceStatusTool = createTool({
         else byStage[stage].missing++;
       }
 
-      // Top-5 missing-document types so Adam can tell the operator which
+      // Top-5 missing-document types so AssistantPersona can tell the operator which
       // doc is the biggest gap across the corpus.
       const missingCounts: Record<string, number> = {};
       for (const r of rows) {
@@ -643,7 +643,7 @@ export const crossModuleOverlapTool = createTool({
         status: status as "active" | "resolved" | "ignored" | "all",
       });
       // The engine already aggregates by_pairing / by_action and
-      // arr_exposure_total; Adam just needs the headline numbers (not
+      // arr_exposure_total; AssistantPersona just needs the headline numbers (not
       // the full cluster list).
       return {
         success: true,
@@ -687,7 +687,7 @@ export const csOverlapStatusTool = createTool({
 });
 
 // ── Cluster merge candidates (Sample User 2026-06-17) ───────────────────────────
-// Surfaces same-domain duplicate clusters so Adam can answer
+// Surfaces same-domain duplicate clusters so AssistantPersona can answer
 // "how many account clusters are split right now" / "which domains have
 // two clusters" / "what should I merge first". Read-only — operator
 // runs the merge from the Cluster Merge tab.
@@ -747,7 +747,7 @@ export const ownerAccountabilityTool = createTool({
         "../../utils/duplicateRadarDatabase"
       );
       const cap = Math.max(1, Math.min((context as any)?.limit ?? 10, 50));
-      // Pull the rich scorecard so Adam can answer RAG / waste / cluster
+      // Pull the rich scorecard so AssistantPersona can answer RAG / waste / cluster
       // questions — not just raw counts. Already consolidated by
       // OWNER_EMAIL_ALIASES inside the function, sorted dup-desc.
       const rows = await getOwnerAccountability();
@@ -814,7 +814,7 @@ export const preflightCheckTool = createTool({
           },
         ],
         // Single-record chat calls get the fresh verdict by default —
-        // Adam is usually asked right when someone is about to create
+        // AssistantPersona is usually asked right when someone is about to create
         // a record, so staleness would be a confusing failure mode.
         refresh_overlap: true,
       });

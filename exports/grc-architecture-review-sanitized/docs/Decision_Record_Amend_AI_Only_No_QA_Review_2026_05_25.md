@@ -1,7 +1,7 @@
 # Decision Record — Amendment: AI-Only Evaluation, No QA Review, Weekly Report as Core
 
 **Date:** 2026-05-25 (fourth amendment today)
-**Decision-maker:** user@example.invalid (Operations & Quality HOD)
+**Decision-maker:** <REDACTED_EMAIL> (Operations & Quality HOD)
 **Status:** Approved, amends prior decisions
 **Lens applied:** Lean Six Sigma (DOWNTIME waste elimination)
 **Supersedes:** `Decision_Record_Amend_Skip_Digest_Merge_Agent_View_2026_05_25.md` and the Phase 1 scope inside `Business_Case_Call_Evaluation_2026_05_25.md`

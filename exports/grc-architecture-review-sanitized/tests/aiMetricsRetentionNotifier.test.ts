@@ -127,7 +127,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.AI_METRICS_RETENTION_ChatProvider_CHANNEL = "C-OPS";
-    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "user@example.invalid";
+    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyAiMetricsRetentionChange(sample(), deps);
     suite.expectEqual(result.disabled, true, "disabled");
@@ -222,7 +222,7 @@ await suite.test(
     clearEnv();
     process.env.AI_METRICS_RETENTION_NOTIFY = "1";
     process.env.AI_METRICS_RETENTION_ALERT_EMAIL =
-      "user@example.invalid, user@example.invalid";
+      "<REDACTED_EMAIL>, <REDACTED_EMAIL>";
     const { deps, emailCalls, ChatProviderCalls } = makeStubs();
     const result = await notifyAiMetricsRetentionChange(sample(), deps);
     suite.expectEqual(result.emailSent, true, "emailSent");
@@ -232,8 +232,8 @@ await suite.test(
     const call = emailCalls[0]!;
     const recipients = Array.isArray(call.to) ? call.to : [call.to];
     suite.expectEqual(recipients.length, 2, "two recipients parsed");
-    suite.expectEqual(recipients[0], "user@example.invalid", "first recipient");
-    suite.expectEqual(recipients[1], "user@example.invalid", "second recipient");
+    suite.expectEqual(recipients[0], "<REDACTED_EMAIL>", "first recipient");
+    suite.expectEqual(recipients[1], "<REDACTED_EMAIL>", "second recipient");
     suite.expect(
       call.subject.startsWith("[AI Metrics Retention · Updated]"),
       `subject prefixed (got: ${call.subject})`,
@@ -264,7 +264,7 @@ await suite.test(
     clearEnv();
     process.env.AI_METRICS_RETENTION_NOTIFY = "1";
     process.env.AI_METRICS_RETENTION_ChatProvider_CHANNEL = "C-AI-OPS";
-    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "user@example.invalid";
+    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyAiMetricsRetentionChange(
       sample({ before: 30, after: 30, effectiveAfter: 30 }),
@@ -382,7 +382,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.AI_METRICS_RETENTION_NOTIFY = "1";
-    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "user@example.invalid";
+    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps } = makeStubs({ emailResult: new Error("EmailProvider down") });
     const origErr = console.error;
     console.error = () => {};
@@ -402,7 +402,7 @@ await suite.test(
     clearEnv();
     process.env.AI_METRICS_RETENTION_NOTIFY = "1";
     process.env.AI_METRICS_RETENTION_ChatProvider_CHANNEL = "C-AI-OPS";
-    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "user@example.invalid";
+    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyAiMetricsRetentionChange(sample(), deps);
     suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
@@ -425,7 +425,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.AI_METRICS_RETENTION_ChatProvider_CHANNEL = "C-OPS";
-    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "user@example.invalid";
+    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "<REDACTED_EMAIL>";
     // The PUT-config knob being on must NOT enable prune-now notifications —
     // an ops team may want to be paged on config changes but not on prunes.
     process.env.AI_METRICS_RETENTION_NOTIFY = "1";
@@ -576,7 +576,7 @@ await suite.test(
     clearEnv();
     process.env.AI_METRICS_RETENTION_PRUNE_NOTIFY = "1";
     process.env.AI_METRICS_RETENTION_ChatProvider_CHANNEL = "C-AI-OPS";
-    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "user@example.invalid";
+    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyAiMetricsRetentionPruneNow(
       pruneSample({ previewedRows: null, deletedRows: 7 }),
@@ -621,7 +621,7 @@ await suite.test(
     clearEnv();
     process.env.AI_METRICS_RETENTION_PRUNE_NOTIFY = "1";
     process.env.AI_METRICS_RETENTION_ALERT_EMAIL =
-      "user@example.invalid, user@example.invalid";
+      "<REDACTED_EMAIL>, <REDACTED_EMAIL>";
     const { deps, emailCalls, ChatProviderCalls } = makeStubs();
     const result = await notifyAiMetricsRetentionPruneNow(pruneSample(), deps);
     suite.expectEqual(result.emailSent, true, "emailSent");
@@ -715,7 +715,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.AI_METRICS_RETENTION_PRUNE_NOTIFY = "1";
-    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "user@example.invalid";
+    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps } = makeStubs({ emailResult: new Error("EmailProvider down") });
     const origErr = console.error;
     console.error = () => {};
@@ -735,7 +735,7 @@ await suite.test(
     clearEnv();
     process.env.AI_METRICS_RETENTION_PRUNE_NOTIFY = "1";
     process.env.AI_METRICS_RETENTION_ChatProvider_CHANNEL = "C-AI-OPS";
-    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "user@example.invalid";
+    process.env.AI_METRICS_RETENTION_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyAiMetricsRetentionPruneNow(pruneSample(), deps);
     suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");

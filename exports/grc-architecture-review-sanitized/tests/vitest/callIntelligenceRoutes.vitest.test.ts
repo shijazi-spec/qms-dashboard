@@ -77,7 +77,7 @@ describe("POST /api/calls/ingest — real data path", () => {
           call_id: "call-abc",
           source: "ContactCenterProvider",
           lead_id: "lead-1",
-          agent_email: "user@example.invalid",
+          agent_email: "<REDACTED_EMAIL>",
           duration_seconds: 120,
         },
       }),
@@ -210,7 +210,7 @@ describe("GET /api/calls/compliance — real data path", () => {
       makeContext({
         method: "GET",
         headers: AUTH_HEADERS,
-        query: { limit: "10", lead_id: "L-1", agent_email: "user@example.invalid" },
+        query: { limit: "10", lead_id: "L-1", agent_email: "<REDACTED_EMAIL>" },
       }),
     );
 
@@ -219,7 +219,7 @@ describe("GET /api/calls/compliance — real data path", () => {
     const args = vi.mocked(callDb.getComplianceRecords).mock.calls[0]?.[0]!;
     expect(args.limit).toBe(10);
     expect(args.lead_id).toBe("L-1");
-    expect(args.agent_email).toBe("user@example.invalid");
+    expect(args.agent_email).toBe("<REDACTED_EMAIL>");
   });
 });
 

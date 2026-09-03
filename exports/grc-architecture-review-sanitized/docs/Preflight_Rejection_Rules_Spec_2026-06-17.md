@@ -10,7 +10,7 @@
 > `basicPreflightVerdict()` / `runPreflightBasic()` in
 > `src/utils/duplicateRadarPreflight.ts`.
 
-**Author:** Sample User / Sample User (GRQ), drafted with Adam · 2026-06-17
+**Author:** Sample User / Sample User (GRQ), drafted with AssistantPersona · 2026-06-17
 **Status:** Superseded by BASIC mode 2026-06-18 (full ladder archived, re-enablable).
 **Applies to:** Duplicate Radar → Preflight Check (pre-import screening of marketing/vendor lead lists before they enter CRMProvider CRM).
 
@@ -155,5 +155,5 @@ Graded outcomes tell Sales *what to do*, not just accept/reject:
 ---
 
 *Once you've reviewed and answered §8, this becomes the canonical Preflight rule
-set — encoded in `duplicateRadarPreflight.ts` and mirrored into Adam's system
+set — encoded in `duplicateRadarPreflight.ts` and mirrored into AssistantPersona's system
 prompt.*

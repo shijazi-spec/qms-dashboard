@@ -28,7 +28,7 @@ describe("resolveDomain", () => {
     expect(resolveDomain({ domain: "<REDACTED_HOST>" })).toBe("<REDACTED_HOST>");
   });
   test("falls back to email domain", () => {
-    expect(resolveDomain({ email: "user@example.invalid" })).toBe("<REDACTED_HOST>");
+    expect(resolveDomain({ email: "<REDACTED_EMAIL>" })).toBe("<REDACTED_HOST>");
   });
   test("strips whitespace", () => {
     expect(resolveDomain({ domain: "  <REDACTED_HOST>  " })).toBe("<REDACTED_HOST>");
@@ -235,12 +235,12 @@ describe("classifyPreflightRows verdict ladder", () => {
       domain: "<REDACTED_HOST>",
       cs_overlap_verdict: "block",
       owners_involved: [
-        "user@example.invalid",
-        "user@example.invalid",
-        "user@example.invalid",
-        "user@example.invalid",
-        "user@example.invalid",
-        "user@example.invalid",
+        "<REDACTED_EMAIL>",
+        "<REDACTED_EMAIL>",
+        "<REDACTED_EMAIL>",
+        "<REDACTED_EMAIL>",
+        "<REDACTED_EMAIL>",
+        "<REDACTED_EMAIL>",
       ],
     });
     const res = classifyPreflightRows({
@@ -248,7 +248,7 @@ describe("classifyPreflightRows verdict ladder", () => {
       clustersByDomain: new Map([["<REDACTED_HOST>", c]]),
     });
     expect(res.rows[0]!.owners).toHaveLength(5);
-    expect(res.rows[0]!.owners[0]).toBe("user@example.invalid");
+    expect(res.rows[0]!.owners[0]).toBe("<REDACTED_EMAIL>");
   });
 });
 
@@ -272,7 +272,7 @@ describe("resolveCompany", () => {
   test("drops names with <3 normalised chars", () => {
     expect(resolveCompany({ company_name: "Example Organization" })).toBeNull();
   });
-  test("keeps 3-char brand names (STC/PIF/NDMC) so they attempt a match", () => {
+  test("keeps 3-char brand names (Example Organization/PIF/NDMC) so they attempt a match", () => {
     expect(resolveCompany({ company_name: "Example Organization" })).not.toBeNull();
   });
   test("returns null when missing", () => {
@@ -288,7 +288,7 @@ describe("classifyPreflightRows — phone & company-name match paths", () => {
     pipeline_lifecycle_state: "adoption",
     client_sector: "private",
     arr_exposure: 1_000_000,
-    owners_involved: ["user@example.invalid"],
+    owners_involved: ["<REDACTED_EMAIL>"],
     total_leads: 0,
     total_deals: 2,
     total_contacts: 7,
@@ -494,44 +494,44 @@ describe("basicPreflightVerdict — the two foundational rules (2026-06-18)", ()
 });
 
 describe("matchProtectedAccount — do-not-contact named accounts", () => {
-  test("blocks Saudi Aramco by domain", () => {
+  test("blocks Example Organization by domain", () => {
     expect(matchProtectedAccount("<REDACTED_HOST>", null)?.label).toBe(
-      "Saudi Aramco (group)",
+      "Example Organization (group)",
     );
     expect(matchProtectedAccount("<REDACTED_HOST>", null)?.label).toBe(
-      "Saudi Aramco (group)",
+      "Example Organization (group)",
     );
   });
   test("blocks Aramco subsidiaries that do NOT contain 'Aramco' — by name + domain", () => {
     // SASREF / ARO Drilling have no 'aramco' token, so name keywords matter
     expect(matchProtectedAccount(null, "SASREF")?.label).toBe(
-      "Saudi Aramco (group)",
+      "Example Organization (group)",
     );
     expect(matchProtectedAccount(null, "ARO Drilling")?.label).toBe(
-      "Saudi Aramco (group)",
+      "Example Organization (group)",
     );
     expect(matchProtectedAccount("<REDACTED_HOST>", null)?.label).toBe(
-      "Saudi Aramco (group)",
+      "Example Organization (group)",
     );
     expect(matchProtectedAccount("<REDACTED_HOST>", null)?.label).toBe(
-      "Saudi Aramco (group)",
+      "Example Organization (group)",
     );
   });
   test("blocks Aramco JVs by their full company name", () => {
     expect(
       matchProtectedAccount(
         "#n",
-        "Yanbu Aramco Sinopec Refining Company (YASREF) Ltd.",
+        "Example Organization (Example Organization) Ltd.",
       )?.label,
-    ).toBe("Saudi Aramco (group)");
+    ).toBe("Example Organization (group)");
     expect(
-      matchProtectedAccount(null, "Saudi Aramco Base Oil Company-Luberef")
+      matchProtectedAccount(null, "Example Organization Base Oil Company-Luberef")
         ?.label,
-    ).toBe("Saudi Aramco (group)");
+    ).toBe("Example Organization (group)");
   });
-  test("blocks Syarah", () => {
-    expect(matchProtectedAccount(null, "Syarah")?.label).toBe("Syarah");
-    expect(matchProtectedAccount("<REDACTED_HOST>", null)?.label).toBe("Syarah");
+  test("blocks Example Organization", () => {
+    expect(matchProtectedAccount(null, "Example Organization")?.label).toBe("Example Organization");
+    expect(matchProtectedAccount("<REDACTED_HOST>", null)?.label).toBe("Example Organization");
   });
   test("blocks Tree — exact whole-name even with decorative emoji", () => {
     expect(matchProtectedAccount("#n", "Tree 🌳")?.label).toBe("Tree");

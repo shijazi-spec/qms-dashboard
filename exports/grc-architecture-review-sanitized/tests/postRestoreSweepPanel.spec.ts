@@ -68,7 +68,7 @@ const SESSION_SECRET = process.env.SESSION_SECRET || '';
 // application-level routes (e.g. GET /api/logs) that now require a real OIDC
 // session rather than an X-Admin-Key header.  X-Admin-Key is still used by
 // apiCtx for /api/admin/* routes, which remain key-accessible.
-const E2E_SESSION_EMAIL = 'user@example.invalid';
+const E2E_SESSION_EMAIL = '<REDACTED_EMAIL>';
 
 function signE2ESession(): string {
   if (!SESSION_SECRET) return '';

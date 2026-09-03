@@ -196,7 +196,7 @@ console.log("\n=== linkDocumentToObligation — innocuous payload passes through
   await linkDocumentToObligation({
     obligation_id: 100,
     document_id: 200,
-    linked_by: "user@example.invalid",
+    linked_by: "<REDACTED_EMAIL>",
   });
 
   const params = lastInsertParams();
@@ -207,7 +207,7 @@ console.log("\n=== linkDocumentToObligation — innocuous payload passes through
       "innocuous: obligation_id / document_id preserved verbatim",
     );
     assert(
-      String(params[2] ?? "") === "user@example.invalid",
+      String(params[2] ?? "") === "<REDACTED_EMAIL>",
       "innocuous: linked_by preserved verbatim (test isn't a tautology)",
     );
     assert(

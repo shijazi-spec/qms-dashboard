@@ -109,7 +109,7 @@ const FIXTURES: SecretFixture[] = [
     patternName: 'IdentityProvider-api',
     description: 'IdentityProvider API key (AIza…) embedded in a commit message',
     secret: '<REDACTED_SECRET>',
-    marker: 'AIzaSyA1234567890abc',
+    marker: '<REDACTED_TOKEN>',
     field: 'commitMessage',
   },
   {

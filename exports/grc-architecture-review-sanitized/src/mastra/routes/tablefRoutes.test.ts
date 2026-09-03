@@ -95,7 +95,7 @@ console.log("\n=== tablefKpi write functions — write-path tests ===\n");
   await insertTablefKpi("kpi-ci-001", {
     department_id: "dept-ci", name: "CI KPI", description: "KPI for CI",
     category: "quality", unit: "%", target_annual: 90, target_monthly: 88,
-    weight: 1, owner_email: "user@example.invalid", data_source: "manual",
+    weight: 1, owner_email: "<REDACTED_EMAIL>", data_source: "manual",
     calculation_definition: "count / total * 100",
   });
   const p = lastWriteParams("INSERT");
@@ -211,7 +211,7 @@ console.log("\n=== tablefUser write functions — write-path tests ===\n");
 {
   captured.length = 0;
   await insertTablefUser({
-    user_id: "u-ci-001", name: "CI User", email: "user@example.invalid",
+    user_id: "u-ci-001", name: "CI User", email: "<REDACTED_EMAIL>",
     role: "viewer", departments: ["dept-ci"],
   });
   const p = lastWriteParams("INSERT");
@@ -222,7 +222,7 @@ console.log("\n=== tablefUser write functions — write-path tests ===\n");
 {
   captured.length = 0;
   await updateTablefUser({
-    user_id: "u-ci-001", name: "CI User Updated", email: "user@example.invalid",
+    user_id: "u-ci-001", name: "CI User Updated", email: "<REDACTED_EMAIL>",
     role: "editor", departments: ["dept-ci"], active: true,
   });
   const p = lastWriteParams("UPDATE");

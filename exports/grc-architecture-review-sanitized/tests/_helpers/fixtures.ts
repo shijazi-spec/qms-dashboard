@@ -281,7 +281,7 @@ export function makeCallRecord(overrides: Partial<CallRecord> = {}): CallRecord 
   return {
     call_id: "call-test-01",
     source: "ContactCenterProvider",
-    agent_email: "user@example.invalid",
+    agent_email: "<REDACTED_EMAIL>",
     direction: "outbound",
     status: "uploaded",
     ...overrides,

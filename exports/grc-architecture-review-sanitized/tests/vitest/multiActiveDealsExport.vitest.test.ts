@@ -16,7 +16,7 @@ import {
 import type { MultiActiveDealAccount } from "../../src/utils/duplicateRadarDatabase";
 
 const deal = (o: Partial<any> = {}): any => ({
-  id: "5146753000077971324",
+  id: "<REDACTED_ID>",
   name: "Deal A",
   stage: "Proposal",
   owner: "Bashayr Sample User",
@@ -41,7 +41,7 @@ const account = (o: Partial<MultiActiveDealAccount> = {}): MultiActiveDealAccoun
     deals: [
       deal(),
       deal({
-        id: "5146753000091183102",
+        id: "<REDACTED_ID>",
         name: "Deal B",
         stage: "On Hold",
         owner: "Mansour Alqahtani",
@@ -87,7 +87,7 @@ describe("the deal sheet is one row per deal", () => {
 
   it("gives every deal a link back to the record", () => {
     const rows = build()[0].rows as any[];
-    expect(rows[0].CRMProvider_link).toBe(dealCRMProviderUrl("5146753000077971324"));
+    expect(rows[0].CRMProvider_link).toBe(dealCRMProviderUrl("<REDACTED_ID>"));
     expect(rows[0].CRMProvider_link).toContain("/tab/Deals/");
   });
 
@@ -155,12 +155,12 @@ describe("the workbook explains itself", () => {
       multiOwnerOnly: true,
     })[2].rows as any[])[0].note;
     const wide = (buildMultiActiveDealSheets([account()], {
-      segment: "walaone",
+      segment: "Example Organization",
       multiOwnerOnly: false,
     })[2].rows as any[])[0].note;
     expect(narrow).toContain("more than one owner");
     expect(wide).toContain("more than one open deal");
-    expect(wide).toContain("walaone");
+    expect(wide).toContain("Example Organization");
   });
 });
 

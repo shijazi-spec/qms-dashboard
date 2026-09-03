@@ -13,9 +13,9 @@ This example demonstrates how to create a WhatsApp chat bot using Mastra agents 
 This example requires a WhatsApp Business API setup and uses the `anthropic` model. Add these environment variables to your `.env` file:
 
 ```bash filename=".env" copy
-ANTHROPIC_API_KEY=<your-anthropic-api-key>
-WHATSAPP_VERIFY_TOKEN=<your-verify-token>
-WHATSAPP_ACCESS_TOKEN=<your-whatsapp-access-token>
+ANTHROPIC_API_KEY=<REDACTED_SECRET>
+WHATSAPP_VERIFY_TOKEN=<REDACTED_SECRET>
+WHATSAPP_ACCESS_TOKEN=<REDACTED_SECRET>
 WHATSAPP_BUSINESS_PHONE_NUMBER_ID=<your-phone-number-id>
 WHATSAPP_API_VERSION=v22.0
 ```

@@ -79,7 +79,7 @@ describe("GET /api/admin/redaction-sweep/alerts — Task #656 enrichment", () =>
       priority: "critical",
       channel: "email",
       status: "unread",
-      recipient: "user@example.invalid",
+      recipient: "<REDACTED_EMAIL>",
       related_entity_type: "SYSTEM",
       related_entity_id: "boot_redaction_sweep",
       action_url: "/audit-logs",
@@ -124,7 +124,7 @@ describe("GET /api/admin/redaction-sweep/alerts — Task #656 enrichment", () =>
     expect(Array.isArray(res.body.notifications)).toBe(true);
     const enriched = res.body.notifications[0];
     expect(enriched.id).toBe(42);
-    expect(enriched.recipient).toBe("user@example.invalid");
+    expect(enriched.recipient).toBe("<REDACTED_EMAIL>");
     expect(enriched.channel).toBe("email");
     expect(enriched.event_log_id).toBe("9001");
     expect(enriched.sweep_timestamp).toBe(sweepTs);

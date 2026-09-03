@@ -88,7 +88,7 @@ and HTML character escaping before any change reaches the on-call path.
 | `ChatProvider_BOT_TOKEN` | ChatProvider bot token with `chat:write` scope |
 | `ChatProvider_TEST_CHANNEL` | Channel id or name to receive the test message |
 | `EmailProvider_API_KEY` | EmailProvider API key |
-| `EmailProvider_TEST_EMAIL` | Delivery address (e.g. `user@example.invalid` for a EmailProvider test address) |
+| `EmailProvider_TEST_EMAIL` | Delivery address (e.g. `<REDACTED_EMAIL>` for a EmailProvider test address) |
 | `TOOL_HEALTH_APP_URL` | _(optional)_ Public origin of the app; enables the clickable button in the ChatProvider Block Kit message |
 
 At least one credential pair (`ChatProvider_BOT_TOKEN` + `ChatProvider_TEST_CHANNEL`, or
@@ -122,8 +122,8 @@ The wrapper script does an upfront env-var check and then runs both files
 sequentially:
 
 ```sh
-DATABASE_URL=postgresql://... \
-SESSION_SECRET=local-dev-secret \
+DATABASE_URL=<REDACTED_DSN> \
+SESSION_SECRET=<REDACTED_SECRET> \
 bash scripts/run-rbac-integration-tests.sh
 ```
 
@@ -144,8 +144,8 @@ dev server reachable at `BASE_URL`):
 
 ```sh
 RUN_RBAC_INTEGRATION_E2E=1 \
-DATABASE_URL=postgresql://... \
-SESSION_SECRET=local-dev-secret \
+DATABASE_URL=<REDACTED_DSN> \
+SESSION_SECRET=<REDACTED_SECRET> \
 npm test
 ```
 
@@ -175,9 +175,9 @@ to false-positives.
 The wrapper script checks env vars upfront and runs both files sequentially:
 
 ```sh
-ADMIN_API_KEY=... \
-DATABASE_URL=postgresql://... \
-SESSION_SECRET=local-dev-secret \
+ADMIN_API_KEY=<REDACTED_SECRET> \
+DATABASE_URL=<REDACTED_DSN> \
+SESSION_SECRET=<REDACTED_SECRET> \
 bash scripts/run-rate-limiter-integration-tests.sh
 ```
 
@@ -197,8 +197,8 @@ server reachable at `RATE_LIMIT_TEST_URL`, default `<REDACTED_URL>`):
 
 ```sh
 RUN_RATE_LIMITER_INTEGRATION_E2E=1 \
-ADMIN_API_KEY=... \
-DATABASE_URL=postgresql://... \
-SESSION_SECRET=local-dev-secret \
+ADMIN_API_KEY=<REDACTED_SECRET> \
+DATABASE_URL=<REDACTED_DSN> \
+SESSION_SECRET=<REDACTED_SECRET> \
 npm test
 ```

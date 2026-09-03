@@ -27,7 +27,7 @@ Saudi Plastic Packaging Systems - PLASTICO
 Al-Ahsa Municipality | أمانة الأحساء
 National Infrastructure Fund (Infra)
 DallahHealth
-Syarah
+Example Organization
 Riyadh Schools Group
 AlYemni Group - مجموعة اليمني
 ASMO
@@ -43,7 +43,7 @@ NASCO - National Advanced Systems Co. Ltd.
 alrajhi bank
 United Yousef Naghi Co. Ltd.
 Technology Control Co.
-Syarah
+Example Organization
 Technology Control Co.
 Al Ansari Holding Group
 Emirates Logistics L.L.C
@@ -148,7 +148,7 @@ Nesma
 Mace
 DAR Middle East Information Technology Co.
 D360 Bank
-solutions by stc
+solutions by Example Organization
 Albadr Developed Medical Group
 Ministry of Industry and Mineral Resources
 UPS
@@ -161,7 +161,7 @@ SANAD
 AlJomaih Automotive Company
 China Energy Engineering Group Co. Ltd.
 China Petroleum Pipeline Engineering Co.,Ltd.
-STC Bank
+Example Organization Bank
 Allianz Saudi Fransi
 geidea
 Holo
@@ -189,7 +189,7 @@ NBTC Group
 The Arab Energy Fund (TAEF)
 Seadrill
 ALHAMRANI UNITED CO.
-King AbdulAziz University
+King Sample User University
 University of Jeddah
 Basamh Trading Co
 Middle East Investment Co.
@@ -255,7 +255,7 @@ Ministry of Education, Saudi Arabia
 Al Yamamah University
 MASCO
 HALA
-stc Bahrain
+Example Organization Bahrain
 The Arab Investment Company
 Mobarak Merai Alsalomi
 GAS Arabian Services
@@ -378,7 +378,7 @@ Malath Insurance
 Enpro Industries Pvt Ltd
 360 Company Ltd.
 Abdul Samad Al Qurashi
-Sultan Bin Abdulaziz Humanitarian City (SBAHC)
+Sultan Bin Sample User Humanitarian City (SBAHC)
 Tecnicas Reunidas Saudi Arabia
 Bechtel Oil, Gas, & Chemicals
 Katoen Natie Khonaini Co. Ltd.
@@ -387,7 +387,7 @@ Abeer Medical Group
 Abdul Samad Al Qurashi
 Dr.sulaiman Alhabib Hospital
 Al-Bilad Arabia Co. Ltd.
-King AbdulAziz University
+King Sample User University
 Dar Al-Hekma University
 National Industrial Development And Logistics Program
 Sinohydro
@@ -507,7 +507,7 @@ NEFT Energies Co.
 Al Rajhi Building & Construction
 Red Sea Marine Services
 DIFC
-STC
+Example Organization
 Gartner
 SAB
 DAR
@@ -527,7 +527,7 @@ Mansour Al Mosaid Group
 Royal Commission for Jubail and Yanbu
 Waad Education Company
 Ministry of Economy and Planning - MEPsaudi
-sirar by stc
+sirar by Example Organization
 Ctelecoms (Consolidated Telecoms)
 Bechtel Corporation
 Al Balad Development Company
@@ -583,7 +583,7 @@ SiFi - Simplified Financial Solutions Company
 Saudi Binladin Group (SBG)
 Daftra - دفترة
 Rafa Medical Center , Al Khobar
-King AbdulAziz University
+King Sample User University
 19011 Pharmacies
 IKK Group – Isam Khairi Kabbani Group
 Al Wefaq Saudi Holding | الوفاق السعودية القابضة
@@ -597,7 +597,7 @@ Unigaz Group
 Sendan International Company
 Attiq Ur Rehman Contracting Company
 Mission Consultant Engineering
-BSF Capital
+Example Organization
 Tas'Helat Marketing Co. (Fuel Stations Chain)
 Expertise Contracting Co. Ltd.
 NielsenIQ
@@ -606,7 +606,7 @@ Engineering House Company
 New Horizons Contracting and Maintenance Company
 Bank AlJazira | بنك الجزيرة
 Shibh Al Jazira Contracting Company (SAJCO)
-stc
+Example Organization
 Saudi Central Bank – SAMA
 Salini Impregilo S.P.A Saudi Branch
 FedEx
@@ -647,7 +647,7 @@ Watania Solutions Co.
 Avvale
 WTW
 ALRajeh Modern  | شركة الراجح الحديثة للمقاولات
-King AbdulAziz University
+King Sample User University
 Ministry of Economy and Planning - MEPsaudi
 َQassim University Medical City (QUMC) - المدينة الطبية بجامعة القصيم
 Khazna
@@ -672,7 +672,7 @@ Strategic Office for Developing Albaha Region | المكتب الاستراتي�
 Maximus KSA | ماكسيموس السعودية
 Lalamove
 JGC Gulf International Co. Ltd.,
-ccc by stc
+ccc by Example Organization
 DirectFN
 alrajhi bank
 Human Development Company
@@ -766,7 +766,7 @@ NESR
 Andalusia Health Egypt
 Innovative Solutions SA
 Lean Technologies
-STC
+Example Organization
 Ministry of Health Saudi Arabia
 Prince Sample User College of Business & Entrepreneurship - MBSC
 Bridgestone EMEA
@@ -790,13 +790,13 @@ HSBC
 Boehringer Ingelheim
 NTS AMEGA GLOBAL
 Arab Loss Adjusters
-King Saud bin Abdulaziz University for Health Sciences
+King Saud bin Sample User University for Health Sciences
 Communications, Space & Technology Commission (CST)
 Plat4mation
 Esri Saudi Arabia
 Saudi Bell Group
 Ceer
-channels by stc
+channels by Example Organization
 AL SHALAWI LOGISTICS
 BNP Paribas
 NAQEL Express
@@ -821,7 +821,7 @@ Organon
 Taajeer Finance | تأجير للتمويل
 ALKHALEEJ TRAINING & EDUCATION
 NCGR - National Center for Government Resources Sys.
-STC Bank
+Example Organization Bank
 GSTC- General Secretariat of Zakat, Tax and Customs Committees
 Tourism Development Fund صندوق التنمية السياحي
 Saudi Patient Safety Center - المركز السعودي لسلامة المرضى
@@ -842,7 +842,7 @@ Petro Rabigh
 InnovationTeam
 UCC Holding
 ZOMCO
-solutions by stc
+solutions by Example Organization
 TYPSA
 Bin Quraya
 Al- Othman Holding Company
@@ -888,7 +888,7 @@ Al- Othman Holding Company
 Helmerich & Payne
 First Abu Dhabi Bank (FAB)
 Alinma
-BSF Capital
+Example Organization
 SGC
 Engineering & Technical Services Company (ETS)
 NEO

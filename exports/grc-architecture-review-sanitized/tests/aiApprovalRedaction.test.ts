@@ -137,7 +137,7 @@ async function run(): Promise<void> {
       refresh_token: SECRET_TOKEN,
       nested: {
         password: SECRET_PASSWORD,
-        username: "user@example.invalid",
+        username: "<REDACTED_EMAIL>",
       },
       reason: SAFE_DESCRIPTION,
       // Innocuously-named fields that still contain credential-shaped values:
@@ -153,7 +153,7 @@ async function run(): Promise<void> {
     riskLevel: "high",
     complianceRefs: ["PCI-DSS-12.3.1"],
     requestedByUserId: 7,
-    requestedByEmail: "user@example.invalid",
+    requestedByEmail: "<REDACTED_EMAIL>",
     requestedByName: "Ops Engineer",
     threadId: "thr_123",
   });
@@ -264,7 +264,7 @@ async function run(): Promise<void> {
   );
   assert(
     returnedPayload.target_integration === "CRMProvider_books" &&
-      returnedPayload.nested.username === "user@example.invalid",
+      returnedPayload.nested.username === "<REDACTED_EMAIL>",
     "Returned PendingAction.payload preserves safe fields",
   );
 
@@ -345,7 +345,7 @@ async function run(): Promise<void> {
       action: "update",
       notes: `Please rotate — old key was ${INLINE_GHP} and fallback was ${INLINE_SK}`,
       metadata: {
-        author: "user@example.invalid",
+        author: "<REDACTED_EMAIL>",
         context: `bearer token: Bearer ${INLINE_GHP}`,
       },
     },
@@ -353,7 +353,7 @@ async function run(): Promise<void> {
     riskLevel: "low",
     complianceRefs: [],
     requestedByUserId: 1,
-    requestedByEmail: "user@example.invalid",
+    requestedByEmail: "<REDACTED_EMAIL>",
     requestedByName: "Ops",
     threadId: null,
   });
@@ -378,7 +378,7 @@ async function run(): Promise<void> {
     "[inline] payload contains the redaction sentinel for embedded credentials",
   );
   assert(
-    inlinePayloadJson.includes("user@example.invalid") &&
+    inlinePayloadJson.includes("<REDACTED_EMAIL>") &&
       inlinePayloadJson.includes('"action":"update"'),
     "[inline] payload preserves safe non-credential fields",
   );
@@ -420,7 +420,7 @@ async function run(): Promise<void> {
       // Safe values that must survive to prove the heuristic is conservative.
       project_slug: SLUG_SAFE,
       correlation_id: UUID_SAFE,
-      assignee_email: "user@example.invalid",
+      assignee_email: "<REDACTED_EMAIL>",
     },
     payloadPreview:
       `Assign task to user — credential ${FREE_FORM_PASSWORD}, ` +
@@ -428,7 +428,7 @@ async function run(): Promise<void> {
     riskLevel: "medium",
     complianceRefs: [],
     requestedByUserId: 1,
-    requestedByEmail: "user@example.invalid",
+    requestedByEmail: "<REDACTED_EMAIL>",
     requestedByName: "Ops",
     threadId: null,
   });
@@ -477,7 +477,7 @@ async function run(): Promise<void> {
     "[heuristic] UUID is preserved (no false positive)",
   );
   assert(
-    heuristicPayloadJson.includes("user@example.invalid") &&
+    heuristicPayloadJson.includes("<REDACTED_EMAIL>") &&
       heuristicPayloadJson.includes('"action":"assign"'),
     "[heuristic] safe non-credential fields are preserved",
   );
@@ -547,7 +547,7 @@ async function run(): Promise<void> {
     riskLevel: "high",
     complianceRefs: [],
     requestedByUserId: 1,
-    requestedByEmail: "user@example.invalid",
+    requestedByEmail: "<REDACTED_EMAIL>",
     requestedByName: "Ops",
     threadId: null,
   });

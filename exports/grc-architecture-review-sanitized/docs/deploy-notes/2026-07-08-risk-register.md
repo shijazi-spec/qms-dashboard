@@ -1,9 +1,9 @@
-# Deploy Note — Risk Register fixes + Adam UI consistency
+# Deploy Note — Risk Register fixes + AssistantPersona UI consistency
 
-**Date:** 2026-07-08 · **Scope:** Adam's risk tools were querying a non-existent table; plus risk-appetite feature and an icon consistency fix. **Backend + frontend, no data migration required** (schema auto-migrates on boot).
+**Date:** 2026-07-08 · **Scope:** AssistantPersona's risk tools were querying a non-existent table; plus risk-appetite feature and an icon consistency fix. **Backend + frontend, no data migration required** (schema auto-migrates on boot).
 
 ## Why this deploy matters
-Adam's **"Review Risk Register"** (and Check Compliance / Suggest Improvements / background risk alerts) were completely broken — every risk query hit a phantom `risks` table that doesn't exist, so Adam got nothing and the chat spun until timeout. The real register is `enterprise_risks`. This deploy repoints all of it, adds risk-appetite/tolerance support end-to-end, and aligns the Quick Actions icon with Adam's branding.
+AssistantPersona's **"Review Risk Register"** (and Check Compliance / Suggest Improvements / background risk alerts) were completely broken — every risk query hit a phantom `risks` table that doesn't exist, so AssistantPersona got nothing and the chat spun until timeout. The real register is `enterprise_risks`. This deploy repoints all of it, adds risk-appetite/tolerance support end-to-end, and aligns the Quick Actions icon with AssistantPersona's branding.
 
 ## Files changed (9)
 
@@ -22,12 +22,12 @@ Adam's **"Review Risk Register"** (and Check Compliance / Suggest Improvements /
 | File | Change |
 |------|--------|
 | `dashboard/risks.html` | Add-form appetite/tolerance inputs + submit wiring (blank→null); detail-modal "Appetite Alignment" panel w/ breach badge |
-| `dashboard/consultant.html` | Quick Actions logo: flask SVG → 🤖 in indigo→purple gradient (matches Adam) |
+| `dashboard/consultant.html` | Quick Actions logo: flask SVG → 🤖 in indigo→purple gradient (matches AssistantPersona) |
 | `dashboard/i18n/en.json` | `risks.f_risk_appetite/tolerance` + 7 `dyn.risks.appetite_*` keys |
 | `dashboard/i18n/ar.json` | Same keys, Arabic |
 
 ## Root cause (reference)
-The real risk register lives in `enterprise_risks` (owned by `src/utils/riskDatabase.ts`, read by `riskRoutes.ts`). Adam's tools queried a bare `risks` table that does not exist, with wrong column names too:
+The real risk register lives in `enterprise_risks` (owned by `src/utils/riskDatabase.ts`, read by `riskRoutes.ts`). AssistantPersona's tools queried a bare `risks` table that does not exist, with wrong column names too:
 
 - `title` → `risk_title`
 - `likelihood` / `impact` → `likelihood_score` / `impact_score` (score via generated `risk_score`)
@@ -40,7 +40,7 @@ The AI background scanner was additionally gated on `schemaSupports("risks")` (a
 ## Behavior changes to expect
 - ✅ **"Review Risk Register" now works** — reads the real `enterprise_risks` register.
 - ⚠️ **Background risk alerts turn ON** — the AI scanner was silently skipping all risk checks; after deploy it will start generating high-risk / overdue-treatment / low-progress alerts (deduped, so no flood).
-- ✅ **Risk appetite/tolerance** settable in the add form and shown in the detail popup; until a value is set, Adam reports appetite as "not configured."
+- ✅ **Risk appetite/tolerance** settable in the add form and shown in the detail popup; until a value is set, AssistantPersona reports appetite as "not configured."
 
 ## Deploy steps
 1. Sync all 9 files to HostingPlatform (standing rule: **commit + push to `origin/QMS` first**, then Republish — local-only edits rebuild stale code).
@@ -49,9 +49,9 @@ The AI background scanner was additionally gated on `schemaSupports("risks")` (a
 4. ⛔ **In the publish schema diff, do NOT approve any `DROP TABLE`** — approve code-only, as always.
 
 ## Post-deploy smoke test
-1. Open Adam → **Review Risk Register** → confirm it returns real risks (not a spinner/error).
+1. Open AssistantPersona → **Review Risk Register** → confirm it returns real risks (not a spinner/error).
 2. Risks screen → **Add Risk** with an Appetite value (e.g. 8) on a high-score risk → open its detail → confirm the **Appetite Alignment** badge shows (🔴/🟠/🟢).
-3. Adam header → confirm **Quick Actions** logo is 🤖, matching the avatar.
+3. AssistantPersona header → confirm **Quick Actions** logo is 🤖, matching the avatar.
 
 ## Pre-verified before handoff
 - ✅ TypeScript: 0 errors

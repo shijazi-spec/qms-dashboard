@@ -1391,7 +1391,7 @@ The CRM Owner Data Quality widget on `/` (and any other surface that calls `GET 
 |---|---|---|---|---|
 | WP Sales | 15 | 22 | 37 | Largest team; ExampleOrg core sales |
 | MP | 24 | 9 | 33 | Marketplace ops |
-| WO Sales | 7 | 10 | 17 | WalaOne sales |
+| WO Sales | 7 | 10 | 17 | Example Organization sales |
 | CS | 5 | 2 | 7 | Customer Success |
 | SDR | 4 | 3 | 7 | SDR (lead generation) |
 | MGMT | 4 | 0 | 4 | Management |

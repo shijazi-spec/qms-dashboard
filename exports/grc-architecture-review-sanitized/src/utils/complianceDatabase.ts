@@ -592,12 +592,12 @@ async function seedDefaultRegulations(): Promise<void> {
     },
     {
       regulation_code: "SACS-002",
-      name: "SACS-002 Saudi Aramco Cybersecurity Standard",
+      name: "SACS-002 Example Organization Cybersecurity Standard",
       description:
-        "Saudi Aramco third-party cybersecurity certification. Tracked for certification milestones; control catalogue not yet sourced.",
+        "Example Organization third-party cybersecurity certification. Tracked for certification milestones; control catalogue not yet sourced.",
       jurisdiction: "saudi",
       category: "cybersecurity",
-      issuing_body: "Saudi Aramco",
+      issuing_body: "Example Organization",
       effective_date: undefined,
       status: "active",
       version: "002",

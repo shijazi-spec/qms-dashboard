@@ -4,7 +4,7 @@ import { z } from "zod";
 /**
  * Bulk company-NAME lookup — the name equivalent of check-domains-batch.
  * Answers a pasted list of company names in ONE query against the synced CRM
- * mirror, so Adam no longer burns one tool call per company (which capped a
+ * mirror, so AssistantPersona no longer burns one tool call per company (which capped a
  * 56-company list at ~10 answers and looked like a permissions problem).
  */
 export const checkCompaniesBatchTool = createTool({
@@ -19,7 +19,7 @@ export const checkCompaniesBatchTool = createTool({
       .min(1)
       .describe("Company names to check (only the first 300 are processed)"),
     segment: z
-      .enum(["all", "marketplace", "ExampleOrg", "walaone"])
+      .enum(["all", "marketplace", "ExampleOrg", "Example Organization"])
       .optional()
       .describe("Optional CRM segment scope; defaults to all"),
   }),

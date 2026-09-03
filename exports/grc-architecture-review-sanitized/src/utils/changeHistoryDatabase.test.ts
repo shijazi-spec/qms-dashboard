@@ -489,7 +489,7 @@ const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
   },
   {
     label: "IdentityProvider API key",
-    value: "AIzaSyABcDefGHIjklMNOpqrSTUVWXyz1234567",
+    value: "<REDACTED_TOKEN>",
   },
   {
     label: "Bearer header",

@@ -1,7 +1,7 @@
 # Decision Record — Amendment: Skip Weekly Digest, Merge Agent View into Overview
 
 **Date:** 2026-05-25 (third amendment today)
-**Decision-maker:** user@example.invalid (Operations & Quality HOD)
+**Decision-maker:** <REDACTED_EMAIL> (Operations & Quality HOD)
 **Status:** Approved, amends prior decisions
 **Supersedes:** `docs/Business_Case_Call_Evaluation_2026_05_25.md` (Phase 1 scope)
 

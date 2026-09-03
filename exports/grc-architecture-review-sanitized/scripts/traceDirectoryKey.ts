@@ -14,7 +14,7 @@ import { normalizeCompanyName } from "../src/utils/duplicateRadarDatabase";
 
 const PAIRS = [
   { key: "atc", label: "utec" },
-  { key: "stc", label: "sasref" },
+  { key: "Example Organization", label: "sasref" },
   { key: "alesayi", label: "yanbu" },
 ];
 

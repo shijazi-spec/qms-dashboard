@@ -14,11 +14,11 @@ const CRMProvider_WRITE_TIMEOUT_MS = 15_000;
  * is wrapped with withApprovalGate in the agent, so a call enqueues an AI
  * Approval card (module, account, record ids) for a Quality Manager / admin to
  * approve before it actually writes — and ChatProvider callers (autoApproveTier
- * "never") can never auto-execute it. Adam DOES have write capability — tagging
+ * "never") can never auto-execute it. AssistantPersona DOES have write capability — tagging
  * for removal AND this link — he just routes risky writes through approval.
  *
  * Typical flow: user identifies the contact/deal + the target account (e.g. via
- * lookup-entity) → Adam confirms → calls this with the module, the record ids,
+ * lookup-entity) → AssistantPersona confirms → calls this with the module, the record ids,
  * and the target Account's CRMProvider id.
  */
 export const linkRecordToAccountTool = createTool({

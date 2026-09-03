@@ -149,7 +149,7 @@ describe("ownership beats pipeline position — through the SHIPPED code", () =>
       group({
         deals: [
           deal({ id: "unowned", stage: "New Deal", owner: "Unassigned" }),
-          deal({ id: "owned", stage: "On Hold", owner: "Khowla Saeed" }),
+          deal({ id: "owned", stage: "On Hold", owner: "Sample User" }),
         ],
       }),
     ]);

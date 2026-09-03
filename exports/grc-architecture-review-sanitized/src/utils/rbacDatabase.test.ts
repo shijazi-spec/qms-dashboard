@@ -22,7 +22,7 @@ await exerciseAllKeys(h, "createBuProcess", async (secret, key, payload) => {
     process_name: `${NON_SENSITIVE_MARKER} process`,
     department: "qa",
     owner_name: NON_SENSITIVE_MARKER,
-    owner_email: "user@example.invalid",
+    owner_email: "<REDACTED_EMAIL>",
     description: JSON.stringify({ [key]: secret, marker: NON_SENSITIVE_MARKER, payload }),
     is_active: true,
     linked_control_ids: [],

@@ -61,7 +61,7 @@
 export {};
 
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
+  process.env.DATABASE_URL || "<REDACTED_DSN>";
 
 const { ROLE_GATED_DASHBOARD_ROUTES } =
   await import("../src/mastra/routes/staticPageRoutes");

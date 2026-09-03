@@ -83,7 +83,7 @@ const SEED: OkrObjective[] = [
     objective_code: "G-O1",
     team: "grc",
     objective: "Establish Enterprise Risk Visibility and Closure Discipline",
-    owner: "Maram (GRC)",
+    owner: "Sample User (GRC)",
     key_results: [
       { kr_code: "G-KR1", kpi_name: "Risk Assessment Coverage (BUs)", kpi_code: null, definition: "Share of Business Units with completed risk assessment in the year/plan.", calculation: "(# BUs Assessed ÷ # Total BUs) × 100", target_text: "100% by Q4", frequency: "Quarterly", data_source: "Enterprise Risk Register" },
       { kr_code: "G-KR2", kpi_name: "High-Risk Items with Treatment Plan", kpi_code: null, definition: "Share of high/critical risks having an approved mitigation plan and owner.", calculation: "(# High Risks with Plans ÷ # Total High Risks) × 100", target_text: "100% always", frequency: "Monthly", data_source: "Risk Register" },
@@ -94,7 +94,7 @@ const SEED: OkrObjective[] = [
     objective_code: "G-O2",
     team: "grc",
     objective: "Maintain Continuous Regulatory & Audit Readiness (PDPL, NCA, ISO)",
-    owner: "Maram (GRC)",
+    owner: "Sample User (GRC)",
     key_results: [
       { kr_code: "G-KR1", kpi_name: "Compliance Coverage Index", kpi_code: "GRC-KPI-008", definition: "Coverage of required controls for applicable regulations/standards.", calculation: "(# Controls Implemented ÷ # Controls Required) × 100", target_text: "≥95% by Q4", frequency: "Quarterly", data_source: "Compliance Matrix" },
       { kr_code: "G-KR2", kpi_name: "Audit Evidence Readiness", kpi_code: "GRC-KPI-003", definition: "Share of required audit evidence available and up-to-date.", calculation: "(# Evidence Items Ready ÷ # Evidence Items Required) × 100", target_text: "≥95% by audit windows", frequency: "Quarterly", data_source: "Evidence Repository" },
@@ -105,7 +105,7 @@ const SEED: OkrObjective[] = [
     objective_code: "G-O3",
     team: "grc",
     objective: "Strengthen Third-Party & Partner Assurance (TPRA)",
-    owner: "Maram (GRC)",
+    owner: "Sample User (GRC)",
     key_results: [
       { kr_code: "G-KR1", kpi_name: "TPRA Coverage Rate (Critical Vendors)", kpi_code: null, definition: "Share of critical vendors/partners assessed and approved annually.", calculation: "(# Critical Vendors Assessed ÷ # Total Critical Vendors) × 100", target_text: "≥95% by Q4", frequency: "Quarterly", data_source: "TPRA Tracker" },
       { kr_code: "G-KR2", kpi_name: "Client/Partner Security Assessment SLA", kpi_code: null, definition: "Share of external security questionnaires delivered within agreed SLA.", calculation: "(# Assessments Delivered On-Time ÷ # Total Assessments) × 100", target_text: "≥90% monthly", frequency: "Monthly", data_source: "Assessment Tracker" },
@@ -116,7 +116,7 @@ const SEED: OkrObjective[] = [
     objective_code: "G-O4",
     team: "grc",
     objective: "Strengthen Incident Governance & External Trust",
-    owner: "Maram (GRC)",
+    owner: "Sample User (GRC)",
     key_results: [
       { kr_code: "G-KR1", kpi_name: "Regulatory Response Timeliness", kpi_code: null, definition: "Average days to respond to regulatory or official compliance requests.", calculation: "Avg(Response Date − Request Date)", target_text: "≤5 business days (avg)", frequency: "Monthly", data_source: "Regulatory Log" },
       { kr_code: "G-KR2", kpi_name: "Security Incident Governance Closure Time", kpi_code: null, definition: "Average days from incident identification to governance closure (incl. evidence and lessons learned).", calculation: "Avg(Closure Date − Incident Date)", target_text: "≤30 days", frequency: "Quarterly", data_source: "Incident Register" },

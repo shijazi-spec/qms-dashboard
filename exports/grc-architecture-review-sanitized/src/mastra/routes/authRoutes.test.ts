@@ -225,7 +225,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS) {
   captured.length = 0;
   await upsertOidcUser({
     sub: "oidc-sub-clean",
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     name: "Alice Anderson",
     picture: "<REDACTED_URL>",
   });
@@ -233,7 +233,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS) {
   if (params) {
     const flat = JSON.stringify(params);
     assert(
-      flat.includes("Alice Anderson") && flat.includes("user@example.invalid"),
+      flat.includes("Alice Anderson") && flat.includes("<REDACTED_EMAIL>"),
       "innocuous: clean profile fields preserved verbatim (test isn't a tautology)",
     );
     assert(

@@ -390,7 +390,7 @@ export interface ListFilters {
   /**
    * Free-text search (Sample User 2026-06-18). Case-insensitive substring match
    * across the request CODE (action_code), the tool label, and the human
-   * preview — so an operator can paste the APR-… ticket Adam handed them and
+   * preview — so an operator can paste the APR-… ticket AssistantPersona handed them and
    * jump straight to it, or search by company/cluster wording. Wildcards in
    * the term are escaped (literal match).
    */
@@ -403,17 +403,17 @@ export interface ListFilters {
   /**
    * Source group (Sample User 2026-06-18): separate the autonomous resolver's
    * SHADOW proposals (tool_id 'duplicate-resolution', queued in bulk by the
-   * 6-hourly cron) from requests made WITH ADAM directly in chat (the gated
+   * 6-hourly cron) from requests made WITH AssistantPersona directly in chat (the gated
    * write tools — merge/update/link/tag/untag). 'autonomous' = only the
-   * duplicate-resolution proposals; 'adam' = everything else.
+   * duplicate-resolution proposals; 'AssistantPersona' = everything else.
    */
-  sourceGroup?: 'adam' | 'autonomous';
+  sourceGroup?: 'AssistantPersona' | 'autonomous';
 }
 
 /**
  * Tool ids produced by the autonomous duplicate resolver (the cron-queued
  * SHADOW proposals). Everything NOT in this set is treated as an operator/
- * chat-initiated request ("done with Adam directly").
+ * chat-initiated request ("done with AssistantPersona directly").
  */
 export const AUTONOMOUS_TOOL_IDS = ['duplicate-resolution'] as const;
 
@@ -464,7 +464,7 @@ export async function listPendingActions(filters: ListFilters = {}): Promise<{
   if (filters.sourceGroup === 'autonomous') {
     params.push(AUTONOMOUS_TOOL_IDS as unknown as string[]);
     where.push(`tool_id = ANY($${params.length})`);
-  } else if (filters.sourceGroup === 'adam') {
+  } else if (filters.sourceGroup === 'AssistantPersona') {
     params.push(AUTONOMOUS_TOOL_IDS as unknown as string[]);
     where.push(`NOT (tool_id = ANY($${params.length}))`);
   }
@@ -767,7 +767,7 @@ export async function countByStatus(filters: {
   requestedByUserId?: number;
   reviewFilter?: ReviewFilter;
   reviewerUserId?: number;
-  sourceGroup?: 'adam' | 'autonomous';
+  sourceGroup?: 'AssistantPersona' | 'autonomous';
 }): Promise<{
   pending: number;
   executed: number;
@@ -791,7 +791,7 @@ export async function countByStatus(filters: {
   if (filters.sourceGroup === 'autonomous') {
     params.push(AUTONOMOUS_TOOL_IDS as unknown as string[]);
     where.push(`tool_id = ANY($${params.length})`);
-  } else if (filters.sourceGroup === 'adam') {
+  } else if (filters.sourceGroup === 'AssistantPersona') {
     params.push(AUTONOMOUS_TOOL_IDS as unknown as string[]);
     where.push(`NOT (tool_id = ANY($${params.length}))`);
   }

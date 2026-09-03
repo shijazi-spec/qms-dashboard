@@ -30,7 +30,7 @@ process.env.SESSION_SECRET =
 // bootstrap IIFE inside aiApprovalRoutes errors immediately instead of
 // hanging the test.
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || 'postgres://localhost:1/none';
+  process.env.DATABASE_URL || '<REDACTED_DSN>';
 
 import crypto from 'crypto';
 import pg from 'pg';
@@ -42,9 +42,9 @@ import type { QueryResult, QueryResultRow } from 'pg';
 /* gate accepts our two synthetic admin reviewers.                    */
 /* ------------------------------------------------------------------ */
 const TEST_PLATFORM_USERS: Record<string, { status: string; role: string }> = {
-  'user@example.invalid': { status: 'active', role: 'admin' },
-  'user@example.invalid': { status: 'active', role: 'quality_manager' },
-  'user@example.invalid': { status: 'active', role: 'executive' },
+  '<REDACTED_EMAIL>': { status: 'active', role: 'admin' },
+  '<REDACTED_EMAIL>': { status: 'active', role: 'quality_manager' },
+  '<REDACTED_EMAIL>': { status: 'active', role: 'executive' },
 };
 const _origPoolQuery = pg.Pool.prototype.query;
 pg.Pool.prototype.query = function (this: pg.Pool, ...args: unknown[]): any {
@@ -410,13 +410,13 @@ function cookieFor(user: {
 
 const REVIEWER_A = {
   userId: 42,
-  email: 'user@example.invalid',
+  email: '<REDACTED_EMAIL>',
   name: 'Reviewer A (admin)',
   role: 'admin',
 };
 const REVIEWER_B = {
   userId: 43,
-  email: 'user@example.invalid',
+  email: '<REDACTED_EMAIL>',
   name: 'Reviewer B (quality_manager)',
   role: 'quality_manager',
 };
@@ -530,7 +530,7 @@ async function runApproveScenario(): Promise<void> {
     riskLevel: 'high',
     complianceRefs: ['ISO 27001:2022 A.5.34'],
     requestedByUserId: 99,
-    requestedByEmail: 'user@example.invalid',
+    requestedByEmail: '<REDACTED_EMAIL>',
     requestedByName: 'Requester User',
     threadId: 'thr_viewer_refresh_approve',
   });
@@ -630,7 +630,7 @@ async function runRejectScenario(): Promise<void> {
     riskLevel: 'high',
     complianceRefs: ['ISO 27001:2022 A.5.34'],
     requestedByUserId: 99,
-    requestedByEmail: 'user@example.invalid',
+    requestedByEmail: '<REDACTED_EMAIL>',
     requestedByName: 'Requester User',
     threadId: 'thr_viewer_refresh_reject',
   });

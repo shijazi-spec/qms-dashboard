@@ -29,6 +29,6 @@ describe("classifyQuestionSection", () => {
     expect(classifyQuestionSection("duplicate deal records")).toBe("duplicates");
   });
   it("ignores emails, phones and urls when matching", () => {
-    expect(classifyQuestionSection("mail user@example.invalid about <REDACTED_PHONE>")).toBeNull();
+    expect(classifyQuestionSection("mail <REDACTED_EMAIL> about <REDACTED_PHONE>")).toBeNull();
   });
 });

@@ -20,7 +20,7 @@
 #   Email:  EmailProvider_API_KEY     — EmailProvider API key
 #           EmailProvider_TEST_EMAIL  — delivery address (use a EmailProvider test address
 #                                if you don't want real mail, e.g.
-#                                user@example.invalid)
+#                                <REDACTED_EMAIL>)
 #
 # Optional environment:
 #   TOOL_HEALTH_APP_URL          — base origin of the deployed app; when set

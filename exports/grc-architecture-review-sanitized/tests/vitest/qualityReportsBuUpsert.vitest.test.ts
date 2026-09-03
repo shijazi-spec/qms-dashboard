@@ -89,7 +89,7 @@ describe("explicit values still apply", () => {
   });
 
   it("keeps the parameter list aligned with the column list", async () => {
-    await upsertBU({ ...BASE, head_email: "user@example.invalid", kpi_owner_name: "CS Team", is_active: true });
+    await upsertBU({ ...BASE, head_email: "<REDACTED_EMAIL>", kpi_owner_name: "CS Team", is_active: true });
     const [sql, params] = upsertCall()!;
     const placeholders = String(sql).match(/\$\d+/g) || [];
     const highest = Math.max(...placeholders.map((p) => Number(p.slice(1))));

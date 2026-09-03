@@ -194,7 +194,7 @@ export function wrapPoolForRedaction<P extends pg.Pool>(pool: P): P {
  * its OWN pg.Pool. At node-pg's default `max: 10` that is 360 possible
  * connections from a single instance — far over the provider's cap. Exhausting
  * it makes new connects fail with "Connection terminated unexpectedly", which
- * is what took Adam down (Mastra's PostgresStore.init could not get a
+ * is what took AssistantPersona down (Mastra's PostgresStore.init could not get a
  * connection while a fan-out request had the pools saturated).
  *
  * - `max: 3`      — most of these modules are low-traffic; hot modules override

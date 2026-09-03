@@ -49,7 +49,7 @@ vi.mock("../../../src/utils/rbacMiddleware", async (orig) => {
 
   type SessionUser = import("../../../src/utils/rbacMiddleware").SessionUser;
 
-  const TEST_ADMIN_EMAIL = "user@example.invalid";
+  const TEST_ADMIN_EMAIL = "<REDACTED_EMAIL>";
 
   const adminFromKey = (c: any): SessionUser | null => {
     const expectedKey = process.env.ADMIN_API_KEY;

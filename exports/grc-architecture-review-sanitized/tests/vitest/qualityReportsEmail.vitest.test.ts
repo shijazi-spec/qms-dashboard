@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderBUReportEmailHtml } from "../../src/utils/qualityReportsEmail";
 
 const baseReport = {
-  bu: { bu_name: "Sales (B2B)", channel: "B2B", segment: "ExampleOrg", head_email: "user@example.invalid" },
+  bu: { bu_name: "Sales (B2B)", channel: "B2B", segment: "ExampleOrg", head_email: "<REDACTED_EMAIL>" },
   sections: {
     sops: { policies: [{}, {}], total: 2 },
     kpis: { done: 3, total: 5, pct: 60 },

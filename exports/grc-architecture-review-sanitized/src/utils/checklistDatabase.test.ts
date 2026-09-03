@@ -43,7 +43,7 @@ await exerciseAllKeys(h, "saveChecklistRun", async (secret, key, payload) => {
     failed_items: 0,
     na_items: 0,
     item_results: [{ [key]: secret, marker: NON_SENSITIVE_MARKER, payload }] as never,
-    run_by: "user@example.invalid",
+    run_by: "<REDACTED_EMAIL>",
     notes: NON_SENSITIVE_MARKER,
   } as never);
 });

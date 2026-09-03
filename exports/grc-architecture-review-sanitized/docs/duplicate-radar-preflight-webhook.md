@@ -31,7 +31,7 @@ x-admin-key: <YOUR_ADMIN_KEY>
 
 {
   "domain": "<REDACTED_HOST>",
-  "email": "user@example.invalid",
+  "email": "<REDACTED_EMAIL>",
   "company_name": "Example Organization Co",
   "phone": "<REDACTED_PHONE>",
   "ref": "web-form-submission-12345"
@@ -139,7 +139,7 @@ curl -X POST <REDACTED_URL_SCHEME><your-deployment>.<REDACTED_HOST>/api/duplicat
   -H "x-admin-key: $ExampleOrg_ADMIN_KEY" \
   -d '{
     "domain": "<REDACTED_HOST>",
-    "email": "user@example.invalid",
+    "email": "<REDACTED_EMAIL>",
     "ref": "marketing-batch-2026-05-22-row-42"
   }'
 ```

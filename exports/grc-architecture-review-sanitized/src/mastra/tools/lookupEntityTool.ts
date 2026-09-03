@@ -15,14 +15,14 @@ import { searchClustersByText } from "../../utils/duplicateRadarDatabase";
  * Read-only. Returns a compact per-module summary the agent can narrate; it
  * does NOT dump full records. Contact PII (email/phone) is included because
  * that's the point of the lookup — only senior roles reach this tool (web is
- * RBAC-gated by login; ChatProvider runs Adam at head_of_operations_quality).
+ * RBAC-gated by login; ChatProvider runs AssistantPersona at head_of_operations_quality).
  */
 
 const ALL_MODULES = ["Accounts", "Deals", "Contacts", "Leads"] as const;
 type ZModule = (typeof ALL_MODULES)[number];
 
 /**
- * Build the CRMProvider CRM *UI* deep-link for a record so Adam can hand the user a
+ * Build the CRMProvider CRM *UI* deep-link for a record so AssistantPersona can hand the user a
  * clickable "open this in the CRM" link. The API host (CRMProviderapis.<tld>) maps to
  * the CRM web host (crm.CRMProvider.<tld>); the org is resolved by CRMProvider from the
  * logged-in session, so the org-less /crm/tab/<Module>/<id> form redirects to
@@ -157,7 +157,7 @@ export const lookupEntityTool = createTool({
     // Normalize the search term. Users paste domains as "@<REDACTED_HOST>" — the
     // leading "@" breaks CRMProvider's indexed word search, so strip it (and any
     // surrounding angle brackets/whitespace). A real email like
-    // "user@example.invalid" keeps its mid-string "@" (CRMProvider matches emails).
+    // "<REDACTED_EMAIL>" keeps its mid-string "@" (CRMProvider matches emails).
     const raw = (context.query || "").trim();
     const query = raw.replace(/^[<@\s]+/, "").replace(/[>\s]+$/, "").trim();
     if (!query) {

@@ -356,7 +356,7 @@ export const FRAMEWORK_BUSINESS_UNITS = [
 ];
 
 /** The non-commercial BUs retired from these KPIs when we adopted the commercial 8.
- *  (WalaOne is NOT here — it IS the B2C product, renamed to Sales B2C in the migration.) */
+ *  (Example Organization is NOT here — it IS the B2C product, renamed to Sales B2C in the migration.) */
 const RETIRED_BUS = ["HR", "Finance", "IT", "Software", "GRC", "Quality"];
 
 /** The two checklist phases that define the leadership milestones. */
@@ -418,7 +418,7 @@ export async function seedBuFrameworkChecklist(): Promise<void> {
 
 /**
  * One-time migration to the Leadership-aligned commercial-8 BU list. Renames
- * Sales→Sales B2B, Customer Support→Contact Center, and WalaOne→Sales B2C (the
+ * Sales→Sales B2B, Customer Support→Contact Center, and Example Organization→Sales B2C (the
  * B2C product, keeping its real not-done progress) — all keeping their ticks —
  * and drops the remaining non-commercial BUs from BOTH the checklist and the BU
  * Coverage tracker. Idempotent (guarded on "Sales B2B" already existing).
@@ -434,8 +434,8 @@ export async function migrateToCommercialBUs(): Promise<void> {
 
   await pool.query(`UPDATE kpi_checklist_items SET section='Contact Center' WHERE kpi_id=$1 AND section='Customer Support'`, [fw.id]);
   await pool.query(`UPDATE kpi_checklist_items SET section='Sales B2B' WHERE kpi_id=$1 AND section='Sales'`, [fw.id]);
-  // WalaOne IS the B2C product → becomes Sales B2C, keeping its actual (not-done) progress.
-  await pool.query(`UPDATE kpi_checklist_items SET section='Sales B2C' WHERE kpi_id=$1 AND section='WalaOne'`, [fw.id]);
+  // Example Organization IS the B2C product → becomes Sales B2C, keeping its actual (not-done) progress.
+  await pool.query(`UPDATE kpi_checklist_items SET section='Sales B2C' WHERE kpi_id=$1 AND section='Example Organization'`, [fw.id]);
   await pool.query(
     `DELETE FROM kpi_checklist_items WHERE kpi_id=$1 AND section = ANY($2::text[])`,
     [fw.id, RETIRED_BUS],
@@ -445,7 +445,7 @@ export async function migrateToCommercialBUs(): Promise<void> {
   if (bu?.id) {
     await pool.query(`UPDATE kpi_bu_coverage SET bu_name='Contact Center' WHERE kpi_id=$1 AND bu_name='Customer Support'`, [bu.id]);
     await pool.query(`UPDATE kpi_bu_coverage SET bu_name='Sales B2B' WHERE kpi_id=$1 AND bu_name='Sales'`, [bu.id]);
-    await pool.query(`UPDATE kpi_bu_coverage SET bu_name='Sales B2C' WHERE kpi_id=$1 AND bu_name='WalaOne'`, [bu.id]);
+    await pool.query(`UPDATE kpi_bu_coverage SET bu_name='Sales B2C' WHERE kpi_id=$1 AND bu_name='Example Organization'`, [bu.id]);
     await pool.query(
       `DELETE FROM kpi_bu_coverage WHERE kpi_id=$1 AND bu_name = ANY($2::text[])`,
       [bu.id, RETIRED_BUS],

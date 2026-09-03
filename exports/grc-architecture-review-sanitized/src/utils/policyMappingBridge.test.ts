@@ -215,7 +215,7 @@ console.log("\n=== syncPolicyToMapping — innocuous policy passes through ===\n
       "innocuous-policy: ordinary file_name preserved verbatim",
     );
     assert(
-      String(params[6] ?? "") === "user@example.invalid",
+      String(params[6] ?? "") === "<REDACTED_EMAIL>",
       "innocuous-policy: ordinary uploaded_by (email) preserved verbatim",
     );
     const combined = params.map((p) => String(p ?? "")).join("|");

@@ -46,7 +46,7 @@ const DATABASE_URL = process.env.DATABASE_URL || '';
 // Synthetic admin identity used purely for AI Ops warmup. The signed cookie
 // and the seeded platform_users row share this email so the live
 // getPlatformUser() lookup in requireRole() resolves to an active admin.
-const WARMUP_SESSION_EMAIL = 'user@example.invalid';
+const WARMUP_SESSION_EMAIL = '<REDACTED_EMAIL>';
 
 function signWarmupSession(): string {
   if (!SESSION_SECRET) return '';

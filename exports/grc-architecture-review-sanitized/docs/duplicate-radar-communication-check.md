@@ -55,7 +55,7 @@ Response shape:
   "matched_deals": [
     {
       "duplicate_record_id": 12345,
-      "CRMProvider_record_id": "5146753000137944925",
+      "CRMProvider_record_id": "<REDACTED_ID>",
       "account_name": "شركة سحاب الوطنية",
       "domain": "<REDACTED_HOST>",
       "company_domain": "<REDACTED_HOST>",

@@ -1,10 +1,10 @@
 export const PREFLIGHT_DEAL_TARGET = {
-  layoutId: process.env.PREFLIGHT_DEAL_LAYOUT_ID || "5146753000000091023",
+  layoutId: process.env.PREFLIGHT_DEAL_LAYOUT_ID || "<REDACTED_ID>",
   pipeline: process.env.PREFLIGHT_DEAL_PIPELINE || "Standard (Corporates)",
   stage: process.env.PREFLIGHT_DEAL_STAGE || "New Deal",
 };
 export const PREFLIGHT_LEAD_TARGET = {
-  layoutId: process.env.PREFLIGHT_LEAD_LAYOUT_ID || "5146753000000091055",
+  layoutId: process.env.PREFLIGHT_LEAD_LAYOUT_ID || "<REDACTED_ID>",
   status: process.env.PREFLIGHT_LEAD_STATUS || "New Lead",
 };
 
@@ -17,7 +17,7 @@ export const PREFLIGHT_PRODUCT = process.env.PREFLIGHT_PRODUCT ?? "ExampleOrg";
 // 0 (the sales agent updates it after), and Sales Person defaults to a user
 // resolved by email. Both env-overridable.
 export const PREFLIGHT_EMPLOYEES = Number(process.env.PREFLIGHT_EMPLOYEES ?? 0) || 0;
-export const PREFLIGHT_SALESPERSON_EMAIL = process.env.PREFLIGHT_SALESPERSON_EMAIL || "user@example.invalid";
+export const PREFLIGHT_SALESPERSON_EMAIL = process.env.PREFLIGHT_SALESPERSON_EMAIL || "<REDACTED_EMAIL>";
 // Gov Type picklist — set to "Private" for the whole batch for now.
 export const PREFLIGHT_GOV_TYPE = process.env.PREFLIGHT_GOV_TYPE ?? "Private";
 // CS Member — a plain TEXT (name) field, normally populated from the CS
@@ -25,9 +25,9 @@ export const PREFLIGHT_GOV_TYPE = process.env.PREFLIGHT_GOV_TYPE ?? "Private";
 // is rejected by CRMProvider as INVALID_DATA. Provide a USER by EMAIL instead; the push
 // resolves it to a CRMProvider user id and sends { id }. Sample User 2026-07-05: CS_Member is
 // NOT mandatory, so if the email doesn't resolve to a user the field is simply
-// omitted (no failed deal). Default user: user@example.invalid.
+// omitted (no failed deal). Default user: <REDACTED_EMAIL>.
 export const PREFLIGHT_CS_MEMBER = process.env.PREFLIGHT_CS_MEMBER ?? "ExampleOrg"; // legacy (unused for the value)
-export const PREFLIGHT_CS_MEMBER_EMAIL = process.env.PREFLIGHT_CS_MEMBER_EMAIL ?? "user@example.invalid";
+export const PREFLIGHT_CS_MEMBER_EMAIL = process.env.PREFLIGHT_CS_MEMBER_EMAIL ?? "<REDACTED_EMAIL>";
 
 // Lead_Source stamped on EVERY record the push creates (Leads, Contacts, Deals).
 // Sample User 2026-07-01: all Preflight-pushed records carry Lead_Source = "Mawsool".

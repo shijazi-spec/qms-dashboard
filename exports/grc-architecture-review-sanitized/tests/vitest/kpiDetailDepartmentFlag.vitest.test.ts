@@ -56,7 +56,7 @@ describe("department detection", () => {
     // Sample User's own KPIs stay in the engine — mis-flagging one would send its
     // detail page's back link and nav to Quality Reports, where it isn't listed.
     expect(isDepartmentKpi("Sample User", owners)).toBe(false);
-    expect(isDepartmentKpi("Maram", owners)).toBe(false);
+    expect(isDepartmentKpi("Sample User", owners)).toBe(false);
   });
 
   it("treats a blank owner as NOT a department KPI", () => {

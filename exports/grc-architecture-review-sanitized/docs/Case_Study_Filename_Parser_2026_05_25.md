@@ -1,7 +1,7 @@
 # Case Study — Filename Parser Contract & Industry Benchmark
 
 **Date**: 2026-05-25
-**Owner**: user@example.invalid
+**Owner**: <REDACTED_EMAIL>
 **Module**: Call Evaluation → Bulk Upload (`/calls` Data Sources tab)
 **Status**: Implemented in commit `<HEAD>` — pending verification on HostingPlatform
 
@@ -11,7 +11,7 @@
 
 **Input filename:**
 ```
-<REDACTED_PHONE> by user@example.invalid on 8_10_2025 @ 11_53_28 AM.wav
+<REDACTED_PHONE> by <REDACTED_EMAIL> on 8_10_2025 @ 11_53_28 AM.wav
 ```
 
 **Expected outputs after the new parser:**
@@ -20,7 +20,7 @@
 |---|---|---|---|
 | 1 | Phone (raw) | `<REDACTED_PHONE>` | `parsed.phone` |
 | 2 | Phone last-9 for CRM search | `<REDACTED_PHONE>` | `parsed.phone_suffix` → `normalizePhoneSuffix` |
-| 3 | Agent email | `user@example.invalid` | `parsed.agentEmail` |
+| 3 | Agent email | `<REDACTED_EMAIL>` | `parsed.agentEmail` |
 | 4 | Agent name | `b.alwahabi` | `parsed.agentName` (local-part) |
 | 5 | Call date | `Aug 10, 2025` | `parsed.date_human` |
 | 6 | Call time | `<REDACTED_IP> AM` | `parsed.time_human` |
@@ -107,7 +107,7 @@ I checked the public-facing flow of four conversation-intelligence vendors and t
 
 ## 5. Verification checklist (after HostingPlatform republish)
 
-- [ ] Drag-and-drop a file named `<REDACTED_PHONE> by user@example.invalid on 8_10_2025 @ 11_53_28 AM.wav` — five chips appear: phone, `…<REDACTED_PHONE>`, agent, `Aug 10, 2025`, `<REDACTED_IP> AM`.
+- [ ] Drag-and-drop a file named `<REDACTED_PHONE> by <REDACTED_EMAIL> on 8_10_2025 @ 11_53_28 AM.wav` — five chips appear: phone, `…<REDACTED_PHONE>`, agent, `Aug 10, 2025`, `<REDACTED_IP> AM`.
 - [ ] Drag-and-drop a file named `random_garbage.wav` — chip strip is red, upload button disabled with hover tooltip explaining why.
 - [ ] Upload a valid file → record appears in Call Records with the date column showing the FILENAME date (e.g. `Aug 10, 2025`), not today's date.
 - [ ] Open the record → Phone field shows `<REDACTED_PHONE>`. Lead/Deal link appears if CRMProvider has that number; otherwise "Re-run auto-link" button visible.

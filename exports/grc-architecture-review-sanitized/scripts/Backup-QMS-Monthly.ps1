@@ -46,7 +46,7 @@
     Set it once, persistently, for your Windows user with:
         [Environment]::SetEnvironmentVariable(
             "HostingPlatform_DATABASE_URL",
-            "postgres://user:user@example.invalid/db?sslmode=require",
+            "<REDACTED_DSN>",
             "User"
         )
 

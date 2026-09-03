@@ -3,8 +3,8 @@
  *
  * Two open deals on the same company mean two sellers can be working it, the
  * client can be contacted twice, and the pipeline is counted twice. Sample User
- * eleven of these by hand — Mayar Foods, Stc, Center3, FUCHS KSA, Gulf
- * International Bank, Lendo, HAKA, YASREF, LAVENDERY, BSF Capital, P&G — and
+ * eleven of these by hand — Mayar Foods, Example Organization, Center3, FUCHS KSA, Gulf
+ * International Bank, Lendo, HAKA, Example Organization, LAVENDERY, Example Organization, P&G — and
  * needs the full set.
  *
  * Three decisions in the rule, each of which changes the answer:
@@ -18,7 +18,7 @@
  *                 the real work; a domain-only version missed 6 of the 13
  *                 accounts Sample User hand. Name cannot lead — company_name
  *                 varies per deal for one Account.
- *   ONE LAYOUT  — a ExampleOrg deal and a WalaOne deal on the same company are
+ *   ONE LAYOUT  — a ExampleOrg deal and a Example Organization deal on the same company are
  *                 two legitimate products, not a collision.
  */
 import { describe, it, expect } from "vitest";
@@ -68,11 +68,11 @@ function violations(deals: Deal[], layout = "ExampleOrg") {
 }
 
 describe("only OPEN deals count", () => {
-  it("flags Stc: two open deals, four Closed Lost ignored", () => {
+  it("flags Example Organization: two open deals, four Closed Lost ignored", () => {
     // The real record from the CRM on 2026-08-24.
     const v = violations([
       { stage: "Proposal", owner: "Ali AlRajhi", domain: "<REDACTED_HOST>" },
-      { stage: "On Hold", owner: "Khowla Saeed", domain: "<REDACTED_HOST>" },
+      { stage: "On Hold", owner: "Sample User", domain: "<REDACTED_HOST>" },
       { stage: "Closed Lost", owner: "Naif AlSaif", domain: "<REDACTED_HOST>" },
       { stage: "Closed Lost", owner: "Abubaker Hashem", domain: "<REDACTED_HOST>" },
       { stage: "Closed Lost", owner: "هاجر الحبردي", domain: "<REDACTED_HOST>" },
@@ -121,8 +121,8 @@ describe("domain merges duplicate Account records", () => {
 
   it("falls back to company name when a deal has no domain", () => {
     const v = violations([
-      { stage: "Contacted", owner: "Khowla", account: "Aseer Development Authority" },
-      { stage: "Contacted", owner: "Khowla", account: "aseer development authority" },
+      { stage: "Contacted", owner: "Khowla", account: "Example Organization" },
+      { stage: "Contacted", owner: "Khowla", account: "Example Organization" },
     ]);
     expect(v).toHaveLength(1);
     // Same owner both sides: a housekeeping breach, not a collision.
@@ -140,12 +140,12 @@ describe("domain merges duplicate Account records", () => {
 });
 
 describe("the rule holds within ONE layout", () => {
-  it("does not flag a ExampleOrg deal against a WalaOne deal", () => {
-    // BSF Capital: two ExampleOrg opens plus a WalaOne Proposal. The WalaOne deal
+  it("does not flag a ExampleOrg deal against a Example Organization deal", () => {
+    // Example Organization: two ExampleOrg opens plus a Example Organization Proposal. The Example Organization deal
     // is a different product, not a second seller on the same sale.
     const v = violations([
       { stage: "Contacted", owner: "Khowla", domain: "<REDACTED_HOST>", layout: "ExampleOrg" },
-      { stage: "Proposal", owner: "Abdulaziz", domain: "<REDACTED_HOST>", layout: "WalaOne" },
+      { stage: "Proposal", owner: "Sample User", domain: "<REDACTED_HOST>", layout: "Example Organization" },
     ]);
     expect(v).toHaveLength(0);
   });
@@ -154,7 +154,7 @@ describe("the rule holds within ONE layout", () => {
     const v = violations([
       { stage: "Contacted", owner: "Khowla", domain: "<REDACTED_HOST>", layout: "ExampleOrg" },
       { stage: "On Hold", owner: "Sample User", domain: "<REDACTED_HOST>", layout: "ExampleOrg" },
-      { stage: "Proposal", owner: "Abdulaziz", domain: "<REDACTED_HOST>", layout: "WalaOne" },
+      { stage: "Proposal", owner: "Sample User", domain: "<REDACTED_HOST>", layout: "Example Organization" },
     ]);
     expect(v).toHaveLength(1);
     expect(v[0].open_deals).toBe(2);
@@ -165,7 +165,7 @@ describe("owner collision is reported separately", () => {
   it("distinguishes two owners from one owner holding both", () => {
     const collision = violations([
       { stage: "New Deal", owner: "Ali AlRajhi", domain: "<REDACTED_HOST>" },
-      { stage: "New Deal", owner: "Khowla Saeed", domain: "<REDACTED_HOST>" },
+      { stage: "New Deal", owner: "Sample User", domain: "<REDACTED_HOST>" },
     ]);
     const housekeeping = violations([
       { stage: "Proposal", owner: "فايز الأسمري", domain: "<REDACTED_HOST>" },
@@ -186,28 +186,28 @@ describe("grouping falls back to the Account id when there is no domain", () => 
   // domain and missed 6 of the 13 accounts Sample User by hand.
   it("groups two open deals on one Account id", () => {
     const v = violations([
-      { stage: "Proposal", owner: "Ali AlRajhi", accountId: "5146753000000898665", account: "Stc" },
-      { stage: "On Hold", owner: "Khowla Saeed", accountId: "5146753000000898665", account: "STC" },
+      { stage: "Proposal", owner: "Ali AlRajhi", accountId: "<REDACTED_ID>", account: "Example Organization" },
+      { stage: "On Hold", owner: "Sample User", accountId: "<REDACTED_ID>", account: "Example Organization" },
     ]);
     expect(v).toHaveLength(1);
     expect(v[0].distinct_owners).toBe(2);
   });
 
   it("does NOT merge genuinely different Accounts that share a name fragment", () => {
-    // "Stc" and "stcbank" are separate companies with separate Account ids.
+    // "Example Organization" and "stcbank" are separate companies with separate Account ids.
     expect(
       violations([
-        { stage: "Proposal", owner: "Ali AlRajhi", accountId: "5146753000000898665", account: "Stc" },
-        { stage: "Contacted", owner: "Ali AlRajhi", accountId: "5146753000185069297", account: "stcbank" },
+        { stage: "Proposal", owner: "Ali AlRajhi", accountId: "<REDACTED_ID>", account: "Example Organization" },
+        { stage: "Contacted", owner: "Ali AlRajhi", accountId: "<REDACTED_ID>", account: "stcbank" },
       ]),
     ).toHaveLength(0);
   });
 
   it("keeps one Account together even when company_name differs per deal", () => {
-    // The failure that hid these: company_name varies ("Stc", "الاتصالات
+    // The failure that hid these: company_name varies ("Example Organization", "الاتصالات
     // السعودية"), so leading with name splits one Account into several groups.
     const v = violations([
-      { stage: "Proposal", owner: "A", accountId: "acc-1", account: "Stc" },
+      { stage: "Proposal", owner: "A", accountId: "acc-1", account: "Example Organization" },
       { stage: "Meeting", owner: "B", accountId: "acc-1", account: "الاتصالات السعودية" },
     ]);
     expect(v).toHaveLength(1);

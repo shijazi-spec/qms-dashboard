@@ -244,10 +244,10 @@ const _aiApprovalRoutesRaw = [
           const search = (url.searchParams.get("search") || "").trim() || undefined;
           const sort =
             url.searchParams.get("sort") === "asc" ? "asc" : "desc";
-          // Source group: 'autonomous' = shadow proposals, 'adam' = chat requests.
+          // Source group: 'autonomous' = shadow proposals, 'AssistantPersona' = chat requests.
           const sourceParam = url.searchParams.get("source");
           const sourceGroup =
-            sourceParam === "autonomous" || sourceParam === "adam"
+            sourceParam === "autonomous" || sourceParam === "AssistantPersona"
               ? sourceParam
               : undefined;
 
@@ -539,7 +539,7 @@ const _aiApprovalRoutesRaw = [
 
           const sourceParam = url.searchParams.get('source');
           const sourceGroup =
-            sourceParam === 'autonomous' || sourceParam === 'adam' ? sourceParam : undefined;
+            sourceParam === 'autonomous' || sourceParam === 'AssistantPersona' ? sourceParam : undefined;
 
           // Only meaningful when reviewFilter='unreviewed_by_me'; we
           // still pass it for 'no_reviewers' so the helper signature

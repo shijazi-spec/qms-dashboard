@@ -8,7 +8,7 @@
  *   Sara (Quality):
  *     - QM-KPI-004  QMS Adoption Rate          → qms_adoption
  *     - QM-KPI-007  Op. Excellence Value Real. → value_realization
- *   Maram (GRC):
+ *   Sample User (GRC):
  *     - GRC-KPI-002 Certification Milestone Delivery → certification_milestones
  *     - GRC-KPI-004  Evidence SLA Compliance         → evidence_requests
  *     - GRC-KPI-006 TPRA Vendor Risk Turnaround SLA → tpra_requests

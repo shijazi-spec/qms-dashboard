@@ -505,7 +505,7 @@ merge(EN.kpis, {
   f_direction: 'Direction',
   // owners
   o_quality_manager: 'Sara (Quality Manager)',
-  o_grc_manager: 'Maram (GRC Manager)',
+  o_grc_manager: 'Sample User (GRC Manager)',
   o_governance_officer: 'Sample User (Governance Officer)',
   o_shared: 'Shared',
   o_shared_kpis: 'Shared KPIs',

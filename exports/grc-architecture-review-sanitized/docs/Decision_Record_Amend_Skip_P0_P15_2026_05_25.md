@@ -1,7 +1,7 @@
 # Decision Record — Amendment: Skip P0 (PII Redaction) and P1.5 (Deterministic Compliance Engine)
 
 **Date:** 2026-05-25 (same-day amendment)
-**Decision-maker:** user@example.invalid (Operations & Quality HOD)
+**Decision-maker:** <REDACTED_EMAIL> (Operations & Quality HOD)
 **Status:** Approved, amends prior decision
 **Supersedes:** `docs/Decision_Record_Close_Velents_Gaps_2026_05_25.md` (P0 + P1.5 sections only)
 

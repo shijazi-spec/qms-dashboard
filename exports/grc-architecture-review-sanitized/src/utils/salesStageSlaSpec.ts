@@ -286,7 +286,7 @@ export const SALES_SOP_DOCUMENT = {
 // module owns "which document is this KPI measured against" for every team.
 // This file stays what it is: the Sales stage SLA spec itself.
 
-/** Used by the dashboard + Adam tool to render the SLA next to a stage. */
+/** Used by the dashboard + AssistantPersona tool to render the SLA next to a stage. */
 export function describeSla(spec: StageSlaSpec): string {
   const unit = spec.unit === "business_days" ? "business day" : "calendar day";
   const plural = spec.sla === 1 ? unit : unit + "s";

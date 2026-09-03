@@ -492,7 +492,7 @@ export async function getMohammedScorecard(): Promise<{
           route: "/compliance",
           what_to_check: "Review obligation summary by regulation",
           if_result: "Missing mappings for PDPL/NCA/ISO",
-          then_action: "Flag to Maram (GRC Manager) for review",
+          then_action: "Flag to Sample User (GRC Manager) for review",
         },
         {
           step: 2,
@@ -603,7 +603,7 @@ export async function getMohammedScorecard(): Promise<{
           route: "/handoffs",
           what_to_check: "Filter by priority=critical",
           if_result: "Critical finding not in GRC",
-          then_action: "Log in GRC tracker manually, assign to HR/Maram",
+          then_action: "Log in GRC tracker manually, assign to HR/Sample User",
         },
         {
           step: 3,
@@ -645,7 +645,7 @@ export async function getMohammedScorecard(): Promise<{
           route: "/risks",
           what_to_check: "Identify risks missing owner field",
           if_result: "Risk without owner detected",
-          then_action: "Flag to Maram for owner assignment",
+          then_action: "Flag to Sample User for owner assignment",
         },
         {
           step: 2,

@@ -11,7 +11,7 @@
  * - Fast feedback loop for cron automation development
  *
  * PREREQUISITES:
- * 1. Start your Mastra server: npm start (runs on localhost:5000)
+ * 1. Start your Mastra server: npm start (runs on <REDACTED_HOST>:5000)
  * 2. Start Inngest dev server: inngest dev -u <REDACTED_URL> --port 3000
  *
  * HOW TO RUN:

@@ -21,13 +21,13 @@ import {
 // --- fieldValuesMatch ---
 
 // Exact match.
-assert.strictEqual(fieldValuesMatch("user@example.invalid", "user@example.invalid"), true);
+assert.strictEqual(fieldValuesMatch("<REDACTED_EMAIL>", "<REDACTED_EMAIL>"), true);
 
 // Trim differences are ignored.
-assert.strictEqual(fieldValuesMatch("  user@example.invalid ", "user@example.invalid"), true);
+assert.strictEqual(fieldValuesMatch("  <REDACTED_EMAIL> ", "<REDACTED_EMAIL>"), true);
 
 // Case-insensitive (CRMProvider may normalize email/URL casing).
-assert.strictEqual(fieldValuesMatch("user@example.invalid", "user@example.invalid"), true);
+assert.strictEqual(fieldValuesMatch("<REDACTED_EMAIL>", "<REDACTED_EMAIL>"), true);
 assert.strictEqual(fieldValuesMatch("<REDACTED_URL>", "<REDACTED_URL>"), true);
 
 // Phone: CRMProvider may reformat — digit-only match counts as success, but ONLY when
@@ -41,12 +41,12 @@ assert.strictEqual(fieldValuesMatch("<REDACTED_PHONE>", "<REDACTED_PHONE>"), fal
 assert.strictEqual(fieldValuesMatch("1234", "1-2-3-4", "Account_Number"), false);
 
 // THE BUG CASE: CRMProvider said SUCCESS but the stale value is still there.
-assert.strictEqual(fieldValuesMatch("user@example.invalid", "user@example.invalid"), false);
+assert.strictEqual(fieldValuesMatch("<REDACTED_EMAIL>", "<REDACTED_EMAIL>"), false);
 
 // A field that was never written (null/empty) is a mismatch, not a pass.
-assert.strictEqual(fieldValuesMatch(null, "user@example.invalid"), false);
-assert.strictEqual(fieldValuesMatch(undefined, "user@example.invalid"), false);
-assert.strictEqual(fieldValuesMatch("", "user@example.invalid"), false);
+assert.strictEqual(fieldValuesMatch(null, "<REDACTED_EMAIL>"), false);
+assert.strictEqual(fieldValuesMatch(undefined, "<REDACTED_EMAIL>"), false);
+assert.strictEqual(fieldValuesMatch("", "<REDACTED_EMAIL>"), false);
 
 // Short numeric strings must NOT collapse via the digit-only path (the
 // >= 4 digit guard prevents "12" matching "1 2" style false positives).
@@ -57,8 +57,8 @@ assert.strictEqual(fieldValuesMatch("12", "1-2", "Phone"), false);
 // All fields persisted -> no mismatches -> tool returns success.
 assert.deepStrictEqual(
   computeReadBackMismatches(
-    { Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
-    { Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
+    { Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
+    { Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
   ),
   [],
 );
@@ -67,8 +67,8 @@ assert.deepStrictEqual(
 // with the actual stored value, which drives success:false on the tool.
 {
   const m = computeReadBackMismatches(
-    { Email: "user@example.invalid" },
-    { Email: "user@example.invalid" },
+    { Email: "<REDACTED_EMAIL>" },
+    { Email: "<REDACTED_EMAIL>" },
   );
   assert.strictEqual(m.length, 1);
   assert.match(m[0], /Email still shows "test@test\.test\.test"/);
@@ -79,8 +79,8 @@ assert.deepStrictEqual(
 // reported.
 {
   const m = computeReadBackMismatches(
-    { Email: "user@example.invalid", Last_Name: "alSannat" },
-    { Email: "user@example.invalid", Last_Name: "alSannat" },
+    { Email: "<REDACTED_EMAIL>", Last_Name: "alSannat" },
+    { Email: "<REDACTED_EMAIL>", Last_Name: "alSannat" },
   );
   assert.strictEqual(m.length, 1);
   assert.match(m[0], /Email still shows "old@test\.test"/);

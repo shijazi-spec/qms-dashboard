@@ -83,13 +83,13 @@ describe("recipients come from the server, never a request", () => {
   });
 
   it("reads a comma-separated env list, trimming space", () => {
-    process.env.MISSING_DOCS_REPORT_RECIPIENTS = " user@example.invalid , user@example.invalid ";
-    expect(monthlyMissingDocsRecipients()).toEqual(["user@example.invalid", "user@example.invalid"]);
+    process.env.MISSING_DOCS_REPORT_RECIPIENTS = " <REDACTED_EMAIL> , <REDACTED_EMAIL> ";
+    expect(monthlyMissingDocsRecipients()).toEqual(["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"]);
   });
 
   it("drops entries that are not addresses rather than mailing them", () => {
-    process.env.MISSING_DOCS_REPORT_RECIPIENTS = "user@example.invalid,not-an-email,@nope,user@example.invalid";
-    expect(monthlyMissingDocsRecipients()).toEqual(["user@example.invalid", "user@example.invalid"]);
+    process.env.MISSING_DOCS_REPORT_RECIPIENTS = "<REDACTED_EMAIL>,not-an-email,@nope,<REDACTED_EMAIL>";
+    expect(monthlyMissingDocsRecipients()).toEqual(["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"]);
   });
 
   it("returns nothing when the whole list is junk, so the caller can refuse", () => {

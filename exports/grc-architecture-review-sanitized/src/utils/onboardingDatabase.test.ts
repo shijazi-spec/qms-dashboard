@@ -20,7 +20,7 @@ console.log("\n=== onboardingDatabase.createDemoLink ===\n");
 await exerciseAllKeys(h, "createDemoLink", async (secret, key, payload) => {
   return mod.createDemoLink({
     created_by: "Sample User",
-    created_by_email: "user@example.invalid",
+    created_by_email: "<REDACTED_EMAIL>",
     description: JSON.stringify({ [key]: secret, marker: NON_SENSITIVE_MARKER, payload }),
     expires_at: new Date(Date.now() + 86_400_000),
   });

@@ -12,7 +12,7 @@ await exerciseAllKeys(h, "createAudit", async (secret, key, payload) => {
     audit_type: "internal",
     scope: NON_SENSITIVE_MARKER,
     audit_standard: "ISO 9001",
-    lead_auditor: "user@example.invalid",
+    lead_auditor: "<REDACTED_EMAIL>",
     auditee_department: "qa",
     status: "planned",
     created_by: "Sample User",
@@ -39,7 +39,7 @@ await exerciseAllKeys(h, "createEvidencePack", async (secret, key, payload) => {
     description: `${NON_SENSITIVE_MARKER} desc`,
     audit_id: 1,
     evidence_items: [{ [key]: secret, marker: NON_SENSITIVE_MARKER, payload }],
-    generated_by: "user@example.invalid",
+    generated_by: "<REDACTED_EMAIL>",
     status: "draft",
   } as never);
 });

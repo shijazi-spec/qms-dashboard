@@ -71,7 +71,7 @@ beforeEach(async () => {
 describe("GET /api/team/members", () => {
   test("200 returns listTeamMembers() result and forwards filters/pagination", async () => {
     const fixture = {
-      members: [{ member_id: "TM-1", full_name: "Sample User", role: "lead", department: "QMS", status: "active" as const, email: "user@example.invalid" }],
+      members: [{ member_id: "TM-1", full_name: "Sample User", role: "lead", department: "QMS", status: "active" as const, email: "<REDACTED_EMAIL>" }],
       total: 1,
     };
     vi.mocked(team.listTeamMembers).mockResolvedValueOnce(fixture);
@@ -126,7 +126,7 @@ describe("GET /api/team/members", () => {
 
 describe("POST /api/team/members", () => {
   test("200 returns { success, member } from createTeamMember()", async () => {
-    const created = { member_id: "TM-99", full_name: "Sample User", role: "auditor", department: "QMS", status: "active" as const, email: "user@example.invalid" };
+    const created = { member_id: "TM-99", full_name: "Sample User", role: "auditor", department: "QMS", status: "active" as const, email: "<REDACTED_EMAIL>" };
     vi.mocked(team.createTeamMember).mockResolvedValueOnce(created);
 
     const handler = await buildHandler(teamRoutes, "/api/team/members", "POST");
@@ -134,7 +134,7 @@ describe("POST /api/team/members", () => {
       makeContext({
         method: "POST",
         headers: ADMIN_HEADERS,
-        body: { full_name: "Sample User", role: "auditor", department: "QMS", email: "user@example.invalid", status: "active" },
+        body: { full_name: "Sample User", role: "auditor", department: "QMS", email: "<REDACTED_EMAIL>", status: "active" },
       }),
     );
 
@@ -147,7 +147,7 @@ describe("POST /api/team/members", () => {
 
 describe("GET /api/team/members/:memberId", () => {
   test("200 returns the member when found", async () => {
-    const member = { member_id: "TM-7", full_name: "Sample User", role: "manager", department: "GRC", status: "active" as const, email: "user@example.invalid" };
+    const member = { member_id: "TM-7", full_name: "Sample User", role: "manager", department: "GRC", status: "active" as const, email: "<REDACTED_EMAIL>" };
     vi.mocked(team.getTeamMemberById).mockResolvedValueOnce(member);
 
     const handler = await buildHandler(teamRoutes, "/api/team/members/:memberId", "GET");
@@ -175,7 +175,7 @@ describe("GET /api/team/members/:memberId", () => {
 
 describe("PUT /api/team/members/:memberId", () => {
   test("200 returns { success, member } when update succeeds", async () => {
-    const updated = { member_id: "TM-3", full_name: "Sample User", role: "lead", department: "QMS", status: "active" as const, email: "user@example.invalid" };
+    const updated = { member_id: "TM-3", full_name: "Sample User", role: "lead", department: "QMS", status: "active" as const, email: "<REDACTED_EMAIL>" };
     vi.mocked(team.updateTeamMember).mockResolvedValueOnce(updated);
 
     const handler = await buildHandler(teamRoutes, "/api/team/members/:memberId", "PUT");

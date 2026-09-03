@@ -12,7 +12,7 @@
  * orphan rows can be found via `agent_name LIKE 'ai-metrics-sweep-test-%'`.
  *
  * Run locally:
- *   RUN_AI_METRICS_SWEEP_E2E=1 DATABASE_URL=postgres://... \
+ *   RUN_AI_METRICS_SWEEP_E2E=1 DATABASE_URL=<REDACTED_DSN> \
  *     npx tsx tests/aiCallMetricsSweepBackfill.integration.ts
  */
 

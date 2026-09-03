@@ -1,7 +1,7 @@
 // JS mirror of buildSegmentPredicate's SQL layout classification (DRD:165-215),
 // used to attribute a resolved-cluster survivor (whose layout we read from
 // duplicate_records) to a segment in application code.
-export type RadarSegment = "marketplace" | "ExampleOrg" | "walaone";
+export type RadarSegment = "marketplace" | "ExampleOrg" | "Example Organization";
 
 export function classifySegmentFromLayout(
   layout: string | null | undefined,
@@ -10,6 +10,6 @@ export function classifySegmentFromLayout(
   if (norm.includes("marketplace") || norm.includes("partneraccounts")) {
     return "marketplace";
   }
-  if (norm.includes("walaone")) return "walaone";
+  if (norm.includes("Example Organization")) return "Example Organization";
   return "ExampleOrg"; // includes blank/legacy corporate
 }

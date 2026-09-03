@@ -141,7 +141,7 @@ await suite.test(
     const harness = makeHarness(
       {
         ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
-        AI_COST_ALERT_EMAIL: 'user@example.invalid,user@example.invalid',
+        AI_COST_ALERT_EMAIL: '<REDACTED_EMAIL>,<REDACTED_EMAIL>',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
         APP_BASE_URL: '<REDACTED_URL>',
@@ -194,7 +194,7 @@ await suite.test(
     suite.expectEqual(harness.emails.length, 1, 'one email call');
     suite.expectEqual(
       harness.emails[0].to.join(','),
-      'user@example.invalid,user@example.invalid',
+      '<REDACTED_EMAIL>,<REDACTED_EMAIL>',
       'email recipients',
     );
     suite.expect(
@@ -237,7 +237,7 @@ await suite.test(
     const harness = makeHarness(
       {
         ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
-        AI_COST_ALERT_EMAIL: 'user@example.invalid',
+        AI_COST_ALERT_EMAIL: '<REDACTED_EMAIL>',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
         STORAGE_HEALTH_MORNING_DIGEST_DISABLED: '1',
@@ -308,7 +308,7 @@ await suite.test(
     const harness = makeHarness(
       {
         ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
-        AI_COST_ALERT_EMAIL: 'user@example.invalid',
+        AI_COST_ALERT_EMAIL: '<REDACTED_EMAIL>',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
       },
@@ -354,7 +354,7 @@ await suite.test(
     const harness = makeHarness(
       {
         ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
-        AI_COST_ALERT_EMAIL: 'user@example.invalid',
+        AI_COST_ALERT_EMAIL: '<REDACTED_EMAIL>',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
       },

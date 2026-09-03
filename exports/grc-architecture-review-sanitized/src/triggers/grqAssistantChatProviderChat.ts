@@ -23,9 +23,9 @@ import { withAgentUserContext } from "../utils/withApprovalGate";
 import { buildAiCallTelemetryMetadata, withAiTelemetry } from "../utils/aiTelemetry";
 import { QMS_CONSULTANT_PROMPT_VERSION } from "../mastra/agents/qmsConsultantAgent";
 
-// Role Adam runs AS when answering in ChatProvider. The platform's data tools are
+// Role AssistantPersona runs AS when answering in ChatProvider. The platform's data tools are
 // RBAC-gated by the caller's role (via withAgentUserContext); without a context
-// the role is "unknown" and every QMS query is denied — which is why Adam said
+// the role is "unknown" and every QMS query is denied — which is why AssistantPersona said
 // "role-based access restrictions" in ChatProvider. ChatProvider has no platform login, so we
 // run him at a FIXED role. Default = head_of_operations_quality (read access to
 // Risks/Policies/Audits/Compliance/KPIs/Vendors; NOT the admin-only NC/CAPA/
@@ -36,10 +36,10 @@ import { QMS_CONSULTANT_PROMPT_VERSION } from "../mastra/agents/qmsConsultantAge
 const ChatProvider_ADAM_ROLE = process.env.ChatProvider_ADAM_ROLE || "head_of_operations_quality";
 
 /**
- * Tool-call iterations Adam gets per ChatProvider question (Sample User 2026-08-30).
+ * Tool-call iterations AssistantPersona gets per ChatProvider question (Sample User 2026-08-30).
  *
  * Was 6, which silently capped LIST questions: asked to check ~56 companies,
- * Adam picked a per-company lookup tool, burned the budget after ~10, then
+ * AssistantPersona picked a per-company lookup tool, burned the budget after ~10, then
  * closed with "let me know if you need checks on additional companies" and
  * hedged about "limitations in data access". The same question in the web chat
  * came back complete, which is what made it look like ChatProvider was restricted —
@@ -73,13 +73,13 @@ export function splitForChatProvider(text: string, limit = ChatProvider_MAX_CHAR
   return chunks;
 }
 
-// Address-by-name trigger: "Adam" (the agent's name) or "GRQ", optionally greeted.
-const NAME_TRIGGER = /(^|\s)(hey\s+|hi\s+|hello\s+)?@?(adam|grq)(\s+assistant)?\b/i;
+// Address-by-name trigger: "AssistantPersona" (the agent's name) or "GRQ", optionally greeted.
+const NAME_TRIGGER = /(^|\s)(hey\s+|hi\s+|hello\s+)?@?(AssistantPersona|grq)(\s+assistant)?\b/i;
 
 /**
  * Provider rate-limit handling (Sample User 2026-07-20).
  *
- * Adam's request is large (big system prompt + many tool schemas), so on a low
+ * AssistantPersona's request is large (big system prompt + many tool schemas), so on a low
  * TPM tier a single call can trip LLMProvider's per-minute token cap and the raw
  * provider error was being posted straight into the channel — including the
  * LLMProvider ORG ID. We now (a) retry after the delay the provider suggests, and
@@ -167,7 +167,7 @@ export function registerGrqAssistantChatProviderRoutes(): ApiRoute[] {
         // Strip the <@bot> mention token and a leading "GRQ"/greeting prefix.
         let q = rawText
           .replace(/<@[A-Z0-9]+>/gi, " ")
-          .replace(/^\s*(hey|hi|hello)?\s*@?(adam|grq)(\s+assistant)?\s*[:,]?\s*/i, "")
+          .replace(/^\s*(hey|hi|hello)?\s*@?(AssistantPersona|grq)(\s+assistant)?\s*[:,]?\s*/i, "")
           .trim();
         if (!q) q = "Hello";
 
@@ -198,7 +198,7 @@ export function registerGrqAssistantChatProviderRoutes(): ApiRoute[] {
 
         let reply = "";
         try {
-          // withAgentUserContext threads a role into the tool layer so Adam's
+          // withAgentUserContext threads a role into the tool layer so AssistantPersona's
           // RBAC-gated platform-data tools actually return data (mirrors what
           // the web /api/consultant/chat route does for a logged-in user).
           void import("../utils/adamTopicLog").then(({ recordQuestionSection }) =>
@@ -209,7 +209,7 @@ export function registerGrqAssistantChatProviderRoutes(): ApiRoute[] {
             // critically, the 429s. The web chat route has always done this;
             // ChatProvider did not, so every ChatProvider question was invisible to AI
             // Operations and a rate-limit burst here left nothing to diagnose
-            // (Sample User 2026-09-02, after Adam answered "I'm hitting the AI rate
+            // (Sample User 2026-09-02, after AssistantPersona answered "I'm hitting the AI rate
             // limit" in #grq-assistant and the table held no row for it).
             //
             // Wrapped INSIDE the retry on purpose: each attempt gets its own

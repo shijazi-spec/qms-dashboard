@@ -3,12 +3,6 @@
 This inventory contains architecture-review source only. Binary assets, runtime data, exports, logs, backups, agent metadata, and all environment files except `.env.example` were excluded.
 
 ```text
-.HostingPlatform
-.SourceControlProvider/workflows/ai-approval-redaction-integration.yml
-.SourceControlProvider/workflows/digest-notification-smoke.yml
-.SourceControlProvider/workflows/streaming-download-smoke.yml
-.SourceControlProvider/workflows/tests.yml
-.SourceControlProvider/workflows/typecheck.yml
 .env.example
 .gitattributes
 .gitignore
@@ -16,9 +10,13 @@ This inventory contains architecture-review source only. Binary assets, runtime 
 .npmrc
 CHANGELOG.md
 CONTRIBUTING.md
-HostingPlatform.nix
 README.md
 SANITIZATION_NOTICE.md
+ci/workflows/ai-approval-redaction-integration.yml
+ci/workflows/digest-notification-smoke.yml
+ci/workflows/streaming-download-smoke.yml
+ci/workflows/tests.yml
+ci/workflows/typecheck.yml
 collector/ExampleOrgDocCollector.ps1
 collector/Install-Tasks.ps1
 collector/Push-Now.cmd
@@ -267,6 +265,8 @@ docs/status/status-2026-05-12.md
 docs/triggers/dev-prod-HostingPlatform.md
 docs/triggers/time_based_triggers.md
 docs/triggers/webhook_connector_triggers.md
+hosting-platform.config
+hosting-platform.nix
 package-lock.json
 package.json
 playwright.config.ts

@@ -44,7 +44,7 @@
 
 - Re-run QC from outside HostingPlatform against published URL:
   - `QC_BASE_URL=<REDACTED_URL_SCHEME><published-domain> npm run qc`
-- If external checks fail while localhost passes, treat it as deployment edge/network exposure issue and keep localhost report as internal functional truth until publish config is corrected.
+- If external checks fail while <REDACTED_HOST> passes, treat it as deployment edge/network exposure issue and keep <REDACTED_HOST> report as internal functional truth until publish config is corrected.
 
 ### P1 - Release Gate Hardening
 
@@ -78,7 +78,7 @@
   - Cause: plaintext keys in `.HostingPlatform`.
   - Mitigation: immediate rotation + secrets manager usage.
 - **R2: False-negative production confidence (Medium)**
-  - Cause: localhost green but published URL may reject external API checks.
+  - Cause: <REDACTED_HOST> green but published URL may reject external API checks.
   - Mitigation: dual validation (inside HostingPlatform + outside URL) before go-live signoff.
 - **R3: Alert blind spots (Medium)**
   - Cause: notification channels not fully smoke-tested in current environment.
@@ -102,7 +102,7 @@ Release should be **Go** only if all are true:
 ## 5) Immediate Next 7 Actions (Recommended Sequence)
 
 1. Rotate exposed admin/test keys and migrate to HostingPlatform Secrets.
-2. Re-run `npm run qc` internally (localhost) and archive report artifact.
+2. Re-run `npm run qc` internally (<REDACTED_HOST>) and archive report artifact.
 3. Run QC against published URL and compare deltas.
 4. Execute `secret-redaction` workflow and capture output.
 5. Execute `i18n` + `post-restore-sweep-panel` workflows and capture output.

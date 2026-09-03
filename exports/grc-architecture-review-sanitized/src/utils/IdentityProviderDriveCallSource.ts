@@ -151,7 +151,7 @@ export async function resolveDriveAuth(): Promise<DriveAuthResult> {
   for (const a of attempts) {
     const token = await a.fn();
     if (token) {
-      cachedToken = { mode: a.mode, access_token: token, expires_at: nowSec() + 50 * 60 };
+      cachedToken = <REDACTED_SECRET> mode: a.mode, access_token: token, expires_at: nowSec() + 50 * 60 };
       return { mode: a.mode, access_token: token };
     }
   }
@@ -286,5 +286,5 @@ export async function downloadDriveFile(file_id: string): Promise<Buffer | null>
 
 /** Test helper: clear the token cache between tests. */
 export function resetDriveAuthCacheForTests(): void {
-  cachedToken = null;
+  cachedToken = <REDACTED_SECRET>
 }

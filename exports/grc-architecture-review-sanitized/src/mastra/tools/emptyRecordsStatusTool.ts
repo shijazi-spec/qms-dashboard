@@ -2,7 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
 /**
- * Read tool for the "Empty / Orphaned Records" CRM-cleanup tab so Adam can
+ * Read tool for the "Empty / Orphaned Records" CRM-cleanup tab so AssistantPersona can
  * answer "how many empty / orphaned / test records do we have to clean?" with
  * real numbers. Reuses the exact detection the tab uses. Read-only — the
  * platform never deletes; it tags "Empty-Delete" for the CRMProvider admin to delete.

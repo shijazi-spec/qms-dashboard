@@ -225,7 +225,7 @@ console.log("\n=== recordResolutionEvent — non-sensitive passthrough ===\n");
     fieldsMigrated: 7,
     plan: { survivor: "CRMProvider-12345", notes: "no overrides, clean merge" },
     report: { summary: "preview only", reparented: 0 },
-    performedBy: "user@example.invalid",
+    performedBy: "<REDACTED_EMAIL>",
   });
   const params = lastInsertParams();
   assert(params !== null, "non-sensitive: pool.query was called");
@@ -239,7 +239,7 @@ console.log("\n=== recordResolutionEvent — non-sensitive passthrough ===\n");
       "non-sensitive: CRMProvider ids preserved verbatim (not over-redacted)",
     );
     assert(
-      params[11] === "user@example.invalid",
+      params[11] === "<REDACTED_EMAIL>",
       "non-sensitive: performed_by preserved verbatim",
     );
     const planParam = String(params[PLAN_IDX] ?? "");

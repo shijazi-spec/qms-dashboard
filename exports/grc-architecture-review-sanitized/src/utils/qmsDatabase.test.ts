@@ -45,7 +45,7 @@ await exerciseAllKeys(h, "createNonconformance", async (secret, key, payload) =>
     source_reference: "ref",
     severity: "minor" as never,
     status: "open" as never,
-    detected_by: "user@example.invalid",
+    detected_by: "<REDACTED_EMAIL>",
     criteria_violations: { [key]: secret, marker: NON_SENSITIVE_MARKER, payload } as never,
     attachments: [{ [key]: secret, marker: NON_SENSITIVE_MARKER, payload }] as never,
     metadata: { [key]: secret, marker: NON_SENSITIVE_MARKER, payload } as never,

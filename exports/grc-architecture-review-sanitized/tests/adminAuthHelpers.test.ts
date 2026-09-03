@@ -23,7 +23,7 @@ const TEST_SESSION_SECRET = "test-session-secret-xyz789";
 
 process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
-process.env.DATABASE_URL = process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
+process.env.DATABASE_URL = process.env.DATABASE_URL || "<REDACTED_DSN>";
 
 import crypto from "crypto";
 import {
@@ -107,7 +107,7 @@ function makeContext(opts: MockContextOptions = {}): any {
 function adminSessionCookie(role: string = "admin"): string {
   const token = signSession({
     userId: 1,
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     name: "Test Admin",
     role,
     exp: Date.now() + 60_000,
@@ -373,7 +373,7 @@ console.log("Case: getSessionUser — valid session cookie, no key → session u
   const user = getSessionUser(c);
   assert(user !== null, "getSessionUser returns a non-null user");
   assertEquals(user?.role, "quality_manager", "role matches the session payload");
-  assertEquals(user?.email, "user@example.invalid", "email matches the session payload");
+  assertEquals(user?.email, "<REDACTED_EMAIL>", "email matches the session payload");
 }
 console.log();
 

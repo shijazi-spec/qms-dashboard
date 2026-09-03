@@ -1,7 +1,7 @@
 # HostingPlatform Secrets Cleanup — Weekly Digest Decommission
 
 **Date:** 2026-05-26
-**Owner:** user@example.invalid
+**Owner:** <REDACTED_EMAIL>
 **Linked decision records:**
 - `Decision_Record_Amend_Skip_Digest_Merge_Agent_View_2026_05_25.md` (3rd amendment)
 - `Decision_Record_Amend_AI_Only_No_QA_Review_2026_05_25.md` (4th amendment)

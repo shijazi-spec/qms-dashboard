@@ -54,11 +54,11 @@ When you run your application locally, you need **two servers**:
 
 ```bash
 # Terminal 1: Mastra server (via "Start application" workflow)
-npm start  # → localhost:5000
+npm start  # → <REDACTED_HOST>:5000
 
 # Terminal 2: Inngest dev server (via "Start inngest server" workflow)
 inngest dev -u <REDACTED_URL> --port 3000
-# → localhost:3000 (orchestrator and a web UI)
+# → <REDACTED_HOST>:3000 (orchestrator and a web UI)
 ```
 
 NOTE: The HostingPlatform agent can only do this by running the HostingPlatform Workflows with the restart_workflow tool for both.
@@ -68,7 +68,7 @@ NOTE: The HostingPlatform agent can only do this by running the HostingPlatform 
 **Via Webhook Testing:**
 
 External Webhook          Mastra Container         Dev Inngest              Mastra Container
-(e.g., Linear)           localhost:5000           localhost:3000           localhost:5000
+(e.g., Linear)           <REDACTED_HOST>:5000           <REDACTED_HOST>:3000           <REDACTED_HOST>:5000
 ────────────────         ───────────────          ───────────────          ───────────────
 
 POST /linear/webhook ──► Handler receives
@@ -207,12 +207,12 @@ POST /webhook    ──► Transforms to
 
 | Aspect | Development | Production |
 |--------|-------------|------------|
-| **Inngest runs on** | localhost:3000 (dev server) | <REDACTED_HOST> (cloud) |
+| **Inngest runs on** | <REDACTED_HOST>:3000 (dev server) | <REDACTED_HOST> (cloud) |
 | **Webhook transformation** | Direct (no HostingPlatform layer) | Via HostingPlatform Webhook Service |
 | **Event pattern** | Direct calls to `/linear/webhook` | `event/api.webhooks.linear.action` |
 | **Storage** | RAM (lost on restart) | Postgres (durable) |
 | **Inngest dev server needed?** | ✅ YES (run manually) | ❌ NO (handled by Publish) |
-| **Web UI** | localhost:3000 | <REDACTED_HOST> |
+| **Web UI** | <REDACTED_HOST>:3000 | <REDACTED_HOST> |
 | **Authentication** | None | Auto-configured by HostingPlatform |
 | **Trigger methods** | `workflow.start()` or webhooks | Same - both methods work |
 | **Retry behavior** | 0 retries (fast debugging) | 3 retries (production reliability) |
@@ -221,7 +221,7 @@ Your code = IDENTICAL in both environments.
 
 The Mastra + Inngest SDK automatically detects the environment:
 
-- **Dev:** Sees dev server at localhost:3000 → uses it for orchestration
+- **Dev:** Sees dev server at <REDACTED_HOST>:3000 → uses it for orchestration
 - **Prod:** No dev server → uses <REDACTED_HOST> for orchestration
 
 ---
@@ -364,7 +364,7 @@ This is the ONLY method that tests the complete production architecture from end
 
 - ✅ Ensure outputSchema of step N matches inputSchema of step N+1
 - ✅ Check that all required fields are returned from each step
-- ✅ Review Inngest UI at localhost:3000 for detailed error messages
+- ✅ Review Inngest UI at <REDACTED_HOST>:3000 for detailed error messages
 
 **Changes not reflected:**
 

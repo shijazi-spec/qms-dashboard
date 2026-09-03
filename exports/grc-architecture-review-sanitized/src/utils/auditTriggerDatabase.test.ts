@@ -24,7 +24,7 @@ console.log("\n=== auditTriggerDatabase.createNotification ===\n");
 await exerciseAllKeys(h, "createNotification", async (secret, key, payload) => {
   return mod.createNotification({
     trigger_id: 1,
-    recipient_email: "user@example.invalid",
+    recipient_email: "<REDACTED_EMAIL>",
     recipient_role: "quality_manager",
     notification_type: "dashboard",
     subject: `${NON_SENSITIVE_MARKER} subject`,

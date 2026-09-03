@@ -525,7 +525,7 @@ const execBriefWeeklyFunction = inngest.createFunction(
 );
 inngestFunctions.push(execBriefWeeklyFunction);
 
-// Monthly notification-schedule review — posts Adam's current notification
+// Monthly notification-schedule review — posts AssistantPersona's current notification
 // schedule to #grq-assistant on the 1st at 09:00 KSA (06:00 UTC) so the team
 // reviews the timings monthly and edits if needed.
 const scheduleReviewFunction = inngest.createFunction(
@@ -1867,7 +1867,7 @@ const fraudSamaDeadlineCheckFunction = inngest.createFunction(
       }
       const recipients = (
         process.env.FRAUD_SAMA_NOTIFY_EMAILS ||
-        "user@example.invalid,user@example.invalid"
+        "<REDACTED_EMAIL>,<REDACTED_EMAIL>"
       )
         .split(",")
         .map((e) => e.trim())
@@ -1927,7 +1927,7 @@ const fraudIncidentOverdueCheckFunction = inngest.createFunction(
         return { notified: 0 };
       }
       const recipient =
-        process.env.FRAUD_OVERDUE_NOTIFY_EMAIL || "user@example.invalid";
+        process.env.FRAUD_OVERDUE_NOTIFY_EMAIL || "<REDACTED_EMAIL>";
       let notified = 0;
       for (const inc of overdue) {
         try {
@@ -1998,7 +1998,7 @@ const fraudIncidentSlaCheckFunction = inngest.createFunction(
         return { notified: 0, open: open.length };
       }
       const recipient =
-        process.env.FRAUD_SLA_NOTIFY_EMAIL || "user@example.invalid";
+        process.env.FRAUD_SLA_NOTIFY_EMAIL || "<REDACTED_EMAIL>";
       let notified = 0;
       for (const inc of breaches as any[]) {
         try {
@@ -2050,7 +2050,7 @@ const fraudCountryReviewReminderFunction = inngest.createFunction(
       await initFraudTables();
       const blacklisted = await getBlackListedCountryCount();
       const recipient =
-        process.env.FRAUD_COUNTRY_NOTIFY_EMAIL || "user@example.invalid";
+        process.env.FRAUD_COUNTRY_NOTIFY_EMAIL || "<REDACTED_EMAIL>";
       await createNotification({
         title: "Country Risk Register — semi-annual review due",
         message: `FATF publishes updates 3x/year. Refresh country-risk ratings against the latest plenary outcomes. Currently ${blacklisted} country/countries are on the FATF black-list.`,
@@ -2106,7 +2106,7 @@ const fraudKpiMonthlyReminderFunction = inngest.createFunction(
       }
 
       const recipient =
-        process.env.FRAUD_KPI_NOTIFY_EMAIL || "user@example.invalid";
+        process.env.FRAUD_KPI_NOTIFY_EMAIL || "<REDACTED_EMAIL>";
       try {
         await createNotification({
           title: `Fraud KPI snapshot ready: ${prevMonth.slice(0, 7)}`,

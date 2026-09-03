@@ -356,7 +356,7 @@ export const infographicRoutes = [
           const EmailProvider = new EmailProvider(process.env.EmailProvider_API_KEY);
           const fromEmail =
             process.env.EmailProvider_FROM_EMAIL ||
-            "ExampleOrg QMS <user@example.invalid>";
+            "ExampleOrg QMS <<REDACTED_EMAIL>>";
           const { data, error } = await EmailProvider.emails.send({
             from: fromEmail,
             to: recipients,

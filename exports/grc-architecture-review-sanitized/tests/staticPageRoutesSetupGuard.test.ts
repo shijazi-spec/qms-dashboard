@@ -68,7 +68,7 @@ const TEST_SESSION_SECRET = "test-session-secret-static-page-setup-guard";
 // dynamic imports so the route module sees a stable secret.
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
+  process.env.DATABASE_URL || "<REDACTED_DSN>";
 
 // Start with ADMIN_API_KEY explicitly UNSET so case A is exercised
 // against a clean baseline. Subsequent cases set/unset it as needed.

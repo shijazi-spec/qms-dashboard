@@ -98,11 +98,11 @@ if (!DATABASE_URL) {
 
 // Synthetic IDs/emails — all distinct from anything a real user could
 // hold so seeded rows are unambiguous and cleanup is safe.
-const TEST_QM_EMAIL = "user@example.invalid";
+const TEST_QM_EMAIL = "<REDACTED_EMAIL>";
 const TEST_QM_NAME = "Review-Counts Integration QM";
 const TEST_QM_USER_ID = 999_801;
 
-const TEST_BU_EMAIL = "user@example.invalid";
+const TEST_BU_EMAIL = "<REDACTED_EMAIL>";
 const TEST_BU_NAME = "Review-Counts Integration BU";
 const TEST_BU_USER_ID = 999_802;
 

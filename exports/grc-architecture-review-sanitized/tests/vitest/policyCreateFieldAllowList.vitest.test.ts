@@ -73,10 +73,10 @@ describe("the lifecycle endpoints get the field names they actually read", () =>
   const CASES: Array<[string, Record<string, unknown>]> = [
     ["POST /:id/transition", { new_status: "archived", comments: "x" }],
     ["PUT /:id/set-owners", {
-      operational_owner: "a", operational_owner_email: "user@example.invalid",
-      compliance_owner: "b", compliance_owner_email: "user@example.invalid",
+      operational_owner: "a", operational_owner_email: "<REDACTED_EMAIL>",
+      compliance_owner: "b", compliance_owner_email: "<REDACTED_EMAIL>",
     }],
-    ["POST /:id/acknowledge", { user_email: "user@example.invalid" }],
+    ["POST /:id/acknowledge", { user_email: "<REDACTED_EMAIL>" }],
     ["POST /review-cycles", { policy_id: 1, scheduled_date: "2026-09-01" }],
   ];
 

@@ -324,7 +324,7 @@ export async function judgeEvidence(
           (Number(usage.completionTokens || usage.completion_tokens) || 0) ||
         0;
     }
-    tokensUsed = tot || null;
+    tokensUsed = <REDACTED_SECRET> || null;
   } catch (err) {
     llmError = (err as Error).message;
     logger.warn(

@@ -1746,7 +1746,7 @@ await suite.test(
         cleared_overrides: { errorRatePct: 99 },
         expired_at: new Date(Date.now() - 60_000),
         audit_id: 12345,
-        previous_updated_by: "user@example.invalid",
+        previous_updated_by: "<REDACTED_EMAIL>",
       }),
     };
     const out = await runToolHealthCheck(deps);
@@ -1777,7 +1777,7 @@ await suite.test(
         cleared_overrides: { errorRatePct: 99, p95LatencyMs: 30_000 },
         expired_at: new Date("2026-04-24T09:00:00Z"),
         audit_id: 7777,
-        previous_updated_by: "user@example.invalid",
+        previous_updated_by: "<REDACTED_EMAIL>",
       }),
       notifyOverrideExpired: (async (n: any) => {
         notifyCalls.push(n);
@@ -1789,7 +1789,7 @@ await suite.test(
     const call = notifyCalls[0];
     suite.expectEqual(
       call.previous_updated_by,
-      "user@example.invalid",
+      "<REDACTED_EMAIL>",
       "carries the operator who set the override",
     );
     suite.expectEqual(
@@ -1865,7 +1865,7 @@ await suite.test(
           cleared_overrides: { errorRatePct: 75 },
           expired_at: new Date(Date.now() - 60_000),
           audit_id: 4242,
-          previous_updated_by: "user@example.invalid",
+          previous_updated_by: "<REDACTED_EMAIL>",
         }),
         notifyOverrideExpired: (async () => {
           throw new Error("simulated ChatProvider outage");

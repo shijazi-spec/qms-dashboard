@@ -128,12 +128,12 @@ Include a `.env.example` file with all required environment variables:
 
 ```bash filename=".env.example"
 # LLM provider API keys (choose one or more)
-LLMProvider_API_KEY=your_LLMProvider_api_key_here
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-IdentityProvider_GENERATIVE_AI_API_KEY=your_IdentityProvider_api_key_here
+LLMProvider_API_KEY=<REDACTED_SECRET>
+ANTHROPIC_API_KEY=<REDACTED_SECRET>
+IdentityProvider_GENERATIVE_AI_API_KEY=<REDACTED_SECRET>
 
 # Other service API keys as needed
-OTHER_SERVICE_API_KEY=your_api_key_here
+OTHER_SERVICE_API_KEY=<REDACTED_SECRET>
 ```
 
 ### Code Standards

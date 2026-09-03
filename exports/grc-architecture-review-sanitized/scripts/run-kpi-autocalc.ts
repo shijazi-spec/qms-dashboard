@@ -3,8 +3,8 @@
  * straight from the database. The fastest way to CHECK the KPIs without the UI.
  *
  * Usage (DATABASE_URL must point at the QMS Postgres):
- *   DATABASE_URL=postgres://... npx tsx scripts/run-kpi-autocalc.ts
- *   # PowerShell: $env:DATABASE_URL="postgres://..."; npx tsx scripts/run-kpi-autocalc.ts
+ *   DATABASE_URL=<REDACTED_DSN> npx tsx scripts/run-kpi-autocalc.ts
+ *   # PowerShell: $env:DATABASE_URL="<REDACTED_DSN>"; npx tsx scripts/run-kpi-autocalc.ts
  *
  * Add --cycle-times to also run the Sales Proposal/Agreement cycle-time step
  * (needs CRMProvider API env vars; otherwise leave it off for a DB-only check):
@@ -100,7 +100,7 @@ async function printDiagnostics() {
 
 const OWNER_LABEL: Record<string, string> = {
   quality_manager: "Sample User (Quality)",
-  grc_manager: "Maram (GRC)",
+  grc_manager: "Sample User (GRC)",
   grq_specialist: "AlHanouf (GRQ Specialist)",
   sdr_team: "SDR Team",
   sales_team: "Sales Team",

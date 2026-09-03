@@ -47,7 +47,7 @@ vi.mock("../../src/utils/aiFeedbackDatabase", () => ({
 vi.mock("../../src/utils/rbacMiddleware", () => ({
   requireRole: vi.fn(async () => ({
     userId: "mobile-tester-1",
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     role: "ai_specialist",
   })),
 }));

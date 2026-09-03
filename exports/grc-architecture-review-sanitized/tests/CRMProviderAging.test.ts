@@ -131,7 +131,7 @@ section("pickLatestStatusTimelineEntry — filters by api_name + value");
     {
       audited_time: "2026-02-01T00:00:00Z",
       field: { api_name: "Email" },
-      value: { current: "user@example.invalid" }, // wrong field — must be ignored
+      value: { current: "<REDACTED_EMAIL>" }, // wrong field — must be ignored
     },
     {
       audited_time: "2026-03-01T00:00:00Z",

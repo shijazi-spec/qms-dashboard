@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <title>Adam - ExampleOrg Enterprise</title>
+    <title>AssistantPersona - ExampleOrg Enterprise</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
     <link rel="stylesheet" href="/css/theme.css">
     <script id="ExampleOrg-theme-fouc-init">
@@ -268,14 +268,14 @@
                     </button>
                 </div>
 
-                <!-- What Adam Remembers (Working Memory) -->
+                <!-- What AssistantPersona Remembers (Working Memory) -->
                 <div class="mt-3 pt-3 border-t border-gray-200">
                     <div class="flex items-center justify-between mb-2 sidebar-section-btn" data-on-click="toggleSection" data-args='["adamMemoryBox"]'>
-                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="consultant.memory_title">What Adam Remembers</span>
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="consultant.memory_title">What AssistantPersona Remembers</span>
                         <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </div>
                     <div id="adamMemoryBox" class="mb-2">
-                        <p class="text-[11px] text-gray-400 mb-1" data-i18n="consultant.memory_hint">Durable notes Adam keeps about you across chats. Say "remember…" or "forget…" to change them.</p>
+                        <p class="text-[11px] text-gray-400 mb-1" data-i18n="consultant.memory_hint">Durable notes AssistantPersona keeps about you across chats. Say "remember…" or "forget…" to change them.</p>
                         <pre id="adamMemoryContent" class="text-[11px] leading-snug text-gray-600 whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded-lg p-2 max-h-48 overflow-y-auto">Loading…</pre>
                         <div class="flex items-center gap-2 mt-1">
                             <button data-on-click="loadAdamMemory" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium" data-i18n="consultant.memory_refresh">Refresh</button>
@@ -309,7 +309,7 @@
                     <span class="text-lg leading-none" aria-hidden="true">🤖</span>
                 </div>
                 <div>
-                    <h1 class="text-sm font-semibold text-gray-800" data-i18n="consultant.title">Adam</h1>
+                    <h1 class="text-sm font-semibold text-gray-800" data-i18n="consultant.title">AssistantPersona</h1>
                     <p class="text-xs text-gray-500" data-i18n="consultant.subtitle">Powered by ExampleOrg Intelligence</p>
                 </div>
                 <div class="ms-auto flex items-center gap-2">
@@ -340,7 +340,7 @@
                         <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg">
                             <span class="text-4xl leading-none" aria-hidden="true">🤖</span>
                         </div>
-                        <h2 class="text-lg font-semibold text-gray-800 mb-1" data-i18n="consultant.welcome_title">Adam</h2>
+                        <h2 class="text-lg font-semibold text-gray-800 mb-1" data-i18n="consultant.welcome_title">AssistantPersona</h2>
                         <p class="text-sm text-gray-500 leading-relaxed mb-4" data-i18n="consultant.welcome_subtitle">Your intelligent quality management advisor — ready to help with compliance, risks, KPIs, audits, and more.</p>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto" id="welcomeCards">
@@ -374,7 +374,7 @@
             <div class="p-4 bg-white border-t border-gray-200 chat-input-area">
                 <form id="chatForm" class="flex items-end gap-3">
                     <div class="flex-1 relative">
-                        <textarea id="chatInput" rows="1" placeholder="Ask the Adam anything about your QMS..." data-i18n-placeholder="consultant.input_placeholder" class="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 pe-12 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow chat-input-cap"></textarea>
+                        <textarea id="chatInput" rows="1" placeholder="Ask the AssistantPersona anything about your QMS..." data-i18n-placeholder="consultant.input_placeholder" class="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 pe-12 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow chat-input-cap"></textarea>
                     </div>
                     <button type="submit" id="sendBtn" aria-label="Send message" class="shrink-0 w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors" disabled>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 0l-7 7m7-7l7 7"/></svg>
@@ -1013,7 +1013,7 @@
 
             html = result.join('\n');
 
-            // Merge adjacent <ol> / <ul> blocks. Adam (and most LLMs) often
+            // Merge adjacent <ol> / <ul> blocks. AssistantPersona (and most LLMs) often
             // emits numbered lists where every item is "1." separated by
             // blank lines, so the per-line parser above closes the list
             // between items and the next "1." opens a fresh <ol> that
@@ -1188,7 +1188,7 @@
                         if (fallback.status === 401 || fallback.status === 403) {
                             bubble = createAssistantMessage();
                             bubble.innerHTML = renderMarkdown(
-                                '**Not authorized.** Your account does not have access to the Adam. '
+                                '**Not authorized.** Your account does not have access to the AssistantPersona. '
                                 + 'Ask an admin to grant a consultant-eligible role.'
                             );
                             return;
@@ -1225,15 +1225,15 @@
                             var label    = data && data.error;
                             var errClass = data && (data.errorClass || '');
                             if (detail) {
-                                respText = '**Adam error:** ' + detail
+                                respText = '**AssistantPersona error:** ' + detail
                                     + (errClass ? ' _(' + errClass + ')_' : '')
                                     + (label && label !== detail ? '\n\n_Server label:_ ' + label : '');
                             } else if (label) {
-                                respText = '**Adam error:** ' + label
+                                respText = '**AssistantPersona error:** ' + label
                                     + (errClass ? ' _(' + errClass + ')_' : '')
                                     + '\n\nNo `details` field on the server response — check the server log for the underlying exception, or open DevTools → Network → /api/consultant/chat → Response.';
                             } else if (!fallback.ok) {
-                                respText = '**Adam error (HTTP ' + fallback.status + ').** '
+                                respText = '**AssistantPersona error (HTTP ' + fallback.status + ').** '
                                     + 'The agent did not return a response. Check the server logs '
                                     + 'or DevTools → Network → ' + (fallback.url ? fallback.url.split('/').pop() : 'chat')
                                     + ' for the underlying cause.';
@@ -1265,7 +1265,7 @@
                     } catch (fallbackErr) {
                         try { console.error('[Consultant] fallback fetch threw:', fallbackErr); } catch (_) {}
                         bubble = createAssistantMessage();
-                        bubble.innerHTML = renderMarkdown('**Connection Error:** Unable to reach the Adam. Please check your connection and try again. (' + escapeHtml(String(fallbackErr && fallbackErr.message || fallbackErr)) + ')');
+                        bubble.innerHTML = renderMarkdown('**Connection Error:** Unable to reach the AssistantPersona. Please check your connection and try again. (' + escapeHtml(String(fallbackErr && fallbackErr.message || fallbackErr)) + ')');
                         addRetryButton(bubble);
                     }
                 } else if (bubble) {
@@ -1794,11 +1794,11 @@
 
         function exportChat() {
             if (!chatMessages.length) { alert(window.ExampleOrgI18n ? window.ExampleOrgI18n.t('consultant.no_messages_export') : 'No messages to export.'); return; }
-            var md = '# Adam - Chat Export\n';
+            var md = '# AssistantPersona - Chat Export\n';
             md += '**Date:** ' + new Date().toLocaleString() + '\n';
             md += '**Thread:** ' + (threadId || 'N/A') + '\n\n---\n\n';
             chatMessages.forEach(function(m) {
-                var prefix = m.role === 'user' ? '**You**' : '**Adam**';
+                var prefix = m.role === 'user' ? '**You**' : '**AssistantPersona**';
                 md += prefix + ' (' + new Date(m.time).toLocaleTimeString() + '):\n\n' + m.content + '\n\n---\n\n';
             });
 
@@ -1820,7 +1820,7 @@
                         '<div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg">' +
                             '<svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 3.104v5.714a2.<REDACTED_PHONE>.591L5 14.5M9.75 3.104c-.<REDACTED_PHONE>.082m.75-.082a24.<REDACTED_PHONE> 0m0 0v5.714a2.<REDACTED_PHONE>.591L19 14.5M14.25 3.104c.<REDACTED_PHONE>.082M19 14.5l-2.47 2.47a2.<REDACTED_PHONE>.659H9.06a2.<REDACTED_PHONE>.659L5 14.5m14 0V5.846a2.<REDACTED_PHONE>.067l-.543-.235a24.<REDACTED_PHONE> 0l-.543.235A2.<REDACTED_PHONE>.846V14.5"/></svg>' +
                         '</div>' +
-                        '<h2 class="text-lg font-semibold text-gray-800 mb-1">Adam</h2>' +
+                        '<h2 class="text-lg font-semibold text-gray-800 mb-1">AssistantPersona</h2>' +
                     '<p class="text-sm text-gray-500 leading-relaxed mb-4">Your intelligent quality management advisor — ready to help with compliance, risks, KPIs, audits, and more.</p>' +
                     '</div>' +
                 '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto">' +
@@ -1857,7 +1857,7 @@
         window.toggleSidebar = toggleSidebar;
         window.exportChat = exportChat;
 
-        // ── What Adam Remembers (resource-scoped working memory) ──────────
+        // ── What AssistantPersona Remembers (resource-scoped working memory) ──────────
         async function loadAdamMemory() {
             var el = document.getElementById('adamMemoryContent');
             if (!el) return;
@@ -1866,14 +1866,14 @@
                 var data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
                 var mem = (data && data.memory ? String(data.memory) : '').trim();
-                el.textContent = mem || "Adam hasn't noted anything about you yet. As you chat — or say \"remember…\" — durable notes will appear here.";
+                el.textContent = mem || "AssistantPersona hasn't noted anything about you yet. As you chat — or say \"remember…\" — durable notes will appear here.";
             } catch (e) {
                 el.textContent = 'Could not load memory: ' + (e && e.message || e);
             }
         }
         async function clearAdamMemory() {
             var msg = (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('consultant.memory_clear_confirm') : '') ||
-                'Clear everything Adam remembers about you? This cannot be undone.';
+                'Clear everything AssistantPersona remembers about you? This cannot be undone.';
             if (!confirm(msg)) return;
             var el = document.getElementById('adamMemoryContent');
             try {
@@ -2505,7 +2505,7 @@
             actOnApproval(a.action_code, 'approve', null, container, key.trim());
         });
 
-        // Requested UX: when Adam prepares a write, just pop up for the admin
+        // Requested UX: when AssistantPersona prepares a write, just pop up for the admin
         // password right away (no need to interact with the card). Auto-fire the
         // admin-key prompt ONCE per action (guarded so the background poll/re-render
         // can't re-open it). If the user cancels, the button stays for a retry.
@@ -2514,7 +2514,7 @@
             if (!window._cmKeyPrompted[a.action_code]) {
                 window._cmKeyPrompted[a.action_code] = true;
                 setTimeout(function () {
-                    var key = prompt('Adam prepared this change: "' + (a.tool_label || 'action') + '".\nEnter the admin password to apply it now (or Cancel to skip):');
+                    var key = prompt('AssistantPersona prepared this change: "' + (a.tool_label || 'action') + '".\nEnter the admin password to apply it now (or Cancel to skip):');
                     if (!key || !key.trim()) return;
                     actOnApproval(a.action_code, 'approve', null, container, key.trim());
                 }, 60);

@@ -4,7 +4,7 @@ import { channelToSegment, SEED_BUS } from "../../src/utils/qualityReportsDepart
 describe("channelToSegment", () => {
   it("maps channel to the fixed segment", () => {
     expect(channelToSegment("B2B")).toBe("ExampleOrg");
-    expect(channelToSegment("B2C")).toBe("walaone");
+    expect(channelToSegment("B2C")).toBe("Example Organization");
     expect(channelToSegment("MP")).toBe("marketplace");
   });
 });

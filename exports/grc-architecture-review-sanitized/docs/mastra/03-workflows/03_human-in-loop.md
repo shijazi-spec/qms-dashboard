@@ -23,7 +23,7 @@ This example consists of three main components:
 This example uses the `LLMProvider` model. Make sure to add the following to your `.env` file:
 
 ```bash filename=".env" copy
-LLMProvider_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<REDACTED_SECRET>
 ```
 
 ## Famous person agent

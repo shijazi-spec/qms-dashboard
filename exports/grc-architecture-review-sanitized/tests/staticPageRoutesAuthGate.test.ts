@@ -52,7 +52,7 @@ const TEST_SESSION_SECRET = "test-session-secret-static-page-gate";
 process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
+  process.env.DATABASE_URL || "<REDACTED_DSN>";
 
 // Register an active admin platform_users row BEFORE importing staticPageRoutes
 // so the live getPlatformUser() lookup inside isAdminAuthorizedLive()
@@ -64,7 +64,7 @@ process.env.DATABASE_URL =
 // query at the pg.Pool level — the non-admin (case B) email is left
 // unregistered so it still correctly renders "Setup Required".
 const { registerPlatformUser } = await import("./_helpers/sessionAuth");
-registerPlatformUser("user@example.invalid", "admin");
+registerPlatformUser("<REDACTED_EMAIL>", "admin");
 
 const { staticPageRoutes } = await import("../src/mastra/routes/staticPageRoutes");
 const { TestSuite } = await import("./_helpers/runner");

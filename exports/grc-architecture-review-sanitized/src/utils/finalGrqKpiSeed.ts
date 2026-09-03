@@ -1,6 +1,6 @@
 /**
  * FINAL canonical GRQ KPI set — source: "GRQ Final KPIs_2.xlsx" (Sample User, 2026-06-16).
- * 5 owner groups: Quality (Sample User), GRC (Maram AlHarbi), GRQ Specialist
+ * 5 owner groups: Quality (Sample User), GRC (Sample User), GRQ Specialist
  * (AlHanouf), Legal (Ali Sample User — NEW owner), and GRQ Team roll-ups (Shared).
  *
  * Each entry mirrors the Excel cells: name, description, calculation (formula),
@@ -65,7 +65,7 @@ export const FINAL_KPIS: FinalKpi[] = [
   { code: "QM-KPI-012", name: "CAPA Effectiveness Rate", owner_type: "quality_manager", owner_name: "Sample User", category: "quality", unit: "%", target: 90, weight: 5, direction: "higher_is_better", frequency: "quarterly", calc_mode: "manual", description: "Measures the percentage of reviewed CAPAs that were verified effective against its deadline in preventing recurrence within the defined effectiveness review period", formula: "Effective CAPAs ÷ CAPAs reviewed for effectiveness × 100", data_source: "CAPA Register" },
   { code: "QM-KPI-004", name: "QMS Platform Adoption Rate", owner_type: "quality_manager", owner_name: "Sample User", category: "quality", unit: "%", target: 70, weight: 5, direction: "higher_is_better", frequency: "quarterly", calc_mode: "checklist", description: "Measures the percentage of in-scope GRQ work activities that are created, tracked, updated, and closed within the platform established and governed by the Quality Manager", formula: "GRQ activities managed in platform ÷ total GRQ activities in scope × 100", data_source: "QMS Platform" },
 
-  // ───────────── GRC — Maram AlHarbi (10) ─────────────
+  // ───────────── GRC — Sample User (10) ─────────────
   { code: "GRC-KPI-008", name: "Compliance Coverage Index", owner_type: "grc_manager", owner_name: "Sample User", category: "compliance", unit: "%", target: 90, weight: 15, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures the percentage of identified compliance obligations (Clauses/Articles) that are mapped to defined controls, owners, and evidence requirements", formula: "Mapped Obligations ÷ Total Obligations × 100", data_source: "Compliance Register" },
   { code: "GRC-KPI-003", name: "Audit / Certification Evidence Readiness", owner_type: "grc_manager", owner_name: "Sample User", category: "audit", unit: "%", target: 95, weight: 10, direction: "higher_is_better", frequency: "Per Certificate", calc_mode: "auto", north_star: false, description: "Measures the percentage of required evidence items that are available, approved, and audit-ready within the defined audit or certification window", formula: "Ready Evidence Items ÷ Required Evidence Items × 100", data_source: "Evidence Repository" },
   { code: "GRC-KPI-005", name: "Risk Treatment On-Time Closure", owner_type: "grc_manager", owner_name: "Sample User", category: "risk", unit: "%", target: 90, weight: 15, direction: "higher_is_better", frequency: "monthly", calc_mode: "auto", north_star: true, description: "Measures the percentage of due risk treatment actions closed within the approved target date", formula: "Closed On Time ÷ Total Treatments Due × 100", data_source: "Risk Register" },

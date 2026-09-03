@@ -13,7 +13,7 @@
  *
  * Exactly TWO verdicts, by Sample User's instruction — no REVIEW tier:
  *   BLOCK — off-limits right now, because ONE of:
- *             1. protected / do-not-contact account (Aramco group, Tree, Syarah)
+ *             1. protected / do-not-contact account (Aramco group, Tree, Example Organization)
  *             2. active DOAM client (HR-ministry subscription; may not look like
  *                a client in the CRM at all)
  *             3. current active client
@@ -108,7 +108,7 @@ export interface ReengageResponse {
   generated_at: string;
 }
 
-/** "zcrm_5146753000194563135" → "5146753000194563135". */
+/** "zcrm_5146753000194563135" → "<REDACTED_ID>". */
 function stripZcrm(id: string | null | undefined): string | null {
   const s = String(id ?? "").trim();
   if (!s) return null;

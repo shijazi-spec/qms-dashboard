@@ -53,7 +53,7 @@ const task = (over: any = {}) => ({
     Subject: "Follow up",
     Status: "Not Started",
     Due_Date: "2026-08-20",
-    Owner: { name: "Rep", email: "user@example.invalid" },
+    Owner: { name: "Rep", email: "<REDACTED_EMAIL>" },
     Who_Id: { id: "L1", name: "A Lead" },
     Created_Time: "2026-08-01T10:00:00+03:00",
     Modified_Time: "2026-08-02T10:00:00+03:00",
@@ -148,7 +148,7 @@ describe("runCRMProviderTasksSync — linkage census", () => {
     await runCRMProviderTasksSync({});
     const call = query.mock.calls.find((c) => /INSERT INTO CRMProvider_tasks/i.test(String(c[0])));
     const params = call?.[1] as any[];
-    expect(params).toContain("user@example.invalid");
+    expect(params).toContain("<REDACTED_EMAIL>");
     expect(params).toContain("L1");
   });
 

@@ -266,7 +266,7 @@ const ExampleOrgNav = {
         // AI Consultant pinned to the top of Tools per user request — it is
         // the most-used item in this group and is open to all roles.
         { label: 'GRQ Assistant', href: '/consultant', icon: 'brain', id: 'consultant' },
-        { label: 'Adam — Scope of Work', href: '/autonomous-resolution', icon: 'duplicate', id: 'autonomous-resolution' },
+        { label: 'AssistantPersona — Scope of Work', href: '/autonomous-resolution', icon: 'duplicate', id: 'autonomous-resolution' },
         { label: 'Data Migration Engine', href: '/migration', icon: 'database', id: 'migration', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] },
         { label: 'Infographic Generator', href: '/infographic', icon: 'document', id: 'infographic', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] },
         // Moved here from GRC > Risk & Oversight (Sample User 2026-09-02). Both are
@@ -551,7 +551,7 @@ const ExampleOrgNav = {
       // include the script tag. The helper is idempotent and self-guards
       // against double-init.
       this._ensureTableSortLoaded();
-      // Floating Adam chat launcher on every page (bottom-right bubble).
+      // Floating AssistantPersona chat launcher on every page (bottom-right bubble).
       this._ensureAssistantWidgetLoaded();
     };
     if (window.ExampleOrgI18n) {
@@ -665,7 +665,7 @@ const ExampleOrgNav = {
     document.head.appendChild(s);
   },
 
-  // Mount the floating Adam chat launcher (the bottom-right bubble) on EVERY
+  // Mount the floating AssistantPersona chat launcher (the bottom-right bubble) on EVERY
   // page, so individual dashboards don't each need their own <script> tag.
   // Idempotent + self-guarding:
   //   - skip the full /consultant page (the widget intentionally doesn't mount

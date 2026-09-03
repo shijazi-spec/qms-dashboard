@@ -4945,7 +4945,7 @@ ${transcriptText}
             score_percentage: body.score_percentage,
             criteria_scores: body.criteria_scores,
             coaching_notes: body.coaching_notes,
-            evaluator: body.evaluator || "user@example.invalid",
+            evaluator: body.evaluator || "<REDACTED_EMAIL>",
           });
 
           if (body.complete) {

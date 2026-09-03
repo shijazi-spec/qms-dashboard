@@ -85,7 +85,7 @@
 // header without DB-backed session lookup.
 process.env.ADMIN_API_KEY = process.env.ADMIN_API_KEY || "a".repeat(64);
 process.env.RATE_LIMIT_DISABLED = "true";
-process.env.HostingPlatform_DOMAINS = process.env.HostingPlatform_DOMAINS || "localhost:5000";
+process.env.HostingPlatform_DOMAINS = process.env.HostingPlatform_DOMAINS || "<REDACTED_HOST>:5000";
 
 import { Hono, type MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";

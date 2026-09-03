@@ -698,9 +698,9 @@ export async function postWeeklyExecBrief(
 }
 
 /**
- * SINGLE SOURCE OF TRUTH for Adam's scheduled notifications. Drives the
+ * SINGLE SOURCE OF TRUTH for AssistantPersona's scheduled notifications. Drives the
  * platform "Notification Schedule" card, the monthly review post, and what
- * Adam tells people about his own cadence. To change a timing, edit the
+ * AssistantPersona tells people about his own cadence. To change a timing, edit the
  * matching env var (envKey) — review this monthly. Times are KSA (UTC+3).
  */
 export interface NotificationScheduleEntry {
@@ -727,7 +727,7 @@ export function buildNotificationScheduleText(): string {
   const lines = ADAM_NOTIFICATION_SCHEDULE.map(
     (e) => `• *${e.time}* — ${e.what}` + (e.postsToChatProvider ? ` → ${e.channel}` : ` _(background)_`),
   ).join("\n");
-  return `*Adam — Notification Schedule (KSA)*\n${lines}`;
+  return `*AssistantPersona — Notification Schedule (KSA)*\n${lines}`;
 }
 
 /** Monthly review post: shows the schedule and invites timing changes. */
@@ -740,7 +740,7 @@ export async function postMonthlyScheduleReview(): Promise<{ ok: boolean; channe
 }
 
 export const AGENT_PERFORMED_BY =
-  "Adam — GRQ Assistant (on behalf of Sample User)";
+  "AssistantPersona — GRQ Assistant (on behalf of Sample User)";
 
 /**
  * Twice-daily APPLY DIGEST posted to the resolution ChatProvider channel — at 09:00
@@ -861,7 +861,7 @@ export async function buildRadarTabStatus(): Promise<string> {
     if (pl) parts.push(`›  *Progress (solved/total):* ${pl}`);
   } catch { /* skip */ }
   // Rejection patterns (Sample User 2026-06-20) — what operators keep rejecting, so
-  // the team knows what to teach Adam / which threshold to tune.
+  // the team knows what to teach AssistantPersona / which threshold to tune.
   try {
     const { analyzeRejectionPatterns } = await import("./rejectionPatterns");
     const rp = await analyzeRejectionPatterns(7);
@@ -1054,7 +1054,7 @@ export async function postResolutionDigest(opts: {
         ? `📋 *Resolution digest — ${opts.label}* (last ${opts.sinceHours}h)\n` +
           `${totalApplies} merge(s) applied · ${tagged} tagged · ${fields} field(s) migrated` +
           (undos ? ` · ${undos} undone` : "") +
-          `\n  by Adam (the agent): ${agentApplies} · by people: ${humanApplies}` +
+          `\n  by AssistantPersona (the agent): ${agentApplies} · by people: ${humanApplies}` +
           byModule
         : `📋 *Resolution digest — ${opts.label}* (last ${opts.sinceHours}h)\n` +
           `No merges applied in this window.`;
@@ -1876,7 +1876,7 @@ async function processModule(ctx: {
     // PENDING in the queue, or the operator REJECTED it recently, skip it. This
     // stops the 6-hourly tick from re-flooding the queue with the same clusters
     // and makes a human rejection a durable "no" the agent honours — the
-    // "Adam should learn from my decisions" behaviour.
+    // "AssistantPersona should learn from my decisions" behaviour.
     const priorAction = await findOpenOrRejectedResolutionAction(clusterId, module).catch(
       () => null,
     );

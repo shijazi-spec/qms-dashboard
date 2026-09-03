@@ -3,7 +3,7 @@ import { z } from "zod";
 
 /**
  * Deals Lifecycle (Sales SOP Stage Aging) — reads the Deals Lifecycle tab so
- * Adam can answer "how many deals are stuck in Proposal past SLA?", "which
+ * AssistantPersona can answer "how many deals are stuck in Proposal past SLA?", "which
  * stage is bleeding pipeline?", or "who owns the most overdue deals?".
  *
  * Reuses scanDealStageAgingViolations (the same engine that powers the

@@ -324,7 +324,7 @@ async function _doInitCallIntelligenceTables(): Promise<void> {
       linked_via VARCHAR(20),
       -- 2026-06-07 — when linked_via='phone_via_contact', stash WHICH
       -- Contact bridged the phone → Deal match. Surfaces in the
-      -- dashboard tooltip ("via Contact: user@example.invalid")
+      -- dashboard tooltip ("via Contact: <REDACTED_EMAIL>")
       -- so an operator auditing a phone-less Deal can see the link
       -- provenance without re-running the matcher. Runtime ALTER in
       -- ensureViaContactColumns covers upgrades.
@@ -799,7 +799,7 @@ export async function updateCallRecordLinkedVia(
 
 // 2026-06-07 — when the Phone → Contact → Deal walk picks the link, also
 // stash WHICH Contact bridged the match. Surfaces in the dashboard
-// tooltip ("via Contact: user@example.invalid") so an operator can
+// tooltip ("via Contact: <REDACTED_EMAIL>") so an operator can
 // audit a phone-less Deal at a glance without re-running the matcher.
 // Idempotent column adds — same pattern as linked_via above so existing
 // deploys don't need a manual migration.

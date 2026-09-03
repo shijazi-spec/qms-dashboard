@@ -93,7 +93,7 @@
                 </p>
             </div>
             <!-- Header action buttons removed (Sample User 2026-06-20): the global
-                 header Refresh already reloads, and the floating Adam chat
+                 header Refresh already reloads, and the floating AssistantPersona chat
                  launcher (bottom-right) replaces "Open Consultant". -->
         </div>
 
@@ -109,7 +109,7 @@
         <!-- Filters -->
         <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 mb-4 flex flex-wrap gap-3 items-center">
             <!-- Search by request code / text (Sample User 2026-06-18): paste the
-                 APR-… ticket Adam gives you and jump straight to it. -->
+                 APR-… ticket AssistantPersona gives you and jump straight to it. -->
             <label class="text-xs text-gray-600 flex items-center gap-1">
                 <span data-i18n="ai_approvals.filter_search">Search</span>
                 <input id="fltSearch" type="search" autocomplete="off"
@@ -120,13 +120,13 @@
             </label>
 
             <!-- Source filter (Sample User 2026-06-18): separate the autonomous
-                 resolver's SHADOW proposals from requests made WITH ADAM in chat. -->
+                 resolver's SHADOW proposals from requests made WITH AssistantPersona in chat. -->
             <span class="inline-flex items-center gap-1 whitespace-nowrap">
                 <span class="text-xs text-gray-600" data-i18n="ai_approvals.filter_source">Source</span>
                 <select id="fltSource" aria-label="Filter by request source"
                         data-testid="select-source"
                         class="border border-gray-300 rounded px-2 py-1 text-sm">
-                    <option value="adam" selected data-i18n="ai_approvals.source_adam">Adam (chat requests)</option>
+                    <option value="AssistantPersona" selected data-i18n="ai_approvals.source_adam">AssistantPersona (chat requests)</option>
                     <option value="autonomous" data-i18n="ai_approvals.source_autonomous">Autonomous (shadow proposals)</option>
                     <option value="" data-i18n="ai_approvals.source_any">All sources</option>
                 </select>
@@ -1461,11 +1461,11 @@
     }
 
     // The clear button adapts to the Source filter:
-    //   All sources → Clear ALL pending; Adam → Clear Adam requests;
+    //   All sources → Clear ALL pending; AssistantPersona → Clear AssistantPersona requests;
     //   Autonomous → Clear shadow proposals.
     function _clearScope() {
         var v = fltSource ? fltSource.value : '';
-        if (v === 'adam') return { group: 'adam', label: '🧹 Clear Adam requests', confirm: 'Reject ALL pending Adam (chat) requests?\n\nThis empties the review backlog. Nothing here was applied to CRMProvider, so no CRM changes.' };
+        if (v === 'AssistantPersona') return { group: 'AssistantPersona', label: '🧹 Clear AssistantPersona requests', confirm: 'Reject ALL pending AssistantPersona (chat) requests?\n\nThis empties the review backlog. Nothing here was applied to CRMProvider, so no CRM changes.' };
         if (v === 'autonomous') return { group: 'autonomous', label: '🧹 Clear shadow proposals', confirm: 'Reject ALL pending shadow proposals?\n\nThese were never applied to CRMProvider (shadow mode) — this only empties the review backlog. No CRM changes.' };
         return { group: 'all', label: '🧹 Clear ALL pending', confirm: 'Reject EVERY pending request in the queue (all sources)?\n\nFull backlog reset. Nothing here was applied to CRMProvider, so no CRM changes are made. The agent re-evaluates clusters fresh on its next run.' };
     }

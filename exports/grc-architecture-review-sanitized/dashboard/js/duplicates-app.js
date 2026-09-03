@@ -200,7 +200,7 @@
                 // client-side, so loading everything is fine. status drives the
                 // Open / Resolved / Dismissed / All filter.
                 const _cmStatus = window._crossModuleStatusFilter || 'active';
-                // Segment chip (Marketplace / ExampleOrg / WalaOne) — server-side.
+                // Segment chip (Marketplace / ExampleOrg / Example Organization) — server-side.
                 const _cmSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
                 const _cmSegQ = (_cmSeg && _cmSeg !== 'all') ? ('&segment=' + encodeURIComponent(_cmSeg)) : '';
                 const res = await fetch('/api/duplicates/cross-module-overlaps?limit=100000&status=' + encodeURIComponent(_cmStatus) + _cmSegQ, { credentials: 'same-origin' });
@@ -1470,7 +1470,7 @@
             if (layout) url += `&layouts=${encodeURIComponent(layout)}`;
             if (range.from) url += `&start_date=${range.from}`;
             if (range.to) url += `&end_date=${range.to}`;
-            // Segment chip (Marketplace / ExampleOrg / WalaOne) — server-side.
+            // Segment chip (Marketplace / ExampleOrg / Example Organization) — server-side.
             const _dcSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
             if (_dcSeg && _dcSeg !== 'all') url += `&segment=${encodeURIComponent(_dcSeg)}`;
 
@@ -2489,7 +2489,7 @@
         }
 
         // Normalize values for cross-row matching:
-        //   email → lowercase + trim   ("user@example.invalid" == "user@example.invalid")
+        //   email → lowercase + trim   ("<REDACTED_EMAIL>" == "<REDACTED_EMAIL>")
         //   phone → digits only        ("<REDACTED_PHONE>" == "<REDACTED_PHONE>")
         //   name  → lowercase + collapse whitespace ("Ali  AL Mikhdam" == "ali al mikhdam")
         function _normEmail(s) { return String(s || '').trim().toLowerCase(); }
@@ -2738,11 +2738,11 @@
         }
 
         // Account PRODUCT (Sample User 2026-08-11) — corporate accounts share the
-        // "Corporate Accounts" layout, so the product (ExampleOrg vs WalaOne) is
+        // "Corporate Accounts" layout, so the product (ExampleOrg vs Example Organization) is
         // NOT in the layout: it lives in the account's CRMProvider multi-select
-        // "Products" field (e.g. ["WalaOne"]). A populated "ExampleOrg Products"
+        // "Products" field (e.g. ["Example Organization"]). A populated "ExampleOrg Products"
         // sub-field is a secondary ExampleOrg signal. Returns 'ExampleOrg' |
-        // 'walaone' | 'both' | null, read entirely client-side from raw_data.
+        // 'Example Organization' | 'both' | null, read entirely client-side from raw_data.
         function _accountProduct(r) {
             const raw = r && r.raw_data ? r.raw_data : {};
             const collect = (v) => {
@@ -2752,47 +2752,47 @@
                 return String(v).split(/[,;|]/);
             };
             // Normalise away EVERY separator, not just spaces: CRMProvider holds the
-            // same product as "WalaOne" in one cell and "Wala One" in another
+            // same product as "Example Organization" in one cell and "Wala One" in another
             // (and "wala-one" turns up too), so strip to letters+digits.
             const norm = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
             // BOTH product cells are read (Sample User 2026-09-02: "you can fetch from
             // these 2 cells not just one"). "ExampleOrg Products" is a field NAME,
             // not a verdict — it holds a product name that can perfectly well be
-            // WalaOne, so it is classified by CONTENT alongside "Products".
+            // Example Organization, so it is classified by CONTENT alongside "Products".
             const wpp = raw['ExampleOrg_Products'] != null ? raw['ExampleOrg_Products'] : raw['ExampleOrg Products'];
             const wppVals = collect(wpp).map(norm).filter(v => v && v !== '-');
             const vals = collect(raw.Products).concat(collect(raw.Product))
                 .map(norm).filter(Boolean).concat(wppVals);
             // The ExampleOrg product FAMILY (Sample User 2026-08-12): the "Products" field
             // carries the specific product, and ExampleOrg, Wala Offer / WalaOffer
-            // and WalaBravo all count as ExampleOrg. WalaOne is the only WalaOne
+            // and WalaBravo all count as ExampleOrg. Example Organization is the only Example Organization
             // signal. Tokens come from env via /api/duplicates/config so a new
             // ExampleOrg sub-product needs NO code change (env
-            // RADAR_ExampleOrg_PRODUCT_TOKENS / RADAR_WALAONE_PRODUCT_TOKENS); the
+            // RADAR_ExampleOrg_PRODUCT_TOKENS / RADAR_Example Organization_PRODUCT_TOKENS); the
             // built-in lists below are the fallback if the config hasn't loaded.
             const _cfg = window._radarProductConfig || {};
             const WP_TOKENS = (_cfg.ExampleOrgProductTokens && _cfg.ExampleOrgProductTokens.length)
                 ? _cfg.ExampleOrgProductTokens : ['ExampleOrg', 'walaoffer', 'walabravo'];
-            const WO_TOKENS = (_cfg.walaoneProductTokens && _cfg.walaoneProductTokens.length)
-                ? _cfg.walaoneProductTokens : ['walaone'];
+            const WO_TOKENS = (_cfg.Example OrganizationProductTokens && _cfg.Example OrganizationProductTokens.length)
+                ? _cfg.Example OrganizationProductTokens : ['Example Organization'];
             const hasWO = vals.some(v => WO_TOKENS.some(t => v.includes(t)));
             let hasWP = vals.some(v => WP_TOKENS.some(t => v.includes(t)));
             // Presence fallback, kept ONLY for the case it was written for: a
             // "ExampleOrg Products" value that names neither family (a bare SKU
             // like "Gold Package"). It must NOT fire when the cells already
             // identify a product — that presence-means-ExampleOrg shortcut is what
-            // labelled the WalaOne account ديمه (CRMProvider 5146753000131556104,
-            // Products "Wala One" / ExampleOrg Products "WalaOne") as ExampleOrg.
+            // labelled the Example Organization account ديمه (CRMProvider <REDACTED_ID>,
+            // Products "Wala One" / ExampleOrg Products "Example Organization") as ExampleOrg.
             if (!hasWP && !hasWO && wppVals.length) hasWP = true;
             if (hasWO && hasWP) return 'both';
-            if (hasWO) return 'walaone';
+            if (hasWO) return 'Example Organization';
             if (hasWP) return 'ExampleOrg';
             return null;
         }
         function _accountProductChip(prod) {
-            if (prod === 'walaone') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-800" title="Account product (CRMProvider Products field): WalaOne">WalaOne</span>';
+            if (prod === 'Example Organization') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-800" title="Account product (CRMProvider Products field): Example Organization">Example Organization</span>';
             if (prod === 'ExampleOrg') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800" title="Account product (CRMProvider Products field): ExampleOrg">ExampleOrg</span>';
-            if (prod === 'both') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800" title="Account product (CRMProvider Products field): ExampleOrg + WalaOne">ExampleOrg + WalaOne</span>';
+            if (prod === 'both') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800" title="Account product (CRMProvider Products field): ExampleOrg + Example Organization">ExampleOrg + Example Organization</span>';
             return '';
         }
         // Accounts-only layout cell: the CRMProvider layout PLUS the product chip below.
@@ -3245,11 +3245,11 @@
                 const gid = 'accounts-' + gIdx;
                 const summary = _dupGroupSummary(items, idxs, extractors, keyDefs);
                 // Cross-product flag: this cluster's accounts span more than one
-                // product (e.g. a ExampleOrg account + a WalaOne account for the
+                // product (e.g. a ExampleOrg account + a Example Organization account for the
                 // same company) — exactly the pairs Sample User spot.
                 const _prodSet = new Set(idxs.map(i => _accountProduct(items[i])).filter(Boolean));
                 summary.extraChips = _prodSet.size > 1
-                    ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 border border-amber-300" title="Cross-product cluster — its accounts span more than one product (ExampleOrg + WalaOne). You chose to accept these as duplicates.">⚡ cross-product</span>'
+                    ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 border border-amber-300" title="Cross-product cluster — its accounts span more than one product (ExampleOrg + Example Organization). You chose to accept these as duplicates.">⚡ cross-product</span>'
                     : '';
                 const cmeta = (summary.primary && clusterMetaById[summary.primary.cluster_id]) || null;
                 rows += _dupGroupHeaderRow(gid, summary, 8, 'accounts', cmeta);
@@ -3320,11 +3320,11 @@
         // account everyone uses) should NOT be aliased here, because it
         // would erroneously fold every other rep's records into the
         // alias target. The current entries cover Rayan Saleh's three
-        // tagged addresses; user@example.invalid appears only with the
+        // tagged addresses; <REDACTED_EMAIL> appears only with the
         // "Rayan Saleh" name in this tenant's data, so it's safe to alias.
         const EMAIL_ALIASES = {
-            'user@example.invalid': 'user@example.invalid',
-            'user@example.invalid':      'user@example.invalid',
+            '<REDACTED_EMAIL>': '<REDACTED_EMAIL>',
+            '<REDACTED_EMAIL>':      '<REDACTED_EMAIL>',
         };
 
         function _canonicaliseOwnerEmail(rawEmail) {
@@ -3336,8 +3336,8 @@
         // Merge rows that share the same email address. The server side
         // builds the per-owner aggregates from the modified-by name on each
         // record, so a single rep with two name spellings in CRM
-        // ("Naif Almutari" + "Naif Almutairi" on user@example.invalid,
-        // "Sample User" × 2 on user@example.invalid, etc.) gets
+        // ("Naif Almutari" + "Naif Almutairi" on <REDACTED_EMAIL>,
+        // "Sample User" × 2 on <REDACTED_EMAIL>, etc.) gets
         // double-counted. We re-aggregate client-side by lowercased email
         // and combine the names into one row so the scorecard reads as
         // intended ("this email = this person's debt"). Rows with no email
@@ -4181,7 +4181,7 @@
                 // CRMProvider and prunes any already deleted BEFORE returning, so the
                 // preview never shows a ghost record (Sample User 2026-07-15, ARGAS).
                 // &segment=<seg> → the preview shows ONLY the active segment's
-                // records (ExampleOrg / Marketplace / WalaOne); "all" shows every
+                // records (ExampleOrg / Marketplace / Example Organization); "all" shows every
                 // record. So opening a cluster from a segment-filtered tab keeps
                 // the same slice you were reviewing (Sample User 2026-07-15).
                 const _seg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
@@ -8242,7 +8242,7 @@
             body.innerHTML = rrSkeletonRows(7);
             var stages = _dcSelectedStages();
             var url = '/api/duplicates/deal-compliance' + (stages.length ? ('?stages=' + encodeURIComponent(stages.join(','))) : '');
-            // Segment chip (Marketplace / ExampleOrg / WalaOne) — filter deals by Layout.
+            // Segment chip (Marketplace / ExampleOrg / Example Organization) — filter deals by Layout.
             var _dcSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
             if (_dcSeg && _dcSeg !== 'all') url += (url.indexOf('?') >= 0 ? '&' : '?') + 'segment=' + encodeURIComponent(_dcSeg);
             if (live === true) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'live=1';
@@ -8748,7 +8748,7 @@
             const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             const n = (window['_er_' + kind] || []).length;
             if (!n) return;
-            if (!confirm('AI-Apply ALL ' + n + ' empty ' + module + '?\n\nFor each one it verifies live in CRMProvider, tags the genuinely-empty as Empty-Delete (Adam, pending admin delete), prunes any already deleted, and removes any that turn out to have data. It runs batch-after-batch until the whole list is done.\n\nThe platform never deletes — the admin removes the tagged records.')) return;
+            if (!confirm('AI-Apply ALL ' + n + ' empty ' + module + '?\n\nFor each one it verifies live in CRMProvider, tags the genuinely-empty as Empty-Delete (AssistantPersona, pending admin delete), prunes any already deleted, and removes any that turn out to have data. It runs batch-after-batch until the whole list is done.\n\nThe platform never deletes — the admin removes the tagged records.')) return;
             // Visible progress lives in a per-section span next to the button (the
             // shared #erBulkResult sits in a hidden bar, so the operator couldn't
             // see anything happening — Sample User 2026-06-30). Also disable the button +
@@ -10361,7 +10361,7 @@
             const host = document.getElementById('cmcGroups');
             if (host) host.innerHTML = '<div class="text-center text-sm text-gray-500 py-8">Scanning duplicate_clusters for same-domain duplicates…</div>';
             try {
-                // Segment chip (Marketplace / ExampleOrg / WalaOne) — server-side layout filter.
+                // Segment chip (Marketplace / ExampleOrg / Example Organization) — server-side layout filter.
                 const _cmcSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
                 const _cmcSegQ = (_cmcSeg && _cmcSeg !== 'all') ? ('&segment=' + encodeURIComponent(_cmcSeg)) : '';
                 const res = await fetch('/api/duplicates/cluster-merge-candidates?limit=200' + _cmcSegQ, { credentials: 'same-origin' });
@@ -10570,7 +10570,7 @@
 
             let url = '/api/duplicates/cs-overlap/clusters?limit=500';
             if (window._csOverlapFilter !== 'all') url += '&verdict=' + encodeURIComponent(window._csOverlapFilter);
-            // Segment chip (Marketplace / ExampleOrg / WalaOne) — server-side layout filter.
+            // Segment chip (Marketplace / ExampleOrg / Example Organization) — server-side layout filter.
             const _csoSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
             if (_csoSeg && _csoSeg !== 'all') url += '&segment=' + encodeURIComponent(_csoSeg);
             try {
@@ -11136,7 +11136,7 @@
         }
         // Ready-to-paste email for the re-engagement run — same shape as the
         // Mawsool one (two headline numbers, one reason list, then the actions),
-        // signed off by Adam. Zero-count reasons never appear because the server
+        // signed off by AssistantPersona. Zero-count reasons never appear because the server
         // only returns buckets it actually used.
         function copyReengageEmailBody() {
             const d = window._reengageResult;
@@ -11169,7 +11169,7 @@
                 '',
                 '📎 Full row-by-row detail (company, domain, owner, lost date, reason, deal link) is in the attached files.',
                 '',
-                '🤖 Checked by Adam — ExampleOrg QMS, Preflight → Lost Deals Re-engage Check Tool.',
+                '🤖 Checked by AssistantPersona — ExampleOrg QMS, Preflight → Lost Deals Re-engage Check Tool.',
             ];
             const body = lines.join('\n');
             try {
@@ -11702,7 +11702,7 @@
                 const stageQ = window._dealLifecycleStageFilter
                     ? ('&stage=' + encodeURIComponent(window._dealLifecycleStageFilter))
                     : '';
-                // Segment chip (ExampleOrg / WalaOne / Marketplace) — sent to the
+                // Segment chip (ExampleOrg / Example Organization / Marketplace) — sent to the
                 // server so BOTH the KPI cards and the rows reflect ONLY deals on
                 // the chosen CRMProvider Layout, not a mix (Sample User 2026-07-07).
                 const _seg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
@@ -12155,7 +12155,7 @@
             // true CS-deal population.
             let url = '/api/duplicates/cs-lifecycle/violations?limit=10000';
             if (window._csLifecycleFilter !== 'all') url += '&severity=' + encodeURIComponent(window._csLifecycleFilter);
-            // Segment chip (ExampleOrg / WalaOne / Marketplace) — server-side so
+            // Segment chip (ExampleOrg / Example Organization / Marketplace) — server-side so
             // "CS deals scanned" + violations reflect only the chosen layout.
             const _csSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
             if (_csSeg && _csSeg !== 'all') url += '&segment=' + encodeURIComponent(_csSeg);
@@ -12598,7 +12598,7 @@
                 + '</div>'
                 + '<div class="text-sm font-semibold mb-1">Why the NOT-counted are excluded</div>'
                 + '<table class="w-full mb-4"><tbody>'
-                + line('Non-corporate layout (Marketplace / WalaOne)', s.non_corporate || 0)
+                + line('Non-corporate layout (Marketplace / Example Organization)', s.non_corporate || 0)
                 + line('CRM ID is an Account / Contact / Lead, not a Deal', s.not_a_deal || 0)
                 + line('Corporate Deal but CS Phase is blank', s.blank_phase || 0)
                 + line('Not in the synced CRMProvider mirror', s.not_in_mirror || 0)
@@ -14760,7 +14760,7 @@
             // SIMPLE + CLEAR (Sample User 2026-08-31): two headline numbers, one reason
             // list, then the actions — no nested "of those" line, and zero-count
             // categories are dropped so nothing reads as noise. Emojis anchor each
-            // line; Adam signs it off. Blank lines are KEPT for readability.
+            // line; AssistantPersona signs it off. Blank lines are KEPT for readability.
             const passCount = (s.pass || 0);
             const steps = [];
             steps.push('  ✅  Import the ' + passCount.toLocaleString() + ' safe contacts — the same tab loads them into CRMProvider on the right Layout.');
@@ -14784,7 +14784,7 @@
                 '',
                 '📎 Full row-by-row detail (domain, company, current owner, recommended action) is in the attached Excel report.',
                 '',
-                '🤖 Checked by Adam — ExampleOrg QMS, Preflight Check tab.',
+                '🤖 Checked by AssistantPersona — ExampleOrg QMS, Preflight Check tab.',
             ];
             const body = lines.join('\n');
             const ok = (txt) => {
@@ -15011,16 +15011,16 @@
                 const isMarketplace = vals.some(v =>
                     v === 'marketplace' || v === 'partner accounts'
                 );
-                // WalaOne = its own layout (normalise so "Wala One"/"wala-one"
+                // Example Organization = its own layout (normalise so "Wala One"/"wala-one"
                 // all match). ExampleOrg (= legacy "corporate") = NOT marketplace
-                // AND NOT walaone; rows with no layout default to ExampleOrg so
+                // AND NOT Example Organization; rows with no layout default to ExampleOrg so
                 // legacy data isn't hidden. Mirrors server buildSegmentPredicate.
-                const isWalaOne = vals.some(v =>
-                    String(v).replace(/[^a-z0-9]/g, '') === 'walaone'
+                const isExample Organization = vals.some(v =>
+                    String(v).replace(/[^a-z0-9]/g, '') === 'Example Organization'
                 );
                 if (s.segment === 'marketplace' && !isMarketplace) return false;
-                if (s.segment === 'walaone' && !isWalaOne) return false;
-                if ((s.segment === 'ExampleOrg' || s.segment === 'corporate') && (isMarketplace || isWalaOne)) return false;
+                if (s.segment === 'Example Organization' && !isExample Organization) return false;
+                if ((s.segment === 'ExampleOrg' || s.segment === 'corporate') && (isMarketplace || isExample Organization)) return false;
             }
             // Pipeline — multi-select.
             if (s.pipelines && s.pipelines.length > 0) {
@@ -15250,8 +15250,8 @@
         // the dropdown or a chip click changes the value.
         function _syncSegmentChipFromDropdown() {
             const seg = document.getElementById('filterSegment')?.value || 'all';
-            const map = { all: 'segmentChipAll', marketplace: 'segmentChipMarketplace', ExampleOrg: 'segmentChipExampleOrg', corporate: 'segmentChipExampleOrg', walaone: 'segmentChipWalaone' };
-            ['segmentChipAll', 'segmentChipMarketplace', 'segmentChipExampleOrg', 'segmentChipWalaone'].forEach(id => {
+            const map = { all: 'segmentChipAll', marketplace: 'segmentChipMarketplace', ExampleOrg: 'segmentChipExampleOrg', corporate: 'segmentChipExampleOrg', Example Organization: 'segmentChipExample Organization' };
+            ['segmentChipAll', 'segmentChipMarketplace', 'segmentChipExampleOrg', 'segmentChipExample Organization'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 if (id === map[seg]) {
@@ -15269,7 +15269,7 @@
         // source of truth), restyles chips, snapshots into this tab's slot,
         // and re-runs the active tab's load path so the change is immediate.
         async function setSegment(newSeg) {
-            if (!['all', 'marketplace', 'corporate', 'ExampleOrg', 'walaone'].includes(newSeg)) return;
+            if (!['all', 'marketplace', 'corporate', 'ExampleOrg', 'Example Organization'].includes(newSeg)) return;
             // Deal Lifecycle AND CS Lifecycle filter the SEGMENT server-side
             // (their KPI cards + rows must reflect only the chosen layout), so a
             // cached re-render would ignore the change. Drop the caches to force

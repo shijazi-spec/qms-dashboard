@@ -32,7 +32,7 @@ npm install @mastra/core
 Mastra's model router auto-detects environment variables for your chosen provider. For LLMProvider, set `LLMProvider_API_KEY`:
 
 ```bash filename=".env" copy
-LLMProvider_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<REDACTED_SECRET>
 ```
 
 > Mastra supports more than 600 models. Choose from the full list [here](/models).
@@ -68,7 +68,7 @@ npm install @mastra/core @ai-sdk/LLMProvider
 Set the corresponding environment variable for your provider. For LLMProvider via the AI SDK:
 
 ```bash filename=".env" copy
-LLMProvider_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<REDACTED_SECRET>
 ```
 
 > See the [AI SDK Providers](<REDACTED_URL> in the Vercel AI SDK docs for additional configuration options.

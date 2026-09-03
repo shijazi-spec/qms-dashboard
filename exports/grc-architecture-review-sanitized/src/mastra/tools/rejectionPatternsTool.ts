@@ -3,7 +3,7 @@ import { z } from "zod";
 import { analyzeRejectionPatterns } from "../../utils/rejectionPatterns";
 
 /**
- * Read-only: "Why are duplicate proposals getting rejected?" Adam reads the
+ * Read-only: "Why are duplicate proposals getting rejected?" AssistantPersona reads the
  * deliberately-rejected resolution proposals and reports the top reasons +
  * recommend-only rule/threshold suggestions (he never creates a rule himself —
  * the operator approves them on the Autonomous Resolution screen).
@@ -12,7 +12,7 @@ export const rejectionPatternsTool = createTool({
   id: "rejection-patterns",
 
   description:
-    "Analyse why the autonomous resolver's duplicate proposals are being REJECTED by operators (deliberate per-card rejections, not bulk clears). Use when asked 'why are proposals getting rejected', 'what should Adam learn / catch', 'what patterns are in my rejections', or to decide threshold/rule changes before trusting assisted mode. Returns the top rejection reasons with counts + share, per-module rejection counts, and a recommend-only learning-rule or config suggestion per pattern. Read-only — it never creates a rule; the operator approves suggestions on the Autonomous Resolution screen.",
+    "Analyse why the autonomous resolver's duplicate proposals are being REJECTED by operators (deliberate per-card rejections, not bulk clears). Use when asked 'why are proposals getting rejected', 'what should AssistantPersona learn / catch', 'what patterns are in my rejections', or to decide threshold/rule changes before trusting assisted mode. Returns the top rejection reasons with counts + share, per-module rejection counts, and a recommend-only learning-rule or config suggestion per pattern. Read-only — it never creates a rule; the operator approves suggestions on the Autonomous Resolution screen.",
 
   inputSchema: z.object({
     days: z

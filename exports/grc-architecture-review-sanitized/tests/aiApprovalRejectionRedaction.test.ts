@@ -19,7 +19,7 @@ process.env.SESSION_SECRET =
 // the bootstrap IIFE inside aiApprovalRoutes errors immediately instead
 // of hanging the test.
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || 'postgres://localhost:1/none';
+  process.env.DATABASE_URL || '<REDACTED_DSN>';
 
 import crypto from 'crypto';
 import pg from 'pg';
@@ -41,8 +41,8 @@ import type { QueryResult, QueryResultRow } from 'pg';
 /* (Mirrors the fix in tests/aiApprovalRoutesRedaction.test.ts.)      */
 /* ------------------------------------------------------------------ */
 const TEST_PLATFORM_USERS: Record<string, { status: string; role: string }> = {
-  'user@example.invalid':        { status: 'active', role: 'admin' },
-  'user@example.invalid': { status: 'active', role: 'executive' },
+  '<REDACTED_EMAIL>':        { status: 'active', role: 'admin' },
+  '<REDACTED_EMAIL>': { status: 'active', role: 'executive' },
 };
 const _origPoolQuery = pg.Pool.prototype.query;
 pg.Pool.prototype.query = function (this: pg.Pool, ...args: unknown[]): any {
@@ -218,7 +218,7 @@ function signSession(payload: Record<string, unknown>): string {
 function adminCookie(): string {
   const token = signSession({
     userId: 42,
-    email: 'user@example.invalid',
+    email: '<REDACTED_EMAIL>',
     name: 'Quality Manager Test',
     role: 'admin',
     exp: Date.now() + 3600_000,
@@ -323,7 +323,7 @@ async function run(): Promise<void> {
     // live policies table.
     complianceRefs: ['PCI-DSS-12.3.1', 'ISO 27001:2022 A.5.34'],
     requestedByUserId: 99,
-    requestedByEmail: 'user@example.invalid',
+    requestedByEmail: '<REDACTED_EMAIL>',
     requestedByName: 'Requester User',
     threadId: 'thr_rejection_redaction_test',
   });
@@ -339,7 +339,7 @@ async function run(): Promise<void> {
     enqueued.action_code,
     {
       userId: 42,
-      email: 'user@example.invalid',
+      email: '<REDACTED_EMAIL>',
       name: 'Quality Manager Test',
     },
     REASON,

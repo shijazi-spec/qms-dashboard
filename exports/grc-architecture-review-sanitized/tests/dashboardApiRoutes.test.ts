@@ -48,7 +48,7 @@ function dashboardSignSession(payload: Record<string, any>): string {
 
 const SESSION_TOKEN = dashboardSignSession({
   userId: 1,
-  email: "user@example.invalid",
+  email: "<REDACTED_EMAIL>",
   name: "Test Admin",
   role: "admin",
   exp: Date.now() + 3_600_000,
@@ -58,7 +58,7 @@ const ADMIN_HEADERS = { Cookie: `ExampleOrg_session=${encodeURIComponent(SESSION
 
 // The dashboardGate inside these routes calls requireRole() which does a DB
 // lookup in platform_users. Seed a test user so the gate allows the request.
-const DASHBOARD_TEST_EMAIL = "user@example.invalid";
+const DASHBOARD_TEST_EMAIL = "<REDACTED_EMAIL>";
 let dashboardPool: pg.Pool | null = null;
 
 if (HAS_DB) {

@@ -196,7 +196,7 @@ await suite.test(
   "email recipient configured → posts via EmailProvider with severity-prefixed subject",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyToolHealthBreach(sample(), deps);
     suite.expectEqual(result.emailSent, true, "emailSent");
@@ -205,8 +205,8 @@ await suite.test(
     const call = emailCalls[0]!;
     suite.expect(
       Array.isArray(call.to)
-        ? (call.to as string[]).includes("user@example.invalid")
-        : call.to === "user@example.invalid",
+        ? (call.to as string[]).includes("<REDACTED_EMAIL>")
+        : call.to === "<REDACTED_EMAIL>",
       "recipient propagated",
     );
     suite.expect(
@@ -229,7 +229,7 @@ await suite.test(
   "comma-separated TOOL_HEALTH_ALERT_EMAIL → forwarded as recipient array",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid, user@example.invalid ,user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>, <REDACTED_EMAIL> ,<REDACTED_EMAIL>";
     const { deps, emailCalls } = makeStubs();
     await notifyToolHealthBreach(sample(), deps);
     suite.expectEqual(emailCalls.length, 1, "one email call");
@@ -237,9 +237,9 @@ await suite.test(
       ? (emailCalls[0]!.to as string[])
       : [emailCalls[0]!.to as string];
     suite.expectEqual(recipients.length, 3, "three recipients");
-    suite.expectEqual(recipients[0], "user@example.invalid", "trimmed first");
-    suite.expectEqual(recipients[1], "user@example.invalid", "trimmed middle");
-    suite.expectEqual(recipients[2], "user@example.invalid", "trimmed last");
+    suite.expectEqual(recipients[0], "<REDACTED_EMAIL>", "trimmed first");
+    suite.expectEqual(recipients[1], "<REDACTED_EMAIL>", "trimmed middle");
+    suite.expectEqual(recipients[2], "<REDACTED_EMAIL>", "trimmed last");
   },
 );
 
@@ -248,7 +248,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyToolHealthBreach(sample(), deps);
     suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
@@ -380,7 +380,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, emailCalls } = makeStubs({
       ChatProviderResult: new Error("ChatProvider down"),
     });
@@ -977,7 +977,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid,user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>,<REDACTED_EMAIL>";
     process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
     const { deps, emailCalls, ChatProviderCalls } = makeConfigChangeStubs();
     const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
@@ -988,7 +988,7 @@ await suite.test(
     suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
     suite.expectEqual(emailCalls.length, 1, "one email call");
     suite.expect(
-      JSON.stringify(emailCalls[0]?.to) === JSON.stringify(["user@example.invalid", "user@example.invalid"]),
+      JSON.stringify(emailCalls[0]?.to) === JSON.stringify(["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"]),
       `both recipients (got: ${JSON.stringify(emailCalls[0]?.to)})`,
     );
     suite.expect(
@@ -1037,7 +1037,7 @@ await suite.test(
     clearEnv();
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, emailCalls, ChatProviderCalls } = makeConfigChangeStubs();
     const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
     suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
@@ -1053,7 +1053,7 @@ await suite.test(
     clearEnv();
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, ChatProviderCalls } = makeConfigChangeStubs({ emailResult: new Error("EmailProvider down") });
     const origErr = console.error;
     console.error = () => {};
@@ -1073,7 +1073,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, emailCalls } = makeConfigChangeStubs();
     await notifyToolHealthConfigChange(
       sampleConfigChange({ audit_id: 42, note: "emergency freeze" }),
@@ -1135,7 +1135,7 @@ function sampleOverride(
 ): ToolHealthOverrideExpiredNotification {
   return {
     cleared_overrides: { errorRatePct: 99, p95LatencyMs: 30_000 },
-    previous_updated_by: "user@example.invalid",
+    previous_updated_by: "<REDACTED_EMAIL>",
     expired_at: new Date("2026-04-24T09:00:00Z"),
     audit_id: 7777,
     ...overrides,
@@ -1167,7 +1167,7 @@ await suite.test(
     suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
     suite.expectEqual(ChatProviderCalls[0]?.channel, "C-ONCALL-CHAN", "channel");
     suite.expect(
-      ChatProviderCalls[0]?.text.includes("user@example.invalid"),
+      ChatProviderCalls[0]?.text.includes("<REDACTED_EMAIL>"),
       "fallback text mentions the operator who set the override",
     );
     suite.expect(
@@ -1176,7 +1176,7 @@ await suite.test(
     );
     const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
-      blocks.includes("user@example.invalid"),
+      blocks.includes("<REDACTED_EMAIL>"),
       "blocks attribute the override to the operator",
     );
     suite.expect(
@@ -1435,7 +1435,7 @@ await suite.test(
   "recovery: email recipient configured → sends recovery email with RECOVERED subject",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, emailCalls } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
     suite.expectEqual(result.emailSent, true, "emailSent");
@@ -1470,7 +1470,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, ChatProviderCalls, emailCalls } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
     suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
@@ -1485,7 +1485,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, emailCalls } = makeRecoveryStubs({ ChatProviderResult: new Error("ChatProvider down") });
     const origErr = console.error;
     console.error = () => {};
@@ -1523,7 +1523,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, ChatProviderCalls, emailCalls } = makeRecoveryStubs();
     const created = new Date("2026-04-25T10:00:00Z");
     const resolved = new Date("2026-04-25T12:15:00Z"); // 2h 15m later
@@ -1754,7 +1754,7 @@ await suite.test(
   "task#284: Email-only configured + send ok → recordResult called with 'email'",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, recordResultCalls } = makeStubs();
     const result = await notifyToolHealthBreach(sample(), deps);
     suite.expectEqual(result.emailSent, true, "email sent");
@@ -1768,7 +1768,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, recordResultCalls } = makeStubs();
     await notifyToolHealthBreach(sample(), deps);
     suite.expectEqual(recordResultCalls.length, 1, "one persist call");
@@ -1781,7 +1781,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, recordResultCalls } = makeStubs({
       emailResult: { success: false, error: "rate-limited" },
     });
@@ -1795,7 +1795,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, recordResultCalls } = makeStubs({
       ChatProviderResult: false,
     });
@@ -1809,7 +1809,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     const { deps, recordResultCalls } = makeStubs({
       ChatProviderResult: false,
       emailResult: { success: false },
@@ -1857,7 +1857,7 @@ await suite.test(
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
-    process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
     process.env.TOOL_HEALTH_RECOVERY_NOTIFY = "0";
     const { deps, ChatProviderCalls, emailCalls } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(sampleRecovery(), deps);

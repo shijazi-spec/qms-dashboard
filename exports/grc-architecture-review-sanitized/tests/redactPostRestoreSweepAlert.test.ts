@@ -655,7 +655,7 @@ async function run(): Promise<void> {
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv:
-        "user@example.invalid, user@example.invalid ,, user@example.invalid",
+        "<REDACTED_EMAIL>, <REDACTED_EMAIL> ,, <REDACTED_EMAIL>",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({
@@ -687,9 +687,9 @@ async function run(): Promise<void> {
     const recipients = Array.isArray(email.to) ? email.to : [email.to];
     assert(
       recipients.length === 3 &&
-        recipients.includes("user@example.invalid") &&
-        recipients.includes("user@example.invalid") &&
-        recipients.includes("user@example.invalid"),
+        recipients.includes("<REDACTED_EMAIL>") &&
+        recipients.includes("<REDACTED_EMAIL>") &&
+        recipients.includes("<REDACTED_EMAIL>"),
       "recipients are split, trimmed, and empty entries discarded",
     );
     assert(
@@ -735,7 +735,7 @@ async function run(): Promise<void> {
   {
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
       emailError: new Error("EmailProvider api down"),
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -788,7 +788,7 @@ async function run(): Promise<void> {
     // unconfigured-helper silent-skip branch covered below.
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
       emailFailureReason: "EmailProvider API rate limited",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -834,7 +834,7 @@ async function run(): Promise<void> {
     // EmailProvider key is a deployment posture, not an alertable failure.
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
       EmailProviderApiKey: null, // omit EmailProvider_API_KEY entirely
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -879,7 +879,7 @@ async function run(): Promise<void> {
     // is treated the same as no key at all.
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
       EmailProviderApiKey: "short",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -908,7 +908,7 @@ async function run(): Promise<void> {
     // boot.
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult(),
@@ -941,7 +941,7 @@ async function run(): Promise<void> {
   {
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
     });
     const flagged = ["APR-001", "APR-002", "APR-003"];
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -1008,7 +1008,7 @@ async function run(): Promise<void> {
   {
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
     });
     // Synthesise the boundary case: helper hit FLAGGED_ACTION_CODES_LIMIT
     // and recorded 7 additional codes via the truncation counter.
@@ -1066,7 +1066,7 @@ async function run(): Promise<void> {
     // section — bodies stay as concise as they were pre-Task-#626.
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({
@@ -1118,7 +1118,7 @@ async function run(): Promise<void> {
     // section, no warning, no crash from missing fields.
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({
@@ -1156,7 +1156,7 @@ async function run(): Promise<void> {
     // if it is set.
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
     });
     let resolverCalls = 0;
     let resolverChannel: string | undefined;
@@ -1166,7 +1166,7 @@ async function run(): Promise<void> {
       resolverChannel = channel;
       resolverEnvValue = envValue;
       return {
-        recipients: ["user@example.invalid", "user@example.invalid"],
+        recipients: ["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"],
         source: "db",
       };
     };
@@ -1181,7 +1181,7 @@ async function run(): Promise<void> {
       "resolver called with post_restore_sweep channel",
     );
     assert(
-      resolverEnvValue === "user@example.invalid",
+      resolverEnvValue === "<REDACTED_EMAIL>",
       "resolver receives the env value (so it can fall back when DB empty)",
     );
     assert(stub.emails.length === 1, "one email send invoked");
@@ -1189,12 +1189,12 @@ async function run(): Promise<void> {
     const recipientsList = Array.isArray(sent.to) ? sent.to : [sent.to];
     assert(
       recipientsList.length === 2 &&
-        recipientsList.includes("user@example.invalid") &&
-        recipientsList.includes("user@example.invalid"),
+        recipientsList.includes("<REDACTED_EMAIL>") &&
+        recipientsList.includes("<REDACTED_EMAIL>"),
       "DB list used as recipient set",
     );
     assert(
-      !recipientsList.includes("user@example.invalid"),
+      !recipientsList.includes("<REDACTED_EMAIL>"),
       "env var recipient NOT included when DB list non-empty",
     );
     assert(
@@ -1217,7 +1217,7 @@ async function run(): Promise<void> {
   {
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
     });
     let resolverCalls = 0;
     stub.deps.resolveRecipients = async (_channel, envValue) => {
@@ -1242,7 +1242,7 @@ async function run(): Promise<void> {
       : [stub.emails[0].to];
     assert(
       recipientsList.length === 1 &&
-        recipientsList[0] === "user@example.invalid",
+        recipientsList[0] === "<REDACTED_EMAIL>",
       "env var used as recipient set when DB empty",
     );
     assert(
@@ -1268,7 +1268,7 @@ async function run(): Promise<void> {
     // to parsing the env var directly so on-call still gets paged.
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
-      emailRecipientsEnv: "user@example.invalid",
+      emailRecipientsEnv: "<REDACTED_EMAIL>",
     });
     stub.deps.resolveRecipients = async () => {
       throw new Error("boom");
@@ -1283,7 +1283,7 @@ async function run(): Promise<void> {
       : [stub.emails[0].to];
     assert(
       recipientsList.length === 1 &&
-        recipientsList[0] === "user@example.invalid",
+        recipientsList[0] === "<REDACTED_EMAIL>",
       "env var used as fallback when resolver throws",
     );
     assert(

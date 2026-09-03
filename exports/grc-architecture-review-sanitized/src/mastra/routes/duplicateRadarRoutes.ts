@@ -178,7 +178,7 @@ function parseRecordTabFilters(url: URL): {
   confidence_level?: string;
   domain?: string;
   ai_status?: string;
-  segment?: "all" | "marketplace" | "corporate" | "ExampleOrg" | "walaone";
+  segment?: "all" | "marketplace" | "corporate" | "ExampleOrg" | "Example Organization";
   sort?: string;
   dir?: "asc" | "desc";
 } {
@@ -201,8 +201,8 @@ function parseRecordTabFilters(url: URL): {
   // ai_status above, mirrors DuplicateFilters["segment"] (database.ts:143).
   // Anything else (including absent/"all") means no constraint.
   const rawSegment = (url.searchParams.get("segment") || "").trim();
-  const segment = ["marketplace", "corporate", "ExampleOrg", "walaone"].includes(rawSegment)
-    ? (rawSegment as "marketplace" | "corporate" | "ExampleOrg" | "walaone")
+  const segment = ["marketplace", "corporate", "ExampleOrg", "Example Organization"].includes(rawSegment)
+    ? (rawSegment as "marketplace" | "corporate" | "ExampleOrg" | "Example Organization")
     : undefined;
   // Column sort — same contract as /api/duplicates/clusters (sort/dir read
   // here, validated against RECORD_SORT_COLUMNS down in
@@ -1801,7 +1801,7 @@ export const duplicateRadarRoutes = [
   {
     // One-tap EXECUTIVE BRIEF — assembles the real aggregate figures into a
     // board-ready, shareable text block (CEO/CCO). Deterministic (no LLM), so
-    // it's consistent and never hallucinates a number. Same framing Adam uses.
+    // it's consistent and never hallucinates a number. Same framing AssistantPersona uses.
     path: "/api/duplicates/autonomous/executive-brief",
     method: "GET" as const,
     createHandler: async () => {
@@ -1820,7 +1820,7 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Adam's notification schedule (single source of truth) — for the platform
+    // AssistantPersona's notification schedule (single source of truth) — for the platform
     // "Notification Schedule" card. Reviewed monthly; timings edited via env.
     path: "/api/duplicates/autonomous/notification-schedule",
     method: "GET" as const,
@@ -1925,7 +1925,7 @@ export const duplicateRadarRoutes = [
   },
   {
     // Hygiene & business rules catalog (Sample User 2026-06-20): the read-only list
-    // of agreed data-hygiene / governance rules Adam enforces, surfaced on the
+    // of agreed data-hygiene / governance rules AssistantPersona enforces, surfaced on the
     // Autonomous Resolution screen so an operator can see what's being checked.
     //   GET /api/duplicates/hygiene-rules
     path: "/api/duplicates/hygiene-rules",
@@ -2501,10 +2501,10 @@ export const duplicateRadarRoutes = [
               : null;
           // sourceGroup (Sample User 2026-06-20): which pending actions to clear.
           //   'autonomous' (default) → only the resolver's shadow proposals
-          //   'adam'                 → only chat-initiated requests
+          //   'AssistantPersona'                 → only chat-initiated requests
           //   'all'                  → EVERY pending action (full reset)
           const sourceGroup =
-            body?.sourceGroup === "all" || body?.sourceGroup === "adam"
+            body?.sourceGroup === "all" || body?.sourceGroup === "AssistantPersona"
               ? body.sourceGroup
               : "autonomous";
           const { pool } = await import("../../utils/duplicateRadarDatabase");
@@ -2514,7 +2514,7 @@ export const duplicateRadarRoutes = [
           ];
           // Build the tool-scope clause for the chosen source group.
           let toolClause = " AND tool_id = 'duplicate-resolution'";
-          if (sourceGroup === "adam") toolClause = " AND tool_id <> 'duplicate-resolution'";
+          if (sourceGroup === "AssistantPersona") toolClause = " AND tool_id <> 'duplicate-resolution'";
           else if (sourceGroup === "all") toolClause = "";
           let verdictClause = "";
           if (onlyVerdict) {
@@ -4483,10 +4483,10 @@ export const duplicateRadarRoutes = [
           const sort = url.searchParams.get("sort") || undefined;
           const dir = url.searchParams.get("dir") || undefined;
 
-          // Segment chip (Marketplace / ExampleOrg / WalaOne) — Sample User 2026-07-13.
+          // Segment chip (Marketplace / ExampleOrg / Example Organization) — Sample User 2026-07-13.
           const rawSegment = (url.searchParams.get("segment") || "").trim();
           const segment: DuplicateFilters["segment"] =
-            ["marketplace", "corporate", "ExampleOrg", "walaone"].includes(
+            ["marketplace", "corporate", "ExampleOrg", "Example Organization"].includes(
               rawSegment,
             )
               ? (rawSegment as DuplicateFilters["segment"])
@@ -4574,7 +4574,7 @@ export const duplicateRadarRoutes = [
             }
           }
           // Segment scoping of the PREVIEW (Sample User 2026-07-15): when the operator
-          // is working a specific segment (ExampleOrg / Marketplace / WalaOne) and
+          // is working a specific segment (ExampleOrg / Marketplace / Example Organization) and
           // opens a cluster, the preview must show ONLY that segment's records —
           // "when I check the segment I separate the data I need to check". `all`
           // shows everything. Same layout semantics as buildSegmentPredicate.
@@ -5512,10 +5512,10 @@ export const duplicateRadarRoutes = [
             ? statusRaw
             : "active") as "active" | "resolved" | "ignored" | "handled" | "all";
 
-          // Segment chip (Marketplace / ExampleOrg / WalaOne) — Sample User 2026-07-13.
+          // Segment chip (Marketplace / ExampleOrg / Example Organization) — Sample User 2026-07-13.
           const rawSegment = (url.searchParams.get("segment") || "").trim();
           const segment: DuplicateFilters["segment"] =
-            ["marketplace", "corporate", "ExampleOrg", "walaone"].includes(
+            ["marketplace", "corporate", "ExampleOrg", "Example Organization"].includes(
               rawSegment,
             )
               ? (rawSegment as DuplicateFilters["segment"])
@@ -5842,7 +5842,7 @@ export const duplicateRadarRoutes = [
   {
     // Radar client config (Sample User 2026-08-12) — env-driven values the dashboard
     // JS needs but can't read directly. Currently the product-token lists that
-    // map a CRMProvider Account "Products" value to ExampleOrg vs WalaOne, so a new
+    // map a CRMProvider Account "Products" value to ExampleOrg vs Example Organization, so a new
     // ExampleOrg sub-product (WalaOffer / WalaBravo / …) is added via env, no code
     // change. Tokens are normalized (lowercased, spaces stripped) to match the
     // client's _accountProduct comparison.
@@ -5868,9 +5868,9 @@ export const duplicateRadarRoutes = [
               process.env.RADAR_ExampleOrg_PRODUCT_TOKENS || "",
               "ExampleOrg,walaoffer,walabravo",
             ),
-            walaoneProductTokens: norm(
-              process.env.RADAR_WALAONE_PRODUCT_TOKENS || "",
-              "walaone",
+            Example OrganizationProductTokens: norm(
+              process.env.RADAR_Example Organization_PRODUCT_TOKENS || "",
+              "Example Organization",
             ),
           });
         } catch (e: any) {
@@ -7868,7 +7868,7 @@ export const duplicateRadarRoutes = [
 
           const rawSegment = (url.searchParams.get("segment") || "").trim();
           const segment: DuplicateFilters["segment"] =
-            ["marketplace", "corporate", "ExampleOrg", "walaone"].includes(
+            ["marketplace", "corporate", "ExampleOrg", "Example Organization"].includes(
               rawSegment,
             )
               ? (rawSegment as DuplicateFilters["segment"])
@@ -7944,7 +7944,7 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const rawSegment = (url.searchParams.get("segment") || "").trim();
           const segment: DuplicateFilters["segment"] =
-            ["marketplace", "corporate", "ExampleOrg", "walaone"].includes(
+            ["marketplace", "corporate", "ExampleOrg", "Example Organization"].includes(
               rawSegment,
             )
               ? (rawSegment as DuplicateFilters["segment"])
@@ -9790,7 +9790,7 @@ export const duplicateRadarRoutes = [
     // Body shape (at least one of domain / email / company_name / phone required):
     //   {
     //     "domain": "<REDACTED_HOST>",                     // optional
-    //     "email":  "user@example.invalid",                // optional (domain extracted)
+    //     "email":  "<REDACTED_EMAIL>",                // optional (domain extracted)
     //     "company_name": "Example Organization Co",                 // optional
     //     "phone": "<REDACTED_PHONE>",                  // optional
     //     "ref":   "web-form-submission-12345"       // optional, echoed back
@@ -13366,7 +13366,7 @@ export const duplicateRadarRoutes = [
         const url = new URL(c.req.url);
         // Defaults to ExampleOrg, NOT all: the rule compares deals within ONE
         // product layout, so an unscoped call would flag a ExampleOrg deal and a
-        // WalaOne deal on the same company as a collision when they are two
+        // Example Organization deal on the same company as a collision when they are two
         // legitimate sales.
         const segment = (url.searchParams.get("segment") || "ExampleOrg") as any;
         const multiOwnerOnly = url.searchParams.get("multi_owner") === "1";
@@ -13628,7 +13628,7 @@ export const duplicateRadarRoutes = [
             : undefined;
         const { aiApplyEmptyDelete } = await import("../../utils/emptyRecordsDatabase");
         const AGENT =
-          "Adam — GRQ Assistant (on behalf of " + (su?.email || "operator") + ")";
+          "AssistantPersona — GRQ Assistant (on behalf of " + (su?.email || "operator") + ")";
         const r = await aiApplyEmptyDelete(
           module as "Deals" | "Accounts" | "Contacts",
           { limit, by: AGENT },
@@ -13669,7 +13669,7 @@ export const duplicateRadarRoutes = [
         if (!CRMProviderIds.length) return c.json({ error: "CRMProviderIds required" }, 400);
         const { verifyEmptyCandidates } = await import("../../utils/emptyRecordsDatabase");
         const AGENT =
-          "Adam — GRQ Assistant (on behalf of " + (su?.email || "operator") + ")";
+          "AssistantPersona — GRQ Assistant (on behalf of " + (su?.email || "operator") + ")";
         const r = await verifyEmptyCandidates(
           module as "Deals" | "Accounts" | "Contacts",
           CRMProviderIds,
@@ -13924,7 +13924,7 @@ export const duplicateRadarRoutes = [
   },
   {
     // Data Cleaning Progress report — single source of truth for the
-    // Cleaning Progress tab, its export, and Adam (getDataCleaningProgress,
+    // Cleaning Progress tab, its export, and AssistantPersona (getDataCleaningProgress,
     // duplicateRadarDatabase.ts). Mirrors the CS-lifecycle read routes above.
     //   GET /api/duplicates/cleaning-progress?segment=
     path: "/api/duplicates/cleaning-progress",

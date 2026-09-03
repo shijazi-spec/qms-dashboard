@@ -72,7 +72,7 @@ async function main(): Promise<void> {
       execute: async (args: unknown) => ({
         success: true,
         echo: args,
-        contact: 'user@example.invalid',
+        contact: '<REDACTED_EMAIL>',
         // Richer secret embedded under an innocuous key — only the regex
         // deny-list inside `redactSecretLikeStrings()` can scrub this on
         // the OUTPUT side.
@@ -87,7 +87,7 @@ async function main(): Promise<void> {
     // via direct SELECT.
     await wrappedHappy.execute!({
       query: 'lookup user',
-      email: 'user@example.invalid',
+      email: '<REDACTED_EMAIL>',
       token: '<REDACTED_SECRET>',
       // Richer secret embedded under an innocuous key — only the regex
       // deny-list inside `redactSensitiveDeep()` can scrub this on the
@@ -121,7 +121,7 @@ async function main(): Promise<void> {
     assert(
       typeof hr?.tool_input_preview === 'string'
         && hr.tool_input_preview.includes('[EMAIL]')
-        && !hr.tool_input_preview.includes('user@example.invalid'),
+        && !hr.tool_input_preview.includes('<REDACTED_EMAIL>'),
       'persisted tool_input_preview redacts emails',
     );
     assert(
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
     assert(
       typeof hr?.tool_output_preview === 'string'
         && hr.tool_output_preview.includes('[EMAIL]')
-        && !hr.tool_output_preview.includes('user@example.invalid'),
+        && !hr.tool_output_preview.includes('<REDACTED_EMAIL>'),
       'persisted tool_output_preview redacts emails',
     );
     // ── Richer secret types (Task #277) ──────────────────────────────

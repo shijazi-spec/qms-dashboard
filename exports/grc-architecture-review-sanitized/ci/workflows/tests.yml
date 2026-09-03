@@ -53,7 +53,7 @@ jobs:
     timeout-minutes: 30
 
     # Real Postgres rather than the dummy connection string the test files
-    # fall back to (`postgres://test:test@localhost:5432/test`). Strictly
+    # fall back to (`<REDACTED_DSN>`). Strictly
     # better: files that only need a parseable URL are unaffected, while
     # files that actually connect exercise real SQL — which is what catches
     # the schema-drift class of bug at test time instead of at deploy time.
@@ -220,10 +220,10 @@ jobs:
           # The four vars test files self-default (`process.env.X || "..."`).
           # Setting them explicitly means the suite runs against known values
           # rather than per-file fallbacks that drift over time.
-          DATABASE_URL: postgres://test:test@localhost:5432/qms_test
+          DATABASE_URL: <REDACTED_DSN>
           SESSION_SECRET: ci-test-session-secret-not-a-real-secret
           ADMIN_API_KEY: ci-test-admin-key-not-a-real-secret
-          HostingPlatform_DOMAINS: localhost:5000
+          HostingPlatform_DOMAINS: <REDACTED_HOST>:5000
           # Bounded so a runaway suite can't eat the whole 30-minute budget
           # on a 2-core runner.
           TEST_CONCURRENCY: "4"

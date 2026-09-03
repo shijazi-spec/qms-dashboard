@@ -12,7 +12,7 @@ await exerciseAllKeys(h, "createProgramme", async (secret, key, payload) => {
     objectives: `${NON_SENSITIVE_MARKER} obj`,
     risk_based_rationale: `${NON_SENSITIVE_MARKER} rationale`,
     planned_audits: [{ [key]: secret, marker: NON_SENSITIVE_MARKER, payload }],
-    prepared_by_email: "user@example.invalid",
+    prepared_by_email: "<REDACTED_EMAIL>",
     prepared_by_name: "Ops",
   });
 });
@@ -29,7 +29,7 @@ await exerciseAllKeys(h, "createIntake", async (secret, key) => {
     file_path: null,
     file_mime: "application/pdf",
     file_sha256: null,
-    uploaded_by_email: "user@example.invalid",
+    uploaded_by_email: "<REDACTED_EMAIL>",
   });
 });
 

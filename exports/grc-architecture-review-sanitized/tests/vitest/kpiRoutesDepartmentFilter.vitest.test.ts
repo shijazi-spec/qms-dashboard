@@ -34,7 +34,7 @@ vi.mock("../../src/utils/qualityReportsDepartments", () => ({
   getDepartmentKpiOwnerNames: deptOwners,
 }));
 vi.mock("../../src/utils/rbacMiddleware", () => ({
-  requireRole: vi.fn(async () => ({ email: "user@example.invalid", role: "admin" })),
+  requireRole: vi.fn(async () => ({ email: "<REDACTED_EMAIL>", role: "admin" })),
   forbiddenResponse: (c: any) => c.json({ error: "forbidden" }, 403),
 }));
 

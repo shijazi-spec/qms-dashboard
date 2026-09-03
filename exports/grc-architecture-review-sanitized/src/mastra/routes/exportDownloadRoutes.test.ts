@@ -86,7 +86,7 @@ function signSession(payload: Record<string, unknown>): string {
 const sessionCookie = `${SESSION_COOKIE_NAME}=${encodeURIComponent(
   signSession({
     userId: 99,
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     name: "Test User",
     role: "admin",
     exp: Date.now() + 3_600_000,

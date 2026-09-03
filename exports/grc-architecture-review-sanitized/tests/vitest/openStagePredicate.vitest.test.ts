@@ -2,7 +2,7 @@
  * Which deal stages count as OPEN pipeline.
  *
  * openStagePredicate is the single source of truth behind Amount at risk, the
- * exec headline, Adam's digest, Top Clusters and the View-all modal. Measured
+ * exec headline, AssistantPersona's digest, Top Clusters and the View-all modal. Measured
  * live 2026-08-23, five post-win stages were being counted as open — the
  * largest being Partner Active, 181 live partners carrying SAR 450,984 reported
  * as pipeline at risk. The rule also contradicted itself: 'client activated'

@@ -1,7 +1,7 @@
 # Expert Review — Phase 1 Call Evaluation Platform
 
 **Reviewer:** Independent senior product + engineering architect
-**Reviewing for:** user@example.invalid (Operations & Quality HOD)
+**Reviewing for:** <REDACTED_EMAIL> (Operations & Quality HOD)
 **Date:** 2026-05-25
 **Status:** Plan-only review. No code changes.
 

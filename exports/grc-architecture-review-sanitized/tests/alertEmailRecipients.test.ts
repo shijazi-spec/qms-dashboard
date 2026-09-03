@@ -38,8 +38,8 @@ function assert(cond: unknown, msg: string): void {
 async function run(): Promise<void> {
   console.log("\nnormaliseEmail");
   {
-    assert(normaliseEmail("user@example.invalid") === "user@example.invalid", "lower-cases input");
-    assert(normaliseEmail("  user@example.invalid  ") === "user@example.invalid", "trims whitespace");
+    assert(normaliseEmail("<REDACTED_EMAIL>") === "<REDACTED_EMAIL>", "lower-cases input");
+    assert(normaliseEmail("  <REDACTED_EMAIL>  ") === "<REDACTED_EMAIL>", "trims whitespace");
     assert(normaliseEmail("not-an-email") === null, "rejects no-@");
     assert(normaliseEmail("a@b") === null, "rejects no-tld");
     assert(normaliseEmail("a@b.c") === null, "rejects 1-char tld");
@@ -47,7 +47,7 @@ async function run(): Promise<void> {
     assert(normaliseEmail("   ") === null, "rejects whitespace-only");
     assert(normaliseEmail(undefined) === null, "rejects undefined");
     assert(normaliseEmail(123) === null, "rejects non-string");
-    assert(normaliseEmail("has user@example.invalid") === null, "rejects whitespace inside");
+    assert(normaliseEmail("has <REDACTED_EMAIL>") === null, "rejects whitespace inside");
     const tooLong = "a".repeat(250) + "@<REDACTED_HOST>";
     assert(normaliseEmail(tooLong) === null, "rejects > 254 chars");
   }
@@ -70,14 +70,14 @@ async function run(): Promise<void> {
 
   console.log("\nparseRecipientsEnvValue");
   {
-    assert(parseRecipientsEnvValue("user@example.invalid").join(",") === "user@example.invalid", "single entry");
+    assert(parseRecipientsEnvValue("<REDACTED_EMAIL>").join(",") === "<REDACTED_EMAIL>", "single entry");
     assert(
-      parseRecipientsEnvValue("user@example.invalid, user@example.invalid , user@example.invalid").join("|") ===
-        "user@example.invalid|user@example.invalid|user@example.invalid",
+      parseRecipientsEnvValue("<REDACTED_EMAIL>, <REDACTED_EMAIL> , <REDACTED_EMAIL>").join("|") ===
+        "<REDACTED_EMAIL>|<REDACTED_EMAIL>|<REDACTED_EMAIL>",
       "multi-entry trim",
     );
     assert(
-      parseRecipientsEnvValue("user@example.invalid, user@example.invalid, user@example.invalid").join("|") === "user@example.invalid|user@example.invalid",
+      parseRecipientsEnvValue("<REDACTED_EMAIL>, <REDACTED_EMAIL>, <REDACTED_EMAIL>").join("|") === "<REDACTED_EMAIL>|<REDACTED_EMAIL>",
       "case-insensitive de-dupe",
     );
     assert(parseRecipientsEnvValue(" , , ").length === 0, "whitespace-only → empty");
@@ -91,28 +91,28 @@ async function run(): Promise<void> {
     // DB list non-empty wins over env.
     const r1 = await resolveEffectiveRecipients(
       "post_restore_sweep",
-      "user@example.invalid",
+      "<REDACTED_EMAIL>",
       {
         list: async () => [
-          { email: "user@example.invalid", added_by: "admin", added_at: new Date() },
+          { email: "<REDACTED_EMAIL>", added_by: "admin", added_at: new Date() },
         ],
       },
     );
     assert(r1.source === "db", "source=db when DB list non-empty");
     assert(
-      r1.recipients.length === 1 && r1.recipients[0] === "user@example.invalid",
+      r1.recipients.length === 1 && r1.recipients[0] === "<REDACTED_EMAIL>",
       "DB list returned, env ignored",
     );
 
     // DB empty → env fallback.
     const r2 = await resolveEffectiveRecipients(
       "post_restore_sweep",
-      "user@example.invalid, user@example.invalid",
+      "<REDACTED_EMAIL>, <REDACTED_EMAIL>",
       { list: async () => [] },
     );
     assert(r2.source === "env", "source=env when DB empty + env set");
     assert(
-      r2.recipients.length === 2 && r2.recipients[0] === "user@example.invalid",
+      r2.recipients.length === 2 && r2.recipients[0] === "<REDACTED_EMAIL>",
       "env list parsed and returned",
     );
 
@@ -128,18 +128,18 @@ async function run(): Promise<void> {
     // DB list with case-only duplicates de-duped defensively.
     const r4 = await resolveEffectiveRecipients(
       "post_restore_sweep",
-      "user@example.invalid",
+      "<REDACTED_EMAIL>",
       {
         list: async () => [
-          { email: "user@example.invalid", added_by: null, added_at: null },
-          { email: "user@example.invalid", added_by: null, added_at: null },
-          { email: "user@example.invalid", added_by: null, added_at: null },
+          { email: "<REDACTED_EMAIL>", added_by: null, added_at: null },
+          { email: "<REDACTED_EMAIL>", added_by: null, added_at: null },
+          { email: "<REDACTED_EMAIL>", added_by: null, added_at: null },
         ],
       },
     );
     assert(r4.source === "db", "source=db on duplicates");
     assert(
-      r4.recipients.length === 2 && r4.recipients[0] === "user@example.invalid",
+      r4.recipients.length === 2 && r4.recipients[0] === "<REDACTED_EMAIL>",
       "case-insensitive dedupe preserves first occurrence",
     );
 
@@ -149,11 +149,11 @@ async function run(): Promise<void> {
     // on error to get the env-fallback behaviour.)
     const r5 = await resolveEffectiveRecipients(
       "ai_cost",
-      "user@example.invalid",
+      "<REDACTED_EMAIL>",
       { list: async () => [] },
     );
     assert(
-      r5.source === "env" && r5.recipients[0] === "user@example.invalid",
+      r5.source === "env" && r5.recipients[0] === "<REDACTED_EMAIL>",
       "ai_cost channel resolves with env fallback",
     );
   }

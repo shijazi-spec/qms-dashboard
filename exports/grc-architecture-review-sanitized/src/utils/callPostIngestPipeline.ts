@@ -230,7 +230,7 @@ export async function autoLinkCallAndCompliance(
       // 2026-06-07 — when the link came via the Phone → Contact → Deal
       // walk, the picked_match carries the originating Contact's id +
       // display name. Persist them so the dashboard tooltip can read
-      // "via Contact: user@example.invalid" instead of just "via
+      // "via Contact: <REDACTED_EMAIL>" instead of just "via
       // linked Contact". Soft-fail like the linked_via write above.
       const picked: any = linkResult.picked_match;
       if (picked?.via_contact_id || picked?.via_contact_name) {

@@ -39,7 +39,7 @@ const TEST_SESSION_SECRET = "test-session-secret-rrole";
 process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
+  process.env.DATABASE_URL || "<REDACTED_DSN>";
 
 // ---------------------------------------------------------------------------
 // 1. Patch pg.Pool BEFORE importing rbacMiddleware so the module-level
@@ -206,8 +206,8 @@ console.log(
 // meaningless (we'd be silently exercising a real DB or the cache).
 console.log("Sanity: stub Pool is wired into getPlatformUser");
 {
-  setPlatformRow("user@example.invalid", { status: "active", role: "admin" });
-  const result = await getPlatformUser("user@example.invalid");
+  setPlatformRow("<REDACTED_EMAIL>", { status: "active", role: "admin" });
+  const result = await getPlatformUser("<REDACTED_EMAIL>");
   assert(result !== null, "getPlatformUser returned a row from the stub");
   assertEquals(result?.status, "active", "stub status flowed through");
   assertEquals(result?.role, "admin", "stub role flowed through");
@@ -224,7 +224,7 @@ console.log(
   "Case: active platform user with role in allowedRoles → user returned"
 );
 {
-  const email = "user@example.invalid";
+  const email = "<REDACTED_EMAIL>";
   // Cookie role is intentionally a *different* allowed role to prove that
   // the live DB role overwrites the cookie role on the returned object.
   setPlatformRow(email, { status: "active", role: "quality_manager" });
@@ -247,7 +247,7 @@ console.log(
   "Case: platform record exists but status != 'active' → null (silent inactive-user block)"
 );
 {
-  const email = "user@example.invalid";
+  const email = "<REDACTED_EMAIL>";
   // Even though the cookie says 'admin' and the DB role would be allowed,
   // an inactive status MUST short-circuit to null.
   setPlatformRow(email, { status: "disabled", role: "admin" });
@@ -264,7 +264,7 @@ console.log(
   "Case: platform record with status 'pending' is also rejected (strict equality on 'active')"
 );
 {
-  const email = "user@example.invalid";
+  const email = "<REDACTED_EMAIL>";
   setPlatformRow(email, { status: "pending", role: "admin" });
   const c = makeContext({
     cookies: { [SESSION_COOKIE_NAME]: sessionCookieFor(email, "admin") },
@@ -279,7 +279,7 @@ console.log(
   "Case: active platform user but live DB role NOT in allowedRoles → null (role-demotion guard)"
 );
 {
-  const email = "user@example.invalid";
+  const email = "<REDACTED_EMAIL>";
   // Cookie role is 'admin' (would pass cookie-only check), but DB has
   // demoted them to 'department_viewer'. The live role must win.
   setPlatformRow(email, { status: "active", role: "department_viewer" });
@@ -300,7 +300,7 @@ console.log(
   "Case: no platform record for the session user → null (orphaned-session guard)"
 );
 {
-  const email = "user@example.invalid";
+  const email = "<REDACTED_EMAIL>";
   setPlatformRow(email, null); // stub returns rows: []
   const c = makeContext({
     cookies: { [SESSION_COOKIE_NAME]: sessionCookieFor(email, "admin") },
@@ -319,7 +319,7 @@ console.log(
   "Case: getPlatformUser DB query throws → treated as no-record → null"
 );
 {
-  const email = "user@example.invalid";
+  const email = "<REDACTED_EMAIL>";
   setPlatformRow(email, null);
   stub.shouldThrow = true;
   const c = makeContext({
@@ -340,7 +340,7 @@ console.log(
   "Case: no session cookie and no admin key → null (no DB lookup attempted)"
 );
 {
-  setPlatformRow("user@example.invalid", { status: "active", role: "admin" });
+  setPlatformRow("<REDACTED_EMAIL>", { status: "active", role: "admin" });
   // Reset call count after the warm-up read above.
   stub.callCount = 0;
   const c = makeContext();
@@ -363,7 +363,7 @@ console.log(
   "Case: X-Admin-Key alone → requireRole returns null (no session, no DB query)"
 );
 {
-  setPlatformRow("user@example.invalid", { status: "active", role: "admin" });
+  setPlatformRow("<REDACTED_EMAIL>", { status: "active", role: "admin" });
   stub.callCount = 0;
   const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
   const user = await requireRole(c, ["admin"]);

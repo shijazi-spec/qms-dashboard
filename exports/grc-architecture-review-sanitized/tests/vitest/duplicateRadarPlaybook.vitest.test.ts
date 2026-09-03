@@ -84,8 +84,8 @@ describe("survivorshipRule", () => {
 describe("ownerToConsult", () => {
   test("name + email → 'name <email>'", () => {
     expect(
-      ownerToConsult({ owner_name: "Sample User", owner_email: "user@example.invalid" }),
-    ).toBe("Ali <user@example.invalid>");
+      ownerToConsult({ owner_name: "Sample User", owner_email: "<REDACTED_EMAIL>" }),
+    ).toBe("Ali <<REDACTED_EMAIL>>");
   });
   test("name only → name", () => {
     expect(
@@ -94,8 +94,8 @@ describe("ownerToConsult", () => {
   });
   test("email only → email", () => {
     expect(
-      ownerToConsult({ owner_name: null, owner_email: "user@example.invalid" }),
-    ).toBe("user@example.invalid");
+      ownerToConsult({ owner_name: null, owner_email: "<REDACTED_EMAIL>" }),
+    ).toBe("<REDACTED_EMAIL>");
   });
   test("nothing → em-dash", () => {
     expect(ownerToConsult({ owner_name: null, owner_email: null })).toBe("—");
@@ -170,7 +170,7 @@ describe("startCluster + rowPlaybook (integration)", () => {
       is_primary: true,
       record_name: "Example Organization Co — Riyadh Branch",
       owner_name: "Sample User",
-      owner_email: "user@example.invalid",
+      owner_email: "<REDACTED_EMAIL>",
       cluster_confidence_score: 95,
       cluster_total_records: 3,
       ai_recommendation: "Merge after CRMProvider confirmation",
@@ -187,7 +187,7 @@ describe("startCluster + rowPlaybook (integration)", () => {
       is_primary: false,
       record_name: "Example Organization co. (Riyadh)",
       owner_name: "Sample User",
-      owner_email: "user@example.invalid",
+      owner_email: "<REDACTED_EMAIL>",
       cluster_confidence_score: 95,
       cluster_total_records: 3,
       ai_recommendation: "Merge after CRMProvider confirmation",
@@ -197,7 +197,7 @@ describe("startCluster + rowPlaybook (integration)", () => {
       'Merge into "Example Organization Co — Riyadh Branch"',
     );
     // The duplicate row's own owner is the one to consult — not the primary's.
-    expect(dupPb.owner_to_consult).toBe("Sara <user@example.invalid>");
+    expect(dupPb.owner_to_consult).toBe("Sara <<REDACTED_EMAIL>>");
     expect(dupPb.due_date).toBe(primaryPb.due_date);
     expect(dupPb.survivorship_rule).toBe(primaryPb.survivorship_rule);
   });

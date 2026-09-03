@@ -74,10 +74,10 @@ Following the penetration testing report dated March 11, 2026 (conducted by Moha
 - **Status:** ALREADY REMEDIATED (finding was incorrect)
 - **Assessment:** The original pentest report stated session cookies lacked HttpOnly, Secure, and SameSite flags. Code review confirms these flags were already correctly set:
   - `HttpOnly` — Present (line 210, authRoutes.ts)
-  - `Secure` — Present in production (conditional on non-localhost)
+  - `Secure` — Present in production (conditional on non-<REDACTED_HOST>)
   - `SameSite=Lax` — Present
   - `Path=/` — Present
-- **Note:** The tester may have observed the development environment where `Secure` is intentionally omitted for localhost compatibility.
+- **Note:** The tester may have observed the development environment where `Secure` is intentionally omitted for <REDACTED_HOST> compatibility.
 
 ### VULN-08: JWT Role Claim in Token Payload
 - **Original Severity:** HIGH (CVSS 6.5)

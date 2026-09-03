@@ -13,11 +13,11 @@ This example demonstrates how to use Mastra's memory system with Upstash as the 
 This example uses the `LLMProvider` model and requires both Upstash Redis and Upstash Vector services. Make sure to add the following to your `.env` file:
 
 ```bash filename=".env" copy
-LLMProvider_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<REDACTED_SECRET>
 UPSTASH_REDIS_REST_URL=<your-redis-url>
-UPSTASH_REDIS_REST_TOKEN=<your-redis-token>
+UPSTASH_REDIS_REST_TOKEN=<REDACTED_SECRET>
 UPSTASH_VECTOR_REST_URL=<your-vector-index-url>
-UPSTASH_VECTOR_REST_TOKEN=<your-vector-index-token>
+UPSTASH_VECTOR_REST_TOKEN=<REDACTED_SECRET>
 ```
 
 You can get your Upstash credentials by signing up at [<REDACTED_HOST>](<REDACTED_URL> and creating both Redis and Vector databases.

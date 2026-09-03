@@ -20,7 +20,7 @@
  * (and the matching `ai_alerts.related_record_id` prefix).
  *
  * Run locally:
- *   RUN_PROMPT_REGRESSION_E2E=1 DATABASE_URL=postgres://... \
+ *   RUN_PROMPT_REGRESSION_E2E=1 DATABASE_URL=<REDACTED_DSN> \
  *     npx tsx tests/promptRegressionAlertsCron.integration.ts
  */
 

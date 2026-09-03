@@ -33,7 +33,7 @@ for (const route of rbacRoutes) {
     const handler = await buildHandler(rbacRoutes, path, method, { mastra: null });
     const res = await handler(makeContext({
       method,
-      params: { email: "user@example.invalid", id: "1" },
+      params: { email: "<REDACTED_EMAIL>", id: "1" },
       url: `<REDACTED_URL>":email", "x%<REDACTED_HOST>").replace(":id", "1")}`,
       body: ["POST", "PUT", "PATCH"].includes(method) ? {} : undefined,
     }));

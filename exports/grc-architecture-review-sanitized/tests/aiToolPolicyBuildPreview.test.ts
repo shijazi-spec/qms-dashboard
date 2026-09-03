@@ -242,7 +242,7 @@ function buildPayloadWithSecretsFor(
     mandatoryFor: `engineers handling ${SECRETS.apiKey}`,
     trainingId: 42,
     trainingTitle: `PII training (note: ${SECRETS.bcrypt})`,
-    assigneeEmail: "user@example.invalid",
+    assigneeEmail: "<REDACTED_EMAIL>",
     assigneeName: "Alice",
     dueDate: "2026-06-01",
     assignmentId: 7,
@@ -368,7 +368,7 @@ async function run(): Promise<void> {
         riskLevel: policy.riskLevel,
         complianceRefs: policy.complianceRefs,
         requestedByUserId: 1,
-        requestedByEmail: "user@example.invalid",
+        requestedByEmail: "<REDACTED_EMAIL>",
         requestedByName: "QA Bot",
         threadId: null,
       });

@@ -1,7 +1,7 @@
 # Decision Record — Close the Velents Gaps
 
 **Date:** 2026-05-25
-**Decision-makers:** user@example.invalid (Operations & Quality HOD)
+**Decision-makers:** <REDACTED_EMAIL> (Operations & Quality HOD)
 **Status:** Approved, not yet implemented
 **References:**
 - `docs/Velents_vs_Internal_Build_Gap_Analysis_2026_05_25.md` (the gap analysis)

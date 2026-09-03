@@ -42,7 +42,7 @@ function signSession(payload: Record<string, unknown>): string {
 const ADMIN_SESSION_COOKIE =
   "ExampleOrg_session=" +
   encodeURIComponent(
-    signSession({ userId: 1, email: "user@example.invalid", name: "Test", role: "admin" }),
+    signSession({ userId: 1, email: "<REDACTED_EMAIL>", name: "Test", role: "admin" }),
   );
 
 const ADMIN_HEADERS = {
@@ -231,7 +231,7 @@ describe("POST /api/tablef/performance — real data path", () => {
 
 describe("GET /api/tablef/users — real data path", () => {
   test("200 returns { users: [...] }", async () => {
-    const rows = [{ user_id: "u-1", email: "user@example.invalid" }];
+    const rows = [{ user_id: "u-1", email: "<REDACTED_EMAIL>" }];
     mockQuery.mockResolvedValueOnce({ rows });
 
     const handler = await buildHandler(tablefApiRoutes, "/api/tablef/users", "GET");

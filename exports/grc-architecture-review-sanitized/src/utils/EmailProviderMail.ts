@@ -5,7 +5,7 @@ const EmailProvider_API_KEY = process.env.EmailProvider_API_KEY;
 // Use EmailProvider's testing domain if no custom from email is set
 // This allows emails to work immediately without domain verification
 const FROM_EMAIL =
-  process.env.EmailProvider_FROM_EMAIL || "ExampleOrg QMS <user@example.invalid>";
+  process.env.EmailProvider_FROM_EMAIL || "ExampleOrg QMS <<REDACTED_EMAIL>>";
 
 /**
  * Returns true when the EmailProvider email helper is fully configured and
@@ -61,7 +61,7 @@ export async function sendEmailProviderEmail(options: EmailProviderEmailOptions)
   try {
     const recipients = Array.isArray(options.to) ? options.to : [options.to];
     const fromEmail =
-      process.env.EmailProvider_FROM_EMAIL || "ExampleOrg QMS <user@example.invalid>";
+      process.env.EmailProvider_FROM_EMAIL || "ExampleOrg QMS <<REDACTED_EMAIL>>";
 
     logger.info(`📧 [EmailProviderMail] Sending email to: ${recipients.join(", ")}`);
     logger.info(`📧 [EmailProviderMail] From: ${fromEmail}`);
@@ -106,6 +106,6 @@ export async function sendEmailProviderEmail(options: EmailProviderEmailOptions)
 }
 
 export const QUALITY_REPORT_RECIPIENTS = [
-  "user@example.invalid",
-  "user@example.invalid",
+  "<REDACTED_EMAIL>",
+  "<REDACTED_EMAIL>",
 ];

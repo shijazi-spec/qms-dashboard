@@ -201,7 +201,7 @@ This document serves as:
 
 #### QMS-017 — Spoofed Audit Trail on User Management Actions
 - **Severity:** HIGH (CVSS 7.5)
-- **Issue:** User management actions (approve, deny, enable, disable) logged `user@example.invalid` as the actor regardless of who performed the action.
+- **Issue:** User management actions (approve, deny, enable, disable) logged `<REDACTED_EMAIL>` as the actor regardless of who performed the action.
 - **Remediation:** `approved_by`, `denied_by`, `enabled_by`, `disabled_by` fields now populated from the authenticated session user (`sessionUser.email`), not hardcoded.
 - **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`
 - **Control:** Session-based identity attribution for all audit trail entries.

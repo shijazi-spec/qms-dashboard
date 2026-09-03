@@ -89,7 +89,7 @@ export const pdplRoutes = [
             await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || "user@example.invalid";
+          const userEmail = body.userEmail || "<REDACTED_EMAIL>";
           const item = await addDataInventoryItem(body, userEmail);
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
@@ -132,7 +132,7 @@ export const pdplRoutes = [
             await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || "user@example.invalid";
+          const userEmail = body.userEmail || "<REDACTED_EMAIL>";
           const item = await updateDataInventoryItem(id, body, userEmail);
 
           if (!item) {
@@ -212,7 +212,7 @@ export const pdplRoutes = [
             await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || "user@example.invalid";
+          const userEmail = body.userEmail || "<REDACTED_EMAIL>";
           const request = await createDSARRequest(body, userEmail);
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
@@ -255,7 +255,7 @@ export const pdplRoutes = [
             await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || "user@example.invalid";
+          const userEmail = body.userEmail || "<REDACTED_EMAIL>";
           const request = await updateDSARRequest(id, body, userEmail);
 
           if (!request) {
@@ -330,7 +330,7 @@ export const pdplRoutes = [
             await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || "user@example.invalid";
+          const userEmail = body.userEmail || "<REDACTED_EMAIL>";
           const policy = await updateRetentionPolicy(id, body, userEmail);
 
           if (!policy) {
@@ -395,7 +395,7 @@ export const pdplRoutes = [
             await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || "user@example.invalid";
+          const userEmail = body.userEmail || "<REDACTED_EMAIL>";
           const incident = await createDataIncident(body, userEmail);
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
@@ -438,7 +438,7 @@ export const pdplRoutes = [
             await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || "user@example.invalid";
+          const userEmail = body.userEmail || "<REDACTED_EMAIL>";
           const incident = await updateDataIncident(id, body, userEmail);
 
           if (!incident) {
@@ -516,7 +516,7 @@ export const pdplRoutes = [
             await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || "user@example.invalid";
+          const userEmail = body.userEmail || "<REDACTED_EMAIL>";
           const guardrail = await addAIGuardrail(body, userEmail);
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");

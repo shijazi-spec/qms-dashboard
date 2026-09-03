@@ -1599,7 +1599,7 @@ const PAGES = {
   feedback: {
     en: {
       title: 'Team Feedback Center',
-      subtitle: 'View and analyze feedback from Sara, Maram, and your team members across all dashboards.',
+      subtitle: 'View and analyze feedback from Sara, Sample User, and your team members across all dashboards.',
       sec_by_dashboard: 'Feedback by Dashboard',
       sec_rating_dist: 'Rating Distribution',
       sec_all_feedback: 'All Feedback',

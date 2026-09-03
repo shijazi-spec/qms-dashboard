@@ -235,7 +235,7 @@ async function testEmailSentOnSuccess(): Promise<void> {
   console.log("\nnotifyToolHealthBreach — emailSent=true on EmailProvider success");
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid, user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>, <REDACTED_EMAIL>";
   process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
 
   type EmailArgs = { to: string | string[]; subject: string; html?: string; text?: string };
@@ -260,7 +260,7 @@ async function testEmailSentOnSuccess(): Promise<void> {
   assertEqual(emailCalls.length, 1, "sendEmail called exactly once");
   assertDeepEqual(
     emailCalls[0].to,
-    ["user@example.invalid", "user@example.invalid"],
+    ["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"],
     "comma-separated TOOL_HEALTH_ALERT_EMAIL is split into a recipient array",
   );
   assert(
@@ -422,7 +422,7 @@ async function testBreachEmailRejectedKeepsEmailSentFalse(): Promise<void> {
   );
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
 
   let emailCalls = 0;
   const result = await notifyToolHealthBreach(
@@ -454,7 +454,7 @@ async function testBreachEmailThrowsDoesNotPropagate(): Promise<void> {
   );
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
 
   let emailCalls = 0;
   const originalError = console.error;
@@ -694,7 +694,7 @@ async function testBreachRecordResultThrowsOnFailedPath(): Promise<void> {
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
   process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
 
   let recordCalls = 0;
   let recordChannel: string | null = null;
@@ -781,7 +781,7 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
   process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
   await notifyToolHealthBreach(
     makeBreach({ related_record_id: "ch-both:error_rate", alert_id: 102 }),
     {
@@ -798,7 +798,7 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
   process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
   await notifyToolHealthBreach(
     makeBreach({ related_record_id: "ch-ChatProvideronly:error_rate", alert_id: 103 }),
     {
@@ -815,7 +815,7 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
   process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
   await notifyToolHealthBreach(
     makeBreach({ related_record_id: "ch-emailonly:error_rate", alert_id: 104 }),
     {
@@ -831,7 +831,7 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
   process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
   await notifyToolHealthBreach(
     makeBreach({ related_record_id: "ch-failed:error_rate", alert_id: 105 }),
     {
@@ -894,7 +894,7 @@ async function testOverrideExpiredChatProviderPost(): Promise<void> {
   const expiredAt = new Date("2026-04-25T14:30:00.000Z");
   const note: ToolHealthOverrideExpiredNotification = {
     cleared_overrides: { errorRatePct: 25, p95LatencyMs: 5000 },
-    previous_updated_by: "user@example.invalid",
+    previous_updated_by: "<REDACTED_EMAIL>",
     expired_at: expiredAt,
     audit_id: 99,
   };
@@ -911,7 +911,7 @@ async function testOverrideExpiredChatProviderPost(): Promise<void> {
   assertEqual(ChatProviderCalls.length, 1, "ChatProvider invoked exactly once");
   assertEqual(ChatProviderCalls[0].channel, "C-ONCALL", "posted to configured channel");
   assert(
-    ChatProviderCalls[0].text.includes("user@example.invalid"),
+    ChatProviderCalls[0].text.includes("<REDACTED_EMAIL>"),
     "fallback text attributes the prior override owner",
   );
   assert(
@@ -972,7 +972,7 @@ async function testOverrideExpiredChatProviderThrowsDoesNotPropagate(): Promise<
     const result = await notifyToolHealthOverrideExpired(
       {
         cleared_overrides: { errorRatePct: 25 },
-        previous_updated_by: "user@example.invalid",
+        previous_updated_by: "<REDACTED_EMAIL>",
         expired_at: new Date("2026-04-25T16:00:00.000Z"),
         audit_id: 101,
       },
@@ -1101,7 +1101,7 @@ function makeConfigChange(
   overrides: Partial<ToolHealthConfigChangeNotification> = {},
 ): ToolHealthConfigChangeNotification {
   return {
-    changedBy: "user@example.invalid",
+    changedBy: "<REDACTED_EMAIL>",
     before: { errorRatePct: 10, p95LatencyMs: 1000 },
     after: { errorRatePct: 15, p95LatencyMs: 1000 },
     note: null,
@@ -1227,7 +1227,7 @@ async function testConfigChangeChatProviderAndEmailOnSuccess(): Promise<void> {
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
   process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
   process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
 
   type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
@@ -1241,7 +1241,7 @@ async function testConfigChangeChatProviderAndEmailOnSuccess(): Promise<void> {
     {
       id: 7,
       changed_at: new Date("2026-04-25T12:34:00.000Z"),
-      changed_by: "user@example.invalid",
+      changed_by: "<REDACTED_EMAIL>",
       before_values: { errorRatePct: 10, p95LatencyMs: 1000 },
       after_values: { errorRatePct: 15, p95LatencyMs: 1000 },
       note: null,
@@ -1250,7 +1250,7 @@ async function testConfigChangeChatProviderAndEmailOnSuccess(): Promise<void> {
     {
       id: 6,
       changed_at: new Date("2026-04-24T09:00:00.000Z"),
-      changed_by: "user@example.invalid",
+      changed_by: "<REDACTED_EMAIL>",
       before_values: { minCalls: 10 },
       after_values: { minCalls: 20 },
       note: null,
@@ -1291,7 +1291,7 @@ async function testConfigChangeChatProviderAndEmailOnSuccess(): Promise<void> {
   assertEqual(ChatProviderCalls.length, 1, "sendChatProvider called exactly once");
   assertEqual(ChatProviderCalls[0].channel, "C-ONCALL", "ChatProvider posted to configured channel");
   assert(
-    ChatProviderCalls[0].text.includes("user@example.invalid"),
+    ChatProviderCalls[0].text.includes("<REDACTED_EMAIL>"),
     "ChatProvider fallback text attributes the operator",
   );
   assert(
@@ -1326,8 +1326,8 @@ async function testConfigChangeChatProviderAndEmailOnSuccess(): Promise<void> {
     "Recent changes block reflects the injected audit count",
   );
   assert(
-    allSectionText.includes("user@example.invalid") &&
-      allSectionText.includes("user@example.invalid"),
+    allSectionText.includes("<REDACTED_EMAIL>") &&
+      allSectionText.includes("<REDACTED_EMAIL>"),
     "Recent changes block lists both injected audit operators",
   );
   // Note from the operator should also be rendered.
@@ -1342,7 +1342,7 @@ async function testConfigChangeChatProviderAndEmailOnSuccess(): Promise<void> {
   assertEqual(emailCalls.length, 1, "sendEmail called exactly once");
   assertDeepEqual(
     emailCalls[0].to,
-    ["user@example.invalid"],
+    ["<REDACTED_EMAIL>"],
     "TOOL_HEALTH_ALERT_EMAIL is split into a recipient array",
   );
   assert(
@@ -1351,7 +1351,7 @@ async function testConfigChangeChatProviderAndEmailOnSuccess(): Promise<void> {
   );
   assert(
     typeof emailCalls[0].html === "string" &&
-      emailCalls[0].html.includes("user@example.invalid") &&
+      emailCalls[0].html.includes("<REDACTED_EMAIL>") &&
       emailCalls[0].html.includes(
         "<REDACTED_URL>",
       ),
@@ -1371,7 +1371,7 @@ async function testConfigChangeChatProviderAndEmailFailIndependently(): Promise<
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
   process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
 
   let ChatProviderCalls = 0;
   let emailCalls = 0;
@@ -1815,7 +1815,7 @@ function makeExpiringSoon(
 ): ToolHealthOverrideExpiringSoonNotification {
   return {
     expires_at: new Date("2026-04-25T18:00:00.000Z"),
-    previous_updated_by: "user@example.invalid",
+    previous_updated_by: "<REDACTED_EMAIL>",
     overrides: { errorRatePct: 25, p95LatencyMs: 5000 },
     minutes_remaining: 25,
     ...overrides,
@@ -1871,7 +1871,7 @@ async function testExpiringSoonChatProviderOnSuccess(): Promise<void> {
   assertEqual(ChatProviderCalls.length, 1, "ChatProvider invoked exactly once");
   assertEqual(ChatProviderCalls[0].channel, "C-ONCALL", "posted to configured channel");
   assert(
-    ChatProviderCalls[0].text.includes("user@example.invalid") &&
+    ChatProviderCalls[0].text.includes("<REDACTED_EMAIL>") &&
       ChatProviderCalls[0].text.includes("~25 min"),
     "fallback text mentions operator and minutes-remaining",
   );
@@ -2069,7 +2069,7 @@ async function testRecoveryChatProviderAndEmailOnSuccess(): Promise<void> {
   );
   clearEnv();
   process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
   process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
 
   type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
@@ -2131,7 +2131,7 @@ async function testRecoveryChatProviderAndEmailOnSuccess(): Promise<void> {
   assertEqual(emailCalls.length, 1, "sendEmail called exactly once");
   assertDeepEqual(
     emailCalls[0].to,
-    ["user@example.invalid"],
+    ["<REDACTED_EMAIL>"],
     "TOOL_HEALTH_ALERT_EMAIL is split into a recipient array",
   );
   assert(
@@ -2280,7 +2280,7 @@ async function testRecoveryChatProviderAndEmailFailIndependently(): Promise<void
   );
   clearEnv();
   process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
 
   let ChatProviderCalls = 0;
   let emailCalls = 0;
@@ -2318,7 +2318,7 @@ async function testRecoveryEmailThrowsDoesNotPropagate(): Promise<void> {
     "\nnotifyToolHealthRecovery — sendEmail throws ⇒ emailSent=false, no throw escapes",
   );
   clearEnv();
-  process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "<REDACTED_EMAIL>";
 
   let emailCalls = 0;
   const originalError = console.error;

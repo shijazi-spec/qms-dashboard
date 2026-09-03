@@ -14,9 +14,9 @@ import {
 } from "../../src/utils/ownerEmailAliases";
 
 describe("OWNER_EMAIL_ALIASES table", () => {
-  test("Rayan's three mailboxes all map to user@example.invalid", () => {
-    expect(OWNER_EMAIL_ALIASES["user@example.invalid"]).toBe("user@example.invalid");
-    expect(OWNER_EMAIL_ALIASES["user@example.invalid"]).toBe("user@example.invalid");
+  test("Rayan's three mailboxes all map to <REDACTED_EMAIL>", () => {
+    expect(OWNER_EMAIL_ALIASES["<REDACTED_EMAIL>"]).toBe("<REDACTED_EMAIL>");
+    expect(OWNER_EMAIL_ALIASES["<REDACTED_EMAIL>"]).toBe("<REDACTED_EMAIL>");
   });
 
   test("alias keys are all lower-case + trimmed", () => {
@@ -28,21 +28,21 @@ describe("OWNER_EMAIL_ALIASES table", () => {
 
 describe("canonicaliseOwnerEmail", () => {
   test("aliases map to canonical", () => {
-    expect(canonicaliseOwnerEmail("user@example.invalid")).toBe("user@example.invalid");
-    expect(canonicaliseOwnerEmail("user@example.invalid")).toBe("user@example.invalid");
+    expect(canonicaliseOwnerEmail("<REDACTED_EMAIL>")).toBe("<REDACTED_EMAIL>");
+    expect(canonicaliseOwnerEmail("<REDACTED_EMAIL>")).toBe("<REDACTED_EMAIL>");
   });
 
   test("case-insensitive lookup", () => {
-    expect(canonicaliseOwnerEmail("user@example.invalid")).toBe("user@example.invalid");
+    expect(canonicaliseOwnerEmail("<REDACTED_EMAIL>")).toBe("<REDACTED_EMAIL>");
   });
 
   test("whitespace is stripped", () => {
-    expect(canonicaliseOwnerEmail("  user@example.invalid  ")).toBe("user@example.invalid");
+    expect(canonicaliseOwnerEmail("  <REDACTED_EMAIL>  ")).toBe("<REDACTED_EMAIL>");
   });
 
   test("non-alias email passes through (lower-cased)", () => {
-    expect(canonicaliseOwnerEmail("user@example.invalid")).toBe("user@example.invalid");
-    expect(canonicaliseOwnerEmail("user@example.invalid")).toBe("user@example.invalid");
+    expect(canonicaliseOwnerEmail("<REDACTED_EMAIL>")).toBe("<REDACTED_EMAIL>");
+    expect(canonicaliseOwnerEmail("<REDACTED_EMAIL>")).toBe("<REDACTED_EMAIL>");
   });
 
   test("null / undefined / empty input → empty string", () => {
@@ -55,7 +55,7 @@ describe("canonicaliseOwnerEmail", () => {
   test("canonical email also canonicalises to itself", () => {
     // Once a row is already keyed by the canonical, a second pass through
     // canonicaliseOwnerEmail must be a no-op — otherwise idempotence breaks.
-    expect(canonicaliseOwnerEmail("user@example.invalid")).toBe("user@example.invalid");
+    expect(canonicaliseOwnerEmail("<REDACTED_EMAIL>")).toBe("<REDACTED_EMAIL>");
   });
 });
 

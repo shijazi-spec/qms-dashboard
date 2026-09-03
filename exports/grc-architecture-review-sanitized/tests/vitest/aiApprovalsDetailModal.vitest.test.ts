@@ -56,7 +56,7 @@ const SEED_ACTION_CODE = 'APR-20260101-T297AA';
 const SEED_VIEWERS = [
   {
     user_id: 1,
-    user_email: 'user@example.invalid',
+    user_email: '<REDACTED_EMAIL>',
     user_name: 'Salma Al Qahtani',
     user_role: 'quality_manager',
     last_viewed_at: '2026-01-02T10:15:00.000Z',
@@ -64,7 +64,7 @@ const SEED_VIEWERS = [
   },
   {
     user_id: 2,
-    user_email: 'user@example.invalid',
+    user_email: '<REDACTED_EMAIL>',
     user_name: 'Omar Auditor',
     user_role: 'admin',
     last_viewed_at: '2026-01-02T08:00:00.000Z',
@@ -72,7 +72,7 @@ const SEED_VIEWERS = [
   },
   {
     user_id: 3,
-    user_email: 'user@example.invalid',
+    user_email: '<REDACTED_EMAIL>',
     user_name: 'Reviewer Three',
     user_role: 'quality_manager',
     last_viewed_at: '2026-01-01T20:30:00.000Z',
@@ -80,7 +80,7 @@ const SEED_VIEWERS = [
   },
   {
     user_id: 4,
-    user_email: 'user@example.invalid',
+    user_email: '<REDACTED_EMAIL>',
     user_name: 'Reviewer Four',
     user_role: 'admin',
     last_viewed_at: '2026-01-01T18:00:00.000Z',
@@ -88,7 +88,7 @@ const SEED_VIEWERS = [
   },
   {
     user_id: 5,
-    user_email: 'user@example.invalid',
+    user_email: '<REDACTED_EMAIL>',
     user_name: 'Reviewer Five',
     user_role: 'quality_manager',
     last_viewed_at: '2026-01-01T17:00:00.000Z',
@@ -96,7 +96,7 @@ const SEED_VIEWERS = [
   },
   {
     user_id: 6,
-    user_email: 'user@example.invalid',
+    user_email: '<REDACTED_EMAIL>',
     user_name: 'Reviewer Six',
     user_role: 'admin',
     last_viewed_at: '2026-01-01T16:00:00.000Z',
@@ -115,7 +115,7 @@ function buildSeededAction(
     payload_preview: 'Rotate API key for fixture integration',
     created_at: '2025-12-31T12:00:00.000Z',
     requested_by_name: 'Test Requester',
-    requested_by_email: 'user@example.invalid',
+    requested_by_email: '<REDACTED_EMAIL>',
     prior_viewers: SEED_VIEWERS,
     credential_warnings: [],
     compliance_refs: [],
@@ -690,7 +690,7 @@ describe('AI Approvals — detail modal (Task #297)', () => {
       prior_viewers: [
         {
           user_id: 9,
-          user_email: 'user@example.invalid',
+          user_email: '<REDACTED_EMAIL>',
           user_name: 'Solo Reviewer',
           user_role: 'admin',
           last_viewed_at: '2026-01-03T00:00:00.000Z',
@@ -698,7 +698,7 @@ describe('AI Approvals — detail modal (Task #297)', () => {
         },
         {
           user_id: 10,
-          user_email: 'user@example.invalid',
+          user_email: '<REDACTED_EMAIL>',
           user_name: 'Multi Reviewer',
           user_role: 'quality_manager',
           last_viewed_at: '2026-01-03T01:00:00.000Z',

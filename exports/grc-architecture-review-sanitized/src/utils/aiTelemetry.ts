@@ -578,9 +578,9 @@ async function finalizeAiCallMetric(
     await pool.query(
       `UPDATE ai_call_metrics
          SET latency_ms         = $2,
-             prompt_tokens      = $3,
-             completion_tokens  = $4,
-             total_tokens       = $5,
+             prompt_tokens      = <REDACTED_SECRET>
+             completion_tokens  = <REDACTED_SECRET>
+             total_tokens       = <REDACTED_SECRET>
              estimated_cost_usd = $6,
              success            = $7,
              error_class        = $8,
@@ -913,10 +913,10 @@ export async function recordStreamTelemetry(params: RecordStreamTelemetryParams)
         new Promise<null>((res) => setTimeout(() => res(null), 2000)),
       ]);
       if (usage) {
-        promptTokens = usage.promptTokens ?? usage.prompt_tokens ?? undefined;
+        promptTokens = <REDACTED_SECRET> ?? usage.prompt_tokens ?? undefined;
         completionTokens =
-          usage.completionTokens ?? usage.completion_tokens ?? undefined;
-        totalTokens = usage.totalTokens ?? usage.total_tokens ?? undefined;
+          <REDACTED_SECRET> ?? usage.completion_tokens ?? undefined;
+        totalTokens = <REDACTED_SECRET> ?? usage.total_tokens ?? undefined;
       }
     } catch {
       // Usage unavailable — record without token counts
@@ -1093,7 +1093,7 @@ export async function pruneOldAiMetrics(
       `DELETE FROM ai_call_metrics WHERE started_at < NOW() - MAKE_INTERVAL(days => $1)`,
       [days],
     );
-    // Adam's section log is AI-usage data, so it ages out on the SAME retention
+    // AssistantPersona's section log is AI-usage data, so it ages out on the SAME retention
     // window as the metrics above.
     let topicLogDeleted = 0;
     try {

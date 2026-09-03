@@ -17,7 +17,7 @@ In this example, the `system` prompt is used to change the agent’s voice betwe
 This example uses the `LLMProvider` model. Make sure to add `LLMProvider_API_KEY` to your `.env` file.
 
 ```bash filename=".env" copy
-LLMProvider_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<REDACTED_SECRET>
 ```
 
 ## Creating an agent

@@ -37,7 +37,7 @@ const CANONICAL_TO_FEED: Record<string, string> = {
   "QM-KPI-003": "QM-KPI-003", // Gap Closure Rate
   // QM-KPI-009 Repeat Findings → manual (feed calc was a capture table, not findings).
   // QM-KPI-006 Handoff SLA → calcHandoffSlaCompliance (% within SLA), NOT the days-based feed calc.
-  // GRC (Maram)
+  // GRC (Sample User)
   "GRC-KPI-010": "GRC-KPI-009", // Risk Assessment Coverage (BUs)
   "GRC-KPI-005": "GRC-KPI-005", // Risk Treatment On-Time Closure ← CAPA closure
   "GRC-KPI-003": "GRC-KPI-003", // Audit Evidence Readiness ← Audit & Cert Readiness

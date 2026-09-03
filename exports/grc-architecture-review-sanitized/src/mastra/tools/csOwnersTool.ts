@@ -4,7 +4,7 @@ import { z } from "zod";
 /**
  * CS OWNER ROSTER (Sample User 2026-07-20).
  *
- * Sample User "who are the CS owners in the platform?" and Adam could not
+ * Sample User "who are the CS owners in the platform?" and AssistantPersona could not
  * answer — its only CS tool (cs-lifecycle-status) returns COUNTS, and no tool
  * exposed the owner NAMES. The platform stores no CS team list either: the
  * owner lives per-deal in CRMProvider's "CS Owner Name" field.
@@ -23,7 +23,7 @@ export const csOwnersTool = createTool({
 
   inputSchema: z.object({
     segment: z
-      .enum(["all", "marketplace", "ExampleOrg", "walaone"])
+      .enum(["all", "marketplace", "ExampleOrg", "Example Organization"])
       .optional()
       .describe("Filter by CRMProvider Layout segment. Defaults to all."),
     limit: z.number().optional().describe("Max owners to return (default 200)."),

@@ -24,7 +24,7 @@ export const duplicateSpikeTool = createTool({
       .optional()
       .describe("Length of each comparison window in weeks (default 3)."),
     segment: z
-      .enum(["all", "marketplace", "ExampleOrg", "walaone"])
+      .enum(["all", "marketplace", "ExampleOrg", "Example Organization"])
       .optional()
       .describe("Filter by CRMProvider Layout segment. Defaults to all."),
   }),

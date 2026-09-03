@@ -44,19 +44,19 @@ export interface CsTeamMember {
 
 /** The 13 CS members Sample User 2026-07-21. */
 const MEMBERS: CsTeamMember[] = [
-  { name: "Saleh Alhamddi", email: "user@example.invalid", aliases: ["صالح الحمدي", "Saleh Alhamdi", "Saleh Al Hamddi"] },
-  { name: "abdulmalik Alfaleh", email: "user@example.invalid", aliases: ["Abdulmalik Alfaleh", "Abdulmalik Al Faleh", "عبدالملك الفالح"] },
-  { name: "Salman Al-Issa", email: "user@example.invalid", aliases: ["Salman Alissa", "Salman Al Issa", "سلمان العيسى"] },
-  { name: "Zeina Alsoudi", email: "user@example.invalid", aliases: ["Zeina Al Soudi", "Zeina Al-Soudi", "زينة السودي"] },
-  { name: "Alhanouf Aldarwish", email: "user@example.invalid", aliases: ["Alhanouf Al Darwish", "AlHanouf Aldarwish", "الهنوف الدرويش"] },
-  { name: "Feras Alarfaj", email: "user@example.invalid", aliases: ["Feras Al Arfaj", "Firas Alarfaj", "فراس العرفج"] },
-  { name: "Basem Al Anazi", email: "user@example.invalid", aliases: ["Basem Alanazi", "Basem Al-Anazi", "باسم العنزي"] },
-  { name: "تغريد الجاسر", email: "user@example.invalid", aliases: ["Taghreed Aljasser", "Taghreed Al Jasser", "Taghreed"] },
-  { name: "Basmah Raddah", email: "user@example.invalid", aliases: ["Basmah Raddah", "Basma Raddah", "بسمة ردة"] },
-  { name: "Sample User", email: "user@example.invalid", aliases: ["Sample User", "Sample User", "عبدالله الجراح"] },
-  { name: "Abdulaziz Al Humoud", email: "user@example.invalid", aliases: ["Abdulaziz Alhumoud", "Abdulaziz Al-Humoud", "عبدالعزيز الحمود"] },
-  { name: "Sample User", email: "user@example.invalid", aliases: ["Sample User", "Sample User", "محمد الحمودي"] },
-  { name: "faisal alzughaiby", email: "user@example.invalid", aliases: ["Faisal Alzughaiby", "Faisal Al Zughaiby", "فيصل الزغيبي"] },
+  { name: "Saleh Alhamddi", email: "<REDACTED_EMAIL>", aliases: ["صالح الحمدي", "Saleh Alhamdi", "Saleh Al Hamddi"] },
+  { name: "abdulmalik Alfaleh", email: "<REDACTED_EMAIL>", aliases: ["Abdulmalik Alfaleh", "Abdulmalik Al Faleh", "عبدالملك الفالح"] },
+  { name: "Salman Al-Issa", email: "<REDACTED_EMAIL>", aliases: ["Salman Alissa", "Salman Al Issa", "سلمان العيسى"] },
+  { name: "Zeina Alsoudi", email: "<REDACTED_EMAIL>", aliases: ["Zeina Al Soudi", "Zeina Al-Soudi", "زينة السودي"] },
+  { name: "Alhanouf Aldarwish", email: "<REDACTED_EMAIL>", aliases: ["Alhanouf Al Darwish", "AlHanouf Aldarwish", "الهنوف الدرويش"] },
+  { name: "Feras Alarfaj", email: "<REDACTED_EMAIL>", aliases: ["Feras Al Arfaj", "Firas Alarfaj", "فراس العرفج"] },
+  { name: "Basem Al Anazi", email: "<REDACTED_EMAIL>", aliases: ["Basem Alanazi", "Basem Al-Anazi", "باسم العنزي"] },
+  { name: "تغريد الجاسر", email: "<REDACTED_EMAIL>", aliases: ["Taghreed Aljasser", "Taghreed Al Jasser", "Taghreed"] },
+  { name: "Basmah Raddah", email: "<REDACTED_EMAIL>", aliases: ["Basmah Raddah", "Basma Raddah", "بسمة ردة"] },
+  { name: "Sample User", email: "<REDACTED_EMAIL>", aliases: ["Sample User", "Sample User", "عبدالله الجراح"] },
+  { name: "Sample User Al Humoud", email: "<REDACTED_EMAIL>", aliases: ["Sample User Alhumoud", "Sample User Al-Humoud", "عبدالعزيز الحمود"] },
+  { name: "Sample User", email: "<REDACTED_EMAIL>", aliases: ["Sample User", "Sample User", "محمد الحمودي"] },
+  { name: "faisal alzughaiby", email: "<REDACTED_EMAIL>", aliases: ["Faisal Alzughaiby", "Faisal Al Zughaiby", "فيصل الزغيبي"] },
 ];
 
 /** Parse the CS_TEAM_MEMBERS env override: "Name <email>, Name <email>". */

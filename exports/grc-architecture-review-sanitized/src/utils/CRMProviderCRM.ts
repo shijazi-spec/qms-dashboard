@@ -243,8 +243,8 @@ async function refreshAccessToken(): Promise<string> {
     throw new Error('No access_token in CRMProvider refresh response');
   }
   
-  cachedAccessToken = data.access_token;
-  tokenExpiresAt = Date.now() + ((data.expires_in || 3600) - 300) * 1000;
+  cachedAccessToken = <REDACTED_SECRET>
+  tokenExpiresAt = <REDACTED_SECRET> + ((data.expires_in || 3600) - 300) * 1000;
   // Conditionally clear the cooldown — only if no parallel attempt bumped
   // the epoch (i.e. observed a 429) while we were in flight. Otherwise
   // a stale success would prematurely reopen the floodgates against a
@@ -334,8 +334,8 @@ async function makeCRMProviderRequest<T>(
   if (response.status === 401) {
     logger.info('🔄 [CRMProviderCRM] Access token expired (401), attempting refresh...');
 
-    cachedAccessToken = null;
-    tokenExpiresAt = 0;
+    cachedAccessToken = <REDACTED_SECRET>
+    tokenExpiresAt = <REDACTED_SECRET>
 
     const oauthConfig = getCRMProviderOAuthConfig();
     if (oauthConfig) {
@@ -1536,7 +1536,7 @@ export interface ActiveDealHit {
   /** Product segment of the deal, when it could be determined from the live
    *  record (layout → pipeline → marketplace-stage). null = unknown; the caller
    *  refines it from the local mirror before deciding to block. */
-  segment: "marketplace" | "walaone" | "ExampleOrg" | null;
+  segment: "marketplace" | "Example Organization" | "ExampleOrg" | null;
 }
 
 /** Fields + rules shared by every "is this deal active?" check. */
@@ -1603,14 +1603,14 @@ function _pfMarketplaceStages(): string[] {
 
 /**
  * Product segment of a live CRMProvider Deal (Sample User 2026-08-30). Preflight vets B2B /
- * ExampleOrg-corporate imports, so a deal on the MARKETPLACE or WALAONE (B2C)
+ * ExampleOrg-corporate imports, so a deal on the MARKETPLACE or Example Organization (B2C)
  * motion must NOT block a B2B approach — the same company can legitimately be
  * approached as a ExampleOrg corporate client. Mirrors classifyLayoutSegment's
  * substring rules (kept local to avoid a duplicateRadarDatabase import cycle).
  * Returns null when the live record carries no segment signal at all; the
  * caller then refines from the local mirror rather than guessing.
  */
-function _pfDealSegment(d: any): "marketplace" | "walaone" | "ExampleOrg" | null {
+function _pfDealSegment(d: any): "marketplace" | "Example Organization" | "ExampleOrg" | null {
   const norm = (v: any) =>
     String(
       v && typeof v === "object" ? (v.name ?? v.display_label ?? "") : (v ?? ""),
@@ -1620,7 +1620,7 @@ function _pfDealSegment(d: any): "marketplace" | "walaone" | "ExampleOrg" | null
   const bySubstring = (s: string) => {
     if (!s) return null;
     if (s.includes("marketplace") || s.includes("partneraccount")) return "marketplace" as const;
-    if (s.includes("walaone")) return "walaone" as const;
+    if (s.includes("Example Organization")) return "Example Organization" as const;
     return "ExampleOrg" as const;
   };
   const layout = norm(d?.$layout) || norm(d?.Layout);
@@ -1685,11 +1685,11 @@ export async function findActiveDealForAccount(
     const kind = _classifyActiveDeal(d);
     if (!kind) continue;
     // SCOPE (Sample User 2026-08-30): Preflight vets B2B / ExampleOrg-corporate imports,
-    // so a MARKETPLACE or WALAONE (B2C) deal must NOT block — the company can
+    // so a MARKETPLACE or Example Organization (B2C) deal must NOT block — the company can
     // still be approached as a ExampleOrg B2B client. Skip it and keep scanning
     // in case the account also carries a real ExampleOrg deal.
     const segment = _pfDealSegment(d);
-    if (segment === "marketplace" || segment === "walaone") continue;
+    if (segment === "marketplace" || segment === "Example Organization") continue;
     const hit: ActiveDealHit = {
       accountId: id,
       dealId: String(d?.id || "").trim(),
@@ -1769,9 +1769,9 @@ export async function findActiveDealByCompany(input: {
       continue;
     const kind = _classifyActiveDeal(d);
     if (!kind) continue;
-    // Same B2B scope as the account path — marketplace / WalaOne never blocks.
+    // Same B2B scope as the account path — marketplace / Example Organization never blocks.
     const segment = _pfDealSegment(d);
-    if (segment === "marketplace" || segment === "walaone") continue;
+    if (segment === "marketplace" || segment === "Example Organization") continue;
     const hit: ActiveDealHit = {
       accountId: d?.Account_Name?.id ? String(d.Account_Name.id) : null,
       dealId: String(d?.id || "").trim(),

@@ -625,7 +625,7 @@ export function matchDoamClient(input: {
  * Normalized company name for the fuzzy-match fallback path.
  *
  * Sample User 2026-06-17 — char floor lowered from 5 to 3 so well-known
- * short brand names ("STC", "PIF", "NDMC", "SDB") attempt a match
+ * short brand names ("Example Organization", "PIF", "NDMC", "SDB") attempt a match
  * instead of silently falling through to PASS. The trigram threshold
  * is also lowered (PATH 3 SQL drops from 0.6 to 0.55) so 3-character
  * names actually find their cluster. Empty / 1-2 char garbage is
@@ -776,9 +776,9 @@ export function isStrategicDomain(domain: string | null | undefined): boolean {
  * names like "Tree" that would over-match as a substring).
  *
  * 2026-06-26 (Sample User): seeded from the Mawsool batch — the whole Aramco group
- * (parent + JV/subsidiaries SAMREF / SATORP / SASREF / YASREF / Luberef / ARO
+ * (parent + JV/subsidiaries SAMREF / SATORP / SASREF / Example Organization / Luberef / ARO
  * Drilling / Aramco Gulf Operations / Aramco Digital / JHAH) plus Tree and
- * Syarah were confirmed do-not-contact. Several subsidiaries do NOT contain the
+ * Example Organization were confirmed do-not-contact. Several subsidiaries do NOT contain the
  * word "Aramco", so we list their tokens + domains explicitly.
  *
  * Extend without a code change via env PREFLIGHT_PROTECTED_DOMAINS /
@@ -793,7 +793,7 @@ interface ProtectedAccount {
 
 const PROTECTED_ACCOUNTS: ReadonlyArray<ProtectedAccount> = [
   {
-    label: "Saudi Aramco (group)",
+    label: "Example Organization (group)",
     domains: [
       "<REDACTED_HOST>",
       "<REDACTED_HOST>",
@@ -811,7 +811,7 @@ const PROTECTED_ACCOUNTS: ReadonlyArray<ProtectedAccount> = [
       "aramco",
       "sasref",
       "satorp",
-      "yasref",
+      "Example Organization",
       "samref",
       "luberef",
       "agoc",
@@ -827,9 +827,9 @@ const PROTECTED_ACCOUNTS: ReadonlyArray<ProtectedAccount> = [
     nameExact: ["tree"],
   },
   {
-    label: "Syarah",
+    label: "Example Organization",
     domains: ["<REDACTED_HOST>"],
-    nameKeywords: ["syarah"],
+    nameKeywords: ["Example Organization"],
   },
 ];
 
@@ -1187,7 +1187,7 @@ export function classifyPreflightRows(input: {
     const domain = resolveDomain(row);
 
     // HIGHEST PRIORITY — protected / do-not-contact named accounts (Aramco
-    // group, Tree, Syarah, …). These ALWAYS reject, even with no CRM match,
+    // group, Tree, Example Organization, …). These ALWAYS reject, even with no CRM match,
     // so a strategic account can never leak into PASS because one contact had
     // no website (#n) or a free-mail address. Runs before duplicate / client
     // matching so the verdict + reason are consistent for every such row.
@@ -1245,7 +1245,7 @@ export function classifyPreflightRows(input: {
       //
       // (1) Free-mail email rows (gmail / hotmail / yahoo / etc.). Even
       //     if no CRM cluster matched, an @<REDACTED_HOST> row whose Company
-      //     Name reads "STC" or "Al Rajhi Bank" almost certainly belongs
+      //     Name reads "Example Organization" or "Al Rajhi Bank" almost certainly belongs
       //     to an existing customer — the lookup just failed because the
       //     company's records don't have THIS mobile number indexed.
       //     Pushes the verdict to REVIEW so the HoS / SDR pair check it
@@ -2219,9 +2219,9 @@ export async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
   const rows =
     (
       await queryWithTimeout<any>(
-        // B2B / ExampleOrg-CORPORATE ONLY (Sample User 2026-07-21, WalaOne added
-        // 2026-08-30). A WalaOne (B2C) deal must not block either: the same
-        // company contracting on WalaOne can still be approached as a ExampleOrg
+        // B2B / ExampleOrg-CORPORATE ONLY (Sample User 2026-07-21, Example Organization added
+        // 2026-08-30). A Example Organization (B2C) deal must not block either: the same
+        // company contracting on Example Organization can still be approached as a ExampleOrg
         // B2B client, so only ExampleOrg-corporate deals count as a conflict.
         // CORPORATE ONLY (Sample User 2026-07-21). Preflight vets CORPORATE/B2B
         // imports; Marketplace / Partner-Accounts deals are out of scope. The
@@ -2253,7 +2253,7 @@ export async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
            FROM d
           WHERE layout_norm NOT LIKE '%marketplace%'
             AND layout_norm NOT LIKE '%partneraccount%'
-            AND layout_norm NOT LIKE '%walaone%'
+            AND layout_norm NOT LIKE '%Example Organization%'
           LIMIT 200000`,
         [],
         undefined,
@@ -2323,7 +2323,7 @@ export function invalidateCsDirectoryCache(): void {
  * main name out, then index each part on its own. Returns the whole name too.
  *
  * IMPORTANT (Sample User 2026-06-25): a SHORT single-word fragment — a 3-4 letter
- * abbreviation like "(ATC)", "(STC)", "| AON" — must NOT be indexed as a
+ * abbreviation like "(ATC)", "(Example Organization)", "| AON" — must NOT be indexed as a
  * standalone alias. Those acronyms collide across unrelated companies (UTEC's
  * "(ATC)" was matching every inbound "ATC"). A sub-segment is only indexable
  * when it carries real identity: Arabic (a bilingual half), OR multi-word, OR a
@@ -2472,7 +2472,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
   // NON-CORPORATE layouts whose deals must NOT make a company a CS client —
   // ExampleOrg Sales MAY contact merchant / app accounts (Sample User 2026-06-24).
   // Comparison is space/punctuation-insensitive (lowercased, non-alphanumerics
-  // stripped) so "Wala One" / "WalaOne" / "wala-one" all match — but "ExampleOrg"
+  // stripped) so "Wala One" / "Example Organization" / "wala-one" all match — but "ExampleOrg"
   // (the corporate layout) never does. Extend with DUPLICATE_RADAR_CS_EXCLUDE_LAYOUTS.
   const _normLayout = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const csExcludeLayouts = Array.from(
@@ -2481,7 +2481,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
         "Marketplace",
         "Doam Marketplace",
         "Partner Accounts",
-        "WalaOne",
+        "Example Organization",
         ...((process.env.DUPLICATE_RADAR_CS_EXCLUDE_LAYOUTS || "").split(",")),
       ]
         .map((s) => _normLayout(s.trim()))
@@ -2508,7 +2508,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
             LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) AS stage
        FROM duplicate_records
       WHERE record_type = 'deal'
-        -- SCOPE (Sample User 2026-06-24): Marketplace / WalaOne / merchant deals are NOT
+        -- SCOPE (Sample User 2026-06-24): Marketplace / Example Organization / merchant deals are NOT
         -- corporate clients — ExampleOrg Sales MAY contact them. Exclude those
         -- layouts here (e.g. "ATOM", "ToYou", "Chalhoub", "Tree" must NOT block).
         -- Space/punctuation-insensitive so name variants are caught; "ExampleOrg"
@@ -2609,7 +2609,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
         await queryWithTimeout<any>(
           // Exclude LEADS (Sample User 2026-06-25): a lead's free-text Company field is
           // the least reliable source — one prospect sitting on a client's domain
-          // with a mistyped company ("stc" on <REDACTED_HOST>) minted a false
+          // with a mistyped company ("Example Organization" on <REDACTED_HOST>) minted a false
           // byName key. The client's real name lives on its Account / Contact /
           // Deal records, which we still index.
           `SELECT DISTINCT LOWER(domain) AS domain, company_name, account_name
@@ -2715,7 +2715,7 @@ export async function auditDirectoryCoverage(): Promise<{
   const dir = await getCsClientDirectory(Date.now());
   const customerStages = new Set(Array.from(PF_CUSTOMER_STAGES));
   const isMerchant = (l: string) =>
-    !!l && (l.includes("marketplace") || l === "walaone" || l === "partneraccounts");
+    !!l && (l.includes("marketplace") || l === "Example Organization" || l === "partneraccounts");
   const q = await queryWithTimeout<any>(
     `SELECT account_name, company_name, LOWER(domain) AS domain,
             LOWER(COALESCE(NULLIF(raw_data->>'Company_Domain',''),'')) AS cs_domain,
@@ -2958,7 +2958,7 @@ export async function auditPassNamesLoose(
         nm.length >= 4 &&
         (exact || _csContainmentMatch(nm, dir) === cand || dice >= 0.82);
       let band: Row["band"];
-      if (exact && nm.length < 4) band = "short_name_skip"; // Aon/ATC/STC class
+      if (exact && nm.length < 4) band = "short_name_skip"; // Aon/ATC/Example Organization class
       else if (strictHit) band = "leak_strict"; // should NOT have passed — investigate
       else band = "near_miss"; // resembles a live client — human eyeball
 
@@ -3129,7 +3129,7 @@ export function cleanClientDomain(raw: string | null | undefined): string | null
  *
  * This is PHASE-based: it excludes Termination-phase (churned) deals — which is
  * how a churned client like <REDACTED_HOST> was wrongly included by the earlier
- * stage-only rule. Corporate scope only: Marketplace / WalaOne / Partner-Accounts
+ * stage-only rule. Corporate scope only: Marketplace / Example Organization / Partner-Accounts
  * layouts are excluded. Each Company_Domain is emitted VERBATIM via
  * cleanClientDomain (light clean only — NO sub-domain reduction, NO typo-
  * correction — so the list matches the CRM's actual Company_Domain values and
@@ -3197,7 +3197,7 @@ export async function listActiveClientDomains(opts?: {
         "Marketplace",
         "Doam Marketplace",
         "Partner Accounts",
-        "WalaOne",
+        "Example Organization",
         ...((process.env.DUPLICATE_RADAR_CS_EXCLUDE_LAYOUTS || "").split(",")),
       ]
         .map((s) => _normLayout(s.trim()))
@@ -3518,7 +3518,7 @@ export async function checkDomainsForClientDeals(
 /**
  * Match an inbound normalized company name to a client by NAME CONTAINMENT —
  * every token of a client's name appears in the inbound name (e.g. client
- * "samref" ⊆ inbound "samref saudi aramco mobil refinery"). Returns the matched
+ * "samref" ⊆ inbound "samref Example Organization mobil refinery"). Returns the matched
  * client normalized-name, or null. Errs toward catching clients (the cost of a
  * false PASS — cold-calling a live customer — is far higher than a false flag).
  */
@@ -3774,7 +3774,7 @@ async function runPreflightBasic(input: {
     const domain = domainByRow.get(i) ?? null;
 
     // HIGHEST PRIORITY — protected / do-not-contact named accounts (Aramco
-    // group, Tree, Syarah, …). These ALWAYS reject, even with no CRM match and
+    // group, Tree, Example Organization, …). These ALWAYS reject, even with no CRM match and
     // even with no reachable contact, so a strategic account can never leak into
     // PASS. This mirrors the full-mode classifier (classifyPreflightRows) so the
     // protected verdict fires identically regardless of PREFLIGHT_RULE_MODE —
@@ -4270,7 +4270,7 @@ async function runPreflightBasic(input: {
         // then treats it as in-scope, i.e. the pre-existing behaviour).
         const mirrorDealSegment = async (
           dealId: string,
-        ): Promise<"marketplace" | "walaone" | "ExampleOrg" | null> => {
+        ): Promise<"marketplace" | "Example Organization" | "ExampleOrg" | null> => {
           try {
             const q = await queryWithTimeout<any>(
               `SELECT COALESCE(NULLIF(layout_name,''), raw_data#>>'{Layout,name}',
@@ -4390,7 +4390,7 @@ async function runPreflightBasic(input: {
           }
           // B2B SCOPE (Sample User 2026-08-30). Preflight vets whether a company can
           // be approached as a ExampleOrg B2B client, so a MARKETPLACE deal
-          // (Partner Active / Welcome Communications …) or a WALAONE (B2C) deal
+          // (Partner Active / Welcome Communications …) or a Example Organization (B2C) deal
           // must NOT block — Sales approaches the same company on the corporate
           // motion instead. The fetchers already skip deals whose live record
           // carried a layout/pipeline/stage signal; when it carried none, fall
@@ -4398,7 +4398,7 @@ async function runPreflightBasic(input: {
           if (hit && hit.segment == null && hit.dealId) {
             hit.segment = await mirrorDealSegment(String(hit.dealId));
           }
-          if (hit && (hit.segment === "marketplace" || hit.segment === "walaone")) {
+          if (hit && (hit.segment === "marketplace" || hit.segment === "Example Organization")) {
             hit = null; // out of B2B scope → not a blocker
           }
           cache.set(key, { hit, checked });

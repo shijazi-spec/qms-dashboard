@@ -235,7 +235,7 @@ for await (const partial of stream.objectStream) {
 
 // Get final validated object
 const user = await stream.object;
-console.log("Final:", user); // { name: "John", age: 30, email: "user@example.invalid" }
+console.log("Final:", user); // { name: "John", age: 30, email: "<REDACTED_EMAIL>" }
 ```
 ```
 

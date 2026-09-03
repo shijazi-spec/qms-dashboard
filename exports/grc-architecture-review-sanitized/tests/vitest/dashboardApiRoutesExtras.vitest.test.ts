@@ -270,7 +270,7 @@ describe("GET /api/agents/performance", () => {
   const baseLead = {
     id: "L1",
     Owner: "u1",
-    Email: "user@example.invalid",
+    Email: "<REDACTED_EMAIL>",
     Lead_Source: "Web",
     Lead_Status: "New",
   } as any;
@@ -456,7 +456,7 @@ describe("GET /api/crm/data", () => {
         owner: "u1",
         createdTime: "2026-04-22",
         modifiedTime: "2026-04-22",
-        data: { Email: "user@example.invalid", Stage: "Won" },
+        data: { Email: "<REDACTED_EMAIL>", Stage: "Won" },
       },
     ] as any);
 
@@ -482,7 +482,7 @@ describe("GET /api/crm/data", () => {
           owner: "u1",
           createdTime: "2026-04-22",
           modifiedTime: "2026-04-22",
-          Email: "user@example.invalid",
+          Email: "<REDACTED_EMAIL>",
           Stage: "Won",
         },
       ],

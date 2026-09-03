@@ -72,7 +72,7 @@ async function bootstrap(page: Page, lang: 'en' | 'ar') {
         authenticated: true,
         user: {
           id: 'admin',
-          email: 'user@example.invalid',
+          email: '<REDACTED_EMAIL>',
           name: 'Admin',
           picture: null,
           role: 'admin',

@@ -19,7 +19,7 @@ Today, Company_Domain exists in your CRMProvider deals but is used only for one 
 
 | Identifier | Stability | Uniqueness | Machine-readable | Notes |
 |---|---|---|---|---|
-| Company name | ❌ — "Aramco" vs "Saudi Aramco" vs "ارامكو" | ❌ — many subsidiaries share a name | ⚠️ — fuzzy match needed | Translates, gets misspelled |
+| Company name | ❌ — "Aramco" vs "Example Organization" vs "ارامكو" | ❌ — many subsidiaries share a name | ⚠️ — fuzzy match needed | Translates, gets misspelled |
 | Phone number | ⚠️ — changes when numbers are ported | ❌ — switchboards shared by thousands | ✅ | Many companies use cellular numbers |
 | CRMProvider record ID | ✅ — never changes | ❌ — same company often has 3-5 records (duplicates) | ✅ | Internal-only, no business meaning |
 | **Email domain** | ✅ — companies rarely change | ✅ — one company = one primary domain | ✅ — RFC-defined | The standard for B2B identity |
@@ -95,7 +95,7 @@ Four phases. P0 is the foundation; P1–P3 each layer additional value on top.
 
 **Recovery rate (estimate):** 10–20% of currently unlinkable calls.
 
-Concretely: a customer calls from a non-CRMProvider-registered cell phone but identifies as `user@example.invalid` during the verification step. Phone match: fails (cell isn't on file). Email domain match: hits Account = STC. Call links automatically.
+Concretely: a customer calls from a non-CRMProvider-registered cell phone but identifies as `<REDACTED_EMAIL>` during the verification step. Phone match: fails (cell isn't on file). Email domain match: hits Account = Example Organization. Call links automatically.
 
 **Why this matters:**
 - Increases compliance coverage (more linked calls = more compliance checks fire)

@@ -78,7 +78,7 @@ export interface AlertRecipientAuditEntry {
 /**
  * RFC-5322 is too forgiving for sane operator UX (it allows quoted
  * local-parts with embedded `@` etc). Mirror what every real-world
- * form does: `user@example.invalid`, no whitespace, ≤ 254 chars
+ * form does: `<REDACTED_EMAIL>`, no whitespace, ≤ 254 chars
  * (the SMTP envelope limit). The dispatcher itself will pass anything
  * we accept here through to EmailProvider, so this is also our last line of
  * defence against typo'd entries that would silently break the page.
@@ -90,8 +90,8 @@ const EMAIL_MAX_LEN = 254;
  * Validate + normalise a candidate email. Returns the trimmed,
  * lower-cased form when valid, or `null` otherwise. Lower-casing here
  * is what makes the UNIQUE(channel, email_lower) constraint do the
- * right thing for case-only collisions ("user@example.invalid" vs
- * "user@example.invalid").
+ * right thing for case-only collisions ("<REDACTED_EMAIL>" vs
+ * "<REDACTED_EMAIL>").
  */
 export function normaliseEmail(raw: unknown): string | null {
   if (typeof raw !== "string") return null;

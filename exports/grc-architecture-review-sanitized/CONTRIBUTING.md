@@ -224,7 +224,7 @@ The flag helper lives at `src/utils/featureFlags.ts`. Use it when you
 want to:
 
 - Push code to `QMS` (deployed) hidden behind `if (isFlagEnabled('x', user.email))`
-- Test by enabling for your own user only (set `<FLAG>_USERS=user@example.invalid` in HostingPlatform Secrets)
+- Test by enabling for your own user only (set `<FLAG>_USERS=<REDACTED_EMAIL>` in HostingPlatform Secrets)
 - Flip on globally when ready (`<FLAG>=true`)
 - Flip off instantly if it breaks — no revert, no redeploy (`<FLAG>=false`)
 

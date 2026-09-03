@@ -159,7 +159,7 @@ function makeAction(overrides: Partial<PendingAction> = {}): PendingAction {
     risk_level: "high",
     compliance_refs: ["WP-SOP-009"],
     requested_by_user_id: 99,
-    requested_by_email: "user@example.invalid",
+    requested_by_email: "<REDACTED_EMAIL>",
     requested_by_name: "Requester",
     thread_id: null,
     status: "pending",
@@ -209,7 +209,7 @@ describe("GET /api/ai/approvals", () => {
       "ACT-2026-0001": [
         {
           user_id: 5,
-          user_email: "user@example.invalid",
+          user_email: "<REDACTED_EMAIL>",
           user_name: "Viewer",
           user_role: "auditor",
           last_viewed_at: new Date("2026-04-22T13:00:00Z"),
@@ -335,7 +335,7 @@ describe("GET /api/ai/approvals/:code", () => {
     vi.mocked(eventLogs.getActionViewers).mockResolvedValueOnce([
       {
         user_id: 7,
-        user_email: "user@example.invalid",
+        user_email: "<REDACTED_EMAIL>",
         user_name: "Viewer",
         user_role: "auditor",
         last_viewed_at: new Date("2026-04-22T13:00:00Z"),
@@ -484,7 +484,7 @@ describe("POST /api/ai/approvals/:code/approve", () => {
     // session user with the same userId so the SoD branch (WP-DOC-005) fires.
     setTestUser({
       userId: 99,
-      email: "user@example.invalid",
+      email: "<REDACTED_EMAIL>",
       name: "QM User",
       role: "quality_manager",
     });
@@ -518,7 +518,7 @@ describe("POST /api/ai/approvals/:code/approve", () => {
     // is the branch under test.
     setTestUser({
       userId: 42,
-      email: "user@example.invalid",
+      email: "<REDACTED_EMAIL>",
       name: "QM User",
       role: "quality_manager",
     });
@@ -708,7 +708,7 @@ describe("POST /api/ai/approvals/:code/reject", () => {
     // succeeds as a self-cancel.
     setTestUser({
       userId: 99,
-      email: "user@example.invalid",
+      email: "<REDACTED_EMAIL>",
       name: "Self-Canceller",
       role: "auditor",
     });
@@ -735,7 +735,7 @@ describe("POST /api/ai/approvals/:code/reject", () => {
     expect(res.body).toEqual({ success: true, action: rejected });
     expect(approvalDb.rejectAction).toHaveBeenCalledWith(
       "ACT-2026-0001",
-      expect.objectContaining({ userId: 99, email: "user@example.invalid" }),
+      expect.objectContaining({ userId: 99, email: "<REDACTED_EMAIL>" }),
       "Changed my mind",
     );
   });
@@ -746,7 +746,7 @@ describe("POST /api/ai/approvals/:code/reject", () => {
     // so the in-handler authorization check is the branch under test.
     setTestUser({
       userId: 7,
-      email: "user@example.invalid",
+      email: "<REDACTED_EMAIL>",
       name: "Random Auditor",
       role: "auditor",
     });

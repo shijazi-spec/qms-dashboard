@@ -191,7 +191,7 @@ console.log("\n--- Section 2: session-authenticated UPDATE path ---\n");
 const SESSION_USER_ID = 4242;
 const sessionCookieValue = signSession({
   userId: SESSION_USER_ID,
-  email: "user@example.invalid",
+  email: "<REDACTED_EMAIL>",
   exp: Date.now() + 60_000,
 });
 const sessionCookieHeader = `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionCookieValue)}`;

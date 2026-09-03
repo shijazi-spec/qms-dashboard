@@ -1,6 +1,6 @@
 /**
  * Quality ↔ GRC Handoff Tracker — the shared task surface between Quality
- * (Sample User) and GRC (Maram). Every task assigned here IS a handoff, which is what
+ * (Sample User) and GRC (Sample User). Every task assigned here IS a handoff, which is what
  * makes GRQ-KPI-02 "Quality ↔ GRC Handoff Effectiveness" auto-calculable.
  *
  * NOT stored in `handoff_events` — that table is a rule-driven automation log

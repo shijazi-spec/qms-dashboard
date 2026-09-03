@@ -156,7 +156,7 @@ describe("integration with featureFlags helper", () => {
     // per-user override doesn't apply to the guard (intentional —
     // a cost cap should be global, not per-user). This test pins
     // that behavior so a future change can't silently break it.
-    process.env.COST_CIRCUIT_BREAKER_USERS = "user@example.invalid";
+    process.env.COST_CIRCUIT_BREAKER_USERS = "<REDACTED_EMAIL>";
     // Flag is off globally + only allowlisted for one user → guard
     // sees no identity → reports flag OFF → does not cap.
     recordSpend(9999, "x");

@@ -45,9 +45,9 @@ async function main(): Promise<void> {
     'null input -> undefined',
   );
 
-  const emailRedacted = redactToolPayloadPreview({ to: 'user@example.invalid' });
+  const emailRedacted = redactToolPayloadPreview({ to: '<REDACTED_EMAIL>' });
   assert(
-    !!emailRedacted && emailRedacted.includes('[EMAIL]') && !emailRedacted.includes('user@example.invalid'),
+    !!emailRedacted && emailRedacted.includes('[EMAIL]') && !emailRedacted.includes('<REDACTED_EMAIL>'),
     'email is replaced with [EMAIL] sentinel',
   );
 
@@ -156,7 +156,7 @@ async function main(): Promise<void> {
 
   // bcrypt hash inside a nested field called password_hash
   const nestedBcrypt = redactToolPayloadPreview({
-    user: { email: 'user@example.invalid', password_hash: BCRYPT_HASH },
+    user: { email: '<REDACTED_EMAIL>', password_hash: BCRYPT_HASH },
   });
   assert(
     !!nestedBcrypt && !nestedBcrypt.includes('$2b$12$'),

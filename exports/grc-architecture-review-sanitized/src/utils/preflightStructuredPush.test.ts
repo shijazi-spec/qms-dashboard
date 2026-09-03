@@ -14,10 +14,10 @@ function assertEq(cond: boolean, label: string): void {
 }
 
 import { PREFLIGHT_DEAL_TARGET, PREFLIGHT_LEAD_TARGET, splitContactName } from "./preflightStructuredPush";
-assertEq(PREFLIGHT_DEAL_TARGET.layoutId === "5146753000000091023", "deal layout id default (ExampleOrg Deals layout)");
+assertEq(PREFLIGHT_DEAL_TARGET.layoutId === "<REDACTED_ID>", "deal layout id default (ExampleOrg Deals layout)");
 assertEq(PREFLIGHT_DEAL_TARGET.pipeline === "Standard (Corporates)", "deal pipeline default");
 assertEq(PREFLIGHT_DEAL_TARGET.stage === "New Deal", "deal stage default");
-assertEq(PREFLIGHT_LEAD_TARGET.layoutId === "5146753000000091055", "lead layout id default");
+assertEq(PREFLIGHT_LEAD_TARGET.layoutId === "<REDACTED_ID>", "lead layout id default");
 assertEq(PREFLIGHT_LEAD_TARGET.status === "New Lead", "lead status default");
 console.log("preflightStructuredPush constants ok");
 
@@ -60,7 +60,7 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 
 // A1 — churned past cool-off, matched → one company entry, carries clusterId
 {
-  const rows = [mk({ row_index: 1, company: "Churn Co", email: "user@example.invalid", verdict: "pass", cluster_id: 9, lifecycle_state: "termination_old" })];
+  const rows = [mk({ row_index: 1, company: "Churn Co", email: "<REDACTED_EMAIL>", verdict: "pass", cluster_id: 9, lifecycle_state: "termination_old" })];
   const p = buildStructuredPushPlan(1, rows, {});
   assertEq(p.companies.length === 1 && p.companies[0].clusterId === 9, "A1 picks churned-matched company");
   assertEq(p.eligible_count === 1 && p.contact_count === 1, "A1 counts");
@@ -68,14 +68,14 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 // A1 — churned past cool-off with NO cluster_id (basic-mode CS-directory match):
 // still eligible — the endpoint resolves the account by domain/name.
 {
-  const rows = [mk({ row_index: 1, company: "Churn Co", domain: "<REDACTED_HOST>", email: "user@example.invalid", verdict: "pass", cluster_id: null, lifecycle_state: "termination_old" })];
+  const rows = [mk({ row_index: 1, company: "Churn Co", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", verdict: "pass", cluster_id: null, lifecycle_state: "termination_old" })];
   const p = buildStructuredPushPlan(1, rows, {});
   assertEq(p.companies.length === 1 && p.companies[0].clusterId === null, "A1 picks churned company even without cluster_id");
 }
 // A1 ignores a genuinely-new, non-matched company (no existing account, not
 // churned, no cluster) — that belongs in A2/A3, not A1.
 {
-  const rows = [mk({ row_index: 1, company: "New Co", domain: "<REDACTED_HOST>", email: "user@example.invalid", verdict: "pass" })];
+  const rows = [mk({ row_index: 1, company: "New Co", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", verdict: "pass" })];
   const p = buildStructuredPushPlan(1, rows, {});
   assertEq(p.companies.length === 0, "A1 skips a non-matched new company");
 }
@@ -83,7 +83,7 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 // grouped by the resolved account id and named by the resolved account NAME
 // (not the row's wrong label).
 {
-  const rows = [mk({ row_index: 1, company: "Whatever Label", domain: "<REDACTED_HOST>", email: "user@example.invalid", matched_account_CRMProvider_id: "ACC1", matched_account_name: "Riyad Bank" })];
+  const rows = [mk({ row_index: 1, company: "Whatever Label", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", matched_account_CRMProvider_id: "ACC1", matched_account_name: "Riyad Bank" })];
   const p = buildStructuredPushPlan(1, rows, {});
   assertEq(p.companies.length === 1 && p.companies[0].companyKey === "ACC1", "A1 links a matched contact, keyed by account id");
   assertEq(p.companies[0].companyName === "Riyad Bank", "A1 names the group by the RESOLVED account name, not the label");
@@ -92,8 +92,8 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 // separate A1 links (never merged under the bad label).
 {
   const rows = [
-    mk({ row_index: 1, company: "Maersk", domain: "<REDACTED_HOST>", email: "user@example.invalid", matched_account_CRMProvider_id: "ACC_A" }),
-    mk({ row_index: 2, company: "Maersk", domain: "<REDACTED_HOST>", email: "user@example.invalid", matched_account_CRMProvider_id: "ACC_B" }),
+    mk({ row_index: 1, company: "Maersk", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", matched_account_CRMProvider_id: "ACC_A" }),
+    mk({ row_index: 2, company: "Maersk", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", matched_account_CRMProvider_id: "ACC_B" }),
   ];
   const p = buildStructuredPushPlan(1, rows, {});
   assertEq(p.companies.length === 2, "A1 splits same-label contacts matched to different accounts");
@@ -101,8 +101,8 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 // Matched + unmatched under one label SPLIT: matched → A1, new → A3.
 {
   const rows = [
-    mk({ row_index: 1, company: "New Startup", domain: "<REDACTED_HOST>", email: "user@example.invalid", matched_account_CRMProvider_id: "ACC1" }),
-    mk({ row_index: 2, company: "New Startup", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
+    mk({ row_index: 1, company: "New Startup", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", matched_account_CRMProvider_id: "ACC1" }),
+    mk({ row_index: 2, company: "New Startup", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
   ];
   const a1 = buildStructuredPushPlan(1, rows, {});
   assertEq(a1.companies.length === 1 && a1.companies[0].companyKey === "ACC1" && a1.companies[0].contacts.length === 1, "ladder: matched contact → A1 (link)");
@@ -112,7 +112,7 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 // A2 — new company with 2 contacts → one company, 2 contacts
 {
   const rows = [
-    mk({ row_index: 1, company: "New Multi", email: "user@example.invalid" }),
+    mk({ row_index: 1, company: "New Multi", email: "<REDACTED_EMAIL>" }),
     mk({ row_index: 2, company: "New Multi", phone: "<REDACTED_PHONE>" }),
   ];
   const p = buildStructuredPushPlan(2, rows, {});
@@ -120,7 +120,7 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 }
 // A2 ignores a single-contact company
 {
-  const rows = [mk({ row_index: 1, company: "Solo Co", email: "user@example.invalid" })];
+  const rows = [mk({ row_index: 1, company: "Solo Co", email: "<REDACTED_EMAIL>" })];
   const p = buildStructuredPushPlan(2, rows, {});
   assertEq(p.companies.length === 0, "A2 excludes single-contact company");
 }
@@ -128,9 +128,9 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 // sliced by count/offset.
 {
   const rows = [
-    mk({ row_index: 1, company: "S1", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
-    mk({ row_index: 2, company: "S2", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
-    mk({ row_index: 3, company: "S3", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
+    mk({ row_index: 1, company: "S1", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
+    mk({ row_index: 2, company: "S2", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
+    mk({ row_index: 3, company: "S3", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
   ];
   const a3 = buildStructuredPushPlan(3, rows, { count: 2 });
   assertEq(a3.companies.length === 2 && a3.companies[0].companyName === "S1" && a3.companies[1].companyName === "S2", "A3 takes first 2");
@@ -142,8 +142,8 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 {
   const rows = [
     mk({ row_index: 1, company: "LeadCo1", phone: "<REDACTED_PHONE>" }),          // no email, no domain -> lead
-    mk({ row_index: 2, company: "LeadCo2", email: "user@example.invalid" }),        // free-mail, unverifiable -> lead
-    mk({ row_index: 3, company: "Verified", domain: "<REDACTED_HOST>", email: "user@example.invalid" }), // account-routed, NOT a lead
+    mk({ row_index: 2, company: "LeadCo2", email: "<REDACTED_EMAIL>" }),        // free-mail, unverifiable -> lead
+    mk({ row_index: 3, company: "Verified", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }), // account-routed, NOT a lead
   ];
   const a4all = buildStructuredPushPlan(4, rows, {});
   assertEq(a4all.leads.length === 2, "A4 = both lead-routed rows (verified account row excluded)");
@@ -156,7 +156,7 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 // corporate email — routes to a LEAD (never dropped, never a new account).
 {
   const rows = [
-    mk({ row_index: 1, company: "", domain: "", email: "user@example.invalid", phone: "<REDACTED_PHONE>" }),
+    mk({ row_index: 1, company: "", domain: "", email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>" }),
   ];
   const a4 = buildStructuredPushPlan(4, rows, {});
   assertEq(a4.leads.length === 1, "no-company corporate-email contact → lead (not dropped)");
@@ -167,9 +167,9 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 // pushable — not via A1 (even if they match an existing account), not via A4.
 {
   const rows = [
-    mk({ row_index: 1, company: "Dup Co", domain: "<REDACTED_HOST>", email: "user@example.invalid", matched_account_CRMProvider_id: "ACC1", verdict: "duplicate" }),
+    mk({ row_index: 1, company: "Dup Co", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", matched_account_CRMProvider_id: "ACC1", verdict: "duplicate" }),
     mk({ row_index: 2, company: "Blocked", domain: "#n", phone: "<REDACTED_PHONE>", verdict: "block" }),
-    mk({ row_index: 3, company: "Good", domain: "<REDACTED_HOST>", email: "user@example.invalid", verdict: "pass" }),
+    mk({ row_index: 3, company: "Good", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", verdict: "pass" }),
   ];
   assertEq(buildStructuredPushPlan(1, rows, {}).companies.length === 0, "PASS-gate: duplicate row excluded from A1 even with a matched account");
   assertEq(buildStructuredPushPlan(4, rows, {}).leads.length === 0, "PASS-gate: block row excluded from A4");
@@ -181,11 +181,11 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 {
   // 4 genuinely-new single-contact companies (all A3-eligible), 1 free-mail lead.
   const rows = [
-    mk({ row_index: 1, company: "NewA", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
-    mk({ row_index: 2, company: "NewB", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
-    mk({ row_index: 3, company: "NewC", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
-    mk({ row_index: 4, company: "NewD", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
-    mk({ row_index: 5, company: "FreeLead", email: "user@example.invalid" }),
+    mk({ row_index: 1, company: "NewA", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
+    mk({ row_index: 2, company: "NewB", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
+    mk({ row_index: 3, company: "NewC", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
+    mk({ row_index: 4, company: "NewD", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
+    mk({ row_index: 5, company: "FreeLead", email: "<REDACTED_EMAIL>" }),
   ];
   // 100% (default) → all 4 new companies are deals, only the free-mail is a lead.
   assertEq(buildStructuredPushPlan(3, rows, { dealPercent: 100 }).companies.length === 4, "split 100%: all 4 new companies are deals");
@@ -231,7 +231,7 @@ function preflightRowToSPRow(r: any, idx: number): any {
 }
 // FIXED shape — email echoed top-level (what runPreflightBasic now emits).
 {
-  const newRow = { row_index: 1, input: { domain: "<REDACTED_HOST>", company_name: "Example Organization" }, email: "user@example.invalid", phone: null, contact_name: null, verdict: "pass", cluster_id: null };
+  const newRow = { row_index: 1, input: { domain: "<REDACTED_HOST>", company_name: "Example Organization" }, email: "<REDACTED_EMAIL>", phone: null, contact_name: null, verdict: "pass", cluster_id: null };
   const plan = buildStructuredPushPlan(3, [preflightRowToSPRow(newRow, 0)], { count: 5 });
   assertEq(plan.companies.length === 1 && plan.companies[0].contacts.length === 1, "regression: PASS row WITH echoed email -> A3 picks it up (the fix)");
 }
@@ -251,7 +251,7 @@ import { websiteFromDomain } from "./preflightStructuredPush";
   assertEq(websiteFromDomain("gmail") === null, "website: bare free-mail token suppressed");
   assertEq(websiteFromDomain("<REDACTED_HOST>") === null, "website: free-mail domain suppressed");
   assertEq(websiteFromDomain("N/A") === null, "website: N/A suppressed");
-  assertEq(websiteFromDomain("localhost") === null, "website: no-dot token suppressed");
+  assertEq(websiteFromDomain("<REDACTED_HOST>") === null, "website: no-dot token suppressed");
   assertEq(websiteFromDomain("") === null, "website: empty -> null");
   assertEq(websiteFromDomain(null) === null, "website: null -> null");
 }
@@ -271,7 +271,7 @@ import { normalizeCoreName, significantTokens, domainRootToken } from "./preflig
   assertEq(domainRootToken("<REDACTED_HOST>") === "kfshrc", "domainRoot: .<REDACTED_HOST> multi-part TLD");
   assertEq(domainRootToken("<REDACTED_HOST>") === "Example Organization", "domainRoot: subdomain");
   assertEq(domainRootToken("#n") === "", "domainRoot: placeholder -> empty");
-  assertEq(domainRootToken("user@example.invalid") === "riyadbank", "domainRoot: from an email");
+  assertEq(domainRootToken("<REDACTED_EMAIL>") === "riyadbank", "domainRoot: from an email");
 }
 console.log("fuzzy identity helpers ok");
 
@@ -324,9 +324,9 @@ import { routeContactsByDomainConsistency } from "./preflightStructuredPush";
   // colleague are kept; a contradicting corporate email is rejected.
   {
     const rows = [
-      mk({ row_index: 1, company: "Example Organization", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
+      mk({ row_index: 1, company: "Example Organization", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
       mk({ row_index: 2, company: "Example Organization", domain: "<REDACTED_HOST>", phone: "<REDACTED_PHONE>" }),
-      mk({ row_index: 3, company: "Example Organization", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
+      mk({ row_index: 3, company: "Example Organization", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
     ];
     const r = routeOf(rows);
     assertEq(r[1] === "account", "route: email matches company domain -> account");
@@ -338,8 +338,8 @@ import { routeContactsByDomainConsistency } from "./preflightStructuredPush";
   // -> unverifiable company -> both rejected (no false Account created).
   {
     const rows = [
-      mk({ row_index: 1, company: "Maersk", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
-      mk({ row_index: 2, company: "Maersk", domain: "<REDACTED_HOST>", email: "user@example.invalid" }),
+      mk({ row_index: 1, company: "Maersk", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
+      mk({ row_index: 2, company: "Maersk", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" }),
     ];
     const r = routeOf(rows);
     assertEq(r[1] === "reject" && r[2] === "reject", "route: contradicting emails at unverified company -> reject");
@@ -348,7 +348,7 @@ import { routeContactsByDomainConsistency } from "./preflightStructuredPush";
   // Free-mail and no-email at an unverifiable company -> lead.
   {
     const rows = [
-      mk({ row_index: 1, company: "Foo", domain: "#n", email: "user@example.invalid" }),
+      mk({ row_index: 1, company: "Foo", domain: "#n", email: "<REDACTED_EMAIL>" }),
       mk({ row_index: 2, company: "Bar", domain: "#n", phone: "<REDACTED_PHONE>" }),
     ];
     const r = routeOf(rows);
@@ -360,7 +360,7 @@ import { routeContactsByDomainConsistency } from "./preflightStructuredPush";
   // its contacts stay account-routed even if an email domain differs.
   {
     const rows = [
-      mk({ row_index: 1, company: "Churn", domain: "<REDACTED_HOST>", email: "user@example.invalid", lifecycle_state: "termination_old" }),
+      mk({ row_index: 1, company: "Churn", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", lifecycle_state: "termination_old" }),
       mk({ row_index: 2, company: "Churn", domain: "<REDACTED_HOST>", phone: "<REDACTED_PHONE>" }),
     ];
     const r = routeOf(rows);

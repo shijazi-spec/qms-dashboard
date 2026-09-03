@@ -21,7 +21,7 @@ import type { CrmNameRow } from "./companyNameBatch";
 // in the production bundle). Idempotent.
 //
 // statement_timeout is a RUNAWAY BACKSTOP, not a latency budget. This pool is
-// shared by the radar dashboards, Adam's tools AND the CRMProvider sync jobs, so the
+// shared by the radar dashboards, AssistantPersona's tools AND the CRMProvider sync jobs, so the
 // default is deliberately generous (15 min): no healthy individual statement
 // comes close, but a query wedged behind a lock or a bad plan now dies with a
 // clear Postgres error instead of pinning one of the pool's connections
@@ -189,7 +189,7 @@ export interface DuplicateFilters {
    * Both segments stay actionable inside the radar — this is for comparison,
    * not for hiding records.
    */
-  segment?: "all" | "marketplace" | "corporate" | "ExampleOrg" | "walaone";
+  segment?: "all" | "marketplace" | "corporate" | "ExampleOrg" | "Example Organization";
   /**
    * AI-status chip: active (untouched) | tagged_pending | resolved | dismissed
    * | all. Absent from this interface until 2026-08-19, which is why
@@ -240,7 +240,7 @@ const LAYOUT_CACHE_TTL_MS = 10 * 60 * 1000;
 type LayoutSegmentCache = {
   at: number;
   all: string[];
-  bySegment: Record<"marketplace" | "walaone" | "ExampleOrg", string[]>;
+  bySegment: Record<"marketplace" | "Example Organization" | "ExampleOrg", string[]>;
 };
 let layoutCache: LayoutSegmentCache | null = null;
 let layoutCacheInFlight: Promise<LayoutSegmentCache> | null = null;
@@ -254,7 +254,7 @@ export async function refreshLayoutSegmentCache(): Promise<LayoutSegmentCache> {
         WHERE layout_name IS NOT NULL AND layout_name <> ''`,
     );
     const bySegment: LayoutSegmentCache["bySegment"] = {
-      marketplace: [], walaone: [], ExampleOrg: [],
+      marketplace: [], Example Organization: [], ExampleOrg: [],
     };
     const all: string[] = [];
     for (const row of r.rows) {
@@ -296,36 +296,36 @@ export function buildSegmentPredicate(
   // populated STILL segments by its true layout instead of defaulting to ExampleOrg.
   const LAYOUT =
     "LOWER(COALESCE(NULLIF(r.layout_name,''), r.raw_data#>>'{Layout,name}', r.raw_data#>>'{$layout,name}', r.raw_data->>'Layout', ''))";
-  // Normalized layout (non-alphanumeric stripped) so "WalaOne" / "Wala One" /
-  // "wala-one" all match 'walaone' and "Doam Marketplace" matches '%marketplace%'.
+  // Normalized layout (non-alphanumeric stripped) so "Example Organization" / "Wala One" /
+  // "wala-one" all match 'Example Organization' and "Doam Marketplace" matches '%marketplace%'.
   const NORM = `regexp_replace(${LAYOUT}, '[^a-z0-9]', '', 'g')`;
   const mktMatch = (offset: number) =>
     markers.map((_, i) => `${NORM} LIKE $${offset + i}`).join(" OR ");
 
   // The original per-row expression, parameterised by where its binds start so
   // the fast path can shift it after its own two array params.
-  // walaone takes no binds; marketplace/ExampleOrg take the two markers.
+  // Example Organization takes no binds; marketplace/ExampleOrg take the two markers.
   const buildExact = (offset: number): { condition: string; params: any[] } => {
     if (segment === "marketplace") {
       return { condition: `(${mktMatch(offset)})`, params: [...markers] };
     }
-    if (segment === "walaone") {
-      // WalaOne product — layout CONTAINS "walaone" (substring, so "WalaOne",
-      // "Wala One", "WalaOne Corporate" all match). No bind params (literal).
-      return { condition: `${NORM} LIKE '%walaone%'`, params: [] };
+    if (segment === "Example Organization") {
+      // Example Organization product — layout CONTAINS "Example Organization" (substring, so "Example Organization",
+      // "Wala One", "Example Organization Corporate" all match). No bind params (literal).
+      return { condition: `${NORM} LIKE '%Example Organization%'`, params: [] };
     }
     // "ExampleOrg" (renamed "corporate") + legacy "corporate" = NOT marketplace
-    // AND NOT WalaOne. NULL/empty layout defaults here so legacy records
+    // AND NOT Example Organization. NULL/empty layout defaults here so legacy records
     // aren't lost.
     return {
-      condition: `NOT (${mktMatch(offset)}) AND ${NORM} NOT LIKE '%walaone%'`,
+      condition: `NOT (${mktMatch(offset)}) AND ${NORM} NOT LIKE '%Example Organization%'`,
       params: [...markers],
     };
   };
 
-  const target: "marketplace" | "walaone" | "ExampleOrg" =
+  const target: "marketplace" | "Example Organization" | "ExampleOrg" =
     segment === "marketplace" ? "marketplace"
-      : segment === "walaone" ? "walaone"
+      : segment === "Example Organization" ? "Example Organization"
         : "ExampleOrg";
 
   const cache = FAST_SEGMENT_ENABLED ? freshLayoutCache() : null;
@@ -366,7 +366,7 @@ export function buildSegmentPredicate(
  * sales pipeline — NOT a won customer (see WON_STAGES) and NOT any terminal /
  * closed stage (Closed Lost/Won, Dropped, Cancelled, Transferred to CS, Client
  * Activated). `alias` is the duplicate_records table alias.
- * Single source of truth so the exec headline, Adam's digest, the Top Clusters
+ * Single source of truth so the exec headline, AssistantPersona's digest, the Top Clusters
  * panel and the View-all modal all agree.
  *
  * NOT excluded, deliberately, because they are ambiguous rather than clearly
@@ -442,7 +442,7 @@ export function openStagePredicate(alias: string): string {
  * WITHOUT another query. Reads the record's layout from `layout_name` with the
  * same raw_data Layout fallback, normalizes it (lowercase, alphanumeric-only),
  * and classifies: contains "marketplace"/"partneraccounts" → marketplace;
- * contains "walaone" → walaone; else → ExampleOrg (the corporate default, incl.
+ * contains "Example Organization" → Example Organization; else → ExampleOrg (the corporate default, incl.
  * blank layout). Keep in lockstep with buildSegmentPredicate.
  */
 export function readRecordLayout(rec: any): string {
@@ -459,13 +459,13 @@ export function readRecordLayout(rec: any): string {
 }
 export function classifyLayoutSegment(
   layoutRaw: string | null | undefined,
-): "marketplace" | "walaone" | "ExampleOrg" {
+): "marketplace" | "Example Organization" | "ExampleOrg" {
   const norm = String(layoutRaw ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
   if (norm.includes("marketplace") || norm.includes("partneraccounts"))
     return "marketplace";
-  if (norm.includes("walaone")) return "walaone";
+  if (norm.includes("Example Organization")) return "Example Organization";
   return "ExampleOrg";
 }
 export function recordMatchesSegment(
@@ -504,7 +504,7 @@ export interface MergeAction {
 }
 
 /** Enriched merge action: MergeAction + the cluster's domain / company name
- *  + the action_type's human-readable label. Powers the Logs tab UI + Adam's
+ *  + the action_type's human-readable label. Powers the Logs tab UI + AssistantPersona's
  *  manualActionAuditTool. */
 export interface MergeActionEnriched extends MergeAction {
   cluster_domain: string | null;
@@ -678,7 +678,7 @@ export async function getClustersBySignal(
 }
 
 // Free-text search across clusters by company name (EN/AR/normalized) or
-// domain — powers the "show me everything on <X>" entity lookup so Adam can
+// domain — powers the "show me everything on <X>" entity lookup so AssistantPersona can
 // flag that a looked-up company also has open duplicate clusters. Active
 // clusters with >1 record only; capped.
 export async function searchClustersByText(
@@ -1995,7 +1995,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   await pool.query(
     `INSERT INTO duplicate_radar_packet_settings (setting_key, setting_value) VALUES
        ('escalation_contact_name',  'Sample User — Operations Quality'),
-       ('escalation_contact_email', 'user@example.invalid'),
+       ('escalation_contact_email', '<REDACTED_EMAIL>'),
        ('dispute_path',             'If a row should NOT be merged (e.g. intentional parallel deals for compliance reasons), flag it back to GRQ Quality with the Cluster ID and a one-line justification. Do not merge in CRMProvider until acknowledged.')
      ON CONFLICT (setting_key) DO NOTHING`,
   );
@@ -2017,7 +2017,7 @@ export async function getPacketSettings(): Promise<PacketSettings> {
     escalation_contact_name:
       map.escalation_contact_name || "Sample User — Operations Quality",
     escalation_contact_email:
-      map.escalation_contact_email || "user@example.invalid",
+      map.escalation_contact_email || "<REDACTED_EMAIL>",
     dispute_path:
       map.dispute_path ||
       "If a row should NOT be merged, flag it back to GRQ Quality with the Cluster ID and a one-line justification. Do not merge in CRMProvider until acknowledged.",
@@ -2218,7 +2218,7 @@ function buildClusterFilterClause(
          * opens a modal listing the clusters they're carrying.
          */
         owner_email?: string;
-        /** Marketplace / ExampleOrg / WalaOne product segment. */
+        /** Marketplace / ExampleOrg / Example Organization product segment. */
         segment?: DuplicateFilters["segment"];
         /** Quarter / year chip — see the DATE_BASIS note below. */
         period_year?: number;
@@ -2308,7 +2308,7 @@ function buildClusterFilterClause(
     )`;
     params.push(filters.owner_email.trim());
   }
-  // Segment chip (Marketplace / ExampleOrg / WalaOne) — Sample User 2026-07-13: keep
+  // Segment chip (Marketplace / ExampleOrg / Example Organization) — Sample User 2026-07-13: keep
   // clusters that have at least one record in the chosen product layout. Mirrors
   // buildSegmentPredicate's layout semantics, inlined with the dr alias (all
   // literal, no bind params) so it composes with the EXISTS filters above.
@@ -2324,11 +2324,11 @@ function buildClusterFilterClause(
     let cond: string;
     if (filters.segment === "marketplace") {
       cond = MKT;
-    } else if (filters.segment === "walaone") {
-      cond = `${NORM} LIKE '%walaone%'`;
+    } else if (filters.segment === "Example Organization") {
+      cond = `${NORM} LIKE '%Example Organization%'`;
     } else {
-      // ExampleOrg / corporate = NOT marketplace AND NOT walaone.
-      cond = `NOT ${MKT} AND ${NORM} NOT LIKE '%walaone%'`;
+      // ExampleOrg / corporate = NOT marketplace AND NOT Example Organization.
+      cond = `NOT ${MKT} AND ${NORM} NOT LIKE '%Example Organization%'`;
     }
     clause += ` AND EXISTS (
       SELECT 1 FROM duplicate_records dr
@@ -2665,7 +2665,7 @@ export async function captureDuplicateProgressSnapshot(): Promise<DuplicateProgr
     }
 
     // open/solved/total per segment via an EXISTS on duplicate_records layout.
-    const SEG_LIST = ["all", "marketplace", "ExampleOrg", "walaone"] as const;
+    const SEG_LIST = ["all", "marketplace", "ExampleOrg", "Example Organization"] as const;
     for (const seg of SEG_LIST) {
       const p = buildSegmentPredicate(seg === "all" ? "all" : seg, 1);
       const exists = p.condition
@@ -2840,7 +2840,7 @@ export async function fetchResolveRowsWithSurvivorSegment(
   }));
 }
 
-/** One source of truth for the Cleaning Progress tab, its export, and Adam. */
+/** One source of truth for the Cleaning Progress tab, its export, and AssistantPersona. */
 export async function getDataCleaningProgress(
   segment: DuplicateFilters["segment"],
 ): Promise<DataCleaningProgress> {
@@ -3164,7 +3164,7 @@ export interface MultiActiveDealAccount {
  *
  * Grouped by the CRMProvider Account id from raw_data, falling back to the account
  * name, so two deals pointing at the same account row group together even when
- * the deal names differ ("stc" vs "STC").
+ * the deal names differ ("Example Organization" vs "Example Organization").
  */
 /**
  * Short-lived result cache, keyed by layout.
@@ -3219,7 +3219,7 @@ async function queryMultiActiveDealAccounts(
   const opts = { multiOwnerOnly: false, limit: limitOpt };
   // The rule is scoped to ONE LAYOUT — ExampleOrg today (Sample User 2026-08-24).
   // Two open deals on the same company across DIFFERENT products (a ExampleOrg
-  // deal and a WalaOne deal) are legitimately separate sales, not a collision,
+  // deal and a Example Organization deal) are legitimately separate sales, not a collision,
   // so comparing across layouts would manufacture violations. An explicit
   // segment is honoured; "all" would compare across products and is therefore
   // NOT the default here, unlike the rest of the radar.
@@ -3291,8 +3291,8 @@ async function queryMultiActiveDealAccounts(
        --      raw_data->Account_Name->id on 14 of 15, and that is how CRMProvider
        --      itself groups them — it is the view Sample User at.
        --   3. Normalised company NAME as the last resort. It cannot lead:
-       --      company_name varies per deal for one Account ("Stc", "stcbank",
-       --      "الاتصالات السعودية", "STC العناية بالموظفين"), so leading with
+       --      company_name varies per deal for one Account ("Example Organization", "stcbank",
+       --      "الاتصالات السعودية", "Example Organization العناية بالموظفين"), so leading with
        --      it splits a single Account into several groups and hides the
        --      very collisions this is meant to surface.
        SELECT group_key,
@@ -5948,7 +5948,7 @@ export async function getDuplicatesByOwner(): Promise<
   `);
 
   // Consolidate per OWNER_EMAIL_ALIASES so reps tagged on multiple mailboxes
-  // (Rayan's three addresses, etc.) land in ONE row. Without this, Adam's
+  // (Rayan's three addresses, etc.) land in ONE row. Without this, AssistantPersona's
   // answers split a single rep into 3 — the dashboard already merges, but
   // every backend consumer needs the same treatment for parity.
   const { canonicaliseOwnerEmail } = await import("./ownerEmailAliases");
@@ -5989,7 +5989,7 @@ export async function getDuplicatesByOwner(): Promise<
 }
 
 // CS Pipeline Overlap tab — active duplicate clusters that overlap a live CS
-// customer, counted by verdict (block / review / warn). Powers Adam's
+// customer, counted by verdict (block / review / warn). Powers AssistantPersona's
 // cs-pipeline-overlap status answer.
 export async function getCsOverlapVerdictCounts(): Promise<{
   block: number;
@@ -8372,7 +8372,7 @@ export async function getMergeHistory(
 /**
  * Enriched merge-history reader — joins duplicate_clusters to surface domain
  * + company_name + status alongside each action row. Powers the Logs tab UI
- * (a new "Manual Actions" sub-section) and Adam's manualActionAuditTool so
+ * (a new "Manual Actions" sub-section) and AssistantPersona's manualActionAuditTool so
  * neither has to make a second hop per row.
  *
  * Filters:
@@ -8879,7 +8879,7 @@ export async function getInflationOpenClosedBreakdown(
  * CRMProvider mirror so a ClientHub-vs-QMS count gap can be attributed exactly:
  *   corporate_deal   — a Deal on a ExampleOrg layout WITH a CS Phase set → this is
  *                      what the CS-Lifecycle census counts.
- *   non_corporate    — a Deal but on a Marketplace / WalaOne layout → the census
+ *   non_corporate    — a Deal but on a Marketplace / Example Organization layout → the census
  *                      (ExampleOrg-scoped) excludes it.
  *   not_a_deal       — the id resolves to an Account/Contact/Lead, not a Deal →
  *                      the deal-based census can't count it.
@@ -10120,7 +10120,7 @@ export async function getDuplicateRecordsByType(
     confidence_level?: string;
     domain?: string;
     ai_status?: string;
-    segment?: "all" | "marketplace" | "corporate" | "ExampleOrg" | "walaone";
+    segment?: "all" | "marketplace" | "corporate" | "ExampleOrg" | "Example Organization";
     sort?: string;
     dir?: string;
   },
@@ -11103,7 +11103,7 @@ export async function getCrossModuleOverlaps(opts: {
    *  (module-scoped: cross_module_handled_at IS NOT NULL, cluster itself
    *  still 'active' — see markCrossModuleHandled), or 'all'. */
   status?: "active" | "resolved" | "ignored" | "handled" | "all";
-  /** Marketplace / ExampleOrg / WalaOne segment chip. Filters clusters by the
+  /** Marketplace / ExampleOrg / Example Organization segment chip. Filters clusters by the
    *  layouts present on their member records (c.layouts). undefined/'all' = no
    *  filter. Mirrors buildSegmentPredicate's layout semantics. */
   segment?: DuplicateFilters["segment"];
@@ -11361,10 +11361,10 @@ export async function getCrossModuleOverlaps(opts: {
     // CS conflicts live on the CS Pipeline Overlap tab.
     return activeLead && activeDeal;
   };
-  // Segment chip (Marketplace / ExampleOrg / WalaOne) — Sample User 2026-07-13: the chip
+  // Segment chip (Marketplace / ExampleOrg / Example Organization) — Sample User 2026-07-13: the chip
   // never reached this tab. Filter by the layouts present on the cluster's member
   // records (c.layouts, aggregated above). Marketplace = a Marketplace/Partner
-  // Accounts layout present; WalaOne = a WalaOne layout present; ExampleOrg = a
+  // Accounts layout present; Example Organization = a Example Organization layout present; ExampleOrg = a
   // corporate layout present (neither of those) OR no layout at all (legacy
   // default). Mirrors the server buildSegmentPredicate layout semantics.
   const _segNorm = (v: any) =>
@@ -11381,13 +11381,13 @@ export async function getCrossModuleOverlaps(opts: {
       return n.includes("marketplace") || n.includes("partneraccounts");
     };
     const isMkt = layouts.some(_isMktLayout);
-    const isW1 = layouts.some((v) => _segNorm(v).includes("walaone"));
+    const isW1 = layouts.some((v) => _segNorm(v).includes("Example Organization"));
     if (seg === "marketplace") return isMkt;
-    if (seg === "walaone") return isW1;
+    if (seg === "Example Organization") return isW1;
     // ExampleOrg / corporate: a corporate record present, or no layout at all.
     return (
       layouts.length === 0 ||
-      layouts.some((v) => !_isMktLayout(v) && !_segNorm(v).includes("walaone"))
+      layouts.some((v) => !_isMktLayout(v) && !_segNorm(v).includes("Example Organization"))
     );
   };
 
@@ -11450,7 +11450,7 @@ export async function getCrossModuleOverlaps(opts: {
     ? visible.filter((c) => matchesPairingChip(c, opts.pairing!))
     : visible;
 
-  // Counts: by_pairing keeps shape for back-compat (Adam tool etc.) but
+  // Counts: by_pairing keeps shape for back-compat (AssistantPersona tool etc.) but
   // is now computed over `visible` (the actionable set), so lead_contact
   // and lead_account always read 0 — operators should look at by_action.
   const byPairing: Record<string, number> = {};
@@ -12729,7 +12729,7 @@ export interface CsLifecycleScanResult {
 /**
  * CS OWNER ROSTER (Sample User 2026-07-20). The platform stores no CS team list — the
  * owner lives per-deal in CRMProvider's "CS Owner Name" field, so nothing could answer
- * "who are the CS owners?" (Adam included). This derives the roster from the
+ * "who are the CS owners?" (AssistantPersona included). This derives the roster from the
  * data: the DISTINCT CS Owner Name values across Deal records, with how many
  * deals/accounts each owns, plus how many CS deals have NO owner (the
  * missing_cs_owner gap). Tolerates CRMProvider's key variants and the lookup-object
@@ -13006,8 +13006,8 @@ export async function scanCsLifecycleViolations(opts: {
 
   // Segment scope. CS Lifecycle is the B2B CS team's domain, so it DEFAULTS to
   // the ExampleOrg (corporate) layout — a bare "all"/unset segment resolves to
-  // ExampleOrg, NOT every layout, because WalaOne / Marketplace are not part of
-  // the CS-B2B book (Sample User 2026-07-07). An explicit Marketplace/WalaOne chip
+  // ExampleOrg, NOT every layout, because Example Organization / Marketplace are not part of
+  // the CS-B2B book (Sample User 2026-07-07). An explicit Marketplace/Example Organization chip
   // still overrides for ad-hoc inspection. Same layout_name predicate the radar
   // tabs use. Segment bind params come first ($1..$N); LIMIT is the last one.
   const csSegment: DuplicateFilters["segment"] =
@@ -13153,7 +13153,7 @@ export async function scanCsLifecycleViolations(opts: {
 // Mirrors scanCsLifecycleViolations but applies the Sales SOP per-stage SLA
 // spec from salesStageSlaSpec.ts. Used by:
 //   - GET /api/duplicates/deal-stage-aging
-//   - dealStageAgingStatusTool (Adam)
+//   - dealStageAgingStatusTool (AssistantPersona)
 //   - twice-daily digest (buildRadarTabStatus)
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -13219,7 +13219,7 @@ export async function scanDealStageAgingViolations(
     "./dealStageAgingCompliance"
   );
 
-  // Segment chip (ExampleOrg / WalaOne / Marketplace) — filter deals by their CRMProvider
+  // Segment chip (ExampleOrg / Example Organization / Marketplace) — filter deals by their CRMProvider
   // Layout, using the SAME predicate the radar tabs use so "ExampleOrg" shows only
   // ExampleOrg-layout deals, etc. (Sample User 2026-07-07). Segment bind params come
   // first ($1..$N); the LIMIT is always the last placeholder.

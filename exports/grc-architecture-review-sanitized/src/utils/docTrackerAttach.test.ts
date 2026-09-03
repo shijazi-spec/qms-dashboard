@@ -66,7 +66,7 @@ console.log("\n=== promoteOrphan — write-path tests ===\n");
   captured.length = 0;
   // When register_code has no matching policy_id (SELECT returns policy_id=null),
   // the function returns early without writing.  Verify it doesn't throw.
-  const result = await promoteOrphan("WP-0001", "user@example.invalid");
+  const result = await promoteOrphan("WP-0001", "<REDACTED_EMAIL>");
   assert(
     result.status === "already_linked" || result.status === "promoted" ||
     result.status === "not_found" || result.status === "failed",
@@ -85,8 +85,8 @@ console.log("\n=== setReviewState — write-path tests ===\n");
   await setReviewState({
     registerCode: "WP-0001",
     reviewState: "approved",
-    reviewedBy: "user@example.invalid",
-    assigneeEmail: "user@example.invalid",
+    reviewedBy: "<REDACTED_EMAIL>",
+    assigneeEmail: "<REDACTED_EMAIL>",
     note: "Approved after annual review",
   });
   const writes = captured.filter(c => {

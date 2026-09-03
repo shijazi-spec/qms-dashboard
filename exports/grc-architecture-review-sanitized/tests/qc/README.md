@@ -28,7 +28,7 @@ npm run qc
 QC_BASE_URL=<REDACTED_URL_SCHEME><REDACTED_HOST> npm run qc
 
 # Include admin-protected routes (Admin Panel, QMS)
-ADMIN_API_KEY=your-admin-key npm run qc
+ADMIN_API_KEY=<REDACTED_SECRET> npm run qc
 ```
 
 ## Using the results

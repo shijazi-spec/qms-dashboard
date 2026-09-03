@@ -8,15 +8,15 @@ const CRMProvider_WRITE_TIMEOUT_MS = 15_000;
 /**
  * Tag CRMProvider records for removal — the chat-side of the migrate-then-tag rule.
  *
- * Adam can FLAG leads/deals/contacts/accounts with the agreed removal tag
- * (default "Duplicate-Delete") so the CRM admin can delete them. Adam NEVER
+ * AssistantPersona can FLAG leads/deals/contacts/accounts with the agreed removal tag
+ * (default "Duplicate-Delete") so the CRM admin can delete them. AssistantPersona NEVER
  * deletes records himself. This is a WRITE tool: it is wrapped with
  * withApprovalGate in the agent, so a call enqueues an AI Approval card
  * (with the module, tag, and record ids) for a Quality Manager / admin to
  * approve before the tag is actually applied — and ChatProvider callers
  * (autoApproveTier "never") can never auto-execute it.
  *
- * Typical flow: user gives a phone/email/company → Adam finds the records via
+ * Typical flow: user gives a phone/email/company → AssistantPersona finds the records via
  * lookup-entity → confirms the list with the user → calls this tool with the
  * module + the CRMProvider record ids to tag.
  */

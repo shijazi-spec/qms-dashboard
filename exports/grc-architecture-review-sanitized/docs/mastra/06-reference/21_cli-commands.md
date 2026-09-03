@@ -65,7 +65,7 @@ Leave it unset to let the CLI pick a sensible default for the machine.
 When using providers supported by the Vercel AI SDK you can redirect requests through proxies or internal gateways by setting a base URL. For LLMProvider:
 
 ```bash copy
-LLMProvider_API_KEY=<your-api-key> \
+LLMProvider_API_KEY=<REDACTED_SECRET> \
 LLMProvider_BASE_URL=<REDACTED_URL> \
 mastra dev
 ```
@@ -73,7 +73,7 @@ mastra dev
 For Anthropic:
 
 ```bash copy
-ANTHROPIC_API_KEY=<your-api-key> \
+ANTHROPIC_API_KEY=<REDACTED_SECRET> \
 ANTHROPIC_BASE_URL=<REDACTED_URL> \
 mastra dev
 ```

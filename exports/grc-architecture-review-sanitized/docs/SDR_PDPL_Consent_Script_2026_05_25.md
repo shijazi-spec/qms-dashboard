@@ -2,7 +2,7 @@
 
 **Audience:** ExampleOrg SDR team
 **Effective from:** [pick a rollout date, recommend 7 days from team brief]
-**Owner:** user@example.invalid
+**Owner:** <REDACTED_EMAIL>
 **Status:** Draft v1 — review with legal/compliance before adoption
 
 ---

@@ -3,8 +3,8 @@
  * straight from the database — no server needed.
  *
  * Usage (DATABASE_URL must point at the QMS Postgres):
- *   DATABASE_URL=postgres://... npx tsx scripts/run-leadership-kpis.ts
- *   # PowerShell:  $env:DATABASE_URL="postgres://..."; npx tsx scripts/run-leadership-kpis.ts
+ *   DATABASE_URL=<REDACTED_DSN> npx tsx scripts/run-leadership-kpis.ts
+ *   # PowerShell:  $env:DATABASE_URL="<REDACTED_DSN>"; npx tsx scripts/run-leadership-kpis.ts
  */
 import { buildLeadershipKpiFeed } from "../src/utils/leadershipKpiFeed";
 

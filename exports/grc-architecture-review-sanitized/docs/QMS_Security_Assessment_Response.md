@@ -262,7 +262,7 @@ Administrative accounts are protected through multiple mechanisms:
    - Login events tracked with `LOGIN` action type
 
 5. **Default Admin Seeding:**
-   - A single admin account (`user@example.invalid`) is seeded on first initialization
+   - A single admin account (`<REDACTED_EMAIL>`) is seeded on first initialization
    - New users authenticated via HostingPlatform OIDC receive the `department_viewer` role by default (least privilege)
 
 **Evidence:**
@@ -286,7 +286,7 @@ Sessions are managed using **cryptographically signed, stateless tokens** stored
 | **Cookie Name** | `ExampleOrg_session` |
 | **Max Age** | 7 days (604,800 seconds) |
 | **HttpOnly** | Yes (prevents JavaScript access) |
-| **Secure** | Yes (HTTPS only, conditional on non-localhost) |
+| **Secure** | Yes (HTTPS only, conditional on non-<REDACTED_HOST>) |
 | **SameSite** | Lax (CSRF protection) |
 | **Path** | `/` (application-wide) |
 

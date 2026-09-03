@@ -377,7 +377,7 @@ const CANONICAL_BUSINESS_UNITS: Array<{ name: string; commercial: boolean }> = [
   { name: "Sales", commercial: true },
   { name: "Marketplace", commercial: true },
   { name: "Customer Success", commercial: true },
-  { name: "WalaOne", commercial: true },
+  { name: "Example Organization", commercial: true },
   // Non-Commercial
   { name: "Marketing", commercial: false },
   { name: "HR", commercial: false },
@@ -1267,7 +1267,7 @@ const SARA_NORTH_STAR: Record<number, NsQuarter> = {
   },
 };
 
-const MARAM_NORTH_STAR: Record<number, NsQuarter> = {
+const Sample User_NORTH_STAR: Record<number, NsQuarter> = {
   1: {
     target: 0.9,
     components: [
@@ -1336,10 +1336,10 @@ const NORTH_STAR_DEFS: Array<{
   {
     code: "GRC-KPI-001",
     name: "GRC North Star Score",
-    weights: MARAM_NORTH_STAR,
+    weights: Sample User_NORTH_STAR,
     detail: {
       description:
-        "Single weighted score combining Maram's GRC KPIs for the current quarter (the headline of the GRC scorecard).",
+        "Single weighted score combining Sample User's GRC KPIs for the current quarter (the headline of the GRC scorecard).",
       methodology:
         "Σ(quarter weight × component actual fraction) over the quarter's components (weights from the North Star plan). Handoff (days) folded as min(1, 5/days). A component with no data counts as 0.",
       rationale:

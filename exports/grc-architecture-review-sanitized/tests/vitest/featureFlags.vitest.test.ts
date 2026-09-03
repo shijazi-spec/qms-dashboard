@@ -59,26 +59,26 @@ describe("isFlagEnabled — global toggle", () => {
 
 describe("isFlagEnabled — per-user allowlist", () => {
   test("listed user is enabled even when global is off", () => {
-    process.env[USERS_KEY] = "user@example.invalid,user@example.invalid";
-    expect(isFlagEnabled(FLAG, "user@example.invalid")).toBe(true);
-    expect(isFlagEnabled(FLAG, "user@example.invalid")).toBe(true);
+    process.env[USERS_KEY] = "<REDACTED_EMAIL>,<REDACTED_EMAIL>";
+    expect(isFlagEnabled(FLAG, "<REDACTED_EMAIL>")).toBe(true);
+    expect(isFlagEnabled(FLAG, "<REDACTED_EMAIL>")).toBe(true);
   });
 
   test("unlisted user stays disabled when global is off", () => {
-    process.env[USERS_KEY] = "user@example.invalid";
-    expect(isFlagEnabled(FLAG, "user@example.invalid")).toBe(false);
+    process.env[USERS_KEY] = "<REDACTED_EMAIL>";
+    expect(isFlagEnabled(FLAG, "<REDACTED_EMAIL>")).toBe(false);
   });
 
   test("user list is additive — global on still wins for unlisted users", () => {
     process.env[ENV_KEY] = "true";
-    process.env[USERS_KEY] = "user@example.invalid";
-    expect(isFlagEnabled(FLAG, "user@example.invalid")).toBe(true);
+    process.env[USERS_KEY] = "<REDACTED_EMAIL>";
+    expect(isFlagEnabled(FLAG, "<REDACTED_EMAIL>")).toBe(true);
   });
 
   test("trims whitespace in user list and identity", () => {
-    process.env[USERS_KEY] = " user@example.invalid , user@example.invalid ";
-    expect(isFlagEnabled(FLAG, "user@example.invalid")).toBe(true);
-    expect(isFlagEnabled(FLAG, "  user@example.invalid  ")).toBe(true);
+    process.env[USERS_KEY] = " <REDACTED_EMAIL> , <REDACTED_EMAIL> ";
+    expect(isFlagEnabled(FLAG, "<REDACTED_EMAIL>")).toBe(true);
+    expect(isFlagEnabled(FLAG, "  <REDACTED_EMAIL>  ")).toBe(true);
   });
 
   test('empty identity ("") returns false even if listed', () => {
@@ -93,7 +93,7 @@ describe("isFlagEnabled — per-user allowlist", () => {
   });
 
   test("null identity → only global is consulted", () => {
-    process.env[USERS_KEY] = "user@example.invalid";
+    process.env[USERS_KEY] = "<REDACTED_EMAIL>";
     expect(isFlagEnabled(FLAG, null)).toBe(false);
     process.env[ENV_KEY] = "true";
     expect(isFlagEnabled(FLAG, null)).toBe(true);
@@ -104,7 +104,7 @@ describe("isFlagEnabled — defensive behavior", () => {
   test("unknown flag name returns false (never throws)", () => {
     // Force-cast to bypass the type checker — we want runtime behavior.
     expect(isFlagEnabled("not_a_flag" as FlagName)).toBe(false);
-    expect(isFlagEnabled("" as FlagName, "user@example.invalid")).toBe(false);
+    expect(isFlagEnabled("" as FlagName, "<REDACTED_EMAIL>")).toBe(false);
   });
 });
 
@@ -126,10 +126,10 @@ describe("listFlagStates", () => {
   });
 
   test("reflects the user list", () => {
-    process.env[USERS_KEY] = "user@example.invalid,user@example.invalid";
+    process.env[USERS_KEY] = "<REDACTED_EMAIL>,<REDACTED_EMAIL>";
     expect(listFlagStates()[FLAG].users).toEqual([
-      "user@example.invalid",
-      "user@example.invalid",
+      "<REDACTED_EMAIL>",
+      "<REDACTED_EMAIL>",
     ]);
   });
 

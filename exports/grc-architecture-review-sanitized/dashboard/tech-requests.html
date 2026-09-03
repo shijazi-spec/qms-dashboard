@@ -45,7 +45,7 @@
             <h2 class="font-semibold text-gray-900 mb-3">Raise a request</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <select id="trProduct" class="border rounded px-3 py-2 text-sm">
-                    <option value="WalaOne">WalaOne</option>
+                    <option value="Example Organization">Example Organization</option>
                     <option value="ExampleOrg">ExampleOrg</option>
                     <option value="GRQ">GRQ</option>
                 </select>
@@ -73,7 +73,7 @@
                     <option value="open">Open only</option>
                     <option value="all">All</option>
                     <option value="overdue">Overdue</option>
-                    <option value="WalaOne">WalaOne</option>
+                    <option value="Example Organization">Example Organization</option>
                     <option value="ExampleOrg">ExampleOrg</option>
                     <option value="GRQ">GRQ</option>
                 </select>
@@ -106,7 +106,7 @@
         const _d = (v) => v ? String(v).slice(0, 10) : '—';
 
         const PRODUCT_CLS = {
-            WalaOne: 'bg-sky-100 text-sky-800',
+            Example Organization: 'bg-sky-100 text-sky-800',
             ExampleOrg: 'bg-indigo-100 text-indigo-800',
             GRQ: 'bg-purple-100 text-purple-800'
         };
@@ -154,7 +154,7 @@
             let rows = _rows;
             if (f === 'open') rows = rows.filter(r => r.status !== 'done');
             else if (f === 'overdue') rows = rows.filter(r => _overdueDays(r) > 0);
-            else if (['WalaOne', 'ExampleOrg', 'GRQ'].includes(f)) rows = rows.filter(r => r.product === f);
+            else if (['Example Organization', 'ExampleOrg', 'GRQ'].includes(f)) rows = rows.filter(r => r.product === f);
             document.getElementById('trRows').innerHTML = rows.length
                 ? rows.map(_row).join('')
                 : '<tr><td colspan="9" class="px-3 py-6 text-center text-sm text-gray-500">Nothing to show.</td></tr>';

@@ -68,9 +68,9 @@ describe("scope of the single aggregate scan", () => {
     expect(sql).toMatch(/FROM duplicate_records r/);
     expect(sql).toMatch(/CRMProvider_module = 'Deals'/);
     // The ExampleOrg branch of buildSegmentPredicate = NOT marketplace AND NOT
-    // WalaOne. Without it, "Partner Active" / "Welcome Communications" records
+    // Example Organization. Without it, "Partner Active" / "Welcome Communications" records
     // land in the Sales team's revenue and pipeline.
-    expect(sql).toMatch(/walaone/);
+    expect(sql).toMatch(/Example Organization/);
     expect(sql).toMatch(/layout/i);
     const params = query.mock.calls.at(-1)?.[1] as any[];
     expect(params.some((p) => String(p).includes("marketplace"))).toBe(true);

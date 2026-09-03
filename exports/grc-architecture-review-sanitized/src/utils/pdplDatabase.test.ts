@@ -35,7 +35,7 @@ await exerciseAllKeys(h, "addDataInventoryItem", async (secret, key) => {
       [key]: secret,
       marker: NON_SENSITIVE_MARKER,
     } as never,
-    "user@example.invalid",
+    "<REDACTED_EMAIL>",
   );
 });
 
@@ -45,14 +45,14 @@ await exerciseAllKeys(h, "createDSARRequest", async (secret, key) => {
     {
       request_type: "access" as never,
       subject_name: NON_SENSITIVE_MARKER,
-      subject_email: "user@example.invalid",
+      subject_email: "<REDACTED_EMAIL>",
       subject_identifier: `id-${key}`,
       request_description: `${NON_SENSITIVE_MARKER} request body`,
       assigned_to: "Sample User",
       [key]: secret,
       marker: NON_SENSITIVE_MARKER,
     } as never,
-    "user@example.invalid",
+    "<REDACTED_EMAIL>",
   );
 });
 
@@ -70,7 +70,7 @@ await exerciseAllKeys(h, "createDataIncident", async (secret, key) => {
       [key]: secret,
       marker: NON_SENSITIVE_MARKER,
     } as never,
-    "user@example.invalid",
+    "<REDACTED_EMAIL>",
   );
 });
 

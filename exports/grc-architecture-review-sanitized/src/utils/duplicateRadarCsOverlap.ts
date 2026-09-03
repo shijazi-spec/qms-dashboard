@@ -136,7 +136,7 @@ function loadConfig(): Config {
     // Env-extendable: DUPLICATE_RADAR_GOV_EDU_DOMAINS (replaces this list).
     govEduDomains: list(process.env.DUPLICATE_RADAR_GOV_EDU_DOMAINS, [
       "<REDACTED_HOST>", // King Saud University
-      "<REDACTED_HOST>", // King Abdulaziz University
+      "<REDACTED_HOST>", // King Sample User University
       "<REDACTED_HOST>", // King Fahd University of Petroleum & Minerals
       "<REDACTED_HOST>", // Imam Sample User University
       "<REDACTED_HOST>", // Umm Al-Qura University
@@ -145,7 +145,7 @@ function loadConfig(): Config {
       "<REDACTED_HOST>", // Al-Jouf University
       "<REDACTED_HOST>", // Najran University
       "<REDACTED_HOST>", // Saudi Electronic University
-      "<REDACTED_HOST>", // King Saud bin Abdulaziz Univ. for Health Sciences
+      "<REDACTED_HOST>", // King Saud bin Sample User Univ. for Health Sciences
       "<REDACTED_HOST>", // KAUST
       // Also in the DOAM list (they block earlier as doam_client), kept here so
       // the sector is still correct wherever the DOAM check does not run.

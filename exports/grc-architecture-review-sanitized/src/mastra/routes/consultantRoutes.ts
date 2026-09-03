@@ -737,8 +737,8 @@ export const consultantRoutes = [
   },
 
   {
-    // Adam's persistent Working Memory for the requesting user — the durable
-    // "what Adam knows about me" profile that follows them across every chat
+    // AssistantPersona's persistent Working Memory for the requesting user — the durable
+    // "what AssistantPersona knows about me" profile that follows them across every chat
     // (web + ChatProvider). PDPL/ISO 27001: a user can only ever read THEIR OWN
     // memory (namespaced by resourceId) and can clear it via the sibling
     // /clear route. Returns the raw markdown so the page can render it.
@@ -856,7 +856,7 @@ export const consultantRoutes = [
             latencyMs: Date.now() - t0,
             error: errorMsg || null,
             hint: ok
-              ? "Key works — Adam is live on this key."
+              ? "Key works — AssistantPersona is live on this key."
               : /rate limit|429|tokens per min|TPM/i.test(errorMsg || "")
                 ? "Still rate-limited — the app is NOT on the new Tier-4 key yet. Check that LLMProvider_API_KEY holds the new key AND that AI_INTEGRATIONS_LLMProvider_API_KEY is cleared, then republish."
                 : /invalid|incorrect|auth|401/i.test(errorMsg || "")
@@ -872,7 +872,7 @@ export const consultantRoutes = [
   },
 
   {
-    // Clear what Adam remembers about the requesting user (PDPL right to
+    // Clear what AssistantPersona remembers about the requesting user (PDPL right to
     // erasure). Resets the resource-scoped working memory to empty so the
     // next conversation starts fresh. Only ever affects the caller's own
     // namespace.
@@ -1354,10 +1354,10 @@ export const consultantRoutes = [
                       const pt = u.promptTokens ?? u.prompt_tokens;
                       const ct = u.completionTokens ?? u.completion_tokens;
                       const tt = u.totalTokens ?? u.total_tokens;
-                      promptTokens = typeof pt === "number" ? pt : undefined;
+                      promptTokens = <REDACTED_SECRET> pt === "number" ? pt : undefined;
                       completionTokens =
-                        typeof ct === "number" ? ct : undefined;
-                      totalTokens = typeof tt === "number" ? tt : undefined;
+                        <REDACTED_SECRET> ct === "number" ? ct : undefined;
+                      totalTokens = <REDACTED_SECRET> tt === "number" ? tt : undefined;
                     }
                   } catch {
                     /* usage unavailable */

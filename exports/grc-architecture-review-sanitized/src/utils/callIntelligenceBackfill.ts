@@ -6,7 +6,7 @@
  * have the data, so re-running on every boot is safe:
  *
  *   1. Phone backfill — bulk-upload filenames like
- *      `call_<ts>_+<REDACTED_PHONE> by user@example.invalid on …wav`
+ *      `call_<ts>_+<REDACTED_PHONE> by <REDACTED_EMAIL> on …wav`
  *      carry the customer phone right in the name. The original
  *      ingest path only set `metadata.contact_phone` when the
  *      operator pasted a phone into the lead-id field, so the 196

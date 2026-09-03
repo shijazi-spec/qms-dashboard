@@ -161,7 +161,7 @@ function check(condition: boolean, label: string): void {
 {
   const scrubbed = redactMetadataForStorage(
     buildAiCallTelemetryMetadata({
-      // Stuff a sk-live-style token into `feature_flag` — the helper allows
+      // Stuff a <REDACTED_TOKEN> token into `feature_flag` — the helper allows
       // it (the field is a free-form string), but the WRITE-path scrubber
       // must still mask it before the row is INSERT-ed.
       featureFlag: "<REDACTED_TOKEN>",

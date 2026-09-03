@@ -134,7 +134,7 @@ async function checkConnectivity(baseUrl: string): Promise<void> {
     const cause = err?.cause?.message ?? err?.cause ?? "";
     console.error(`\n⚠️  Connectivity check failed for ${testUrl}`);
     console.error(`   Error: ${msg}${cause ? `\n   Cause: ${cause}` : ""}`);
-    console.error(`   If testing production (e.g. HostingPlatform), try running QC inside HostingPlatform Shell against localhost instead.\n`);
+    console.error(`   If testing production (e.g. HostingPlatform), try running QC inside HostingPlatform Shell against <REDACTED_HOST> instead.\n`);
   }
 }
 

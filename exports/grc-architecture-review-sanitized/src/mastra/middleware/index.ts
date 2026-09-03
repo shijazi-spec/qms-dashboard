@@ -126,7 +126,7 @@ function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter
 //     enforce session-or-admin-key on their own as defense-in-depth.
 //   - `/test/ChatProvider`, `/webhooks/ChatProvider`, `/api/webhooks/ChatProvider` — were removed
 //     when ChatProviderTriggers.ts was unimported. RE-ADDED 2026-06-10: the GRQ
-//     Assistant (Adam) two-way ChatProvider chat wires registerChatProviderTrigger +
+//     Assistant (AssistantPersona) two-way ChatProvider chat wires registerChatProviderTrigger +
 //     registerGrqAssistantChatProviderRoutes in src/mastra/index.ts, so the webhook
 //     routes exist again and ChatProvider needs unauthenticated access (see the
 //     ChatProvider Events API webhook entry below). Per the per-route re-evaluation
@@ -193,7 +193,7 @@ export const PUBLIC_PATHS = [
   // ---- Accessibility statement (WCAG / regulator-facing public page) ----
   '/a11y',
 
-  // ---- ChatProvider Events API webhook (GRQ Assistant / Adam two-way chat) ----
+  // ---- ChatProvider Events API webhook (GRQ Assistant / AssistantPersona two-way chat) ----
   // ChatProvider POSTs here for URL-verification (challenge) and every subscribed
   // event. ChatProvider is unauthenticated to our session model and does NOT follow
   // redirects — so without this bypass the request hits checkPageAuth and

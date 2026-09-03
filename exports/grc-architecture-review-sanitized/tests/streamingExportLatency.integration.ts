@@ -58,7 +58,7 @@ if (!DATABASE_URL) {
 const pool = new Pool({ connectionString: DATABASE_URL });
 
 const TEST_USER = {
-  email: "user@example.invalid",
+  email: "<REDACTED_EMAIL>",
   role: "admin",
   name: "Stream Export Latency Admin",
 };

@@ -55,9 +55,9 @@ vi.mock("fs", async (importOriginal) => {
 // platform_user), but resolve the platform_user from a hermetic map keyed by
 // the session email instead of hitting the DB. The role is derived from the
 // session email prefix (see `sessionCookie` below), so:
-//   • user@example.invalid               → active admin   → gate admits (200)
-//   • user@example.invalid   → active viewer  → gate refuses (setup)
-//   • user@example.invalid     → active QM      → gate refuses (setup)
+//   • <REDACTED_EMAIL>               → active admin   → gate admits (200)
+//   • <REDACTED_EMAIL>   → active viewer  → gate refuses (setup)
+//   • <REDACTED_EMAIL>     → active QM      → gate refuses (setup)
 // The X-Admin-Key path, the admin_key-cookie-only path, and the
 // no-credentials path all keep flowing through the real helpers unchanged.
 //

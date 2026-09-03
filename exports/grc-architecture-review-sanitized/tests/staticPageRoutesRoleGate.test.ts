@@ -69,7 +69,7 @@ const TEST_SESSION_SECRET = "test-session-secret-static-page-role-gate";
 process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
+  process.env.DATABASE_URL || "<REDACTED_DSN>";
 
 const { staticPageRoutes, ROLE_GATED_DASHBOARD_ROUTES } = await import(
   "../src/mastra/routes/staticPageRoutes"

@@ -232,7 +232,7 @@ export async function initRiskTables(): Promise<void> {
     `ALTER TABLE risk_treatment_actions ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`,
   );
   // Risk appetite/tolerance thresholds (per-risk, on the 1-25 risk_score
-  // scale). Used by monitorRisksTool's threshold_breach check so Adam can
+  // scale). Used by monitorRisksTool's threshold_breach check so AssistantPersona can
   // report risk-appetite alignment. Nullable — a NULL threshold means
   // "not configured" and is simply skipped by the breach query.
   await pool.query(

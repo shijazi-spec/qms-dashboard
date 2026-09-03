@@ -142,7 +142,7 @@ Walks one anonymised call through the system to demonstrate the suggested workfl
 
 | Field | Value |
 |---|---|
-| Agent | Sample User (`user@example.invalid`) — SDR, 3 months tenure |
+| Agent | Sample User (`<REDACTED_EMAIL>`) — SDR, 3 months tenure |
 | Customer | New prospect at `<REDACTED_HOST>`, called from `<REDACTED_PHONE>` |
 | Date | Sunday 10 May, 11:53 AM Riyadh |
 | Call duration | 7 min 12 sec |
@@ -152,7 +152,7 @@ Walks one anonymised call through the system to demonstrate the suggested workfl
 ### Step 1 — Call happens (Sunday 11:53 AM)
 
 Sample User call. Recording saved as
-`<REDACTED_PHONE> by user@example.invalid on 5_10_2025 @ 11_53_28 AM.wav`
+`<REDACTED_PHONE> by <REDACTED_EMAIL> on 5_10_2025 @ 11_53_28 AM.wav`
 following ExampleOrg's canonical filename convention.
 
 ### Step 2 — Upload + parse (Sunday afternoon)
@@ -163,7 +163,7 @@ Sample User (or an ops admin) uploads the recording to `/calls` → Data Sources
 |---|---|
 | Phone (raw) | `<REDACTED_PHONE>` |
 | Phone (last 9 digits, for CRM search) | `<REDACTED_PHONE>` |
-| Agent email | `user@example.invalid` |
+| Agent email | `<REDACTED_EMAIL>` |
 | Call date | 10 May 2025 |
 | Call time | <REDACTED_IP> AM (Riyadh local) |
 
@@ -199,7 +199,7 @@ The `onSdrEvaluationSaved` hook fires (already shipped):
 4. **Auto-generates a coaching plan:**
 
 ```
-agent_email:           user@example.invalid
+agent_email:           <REDACTED_EMAIL>
 attribute_id:          objection_handling
 fail_count:            3
 failed_call_ids:       [142, 156, 171]

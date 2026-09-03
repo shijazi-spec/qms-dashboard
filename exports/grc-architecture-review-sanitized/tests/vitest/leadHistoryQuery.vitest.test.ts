@@ -125,9 +125,9 @@ describe("summarizeCalls", () => {
   });
   test("counts unique agent emails (ignores nulls)", () => {
     const rows: any[] = [
-      { agent_email: "user@example.invalid", call_date: new Date("2026-05-01") },
-      { agent_email: "user@example.invalid", call_date: new Date("2026-05-02") },
-      { agent_email: "user@example.invalid", call_date: new Date("2026-05-03") },
+      { agent_email: "<REDACTED_EMAIL>", call_date: new Date("2026-05-01") },
+      { agent_email: "<REDACTED_EMAIL>", call_date: new Date("2026-05-02") },
+      { agent_email: "<REDACTED_EMAIL>", call_date: new Date("2026-05-03") },
       { agent_email: null, call_date: new Date("2026-05-04") },
     ];
     const s = summarizeCalls(rows);
@@ -192,13 +192,13 @@ describe("fetchLeadHistory (with mock pool)", () => {
         rows: [
           {
             id: 1,
-            agent_email: "user@example.invalid",
+            agent_email: "<REDACTED_EMAIL>",
             call_date: new Date("2026-05-01"),
             overall_score: 80,
           },
           {
             id: 2,
-            agent_email: "user@example.invalid",
+            agent_email: "<REDACTED_EMAIL>",
             call_date: new Date("2026-05-02"),
             overall_score: null,
           },

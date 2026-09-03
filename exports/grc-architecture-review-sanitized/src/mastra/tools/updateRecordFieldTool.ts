@@ -72,7 +72,7 @@ export function computeReadBackMismatches(
 
 /**
  * Update simple fields on a CRMProvider record — the chat-side of "change this
- * contact's email / phone / website / name to X". Adam previously had NO tool
+ * contact's email / phone / website / name to X". AssistantPersona previously had NO tool
  * for arbitrary field edits, so he could only tell the user to do it manually
  * in CRMProvider. This closes that gap: it writes the given SCALAR fields via the v2
  * API and is wrapped with withApprovalGate in the agent, so the change queues
@@ -109,7 +109,7 @@ const PROTECTED_FIELDS = new Set<string>([
 /** Pull the trailing record id out of a pasted CRMProvider URL, else return as-is. */
 function extractRecordId(raw: string): string {
   const s = String(raw || "").trim();
-  // .../tab/Contacts/5146753000181667008  (optionally with trailing slash/query)
+  // .../tab/Contacts/<REDACTED_ID>  (optionally with trailing slash/query)
   const m = s.match(/\/(\d{6,})(?:[/?#].*)?$/);
   if (m) return m[1];
   // bare id

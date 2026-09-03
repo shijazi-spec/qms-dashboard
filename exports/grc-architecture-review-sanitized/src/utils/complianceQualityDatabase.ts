@@ -113,7 +113,7 @@ export async function upsertEvidenceQuality(input: {
         judged_at       = CURRENT_TIMESTAMP,
         judged_by       = EXCLUDED.judged_by,
         llm_model       = EXCLUDED.llm_model,
-        tokens_used     = EXCLUDED.tokens_used
+        tokens_used     = <REDACTED_SECRET>
       RETURNING *`,
     [
       input.obligation_id,

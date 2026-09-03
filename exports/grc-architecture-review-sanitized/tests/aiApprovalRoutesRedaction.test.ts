@@ -13,7 +13,7 @@ process.env.SESSION_SECRET =
 // the bootstrap IIFE inside aiApprovalRoutes errors immediately instead
 // of hanging the test.
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || 'postgres://localhost:1/none';
+  process.env.DATABASE_URL || '<REDACTED_DSN>';
 
 import crypto from 'crypto';
 import pg from 'pg';
@@ -34,8 +34,8 @@ import type { QueryResult, QueryResultRow } from 'pg';
 /* and therefore bypass this prototype patch.                          */
 /* ------------------------------------------------------------------ */
 const TEST_PLATFORM_USERS: Record<string, { status: string; role: string }> = {
-  'user@example.invalid':        { status: 'active', role: 'admin' },
-  'user@example.invalid': { status: 'active', role: 'executive' },
+  '<REDACTED_EMAIL>':        { status: 'active', role: 'admin' },
+  '<REDACTED_EMAIL>': { status: 'active', role: 'executive' },
 };
 const _origPoolQuery = pg.Pool.prototype.query;
 pg.Pool.prototype.query = function (this: pg.Pool, ...args: unknown[]): any {
@@ -387,7 +387,7 @@ function signSession(payload: Record<string, unknown>): string {
 function adminCookie(): string {
   const token = signSession({
     userId: 42,
-    email: 'user@example.invalid',
+    email: '<REDACTED_EMAIL>',
     name: 'Quality Manager Test',
     role: 'admin',
     exp: Date.now() + 3600_000,
@@ -400,7 +400,7 @@ function requesterCookie(): string {
   // this viewer is the requester themselves — the view-audit gate must skip.
   const token = signSession({
     userId: 99,
-    email: 'user@example.invalid',
+    email: '<REDACTED_EMAIL>',
     name: 'Requester User',
     role: 'engineer',
     exp: Date.now() + 3600_000,
@@ -630,7 +630,7 @@ async function runApproveResponseLeakTests(): Promise<void> {
     riskLevel: 'high',
     complianceRefs: ['REDACTION-TEST'],
     requestedByUserId: 99, // != admin (42) → SOD passes
-    requestedByEmail: 'user@example.invalid',
+    requestedByEmail: '<REDACTED_EMAIL>',
     requestedByName: 'Requester User',
     threadId: 'thr_approve_redaction_test',
   });
@@ -701,7 +701,7 @@ async function runApproveResponseLeakTests(): Promise<void> {
     riskLevel: 'high',
     complianceRefs: ['REDACTION-TEST'],
     requestedByUserId: 99,
-    requestedByEmail: 'user@example.invalid',
+    requestedByEmail: '<REDACTED_EMAIL>',
     requestedByName: 'Requester User',
     threadId: 'thr_approve_redaction_throw',
   });
@@ -752,7 +752,7 @@ async function run(): Promise<void> {
       refresh_token: PAYLOAD_REFRESH,
       nested: {
         password_hash: PAYLOAD_BCRYPT,
-        username: 'user@example.invalid',
+        username: '<REDACTED_EMAIL>',
       },
       reason: 'rotate-CRMProvider-books-key',
     },
@@ -766,7 +766,7 @@ async function run(): Promise<void> {
     // live policies table.
     complianceRefs: ['PCI-DSS-12.3.1', 'ISO 27001:2022 A.5.34'],
     requestedByUserId: 99,
-    requestedByEmail: 'user@example.invalid',
+    requestedByEmail: '<REDACTED_EMAIL>',
     requestedByName: 'Requester User',
     threadId: 'thr_redaction_test',
   });
@@ -871,7 +871,7 @@ async function run(): Promise<void> {
 
   const viewEvent = viewAuditEvents[0];
   assert(
-    viewEvent?.user_id === 42 && viewEvent?.user_email === 'user@example.invalid',
+    viewEvent?.user_id === 42 && viewEvent?.user_email === '<REDACTED_EMAIL>',
     'view-audit event captures reviewer identity (user_id + email)',
   );
   assert(
@@ -936,7 +936,7 @@ async function run(): Promise<void> {
     'prior_viewers includes the admin reviewer (user_id=42)',
   );
   assert(
-    adminViewer?.user_email === 'user@example.invalid',
+    adminViewer?.user_email === '<REDACTED_EMAIL>',
     `prior_viewers entry has correct email (got: ${adminViewer?.user_email})`,
   );
   assert(

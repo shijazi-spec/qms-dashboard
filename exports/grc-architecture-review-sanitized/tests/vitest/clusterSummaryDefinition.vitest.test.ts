@@ -2,7 +2,7 @@
  * What counts as a "duplicate cluster" in the executive brief and digest.
  *
  * getClusterSummary feeds three human-facing surfaces: the weekly executive
- * brief, the twice-daily resolution digest, and Adam's assistant tool. It gated
+ * brief, the twice-daily resolution digest, and AssistantPersona's assistant tool. It gated
  * on the SUM of records across modules being >= 2, so a cluster holding one
  * lead and one account — a cross-module LINK, the same company seen twice, not
  * a duplicate of either — counted as a duplicate.

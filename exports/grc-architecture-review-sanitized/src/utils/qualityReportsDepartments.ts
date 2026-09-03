@@ -9,10 +9,10 @@ const pool = createRedactedPool({
 });
 
 export type Channel = "B2B" | "B2C" | "MP";
-export type Segment = "ExampleOrg" | "walaone" | "marketplace";
+export type Segment = "ExampleOrg" | "Example Organization" | "marketplace";
 
 export function channelToSegment(ch: Channel): Segment {
-  if (ch === "B2C") return "walaone";
+  if (ch === "B2C") return "Example Organization";
   if (ch === "MP") return "marketplace";
   return "ExampleOrg"; // B2B
 }

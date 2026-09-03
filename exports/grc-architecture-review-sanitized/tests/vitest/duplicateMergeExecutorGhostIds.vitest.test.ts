@@ -57,7 +57,7 @@ function basePlan(overrides: Record<string, unknown> = {}) {
   return {
     clusterId: 42,
     module: "Accounts" as const,
-    masterCRMProviderId: "5146753000000000001",
+    masterCRMProviderId: "<REDACTED_ID>",
     masterDbId: 100,
     masterName: "Survivor Co.",
     tagName: "Duplicate-Delete",
@@ -117,7 +117,7 @@ describe("isGhostRecordError — pure pattern matcher", () => {
 
 describe("executeMergePlan — ghost id routes to stale_pending instead of errors", () => {
   test("single ghost dup: zero errors, one staleDropped, one warning, markRecordStalePending called once", async () => {
-    const ghostId = "5146753000000831624";
+    const ghostId = "<REDACTED_ID>";
     fetchCRMProviderRelatedRecords.mockRejectedValue(new Error(GHOST_ERROR_MSG));
     addCRMProviderNote.mockImplementation(async (_m, recordId) => {
       if (recordId === ghostId) throw new Error(GHOST_ERROR_MSG);
@@ -138,7 +138,7 @@ describe("executeMergePlan — ghost id routes to stale_pending instead of error
   });
 
   test("first ghost-op skips remaining ops for the same id (no addCRMProviderNote call after the fetch failure)", async () => {
-    const ghostId = "5146753000000831624";
+    const ghostId = "<REDACTED_ID>";
     fetchCRMProviderRelatedRecords.mockRejectedValue(new Error(GHOST_ERROR_MSG));
 
     await executeMergePlan(
@@ -153,7 +153,7 @@ describe("executeMergePlan — ghost id routes to stale_pending instead of error
   });
 
   test("dry-run: ghost detected, staleDropped populated, but markRecordStalePending NOT called", async () => {
-    const ghostId = "5146753000000831575";
+    const ghostId = "<REDACTED_ID>";
     fetchCRMProviderRelatedRecords.mockRejectedValue(new Error(GHOST_ERROR_MSG));
 
     const report = await executeMergePlan(
@@ -166,7 +166,7 @@ describe("executeMergePlan — ghost id routes to stale_pending instead of error
   });
 
   test("real (non-ghost) 400 still surfaces as a red error", async () => {
-    const liveDupId = "5146753000000999999";
+    const liveDupId = "<REDACTED_ID>";
     fetchCRMProviderRelatedRecords.mockRejectedValue(new Error(NON_GHOST_400_MSG));
 
     const report = await executeMergePlan(
@@ -182,9 +182,9 @@ describe("executeMergePlan — ghost id routes to stale_pending instead of error
 
   test("multiple ghost dups: each id appears once in staleDropped, one combined warning", async () => {
     const ghostIds = [
-      "5146753000000831624",
-      "5146753000000831575",
-      "5146753000000831661",
+      "<REDACTED_ID>",
+      "<REDACTED_ID>",
+      "<REDACTED_ID>",
     ];
     fetchCRMProviderRelatedRecords.mockRejectedValue(new Error(GHOST_ERROR_MSG));
     addCRMProviderNote.mockImplementation(async (_m, recordId) => {
@@ -209,7 +209,7 @@ describe("executeMergePlan — ghost id routes to stale_pending instead of error
 
   test("clean run with no ghosts: no auto-cleaned warning, staleDropped empty", async () => {
     const report = await executeMergePlan(
-      basePlan({ duplicateCRMProviderIds: ["5146753000000111111"] }) as any,
+      basePlan({ duplicateCRMProviderIds: ["<REDACTED_ID>"] }) as any,
       { performedBy: "test", dryRun: false },
     );
 

@@ -15,7 +15,7 @@ export interface SectionDef {
 
 /**
  * The platform's OWN sections (mirrors dashboard/js/navigation.js), which is
- * what Adam offers as options and what the topic log counts. Order matters:
+ * what AssistantPersona offers as options and what the topic log counts. Order matters:
  * the first section whose keyword appears wins, so the more specific ones come
  * first. Extending a keyword list here is the ONLY way a new theme enters the
  * menu — nothing is auto-invented, and no text from a question is ever stored.

@@ -219,7 +219,7 @@ check T-SOP-01   "Platform SOP is public"                T3 200 GET /sop
 echo
 echo "▶ Database sanity"
 db_count() {
-  PGPASSWORD=$(echo "$DATABASE_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|') \
+  PGPASSWORD=<REDACTED_SECRET> "$DATABASE_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|') \
     psql "$DATABASE_URL" -t -c "SELECT COUNT(*)::int FROM $1;" 2>/dev/null | tr -d ' \n' || echo "0"
 }
 DB_AUDITS=$(db_count quality_audit_results)

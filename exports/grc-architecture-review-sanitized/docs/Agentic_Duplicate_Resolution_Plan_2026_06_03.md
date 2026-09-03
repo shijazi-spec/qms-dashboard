@@ -3,7 +3,7 @@
 # Agentic Duplicate Resolution — Design & Implementation Plan
 
 **Date:** 2026-06-03
-**Author:** Claude (planning agent), commissioned by user@example.invalid
+**Author:** Claude (planning agent), commissioned by <REDACTED_EMAIL>
 **Target commit path:** `docs/Agentic_Duplicate_Resolution_Plan_2026_06_03.md`
 **Status:** Plan-only. No code in this PR. Review-before-build.
 

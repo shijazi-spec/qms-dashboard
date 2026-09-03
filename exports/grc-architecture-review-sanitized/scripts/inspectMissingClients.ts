@@ -16,7 +16,7 @@ const TARGETS = [
   "Mozn",
   "Diriyah",
   "SIDF",
-  "YASREF",
+  "Example Organization",
   "JHAH",
   "CMA",
   "HungerStation",

@@ -37,7 +37,7 @@ assert(isTestOrPlaceholderName("Contact") === true, "whole-name junk 'Contact'")
 assert(isTestOrPlaceholderName("اسم") === true, "whole-name junk Arabic 'اسم'");
 assert(isTestOrPlaceholderName("First Contact Solutions") === false, "real firm with 'Contact' as a word not flagged");
 assert(isTestOrPlaceholderName("Sample User") === false, "'name' as a middle word not flagged");
-assert(isTestOrPlaceholderName("Saudi Aramco") === false, "real company, no keyword");
+assert(isTestOrPlaceholderName("Example Organization") === false, "real company, no keyword");
 
 console.log("classifyDeal");
 {

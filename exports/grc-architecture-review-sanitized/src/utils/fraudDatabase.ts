@@ -1145,11 +1145,11 @@ export const ESCALATION_MATRIX_DEFINITIONS: EscalationDefinition[] = [
       "P1 fraud incident (≥10 affected customers OR ≥50,000 SAR loss).",
     severity: "P1",
     notify_immediately: [
-      "user@example.invalid",
-      "user@example.invalid",
-      "user@example.invalid",
+      "<REDACTED_EMAIL>",
+      "<REDACTED_EMAIL>",
+      "<REDACTED_EMAIL>",
     ],
-    notify_within_4h: ["user@example.invalid", "user@example.invalid"],
+    notify_within_4h: ["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"],
     external_party: "SAMA",
     external_contact: "Submit via SAMA RegPortal within 72 hours.",
     response_sla: "Containment within 4 hours",
@@ -1160,8 +1160,8 @@ export const ESCALATION_MATRIX_DEFINITIONS: EscalationDefinition[] = [
     trigger_definition:
       "P2 fraud incident (3-9 affected customers OR 10,000-50,000 SAR loss).",
     severity: "P2",
-    notify_immediately: ["user@example.invalid", "user@example.invalid"],
-    notify_within_4h: ["user@example.invalid"],
+    notify_immediately: ["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"],
+    notify_within_4h: ["<REDACTED_EMAIL>"],
     external_party: null,
     external_contact: null,
     response_sla: "Containment within 24 hours",
@@ -1172,7 +1172,7 @@ export const ESCALATION_MATRIX_DEFINITIONS: EscalationDefinition[] = [
     trigger_definition:
       "P3 fraud incident (1-2 affected customers, <10,000 SAR loss).",
     severity: "P3",
-    notify_immediately: ["user@example.invalid"],
+    notify_immediately: ["<REDACTED_EMAIL>"],
     notify_within_4h: [],
     external_party: null,
     external_contact: null,
@@ -1185,7 +1185,7 @@ export const ESCALATION_MATRIX_DEFINITIONS: EscalationDefinition[] = [
       "P4 informational / suspicious-only event with no customer impact.",
     severity: "P4",
     notify_immediately: [],
-    notify_within_4h: ["user@example.invalid"],
+    notify_within_4h: ["<REDACTED_EMAIL>"],
     external_party: null,
     external_contact: null,
     response_sla: "Log only; weekly review",
@@ -1196,8 +1196,8 @@ export const ESCALATION_MATRIX_DEFINITIONS: EscalationDefinition[] = [
     trigger_definition:
       "Chargeback dispute initiated by acquiring bank (any severity).",
     severity: null,
-    notify_immediately: ["user@example.invalid", "user@example.invalid"],
-    notify_within_4h: ["user@example.invalid"],
+    notify_immediately: ["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"],
+    notify_within_4h: ["<REDACTED_EMAIL>"],
     external_party: "Acquiring bank",
     external_contact: "Reply via bank chargeback portal.",
     response_sla: "Bank response within 72 hours (3 calendar days)",
@@ -1211,7 +1211,7 @@ export const ESCALATION_MATRIX_DEFINITIONS: EscalationDefinition[] = [
     // AML/SAR has a hard "no tipping off" rule. notify_immediately and
     // notify_within_4h MUST NOT include customer or customer-facing roles.
     // dispatchEscalationForIncident() asserts this invariant.
-    notify_immediately: ["user@example.invalid", "user@example.invalid"],
+    notify_immediately: ["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"],
     notify_within_4h: [],
     external_party: "SAFIU",
     external_contact:

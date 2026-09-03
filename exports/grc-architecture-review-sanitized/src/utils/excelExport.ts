@@ -1737,7 +1737,7 @@ export interface StreamingExportStagingOptions {
 //     trips this almost always means we accidentally introduced full-body
 //     buffering or stalled the promise chain.
 //   * EXPORT_TOTAL_BUDGET_MS = 10_000 ms — wall-clock cap for total
-//     transfer of a small payload to localhost. A staged-and-served file
+//     transfer of a small payload to <REDACTED_HOST>. A staged-and-served file
 //     whose body cannot be drained inside this window is broken in a way
 //     the user will feel.
 export const EXPORT_TTFB_BUDGET_MS = 5_000;

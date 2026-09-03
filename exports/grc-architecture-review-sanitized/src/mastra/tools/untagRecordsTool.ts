@@ -8,15 +8,15 @@ const CRMProvider_WRITE_TIMEOUT_MS = 15_000;
 /**
  * Remove a tag from CRMProvider records — the inverse of tagRecordsForRemovalTool.
  *
- * Adam can REMOVE a tag (default "Duplicate-Delete") from leads/deals/contacts/
+ * AssistantPersona can REMOVE a tag (default "Duplicate-Delete") from leads/deals/contacts/
  * accounts — e.g. when a record was tagged for removal by mistake, or the
  * duplicate decision was reversed. This is a WRITE tool: it is wrapped with
  * withApprovalGate in the agent, so a call enqueues an AI Approval (module,
  * tag, record ids) and ChatProvider callers (autoApproveTier "never") can never
- * auto-execute it. Adam DOES have this capability — he must never say he "can't
+ * auto-execute it. AssistantPersona DOES have this capability — he must never say he "can't
  * remove tags"; it just routes through approval (or the admin-password apply).
  *
- * Typical flow: user gives the record (or a CRMProvider URL / id) → Adam confirms →
+ * Typical flow: user gives the record (or a CRMProvider URL / id) → AssistantPersona confirms →
  * calls this with the module + the CRMProvider record ids (+ the tag, default
  * "Duplicate-Delete").
  */

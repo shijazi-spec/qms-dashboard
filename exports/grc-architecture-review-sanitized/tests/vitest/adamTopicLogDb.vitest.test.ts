@@ -21,7 +21,7 @@ describe("rankSections", () => {
 describe("recordQuestionSection", () => {
   it("stores only the section key — never any question text", async () => {
     query.mockResolvedValue({ rows: [] });
-    await recordQuestionSection("how many duplicates for Example Organization Trading Ltd?", { surface: "web", askedBy: "user@example.invalid" });
+    await recordQuestionSection("how many duplicates for Example Organization Trading Ltd?", { surface: "web", askedBy: "<REDACTED_EMAIL>" });
     const call = query.mock.calls.find((c) => String(c[0]).includes("INSERT INTO adam_topic_log"));
     expect(call).toBeTruthy();
     expect(JSON.stringify(call?.[1])).not.toContain("Example Organization");

@@ -33,7 +33,7 @@ const HAS_DB = !!process.env.DATABASE_URL;
 // in the cleanup step at the end.
 const TEST_SESSION_SECRET = process.env.SESSION_SECRET ?? "consultant-test-secret-2026";
 if (!process.env.SESSION_SECRET) process.env.SESSION_SECRET = TEST_SESSION_SECRET;
-const TEST_AUTH_EMAIL = "user@example.invalid";
+const TEST_AUTH_EMAIL = "<REDACTED_EMAIL>";
 const TEST_AUTH_ROLE = "admin"; // admin role: can access consultant routes and sees isAdmin=true in feedback stats
 
 import crypto from "crypto";

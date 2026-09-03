@@ -48,7 +48,7 @@
  * -----------------
  *   - `EmailProvider_FROM_EMAIL`                — override the From header
  *                                          (default `ExampleOrg QMS
- *                                          <user@example.invalid>`).
+ *                                          <<REDACTED_EMAIL>>`).
  *
  * CLI flags
  * ---------

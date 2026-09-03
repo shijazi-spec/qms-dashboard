@@ -9,7 +9,7 @@
  * This module is the **single source of truth** — both the backend rollups
  * (getOwnerAccountability, getDuplicatesByOwner) and the dashboard's
  * post-fetch merge function pull from here. The previous version of this
- * map lived only in the dashboard HTML, which meant Adam and any other
+ * map lived only in the dashboard HTML, which meant AssistantPersona and any other
  * backend consumer saw a different (un-merged) view than the dashboard.
  *
  * MAINTENANCE — when adding an alias:
@@ -23,10 +23,10 @@
 
 /** alias-email → canonical-email. Keys and values lower-case + trimmed. */
 export const OWNER_EMAIL_ALIASES: Readonly<Record<string, string>> = Object.freeze({
-  // Rayan Saleh — sits on three tagged addresses in this tenant; user@example.invalid
+  // Rayan Saleh — sits on three tagged addresses in this tenant; <REDACTED_EMAIL>
   // appears only with the "Rayan Saleh" name in the data, so it's safe to alias.
-  "user@example.invalid": "user@example.invalid",
-  "user@example.invalid": "user@example.invalid",
+  "<REDACTED_EMAIL>": "<REDACTED_EMAIL>",
+  "<REDACTED_EMAIL>": "<REDACTED_EMAIL>",
 });
 
 /**

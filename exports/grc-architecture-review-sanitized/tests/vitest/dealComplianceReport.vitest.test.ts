@@ -24,7 +24,7 @@ describe("shapeDealCompliance", () => {
     expect(out.top_missing_docs[0]).toEqual({ label: "VAT Certificate", count: 2 });
   });
   it("compliant_rate is null when nothing checked", () => {
-    const out = shapeDealCompliance("walaone", []);
+    const out = shapeDealCompliance("Example Organization", []);
     expect(out.checked).toBe(0);
     expect(out.compliant_rate).toBeNull();
     expect(out.at_risk_sar).toBe(0);

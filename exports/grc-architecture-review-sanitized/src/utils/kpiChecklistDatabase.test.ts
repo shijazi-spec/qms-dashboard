@@ -79,7 +79,7 @@ const REDACTED_SENTINEL = "***REDACTED***";
 // additionally exercised by the JSON-object test in Section 3.
 const SECRETS = {
   password_hash: "$2b$12$abcdefghijklmnopqrstuOCm5RJ7p2sIcQqL7gKwSxmXJ9pYsZyHa",
-  mfa_secret: "ghs_MFAsecretABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
+  mfa_secret: "<REDACTED_TOKEN>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
   api_key: "<REDACTED_SECRET>",

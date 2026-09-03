@@ -3,7 +3,7 @@ import { z } from "zod";
 
 /**
  * CS Lifecycle status — reads the Duplicate Radar's CS Lifecycle tab data so
- * Adam can answer "how many deals are in the renewal stage?", "what's the CS
+ * AssistantPersona can answer "how many deals are in the renewal stage?", "what's the CS
  * team's lifecycle picture?", or "what CS data-hygiene issues are open?".
  *
  * Reuses scanCsLifecycleViolations (the same engine that powers the CS

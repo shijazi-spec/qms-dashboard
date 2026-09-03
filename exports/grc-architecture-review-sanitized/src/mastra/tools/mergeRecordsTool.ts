@@ -14,7 +14,7 @@ import {
  * and tag the duplicate(s) "Duplicate-Delete" so the CRM admin deletes them.
  *
  * Gated (withApprovalGate in the agent) → enqueues an AI Approval / applies via
- * the admin-password pop-up. Adam DOES have this capability — never "I can't
+ * the admin-password pop-up. AssistantPersona DOES have this capability — never "I can't
  * merge accounts".
  *
  * Safety: only fills fields that are (a) empty on the survivor, (b) a non-empty

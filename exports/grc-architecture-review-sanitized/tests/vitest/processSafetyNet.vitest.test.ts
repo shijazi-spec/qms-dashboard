@@ -125,7 +125,7 @@ describe("attachPoolErrorHandler", () => {
 describe("every redacted pool gets the listener by construction", () => {
   it("createRedactedPool attaches one", async () => {
     const { createRedactedPool } = await import("../../src/utils/redactedPool");
-    const p = createRedactedPool({ connectionString: "postgres://u:p@<REDACTED_IP>:1/db" });
+    const p = createRedactedPool({ connectionString: "<REDACTED_DSN><REDACTED_IP>:1/db" });
     // pg's Pool is an EventEmitter — assert a listener is present rather than
     // reaching into the module's internals.
     expect((p as any).listenerCount("error")).toBeGreaterThan(0);

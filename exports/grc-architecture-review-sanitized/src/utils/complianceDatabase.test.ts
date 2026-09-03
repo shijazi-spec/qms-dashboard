@@ -28,7 +28,7 @@ await exerciseAllKeys(h, "createAssessment", async (secret, key, payload) => {
   return mod.createAssessment({
     obligation_id: 1,
     assessment_date: new Date(),
-    assessed_by: "user@example.invalid",
+    assessed_by: "<REDACTED_EMAIL>",
     compliance_status: "compliant",
     score: 90,
     evidence_provided: `${NON_SENSITIVE_MARKER} evidence`,

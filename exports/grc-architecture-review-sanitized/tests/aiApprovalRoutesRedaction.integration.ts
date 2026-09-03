@@ -66,7 +66,7 @@ import {
   INT_APPROVE_THROW_SK_KEY,
 } from '../src/utils/integrationTestFixtureTools';
 
-const TEST_QM_EMAIL = 'user@example.invalid';
+const TEST_QM_EMAIL = '<REDACTED_EMAIL>';
 const TEST_QM_NAME = 'Redaction Integration QM';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
@@ -297,7 +297,7 @@ async function main(): Promise<void> {
         refresh_token: PAYLOAD_REFRESH,
         nested: {
           password_hash: PAYLOAD_BCRYPT,
-          username: 'user@example.invalid',
+          username: '<REDACTED_EMAIL>',
         },
         reason: 'integration-leak-guard',
       },
@@ -307,7 +307,7 @@ async function main(): Promise<void> {
       // the test independent of the policies registry contents.
       complianceRefs: ['PCI-DSS-12.3.1', 'ISO 27001:2022 A.5.34'],
       requestedByUserId: 998999,
-      requestedByEmail: 'user@example.invalid',
+      requestedByEmail: '<REDACTED_EMAIL>',
       requestedByName: 'Redaction Integration Requester',
       threadId: 'thr_redaction_integration_test',
     });
@@ -463,7 +463,7 @@ async function main(): Promise<void> {
       riskLevel: 'high',
       complianceRefs: ['REDACTION-INTEGRATION-TEST'],
       requestedByUserId: 998999,
-      requestedByEmail: 'user@example.invalid',
+      requestedByEmail: '<REDACTED_EMAIL>',
       requestedByName: 'Redaction Integration Requester',
       threadId: 'thr_redaction_int_approve_ok',
     });
@@ -537,7 +537,7 @@ async function main(): Promise<void> {
       riskLevel: 'high',
       complianceRefs: ['REDACTION-INTEGRATION-TEST'],
       requestedByUserId: 998999,
-      requestedByEmail: 'user@example.invalid',
+      requestedByEmail: '<REDACTED_EMAIL>',
       requestedByName: 'Redaction Integration Requester',
       threadId: 'thr_redaction_int_approve_throw',
     });

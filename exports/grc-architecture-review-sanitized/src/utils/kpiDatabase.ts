@@ -305,7 +305,7 @@ export async function initKPITables(): Promise<void> {
 
   await seedDefaultKPIs();
 
-  // Post-seed migration: fold Sample User's KPIs into Sara/Maram after his
+  // Post-seed migration: fold Sample User's KPIs into Sara/Sample User after his
   // resignation. Runs on existing DBs too (seedDefaultKPIs early-returns when
   // KPIs already exist, so this must be called independently).
   await reassignMohammedKPIs();
@@ -487,7 +487,7 @@ async function seedDefaultKPIs(): Promise<void> {
       target_value: 75,
     },
 
-    // GRC Manager (Maram) KPIs
+    // GRC Manager (Sample User) KPIs
     {
       kpi_name: "Enterprise Risk Coverage",
       kpi_code: "GRC-RSK-001",
@@ -777,7 +777,7 @@ async function seedMohammedKPIs(): Promise<void> {
           route: "/compliance",
           what_to_check: "Review obligation summary by regulation",
           if_result: "Missing mappings for PDPL/NCA/ISO",
-          then_action: "Flag to Maram (GRC Manager) for review",
+          then_action: "Flag to Sample User (GRC Manager) for review",
         },
         {
           step: 2,
@@ -896,7 +896,7 @@ async function seedMohammedKPIs(): Promise<void> {
           route: "/handoffs",
           what_to_check: "Filter by priority=critical",
           if_result: "Critical finding not in GRC",
-          then_action: "Log in GRC tracker manually, assign to HR/Maram",
+          then_action: "Log in GRC tracker manually, assign to HR/Sample User",
         },
         {
           step: 3,
@@ -942,7 +942,7 @@ async function seedMohammedKPIs(): Promise<void> {
           route: "/risks",
           what_to_check: "Identify risks missing owner field",
           if_result: "Risk without owner detected",
-          then_action: "Flag to Maram for owner assignment",
+          then_action: "Flag to Sample User for owner assignment",
         },
         {
           step: 2,
@@ -1068,7 +1068,7 @@ async function seedMohammedKPIs(): Promise<void> {
  * RACI in "Quality Plan 2026":
  *   - MAM-KPI-01 Governance Documentation Lifecycle → Quality Manager (Sample User)
  *   - MAM-KPI-02..06 (compliance, audit evidence, handoff, risk hygiene,
- *     exec reporting)                              → GRC Manager (Maram)
+ *     exec reporting)                              → GRC Manager (Sample User)
  * Idempotent: keyed on kpi_code and gated on any remaining governance_officer
  * rows, so it runs once and is a no-op thereafter.
  */
@@ -1091,7 +1091,7 @@ export async function reassignMohammedKPIs(): Promise<void> {
   );
   if (parseInt(pending.rows[0].count) === 0) return;
   logger.info(
-    "🔁 [KPIDB] Reassigning Sample User's KPIs (resignation) → Sample User / Maram...",
+    "🔁 [KPIDB] Reassigning Sample User's KPIs (resignation) → Sample User / Sample User...",
   );
   for (const m of MOHAMMED_KPI_REASSIGNMENT) {
     await pool.query(
@@ -1101,7 +1101,7 @@ export async function reassignMohammedKPIs(): Promise<void> {
       [m.owner_type, m.owner_name, m.code],
     );
   }
-  logger.info("✅ [KPIDB] Sample User's KPIs reassigned to Sample User / Maram");
+  logger.info("✅ [KPIDB] Sample User's KPIs reassigned to Sample User / Sample User");
 }
 
 /**
@@ -1146,7 +1146,7 @@ export async function deactivateStaleLegacyKPIs(): Promise<void> {
 /** Canonical display name per owner_type — used so a reassignment also sets owner_name. */
 export const OWNER_NAME_BY_TYPE: Record<string, string> = {
   quality_manager: "Sample User",
-  grc_manager: "Maram",
+  grc_manager: "Sample User",
   grq_specialist: "AlHanouf",
   legal_specialist: "Ali Sample User",
   sdr_team: "SDR Team",
@@ -1248,7 +1248,7 @@ const GRQ_SCORECARD_KPIS: Array<Partial<KPIDefinition>> = [
   { kpi_code: "QM-KPI-004", kpi_name: "QMS Adoption Rate", owner_type: "quality_manager", owner_name: "Sample User", category: "quality", unit: "%", target_value: 70, threshold_green: 70, threshold_amber: 50, threshold_red: 40, threshold_direction: "higher_is_better", calc_mode: "checklist", frequency: "quarterly", description: "Business units actively adopting the QMS / governance system.", formula: "(Adopted BUs ÷ total BUs) × 100" },
   { kpi_code: "QM-KPI-006", kpi_name: "Quality↔GRC Handoff SLA", owner_type: "quality_manager", owner_name: "Sample User", category: "governance", unit: "days", target_value: 5, threshold_green: 5, threshold_amber: 8, threshold_red: 12, threshold_direction: "lower_is_better", calc_mode: "auto", frequency: "monthly", description: "Average days from a Quality finding to its GRC handoff.", formula: "Avg(handoff date − finding date)" },
   { kpi_code: "QM-KPI-010", kpi_name: "Documentation Lifecycle Compliance", owner_type: "quality_manager", owner_name: "Sample User", category: "governance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "quarterly", description: "Integrated QMS documents that completed the review cycle (Published) and are current (review not overdue).", formula: "(Published & not-overdue docs ÷ active controlled docs) × 100" },
-  // ===== GRC Manager — Maram =====
+  // ===== GRC Manager — Sample User =====
   { kpi_code: "GRC-KPI-009", kpi_name: "High-Risk Items with Treatment Plan", owner_type: "grc_manager", owner_name: "Sample User", category: "risk", unit: "%", target_value: 100, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "monthly", description: "High-risk items carrying an active treatment plan.", formula: "(High risks with treatment plan ÷ total high risks) × 100" },
   { kpi_code: "GRC-KPI-010", kpi_name: "Risk Assessment Coverage (BUs)", owner_type: "grc_manager", owner_name: "Sample User", category: "risk", unit: "%", target_value: 100, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "quarterly", description: "Business units with a completed risk assessment.", formula: "(BUs risk-assessed ÷ total BUs) × 100" },
   { kpi_code: "GRC-KPI-005", kpi_name: "Risk Treatment On-Time Closure", owner_type: "grc_manager", owner_name: "Sample User", category: "risk", unit: "%", target_value: 80, threshold_green: 80, threshold_amber: 65, threshold_red: 50, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "monthly", description: "Risk treatments / CAPAs closed on time.", formula: "(Treatments closed on-time ÷ due) × 100" },
@@ -1317,7 +1317,7 @@ export async function seedGrqScorecardKPIs(): Promise<void> {
     [SUPERSEDED_SCORECARD_KPI_CODES],
   );
 
-  logger.info("✅ [KPIDB] Seeded canonical GRQ scorecard KPIs (Quality/Sample User + GRC/Maram) onto the KPI Engine");
+  logger.info("✅ [KPIDB] Seeded canonical GRQ scorecard KPIs (Quality/Sample User + GRC/Sample User) onto the KPI Engine");
 }
 
 export async function seedMohammedKPIsManual(): Promise<void> {

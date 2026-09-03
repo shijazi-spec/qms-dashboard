@@ -3,7 +3,7 @@
 # Call Evaluation — Comprehensive Revamp Plan
 
 **Date:** 2026-05-25
-**Author:** Claude (planning agent), commissioned by user@example.invalid
+**Author:** Claude (planning agent), commissioned by <REDACTED_EMAIL>
 **Target commit path:** `docs/Call_Evaluation_Revamp_Plan_2026_05_25.md`
 **Status:** Plan-only. No code in this PR. Review-before-build.
 

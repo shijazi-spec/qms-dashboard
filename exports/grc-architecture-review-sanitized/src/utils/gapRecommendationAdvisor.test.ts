@@ -256,7 +256,7 @@ console.log("\n=== draftDocumentForClause — UPDATE secret-leak tests ===\n");
     web_grounded: false,
   };
 
-  await draftDocumentForClause(1, { generatedBy: "user@example.invalid" });
+  await draftDocumentForClause(1, { generatedBy: "<REDACTED_EMAIL>" });
 
   const params = lastParamsMatching(
     /^UPDATE obligation_gap_recommendations SET recommendation/i,

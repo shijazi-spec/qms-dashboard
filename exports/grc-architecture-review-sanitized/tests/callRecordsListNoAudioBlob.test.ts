@@ -39,7 +39,7 @@ await suite.test(
     await createCallRecord({
       call_id: callId,
       source: "manual",
-      agent_email: "user@example.invalid",
+      agent_email: "<REDACTED_EMAIL>",
       status: "qa_review_pending",
     } as any);
 

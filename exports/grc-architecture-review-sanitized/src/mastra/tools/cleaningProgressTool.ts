@@ -3,7 +3,7 @@ import { z } from "zod";
 
 /**
  * Data Cleaning Progress — reads the Duplicate Radar's Cleaning Progress tab
- * data so Adam can answer "how much data have we cleaned?", cleanup reports,
+ * data so AssistantPersona can answer "how much data have we cleaned?", cleanup reports,
  * or "what's the ExampleOrg Deals/Accounts progress?".
  *
  * Reuses getDataCleaningProgress (the same engine that powers the Cleaning
@@ -14,10 +14,10 @@ export const cleaningProgressTool = createTool({
   id: "cleaning-progress-status",
 
   description:
-    "Data Cleaning Progress for Deals & Accounts — verified duplicate merges and verified empty-record deletions, plus how many duplicates are still outstanding, filterable by segment (all/marketplace/ExampleOrg/walaone). Use for 'how much data have we cleaned', cleanup reports, or ExampleOrg Deals/Accounts progress.",
+    "Data Cleaning Progress for Deals & Accounts — verified duplicate merges and verified empty-record deletions, plus how many duplicates are still outstanding, filterable by segment (all/marketplace/ExampleOrg/Example Organization). Use for 'how much data have we cleaned', cleanup reports, or ExampleOrg Deals/Accounts progress.",
 
   inputSchema: z.object({
-    segment: z.enum(["all", "marketplace", "ExampleOrg", "walaone"]).optional(),
+    segment: z.enum(["all", "marketplace", "ExampleOrg", "Example Organization"]).optional(),
   }),
 
   outputSchema: z.object({

@@ -80,7 +80,7 @@ function getDomain(): string {
   return (
     process.env.HostingPlatform_DOMAINS?.split(",")[0] ||
     process.env.HostingPlatform_DEV_DOMAIN ||
-    "localhost:5000"
+    "<REDACTED_HOST>:5000"
   );
 }
 
@@ -99,12 +99,12 @@ function getAuthProviderName(): "IdentityProvider" | "HostingPlatform" | "other"
 
 function getCallbackUrl(): string {
   const domain = getDomain();
-  const protocol = domain.includes("localhost") ? "http" : "https";
+  const protocol = domain.includes("<REDACTED_HOST>") ? "http" : "https";
   return `${protocol}://${domain}/api/callback`;
 }
 
 function isSecureDomain(): boolean {
-  return !getDomain().includes("localhost");
+  return !getDomain().includes("<REDACTED_HOST>");
 }
 
 /**
@@ -524,7 +524,7 @@ export const authRoutes = [
             authenticated: true,
             user: {
               id: "admin",
-              email: "user@example.invalid",
+              email: "<REDACTED_EMAIL>",
               name: "Admin",
               picture: null,
               role: "admin",
@@ -618,7 +618,7 @@ export const authRoutes = [
         try {
           const config = await getOidcConfig();
           const domain = getDomain();
-          const protocol = domain.includes("localhost") ? "http" : "https";
+          const protocol = domain.includes("<REDACTED_HOST>") ? "http" : "https";
           // buildEndSessionUrl requires the IdP to advertise an
           // end_session_endpoint in its discovery doc. IdentityProvider does NOT —
           // when omitted, openid-client throws. Catch and fall back to a

@@ -2189,7 +2189,7 @@ export async function sendDigestEmail(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: process.env.EmailProvider_FROM || "ExampleOrg QMS <user@example.invalid>",
+          from: process.env.EmailProvider_FROM || "ExampleOrg QMS <<REDACTED_EMAIL>>",
           to: recipientEmail,
           subject: `${cadenceLabel(cadence)} Quality Digest - ${new Date().toLocaleDateString()}`,
           html,

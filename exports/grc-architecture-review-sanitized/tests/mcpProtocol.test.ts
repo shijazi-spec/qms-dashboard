@@ -73,7 +73,7 @@
 // never used because the test only calls `evaluate-sdr-governance`,
 // which is a pure-function tool.
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
+  process.env.DATABASE_URL || "<REDACTED_DSN>";
 
 import { MCPServer } from "@mastra/mcp";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";

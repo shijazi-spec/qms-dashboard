@@ -7,10 +7,10 @@ describe("classifySegmentFromLayout", () => {
     expect(classifySegmentFromLayout("Partner Accounts")).toBe("marketplace");
     expect(classifySegmentFromLayout("Marketplace")).toBe("marketplace");
   });
-  it("classifies walaone variants", () => {
-    expect(classifySegmentFromLayout("WalaOne")).toBe("walaone");
-    expect(classifySegmentFromLayout("Wala One")).toBe("walaone");
-    expect(classifySegmentFromLayout("wala-one corporate")).toBe("walaone");
+  it("classifies Example Organization variants", () => {
+    expect(classifySegmentFromLayout("Example Organization")).toBe("Example Organization");
+    expect(classifySegmentFromLayout("Wala One")).toBe("Example Organization");
+    expect(classifySegmentFromLayout("wala-one corporate")).toBe("Example Organization");
   });
   it("defaults blank/other to ExampleOrg", () => {
     expect(classifySegmentFromLayout("")).toBe("ExampleOrg");

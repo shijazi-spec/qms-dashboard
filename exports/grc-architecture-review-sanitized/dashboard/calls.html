@@ -640,7 +640,7 @@
                         </div>
                         <div>
                             <h3 class="text-lg font-semibold text-white" data-i18n="calls.sec_bulk_upload">Bulk Call Recordings Upload</h3>
-                            <p class="text-sm text-white/80">Upload multiple recordings — agent email & client phone are auto-detected from filenames like <code class="bg-white/20 px-1 rounded"><REDACTED_PHONE> by user@example.invalid @ 8_58_04 AM</code></p>
+                            <p class="text-sm text-white/80">Upload multiple recordings — agent email & client phone are auto-detected from filenames like <code class="bg-white/20 px-1 rounded"><REDACTED_PHONE> by <REDACTED_EMAIL> @ 8_58_04 AM</code></p>
                         </div>
                     </div>
                 </div>
@@ -768,7 +768,7 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_api_username">API Username</label>
-                                <input type="text" id="ContactCenterProvider-username" placeholder="user@example.invalid" 
+                                <input type="text" id="ContactCenterProvider-username" placeholder="<REDACTED_EMAIL>" 
                                        class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                             </div>
                             <div>
@@ -846,7 +846,7 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Owner email (optional filter)</label>
-                                <input type="email" id="CRMProviderImportOwnerEmail" placeholder="user@example.invalid" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                                <input type="email" id="CRMProviderImportOwnerEmail" placeholder="<REDACTED_EMAIL>" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Direction</label>
@@ -920,7 +920,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_agent_email">Agent Email *</label>
-                                    <input type="email" id="upload-agent-email" placeholder="user@example.invalid" 
+                                    <input type="email" id="upload-agent-email" placeholder="<REDACTED_EMAIL>" 
                                            class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                 </div>
                             </div>
@@ -4627,7 +4627,7 @@
             // link, the bridging Contact's display name is now persisted
             // on the row (via_contact_name). Surface it in the tooltip
             // so the operator can audit the link without re-running the
-            // matcher: "via Contact: user@example.invalid".
+            // matcher: "via Contact: <REDACTED_EMAIL>".
             const viaContactName = viaContact ? (call.via_contact_name || '') : '';
             const viaSuffix = viaActivity
                 ? ' (via activity)'
@@ -6830,7 +6830,7 @@
         // Returns {
         //   phone:         "<REDACTED_PHONE>"  // raw phone with country code
         //   phone_suffix:  "<REDACTED_PHONE>"      // last 9 digits, for CRM search
-        //   agentEmail:    "user@example.invalid"
+        //   agentEmail:    "<REDACTED_EMAIL>"
         //   agentName:     "b.alwahabi"     // local-part of email
         //   date_iso:      "2025-08-10T11:53:28"  // assembled ISO local
         //   date_human:    "Aug 10, 2025"
@@ -9219,7 +9219,7 @@
                         evaluation_id: evaluationId,
                         feedback_type: feedbackType,
                         details: details,
-                        submitted_by: 'user@example.invalid'
+                        submitted_by: '<REDACTED_EMAIL>'
                     })
                 });
                 const data = await res.json();

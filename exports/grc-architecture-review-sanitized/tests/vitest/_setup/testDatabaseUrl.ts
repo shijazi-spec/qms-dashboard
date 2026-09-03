@@ -19,5 +19,5 @@
  */
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL =
-    "postgresql://vitest:vitest@<REDACTED_IP>:1/vitest_no_such_database";
+    "<REDACTED_DSN><REDACTED_IP>:1/vitest_no_such_database";
 }

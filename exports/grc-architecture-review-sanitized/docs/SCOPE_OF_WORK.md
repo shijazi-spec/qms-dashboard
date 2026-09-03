@@ -699,7 +699,7 @@ The platform defines **12 roles** in `UserRole` (`src/utils/rbacDatabase.ts:8-20
 |------|------|----------------------|--------------|
 | admin | Primary | Full system access incl. user management | System Admin |
 | head_of_operations_quality | Primary | Accept risks, approve policies, close findings, edit controls, create CAPA, executive view (audit programme sign-off per ISO 19011 §5.2) | Head of Ops & Quality |
-| grc_manager | Primary | Accept risks, approve policies, compliance sign-off, executive view | Maram |
+| grc_manager | Primary | Accept risks, approve policies, compliance sign-off, executive view | Sample User |
 | quality_manager | Primary | Close findings, edit controls, create CAPA, submit evidence | Sara |
 | ai_specialist | Primary | Executive view + configure AI settings (no write actions) | AI Team |
 | bu_owner | Primary | Submit evidence; update action status only | Department Heads |
@@ -1153,12 +1153,12 @@ The `permissions` JSONB column holds per-user permission overrides on top of the
 **Default Users Seeded:**
 | Email | Name | Role | Department |
 |-------|------|------|------------|
-| user@example.invalid | Sara Al-Rashid | quality_manager | Quality |
-| user@example.invalid | Maram Al-Ghamdi | grc_manager | GRC |
-| user@example.invalid | System Admin | admin | IT |
-| user@example.invalid | Sample User | bu_owner | Operations |
-| user@example.invalid | Sample User | executive | Executive |
-| user@example.invalid | AI Specialist | ai_specialist | AI Team |
+| <REDACTED_EMAIL> | Sara Al-Rashid | quality_manager | Quality |
+| <REDACTED_EMAIL> | Sample User | grc_manager | GRC |
+| <REDACTED_EMAIL> | System Admin | admin | IT |
+| <REDACTED_EMAIL> | Sample User | bu_owner | Operations |
+| <REDACTED_EMAIL> | Sample User | executive | Executive |
+| <REDACTED_EMAIL> | AI Specialist | ai_specialist | AI Team |
 
 **bu_processes**
 ```sql
@@ -2089,7 +2089,7 @@ The ExampleOrg platform is built on standard, open-source technologies (Node.js,
 1. Provision a Linux server (Ubuntu 22.04+ recommended) or VM in your data center
 2. Install Node.js 20+ and PostgreSQL 15+
 3. Install Nginx as a reverse proxy (for TLS termination and domain routing)
-4. Configure firewall rules (allow ports 80, 443 inbound; restrict database to localhost)
+4. Configure firewall rules (allow ports 80, 443 inbound; restrict database to <REDACTED_HOST>)
 
 **Phase 2: Export & Transfer Code (1 day)**
 
@@ -2101,16 +2101,16 @@ The ExampleOrg platform is built on standard, open-source technologies (Node.js,
    ```
 2. Copy all environment secrets to the new server's environment (`.env` file or system environment):
    ```
-   DATABASE_URL=postgresql://user:password@localhost:5432/ExampleOrg
+   DATABASE_URL=<REDACTED_DSN>
    IdentityProvider_CLIENT_ID=<your-IdentityProvider-client-id>
-   IdentityProvider_CLIENT_SECRET=<your-IdentityProvider-client-secret>
-   SESSION_SECRET=<your-session-secret>
-   ADMIN_API_KEY=<your-admin-key>
-   EmailProvider_API_KEY=<your-EmailProvider-key>
+   IdentityProvider_CLIENT_SECRET=<REDACTED_SECRET>
+   SESSION_SECRET=<REDACTED_SECRET>
+   ADMIN_API_KEY=<REDACTED_SECRET>
+   EmailProvider_API_KEY=<REDACTED_SECRET>
    EmailProvider_FROM_EMAIL=<your-from-email>
    CRMProvider_CLIENT_ID=<your-CRMProvider-client-id>
-   CRMProvider_CLIENT_SECRET=<your-CRMProvider-client-secret>
-   CRMProvider_REFRESH_TOKEN=<your-CRMProvider-refresh-token>
+   CRMProvider_CLIENT_SECRET=<REDACTED_SECRET>
+   CRMProvider_REFRESH_TOKEN=<REDACTED_SECRET>
    ```
 
 **Phase 3: Database Migration (1 day)**

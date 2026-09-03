@@ -1,6 +1,6 @@
 # Run QC Inside HostingPlatform (to avoid production 52 errors)
 
-If QC from your PC against `<REDACTED_URL_SCHEME><REDACTED_HOST>` always shows 52 "fetch failed" errors, the production URL may not accept API requests from outside. **Run the QC inside HostingPlatform** so it hits the server on the same machine (localhost).
+If QC from your PC against `<REDACTED_URL_SCHEME><REDACTED_HOST>` always shows 52 "fetch failed" errors, the production URL may not accept API requests from outside. **Run the QC inside HostingPlatform** so it hits the server on the same machine (<REDACTED_HOST>).
 
 ## Steps in HostingPlatform
 
@@ -10,7 +10,7 @@ If QC from your PC against `<REDACTED_URL_SCHEME><REDACTED_HOST>` always shows 5
 2. **Open the Shell**  
    In HostingPlatform, open the **Shell** tab (bottom panel).
 
-3. **Run QC against localhost** (no env var):
+3. **Run QC against <REDACTED_HOST>** (no env var):
    ```bash
    npm run qc
    ```

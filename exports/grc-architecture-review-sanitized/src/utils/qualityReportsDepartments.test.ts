@@ -65,7 +65,7 @@ console.log("\n=== upsertBU — write-path tests ===\n");
     bu_name: "CI Business Unit",
     channel: "B2B",
     fn: "Engineering",
-    head_email: "user@example.invalid",
+    head_email: "<REDACTED_EMAIL>",
     sort_order: 1,
     is_active: true,
   });
@@ -94,7 +94,7 @@ console.log("\n=== setBUOwners — write-path tests ===\n");
 
 {
   captured.length = 0;
-  await setBUOwners(1, ["user@example.invalid", "user@example.invalid"]);
+  await setBUOwners(1, ["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"]);
   const inserts = captured.filter(c => c.sql.replace(/\s+/g, " ").toUpperCase().includes("INSERT"));
   assert(inserts.length > 0, "setBUOwners: pool.query called with INSERT for each owner");
 

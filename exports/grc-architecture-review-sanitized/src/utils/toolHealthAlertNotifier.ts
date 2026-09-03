@@ -1157,7 +1157,7 @@ export interface ToolHealthOverrideExpiredNotification {
   cleared_overrides: Record<string, number | undefined>;
   /**
    * `updated_by` recorded against the override row immediately before
-   * the reaper cleared it. May be an email like `user@example.invalid`,
+   * the reaper cleared it. May be an email like `<REDACTED_EMAIL>`,
    * a free-form name, or `null` when the row had no attribution.
    */
   previous_updated_by: string | null;

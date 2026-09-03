@@ -68,7 +68,7 @@
                 <p class="text-gray-600" data-i18n="users.subtitle">Manage user invitations, approvals, and permissions</p>
             </div>
             <div class="flex items-center gap-2">
-                <button data-on-click="openDeleteUserModal" data-testid="button-delete-user" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center text-sm" title="Pick a user to permanently delete (Sample User, user@example.invalid, and you are protected)">
+                <button data-on-click="openDeleteUserModal" data-testid="button-delete-user" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center text-sm" title="Pick a user to permanently delete (Sample User, <REDACTED_EMAIL>, and you are protected)">
                     <svg class="w-5 h-5 me-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 <REDACTED_PHONE> 21H7.862a2 <REDACTED_PHONE>.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/>
                     </svg>
@@ -273,7 +273,7 @@
             </div>
             <p class="text-sm text-gray-600 mb-3">
                 Pick a user to permanently delete. This is a HARD delete and cannot be undone.
-                Protected accounts (Sample User, user@example.invalid) and your own account
+                Protected accounts (Sample User, <REDACTED_EMAIL>) and your own account
                 are not selectable.
             </p>
             <div class="space-y-3">
@@ -307,7 +307,7 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium mb-1">Email <span class="text-red-500">*</span></label>
-                        <input type="email" name="email" required class="w-full border rounded px-3 py-2" placeholder="user@example.invalid" />
+                        <input type="email" name="email" required class="w-full border rounded px-3 py-2" placeholder="<REDACTED_EMAIL>" />
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1" data-i18n="users.f_full_name">Full Name</label>
@@ -820,7 +820,7 @@
                 role: form.role.value,
                 expiry_days: parseInt(form.expiry_days.value),
                 require_mfa: form.require_mfa.checked,
-                invited_by: 'user@example.invalid'
+                invited_by: '<REDACTED_EMAIL>'
             };
 
             try {
@@ -861,7 +861,7 @@
                 const res = await fetch(`/api/users/${userId}/approve`, {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify({ approved_by: 'user@example.invalid' })
+                    body: JSON.stringify({ approved_by: '<REDACTED_EMAIL>' })
                 });
                 if (res.ok) {
                     alert(ExampleOrgI18n.t('dyn.users.user_approved'));
@@ -889,7 +889,7 @@
                 const res = await fetch(`/api/users/${userId}/deny`, {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify({ denied_by: 'user@example.invalid', reason })
+                    body: JSON.stringify({ denied_by: '<REDACTED_EMAIL>', reason })
                 });
                 if (res.ok) {
                     alert(ExampleOrgI18n.t('dyn.users.user_denied'));
@@ -915,7 +915,7 @@
                 const res = await fetch(`/api/users/${userId}/disable`, {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify({ disabled_by: 'user@example.invalid' })
+                    body: JSON.stringify({ disabled_by: '<REDACTED_EMAIL>' })
                 });
                 if (res.ok) {
                     alert(ExampleOrgI18n.t('dyn.users.user_disabled'));
@@ -933,7 +933,7 @@
                 const res = await fetch(`/api/users/${userId}/enable`, {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify({ enabled_by: 'user@example.invalid' })
+                    body: JSON.stringify({ enabled_by: '<REDACTED_EMAIL>' })
                 });
                 if (res.ok) {
                     alert(ExampleOrgI18n.t('dyn.users.user_enabled'));
@@ -1090,7 +1090,7 @@
             }
         }
 
-        const PROTECTED_EMAILS = ['user@example.invalid'];
+        const PROTECTED_EMAILS = ['<REDACTED_EMAIL>'];
         const PROTECTED_NAME_SUBSTR = 'Sample User';
 
         function isProtectedUser(u) {

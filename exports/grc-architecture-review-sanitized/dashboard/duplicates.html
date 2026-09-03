@@ -150,7 +150,7 @@
         html.wp-dark .rr-btn.rr-btn-ghost:hover { background: #16233B; color: #F1F5F9; }
         html.wp-dark .rr-btn:focus-visible { outline-color: #2563EB; }
         /* SaaS phase 4 — control layer. Toolbar buttons reuse .rr-btn + these
-           role variants; AI (Adam) keeps a reserved purple, destructive a red
+           role variants; AI (AssistantPersona) keeps a reserved purple, destructive a red
            outline. Plus shared filter chips / selects / search. Dark-aware. */
         .rr-btn.rr-btn-ai { background: #F5F3FF; color: #6D28D9; border-color: transparent; }
         .rr-btn.rr-btn-ai:hover { filter: brightness(0.97); }
@@ -491,8 +491,8 @@
             <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden text-sm">
                 <button type="button" data-on-click="setSegment" data-args="[&quot;all&quot;]" data-testid="segment-chip-all" id="segmentChipAll" class="segment-chip px-3 py-1 bg-blue-600 text-white font-medium" title="No filter — show every cluster regardless of layout. Default.">All</button>
                 <button type="button" data-on-click="setSegment" data-args="[&quot;marketplace&quot;]" data-testid="segment-chip-marketplace" id="segmentChipMarketplace" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="Only records on the Marketplace / Partner Accounts layouts (merchant / vendor B2B2C records).">Marketplace</button>
-                <button type="button" data-on-click="setSegment" data-args="[&quot;ExampleOrg&quot;]" data-testid="segment-chip-ExampleOrg" id="segmentChipExampleOrg" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="ExampleOrg — corporate / direct B2B records that are NOT Marketplace and NOT WalaOne (records with no layout default here so legacy data isn't lost).">ExampleOrg</button>
-                <button type="button" data-on-click="setSegment" data-args="[&quot;walaone&quot;]" data-testid="segment-chip-walaone" id="segmentChipWalaone" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="WalaOne — records on the WalaOne product layout only.">WalaOne</button>
+                <button type="button" data-on-click="setSegment" data-args="[&quot;ExampleOrg&quot;]" data-testid="segment-chip-ExampleOrg" id="segmentChipExampleOrg" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="ExampleOrg — corporate / direct B2B records that are NOT Marketplace and NOT Example Organization (records with no layout default here so legacy data isn't lost).">ExampleOrg</button>
+                <button type="button" data-on-click="setSegment" data-args="[&quot;Example Organization&quot;]" data-testid="segment-chip-Example Organization" id="segmentChipExample Organization" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="Example Organization — records on the Example Organization product layout only.">Example Organization</button>
             </div>
             <span class="text-[10px] font-normal text-gray-400 ms-1" title="Each tab remembers its segment selection — switching tabs restores that tab's segment.">· per tab</span>
         </div>
@@ -519,7 +519,7 @@
                             <option value="all">All</option>
                             <option value="marketplace">Marketplace only</option>
                             <option value="ExampleOrg">ExampleOrg only</option>
-                            <option value="walaone">WalaOne only</option>
+                            <option value="Example Organization">Example Organization only</option>
                         </select>
                     </div>
                     <!-- Period (Sample User 2026-08-25): the server has honoured
@@ -871,9 +871,9 @@
                     <div><label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="duplicates.f_phone">Mobile / Phone</label><input type="text" id="searchPhone" data-testid="input-search-phone" placeholder="e.g., <REDACTED_PHONE>" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
                     <div><label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="duplicates.f_company">Company Name</label><input type="text" id="searchCompany" data-testid="input-search-company" placeholder="e.g., Example Organizationoration" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
                     <div><label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="duplicates.f_contract">Contract / Record #</label><input type="text" id="searchContract" data-testid="input-search-contract" placeholder="e.g., ZCR-12345" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-                    <div><label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="duplicates.f_email">Email Address</label><input type="text" id="searchEmail" data-testid="input-search-email" placeholder="e.g., user@example.invalid" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="duplicates.f_email">Email Address</label><input type="text" id="searchEmail" data-testid="input-search-email" placeholder="e.g., <REDACTED_EMAIL>" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
                     <div><label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="duplicates.f_lead_name">Lead/Deal Name</label><input type="text" id="searchName" data-testid="input-search-name" placeholder="e.g., John Smith" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-                    <div><label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="duplicates.f_owner">Owner Email</label><input type="text" id="searchOwner" data-testid="input-search-owner" placeholder="e.g., user@example.invalid" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="duplicates.f_owner">Owner Email</label><input type="text" id="searchOwner" data-testid="input-search-owner" placeholder="e.g., <REDACTED_EMAIL>" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
                     <div class="flex items-end"><button data-on-click="performSearch" data-testid="button-search" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Search</button></div>
                 </div>
                 <button data-on-click="clearSearch" data-testid="button-clear-search" class="text-sm text-gray-500 hover:text-gray-700">Clear All</button>
@@ -2040,7 +2040,7 @@
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_deals">Deals</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_deals_sub">empty / test (missing-account deals → Account Hints)</span></span></h3>
               <span id="erCount-deals" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
               <button data-on-click="erVerifyPage" data-args="[&quot;deals&quot;]" class="ms-auto rr-btn rr-btn-ghost" title="Live-check the records shown on THIS page against CRMProvider — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
-              <button id="erAiBtn-deals" data-on-click="erAiApply" data-args="[&quot;deals&quot;]" class="rr-btn rr-btn-ai" title="Verify each empty record live in CRMProvider, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button id="erAiBtn-deals" data-on-click="erAiApply" data-args="[&quot;deals&quot;]" class="rr-btn rr-btn-ai" title="Verify each empty record live in CRMProvider, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (AssistantPersona). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
               <span id="erAiProgress-deals" class="text-xs font-medium text-rose-700" role="status" aria-live="polite"></span>
               <button data-on-click="erReload" data-args="[&quot;deals&quot;]" class="rr-btn rr-btn-ghost">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
@@ -2057,7 +2057,7 @@
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_accounts">Accounts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_accounts_sub">empty (check attachments first) / test</span></span></h3>
               <span id="erCount-accounts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
               <button data-on-click="erVerifyPage" data-args="[&quot;accounts&quot;]" class="ms-auto rr-btn rr-btn-ghost" title="Live-check the records shown on THIS page against CRMProvider — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
-              <button id="erAiBtn-accounts" data-on-click="erAiApply" data-args="[&quot;accounts&quot;]" class="rr-btn rr-btn-ai" title="Verify each empty record live in CRMProvider, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button id="erAiBtn-accounts" data-on-click="erAiApply" data-args="[&quot;accounts&quot;]" class="rr-btn rr-btn-ai" title="Verify each empty record live in CRMProvider, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (AssistantPersona). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
               <span id="erAiProgress-accounts" class="text-xs font-medium text-rose-700" role="status" aria-live="polite"></span>
               <button data-on-click="erReload" data-args="[&quot;accounts&quot;]" class="rr-btn rr-btn-ghost">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
@@ -2074,7 +2074,7 @@
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_contacts">Contacts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_contacts_sub">name-only / test</span></span></h3>
               <span id="erCount-contacts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
               <button data-on-click="erVerifyPage" data-args="[&quot;contacts&quot;]" class="ms-auto rr-btn rr-btn-ghost" title="Live-check the records shown on THIS page against CRMProvider — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
-              <button id="erAiBtn-contacts" data-on-click="erAiApply" data-args="[&quot;contacts&quot;]" class="rr-btn rr-btn-ai" title="Verify each empty record live in CRMProvider, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
+              <button id="erAiBtn-contacts" data-on-click="erAiApply" data-args="[&quot;contacts&quot;]" class="rr-btn rr-btn-ai" title="Verify each empty record live in CRMProvider, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (AssistantPersona). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
               <span id="erAiProgress-contacts" class="text-xs font-medium text-rose-700" role="status" aria-live="polite"></span>
               <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="rr-btn rr-btn-ghost">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
             </div>
@@ -2118,7 +2118,7 @@
                 <label class="text-xs text-gray-600">Layout:</label>
                 <select id="adcSegment" data-on-change="loadActiveDealConflicts" class="border rounded px-2 py-1 text-sm">
                     <option value="ExampleOrg" selected>ExampleOrg</option>
-                    <option value="walaone">WalaOne</option>
+                    <option value="Example Organization">Example Organization</option>
                     <option value="marketplace">Marketplace</option>
                 </select>
                 <label class="text-xs text-gray-600 ms-2 flex items-center gap-1">

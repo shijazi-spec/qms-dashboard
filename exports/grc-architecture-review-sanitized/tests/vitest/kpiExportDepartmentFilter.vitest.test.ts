@@ -39,7 +39,7 @@ vi.mock("../../src/utils/rbacMiddleware", () => ({
   gateApiRoute: (route: any) => route,
   requireRole: vi.fn(async () => ({
     userId: 1,
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     name: "Test User",
     role: "admin",
   })),

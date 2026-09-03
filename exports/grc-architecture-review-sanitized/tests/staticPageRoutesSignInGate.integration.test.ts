@@ -58,9 +58,9 @@ const TEST_SESSION_SECRET = "test-session-secret-static-page-signin-gate";
 process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 process.env.RATE_LIMIT_DISABLED = "true";
-process.env.HostingPlatform_DOMAINS = process.env.HostingPlatform_DOMAINS || "localhost:5000";
+process.env.HostingPlatform_DOMAINS = process.env.HostingPlatform_DOMAINS || "<REDACTED_HOST>:5000";
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
+  process.env.DATABASE_URL || "<REDACTED_DSN>";
 
 import crypto from "node:crypto";
 import { Hono, type Handler, type MiddlewareHandler } from "hono";
@@ -84,7 +84,7 @@ function signSession(payload: Record<string, unknown>): string {
 function adminSessionCookie(): string {
   const token = signSession({
     userId: 7,
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     name: "admin user",
     role: "admin",
     exp: Date.now() + 60_000,

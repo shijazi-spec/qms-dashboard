@@ -44,10 +44,10 @@ describe("runPreflight BASIC mode — protected-account guard", () => {
   it("blocks protected / do-not-contact accounts even with no CRM match", async () => {
     const res = await runPreflight({
       rows: [
-        { company_name: "Example Organization", domain: "<REDACTED_HOST>", email: "user@example.invalid" },
-        { company_name: "Example Organization", domain: "<REDACTED_HOST>", email: "user@example.invalid" },
-        { company_name: "Example Organization", email: "user@example.invalid" },
-        { company_name: "Example Organization", domain: "normalco.example", email: "user@example.invalid" },
+        { company_name: "Example Organization", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" },
+        { company_name: "Example Organization", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>" },
+        { company_name: "Example Organization", email: "<REDACTED_EMAIL>" },
+        { company_name: "Example Organization", domain: "normalco.example", email: "<REDACTED_EMAIL>" },
       ],
     });
 
@@ -76,9 +76,9 @@ describe("runPreflight BASIC mode — protected-account guard", () => {
   it("rejects a named contact with NO phone even when it has an email", async () => {
     const res = await runPreflight({
       rows: [
-        { company_name: "Example Organization", contact_name: "Sample User", email: "user@example.invalid" },
-        { company_name: "Example Organization", contact_name: "Sample User", email: "user@example.invalid", phone: "555" },
-        { company_name: "Example Organization", contact_name: "Sample User", email: "user@example.invalid", phone: "<REDACTED_PHONE>" },
+        { company_name: "Example Organization", contact_name: "Sample User", email: "<REDACTED_EMAIL>" },
+        { company_name: "Example Organization", contact_name: "Sample User", email: "<REDACTED_EMAIL>", phone: "555" },
+        { company_name: "Example Organization", contact_name: "Sample User", email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>" },
       ],
     });
     const alice = res.rows.find((r) => r.input.company_name === "NoPhone Co");

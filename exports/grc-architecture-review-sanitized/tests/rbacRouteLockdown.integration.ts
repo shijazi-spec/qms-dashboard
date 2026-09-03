@@ -63,27 +63,27 @@ function makeSessionCookie(email: string, role: string): string {
 
 const TEST_USERS = [
   {
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     role: "department_viewer",
     name: "RBAC Lock Viewer",
   },
   {
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     role: "executive",
     name: "RBAC Lock Executive",
   },
   {
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     role: "quality_manager",
     name: "RBAC Lock QM",
   },
   {
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     role: "admin",
     name: "RBAC Lock Admin",
   },
   {
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     role: "head_of_operations_quality",
     name: "RBAC Lock HOQ",
   },

@@ -106,7 +106,7 @@
         closeList();
 
         html = result.join('\n');
-        // Merge adjacent same-type lists so Adam's "1. … \n\n 1. … \n\n 1. …"
+        // Merge adjacent same-type lists so AssistantPersona's "1. … \n\n 1. … \n\n 1. …"
         // pattern (every item labelled "1." with blank lines between) shows
         // as 1, 2, 3, 4, 5 instead of five "1." items each in their own
         // restart-at-1 <ol>. Same fix as the consultant.html renderer.
@@ -270,9 +270,9 @@
 
     // Build translated widget HTML — called once at init and again after i18n loads
     function buildWidgetHTML() {
-        var widgetTitle    = _t('consultant.widget_title',       'Adam');
+        var widgetTitle    = _t('consultant.widget_title',       'AssistantPersona');
         var fullView       = _t('consultant.full_view',          'Full view');
-        var welcomeTitle   = _t('consultant.widget_welcome_title','Adam');
+        var welcomeTitle   = _t('consultant.widget_welcome_title','AssistantPersona');
         var welcomeSub     = _t('consultant.widget_welcome_sub', 'Ask about quality management, compliance, CRM data hygiene, or SOPs.');
         var qQuality       = _t('consultant.quick_quality',      'Quality Score');
         var qCompliance    = _t('consultant.quick_compliance',   'Compliance');
@@ -292,12 +292,12 @@
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="icon-14"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
                         ${fullView}
                     </a>
-                    <button data-on-click="aiWidgetClose" aria-label="Close Adam chat" data-testid="button-close-widget">
+                    <button data-on-click="aiWidgetClose" aria-label="Close AssistantPersona chat" data-testid="button-close-widget">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="icon-18" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
             </div>
-            <div id="ai-widget-messages" role="log" aria-live="polite" aria-label="Adam conversation" aria-relevant="additions">
+            <div id="ai-widget-messages" role="log" aria-live="polite" aria-label="AssistantPersona conversation" aria-relevant="additions">
                 <div id="ai-widget-welcome">
                     <h4 data-i18n="consultant.widget_welcome_title">${welcomeTitle}</h4>
                     <p data-i18n="consultant.widget_welcome_sub">${welcomeSub}</p>
@@ -314,7 +314,7 @@
                     </div>
                     <div class="aiw-bubble-bot">
                         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-                        <span id="ai-widget-typing-label" style="margin-inline-start:8px;font-size:12px;color:#64748b;" data-csp-note="csp-safe-inline-style: inline style in widget HTML literal; waiting for CSS class refactor">Adam is preparing your answer…</span>
+                        <span id="ai-widget-typing-label" style="margin-inline-start:8px;font-size:12px;color:#64748b;" data-csp-note="csp-safe-inline-style: inline style in widget HTML literal; waiting for CSS class refactor">AssistantPersona is preparing your answer…</span>
                     </div>
                 </div>
             </div>
@@ -325,7 +325,7 @@
                 </button>
             </div>
         </div>
-        <button id="ai-widget-btn" aria-label="Open Adam chat" aria-expanded="false" aria-controls="ai-widget-panel" data-testid="button-ai-consultant">
+        <button id="ai-widget-btn" aria-label="Open AssistantPersona chat" aria-expanded="false" aria-controls="ai-widget-panel" data-testid="button-ai-consultant">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
         </button>
         `;
@@ -344,7 +344,7 @@
     function setWidgetOpen(open) {
         isOpen = open;
         btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        btn.setAttribute('aria-label', isOpen ? 'Close Adam chat' : 'Open Adam chat');
+        btn.setAttribute('aria-label', isOpen ? 'Close AssistantPersona chat' : 'Open AssistantPersona chat');
         if (isOpen) {
             panel.classList.add('open');
             panel.setAttribute('aria-hidden', 'false');
@@ -357,7 +357,7 @@
     }
 
     window._closeAIWidget = function() { setWidgetOpen(false); };
-    // Opened by the global header 🤖 Adam button (ExampleOrgNav.openAssistant).
+    // Opened by the global header 🤖 AssistantPersona button (ExampleOrgNav.openAssistant).
     window._LLMProviderWidget = function() {
         setWidgetOpen(true);
         widgetLoadThreadHistory();
@@ -454,7 +454,7 @@
         if (header) {
             var svgEl = header.querySelector('svg');
             var svgHTML = svgEl ? svgEl.outerHTML : '';
-            header.innerHTML = svgHTML + ' ' + _t('consultant.widget_title', 'Adam');
+            header.innerHTML = svgHTML + ' ' + _t('consultant.widget_title', 'AssistantPersona');
         }
         var expandLink = widget.querySelector('.widget-expand-link');
         if (expandLink) {
@@ -498,7 +498,7 @@
             });
         }
         var wTitle = widget.querySelector('#ai-widget-welcome h4');
-        if (wTitle) wTitle.textContent = _t('consultant.widget_welcome_title', 'Adam');
+        if (wTitle) wTitle.textContent = _t('consultant.widget_welcome_title', 'AssistantPersona');
         var wSub = widget.querySelector('#ai-widget-welcome p');
         if (wSub) wSub.textContent = _t('consultant.widget_welcome_sub', 'Ask about quality management, compliance, CRM data hygiene, or SOPs.');
         var qBtnSpecs = [
@@ -785,7 +785,7 @@
 
             var reader = response.body.getReader();
             var decoder = new TextDecoder();
-            // Keep the "Adam is preparing your answer…" indicator visible until
+            // Keep the "AssistantPersona is preparing your answer…" indicator visible until
             // the FIRST token actually arrives (create the bubble lazily). The
             // connection can open long before any text — e.g. while the server
             // waits out an LLMProvider rate limit — and hiding the indicator here made
@@ -836,7 +836,7 @@
 
             // Stream ended with nothing rendered (e.g. rate limit consumed the
             // turn): show a clear message instead of an empty/blank bubble that
-            // looks like Adam stopped mid-answer.
+            // looks like AssistantPersona stopped mid-answer.
             if (!fullText.trim()) {
                 widgetHideTyping();
                 ensureBubble().innerHTML = renderMarkdown("I couldn't generate a response just now — please try again in a moment.");
@@ -867,7 +867,7 @@
                     }
                 } catch (fallbackErr) {
                     bubble = widgetCreateAI();
-                    bubble.innerHTML = '<span class="aiw-error-text">Unable to reach Adam. Please try again.</span>';
+                    bubble.innerHTML = '<span class="aiw-error-text">Unable to reach AssistantPersona. Please try again.</span>';
                 }
             } else if (bubble && fullText.trim()) {
                 fullText += '\n\n---\n*Response interrupted.*';

@@ -200,7 +200,7 @@ console.log(
         {
           id: 202,
           CRMProvider_record_id: "CRMProvider-contact-1",
-          email: "user@example.invalid",
+          email: "<REDACTED_EMAIL>",
           domain: "Example Organization.example",
         },
       ];
@@ -214,7 +214,7 @@ console.log(
           account_name: "Example Organization",
           company_name: "Example Organization",
           domain: "Example Organization.example",
-          email: "user@example.invalid",
+          email: "<REDACTED_EMAIL>",
           has_explicit_domain: true,
           related_record_count: 5,
         },
@@ -307,7 +307,7 @@ for (const key of REQUIRED_DENY_KEYS) {
           account_name: pollutedAccountName,
           company_name: "Example Organization",
           domain: "Example Organization.example",
-          email: "user@example.invalid",
+          email: "<REDACTED_EMAIL>",
           has_explicit_domain: true,
           related_record_count: 5,
         },

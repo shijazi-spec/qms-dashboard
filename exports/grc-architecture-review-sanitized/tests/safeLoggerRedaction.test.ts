@@ -67,9 +67,9 @@ assert(_sanitiseForTest('hello') === 'hello', 'plain string passes through uncha
 assert(_sanitiseForTest(true) === true, 'boolean passes through unchanged');
 
 {
-  const result = _sanitiseForTest({ username: 'alice', email: 'user@example.invalid' }) as any;
+  const result = _sanitiseForTest({ username: 'alice', email: '<REDACTED_EMAIL>' }) as any;
   assert(result.username === 'alice', 'non-sensitive key preserved by sanitise');
-  assert(result.email === 'user@example.invalid', 'email preserved by sanitise');
+  assert(result.email === '<REDACTED_EMAIL>', 'email preserved by sanitise');
 }
 
 {
@@ -95,12 +95,12 @@ assert(_sanitiseForTest(true) === true, 'boolean passes through unchanged');
 
 {
   const result = _sanitiseForTest({
-    user: { email: 'user@example.invalid', password_hash: '$2b$12$hash', mfa_secret: 'TOTP_SECRET' },
+    user: { email: '<REDACTED_EMAIL>', password_hash: '$2b$12$hash', mfa_secret: 'TOTP_SECRET' },
     meta: { module: 'auth' },
   }) as any;
   assert(result.user.password_hash === REDACTED_SENTINEL, 'nested password_hash redacted');
   assert(result.user.mfa_secret === REDACTED_SENTINEL, 'nested mfa_secret redacted');
-  assert(result.user.email === 'user@example.invalid', 'nested email preserved');
+  assert(result.user.email === '<REDACTED_EMAIL>', 'nested email preserved');
   assert(result.meta.module === 'auth', 'nested meta preserved');
 }
 

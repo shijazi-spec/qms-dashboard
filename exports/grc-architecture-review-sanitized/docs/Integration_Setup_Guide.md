@@ -170,7 +170,7 @@ Content-Type: application/json
 
 {
   "domain": "<REDACTED_HOST>",
-  "username": "user@example.invalid",
+  "username": "<REDACTED_EMAIL>",
   "password": "<REDACTED_SECRET>"
 }
 ```
@@ -183,7 +183,7 @@ Content-Type: application/json
 
 {
   "domain": "<REDACTED_HOST>",
-  "username": "user@example.invalid",
+  "username": "<REDACTED_EMAIL>",
   "password": "<REDACTED_SECRET>"
 }
 ```
@@ -229,7 +229,7 @@ Content-Type: application/json
 {
   "call_id": "unique-call-id",
   "source": "ContactCenterProvider",
-  "agent_email": "user@example.invalid",
+  "agent_email": "<REDACTED_EMAIL>",
   "agent_name": "Agent Name",
   "contact_name": "Customer Name",
   "direction": "outbound",
@@ -274,7 +274,7 @@ If deploying outside HostingPlatform:
 2. Create a **Service Account**
 3. Enable the **IdentityProvider Calendar API**
 4. Download the service account JSON key file
-5. **Share the calendars** you want ExampleOrg to audit with the service account email (e.g., `user@example.invalid`) — grant **"See all event details"** permission
+5. **Share the calendars** you want ExampleOrg to audit with the service account email (e.g., `<REDACTED_EMAIL>`) — grant **"See all event details"** permission
 6. Set the following environment variable:
    - `IdentityProvider_CLIENT_EMAIL` — the service account email
    - Store the private key securely

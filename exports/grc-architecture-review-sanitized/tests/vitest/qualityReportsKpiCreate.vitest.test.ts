@@ -27,7 +27,7 @@ vi.mock("../../src/utils/qualityReportsAggregator", () => ({
   getBUHeadline: vi.fn(),
 }));
 vi.mock("../../src/utils/rbacMiddleware", () => ({
-  requireRole: vi.fn(async () => ({ email: "user@example.invalid", role: "admin" })),
+  requireRole: vi.fn(async () => ({ email: "<REDACTED_EMAIL>", role: "admin" })),
   forbiddenResponse: (c: any) => c.json({ error: "forbidden" }, 403),
 }));
 vi.mock("../../src/utils/logger", () => ({

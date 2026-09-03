@@ -44,7 +44,7 @@ await exerciseAllKeys(h, "enqueuePendingAction", async (secret, key, payload) =>
     riskLevel: "medium",
     complianceRefs: [`ref:${NON_SENSITIVE_MARKER}`],
     requestedByUserId: 1,
-    requestedByEmail: "user@example.invalid",
+    requestedByEmail: "<REDACTED_EMAIL>",
     requestedByName: "User",
     threadId: "th-1",
     ttlHours: 24,

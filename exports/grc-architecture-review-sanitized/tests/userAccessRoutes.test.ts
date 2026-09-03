@@ -42,7 +42,7 @@ for (const route of apiRoutes) {
     const handler = await buildHandler(userAccessRoutes, path, method, { mastra: null });
     const ctx = makeContext({
       method,
-      params: { id: "1", email: "user@example.invalid" },
+      params: { id: "1", email: "<REDACTED_EMAIL>" },
       body: ["POST", "PUT", "PATCH"].includes(method) ? {} : undefined,
     }) as FakeContext & { html?: any };
     ctx.html = (body: string, status?: number) => ({ status: status ?? 200, body, headers: {} });

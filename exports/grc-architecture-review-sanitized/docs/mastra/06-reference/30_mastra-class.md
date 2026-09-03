@@ -114,7 +114,7 @@ export const mastra = new Mastra({
         "Server configuration including port, host, timeout, API routes, middleware, CORS settings, and build options for Swagger UI, API request logging, and OpenAPI docs.",
       isOptional: true,
       defaultValue:
-        "{ port: 4111, host: localhost,  cors: { origin: '*', allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowHeaders: ['Content-Type', 'Authorization', 'x-mastra-client-type'], exposeHeaders: ['Content-Length', 'X-Requested-With'], credentials: false } }",
+        "{ port: 4111, host: <REDACTED_HOST>,  cors: { origin: '*', allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowHeaders: ['Content-Type', 'Authorization', 'x-mastra-client-type'], exposeHeaders: ['Content-Length', 'X-Requested-With'], credentials: false } }",
     },
     {
       name: "mcpServers",

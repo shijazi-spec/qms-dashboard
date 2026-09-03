@@ -15,7 +15,7 @@ await exerciseAllKeys(h, "saveFeedback", async (secret, key) => {
     category: NON_SENSITIVE_MARKER,
     comment: `${NON_SENSITIVE_MARKER} (carrying ${key}=${secret})`,
     user_id: "u-1",
-    user_email: "user@example.invalid",
+    user_email: "<REDACTED_EMAIL>",
     prompt_preview: `${NON_SENSITIVE_MARKER} prompt`,
     response_preview: `${NON_SENSITIVE_MARKER} response`,
     metadata: {

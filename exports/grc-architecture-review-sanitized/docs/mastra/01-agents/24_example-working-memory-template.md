@@ -17,7 +17,7 @@ This example shows how to manage a todo list using a working memory template.
 This example uses the `LLMProvider` model. Make sure to add `LLMProvider_API_KEY` to your `.env` file.
 
 ```bash filename=".env" copy
-LLMProvider_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<REDACTED_SECRET>
 ```
 
 And install the following package:

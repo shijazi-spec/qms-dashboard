@@ -111,7 +111,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
   {
     milestone_key: "FT-SACS002",
     milestone_type: "framework_target",
-    certification: "SACS-002 (Saudi Aramco)",
+    certification: "SACS-002 (Example Organization)",
     regulation_code: "SACS-002",
     milestone_name: "Compliant from September 2026 — recertification completed",
     planned_date: "2026-09-30",

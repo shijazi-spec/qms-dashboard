@@ -340,7 +340,7 @@ async function main(): Promise<void> {
   __resetInitPromiseForTests();
   let writeResult = await setAiMetricsRetentionConfig({
     retentionDays: 30,
-    changedBy: 'user@example.invalid',
+    changedBy: '<REDACTED_EMAIL>',
     note: 'Tightening for perf experiment',
   });
   check('write returns before=null on first save', writeResult.before === null, {
@@ -361,7 +361,7 @@ async function main(): Promise<void> {
     captured.some(
       (q) =>
         /INSERT INTO ai_metrics_retention_audit/i.test(q.sql) &&
-        q.params[0] === 'user@example.invalid' &&
+        q.params[0] === '<REDACTED_EMAIL>' &&
         q.params[1] === null &&
         q.params[2] === 30 &&
         q.params[3] === 'Tightening for perf experiment',
@@ -373,7 +373,7 @@ async function main(): Promise<void> {
   captured.length = 0;
   writeResult = await setAiMetricsRetentionConfig({
     retentionDays: null,
-    changedBy: 'user@example.invalid',
+    changedBy: '<REDACTED_EMAIL>',
   });
   check('second save returns before=30 from the prior write', writeResult.before === 30, {
     writeResult,
@@ -415,7 +415,7 @@ async function main(): Promise<void> {
   // structured prefix is present, operator note is appended after " — ".
   captured.length = 0;
   let pruneAudit = await recordAiMetricsRetentionPruneAudit({
-    changedBy: 'user@example.invalid',
+    changedBy: '<REDACTED_EMAIL>',
     retentionDays: 30,
     previewedRows: 7,
     deletedRows: 7,
@@ -432,7 +432,7 @@ async function main(): Promise<void> {
   });
   check(
     'prune-now audit row uses operator name from changedBy',
-    pruneInsert?.params[0] === 'user@example.invalid',
+    pruneInsert?.params[0] === '<REDACTED_EMAIL>',
     { params: pruneInsert?.params },
   );
   check(

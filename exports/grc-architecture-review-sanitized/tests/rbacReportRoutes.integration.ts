@@ -58,12 +58,12 @@ function makeSessionCookie(email: string, role: string): string {
 
 const TEST_USERS = [
   {
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     role: "department_viewer",
     name: "RBAC Test Viewer",
   },
   {
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     role: "executive",
     name: "RBAC Test Executive",
   },
@@ -115,11 +115,11 @@ async function main(): Promise<void> {
 
   try {
     const viewerCookie = makeSessionCookie(
-      "user@example.invalid",
+      "<REDACTED_EMAIL>",
       "department_viewer"
     );
     const executiveCookie = makeSessionCookie(
-      "user@example.invalid",
+      "<REDACTED_EMAIL>",
       "executive"
     );
 

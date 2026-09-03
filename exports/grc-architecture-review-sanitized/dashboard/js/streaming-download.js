@@ -225,7 +225,7 @@
         if (typeof TransformStream === 'undefined') return false;
         if (typeof ReadableStream === 'undefined') return false;
         if (typeof MessageChannel === 'undefined') return false;
-        // SW registration is only allowed in secure contexts (HTTPS or localhost).
+        // SW registration is only allowed in secure contexts (HTTPS or <REDACTED_HOST>).
         if (typeof window !== 'undefined' && window.isSecureContext === false) return false;
         return canTransferReadableStream();
     }

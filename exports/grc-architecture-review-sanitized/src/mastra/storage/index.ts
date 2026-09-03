@@ -30,7 +30,7 @@ const connectionString = normalizeSslMode(rawConnectionString)!;
 // wrap, so it had no cap and no idle reaping while ~36 other module pools
 // competed for the same provider connection limit. When the limit was hit,
 // `PostgresStore.init` failed with "Connection terminated unexpectedly" and
-// every Adam message (web + ChatProvider) died with "Failed to process message".
+// every AssistantPersona message (web + ChatProvider) died with "Failed to process message".
 // A small, explicitly-reaped pool is plenty for agent memory reads/writes.
 export const sharedPostgresStorage = new PostgresStore({
   connectionString,

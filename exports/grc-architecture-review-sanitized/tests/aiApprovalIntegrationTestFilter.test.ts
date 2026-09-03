@@ -38,7 +38,7 @@ process.env.SESSION_SECRET =
 // the bootstrap IIFE inside aiApprovalRoutes errors immediately instead
 // of hanging the test (mirrors aiApprovalRoutesRedaction.test.ts).
 process.env.DATABASE_URL =
-  process.env.DATABASE_URL || "postgres://localhost:1/none";
+  process.env.DATABASE_URL || "<REDACTED_DSN>";
 
 import crypto from "crypto";
 import pg from "pg";
@@ -55,7 +55,7 @@ import type { QueryResult, QueryResultRow } from "pg";
 /* ONLY that catalog query and return a synthetic active-admin row.   */
 /* ------------------------------------------------------------------ */
 const TEST_PLATFORM_USERS: Record<string, { status: string; role: string }> = {
-  "user@example.invalid": { status: "active", role: "admin" },
+  "<REDACTED_EMAIL>": { status: "active", role: "admin" },
 };
 const _origPoolQuery = pg.Pool.prototype.query;
 pg.Pool.prototype.query = function (this: pg.Pool, ...args: unknown[]): any {
@@ -121,7 +121,7 @@ function seedRow(overrides: Partial<PendingAction>): PendingAction {
     risk_level: "high",
     compliance_refs: [],
     requested_by_user_id: 99,
-    requested_by_email: "user@example.invalid",
+    requested_by_email: "<REDACTED_EMAIL>",
     requested_by_name: "Requester",
     thread_id: null,
     status: "pending",
@@ -298,7 +298,7 @@ function signSession(payload: Record<string, unknown>): string {
 function adminCookie(): string {
   const token = signSession({
     userId: 42,
-    email: "user@example.invalid",
+    email: "<REDACTED_EMAIL>",
     name: "Quality Manager Test",
     role: "admin",
     exp: Date.now() + 3600_000,

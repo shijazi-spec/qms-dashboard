@@ -1,7 +1,7 @@
 # DMAIC — Call Details Unification (Call Evaluation Tab)
 
 **Date**: 2026-05-25
-**Owner**: user@example.invalid
+**Owner**: <REDACTED_EMAIL>
 **Module touched**: `dashboard/calls.html`, `src/mastra/routes/callIntelligenceRoutes.ts`, `dashboard/i18n/{en,ar}.json`
 
 ---

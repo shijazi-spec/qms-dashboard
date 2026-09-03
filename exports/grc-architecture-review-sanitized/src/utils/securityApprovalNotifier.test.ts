@@ -93,7 +93,7 @@ function makeNotification(
     tool_label: "Create nonconformance record",
     risk_level: "high",
     requested_by_user_id: 42,
-    requested_by_email: "user@example.invalid",
+    requested_by_email: "<REDACTED_EMAIL>",
     requested_by_name: "Alice Auditor",
     credential_warnings: [
       { path: "evidenceUrl", kind: "regex", patternName: "LLMProvider-sk" },
@@ -216,7 +216,7 @@ async function testChatProviderSentOnSuccess(): Promise<void> {
   const blockText = JSON.stringify(ChatProviderCalls[0].blocks);
   assert(blockText.includes("APR-ChatProvider-ok:1"), "blocks include action_code");
   assert(blockText.includes("Alice Auditor"), "blocks include requester name");
-  assert(blockText.includes("user@example.invalid"), "blocks include requester email");
+  assert(blockText.includes("<REDACTED_EMAIL>"), "blocks include requester email");
   assert(blockText.includes("evidenceUrl"), "blocks include flagged field path");
   assert(blockText.includes("description"), "blocks include second flagged path");
 
@@ -248,7 +248,7 @@ async function testEmailSentOnSuccess(): Promise<void> {
   );
   clearEnv();
   _resetSecurityApprovalNotifierThrottleForTests();
-  process.env.SECURITY_REVIEWER_EMAIL = "user@example.invalid, user@example.invalid";
+  process.env.SECURITY_REVIEWER_EMAIL = "<REDACTED_EMAIL>, <REDACTED_EMAIL>";
   process.env.SECURITY_REVIEWER_APP_URL = "<REDACTED_URL>";
 
   type EmailArgs = { to: any; subject: string; html?: string; text?: string };
@@ -277,8 +277,8 @@ async function testEmailSentOnSuccess(): Promise<void> {
   assert(
     Array.isArray(emailCalls[0].to) &&
       (emailCalls[0].to as string[]).length === 2 &&
-      (emailCalls[0].to as string[])[0] === "user@example.invalid" &&
-      (emailCalls[0].to as string[])[1] === "user@example.invalid",
+      (emailCalls[0].to as string[])[0] === "<REDACTED_EMAIL>" &&
+      (emailCalls[0].to as string[])[1] === "<REDACTED_EMAIL>",
     "comma-separated SECURITY_REVIEWER_EMAIL parsed into recipient array",
   );
   assert(

@@ -1,5 +1,5 @@
 /**
- * CI gate: proves Adam topic-log writes cannot persist unmasked credentials.
+ * CI gate: proves AssistantPersona topic-log writes cannot persist unmasked credentials.
  *
  * Run: npx tsx src/utils/adamTopicLog.test.ts
  */
@@ -103,7 +103,7 @@ for (const [key, rawSecret] of Object.entries(SECRETS)) {
 captured.length = 0;
 await recordQuestionSection("Show KPI scorecards", {
   surface: "ChatProvider",
-  askedBy: "user@example.invalid",
+  askedBy: "<REDACTED_EMAIL>",
 });
 const ordinaryParams = lastInsertParams();
 assert(ordinaryParams !== null, "ordinary payload: INSERT was issued");
@@ -111,7 +111,7 @@ if (ordinaryParams) {
   assert(
     ordinaryParams[0] === "kpis" &&
       ordinaryParams[1] === "ChatProvider" &&
-      ordinaryParams[2] === "user@example.invalid",
+      ordinaryParams[2] === "<REDACTED_EMAIL>",
     "ordinary payload is preserved verbatim",
   );
 }

@@ -112,7 +112,7 @@ assert(redactSensitiveFields(null) === null, "null returned unchanged");
 assert(redactSensitiveFields(undefined) === undefined, "undefined returned unchanged");
 
 {
-  const input = { username: "alice", email: "user@example.invalid", role: "admin" };
+  const input = { username: "alice", email: "<REDACTED_EMAIL>", role: "admin" };
   assertDeepEqual(redactSensitiveFields(input), input, "non-sensitive flat object passes through");
 }
 
@@ -123,9 +123,9 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
 }
 
 {
-  const r = redactSensitiveFields({ id: 1, password_hash: "$2b$12$hashedvalue", email: "user@example.invalid" });
+  const r = redactSensitiveFields({ id: 1, password_hash: "$2b$12$hashedvalue", email: "<REDACTED_EMAIL>" });
   assert(r.password_hash === REDACTED_SENTINEL, "exact: password_hash redacted");
-  assert(r.email === "user@example.invalid", "exact: email preserved");
+  assert(r.email === "<REDACTED_EMAIL>", "exact: email preserved");
 }
 
 {
@@ -146,7 +146,7 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
 }
 
 {
-  const r = redactSensitiveFields({ api_key: "<REDACTED_SECRET>", LLMProvider_api_key: "sk-LLMProvider" });
+  const r = redactSensitiveFields({ api_key: "<REDACTED_SECRET>", LLMProvider_api_key: "<REDACTED_TOKEN>" });
   assert(r.api_key === REDACTED_SENTINEL, "suffix _key: api_key redacted");
   assert(r.LLMProvider_api_key === REDACTED_SENTINEL, "suffix _key: LLMProvider_api_key redacted");
 }
@@ -180,12 +180,12 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
 
 {
   const r = redactSensitiveFields({
-    user: { email: "user@example.invalid", password_hash: "$2b$12$xyz", mfa_secret: "secret" },
+    user: { email: "<REDACTED_EMAIL>", password_hash: "$2b$12$xyz", mfa_secret: "secret" },
     meta: { module: "auth" },
   });
   assert(r.user.password_hash === REDACTED_SENTINEL, "nested: password_hash redacted");
   assert(r.user.mfa_secret === REDACTED_SENTINEL, "nested: mfa_secret redacted");
-  assert(r.user.email === "user@example.invalid", "nested: email preserved");
+  assert(r.user.email === "<REDACTED_EMAIL>", "nested: email preserved");
   assert(r.meta.module === "auth", "nested: meta.module preserved");
 }
 
@@ -387,7 +387,7 @@ await runWritePathTest(
     module: "auth",
     oldValue: {
       id: 42,
-      email: "user@example.invalid",
+      email: "<REDACTED_EMAIL>",
       full_name: "Sample User",
       password_hash: SECRETS.password_hash,
       mfa_secret: SECRETS.mfa_secret,
@@ -395,7 +395,7 @@ await runWritePathTest(
     },
     newValue: {
       id: 42,
-      email: "user@example.invalid",
+      email: "<REDACTED_EMAIL>",
       full_name: "Sample User",
       password_hash: SECRETS.password_hash,
       mfa_secret: SECRETS.mfa_secret,
@@ -474,7 +474,7 @@ await runWritePathTest(
     description: "Non-sensitive profile update",
     severity: "INFO",
     module: "users",
-    newValue: { id: 100, email: "user@example.invalid", account_id: "acct-public-XYZ" },
+    newValue: { id: 100, email: "<REDACTED_EMAIL>", account_id: "acct-public-XYZ" },
   });
   const params = findInsertCallParams();
   assert(params !== null, "non-sensitive: pool.query was called");
@@ -485,7 +485,7 @@ await runWritePathTest(
       "non-sensitive: account_id is preserved verbatim (test isn't a tautology)",
     );
     assert(
-      json.includes("user@example.invalid"),
+      json.includes("<REDACTED_EMAIL>"),
       "non-sensitive: email is preserved verbatim",
     );
   }

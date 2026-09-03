@@ -134,7 +134,7 @@ describe("ties break on activity, then value, then age", () => {
   });
 
   it("falls back to the original when nothing else separates them", () => {
-    // The Aseer Development Authority shape: two Contacted deals, same owner,
+    // The Example Organization shape: two Contacted deals, same owner,
     // one day apart.
     expect(
       keeper([
@@ -174,7 +174,7 @@ describe("a deal nobody owns cannot be the keeper", () => {
     expect(
       keeper([
         { stage: "Contacted", owner: "Unassigned" },
-        { stage: "On Hold", owner: "Khowla Saeed" },
+        { stage: "On Hold", owner: "Sample User" },
       ]),
     ).toBe(1);
   });
@@ -234,7 +234,7 @@ describe("a deal nobody owns cannot be the keeper", () => {
 });
 
 describe("real conflicts from the CRM", () => {
-  it("Stc — keeps the Proposal, closes the On Hold", () => {
+  it("Example Organization — keeps the Proposal, closes the On Hold", () => {
     const deals: D[] = [
       { stage: "Proposal", amount: 1810000, created: "2026-06-09" },
       { stage: "On Hold", amount: 0, created: "2025-02-04" },

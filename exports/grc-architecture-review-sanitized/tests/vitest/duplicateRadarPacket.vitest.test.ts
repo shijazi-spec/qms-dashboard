@@ -18,7 +18,7 @@ import type {
 
 const owner: OwnerAccountability = {
   owner_name: "Sample User",
-  owner_email: "user@example.invalid",
+  owner_email: "<REDACTED_EMAIL>",
   // `team` was added to OwnerAccountability so coaching reports can group
   // owners by squad (MP / WO Sales / CS / MGMT / Unassigned). The packet
   // builders don't actually read this field — but the test fixture has to
@@ -35,7 +35,7 @@ const owner: OwnerAccountability = {
 
 const settings: PacketSettings = {
   escalation_contact_name: "Data Quality Lead",
-  escalation_contact_email: "user@example.invalid",
+  escalation_contact_email: "<REDACTED_EMAIL>",
   dispute_path: "Reply to the packet email",
 };
 
@@ -149,7 +149,7 @@ describe("buildPacketSheets — English (default)", () => {
         record_type: "account",
         CRMProvider_record_id: "Z1",
         domain: "<REDACTED_HOST>",
-        email: "user@example.invalid",
+        email: "<REDACTED_EMAIL>",
         cluster_confidence_score: 95,
         cluster_total_records: 2,
         owner_name: owner.owner_name,
@@ -163,7 +163,7 @@ describe("buildPacketSheets — English (default)", () => {
         record_type: "account",
         CRMProvider_record_id: "Z2",
         domain: "<REDACTED_HOST>",
-        email: "user@example.invalid",
+        email: "<REDACTED_EMAIL>",
         cluster_confidence_score: 95,
         cluster_total_records: 2,
         owner_name: owner.owner_name,

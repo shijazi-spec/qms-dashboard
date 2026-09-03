@@ -996,7 +996,7 @@ Interactive visual showing all risks positioned by likelihood and impact.
 
 #### Risk Acceptance (GRC Manager Role Required)
 
-**Who Can Accept Risks?** Only users with the GRC Manager role (e.g., user@example.invalid) can formally accept risks. This ensures proper governance and accountability.
+**Who Can Accept Risks?** Only users with the GRC Manager role (e.g., <REDACTED_EMAIL>) can formally accept risks. This ensures proper governance and accountability.
 
 **How to Accept a Risk:**
 1. Open the risk detail view by clicking on any risk
@@ -1077,7 +1077,7 @@ Policies in "Approval" status **cannot be published** until the GRC Manager (Com
 
 **How to Request GRC Approval:**
 1. When viewing a policy in "Approval" status, click the **"Request GRC Approval"** button (slate-colored with shield icon)
-2. Enter the GRC Manager email address (e.g., user@example.invalid)
+2. Enter the GRC Manager email address (e.g., <REDACTED_EMAIL>)
 3. If the user has GRC Manager role, the policy receives compliance approval
 4. Once approved, a green "GRC Approved" badge appears and the "Publish" button becomes available
 
@@ -1483,7 +1483,7 @@ The **Quality Specialist Agent** runs automatically:
 A: Dashboard data refreshes when you load the page or click Refresh. Automated audits run weekly on Mondays at 8 AM UTC.
 
 **Q: Who receives the weekly email reports?**
-A: Reports are sent to user@example.invalid. Contact admin to add recipients.
+A: Reports are sent to <REDACTED_EMAIL>. Contact admin to add recipients.
 
 **Q: What if CRM credentials aren't configured?**
 A: The system handles this gracefully, showing appropriate messages and using available data.

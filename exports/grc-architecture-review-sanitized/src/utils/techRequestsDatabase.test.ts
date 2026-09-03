@@ -34,9 +34,9 @@ interface CapturedQuery { sql: string; params: unknown[] }
 const captured: CapturedQuery[] = [];
 
 const fakeRow = {
-  id: 1, product: "Demo", client_name: "Example Organization", contact_email: "user@example.invalid",
+  id: 1, product: "Demo", client_name: "Example Organization", contact_email: "<REDACTED_EMAIL>",
   request_text: "Set up demo env", assignee_name: "Engineer",
-  assignee_email: "user@example.invalid", due_date: null, status: "sent",
+  assignee_email: "<REDACTED_EMAIL>", due_date: null, status: "sent",
   response_note: null, responded_at: null, follow_up_at: null,
   last_reminder_at: null, action_token: "a".repeat(64), created_by: "Sample User",
   created_at: new Date(), updated_at: new Date(),
@@ -84,10 +84,10 @@ console.log("\n=== createRequest — write-path tests ===\n");
   captured.length = 0;
   const req = await createRequest({
     request_text: "Please provision the staging environment.",
-    assignee_email: "user@example.invalid",
+    assignee_email: "<REDACTED_EMAIL>",
     product: "QMS Platform",
     client_name: "Example Organization",
-    contact_email: "user@example.invalid",
+    contact_email: "<REDACTED_EMAIL>",
     created_by: "Sample User",
   });
   assert(req !== null && typeof req === "object", "createRequest: returns a request object");
@@ -99,7 +99,7 @@ console.log("\n=== createRequest — write-path tests ===\n");
       "createRequest: request_text stored verbatim (anti-tautology)",
     );
     assert(
-      params.some(p => String(p) === "user@example.invalid"),
+      params.some(p => String(p) === "<REDACTED_EMAIL>"),
       "createRequest: assignee_email stored verbatim",
     );
   }

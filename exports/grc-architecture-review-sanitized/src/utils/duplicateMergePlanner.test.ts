@@ -78,7 +78,7 @@ const recB = rec({
 console.log("buildAccountMergePlan — core behaviour");
 const plan = buildAccountMergePlan(7, [recA, recB], {
   tagName: "Duplicate-Delete",
-  generatedBy: "user@example.invalid",
+  generatedBy: "<REDACTED_EMAIL>",
   generatedAt: "2026-06-08T00:00:00.000Z",
 });
 
@@ -98,7 +98,7 @@ assert(
 );
 assert(plan.tagName === "Duplicate-Delete", "uses the agreed tag name");
 assert(
-  plan.generatedBy === "user@example.invalid" &&
+  plan.generatedBy === "<REDACTED_EMAIL>" &&
     plan.generatedAt === "2026-06-08T00:00:00.000Z",
   "stamps provenance",
 );
@@ -229,7 +229,7 @@ const lead1 = rec({
   record_type: "lead",
   record_name: "Sam",
   // Most complete (3 fields) but NO Phone → Phone should gap-fill from L2.
-  raw_data: { Last_Name: "Sam", Company: "Example Organization", Email: "user@example.invalid" },
+  raw_data: { Last_Name: "Sam", Company: "Example Organization", Email: "<REDACTED_EMAIL>" },
 });
 const lead2 = rec({
   id: 31,
@@ -291,7 +291,7 @@ const c1 = rec({
   CRMProvider_record_id: "C1",
   record_type: "contact",
   record_name: "Khalil",
-  raw_data: { Last_Name: "Khalil", Email: "user@example.invalid", Phone: "1" },
+  raw_data: { Last_Name: "Khalil", Email: "<REDACTED_EMAIL>", Phone: "1" },
 });
 const c2 = rec({
   id: 52,
@@ -327,29 +327,29 @@ assert(
 const cM = rec({
   record_type: "contact",
   id: 30, CRMProvider_record_id: "CM", record_name: "Sample User",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>", title: "Manager",
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>", title: "Manager",
   modified_date: new Date("2024-06-01"),
-  raw_data: { Last_Name: "Sample User", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>", Title: "Manager" },
+  raw_data: { Last_Name: "Sample User", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>", Title: "Manager" },
 });
 const cD1 = rec({
   record_type: "contact",
   id: 31, CRMProvider_record_id: "CD1", record_name: "Sample User",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>",
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>",
   modified_date: new Date("2024-05-01"),
-  raw_data: { Last_Name: "Sample User", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
+  raw_data: { Last_Name: "Sample User", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
 });
 const cD2 = rec({
   record_type: "contact",
   id: 32, CRMProvider_record_id: "CD2", record_name: "Sample User",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>",
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>",
   modified_date: new Date("2024-04-01"),
-  raw_data: { Last_Name: "Sample User", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
+  raw_data: { Last_Name: "Sample User", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
 });
 const keepBothPlan = buildMergePlan("Contacts", 30, [cM, cD1, cD2], { masterCRMProviderId: "CM" });
 const cds = keepBothPlan.contactDataSummary;
 assert(keepBothPlan.masterCRMProviderId === "CM", "survivor pinned to CM");
 assert(!!cds, "Contacts plan includes contactDataSummary");
-assert(cds?.emails.primary?.value === "user@example.invalid", "email primary = the shared email");
+assert(cds?.emails.primary?.value === "<REDACTED_EMAIL>", "email primary = the shared email");
 assert(cds?.emails.primary?.from === "survivor", "email primary tagged survivor (kept)");
 assert(cds?.emails.secondary === null, "no second distinct email ⇒ Secondary_Email empty");
 assert(cds?.phones.phone?.value === "<REDACTED_PHONE>", "phone primary = survivor's phone");
@@ -364,51 +364,51 @@ assert(cds?.phones.extras[0]?.value === "<REDACTED_PHONE>", "extra phone preserv
 // dedup gate compares the normalized column, not the raw value).
 const eM = rec({
   record_type: "contact", id: 40, CRMProvider_record_id: "EM", record_name: "Sara Q",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>", title: "Lead",
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>", title: "Lead",
   modified_date: new Date("2024-06-01"),
-  raw_data: { Last_Name: "Sara Q", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>", Title: "Lead" },
+  raw_data: { Last_Name: "Sara Q", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>", Title: "Lead" },
 });
 const eD = rec({
   record_type: "contact", id: 41, CRMProvider_record_id: "ED", record_name: "Sara Q",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
   modified_date: new Date("2024-05-01"),
-  raw_data: { Last_Name: "Sara Q", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
+  raw_data: { Last_Name: "Sara Q", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
 });
 const emailPlan = buildMergePlan("Contacts", 40, [eM, eD], { masterCRMProviderId: "EM" });
 const ecds = emailPlan.contactDataSummary;
-assert(ecds?.emails.primary?.value === "user@example.invalid", "email primary = survivor's email");
-assert(ecds?.emails.secondary?.value === "user@example.invalid", "second distinct email → Secondary_Email");
+assert(ecds?.emails.primary?.value === "<REDACTED_EMAIL>", "email primary = survivor's email");
+assert(ecds?.emails.secondary?.value === "<REDACTED_EMAIL>", "second distinct email → Secondary_Email");
 assert((ecds?.emails.secondary?.from || "") !== "survivor", "Secondary_Email tagged from a duplicate");
 assert(ecds?.phones.mobile === null, "same phone ⇒ no Mobile needed");
 
 // ── Relaxed contact-merge bridges (Sample User 2026-06-26) ─────────────────────────
 console.log("contact merge — generic-mailbox + same-email bridges");
 
-assert(isRoleMailbox("user@example.invalid") === true, "info@ is a role mailbox");
-assert(isRoleMailbox("user@example.invalid") === true, "e-store@ is a role mailbox");
-assert(isRoleMailbox("user@example.invalid") === false, "personal email is not a role mailbox");
-assert(isRoleMailbox("user@example.invalid") === false, "role detection is exact local-part, not a prefix");
+assert(isRoleMailbox("<REDACTED_EMAIL>") === true, "info@ is a role mailbox");
+assert(isRoleMailbox("<REDACTED_EMAIL>") === true, "e-store@ is a role mailbox");
+assert(isRoleMailbox("<REDACTED_EMAIL>") === false, "personal email is not a role mailbox");
+assert(isRoleMailbox("<REDACTED_EMAIL>") === false, "role detection is exact local-part, not a prefix");
 assert(isRoleMailbox("") === false, "empty email is not a role mailbox");
 
 // Bridge 2 — shared phone + a generic role mailbox on the DUPLICATE, DIFFERENT
 // names → absorb the role mailbox into the personal survivor; keep both emails.
 const rM = rec({
   record_type: "contact", id: 50, CRMProvider_record_id: "RM", record_name: "Yamen Albakour",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
   modified_date: new Date("2024-06-01"),
-  raw_data: { Last_Name: "Yamen Albakour", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
+  raw_data: { Last_Name: "Yamen Albakour", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
 });
 const rD = rec({
   record_type: "contact", id: 51, CRMProvider_record_id: "RD", record_name: "Badr Alharbi",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
   modified_date: new Date("2024-05-01"),
-  raw_data: { Last_Name: "Badr Alharbi", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
+  raw_data: { Last_Name: "Badr Alharbi", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
 });
 const rolePlan = buildMergePlan("Contacts", 50, [rM, rD], { masterCRMProviderId: "RM" });
 assert(rolePlan.duplicateCRMProviderIds.includes("RD"), "role-mailbox dup (info@) tagged as duplicate of the personal survivor");
 const rcds = rolePlan.contactDataSummary;
-assert(rcds?.emails.primary?.value === "user@example.invalid", "primary = survivor personal email");
-assert(rcds?.emails.secondary?.value === "user@example.invalid", "info@ kept as Secondary_Email");
+assert(rcds?.emails.primary?.value === "<REDACTED_EMAIL>", "primary = survivor personal email");
+assert(rcds?.emails.secondary?.value === "<REDACTED_EMAIL>", "info@ kept as Secondary_Email");
 assert(rolePlan.warnings.some((w) => /relaxed rule|info@\/support@/i.test(w)), "bridge merge is flagged for review");
 
 // Directional guard — if the operator picks the info@ contact as survivor, the
@@ -420,15 +420,15 @@ assert(!rolePlanRev.duplicateCRMProviderIds.includes("RM"), "personal contact NO
 // same person; merged, second phone preserved as Mobile.
 const pM = rec({
   record_type: "contact", id: 60, CRMProvider_record_id: "PM", record_name: "Omar A",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
   modified_date: new Date("2024-06-01"),
-  raw_data: { Last_Name: "Omar A", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
+  raw_data: { Last_Name: "Omar A", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
 });
 const pD = rec({
   record_type: "contact", id: 61, CRMProvider_record_id: "PD", record_name: "Omar Alotaibi",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
   modified_date: new Date("2024-05-01"),
-  raw_data: { Last_Name: "Omar Alotaibi", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
+  raw_data: { Last_Name: "Omar Alotaibi", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
 });
 const sameEmailPlan = buildMergePlan("Contacts", 60, [pM, pD], { masterCRMProviderId: "PM" });
 assert(sameEmailPlan.duplicateCRMProviderIds.includes("PD"), "same personal email ⇒ merged even with different name + phone");
@@ -438,13 +438,13 @@ assert(sameEmailPlan.contactDataSummary?.phones.mobile?.value != null, "second d
 // mailbox, different names) must STAY soft-excluded (the safe ≥2 rule holds).
 const nM = rec({
   record_type: "contact", id: 70, CRMProvider_record_id: "NM", record_name: "Ali One",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
-  raw_data: { Last_Name: "Ali One", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
+  raw_data: { Last_Name: "Ali One", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
 });
 const nD = rec({
   record_type: "contact", id: 71, CRMProvider_record_id: "ND", record_name: "Sample User",
-  email: "user@example.invalid", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
-  raw_data: { Last_Name: "Sample User", Email: "user@example.invalid", Phone: "<REDACTED_PHONE>" },
+  email: "<REDACTED_EMAIL>", phone: "<REDACTED_PHONE>", phone_normalized: "<REDACTED_PHONE>",
+  raw_data: { Last_Name: "Sample User", Email: "<REDACTED_EMAIL>", Phone: "<REDACTED_PHONE>" },
 });
 const negPlan = buildMergePlan("Contacts", 70, [nM, nD], { masterCRMProviderId: "NM" });
 assert(!negPlan.duplicateCRMProviderIds.includes("ND"), "two different personal emails sharing only a phone are NOT merged");

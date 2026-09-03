@@ -781,7 +781,7 @@ async function run(): Promise<void> {
       delete process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL;
     } else {
       process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL =
-        overrides.email ?? "user@example.invalid";
+        overrides.email ?? "<REDACTED_EMAIL>";
     }
     return fn().finally(() => {
       if (prevChatProvider === undefined) delete process.env.ChatProvider_WEBHOOK_URL;
@@ -876,7 +876,7 @@ async function run(): Promise<void> {
     const emailTo = emailCalls[0]?.to;
     const recipients = Array.isArray(emailTo) ? emailTo : [emailTo];
     assert(
-      recipients.includes("user@example.invalid"),
+      recipients.includes("<REDACTED_EMAIL>"),
       `Email targets the configured recipient (got ${JSON.stringify(emailTo)})`,
     );
     assert(
@@ -1102,7 +1102,7 @@ async function run(): Promise<void> {
     const emailTo = emailCalls[0]?.to;
     const recipients = Array.isArray(emailTo) ? emailTo : [emailTo];
     assert(
-      recipients.includes("user@example.invalid"),
+      recipients.includes("<REDACTED_EMAIL>"),
       `Recovery email targets the configured recipient (got ${JSON.stringify(emailTo)})`,
     );
     assert(

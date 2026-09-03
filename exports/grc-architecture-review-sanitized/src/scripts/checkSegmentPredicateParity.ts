@@ -31,8 +31,8 @@ export {};
 // re-declared copy that could drift from it.
 process.env.DUPLICATE_RADAR_FAST_SEGMENT = "true";
 
-type Segment = "marketplace" | "walaone" | "ExampleOrg";
-const SEGMENTS: Segment[] = ["marketplace", "walaone", "ExampleOrg"];
+type Segment = "marketplace" | "Example Organization" | "ExampleOrg";
+const SEGMENTS: Segment[] = ["marketplace", "Example Organization", "ExampleOrg"];
 
 // The ORIGINAL per-row expression, inlined verbatim so this check is independent
 // of buildSegmentPredicate — if someone edits the predicate, this still compares
@@ -44,8 +44,8 @@ const MKT = `(${NORM} LIKE '%marketplace%' OR ${NORM} LIKE '%partneraccounts%')`
 
 function exactCondition(segment: Segment): string {
   if (segment === "marketplace") return MKT;
-  if (segment === "walaone") return `${NORM} LIKE '%walaone%'`;
-  return `NOT ${MKT} AND ${NORM} NOT LIKE '%walaone%'`;
+  if (segment === "Example Organization") return `${NORM} LIKE '%Example Organization%'`;
+  return `NOT ${MKT} AND ${NORM} NOT LIKE '%Example Organization%'`;
 }
 
 async function main(): Promise<void> {

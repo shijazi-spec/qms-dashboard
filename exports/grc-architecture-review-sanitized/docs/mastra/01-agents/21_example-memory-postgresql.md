@@ -13,7 +13,7 @@ This example demonstrates how to use Mastra's memory system with PostgreSQL as t
 This example uses the `LLMProvider` model and requires a PostgreSQL database with the `pgvector` extension. Make sure to add the following to your `.env` file:
 
 ```bash filename=".env" copy
-LLMProvider_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<REDACTED_SECRET>
 DATABASE_URL=<your-connection-string>
 ```
 
