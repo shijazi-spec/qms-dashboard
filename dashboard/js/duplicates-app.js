@@ -9455,6 +9455,7 @@
                 seen[seg].n++;
             });
             var keys = Object.keys(seen).sort();
+            if (!keys.length) return; // nothing to learn from; keep the static list
             var keep = sel.value;
             sel.innerHTML = '<option value="">All layouts</option>' +
                 keys.map(function (k) {
@@ -9464,7 +9465,6 @@
             // A layout no longer present must not stay silently selected —
             // otherwise the table and the export would scope to nothing.
             sel.value = keys.indexOf(keep) >= 0 ? keep : '';
-            sel.style.display = keys.length ? '' : 'none';
         }
         // Re-load the tab under the chosen layout. The export reads the same
         // control, so the workbook always matches what is on screen.
