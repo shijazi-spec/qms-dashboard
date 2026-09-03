@@ -790,7 +790,16 @@
             return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
         function _ct(k, fb) {
-            return (window.WalaPlusI18n && window.WalaPlusI18n.t) ? (window.WalaPlusI18n.t(k) || fb) : fb;
+            if (!(window.WalaPlusI18n && window.WalaPlusI18n.t)) return fb;
+            const v = window.WalaPlusI18n.t(k);
+            if (!v) return fb;
+            // WalaPlusI18n.t() ECHOES the key (or its last fragment) when the key
+            // is missing from the loaded bundle — and that echo is truthy, so a
+            // plain `t(k) || fb` can never fall back. That is how raw slugs like
+            // "ms_lbl_docs" reached the screen on a stale i18n bundle. Treat an
+            // echo as a miss and use the English fallback instead.
+            const last = k.slice(k.lastIndexOf('.') + 1);
+            return (v === k || v === last) ? fb : v;
         }
         function _td(prefix, value) {
             if (!value) return '';
@@ -830,38 +839,27 @@
             return p ? p.month : '—';
         }
 
-        // Explicit label map for the plan's known milestone_keys, routed
-        // through _ct so both locales render real copy instead of a slug
-        // derived from the key suffix (e.g. "Saqa", "Mgmtrev").
-        const ROADMAP_LABEL_KEYS = {
-            'PLAN-2026-08-DOCS': 'compliance.ms_lbl_docs',
-            'PLAN-2026-09-APPROVE': 'compliance.ms_lbl_approve',
-            'PLAN-2026-10-SAQA': 'compliance.ms_lbl_saqa',
-            'PLAN-2026-11-AUDIT': 'compliance.ms_lbl_audit',
-            'PLAN-2026-12-MGMTREV': 'compliance.ms_lbl_mgmtrev',
-            'PLAN-2027-01-PENTEST': 'compliance.ms_lbl_pentest',
-            'PLAN-2027-02-SURV': 'compliance.ms_lbl_surv'
-        };
-        const ROADMAP_LABEL_FALLBACKS = {
-            'compliance.ms_lbl_docs': 'Documents',
-            'compliance.ms_lbl_approve': 'Approval',
-            'compliance.ms_lbl_saqa': 'SAQ A + Training',
-            'compliance.ms_lbl_audit': 'Internal Audit',
-            'compliance.ms_lbl_mgmtrev': 'Management Review',
-            'compliance.ms_lbl_pentest': 'Penetration Test',
-            'compliance.ms_lbl_surv': 'Surveillance Audit'
-        };
-
-        // Short per-node label. Known milestone_keys resolve through the
-        // explicit map above (real i18n copy, not a slug). Any milestone_key
-        // NOT in the map — e.g. an operator-added row — falls back to the
-        // previous suffix-derivation (e.g. "PLAN-2026-09-APPROVE" ->
-        // "Approve") so nothing crashes or renders blank.
+        // Short per-node label for the plan's known milestone_keys.
+        //
+        // These _ct() calls are written as STRING LITERALS on purpose. The i18n
+        // guardrail (scripts/check-i18n.cjs) scans statically for t('key') /
+        // _ct('key') literals; a lookup like _ct(MAP[x]) is invisible to it, so
+        // every one of these keys was reported as an unused orphan and failed
+        // tests/i18nCoverage.test.ts. Keep them literal rather than baselining.
+        //
+        // Any milestone_key NOT listed here — e.g. an operator-added row —
+        // falls back to the suffix-derivation below so nothing renders blank.
         function _roadmapShortLabel(m) {
             const key = String(m.milestone_key || '');
-            const i18nKey = ROADMAP_LABEL_KEYS[key];
-            if (i18nKey) {
-                return _ct(i18nKey, ROADMAP_LABEL_FALLBACKS[i18nKey]);
+            switch (key) {
+                case 'PLAN-2026-08-DOCS':    return _ct('compliance.ms_lbl_docs', 'Documents');
+                case 'PLAN-2026-09-APPROVE': return _ct('compliance.ms_lbl_approve', 'Approval');
+                case 'PLAN-2026-10-SAQA':    return _ct('compliance.ms_lbl_saqa', 'SAQ A + Training');
+                case 'PLAN-2026-11-AUDIT':   return _ct('compliance.ms_lbl_audit', 'Internal Audit');
+                case 'PLAN-2026-12-MGMTREV': return _ct('compliance.ms_lbl_mgmtrev', 'Management Review');
+                case 'PLAN-2027-01-PENTEST': return _ct('compliance.ms_lbl_pentest', 'Penetration Test');
+                case 'PLAN-2027-02-SURV':    return _ct('compliance.ms_lbl_surv', 'Surveillance Audit');
+                default: break;
             }
             const idx = key.lastIndexOf('-');
             const seg = (idx >= 0 ? key.slice(idx + 1) : key).toLowerCase();
