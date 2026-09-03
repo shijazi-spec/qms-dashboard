@@ -964,6 +964,19 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "grc_manager", "head_of_operations_quality"],
   },
   {
+    // Bulk acknowledge behind the nav bell's "Mark all read". Deliberately
+    // TIGHTER than the per-alert rule above: that one is widened so the
+    // consultant page's action buttons don't 403 for the governance leads,
+    // but this clears every open alert in one call and ai_alerts is shared
+    // (no recipient column), so it clears the badge for everyone and stamps
+    // the caller as triager on every row. Matches the handler's own
+    // ALERT_ADMIN_ROLES exactly. Any other role gets a 403 here and the bell
+    // just clears their notifications.
+    pattern: /^\/api\/consultant\/alerts\/acknowledge-all$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist"],
+  },
+  {
     // AI Consultant working-memory read (resource-scoped). Kept in sync with
     // CONSULTANT_ROLES in src/mastra/routes/consultantRoutes.ts.
     pattern: /^\/api\/consultant\/memory$/,

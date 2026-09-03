@@ -229,6 +229,43 @@ export async function acknowledgeAlert(id: number, acknowledgedBy: string): Prom
   return result.rows[0] || null;
 }
 
+/**
+ * Bulk-acknowledge every OPEN alert, returning how many rows changed.
+ *
+ * Backs the nav bell's "Mark all read", which has to clear both feeds: the
+ * badge sums notifications with `getUnreadAlertCount()`, and that counts
+ * `status = 'open'`, so acknowledging is what actually makes the badge drop.
+ *
+ * ACKNOWLEDGE, never resolve or dismiss. Acknowledged means "a human has seen
+ * this"; the alert stays in the feed as outstanding work. Bulk-resolving would
+ * claim ~27k governance findings were dealt with when nothing was done.
+ *
+ * Two consequences worth knowing, both inherent to the model:
+ *   - `ai_alerts` has no recipient column, so alerts are SHARED. One person
+ *     acknowledging clears the badge for everyone. The route is therefore
+ *     gated to ALERT_ADMIN_ROLES (admin, ai_specialist).
+ *   - Every row is stamped with `acknowledged_by`, so this writes an audit
+ *     trail naming that person as the triager of each alert.
+ *
+ * `WHERE status = 'open'` both keeps the write idempotent and preserves the
+ * original triager on rows already acknowledged — same guard `resolveAlert`
+ * uses to stay clear of the cron auto-resolve sweep. Uses the
+ * `idx_ai_alerts_status` index rather than scanning the table.
+ */
+export async function acknowledgeAllOpenAlerts(
+  acknowledgedBy: string,
+): Promise<number> {
+  const result = await pool.query(
+    `UPDATE ai_alerts
+        SET status = 'acknowledged',
+            acknowledged_by = $1,
+            acknowledged_at = NOW()
+      WHERE status = 'open'`,
+    [acknowledgedBy],
+  );
+  return result.rowCount ?? 0;
+}
+
 export async function resolveAlert(
   id: number,
   note?: string,

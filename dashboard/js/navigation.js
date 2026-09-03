@@ -696,18 +696,58 @@ const WalaPlusNav = {
     this.refreshNotifications();
   },
 
-  // Bulk clear. The server scopes the UPDATE to the session user, so this only
-  // ever clears what this user can see — the request carries no recipient.
+  // Bulk clear. The badge sums TWO feeds, so clearing it takes two calls:
+  //
+  //   notifications  — per-recipient. The server scopes the UPDATE to the
+  //                    session user, so this only touches what this user can
+  //                    see; the request carries no recipient. Always sent.
+  //   consultant AI  — SHARED (ai_alerts has no recipient column) and the
+  //   alerts           write stamps this account as the triager of every row,
+  //                    so it is confirmed first and only offered when there is
+  //                    something to clear. Restricted to admin/ai_specialist;
+  //                    every other role gets a 403 we swallow, and the bell
+  //                    just clears their notifications.
+  //
+  // Acknowledge, not resolve: the alerts stay in the feed as open work.
   markAllRead() {
     const btn = document.getElementById('nav-notif-mark-all');
     if (btn) btn.disabled = true;
-    fetch('/api/notifications/read-all', { method: 'POST', credentials: 'same-origin' })
-      .then(() => {
-        this.refreshAlertBadge();
-        this.refreshNotifications();
+    const done = () => {
+      this.refreshAlertBadge();
+      this.refreshNotifications();
+      if (btn) btn.disabled = false;
+    };
+    // A 403 here is the normal case for non-admins — treat it as "no alerts
+    // to offer" rather than an error, and never prompt about them.
+    fetch('/api/consultant/alerts/count', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : { count: 0 })
+      .catch(() => ({ count: 0 }))
+      .then(data => {
+        const open = Number(data && data.count) || 0;
+        const ackAlerts = open > 0 && this._confirmAcknowledgeAlerts(open);
+        const calls = [
+          fetch('/api/notifications/read-all', { method: 'POST', credentials: 'same-origin' }).catch(() => {})
+        ];
+        if (ackAlerts) {
+          calls.push(
+            fetch('/api/consultant/alerts/acknowledge-all', { method: 'POST', credentials: 'same-origin' }).catch(() => {})
+          );
+        }
+        return Promise.all(calls);
       })
       .catch(() => {})
-      .then(() => { if (btn) btn.disabled = false; });
+      .then(done);
+  },
+
+  // Spelled out because the action is shared and not undoable from this UI.
+  _confirmAcknowledgeAlerts(open) {
+    const i18n = window.WalaPlusI18n;
+    const msg = (i18n && i18n.t)
+      ? i18n.t('notifications.ack_alerts_confirm', { count: open })
+      : 'Also mark ' + open + ' open AI alert(s) as acknowledged?\n\n'
+        + 'Acknowledged means SEEN, not resolved — they stay in the alerts feed as open work. '
+        + 'Alerts are shared, so this clears the bell for everyone and records you as the person who triaged them.';
+    return window.confirm(msg);
   },
 
   timeAgo(date) {

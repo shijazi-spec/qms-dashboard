@@ -389,7 +389,8 @@
     "mark_all_read": "Mark all read",
     "show_less": "Show less",
     "none_yet": "No notifications yet",
-    "more_hidden": "more not shown"
+    "more_hidden": "more not shown",
+    "ack_alerts_confirm": "Also mark {count} open AI alert(s) as acknowledged?\n\nAcknowledged means SEEN, not resolved — they stay in the alerts feed as open work. Alerts are shared, so this clears the bell for everyone and records you as the person who triaged them."
   },
   "common": {
     "loading": "Loading...",

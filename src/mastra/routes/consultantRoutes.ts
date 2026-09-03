@@ -7,6 +7,7 @@ import {
   getAIAlerts,
   getUnreadAlertCount,
   acknowledgeAlert,
+  acknowledgeAllOpenAlerts,
   resolveAlert,
   dismissAlert,
   type AlertStatus,
@@ -1470,6 +1471,37 @@ export const consultantRoutes = [
           return c.json({ count });
         } catch (error) {
           return c.json({ count: 0 });
+        }
+      };
+    },
+  },
+
+  {
+    // Bulk acknowledge, backing the nav bell's "Mark all read". The badge sums
+    // notifications with getUnreadAlertCount(), which counts status='open', so
+    // clearing the bell needs this as well as /api/notifications/read-all.
+    //
+    // Deliberately ACKNOWLEDGE, not resolve/dismiss: acknowledged means seen,
+    // and the alert stays in the feed as outstanding work. See
+    // acknowledgeAllOpenAlerts() for why, and for the two consequences —
+    // ai_alerts is shared (no recipient column), so this clears the badge for
+    // everyone, and each row is stamped with the caller as its triager.
+    // ALERT_ADMIN_ROLES (admin, ai_specialist) is what keeps that in check;
+    // every other role gets a 403 here and only clears their notifications.
+    path: "/api/consultant/alerts/acknowledge-all",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, ALERT_ADMIN_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const acknowledgedBy = user.name || user.email;
+          const updated = await acknowledgeAllOpenAlerts(acknowledgedBy);
+          return c.json({ success: true, updated });
+        } catch (error) {
+          logger.error("[Consultant] Bulk acknowledge failed:", error);
+          return c.json({ error: "Failed to acknowledge alerts" }, 500);
         }
       };
     },
