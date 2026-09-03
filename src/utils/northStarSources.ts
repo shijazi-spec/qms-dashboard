@@ -31,6 +31,7 @@ import {
   SOURCE_DOC,
   resolveMilestoneRegulationIds,
 } from "./seeds/certificationMilestonePlan";
+import { CERTIFICATION_ACTIONS } from "./seeds/certificationActions";
 
 export async function initNorthStarSourceTables(): Promise<void> {
   await pool.query(`
@@ -88,6 +89,82 @@ export async function initNorthStarSourceTables(): Promise<void> {
   await pool.query(
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_certification_milestones_key
        ON certification_milestones(milestone_key) WHERE milestone_key IS NOT NULL`,
+  );
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS certification_actions (
+      id SERIAL PRIMARY KEY,
+      action_key VARCHAR(100),
+      milestone_key VARCHAR(100),
+      sort_order INTEGER,
+      action_text TEXT,
+      owner VARCHAR(255),
+      verification_mode VARCHAR(20),
+      evidence_source VARCHAR(60),
+      done_at TIMESTAMP,
+      done_by VARCHAR(255),
+      evidence_policy_id INTEGER,
+      note TEXT,
+      plan_version VARCHAR(20),
+      source_doc VARCHAR(50),
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  // Certification Actions (GRQ-PLAN-2026-01 §3.1) — the 23 checkable actions
+  // (21 across the 7 plan milestones + 2 Technology dependency actions; the
+  // design spec's decision #1 rounds this to "20 actions" but §3.1's own
+  // per-milestone tables total 21 — see CERTIFICATION_ACTIONS) that break the
+  // 7 coarse milestones into items that can actually be "checked and
+  // followed". See src/utils/seeds/certificationActions.ts.
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS action_key VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS milestone_key VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS sort_order INTEGER`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS action_text TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS owner VARCHAR(255)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS verification_mode VARCHAR(20)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS evidence_source VARCHAR(60)`,
+  );
+  // Manual ticks only — auto actions are computed live at read time and never
+  // stored (spec §3, §4.1).
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS done_at TIMESTAMP`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS done_by VARCHAR(255)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS evidence_policy_id INTEGER`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS note TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS plan_version VARCHAR(20)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_actions ADD COLUMN IF NOT EXISTS source_doc VARCHAR(50)`,
+  );
+  // Idempotency key for the action seed. NON-partial (unlike
+  // uq_certification_milestones_key): every seeded action_key row carries a
+  // key, so there are no legacy keyless rows to exclude, and ON CONFLICT
+  // (action_key) DO NOTHING can target this index directly without repeating
+  // a WHERE predicate.
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_certification_actions_key
+       ON certification_actions(action_key)`,
   );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS evidence_requests (
@@ -160,6 +237,7 @@ export async function initNorthStarSourceTables(): Promise<void> {
   `);
   logger.info("✅ [NorthStarSources] source tables ready");
   await seedCertificationMilestonePlan();
+  await seedCertificationActions();
 }
 
 /**
@@ -276,6 +354,43 @@ export async function seedCertificationMilestonePlan(): Promise<{ inserted: numb
   }
 
   logger.info(`✅ [NorthStar] Certification Milestone Plan seeded (${inserted} new rows)`);
+  return { inserted };
+}
+
+/**
+ * Seed the 23 Certification Actions (GRQ-PLAN-2026-01 §3.1). Idempotent:
+ * ON CONFLICT on action_key DO NOTHING, so redeploys never clobber an
+ * operator's manual tick (done_at / done_by / note).
+ *
+ * Unlike seedCertificationMilestonePlan(), this seed does not depend on
+ * `regulations` — action rows only reference milestone_key, which lives on
+ * certification_milestones regardless of whether the compliance module's
+ * lazily-created tables exist yet.
+ */
+export async function seedCertificationActions(): Promise<{ inserted: number }> {
+  let inserted = 0;
+  for (const a of CERTIFICATION_ACTIONS) {
+    const res = await pool.query(
+      `INSERT INTO certification_actions
+         (action_key, milestone_key, sort_order, action_text, owner,
+          verification_mode, evidence_source, plan_version, source_doc)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (action_key) DO NOTHING`,
+      [
+        a.action_key,
+        a.milestone_key,
+        a.sort_order,
+        a.action_text,
+        a.owner,
+        a.verification_mode,
+        a.evidence_source,
+        PLAN_VERSION,
+        SOURCE_DOC,
+      ],
+    );
+    inserted += res.rowCount ?? 0;
+  }
+  logger.info(`✅ [NorthStar] Certification Actions seeded (${inserted} new rows)`);
   return { inserted };
 }
 
