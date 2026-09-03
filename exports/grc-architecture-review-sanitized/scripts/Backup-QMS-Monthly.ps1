@@ -41,7 +41,7 @@
     Required environment variable: HostingPlatform_DATABASE_URL
         Source: HostingPlatform → your QMS Repl → Tools → Secrets → copy the value of
                 DATABASE_URL (or PROD_DATABASE_URL — the DatabaseProvider connection string).
-        Format: postgres://<user>:<pass>@<host>.DatabaseProvider.tech/<db>?sslmode=require
+        Format: <REDACTED_DSN><user>:<pass>@<host>.DatabaseProvider.tech/<db>?sslmode=require
 
     Set it once, persistently, for your Windows user with:
         [Environment]::SetEnvironmentVariable(

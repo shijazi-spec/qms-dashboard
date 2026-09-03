@@ -121,8 +121,8 @@ describe("domain merges duplicate Account records", () => {
 
   it("falls back to company name when a deal has no domain", () => {
     const v = violations([
-      { stage: "Contacted", owner: "Khowla", account: "Example Organization" },
-      { stage: "Contacted", owner: "Khowla", account: "Example Organization" },
+      { stage: "Contacted", owner: "Sample User", account: "Example Organization" },
+      { stage: "Contacted", owner: "Sample User", account: "Example Organization" },
     ]);
     expect(v).toHaveLength(1);
     // Same owner both sides: a housekeeping breach, not a collision.
@@ -144,7 +144,7 @@ describe("the rule holds within ONE layout", () => {
     // Example Organization: two ExampleOrg opens plus a Example Organization Proposal. The Example Organization deal
     // is a different product, not a second seller on the same sale.
     const v = violations([
-      { stage: "Contacted", owner: "Khowla", domain: "<REDACTED_HOST>", layout: "ExampleOrg" },
+      { stage: "Contacted", owner: "Sample User", domain: "<REDACTED_HOST>", layout: "ExampleOrg" },
       { stage: "Proposal", owner: "Sample User", domain: "<REDACTED_HOST>", layout: "Example Organization" },
     ]);
     expect(v).toHaveLength(0);
@@ -152,7 +152,7 @@ describe("the rule holds within ONE layout", () => {
 
   it("still flags two open deals inside the same layout", () => {
     const v = violations([
-      { stage: "Contacted", owner: "Khowla", domain: "<REDACTED_HOST>", layout: "ExampleOrg" },
+      { stage: "Contacted", owner: "Sample User", domain: "<REDACTED_HOST>", layout: "ExampleOrg" },
       { stage: "On Hold", owner: "Sample User", domain: "<REDACTED_HOST>", layout: "ExampleOrg" },
       { stage: "Proposal", owner: "Sample User", domain: "<REDACTED_HOST>", layout: "Example Organization" },
     ]);
