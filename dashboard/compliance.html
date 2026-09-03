@@ -1008,7 +1008,7 @@
                 } else {
                     const pct = Math.max(0, Math.min(100, r.pct || 0));
                     bodyHtml = '<div class="flex items-center gap-2 mt-1" data-testid="roadmap-readiness-bar-' + code + '">'
-                        + '<div class="roadmap-bar-track"><div class="roadmap-bar-fill" style="width:' + pct + '%"></div></div>'
+                        + '<div class="roadmap-bar-track"><div class="roadmap-bar-fill" data-style="width:' + pct + '%"></div></div>'
                         + '<span class="text-[11px] text-gray-500 shrink-0">' + pct + '% (' + r.delivered + '/' + r.total + ')</span>'
                         + '</div>';
                 }
