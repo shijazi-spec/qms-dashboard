@@ -43,6 +43,17 @@ await suite.test("POST /api/notifications/:id/dismiss — 400 with non-numeric i
   suite.expectEqual(res.body?.error, "Invalid ID", "body.error");
 });
 
+await suite.test("POST /api/notifications/read-all — 401 without a session", async () => {
+  // The bulk clear must never run for an anonymous caller: it scopes the
+  // UPDATE to the session user, so no session means there is nothing it could
+  // legitimately clear. Guards against the handler falling through to the
+  // admin-key branch (which clears EVERY recipient's notifications).
+  const handler = await buildHandler(notificationRoutes, "/api/notifications/read-all", "POST");
+  const res = await handler(makeContext({ method: "POST" }));
+  suite.expectEqual(res.status, 401, "status");
+  suite.expectEqual(res.body?.error, "Authentication required", "body.error");
+});
+
 if (HAS_DB) {
   await suite.test("GET /api/notifications/count — handler returns numeric count or structured 500", async () => {
     const handler = await buildHandler(notificationRoutes, "/api/notifications/count", "GET");

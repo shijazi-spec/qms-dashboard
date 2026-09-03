@@ -163,6 +163,37 @@ export async function markAsRead(id: number): Promise<Notification | null> {
   return result.rows[0] || null;
 }
 
+/**
+ * Mark every UNREAD notification visible to `recipient` as read, and return how
+ * many rows changed.
+ *
+ * Recipient scoping deliberately mirrors getUnreadCount / getNotifications:
+ * `recipient = $1 OR recipient IS NULL` — a NULL recipient is a broadcast that
+ * everyone sees. Without that clause this would clear other people's inboxes,
+ * which matters here because the table can hold tens of thousands of rows.
+ *
+ * Omitting `recipient` clears EVERYTHING and is intended only for an
+ * admin-key caller; the route decides which of the two applies.
+ *
+ * Bounded by `status = 'unread'` so re-running it is cheap and idempotent
+ * rather than rewriting read_at on rows that were already read.
+ */
+export async function markAllAsRead(recipient?: string): Promise<number> {
+  const result = recipient
+    ? await pool.query(
+        `UPDATE notifications
+            SET status = 'read', read_at = NOW()
+          WHERE status = 'unread' AND (recipient = $1 OR recipient IS NULL)`,
+        [recipient],
+      )
+    : await pool.query(
+        `UPDATE notifications
+            SET status = 'read', read_at = NOW()
+          WHERE status = 'unread'`,
+      );
+  return result.rowCount ?? 0;
+}
+
 export async function dismissNotification(
   id: number,
 ): Promise<Notification | null> {

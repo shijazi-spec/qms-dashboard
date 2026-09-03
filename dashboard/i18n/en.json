@@ -385,7 +385,11 @@
   },
   "notifications": {
     "title": "Notifications",
-    "no_notifications": "No new notifications"
+    "no_notifications": "No new notifications",
+    "mark_all_read": "Mark all read",
+    "show_less": "Show less",
+    "none_yet": "No notifications yet",
+    "more_hidden": "more not shown"
   },
   "common": {
     "loading": "Loading...",

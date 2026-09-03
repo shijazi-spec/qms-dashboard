@@ -225,7 +225,7 @@
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=2"></script>
-    <script src="/js/navigation.js?v=5.7"></script>
+    <script src="/js/navigation.js?v=5.8"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('compliance');
@@ -793,7 +793,7 @@
             if (!(window.WalaPlusI18n && window.WalaPlusI18n.t)) return fb;
             const v = window.WalaPlusI18n.t(k);
             if (!v) return fb;
-            // WalaPlusI18n.t() ECHOES the key (or its last fragment) when the key
+            // The i18n lookup ECHOES the key (or its last fragment) when the key
             // is missing from the loaded bundle — and that echo is truthy, so a
             // plain `t(k) || fb` can never fall back. That is how raw slugs like
             // "ms_lbl_docs" reached the screen on a stale i18n bundle. Treat an
@@ -841,9 +841,9 @@
 
         // Short per-node label for the plan's known milestone_keys.
         //
-        // These _ct() calls are written as STRING LITERALS on purpose. The i18n
-        // guardrail (scripts/check-i18n.cjs) scans statically for t('key') /
-        // _ct('key') literals; a lookup like _ct(MAP[x]) is invisible to it, so
+        // These lookups are written as STRING LITERALS on purpose. The i18n
+        // guardrail in scripts/check-i18n.cjs scans statically for quoted-literal
+        // keys; a lookup whose key comes from a variable is invisible to it, so
         // every one of these keys was reported as an unused orphan and failed
         // tests/i18nCoverage.test.ts. Keep them literal rather than baselining.
         //

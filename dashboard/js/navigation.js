@@ -573,59 +573,141 @@ const WalaPlusNav = {
     }
   },
 
+  // Bell-dropdown paging state. Collapsed = the 10 newest UNREAD, which is
+  // what the bell is for. Expanded ("View All") = a larger page that also
+  // includes already-read items, so the control still shows something once
+  // the unread list is empty. It used to be an <a href="/consultant">, which
+  // navigated to the GRQ Assistant page — a page with no notifications view,
+  // so pressing "View All" appeared to do nothing.
+  _notifExpanded: false,
+  NOTIF_COLLAPSED_LIMIT: 10,
+  NOTIF_EXPANDED_LIMIT: 50,
+
   pollAlertCount() {
-    const updateBadge = () => {
-      Promise.all([
-        fetch('/api/consultant/alerts/count', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { count: 0 }),
-        fetch('/api/notifications/count', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { count: 0 })
-      ]).then(([alerts, notifs]) => {
-        const total = (alerts.count || 0) + (notifs.count || 0);
-        const badge = document.getElementById('nav-alert-badge');
-        if (!badge) return;
-        if (total > 0) {
-          badge.textContent = total > 99 ? '99+' : String(total);
-          badge.classList.remove('hidden');
-        } else {
-          badge.classList.add('hidden');
+    this.refreshAlertBadge();
+    this.refreshNotifications();
+    if (this._notificationPollStarted) return;
+    this._notificationPollStarted = true;
+    setInterval(() => this.refreshAlertBadge(), 60000);
+    setInterval(() => this.refreshNotifications(), 60000);
+  },
+
+  refreshAlertBadge() {
+    Promise.all([
+      fetch('/api/consultant/alerts/count', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { count: 0 }),
+      fetch('/api/notifications/count', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { count: 0 })
+    ]).then(([alerts, notifs]) => {
+      const total = (alerts.count || 0) + (notifs.count || 0);
+      const badge = document.getElementById('nav-alert-badge');
+      if (!badge) return;
+      if (total > 0) {
+        badge.textContent = total > 99 ? '99+' : String(total);
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }).catch(() => {});
+  },
+
+  refreshNotifications() {
+    const expanded = this._notifExpanded;
+    const limit = expanded ? this.NOTIF_EXPANDED_LIMIT : this.NOTIF_COLLAPSED_LIMIT;
+    // Expanded drops the status filter so read history is visible too.
+    const query = expanded ? '?limit=' + limit : '?limit=' + limit + '&status=unread';
+    fetch('/api/notifications' + query, { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : { notifications: [], total: 0 })
+      .then(data => {
+        const list = document.getElementById('nav-notifications-list');
+        if (!list) return;
+        const page = data.notifications || [];
+        // Expanding drops the status filter so read history shows up, but a
+        // DISMISSED notification was explicitly removed by the user and must
+        // never come back. The API takes one exact-match status, not a NOT,
+        // so the exclusion happens here.
+        const items = page.filter(n => n.status !== 'dismissed');
+        if (items.length === 0) {
+          // Both lookups are written as STRING LITERALS, never a variable key:
+          // the i18n guardrail in scripts/check-i18n.cjs can only verify a key
+          // against en.json/ar.json when it can read it statically.
+          const empty = expanded
+            ? this._t('notifications.none_yet')
+            : this._t('notifications.no_notifications');
+          list.innerHTML = '<p class="text-center text-sm text-gray-400 py-4">' + this.escapeHtml(empty) + '</p>';
+          return;
         }
-      }).catch(() => {});
-    };
-    const loadNotifications = () => {
-      fetch('/api/notifications?limit=10&status=unread', { credentials: 'same-origin' })
-        .then(r => r.ok ? r.json() : { notifications: [] })
-        .then(data => {
-          const list = document.getElementById('nav-notifications-list');
-          if (!list) return;
-          const items = data.notifications || [];
-          if (items.length === 0) {
-            list.innerHTML = `<p class="text-center text-sm text-gray-400 py-4">${window.WalaPlusI18n ? window.WalaPlusI18n.t('notifications.no_notifications') : 'No new notifications'}</p>`;
-            return;
-          }
-          list.innerHTML = items.map(n => {
-            const time = new Date(n.created_at);
-            const ago = this.timeAgo(time);
-            const KNOWN_MODULES = {NC:'text-red-500',CAPA:'text-amber-500',RISK:'text-orange-500',COMPLIANCE:'text-blue-500',KPI:'text-green-500'};
-            const safeModule = Object.prototype.hasOwnProperty.call(KNOWN_MODULES, n.module) ? n.module : 'System';
-            const iconColor = KNOWN_MODULES[safeModule] || 'text-gray-500';
-            const safeId = Number.isFinite(Number(n.id)) && Number(n.id) >= 0 ? Number(n.id) : 0;
-            return `<button type="button" class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 w-full text-left" data-on-click="WalaPlusNav.markRead" data-args="[${safeId}]" aria-label="Mark notification as read: ${this.escapeHtml(n.subject||'Notification')}">
-              <span class="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0" aria-hidden="true"></span>
+        let html = items.map(n => {
+          const time = new Date(n.created_at);
+          const ago = this.timeAgo(time);
+          const KNOWN_MODULES = {NC:'text-red-500',CAPA:'text-amber-500',RISK:'text-orange-500',COMPLIANCE:'text-blue-500',KPI:'text-green-500'};
+          const safeModule = Object.prototype.hasOwnProperty.call(KNOWN_MODULES, n.module) ? n.module : 'System';
+          const iconColor = KNOWN_MODULES[safeModule] || 'text-gray-500';
+          const safeId = Number.isFinite(Number(n.id)) && Number(n.id) >= 0 ? Number(n.id) : 0;
+          // The API column is `title`; `subject` was never in the payload, so
+          // every row used to render as the literal word "Notification".
+          const subject = this.escapeHtml(n.title || n.subject || 'Notification');
+          if (n.status === 'read') {
+            // Already read: no mark-as-read affordance, muted dot.
+            return `<div class="flex items-start space-x-2 p-2 rounded-lg w-full text-left opacity-60">
+              <span class="w-2 h-2 mt-1.5 rounded-full bg-gray-300 flex-shrink-0" aria-hidden="true"></span>
               <span class="flex-1 min-w-0">
-                <span class="block text-sm font-medium text-gray-900 truncate">${this.escapeHtml(n.subject||'Notification')}</span>
+                <span class="block text-sm font-medium text-gray-900 truncate">${subject}</span>
                 <span class="block text-xs text-gray-500 truncate">${this.escapeHtml(n.message||'')}</span>
                 <span class="block text-xs ${iconColor} mt-0.5">${this.escapeHtml(safeModule)} · ${this.escapeHtml(ago)}</span>
               </span>
-            </button>`;
-          }).join('');
-        })
-        .catch(() => {});
-    };
-    updateBadge();
-    loadNotifications();
-    if (this._notificationPollStarted) return;
-    this._notificationPollStarted = true;
-    setInterval(updateBadge, 60000);
-    setInterval(loadNotifications, 60000);
+            </div>`;
+          }
+          return `<button type="button" class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 w-full text-left" data-on-click="WalaPlusNav.markRead" data-args="[${safeId}]" aria-label="Mark notification as read: ${subject}">
+            <span class="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0" aria-hidden="true"></span>
+            <span class="flex-1 min-w-0">
+              <span class="block text-sm font-medium text-gray-900 truncate">${subject}</span>
+              <span class="block text-xs text-gray-500 truncate">${this.escapeHtml(n.message||'')}</span>
+              <span class="block text-xs ${iconColor} mt-0.5">${this.escapeHtml(safeModule)} · ${this.escapeHtml(ago)}</span>
+            </span>
+          </button>`;
+        }).join('');
+        // Remainder the SERVER did not send in this page — measured against
+        // the raw page size, not the locally filtered list.
+        const total = Number(data.total) || page.length;
+        const hidden = total - page.length;
+        if (hidden > 0) {
+          html += '<p class="text-center text-xs text-gray-400 pt-2 pb-1">+' +
+            this.escapeHtml(String(hidden)) + ' ' +
+            this.escapeHtml(this._t('notifications.more_hidden')) + '</p>';
+        }
+        list.innerHTML = html;
+      })
+      .catch(() => {});
+  },
+
+  // "View All" / "Show less". Re-points the label at the other i18n key rather
+  // than writing text directly, so a later language switch still translates it.
+  toggleNotificationsView() {
+    this._notifExpanded = !this._notifExpanded;
+    const btn = document.getElementById('nav-notif-view-all');
+    if (btn) {
+      // data-i18n carries the key so a later language switch re-translates the
+      // label; the text itself is looked up with STRING LITERALS so the i18n
+      // guardrail can verify both keys resolve in en.json and ar.json.
+      btn.setAttribute('data-i18n', this._notifExpanded ? 'notifications.show_less' : 'nav.view_all');
+      btn.textContent = this._notifExpanded
+        ? this._t('notifications.show_less')
+        : this._t('nav.view_all');
+    }
+    this.refreshNotifications();
+  },
+
+  // Bulk clear. The server scopes the UPDATE to the session user, so this only
+  // ever clears what this user can see — the request carries no recipient.
+  markAllRead() {
+    const btn = document.getElementById('nav-notif-mark-all');
+    if (btn) btn.disabled = true;
+    fetch('/api/notifications/read-all', { method: 'POST', credentials: 'same-origin' })
+      .then(() => {
+        this.refreshAlertBadge();
+        this.refreshNotifications();
+      })
+      .catch(() => {})
+      .then(() => { if (btn) btn.disabled = false; });
   },
 
   timeAgo(date) {
@@ -1130,7 +1212,11 @@ const WalaPlusNav = {
             <div class="dropdown-menu hidden absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
               <div class="p-3 border-b border-gray-100 flex justify-between items-center">
                 <span class="font-semibold text-sm text-gray-900" data-i18n="notifications.title">${this._t('notifications.title')}</span>
-                <a href="/consultant" class="text-xs text-indigo-600 hover:text-indigo-800" data-i18n="nav.view_all">${this._t('nav.view_all')}</a>
+                <span class="flex items-center gap-2">
+                  <button type="button" id="nav-notif-mark-all" data-nav-keep-open data-on-click="WalaPlusNav.markAllRead" class="text-xs text-gray-500 hover:text-gray-800 disabled:opacity-50" data-i18n="notifications.mark_all_read" data-testid="button-mark-all-read">${this._t('notifications.mark_all_read')}</button>
+                  <span class="text-gray-300" aria-hidden="true">|</span>
+                  <button type="button" id="nav-notif-view-all" data-nav-keep-open data-on-click="WalaPlusNav.toggleNotificationsView" class="text-xs text-indigo-600 hover:text-indigo-800" data-i18n="nav.view_all" data-testid="button-view-all-notifications">${this._t('nav.view_all')}</button>
+                </span>
               </div>
               <div id="nav-notifications-list" class="overflow-y-auto max-h-72 p-2 space-y-1">
                 <p class="text-center text-sm text-gray-400 py-4" data-i18n="common.loading">${this._t('common.loading')}</p>
@@ -1327,6 +1413,20 @@ const WalaPlusNav = {
           if (arrow) arrow.classList.add('rotate-180');
         }
       });
+    });
+    // Controls that live INSIDE an open menu must not bubble to the
+    // document-level closer below, or the menu snaps shut the instant they
+    // are pressed — only the trigger button stops propagation. That is why
+    // "View All" appeared to do nothing: it would expand the list and then
+    // immediately hide the whole dropdown again.
+    //
+    // Safe to stop here: SafeActions listens in the CAPTURE phase
+    // (safe-actions.js `bind()` passes `true`), so the data-on-click handler
+    // has already run by the time this bubble-phase listener fires.
+    document.querySelectorAll('[data-nav-keep-open]').forEach(el => {
+      if (el.dataset.navKeepOpenBound === '1') return;
+      el.dataset.navKeepOpenBound = '1';
+      el.addEventListener('click', (e) => e.stopPropagation());
     });
     if (!this._docClosersBound) {
       this._docClosersBound = true;

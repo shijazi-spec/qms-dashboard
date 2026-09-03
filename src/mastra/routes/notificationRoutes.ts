@@ -153,6 +153,58 @@ export const notificationRoutes = [
     },
   },
   {
+    // Bulk "Mark all as read" for the bell dropdown. Without it, clearing a
+    // backlog meant one POST per notification — impractical when the table
+    // holds tens of thousands of rows.
+    //
+    // SCOPING IS THE WHOLE POINT: a session caller only ever clears what they
+    // can see (their own notifications plus NULL-recipient broadcasts), which
+    // is the same predicate getNotifications/getUnreadCount use. Only an
+    // admin-key caller clears globally. Getting this wrong would wipe other
+    // people's inboxes, so the recipient is derived server-side from the
+    // session and never taken from the request body.
+    path: "/api/notifications/read-all",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getSessionUser, hasValidAdminApiKey } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const { markAllAsRead } = await import(
+            "../../utils/notificationHub"
+          );
+
+          const isAdminKey = hasValidAdminApiKey(c);
+          let recipient: string | undefined;
+
+          if (!isAdminKey) {
+            const user = getSessionUser(c);
+            if (!user) return c.json({ error: "Authentication required" }, 401);
+
+            // Live DB role, not the cookie — a demoted user must not retain
+            // the global clear. Same check the :id/read handler makes.
+            const platformUser = await getPlatformUser(user.email);
+            const isLiveAdmin =
+              platformUser?.status === "active" &&
+              platformUser?.role === "admin";
+
+            // Non-admins are scoped to their own inbox. A live admin still
+            // gets the global clear, matching the per-id handler's rule that
+            // an admin may act on any notification.
+            recipient = isLiveAdmin ? undefined : user.email;
+          }
+
+          const updated = await markAllAsRead(recipient);
+          return c.json({ success: true, updated });
+        } catch (error) {
+          logger.error("[Notifications] mark-all-read failed:", error);
+          return c.json({ error: "Failed to mark all as read" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/notifications/:id/dismiss",
     method: "POST" as const,
     createHandler: async () => {
