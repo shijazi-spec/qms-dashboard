@@ -733,6 +733,17 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["GET"],
     roles: ["admin", "head_of_operations_quality", "grc_manager", "quality_manager", "executive"],
   },
+  // The one write path on the certification action plan — toggles a single
+  // MANUAL action's done_at/done_by (the route itself refuses to toggle an
+  // `auto` action with a 409). `:action_key` is a path segment, so the
+  // pattern must match the subtree, not just the bare collection path —
+  // an exact-anchor regex here would 403 every real call including admin's.
+  // Same five roles as the read endpoint above.
+  {
+    pattern: /^\/api\/certification-actions\/[^/]+\/toggle$/,
+    methods: ["POST"],
+    roles: ["admin", "head_of_operations_quality", "grc_manager", "quality_manager", "executive"],
+  },
 
   // ---- Documentation Live Tracker -------------------------------------
   // The three COLLECTOR paths (/ingest, /heartbeat, /collector-config) are in
@@ -907,6 +918,19 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // The handler additionally verifies the notification belongs to the caller's role.
   {
     pattern: /^\/api\/notifications\/\d+\/read$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
+
+  // Bulk "Mark all as read". Same role set as the per-id read above — it is
+  // the same privilege applied to the caller's whole inbox, not a wider one.
+  // The handler derives the recipient from the SESSION and scopes the UPDATE
+  // to it, so a non-admin can only ever clear their own notifications plus
+  // NULL-recipient broadcasts; only a live admin (or the admin key) clears
+  // globally. Must be listed here or deny-by-default blocks it — and
+  // rbacRouteCoverage.test.ts fails on any /api/* route with no rule.
+  {
+    pattern: /^\/api\/notifications\/read-all$/,
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
