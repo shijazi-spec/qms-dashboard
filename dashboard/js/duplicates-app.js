@@ -9410,8 +9410,14 @@
         window.exportDealComplianceReport = function () {
             var seg = document.getElementById('filterSegment')
                 ? document.getElementById('filterSegment').value : 'all';
-            window.location.href = '/api/duplicates/deal-compliance.xlsx?segment=' +
-                encodeURIComponent(seg || 'all');
+            var params = new URLSearchParams();
+            params.set('segment', seg || 'all');
+            // Pipeline narrowing within the layout. The workbook states the
+            // scope on its "How to read this" sheet either way, so a filtered
+            // copy can never be mistaken for the whole pipeline.
+            var pipe = document.getElementById('dcReportPipeline');
+            if (pipe && pipe.value) params.set('pipeline', pipe.value);
+            window.location.href = '/api/duplicates/deal-compliance.xlsx?' + params.toString();
         };
 
         // CSV export of the deals shown + their document status.

@@ -4092,16 +4092,23 @@ export const duplicateRadarRoutes = [
         const { countNeverChecked } = await import(
           "../../utils/dealDocComplianceSweep"
         );
-        const rows = await getDealComplianceReportRows(segment);
+        // ?pipeline= narrows within the layout (Sarah 2026-09-03: "WalaPlus
+        // Layout, Standard corporate pipeline"). Substring match — see the note
+        // in getDealComplianceReportRows on Zoho's inconsistent spellings.
+        const pipeline = (url.searchParams.get("pipeline") || "").trim();
+        const rows = await getDealComplianceReportRows(segment, {
+          pipeline: pipeline || undefined,
+        });
         const neverChecked = await countNeverChecked();
         const sheets = buildDealComplianceReportSheets(rows, {
           segment: String(segment),
-          inScope: rows.length + neverChecked,
+          inScope: pipeline ? rows.length : rows.length + neverChecked,
+          pipeline: pipeline || undefined,
         });
         try {
           await createExportLog({
             export_type: "deal_doc_compliance" as any,
-            filter_criteria: { segment },
+            filter_criteria: { segment, pipeline: pipeline || null },
             total_records_exported: rows.length,
             file_format: "xlsx",
             exported_by:

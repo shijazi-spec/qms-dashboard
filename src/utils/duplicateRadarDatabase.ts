@@ -796,6 +796,12 @@ export interface DealComplianceReportRow {
   missing_docs: string[];
   attachment_count: number;
   checked_at: string | null;
+  /** Zoho layout — WalaPlus / WalaOne / a Marketplace variant. */
+  layout: string;
+  /** Zoho pipeline within the layout, e.g. "Standard (Corporate)". */
+  pipeline: string;
+  /** Product(s) on the deal, from the Zoho Products field. */
+  product: string;
 }
 
 /**
@@ -811,10 +817,20 @@ export interface DealComplianceReportRow {
  */
 export async function getDealComplianceReportRows(
   segment: DuplicateFilters["segment"],
+  opts?: { pipeline?: string },
 ): Promise<DealComplianceReportRow[]> {
   const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
   const p = buildSegmentPredicate(seg, 1);
   const segCond = p.condition ? " AND " + p.condition : "";
+  // Optional pipeline narrowing (Sarah 2026-09-03: "WalaPlus Layout, Standard
+  // corporate pipeline"). Matched case-insensitively on a CONTAINS, because
+  // Zoho spells this pipeline several ways across records ("Standard",
+  // "Standard (Corporate)", "Corporate Standard") and an exact match on one
+  // spelling would silently drop the others.
+  const pipeParam = opts?.pipeline?.trim();
+  const pipeCond = pipeParam
+    ? ` AND LOWER(COALESCE(r.pipeline, '')) LIKE '%' || LOWER($${p.params.length + 1}) || '%'`
+    : "";
   const res = await pool.query(
     `SELECT d.zoho_deal_id AS id,
             COALESCE(NULLIF(BTRIM(r.record_name), ''), d.zoho_deal_id) AS name,
@@ -829,12 +845,15 @@ export async function getDealComplianceReportRows(
             d.compliant AS compliant,
             d.missing_docs AS missing_docs,
             d.attachment_count AS attachment_count,
-            d.checked_at AS checked_at
+            d.checked_at AS checked_at,
+            COALESCE(NULLIF(BTRIM(r.layout_name), ''), '') AS layout,
+            COALESCE(NULLIF(BTRIM(r.pipeline), ''), '') AS pipeline,
+            COALESCE(NULLIF(BTRIM(r.products), ''), '') AS product
        FROM deal_doc_compliance d
        JOIN duplicate_records r ON r.zoho_record_id = d.zoho_deal_id
-      WHERE r.record_type = 'deal'${segCond}
+      WHERE r.record_type = 'deal'${segCond}${pipeCond}
       ORDER BY d.compliant ASC, COALESCE(r.deal_value, 0) DESC`,
-    [...p.params],
+    pipeParam ? [...p.params, pipeParam] : [...p.params],
   );
   return (res.rows as any[]).map((x) => ({
     id: String(x.id),
@@ -849,6 +868,9 @@ export async function getDealComplianceReportRows(
     missing_docs: Array.isArray(x.missing_docs) ? x.missing_docs : [],
     attachment_count: Number(x.attachment_count) || 0,
     checked_at: x.checked_at ? new Date(x.checked_at).toISOString() : null,
+    layout: String(x.layout || ""),
+    pipeline: String(x.pipeline || ""),
+    product: String(x.product || ""),
   }));
 }
 

@@ -34,6 +34,11 @@ const deal = (o: Partial<DealComplianceReportRow> = {}): DealComplianceReportRow
   missing_docs: [],
   attachment_count: 3,
   checked_at: "2026-08-31T00:00:00.000Z",
+  // Layout / pipeline / product became required on the row when the
+  // report gained those columns (2026-09-03).
+  layout: "WalaPlus",
+  pipeline: "Standard (Corporate)",
+  product: "WalaPlus",
   ...o,
 });
 const bad = (o: Partial<DealComplianceReportRow> = {}) =>

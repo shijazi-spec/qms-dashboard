@@ -22,6 +22,8 @@ import {
   pct,
   sameStage,
   dealComplianceReportFilename,
+  FMT_PERCENT,
+  FMT_SAR,
   REPORT_STAGES,
 } from "../../src/utils/dealComplianceReportExport";
 import type { DealComplianceReportRow } from "../../src/utils/duplicateRadarDatabase";
@@ -39,6 +41,11 @@ const deal = (o: Partial<DealComplianceReportRow> = {}): DealComplianceReportRow
   missing_docs: [],
   attachment_count: 1,
   checked_at: "2026-08-25T00:00:00.000Z",
+  // Layout / pipeline / product became required on the row when the
+  // report gained those columns (2026-09-03).
+  layout: "WalaPlus",
+  pipeline: "Standard (Corporate)",
+  product: "WalaPlus",
   ...o,
 });
 
@@ -150,7 +157,9 @@ describe("workbook shape", () => {
     expect(last.stage).toBe("ALL STAGES");
     expect(last.checked).toBe(4);
     expect(last.missing).toBe(2);
-    expect(last.missing_pct).toBe(50);
+    // A FRACTION, not 50: the column carries Excel's "0%" format, which
+    // multiplies by 100 on display. Writing 50 would render "5000%".
+    expect(last.missing_pct).toBe(0.5);
   });
 
   it("puts incomplete deals first, by value, on each stage sheet", () => {
@@ -189,6 +198,69 @@ describe("workbook shape", () => {
   it("records that nothing was changed in the CRM", () => {
     const notes = (sheets.at(-1)!.rows as any[]).map((r) => r.note).join(" ");
     expect(notes).toContain("Nothing in this workbook has been changed in the CRM");
+  });
+});
+
+describe("the formatting Sarah applied by hand, now built in", () => {
+  // She exported the first report, formatted it herself, and sent it back
+  // (2026-09-03). These assert the workbook now produces what she made:
+  // percentages as real percentages, money as SAR, and colour that separates
+  // complete from missing at a glance.
+  const sheets = buildDealComplianceReportSheets(
+    [deal({ stage: "Paid" }), bad({ stage: "Paid", amount: 5000 })],
+    { segment: "walaplus", pipeline: "Standard" },
+  );
+  const col = (sheetName: string, key: string) =>
+    sheets.find((s) => s.name === sheetName)!.columns.find((c) => c.key === key)!;
+
+  it("formats both percentage columns as percentages", () => {
+    expect((col("Summary", "missing_pct") as any).numFmt).toBe(FMT_PERCENT);
+    expect((col("By owner", "missing_pct") as any).numFmt).toBe(FMT_PERCENT);
+  });
+
+  it("stores percentages as fractions, so 0% format renders correctly", () => {
+    const paid = (sheets[0].rows as any[]).find((r) => r.stage === "Paid");
+    expect(paid.missing_pct).toBeGreaterThan(0);
+    expect(paid.missing_pct).toBeLessThanOrEqual(1);
+  });
+
+  it("formats every money column as SAR", () => {
+    expect((col("Summary", "missing_value") as any).numFmt).toBe(FMT_SAR);
+    expect((col("By owner", "missing_value") as any).numFmt).toBe(FMT_SAR);
+    expect((col("Paid", "amount") as any).numFmt).toBe(FMT_SAR);
+  });
+
+  it("colours Complete green and Missing red, only when non-zero", () => {
+    for (const sheet of ["Summary", "By owner"]) {
+      const complete = col(sheet, "compliant") as any;
+      const missing = col(sheet, "missing") as any;
+      expect(complete.fill).toBe("FF92D050");
+      expect(missing.fill).toBe("FFFF0000");
+      // Without this, a stage with nothing missing still gets a red cell.
+      expect(complete.fillWhenTruthy).toBe(true);
+      expect(missing.fillWhenTruthy).toBe(true);
+    }
+  });
+
+  it("carries Layout, Pipeline and Product on every stage sheet", () => {
+    for (const stage of REPORT_STAGES) {
+      const keys = sheets.find((s) => s.name === stage)!.columns.map((c) => c.key);
+      expect(keys).toContain("layout");
+      expect(keys).toContain("pipeline");
+      expect(keys).toContain("product");
+    }
+  });
+
+  it("states the layout AND pipeline it was scoped to", () => {
+    const notes = (sheets.at(-1)!.rows as any[]).map((r) => r.note).join(" ");
+    expect(notes).toContain("layout walaplus");
+    expect(notes).toContain("pipeline Standard");
+  });
+
+  it("says 'all pipelines' rather than going silent when unscoped", () => {
+    // A filtered sheet that does not say so reads as covering everything.
+    const wide = buildDealComplianceReportSheets([deal()], { segment: "all" });
+    expect((wide.at(-1)!.rows as any[]).map((r) => r.note).join(" ")).toContain("all pipelines");
   });
 });
 

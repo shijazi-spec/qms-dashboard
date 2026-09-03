@@ -77,6 +77,26 @@ export interface ColumnSpec {
   header: string;
   key: string;
   width?: number;
+  /**
+   * Excel number format for this column's DATA cells, e.g. "0%" or an
+   * accounting mask. Applied by `buildWorkbook` only — the streaming writer
+   * leaves it alone, since a streamed export of unbounded size is not the
+   * place for per-cell styling.
+   *
+   * A percentage column must carry the FRACTION (0.46), not 46: "0%" multiplies
+   * by 100 on display, so writing 46 renders "4600%".
+   */
+  numFmt?: string;
+  /**
+   * Solid background for this column's data cells, as ARGB ("FF92D050").
+   * `fillWhenTruthy` restricts it to cells with a non-zero value, so a
+   * red "missing" column does not paint the rows that have nothing missing.
+   */
+  fill?: string;
+  fillWhenTruthy?: boolean;
+  /** Font colour for data cells, as ARGB. Pair with a dark `fill`. */
+  fontColor?: string;
+  bold?: boolean;
 }
 
 /** A sheet in an XLSX export.  `rows` may be a plain array or an AsyncIterable. */
@@ -409,6 +429,34 @@ export async function buildWorkbook(
     headerRow.height = 22;
 
     if (sheet.rows.length) ws.addRows(sheet.rows);
+
+    // Column-level formatting for the data rows. Applied after addRows so it
+    // covers every row without styling each one at build time.
+    const styled = sheet.columns
+      .map((c, i) => ({ c, idx: i + 1 }))
+      .filter(({ c }) => c.numFmt || c.fill || c.fontColor || c.bold);
+    for (const { c, idx } of styled) {
+      const col = ws.getColumn(idx);
+      col.eachCell({ includeEmpty: false }, (cell, rowNumber) => {
+        if (rowNumber === 1) return; // header keeps HEADER_STYLE
+        if (c.numFmt) cell.numFmt = c.numFmt;
+        if (c.fill && (!c.fillWhenTruthy || !!cell.value)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: c.fill },
+          };
+        }
+        if (c.fontColor || c.bold) {
+          cell.font = {
+            ...(cell.font || {}),
+            ...(c.fontColor ? { color: { argb: c.fontColor } } : {}),
+            ...(c.bold ? { bold: true } : {}),
+          };
+        }
+      });
+    }
+
     autoSize(ws, sheet.columns);
   }
 

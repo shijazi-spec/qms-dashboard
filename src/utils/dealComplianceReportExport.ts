@@ -41,6 +41,30 @@ export function pct(part: number, whole: number): number | null {
   return Math.round((part / whole) * 100);
 }
 
+/**
+ * Formatting Sarah applied by hand to the first export (2026-09-03) and asked
+ * to have built in. Kept here as named constants so the workbook and its tests
+ * refer to the same values.
+ *
+ * The percentage columns carry a FRACTION and are displayed with "0%": Excel's
+ * percent format multiplies by 100, so storing 46 would render "4600%". This
+ * is also why `pct()` above (whole numbers, for the email and the UI) and the
+ * workbook's percentages are deliberately different types.
+ */
+export const FMT_PERCENT = "0%";
+export const FMT_SAR =
+  '_([$SAR]\\ * #,##0.00_);_([$SAR]\\ * \\(#,##0.00\\);_([$SAR]\\ * "-"??_);_(@_)';
+const FILL_COMPLETE = "FF92D050"; // green — deals with every document
+const FILL_MISSING = "FFFF0000"; // red — deals short of one
+const FILL_EMPHASIS = "FF1F2937"; // the header navy, reused to weight % missing
+const FONT_ON_EMPHASIS = "FFFFFFFF";
+
+/** Fraction for Excel's percent format, or "" when nothing was measured. */
+function pctFraction(part: number, whole: number): number | string {
+  if (!whole) return "";
+  return part / whole;
+}
+
 export function dealComplianceReportFilename(segment: string): string {
   const safe = String(segment || "all").replace(/[^a-z0-9_-]/gi, "");
   return `deal-document-compliance-${safe}.xlsx`;
@@ -114,7 +138,7 @@ export function sameStage(a: string, b: string): boolean {
 
 export function buildDealComplianceReportSheets(
   rows: DealComplianceReportRow[],
-  opts: { segment: string; inScope?: number },
+  opts: { segment: string; inScope?: number; pipeline?: string },
 ): SheetSpec[] {
   const missingAll = rows.filter((r) => !r.compliant);
   const stages = stageSummary(rows);
@@ -125,26 +149,26 @@ export function buildDealComplianceReportSheets(
     {
       name: "Summary",
       columns: [
-        { header: "Stage", key: "stage", width: 20 },
+        { header: "Stage", key: "stage", width: 20, fill: FILL_EMPHASIS, fontColor: FONT_ON_EMPHASIS, bold: true },
         { header: "Deals checked", key: "checked", width: 14 },
-        { header: "Complete", key: "compliant", width: 12 },
-        { header: "Missing documents", key: "missing", width: 18 },
-        { header: "% missing", key: "missing_pct", width: 11 },
-        { header: "Value at risk (SAR)", key: "missing_value", width: 19 },
+        { header: "Complete", key: "compliant", width: 12, fill: FILL_COMPLETE, fillWhenTruthy: true },
+        { header: "Missing documents", key: "missing", width: 18, fill: FILL_MISSING, fillWhenTruthy: true },
+        { header: "% missing", key: "missing_pct", width: 11, numFmt: FMT_PERCENT, fill: FILL_EMPHASIS, fontColor: FONT_ON_EMPHASIS, bold: true },
+        { header: "Value at risk (SAR)", key: "missing_value", width: 19, numFmt: FMT_SAR },
       ],
       rows: [
         ...stages.map((s) => ({
           ...s,
-          // Excel shows a blank rather than a misleading 0% when the sweep has
-          // not reached a single deal in that stage.
-          missing_pct: s.missing_pct == null ? "" : s.missing_pct,
+          // Blank, not 0%, when the sweep has not reached a single deal in the
+          // stage — "0% missing" would read as perfect compliance.
+          missing_pct: pctFraction(s.missing, s.checked),
         })),
         {
           stage: "ALL STAGES",
           checked: rows.length,
           compliant: rows.length - missingAll.length,
           missing: missingAll.length,
-          missing_pct: pct(missingAll.length, rows.length) ?? "",
+          missing_pct: pctFraction(missingAll.length, rows.length),
           missing_value: Math.round(missingAll.reduce((n, r) => n + (r.amount || 0), 0)),
         },
       ],
@@ -154,15 +178,15 @@ export function buildDealComplianceReportSheets(
       columns: [
         { header: "Deal owner", key: "owner", width: 28 },
         { header: "Deals checked", key: "checked", width: 14 },
-        { header: "Complete", key: "compliant", width: 12 },
-        { header: "Missing documents", key: "missing", width: 18 },
-        { header: "% missing", key: "missing_pct", width: 11 },
-        { header: "Value at risk (SAR)", key: "missing_value", width: 19 },
+        { header: "Complete", key: "compliant", width: 12, fill: FILL_COMPLETE, fillWhenTruthy: true },
+        { header: "Missing documents", key: "missing", width: 18, fill: FILL_MISSING, fillWhenTruthy: true },
+        { header: "% missing", key: "missing_pct", width: 11, numFmt: FMT_PERCENT, fill: FILL_EMPHASIS, fontColor: FONT_ON_EMPHASIS, bold: true },
+        { header: "Value at risk (SAR)", key: "missing_value", width: 19, numFmt: FMT_SAR },
         { header: "Note", key: "note", width: 34 },
       ],
       rows: owners.map((o) => ({
         ...o,
-        missing_pct: o.missing_pct == null ? "" : o.missing_pct,
+        missing_pct: o.missing_pct == null ? "" : pctFraction(o.missing, o.checked),
         note:
           o.missing_pct == null
             ? `Too few deals checked (${o.checked}) to read a rate`
@@ -187,7 +211,14 @@ export function buildDealComplianceReportSheets(
         { header: "Deal", key: "deal", width: 36 },
         { header: "Account", key: "account", width: 30 },
         { header: "Deal owner", key: "owner", width: 24 },
-        { header: "Amount (SAR)", key: "amount", width: 15 },
+        // Layout / Pipeline / Product (Sarah 2026-09-03). Even when the whole
+        // workbook is scoped to one layout, the columns stay: a sheet that has
+        // been filtered must still say what it was filtered to, or a forwarded
+        // copy reads as if it covered everything.
+        { header: "Layout", key: "layout", width: 18 },
+        { header: "Pipeline", key: "pipeline", width: 22 },
+        { header: "Product", key: "product", width: 22 },
+        { header: "Amount (SAR)", key: "amount", width: 17, numFmt: FMT_SAR },
         { header: "Created", key: "created", width: 12 },
         { header: "Missing documents", key: "missing", width: 52 },
         { header: "Attachments", key: "attachments", width: 12 },
@@ -199,6 +230,9 @@ export function buildDealComplianceReportSheets(
         deal: r.name,
         account: r.account || "",
         owner: r.owner,
+        layout: r.layout || "",
+        pipeline: r.pipeline || "",
+        product: r.product || "",
         amount: Math.round(r.amount || 0),
         created: day(r.created),
         missing: (r.missing_docs || []).join(", "),
@@ -218,7 +252,12 @@ export function buildDealComplianceReportSheets(
     name: "How to read this",
     columns: [{ header: "Notes", key: "note", width: 118 }],
     rows: [
-      { note: `Scope: ${opts.segment} · stages ${REPORT_STAGES.join(", ")}.` },
+      {
+        note:
+          `Scope: layout ${opts.segment}` +
+          (opts.pipeline ? ` · pipeline ${opts.pipeline}` : " · all pipelines") +
+          ` · stages ${REPORT_STAGES.join(", ")}.`,
+      },
       { note: coverage },
       {
         note:
