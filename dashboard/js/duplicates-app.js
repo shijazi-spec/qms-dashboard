@@ -9667,6 +9667,22 @@
                 });
                 var moreOwners = Math.max(0, (d.by_owner || []).length - ownerLines.length);
 
+                // Deals with no Amount. Reported as its own finding AND as the
+                // reason the SAR exposure is a floor rather than the true
+                // number — a deal with no Amount contributes zero to it.
+                var amountLines = [];
+                if (d.no_amount) {
+                    amountLines = [
+                        '',
+                        '⚠️  ' + _fn(d.no_amount) + ' of these deals carry NO Amount (SAR) at all'
+                            + (d.no_amount_missing_docs ? ' — ' + _fn(d.no_amount_missing_docs) + ' of them are also missing documents' : '') + '.',
+                        '    A deal cannot reach Proposal or Agreement Signed without a value: it has been quoted to the client.',
+                        '    Because the system can only count what is recorded, those deals add SAR 0 to the figure above —',
+                        '    so the real exposure is HIGHER than SAR ' + _fn(d.value_at_risk) + ', and these deals are invisible in',
+                        '    pipeline value, forecasting and win-ratio reporting until the Amount is filled in.',
+                    ];
+                }
+
                 var lines = [
                     '📄 Deal documents — compliance report · ' + scopeBits.join(' · '),
                     '',
@@ -9675,6 +9691,7 @@
                     '  ⛔  Missing documents — ' + _fn(d.missing) + ' of ' + _fn(d.checked) + ' deals (' + pctOf(d.missing, d.checked) + '%)',
                     '  ✅  Complete — ' + _fn(d.complete) + ' deals',
                     '  💰  Value at risk — SAR ' + _fn(d.value_at_risk),
+                ].concat(amountLines).concat([
                     '',
                     'By stage:',
                     stageLines.length ? stageLines.join('\n') : '  (no deals in the reported stages)',
@@ -9684,12 +9701,34 @@
                         ? ownerLines.join('\n') + (moreOwners ? '\n  • …and ' + _fn(moreOwners) + ' more — full list in the "By owner" tab.' : '')
                         : '  (none)',
                     '',
+                    'Why this matters:',
+                    '',
+                    '  🤝  A signed agreement without its quotation, PO, VAT certificate or commercial registration is not a',
+                    '      complete contract file. If a client later disputes scope, price or duration, we have nothing to',
+                    '      point to — the commercial position is only as strong as the paperwork behind it.',
+                    '',
+                    '  📉  At Proposal stage the financial offer IS the deal. A proposal the client never received in writing',
+                    '      cannot be approved, so it stalls rather than closes. Deals that sit without their offer on file are',
+                    '      the ones that quietly age out of the pipeline, and that shows up directly in the win ratio.',
+                    '',
+                    '  🏛️  Government and large enterprise clients audit their vendor file. A missing CR, VAT certificate or',
+                    '      national address can disqualify us at renewal or in the next tender regardless of how well we',
+                    '      delivered — the reputational cost lands long after the deal was won.',
+                    '',
+                    '  💸  Finance cannot invoice or collect against a deal with no PO or agreement on file, so incomplete',
+                    '      documentation turns directly into slower cash collection.',
+                    '',
+                    '  🔍  In an ISO or internal audit, the sample is drawn from exactly these stages. A ' + pctOf(d.missing, d.checked) + '% gap on',
+                    '      required records is a finding against the Sales process, not against any individual.',
+                    '',
                     'What we need:',
                     '  📎  Upload the missing documents to the deal in Zoho. Each row lists exactly which ones are missing and links straight to the deal.',
                     '  🗓️  Please action the highest-value deals first — the list is sorted that way.',
+                ]).concat(d.no_amount ? ['  💰  Fill in the Amount (SAR) on the deals flagged above so they can be forecast and counted.'] : [])
+                 .concat([
                     '',
                     'How to read the attachment:',
-                ].concat((d.notes || []).map(function (n) { return '  • ' + n; }))
+                ]).concat((d.notes || []).map(function (n) { return '  • ' + n; }))
                  .concat([
                     '',
                     '🤖 Checked by Adam — WalaPlus QMS, Duplicate Radar → Deal Compliance.',

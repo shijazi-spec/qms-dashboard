@@ -4139,6 +4139,17 @@ export const duplicateRadarRoutes = [
         );
         const neverChecked = await countNeverChecked();
         const missing = rows.filter((r: any) => !r.compliant);
+        // Deals carrying NO Amount (Sarah 2026-09-03: "it doesn't make any
+        // sense that I have been in the agreement signed or proposal without
+        // knowing the Amount"). This is a finding in its own right, and it also
+        // qualifies every SAR figure in the report: a deal with no Amount
+        // contributes ZERO to value at risk, so the exposure below is a FLOOR,
+        // not the true number. Reported so the reader knows which way it is
+        // wrong rather than trusting a total that quietly understates.
+        const noAmount = rows.filter(
+          (r: any) => r.amount == null || Number(r.amount) === 0,
+        );
+        const noAmountMissingDocs = noAmount.filter((r: any) => !r.compliant);
         return c.json({
           success: true,
           segment: String(segment),
@@ -4147,6 +4158,8 @@ export const duplicateRadarRoutes = [
           in_scope: pipeline ? rows.length : rows.length + neverChecked,
           missing: missing.length,
           complete: rows.length - missing.length,
+          no_amount: noAmount.length,
+          no_amount_missing_docs: noAmountMissingDocs.length,
           value_at_risk: Math.round(
             missing.reduce((n: number, r: any) => n + (r.amount || 0), 0),
           ),

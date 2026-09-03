@@ -294,6 +294,7 @@ export function buildReportNotes(opts: {
     "Percentages are of deals that have been CHECKED, not of all deals. A deal the automatic check has not reached yet is not counted either way — padding the denominator with unknowns would flatter the numbers.",
     `Owners are ranked by the NUMBER of deals missing documents, not by rate. A rep with 2 of 3 incomplete is at 67% but is not the problem; a rep with 180 incomplete is, even at 40%. Rates are hidden below ${MIN_DEALS_FOR_RATE} checked deals.`,
     "Requirements per Sales SOP 7.5.10 — Proposal needs the financial offer; Agreement Signed needs the proposal, service agreement/contract, quotation/PO/invoice, VAT certificate, commercial registration and national address.",
+    "Value at risk counts only deals that carry an Amount. A deal with the Amount left blank adds SAR 0, so the exposure shown is a FLOOR, not the true figure — and that deal is also invisible in pipeline value, forecasting and win-ratio reporting until the Amount is filled in.",
     "This checks the FILES uploaded to Zoho. Field and data-entry compliance is a separate audit on the Quality Dashboard.",
     "Nothing in this workbook has been changed in the CRM.",
   ];
