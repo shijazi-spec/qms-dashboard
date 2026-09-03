@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Handoff Tracker - ExampleOrg Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('handoff-tracker');
+        });
+    </script>
+
+    <div class="max-w-6xl mx-auto px-4 py-6">
+        <div class="mb-5">
+            <h1 class="text-2xl font-bold text-gray-900">Quality &harr; GRC Handoff Tracker</h1>
+            <p class="text-sm text-gray-600 mt-1">
+                Shared tasks between Quality and GRC. Every handoff here feeds the
+                <strong>Handoff Effectiveness</strong> KPI &mdash; on time, accepted, and without rework.
+            </p>
+        </div>
+
+        <!-- New handoff -->
+        <div class="bg-white rounded-lg shadow p-4 mb-6">
+            <h2 class="font-semibold text-gray-900 mb-3">Assign a handoff</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input id="htTitle" type="text" placeholder="Title (what needs to be done)" class="border rounded px-3 py-2 text-sm" />
+                <select id="htAssignee" class="border rounded px-3 py-2 text-sm"></select>
+                <textarea id="htDesc" rows="2" placeholder="Details (optional)" class="border rounded px-3 py-2 text-sm md:col-span-2"></textarea>
+                <label class="text-sm text-gray-600 flex items-center gap-2">Due date
+                    <input id="htDue" type="date" class="border rounded px-2 py-1 text-sm" />
+                </label>
+                <div class="flex justify-end">
+                    <button data-on-click="createHandoff" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Assign &amp; email</button>
+                </div>
+            </div>
+            <p id="htFormMsg" class="text-xs mt-2"></p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="flex items-center gap-3 px-4 py-3 border-b">
+                <h2 class="font-semibold text-gray-900">Handoffs</h2>
+                <span id="htCounts" class="text-xs text-gray-500"></span>
+                <div class="flex-1"></div>
+                <select id="htFilter" class="border rounded px-2 py-1 text-xs">
+                    <option value="open">Open only</option>
+                    <option value="all">All</option>
+                    <option value="mine">Assigned to me</option>
+                    <option value="sent">I assigned</option>
+                    <option value="overdue">Overdue</option>
+                </select>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-700">
+                        <tr>
+                            <th scope="col" class="text-start px-3 py-2 font-semibold">Direction</th>
+                            <th scope="col" class="text-start px-3 py-2 font-semibold">What was requested</th>
+                            <th scope="col" class="text-start px-3 py-2 font-semibold">Owner</th>
+                            <th scope="col" class="text-start px-3 py-2 font-semibold">Requested</th>
+                            <th scope="col" class="text-start px-3 py-2 font-semibold">Due</th>
+                            <th scope="col" class="text-start px-3 py-2 font-semibold">Overdue</th>
+                            <th scope="col" class="text-start px-3 py-2 font-semibold">Status</th>
+                            <th scope="col" class="text-start px-3 py-2 font-semibold">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="htRows" class="divide-y"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let _me = '';
+        // Quality <-> GRC only, per the approved design.
+        const PARTICIPANTS = [
+            { email: 'user@example.invalid', name: 'Sample User (Quality)' },
+            { email: 'user@example.invalid', name: 'Maram AlHarbi (GRC)' }
+        ];
+        const _esc = (s) => String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        function _statusChip(t) {
+            const map = {
+                sent: ['Sent', 'bg-blue-100 text-blue-700'],
+                accepted: ['Accepted', 'bg-amber-100 text-amber-700'],
+                done: ['Done', 'bg-emerald-100 text-emerald-700'],
+                rejected: ['Returned', 'bg-red-100 text-red-700']
+            };
+            const [label, cls] = map[t.status] || ['—', 'bg-gray-100 text-gray-600'];
+            return `<span class="text-xs px-2 py-0.5 rounded ${cls}">${label}</span>`;
+        }
+
+        function _overdue(t) {
+            if (!t.due_date || t.status === 'done' || t.status === 'rejected') return false;
+            return String(t.due_date).slice(0, 10) < new Date().toISOString().split('T')[0];
+        }
+
+        /** Whole days past the due date, like the "19 days" column in the Excel tracker. */
+        function _overdueDays(t) {
+            if (!_overdue(t)) return 0;
+            const due = new Date(String(t.due_date).slice(0, 10));
+            const today = new Date(new Date().toISOString().split('T')[0]);
+            return Math.max(0, Math.round((today - due) / 86400000));
+        }
+
+        function _row(t, mine) {
+            const due = t.due_date ? String(t.due_date).slice(0, 10) : '—';
+            const od = _overdueDays(t);
+            // Actions depend on which side you're on and where the task is.
+            let actions = '<span class="text-gray-400 text-xs">—</span>';
+            if (mine && t.status === 'sent') {
+                actions = `<button data-on-click="act" data-args="[${t.id},&quot;accept&quot;]" class="text-xs px-2 py-1 rounded bg-emerald-600 text-white">Accept</button>
+                           <button data-on-click="act" data-args="[${t.id},&quot;reject&quot;]" class="text-xs px-2 py-1 rounded border text-red-600 ms-1">Return</button>`;
+            } else if (mine && t.status === 'accepted') {
+                actions = `<button data-on-click="act" data-args="[${t.id},&quot;done&quot;]" class="text-xs px-2 py-1 rounded bg-emerald-600 text-white">Done</button>
+                           <button data-on-click="act" data-args="[${t.id},&quot;reject&quot;]" class="text-xs px-2 py-1 rounded border text-red-600 ms-1">Return</button>`;
+            } else if (!mine && t.status === 'rejected') {
+                actions = `<button data-on-click="act" data-args="[${t.id},&quot;resend&quot;]" class="text-xs px-2 py-1 rounded bg-indigo-600 text-white">Re-send</button>`;
+            }
+            const requested = t.created_at ? String(t.created_at).slice(0, 10) : '—';
+            return `<tr class="${od ? 'bg-red-50' : ''}">
+                <td class="px-3 py-2 whitespace-nowrap">
+                    <span class="text-xs px-2 py-0.5 rounded ${mine ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}">${mine ? 'To me' : 'I sent'}</span>
+                </td>
+                <td class="px-3 py-2">
+                    <div class="font-medium text-gray-900">${_esc(t.title)}</div>
+                    ${t.description ? `<div class="text-xs text-gray-600">${_esc(t.description)}</div>` : ''}
+                    ${t.reject_reason ? `<div class="text-xs text-red-700 mt-0.5">Returned: ${_esc(t.reject_reason)}</div>` : ''}
+                    ${Number(t.rework_count) > 0 ? `<div class="text-xs text-amber-700">rework &times;${Number(t.rework_count)}</div>` : ''}
+                </td>
+                <td class="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">${_esc(mine ? t.created_by : t.assigned_to)}</td>
+                <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${requested}</td>
+                <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${due}</td>
+                <td class="px-3 py-2 whitespace-nowrap">${od ? `<span class="text-xs font-semibold text-red-700">${od} day${od === 1 ? '' : 's'}</span>` : '<span class="text-xs text-gray-400">—</span>'}</td>
+                <td class="px-3 py-2 whitespace-nowrap">${_statusChip(t)}</td>
+                <td class="px-3 py-2 whitespace-nowrap">${actions}</td>
+            </tr>`;
+        }
+
+        let _tasks = [];
+
+        function renderTable() {
+            const mode = document.getElementById('htFilter').value;
+            const isMine = t => (t.assigned_to || '').toLowerCase() === _me;
+            const open = t => t.status === 'sent' || t.status === 'accepted';
+            let rows = _tasks;
+            if (mode === 'open') rows = rows.filter(open);
+            else if (mode === 'mine') rows = rows.filter(isMine);
+            else if (mode === 'sent') rows = rows.filter(t => (t.created_by || '').toLowerCase() === _me);
+            else if (mode === 'overdue') rows = rows.filter(t => _overdueDays(t) > 0);
+            document.getElementById('htRows').innerHTML = rows.length
+                ? rows.map(t => _row(t, isMine(t))).join('')
+                : '<tr><td colspan="8" class="px-3 py-6 text-center text-sm text-gray-500">Nothing to show.</td></tr>';
+            const mine = _tasks.filter(t => isMine(t) && open(t)).length;
+            const od = _tasks.filter(t => _overdueDays(t) > 0).length;
+            document.getElementById('htCounts').textContent =
+                `${mine} awaiting you${od ? ` · ${od} overdue` : ''}`;
+        }
+
+        async function loadTasks() {
+            try {
+                const res = await fetch('/api/handoff-tasks');
+                if (!res.ok) {
+                    document.getElementById('htRows').innerHTML =
+                        '<tr><td colspan="8" class="px-3 py-6 text-center text-sm text-red-600">You don’t have access to the handoff tracker.</td></tr>';
+                    return;
+                }
+                const data = await res.json();
+                _me = (<REDACTED_HOST> || '').toLowerCase();
+                _tasks = data.tasks || [];
+                renderTable();
+                // Offer only the OTHER participant as the assignee.
+                const sel = document.getElementById('htAssignee');
+                const others = PARTICIPANTS.filter(p => p.email.toLowerCase() !== _me);
+                sel.innerHTML = (others.length ? others : PARTICIPANTS)
+                    .map(p => `<option value="${_esc(p.email)}">${_esc(p.name)}</option>`).join('');
+            } catch (e) {
+                console.error('Load handoff tasks error:', e);
+            }
+        }
+
+        async function createHandoff() {
+            const title = (document.getElementById('htTitle').value || '').trim();
+            const msg = document.getElementById('htFormMsg');
+            if (!title) { msg.textContent = 'Please enter a title.'; msg.className = 'text-xs mt-2 text-red-600'; return; }
+            const payload = {
+                title,
+                description: document.getElementById('htDesc').value,
+                due_date: document.getElementById('htDue').value || null,
+                assigned_to: document.getElementById('htAssignee').value
+            };
+            try {
+                const res = await fetch('/api/handoff-tasks', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    document.getElementById('htTitle').value = '';
+                    document.getElementById('htDesc').value = '';
+                    document.getElementById('htDue').value = '';
+                    msg.textContent = 'Assigned — an email has been sent.';
+                    msg.className = 'text-xs mt-2 text-emerald-700';
+                    await loadTasks();
+                } else {
+                    const d = await res.json().catch(() => ({}));
+                    msg.textContent = d.error || 'Failed to assign.';
+                    msg.className = 'text-xs mt-2 text-red-600';
+                }
+            } catch (e) {
+                console.error('Create handoff error:', e);
+                msg.textContent = 'Network error.'; msg.className = 'text-xs mt-2 text-red-600';
+            }
+        }
+
+        async function act(id, action) {
+            let reason;
+            if (action === 'reject') {
+                reason = prompt('Why are you returning this handoff?');
+                if (reason === null) return;
+            }
+            try {
+                const res = await fetch(`/api/handoff-tasks/${id}/${action}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason })
+                });
+                if (!res.ok) {
+                    const d = await res.json().catch(() => ({}));
+                    alert(d.error || 'Action failed.');
+                }
+                await loadTasks();
+            } catch (e) {
+                console.error('Handoff action error:', e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // safe-actions only delegates clicks, so wire the filter's change directly.
+            const f = document.getElementById('htFilter');
+            if (f) f.addEventListener('change', renderTable);
+            loadTasks();
+        });
+    </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

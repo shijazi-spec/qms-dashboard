@@ -1,0 +1,1240 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg - Users & Access Control</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="<REDACTED_URL>" rel="stylesheet" />
+    <style>
+        :root {
+            --qms-blue: #1E3A8A;
+            --qms-blue-light: #2563EB;
+            --qms-blue-bg: #DBEAFE;
+            --qms-green: #047857;
+            --qms-green-light: #22C55E;
+            --qms-green-bg: #D1FAE5;
+            --qms-amber: #D97706;
+            --qms-amber-bg: #FEF3C7;
+            --qms-red: #B91C1C;
+            --qms-red-bg: #FEE2E2;
+            --qms-purple: #6D28D9;
+            --qms-purple-bg: #EDE9FE;
+        }
+        html, body { font-family: "Inter", sans-serif; scroll-behavior: smooth; }
+        body { min-height: 100vh; overflow-x: hidden; }
+        .tab-active { border-bottom: 2px solid var(--qms-blue); color: var(--qms-blue); font-weight: 600; }
+        .status-invited { background-color: var(--qms-blue-bg); color: var(--qms-blue); }
+        .status-pending_approval { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+        .status-active { background-color: var(--qms-green-bg); color: var(--qms-green); }
+        .status-denied { background-color: var(--qms-red-bg); color: var(--qms-red); }
+        .status-disabled { background-color: #F3F4F6; color: #6B7280; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('admin');
+        });
+    </script>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="users.title">Users & Access Control</h1>
+                <p class="text-gray-600" data-i18n="users.subtitle">Manage user invitations, approvals, and permissions</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button data-on-click="openDeleteUserModal" data-testid="button-delete-user" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center text-sm" title="Pick a user to permanently delete (Sample User, user@example.invalid, and you are protected)">
+                    <svg class="w-5 h-5 me-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 <REDACTED_PHONE> 21H7.862a2 <REDACTED_PHONE>.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/>
+                    </svg>
+                    Delete User
+                </button>
+                <button data-on-click="showInviteModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center">
+                    <svg class="w-5 h-5 me-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Invite User
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow p-4">
+                <p class="text-sm text-gray-500">Total Users</p>
+                <p class="text-2xl font-bold text-gray-900" id="stat-total">0</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4">
+                <p class="text-sm text-gray-500">Active</p>
+                <p class="text-2xl font-bold text-green-600" id="stat-active">0</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4">
+                <p class="text-sm text-gray-500">Pending Approval</p>
+                <p class="text-2xl font-bold text-amber-600" id="stat-pending">0</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4">
+                <p class="text-sm text-gray-500">Denied</p>
+                <p class="text-2xl font-bold text-red-600" id="stat-denied">0</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4">
+                <p class="text-sm text-gray-500">Disabled</p>
+                <p class="text-2xl font-bold text-gray-500" id="stat-disabled">0</p>
+            </div>
+        </div>
+
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="flex gap-8">
+                <button data-on-click="switchTab" data-args="[&quot;pending&quot;]" id="tab-pending" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                    Pending Requests <span id="pending-badge" class="ms-2 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs">0</span>
+                </button>
+                <button data-on-click="switchTab" data-args="[&quot;active&quot;]" id="tab-active" class="py-3 px-1 tab-active font-medium text-sm">
+                    Active Users
+                </button>
+                <button data-on-click="switchTab" data-args="[&quot;all&quot;]" id="tab-all" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                    All Users
+                </button>
+                <button data-on-click="switchTab" data-args="[&quot;invitations&quot;]" id="tab-invitations" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                    Invitations
+                </button>
+                <button data-on-click="switchTab" data-args="[&quot;roles&quot;]" id="tab-roles" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                    Roles & Permissions
+                </button>
+                <button data-on-click="switchTab" data-args="[&quot;audit&quot;]" id="tab-audit" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                    Audit Log
+                </button>
+            </nav>
+        </div>
+
+        <div id="content-pending" class="tab-content">
+            <div class="bg-white rounded-xl shadow">
+                <div class="p-4 border-b">
+                    <h3 class="font-semibold" data-i18n="users.sec_pending">Pending Access Requests</h3>
+                    <p class="text-sm text-gray-500">Review and approve or deny user access requests</p>
+                </div>
+                <div id="pending-list" class="divide-y">
+                    <p class="text-gray-500 text-center py-8">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-active" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="p-4 border-b">
+                    <h3 class="font-semibold" data-i18n="users.sec_active">Active Users</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.last_login">Last Login</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="active-list" class="divide-y">
+                            <tr><td colspan="6" class="text-center py-8 text-gray-500">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-all" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="p-4 border-b">
+                    <h3 class="font-semibold" data-i18n="users.sec_all">All Users</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="all-list" class="divide-y">
+                            <tr><td colspan="6" class="text-center py-8 text-gray-500">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-invitations" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="p-4 border-b">
+                    <h3 class="font-semibold" data-i18n="users.sec_invitations">Sent Invitations</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_invited_by">Invited By</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.expires">Expires</th>
+                            </tr>
+                        </thead>
+                        <tbody id="invitations-list" class="divide-y">
+                            <tr><td colspan="6" class="text-center py-8 text-gray-500">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-roles" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow p-6">
+                <h3 class="font-semibold mb-4" data-i18n="users.sec_roles">Default Role Permissions</h3>
+                <p class="text-sm text-gray-500 mb-6">These are the default permissions assigned to each role. Custom roles can have individual permissions.</p>
+                <div id="roles-grid" class="space-y-4">
+                    <p class="text-gray-500">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-audit" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="p-4 border-b flex justify-between items-center">
+                    <div>
+                        <h3 class="font-semibold" data-i18n="users.sec_audit">Access Audit Log</h3>
+                        <p class="text-sm text-gray-500">All access-related events for PDPL accountability</p>
+                    </div>
+                    <select id="audit-filter" data-on-change="loadAuditLog" class="border rounded px-3 py-1 text-sm">
+                        <option value="">All Events</option>
+                        <option value="INVITATION_CREATED">Invitations Created</option>
+                        <option value="INVITATION_ACCEPTED">Invitations Accepted</option>
+                        <option value="ACCESS_APPROVED">Access Approved</option>
+                        <option value="ACCESS_DENIED">Access Denied</option>
+                        <option value="USER_DISABLED">Users Disabled</option>
+                        <option value="USER_ENABLED">Users Enabled</option>
+                        <option value="ROLE_CHANGED">Role Changes</option>
+                        <option value="PERMISSIONS_CHANGED">Permission Changes</option>
+                    </select>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_event">Event</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_target">Target</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_action">Action</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_performed_by">Performed By</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_timestamp">Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-list" class="divide-y">
+                            <tr><td colspan="5" class="text-center py-8 text-gray-500">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-user-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-red-700">Delete User</h3>
+                <button data-on-click="hideDeleteUserModal" data-testid="button-close-delete-user" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <p class="text-sm text-gray-600 mb-3">
+                Pick a user to permanently delete. This is a HARD delete and cannot be undone.
+                Protected accounts (Sample User, user@example.invalid) and your own account
+                are not selectable.
+            </p>
+            <div class="space-y-3">
+                <div>
+                    <label for="delete-user-select" class="block text-sm font-medium mb-1">User</label>
+                    <select id="delete-user-select" data-testid="select-delete-user" class="w-full border rounded px-3 py-2">
+                        <option value="">Loading…</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="delete-user-confirm-input" class="block text-sm font-medium mb-1">
+                        Type <span class="font-mono font-bold">DELETE</span> to confirm
+                    </label>
+                    <input id="delete-user-confirm-input" data-testid="input-delete-user-confirm" type="text" class="w-full border rounded px-3 py-2" placeholder="DELETE" autocomplete="off" />
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" data-on-click="hideDeleteUserModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+                <button type="button" data-on-click="confirmDeleteUserFromModal" data-testid="button-confirm-delete-user" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Delete User</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="invite-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold" data-i18n="users.invite_modal">Invite New User</h3>
+                <button data-on-click="hideInviteModal" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <form id="invite-form" data-on-submit="sendInvitation" data-pass-event="true">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Email <span class="text-red-500">*</span></label>
+                        <input type="email" name="email" required class="w-full border rounded px-3 py-2" placeholder="user@example.invalid" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1" data-i18n="users.f_full_name">Full Name</label>
+                        <input type="text" name="full_name" class="w-full border rounded px-3 py-2" placeholder="John Smith" />
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Team <span class="text-red-500">*</span></label>
+                            <select name="team" required class="w-full border rounded px-3 py-2">
+                                <option value="">Select team</option>
+                                <option value="SDR">SDR</option>
+                                <option value="Sales">Sales</option>
+                                <option value="Quality">Quality</option>
+                                <option value="GRC">GRC</option>
+                                <option value="Legal Specialist">Legal Specialist</option>
+                                <option value="MGMT">MGMT</option>
+                                <option value="Viewer">Viewer</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Role <span class="text-red-500">*</span></label>
+                            <select name="role" required class="w-full border rounded px-3 py-2">
+                                <option value="">Select role</option>
+                                <option value="admin">Admin (Full Access)</option>
+                                <option value="quality_manager">Quality Manager</option>
+                                <option value="quality_specialist">Quality Specialist</option>
+                                <option value="grc_manager">GRC Manager</option>
+                                <option value="team_lead">Team Lead</option>
+                                <option value="department_viewer">Department Viewer</option>
+                                <option value="auditor">Auditor (Read-Only)</option>
+                                <option value="custom">Custom Permissions</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1" data-i18n="users.invite_expires">Invitation Expires In</label>
+                            <select name="expiry_days" class="w-full border rounded px-3 py-2">
+                                <option value="7">7 days</option>
+                                <option value="14">14 days</option>
+                                <option value="30">30 days</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center pt-6">
+                            <input type="checkbox" name="require_mfa" id="require_mfa" class="me-2" />
+                            <label for="require_mfa" class="text-sm">Require MFA</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 mt-6">
+                    <button type="button" data-on-click="hideInviteModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="users.send_invitation">Send Invitation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="invite-fallback-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold" data-i18n="dyn.users.invite_fallback_title" data-testid="text-invite-fallback-title">Invitation created — email not sent</h3>
+                <button data-on-click="hideInviteFallbackModal" class="text-gray-400 hover:text-gray-600" data-testid="button-close-invite-fallback">&times;</button>
+            </div>
+            <p class="text-sm text-gray-700 mb-3" data-i18n="dyn.users.invite_fallback_body">The invitation was created successfully, but the invitation email could not be delivered. Copy the link below and share it with the user manually.</p>
+            <p id="invite-fallback-reason" class="hidden text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3" data-testid="text-invite-fallback-reason"></p>
+            <label for="invite-fallback-link" class="block text-sm font-medium mb-1" data-i18n="dyn.users.invite_link_label">Invite link</label>
+            <input id="invite-fallback-link" type="text" readonly class="w-full border rounded px-3 py-2 text-sm bg-gray-50 mb-4" data-testid="input-invite-fallback-link" />
+            <div class="flex justify-end gap-3">
+                <button type="button" data-on-click="hideInviteFallbackModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50" data-i18n="dyn.users.close_btn" data-testid="button-close-invite-fallback-done">Close</button>
+                <button type="button" data-on-click="copyInviteFallbackLink" id="invite-fallback-copy-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="dyn.users.copy_link_btn" data-testid="button-copy-invite-fallback-link">Copy link</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirm-action-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="confirm-action-title" class="text-lg font-semibold" data-testid="text-confirm-modal-title"></h3>
+                <button type="button" data-on-click="cancelConfirmModal" class="text-gray-400 hover:text-gray-600" data-testid="button-confirm-modal-close">&times;</button>
+            </div>
+            <p id="confirm-action-body" class="text-sm text-gray-700 mb-6" data-testid="text-confirm-modal-body"></p>
+            <div class="flex justify-end gap-3">
+                <button type="button" data-on-click="cancelConfirmModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50" data-i18n="common.cancel" data-testid="button-confirm-modal-cancel">Cancel</button>
+                <button type="button" id="confirm-action-confirm" data-on-click="acceptConfirmModal" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-testid="button-confirm-modal-accept"></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="prompt-input-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="prompt-input-title" class="text-lg font-semibold" data-testid="text-prompt-modal-title"></h3>
+                <button type="button" data-on-click="cancelPromptModal" class="text-gray-400 hover:text-gray-600" data-testid="button-prompt-modal-close">&times;</button>
+            </div>
+            <p id="prompt-input-body" class="text-sm text-gray-700 mb-3" data-testid="text-prompt-modal-body"></p>
+            <form id="prompt-input-form" data-on-submit="submitPromptModal" data-pass-event="true">
+                <label id="prompt-input-label" for="prompt-input-field" class="block text-sm font-medium mb-1"></label>
+                <input id="prompt-input-field" type="text" class="w-full border rounded px-3 py-2 mb-4" data-testid="input-prompt-modal-field" />
+                <div class="flex justify-end gap-3">
+                    <button type="button" id="prompt-input-cancel" data-on-click="cancelPromptModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50" data-testid="button-prompt-modal-cancel"></button>
+                    <button type="submit" id="prompt-input-submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-testid="button-prompt-modal-submit"></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="user-detail-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold" data-i18n="users.details_modal">User Details & Permissions</h3>
+                <button data-on-click="hideUserDetailModal" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div id="user-detail-content">Loading...</div>
+        </div>
+    </div>
+
+    <script>
+        let useSessionAuth = false;
+        const headers = { 'Content-Type': 'application/json' };
+
+        let _confirmModalResolver = null;
+        function showConfirmModal({ title, body, confirmLabel, confirmVariant }) {
+            return new Promise((resolve) => {
+                _confirmModalResolver = resolve;
+                document.getElementById('confirm-action-title').textContent = title || '';
+                document.getElementById('confirm-action-body').textContent = body || '';
+                const btn = document.getElementById('confirm-action-confirm');
+                btn.textContent = confirmLabel || 'OK';
+                btn.className = 'px-4 py-2 text-white rounded-lg ' + (
+                    confirmVariant === 'danger'
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : confirmVariant === 'success'
+                            ? 'bg-green-600 hover:bg-green-700'
+                            : 'bg-blue-600 hover:bg-blue-700'
+                );
+                document.getElementById('confirm-action-modal').classList.add('active');
+                setTimeout(() => btn.focus(), 0);
+            });
+        }
+        function acceptConfirmModal() {
+            document.getElementById('confirm-action-modal').classList.remove('active');
+            const r = _confirmModalResolver; _confirmModalResolver = null;
+            if (r) r(true);
+        }
+        function cancelConfirmModal() {
+            document.getElementById('confirm-action-modal').classList.remove('active');
+            const r = _confirmModalResolver; _confirmModalResolver = null;
+            if (r) r(false);
+        }
+
+        let _promptModalResolver = null;
+        function showPromptModal({ title, body, label, placeholder, inputType, submitLabel, cancelLabel, submitVariant, required }) {
+            return new Promise((resolve) => {
+                _promptModalResolver = resolve;
+                document.getElementById('prompt-input-title').textContent = title || '';
+                const bodyEl = document.getElementById('prompt-input-body');
+                if (body) { bodyEl.textContent = body; bodyEl.classList.remove('hidden'); }
+                else { bodyEl.textContent = ''; bodyEl.classList.add('hidden'); }
+                const labelEl = document.getElementById('prompt-input-label');
+                if (label) { labelEl.textContent = label; labelEl.classList.remove('hidden'); }
+                else { labelEl.textContent = ''; labelEl.classList.add('hidden'); }
+                const input = document.getElementById('prompt-input-field');
+                input.type = inputType || 'text';
+                input.placeholder = placeholder || '';
+                input.required = !!required;
+                input.value = '';
+                const submit = document.getElementById('prompt-input-submit');
+                submit.textContent = submitLabel || 'OK';
+                submit.className = 'px-4 py-2 text-white rounded-lg ' + (
+                    submitVariant === 'danger'
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : 'bg-blue-600 hover:bg-blue-700'
+                );
+                const cancelBtn = document.getElementById('prompt-input-cancel');
+                if (cancelBtn) cancelBtn.textContent = cancelLabel || 'Cancel';
+                document.getElementById('prompt-input-modal').classList.add('active');
+                setTimeout(() => input.focus(), 0);
+            });
+        }
+        function submitPromptModal(event) {
+            if (event && event.preventDefault) event.preventDefault();
+            const value = document.getElementById('prompt-input-field').value;
+            document.getElementById('prompt-input-modal').classList.remove('active');
+            const r = _promptModalResolver; _promptModalResolver = null;
+            if (r) r(value);
+        }
+        function cancelPromptModal() {
+            document.getElementById('prompt-input-modal').classList.remove('active');
+            const r = _promptModalResolver; _promptModalResolver = null;
+            if (r) r(null);
+        }
+
+        async function initAuth() {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'include' });
+                const data = await res.json();
+                if (data.authenticated) {
+                    useSessionAuth = true;
+                } else {
+                    window.location.href = '/login';
+                    return;
+                }
+            } catch (e) {
+                window.location.href = '/login';
+                return;
+            }
+            loadStats();
+            switchTab('active');
+        }
+
+        initAuth();
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.remove('tab-active'));
+            document.getElementById(`content-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('tab-active');
+
+            switch(tab) {
+                case 'pending': loadPendingUsers(); break;
+                case 'active': loadActiveUsers(); break;
+                case 'all': loadAllUsers(); break;
+                case 'invitations': loadInvitations(); break;
+                case 'roles': loadRoles(); break;
+                case 'audit': loadAuditLog(); break;
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/users/stats', { headers });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('stat-total').textContent = data.total;
+                    document.getElementById('stat-active').textContent = data.active;
+                    document.getElementById('stat-pending').textContent = data.pending;
+                    document.getElementById('stat-denied').textContent = data.denied;
+                    document.getElementById('stat-disabled').textContent = data.disabled;
+                    document.getElementById('pending-badge').textContent = data.pending;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function loadPendingUsers() {
+            try {
+                const res = await fetch('/api/users?status=pending', { headers });
+                const data = await res.json();
+                const container = document.getElementById('pending-list');
+                
+                if (!data.users || data.users.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.users.no_pending_requests') + '</p>';
+                    return;
+                }
+
+                container.innerHTML = data.users.map(u => `
+                    <div class="p-4 hover:bg-gray-50">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-medium">${escAttr(u.full_name)}</h4>
+                                <p class="text-sm text-gray-500">${escAttr(u.email)}</p>
+                                <div class="flex gap-2 mt-2">
+                                    <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${escAttr(u.role)}</span>
+                                    <span class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">${escAttr(u.team)}</span>
+                                </div>
+                                ${u.access_reason ? `<p class="text-sm text-gray-600 mt-2"><strong>Reason:</strong> ${escAttr(u.access_reason)}</p>` : ''}
+                                <p class="text-xs text-gray-400 mt-2">Requested: ${new Date(u.created_at).toLocaleString()}</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button data-on-click="approveUser" data-args="[${u.id}]" class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700">Approve</button>
+                                <button data-on-click="denyUser" data-args="[${u.id}]" class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700">Deny</button>
+                                <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="px-3 py-1 border text-sm rounded hover:bg-gray-50">Edit Permissions</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading pending users:', error);
+            }
+        }
+
+        async function loadActiveUsers() {
+            try {
+                const res = await fetch('/api/users?status=active', { headers });
+                const data = await res.json();
+                const container = document.getElementById('active-list');
+                
+                if (!data.users || data.users.length === 0) {
+                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_active_users') + '</td></tr>';
+                    return;
+                }
+
+                container.innerHTML = data.users.map(u => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3">${escAttr(u.full_name)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${escAttr(u.email)}</td>
+                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${escAttr(u.role)}</span></td>
+                        <td class="px-4 py-3 text-sm">${escAttr(u.team)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500">${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
+                        <td class="px-4 py-3">
+                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm me-2">Edit</button>
+                            <button data-on-click="disableUser" data-args="[${u.id}]" class="text-amber-600 hover:text-amber-800 text-sm me-2">Disable</button>
+                            <button data-on-click="deleteUserConfirm" data-args="[${u.id}, &quot;${escAttr(u.email)}&quot;]" class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading active users:', error);
+            }
+        }
+
+        async function loadAllUsers() {
+            try {
+                const res = await fetch('/api/users', { headers });
+                const data = await res.json();
+                const container = document.getElementById('all-list');
+                
+                if (!data.users || data.users.length === 0) {
+                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_users_found') + '</td></tr>';
+                    return;
+                }
+
+                container.innerHTML = data.users.map(u => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3">${escAttr(u.full_name)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${escAttr(u.email)}</td>
+                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${escAttr(u.role)}</span></td>
+                        <td class="px-4 py-3 text-sm">${escAttr(u.team)}</td>
+                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded status-${escAttr(u.status)}">${escAttr(u.status.replace('_', ' '))}</span></td>
+                        <td class="px-4 py-3">
+                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm me-2">View</button>
+                            ${u.status === 'disabled' ? `<button data-on-click="enableUser" data-args="[${u.id}]" class="text-green-600 hover:text-green-800 text-sm me-2">Enable</button>` : ''}
+                            ${u.status === 'active' ? `<button data-on-click="disableUser" data-args="[${u.id}]" class="text-amber-600 hover:text-amber-800 text-sm me-2">Disable</button>` : ''}
+                            <button data-on-click="deleteUserConfirm" data-args="[${u.id}, &quot;${escAttr(u.email)}&quot;]" class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading all users:', error);
+            }
+        }
+
+        async function loadInvitations() {
+            try {
+                const res = await fetch('/api/invitations', { headers });
+                const data = await res.json();
+                const container = document.getElementById('invitations-list');
+                
+                if (!data.invitations || data.invitations.length === 0) {
+                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_invitations') + '</td></tr>';
+                    return;
+                }
+
+                container.innerHTML = data.invitations.map(inv => {
+                    const expired = new Date(inv.token_expires_at) < new Date();
+                    const status = inv.used ? 'Used' : (expired ? 'Expired' : 'Pending');
+                    const statusClass = inv.used ? 'bg-green-100 text-green-700' : (expired ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700');
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3">${escAttr(inv.email)}</td>
+                            <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${escAttr(inv.role)}</span></td>
+                            <td class="px-4 py-3 text-sm">${escAttr(inv.team)}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${escAttr(inv.invited_by)}</td>
+                            <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded ${statusClass}">${status}</span></td>
+                            <td class="px-4 py-3 text-sm text-gray-500">${new Date(inv.token_expires_at).toLocaleDateString()}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading invitations:', error);
+            }
+        }
+
+        async function loadRoles() {
+            try {
+                const res = await fetch('/api/roles/defaults', { headers });
+                const data = await res.json();
+                const container = document.getElementById('roles-grid');
+                
+                if (!data.roles) {
+                    container.innerHTML = '<p class="text-gray-500">' + WalaPlusI18n.t('dyn.users.could_not_load_roles') + '</p>';
+                    return;
+                }
+
+                const roleNames = {
+                    admin: 'Admin (Full Access)',
+                    quality_manager: 'Quality Manager',
+                    quality_specialist: 'Quality Specialist',
+                    grc_manager: 'GRC Manager',
+                    team_lead: 'Team Lead',
+                    department_viewer: 'Department Viewer',
+                    auditor: 'Auditor (Read-Only)',
+                    custom: 'Custom'
+                };
+
+                container.innerHTML = Object.entries(data.roles).filter(([k]) => k !== 'custom').map(([role, perms]) => `
+                    <div class="border rounded-lg p-4">
+                        <h4 class="font-medium mb-3">${escAttr(roleNames[role] || role)}</h4>
+                        <div class="flex flex-wrap gap-2">
+                            ${perms.can_view ? '<span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">View</span>' : ''}
+                            ${perms.can_create ? '<span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Create</span>' : ''}
+                            ${perms.can_edit ? '<span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Edit</span>' : ''}
+                            ${perms.can_delete ? '<span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Delete</span>' : ''}
+                            ${perms.can_approve ? '<span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Approve</span>' : ''}
+                            ${perms.can_assign ? '<span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Assign</span>' : ''}
+                            ${perms.can_run_audit ? '<span class="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded">Run Audit</span>' : ''}
+                            ${perms.can_export ? '<span class="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded">Export</span>' : ''}
+                            ${perms.can_upload ? '<span class="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded">Upload</span>' : ''}
+                            ${perms.can_manage_settings ? '<span class="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">Settings</span>' : ''}
+                            ${perms.can_manage_users ? '<span class="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">Manage Users</span>' : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading roles:', error);
+            }
+        }
+
+        async function loadAuditLog() {
+            try {
+                const filter = document.getElementById('audit-filter').value;
+                const url = filter ? `/api/access-audit?event_type=${filter}&limit=100` : '/api/access-audit?limit=100';
+                const res = await fetch(url, { headers });
+                const data = await res.json();
+                const container = document.getElementById('audit-list');
+                
+                if (!data.logs || data.logs.length === 0) {
+                    container.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_audit_logs') + '</td></tr>';
+                    return;
+                }
+
+                container.innerHTML = data.logs.map(log => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-gray-100 rounded">${escAttr(log.event_type)}</span></td>
+                        <td class="px-4 py-3 text-sm">${escAttr(log.target_email || '-')}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${escAttr(log.action)}</td>
+                        <td class="px-4 py-3 text-sm">${escAttr(log.performed_by)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500">${new Date(log.created_at).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading audit log:', error);
+            }
+        }
+
+        function showInviteModal() {
+            document.getElementById('invite-modal').classList.add('active');
+        }
+
+        function hideInviteModal() {
+            document.getElementById('invite-modal').classList.remove('active');
+            document.getElementById('invite-form').reset();
+        }
+
+        function showInviteFallbackModal(inviteLink, emailError) {
+            const modal = document.getElementById('invite-fallback-modal');
+            const linkInput = document.getElementById('invite-fallback-link');
+            const reasonEl = document.getElementById('invite-fallback-reason');
+            const copyBtn = document.getElementById('invite-fallback-copy-btn');
+            linkInput.value = inviteLink || '';
+            if (emailError) {
+                reasonEl.textContent = WalaPlusI18n.t('dyn.users.reason_prefix') + emailError;
+                reasonEl.classList.remove('hidden');
+            } else {
+                reasonEl.textContent = '';
+                reasonEl.classList.add('hidden');
+            }
+            copyBtn.textContent = WalaPlusI18n.t('dyn.users.copy_link_btn');
+            modal.classList.add('active');
+        }
+
+        function hideInviteFallbackModal() {
+            document.getElementById('invite-fallback-modal').classList.remove('active');
+            document.getElementById('invite-fallback-link').value = '';
+        }
+
+        function copyInviteFallbackLink() {
+            const linkInput = document.getElementById('invite-fallback-link');
+            const copyBtn = document.getElementById('invite-fallback-copy-btn');
+            const value = linkInput.value;
+            const showCopied = () => {
+                const original = WalaPlusI18n.t('dyn.users.copy_link_btn');
+                copyBtn.textContent = WalaPlusI18n.t('dyn.users.copy_link_done');
+                setTimeout(() => { copyBtn.textContent = original; }, 1500);
+            };
+            const fallbackSelect = () => {
+                try {
+                    linkInput.removeAttribute('readonly');
+                    linkInput.focus();
+                    linkInput.select();
+                    linkInput.setAttribute('readonly', 'readonly');
+                } catch (_) {}
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(value).then(showCopied).catch(fallbackSelect);
+            } else {
+                fallbackSelect();
+            }
+        }
+
+        async function sendInvitation(e) {
+            e.preventDefault();
+            const form = e.target;
+            const data = {
+                email: form.email.value,
+                full_name: form.full_name.value,
+                team: form.team.value,
+                role: form.role.value,
+                expiry_days: parseInt(form.expiry_days.value),
+                require_mfa: form.require_mfa.checked,
+                invited_by: 'user@example.invalid'
+            };
+
+            try {
+                const res = await fetch('/api/invitations', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                
+                if (result.success) {
+                    hideInviteModal();
+                    loadInvitations();
+                    loadStats();
+                    
+                    if (result.email_sent) {
+                        alert(WalaPlusI18n.t('dyn.users.invite_sent', { email: data.email }));
+                    } else {
+                        showInviteFallbackModal(result.invite_link, result.email_error);
+                    }
+                } else {
+                    alert(WalaPlusI18n.t('dyn.users.error_prefix', { msg: result.error || WalaPlusI18n.t('dyn.users.failed_send_invite') }));
+                }
+            } catch (error) {
+                alert(WalaPlusI18n.t('dyn.users.error_send_invite'));
+            }
+        }
+
+        async function approveUser(userId) {
+            const ok = await showConfirmModal({
+                title: WalaPlusI18n.t('dyn.users.approve_access_title'),
+                body: WalaPlusI18n.t('dyn.users.confirm_approve_access'),
+                confirmLabel: WalaPlusI18n.t('dyn.users.approve_btn'),
+                confirmVariant: 'success',
+            });
+            if (!ok) return;
+            try {
+                const res = await fetch(`/api/users/${userId}/approve`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ approved_by: 'user@example.invalid' })
+                });
+                if (res.ok) {
+                    alert(WalaPlusI18n.t('dyn.users.user_approved'));
+                    loadPendingUsers();
+                    loadStats();
+                } else {
+                    alert(WalaPlusI18n.t('dyn.users.failed_approve'));
+                }
+            } catch (error) {
+                alert(WalaPlusI18n.t('dyn.users.error_approve'));
+            }
+        }
+
+        async function denyUser(userId) {
+            const reason = await showPromptModal({
+                title: WalaPlusI18n.t('dyn.users.deny_access_title'),
+                body: WalaPlusI18n.t('dyn.users.prompt_denial_reason'),
+                label: WalaPlusI18n.t('dyn.users.denial_reason_label'),
+                placeholder: WalaPlusI18n.t('dyn.users.denial_reason_placeholder'),
+                submitLabel: WalaPlusI18n.t('dyn.users.deny_btn'),
+                submitVariant: 'danger',
+            });
+            if (reason === null) return;
+            try {
+                const res = await fetch(`/api/users/${userId}/deny`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ denied_by: 'user@example.invalid', reason })
+                });
+                if (res.ok) {
+                    alert(WalaPlusI18n.t('dyn.users.user_denied'));
+                    loadPendingUsers();
+                    loadStats();
+                } else {
+                    alert(WalaPlusI18n.t('dyn.users.failed_deny'));
+                }
+            } catch (error) {
+                alert(WalaPlusI18n.t('dyn.users.error_deny'));
+            }
+        }
+
+        async function disableUser(userId) {
+            const ok = await showConfirmModal({
+                title: WalaPlusI18n.t('dyn.users.disable_user_title'),
+                body: WalaPlusI18n.t('dyn.users.confirm_disable_user'),
+                confirmLabel: WalaPlusI18n.t('dyn.users.disable_btn'),
+                confirmVariant: 'danger',
+            });
+            if (!ok) return;
+            try {
+                const res = await fetch(`/api/users/${userId}/disable`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ disabled_by: 'user@example.invalid' })
+                });
+                if (res.ok) {
+                    alert(WalaPlusI18n.t('dyn.users.user_disabled'));
+                    loadActiveUsers();
+                    loadAllUsers();
+                    loadStats();
+                }
+            } catch (error) {
+                alert(WalaPlusI18n.t('dyn.users.error_disable'));
+            }
+        }
+
+        async function enableUser(userId) {
+            try {
+                const res = await fetch(`/api/users/${userId}/enable`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ enabled_by: 'user@example.invalid' })
+                });
+                if (res.ok) {
+                    alert(WalaPlusI18n.t('dyn.users.user_enabled'));
+                    loadAllUsers();
+                    loadStats();
+                }
+            } catch (error) {
+                alert(WalaPlusI18n.t('dyn.users.error_enable'));
+            }
+        }
+
+        function escAttr(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        async function viewUserDetail(userId) {
+            document.getElementById('user-detail-modal').classList.add('active');
+            const content = document.getElementById('user-detail-content');
+            content.innerHTML = WalaPlusI18n.t('dyn.users.loading');
+
+            try {
+                const res = await fetch(`/api/users/${userId}`, { headers });
+                const data = await res.json();
+                
+                if (!data.user) {
+                    content.innerHTML = '<p class="text-red-500">' + WalaPlusI18n.t('dyn.users.user_not_found') + '</p>';
+                    return;
+                }
+
+                const u = data.user;
+                const perms = data.permissions || [];
+                const ROLES = ['admin','quality_manager','quality_specialist','grc_manager','team_lead','department_viewer','auditor','ai_specialist','bu_owner','executive','custom'];
+                const TEAMS = ['SDR','Sales','Quality','GRC','MGMT','Viewer','Other'];
+                if (u.role && !ROLES.includes(u.role)) ROLES.unshift(u.role);
+                const roleOptions = ROLES.map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r}</option>`).join('');
+                const currentTeam = u.team || '';
+                if (currentTeam && !TEAMS.includes(currentTeam)) TEAMS.unshift(currentTeam);
+                const teamOptions = TEAMS.map(t => `<option value="${t}" ${currentTeam === t ? 'selected' : ''}>${t}</option>`).join('');
+
+                content.innerHTML = `
+                    <div class="space-y-4">
+                        <form id="user-edit-form" data-on-submit="saveUserProfile" data-pass-event="true" data-args="[${u.id}]" class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-sm text-gray-500">Full Name</label>
+                                <input name="full_name" type="text" required value="${escAttr(u.full_name)}"
+                                       class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="text-sm text-gray-500">Email <span class="text-xs text-gray-400">(read-only)</span></label>
+                                <p class="font-medium mt-2">${escAttr(u.email)}</p>
+                            </div>
+                            <div>
+                                <label class="text-sm text-gray-500">Role</label>
+                                <select name="role" class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    ${roleOptions}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-sm text-gray-500">Team</label>
+                                <select name="team" class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    ${teamOptions}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-sm text-gray-500">Status</label>
+                                <p class="mt-2"><span class="px-2 py-1 rounded text-sm status-${escAttr(u.status)}">${escAttr(u.status.replace('_', ' '))}</span></p>
+                            </div>
+                            <div>
+                                <label class="text-sm text-gray-500">Created</label>
+                                <p class="text-sm mt-2">${new Date(u.created_at).toLocaleString()}</p>
+                            </div>
+                            <div class="col-span-2 flex items-center justify-between pt-2">
+                                <button type="button" data-on-click="deleteUserConfirm" data-args="[${u.id}, &quot;${escAttr(u.email)}&quot;]"
+                                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium">
+                                    Hard Delete User
+                                </button>
+                                <button type="submit"
+                                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
+                                    Save Changes
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="border-t pt-4">
+                            <h4 class="font-medium mb-3">Screen Permissions</h4>
+                            <div class="max-h-64 overflow-y-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-50 sticky top-0">
+                                        <tr>
+                                            <th scope="col" class="px-2 py-1 text-start">Screen</th>
+                                            <th scope="col" class="px-2 py-1 text-center">View</th>
+                                            <th scope="col" class="px-2 py-1 text-center">Create</th>
+                                            <th scope="col" class="px-2 py-1 text-center">Edit</th>
+                                            <th scope="col" class="px-2 py-1 text-center">Delete</th>
+                                            <th scope="col" class="px-2 py-1 text-center">Export</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${perms.map(p => `
+                                            <tr class="border-b">
+                                                <td class="px-2 py-1">${escAttr(p.screen_name)}</td>
+                                                <td class="px-2 py-1 text-center">${p.can_view ? '✓' : '-'}</td>
+                                                <td class="px-2 py-1 text-center">${p.can_create ? '✓' : '-'}</td>
+                                                <td class="px-2 py-1 text-center">${p.can_edit ? '✓' : '-'}</td>
+                                                <td class="px-2 py-1 text-center">${p.can_delete ? '✓' : '-'}</td>
+                                                <td class="px-2 py-1 text-center">${p.can_export ? '✓' : '-'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                content.innerHTML = '<p class="text-red-500">' + WalaPlusI18n.t('dyn.users.error_loading_user') + '</p>';
+            }
+        }
+
+        function hideUserDetailModal() {
+            document.getElementById('user-detail-modal').classList.remove('active');
+        }
+
+        async function saveUserProfile(userId, event) {
+            event.preventDefault();
+            const form = event.target;
+            const payload = {
+                full_name: form.full_name.value.trim(),
+                role: form.role.value,
+                team: form.team.value.trim(),
+            };
+            if (!payload.full_name) {
+                alert('Full name is required.');
+                return;
+            }
+            try {
+                const res = await fetch(`/api/users/${userId}`, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    alert('User updated.');
+                    hideUserDetailModal();
+                    loadActiveUsers();
+                    loadAllUsers();
+                    loadStats();
+                } else {
+                    alert('Update failed: ' + (data.error || res.status));
+                }
+            } catch (e) {
+                alert('Error updating user.');
+            }
+        }
+
+        const PROTECTED_EMAILS = ['user@example.invalid'];
+        const PROTECTED_NAME_SUBSTR = 'Sample User';
+
+        function isProtectedUser(u) {
+            const email = (u.email || '').toLowerCase();
+            const name = (u.full_name || '').toLowerCase();
+            if (PROTECTED_EMAILS.includes(email)) return true;
+            if (name.includes(PROTECTED_NAME_SUBSTR)) return true;
+            return false;
+        }
+
+        async function deleteUserConfirm(userId, email) {
+            const ok = confirm(`HARD DELETE user "${email}"?\n\nThis permanently removes the user and all their permissions/data scope. This cannot be undone.`);
+            if (!ok) return;
+            const typed = prompt(`Type the email to confirm deletion:\n${email}`);
+            if (typed !== email) {
+                alert('Email did not match. Deletion cancelled.');
+                return;
+            }
+            try {
+                const res = await fetch(`/api/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { ...headers, 'x-confirm-delete': 'true' },
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success) {
+                    alert('User deleted.');
+                    hideUserDetailModal();
+                    loadActiveUsers();
+                    loadAllUsers();
+                    loadStats();
+                } else {
+                    alert('Delete failed: ' + (data.error || res.status));
+                }
+            } catch (e) {
+                alert('Error deleting user.');
+            }
+        }
+
+        async function openDeleteUserModal() {
+            const modal = document.getElementById('delete-user-modal');
+            const select = document.getElementById('delete-user-select');
+            const confirmInput = document.getElementById('delete-user-confirm-input');
+            if (confirmInput) confirmInput.value = '';
+            if (select) {
+                select.innerHTML = '<option value="">Loading…</option>';
+                select.disabled = true;
+            }
+            modal.classList.add('active');
+
+            try {
+                let currentEmail = null;
+                try {
+                    const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+                    if (meRes.ok) {
+                        const me = await meRes.json();
+                        currentEmail = (me?.user?.email || me?.email || '').toLowerCase() || null;
+                    }
+                } catch {}
+
+                const res = await fetch('/api/users', { headers });
+                const data = await res.json();
+                const all = data.users || [];
+                const isSelf = u => currentEmail && (u.email || '').toLowerCase() === currentEmail;
+                const eligible = all
+                    .filter(u => !isProtectedUser(u) && !isSelf(u))
+                    .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+
+                if (eligible.length === 0) {
+                    while (select.options.length) select.remove(0);
+                    const emptyOpt = document.createElement('option');
+                    emptyOpt.value = '';
+                    emptyOpt.textContent = 'No deletable users — only protected accounts remain';
+                    select.appendChild(emptyOpt);
+                    select.disabled = true;
+                    return;
+                }
+
+                while (select.options.length) select.remove(0);
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = 'Select a user…';
+                select.appendChild(placeholder);
+                for (const u of eligible) {
+                    const label = (u.full_name && u.full_name.trim())
+                        ? `${u.full_name} <${u.email}>`
+                        : u.email;
+                    const opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.dataset.email = u.email;
+                    opt.textContent = label;
+                    select.appendChild(opt);
+                }
+                select.disabled = false;
+            } catch (e) {
+                select.innerHTML = '<option value="">Error loading users</option>';
+                select.disabled = true;
+            }
+        }
+
+        function hideDeleteUserModal() {
+            document.getElementById('delete-user-modal').classList.remove('active');
+        }
+
+        async function confirmDeleteUserFromModal() {
+            const select = document.getElementById('delete-user-select');
+            const confirmInput = document.getElementById('delete-user-confirm-input');
+            const userId = select?.value;
+            const email = select?.selectedOptions?.[0]?.dataset?.email || '';
+            if (!userId) {
+                alert('Please pick a user to delete.');
+                return;
+            }
+            if ((confirmInput?.value || '').trim() !== 'DELETE') {
+                alert('Type DELETE in the confirmation box to proceed.');
+                return;
+            }
+            try {
+                const r = await fetch(`/api/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { ...headers, 'x-confirm-delete': 'true' },
+                });
+                const j = await r.json().catch(() => ({}));
+                if (r.ok && j.success) {
+                    alert(`Deleted: ${email}`);
+                    hideDeleteUserModal();
+                    loadActiveUsers();
+                    loadAllUsers();
+                    loadStats();
+                } else {
+                    alert(`Delete failed: ${j.error || r.status}`);
+                }
+            } catch (e) {
+                alert('Error deleting user: ' + e.message);
+            }
+        }
+
+        loadStats();
+        loadPendingUsers();
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

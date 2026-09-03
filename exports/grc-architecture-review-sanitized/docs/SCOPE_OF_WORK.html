@@ -1,0 +1,1287 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>ExampleOrg Enterprise GRC & Quality Management Platform - Scope of Work</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 40px;
+                background: white;
+            }
+            @media print {
+                body {
+                    padding: 20px;
+                }
+                .no-print {
+                    display: none;
+                }
+                .page-break {
+                    page-break-before: always;
+                }
+            }
+            .header {
+                text-align: center;
+                border-bottom: 3px solid #4f46e5;
+                padding-bottom: 30px;
+                margin-bottom: 40px;
+            }
+            .header h1 {
+                color: #4f46e5;
+                font-size: 28px;
+                margin-bottom: 10px;
+            }
+            .header h2 {
+                color: #6b7280;
+                font-size: 18px;
+                font-weight: normal;
+            }
+            .meta-info {
+                background: #f8fafc;
+                padding: 15px 20px;
+                border-radius: 8px;
+                margin-bottom: 30px;
+                display: flex;
+                justify-content: space-between;
+                flex-wrap: wrap;
+            }
+            .meta-info span {
+                color: #64748b;
+                font-size: 14px;
+            }
+            h2 {
+                color: #1e293b;
+                font-size: 22px;
+                margin-top: 40px;
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #e2e8f0;
+            }
+            h3 {
+                color: #334155;
+                font-size: 18px;
+                margin-top: 25px;
+                margin-bottom: 15px;
+            }
+            h4 {
+                color: #475569;
+                font-size: 16px;
+                margin-top: 20px;
+                margin-bottom: 10px;
+            }
+            p {
+                margin-bottom: 15px;
+                color: #475569;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 20px 0;
+                font-size: 14px;
+            }
+            th,
+            td {
+                border: 1px solid #e2e8f0;
+                padding: 12px 15px;
+                text-align: left;
+            }
+            th {
+                background: #f1f5f9;
+                font-weight: 600;
+                color: #334155;
+            }
+            tr:nth-child(even) {
+                background: #f8fafc;
+            }
+            .diagram {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 20px;
+                margin: 20px 0;
+                font-family: "Courier New", monospace;
+                font-size: 12px;
+                white-space: pre;
+                overflow-x: auto;
+                line-height: 1.4;
+            }
+            ul,
+            ol {
+                margin: 15px 0;
+                padding-left: 30px;
+            }
+            li {
+                margin-bottom: 8px;
+                color: #475569;
+            }
+            .check {
+                color: #22c55e;
+                font-weight: bold;
+            }
+            .highlight-box {
+                background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+                border-left: 4px solid #4f46e5;
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 0 8px 8px 0;
+            }
+            .highlight-box h4 {
+                color: #4f46e5;
+                margin-top: 0;
+            }
+            .two-column {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                margin: 20px 0;
+            }
+            .card {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 20px;
+            }
+            .card h4 {
+                margin-top: 0;
+                color: #4f46e5;
+            }
+            .toc {
+                background: #f8fafc;
+                padding: 25px;
+                border-radius: 8px;
+                margin-bottom: 30px;
+            }
+            .toc h3 {
+                margin-top: 0;
+                color: #1e293b;
+            }
+            .toc ol {
+                columns: 2;
+                column-gap: 40px;
+            }
+            .toc li {
+                margin-bottom: 5px;
+            }
+            .footer {
+                margin-top: 50px;
+                padding-top: 20px;
+                border-top: 2px solid #e2e8f0;
+                text-align: center;
+                color: #64748b;
+                font-size: 12px;
+            }
+            .signature-table {
+                margin-top: 30px;
+            }
+            .signature-table td {
+                height: 60px;
+                vertical-align: bottom;
+            }
+            .btn-download {
+                background: #4f46e5;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 16px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .btn-download:hover {
+                background: #4338ca;
+            }
+            .download-section {
+                text-align: center;
+                padding: 20px;
+                margin-bottom: 30px;
+                background: #fef3c7;
+                border-radius: 8px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="download-section no-print">
+            <p style="margin-bottom: 15px; color: #92400e">
+                <strong>To save as PDF:</strong> Press
+                <kbd>Ctrl+P</kbd> (Windows) or <kbd>Cmd+P</kbd> (Mac), then
+                select "Save as PDF"
+            </p>
+            <button class="btn-download" onclick="window.print()">
+                <svg
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                    />
+                </svg>
+                Print / Save as PDF
+            </button>
+        </div>
+
+        <div class="header">
+            <h1>ExampleOrg Enterprise GRC & Quality Management Platform</h1>
+            <h2>Scope of Work & System Architecture Document</h2>
+        </div>
+
+        <div class="meta-info">
+            <span><strong>Document Version:</strong> 2.0</span>
+            <span><strong>Date:</strong> December 23, 2024</span>
+            <span><strong>Prepared For:</strong> ExampleOrg Product Team</span>
+        </div>
+
+        <div class="toc">
+            <h3>Table of Contents</h3>
+            <ol>
+                <li>Executive Summary</li>
+                <li>Scope of Work</li>
+                <li>System Architecture</li>
+                <li>Integration Points</li>
+                <li>Hosting & Infrastructure</li>
+                <li>Data Flow & Security</li>
+                <li>User Interfaces</li>
+                <li>Compliance & Certifications</li>
+                <li>Technical Specifications</li>
+                <li>Enterprise GRC Modules</li>
+            </ol>
+        </div>
+
+        <h2>1. Executive Summary</h2>
+
+        <h3>Purpose</h3>
+        <p>
+            The ExampleOrg Enterprise GRC & Quality Management Platform is a comprehensive, 
+            AI-powered system combining governance, risk, and compliance (GRC) with quality 
+            management. It provides autonomous monitoring, governance validation, quality 
+            scoring, enterprise risk management, policy governance, compliance tracking, 
+            and vendor risk assessment across ExampleOrg's commercial ecosystem.
+        </p>
+
+        <h3>Key Objectives</h3>
+        <ul>
+            <li>
+                Automate quality audits across CRM data (Leads, Deals, Contacts,
+                Tasks)
+            </li>
+            <li>Validate calendar events and meeting compliance</li>
+            <li>Generate AI-powered insights and recommendations</li>
+            <li>Provide real-time dashboard visualization</li>
+            <li>Enable administrative governance management</li>
+            <li>Support ISO 9001, COPC, and Six Sigma quality frameworks</li>
+            <li><strong>Enterprise Risk Register</strong> with risk scoring matrix and treatment workflows</li>
+            <li><strong>Policy & Document Governance</strong> with lifecycle management and version control</li>
+            <li><strong>Compliance Tracker</strong> for PDPL, NCA-ECC, and ISO regulatory frameworks</li>
+            <li><strong>Audit Readiness</strong> with findings register and evidence pack generation</li>
+            <li><strong>Vendor Risk Management</strong> with assessments and remediation tracking</li>
+            <li><strong>Data Migration Engine</strong> with AI-powered field mapping and deduplication</li>
+            <li><strong>GRC Control Tower</strong> executive dashboard with cross-module integration</li>
+        </ul>
+
+        <h3>Target Users</h3>
+        <table>
+            <tr>
+                <th>User Type</th>
+                <th>Access Level</th>
+                <th>Primary Functions</th>
+            </tr>
+            <tr>
+                <td>Quality Managers</td>
+                <td>Full Access</td>
+                <td>View dashboards, analyze trends, generate reports</td>
+            </tr>
+            <tr>
+                <td>Administrators</td>
+                <td>Admin Panel</td>
+                <td>Manage governance rules, scorecards, system settings</td>
+            </tr>
+            <tr>
+                <td>Executives</td>
+                <td>Dashboard</td>
+                <td>View high-level quality metrics and KPIs</td>
+            </tr>
+        </table>
+
+        <h2 class="page-break">2. Scope of Work</h2>
+
+        <h3>2.1 In-Scope Deliverables</h3>
+
+        <h4>Quality Audit Automation</h4>
+        <ul>
+            <li>
+                <span class="check">&#10003;</span> Automated weekly CRM data
+                hygiene audits
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Real-time quality scoring
+                (People/Process/Governance dimensions)
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Calendar event validation
+                and tracking
+            </li>
+            <li>
+                <span class="check">&#10003;</span> AI-powered recommendations
+                generation
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Automated email report
+                delivery
+            </li>
+        </ul>
+
+        <h4>Dashboard & Visualization</h4>
+        <ul>
+            <li>
+                <span class="check">&#10003;</span> Real-time Quality Dashboard
+                with interactive charts
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Score trend visualization
+                over time
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Dimension breakdown (People
+                25%, Process 35%, Governance 40%)
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Issues categorization and
+                tracking
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Customizable widget layouts
+                (drag-and-drop)
+            </li>
+        </ul>
+
+        <h4>Admin Panel</h4>
+        <ul>
+            <li>
+                <span class="check">&#10003;</span> Governance Document Manager
+                (version control)
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Evaluation Scorecard Editor
+                (weight adjustments)
+            </li>
+            <li>
+                <span class="check">&#10003;</span> System settings and
+                integration status
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Activity logging and audit
+                trail
+            </li>
+        </ul>
+
+        <h4>Quality Management System (QMS)</h4>
+        <ul>
+            <li>
+                <span class="check">&#10003;</span> Deal Evaluation Engine (CRM,
+                CSV, Manual data sources)
+            </li>
+            <li>
+                <span class="check">&#10003;</span> CAPA (Corrective and
+                Preventive Actions) management
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Nonconformance tracking and
+                resolution
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Training compliance
+                management
+            </li>
+            <li>
+                <span class="check">&#10003;</span> Flexible evaluation
+                framework (ISO 9001, COPC, Six Sigma)
+            </li>
+        </ul>
+
+        <h3>2.2 Out of Scope</h3>
+        <ul>
+            <li>Production Zoho CRM administrative changes</li>
+            <li>Custom mobile applications</li>
+            <li>Third-party ERP integrations (not specified)</li>
+            <li>Historical data migration from legacy systems</li>
+        </ul>
+
+        <h2 class="page-break">3. System Architecture</h2>
+
+        <h3>3.1 High-Level Architecture Diagram</h3>
+        <div class="diagram">
+            +-----------------------------------------------------------------------------+
+            | ExampleOrg QUALITY PLATFORM |
+            +-----------------------------------------------------------------------------+
+            | | | +--------------+ +--------------+ +--------------+ | | |
+            QUALITY | | ADMIN | | QMS | | | | DASHBOARD | | PANEL | | DASHBOARD
+            | | | | /dashboard | | /admin | | /qms | | | +------+-------+
+            +------+-------+ +------+-------+ | | | | | | |
+            +-------------------+-------------------+ | | | | |
+            +--------v--------+ | | | MASTRA API | | | | (Port 5000) | | |
+            +--------+--------+ | | | | |
+            +-------------------+-------------------+ | | | | | | |
+            +------v------+ +-------v-------+ +------v------+ | | | QUALITY | |
+            INNGEST | | POSTGRESQL | | | | AGENT | | SCHEDULER | | DATABASE | |
+            | | (GPT-4o) | | (Cron Jobs) | | (Neon) | | | +------+------+
+            +---------------+ +-------------+ | | | | |
+            +------------------+------------------------+ | | | | |
+            +-----------------------------+------------------------+----------------------+
+            | | +--------------v--------------+ +------v------+ | EXTERNAL
+            SERVICES | | EMAIL | +-----------------------------+ | SERVICE | |
+            +---------+ +----------+ | +-------------+ | | ZOHO | | GOOGLE | | |
+            | CRM | | CALENDAR | | | +---------+ +----------+ |
+            +-----------------------------+
+        </div>
+
+        <h3>3.2 Component Description</h3>
+        <table>
+            <tr>
+                <th>Component</th>
+                <th>Technology</th>
+                <th>Purpose</th>
+            </tr>
+            <tr>
+                <td>Quality Dashboard</td>
+                <td>HTML5/TailwindCSS/Chart.js</td>
+                <td>Real-time quality metrics visualization</td>
+            </tr>
+            <tr>
+                <td>Admin Panel</td>
+                <td>HTML5/TailwindCSS</td>
+                <td>Governance and scorecard management</td>
+            </tr>
+            <tr>
+                <td>ExampleOrg</td>
+                <td>HTML5/TailwindCSS</td>
+                <td>Quality management system interface</td>
+            </tr>
+            <tr>
+                <td>Mastra API</td>
+                <td>Node.js/TypeScript</td>
+                <td>Backend API and workflow orchestration</td>
+            </tr>
+            <tr>
+                <td>Quality Agent</td>
+                <td>Mastra Agent + GPT-4o</td>
+                <td>AI-powered analysis and recommendations</td>
+            </tr>
+            <tr>
+                <td>Inngest Scheduler</td>
+                <td>Inngest</td>
+                <td>Cron-based workflow triggering</td>
+            </tr>
+            <tr>
+                <td>PostgreSQL Database</td>
+                <td>Neon (PostgreSQL)</td>
+                <td>Data persistence and storage</td>
+            </tr>
+        </table>
+
+        <h2 class="page-break">4. Integration Points</h2>
+
+        <h3>4.1 Zoho CRM Integration</h3>
+        <table>
+            <tr>
+                <th>Aspect</th>
+                <th>Details</th>
+            </tr>
+            <tr>
+                <td>Connection Type</td>
+                <td>REST API (OAuth 2.0)</td>
+            </tr>
+            <tr>
+                <td>Access Level</td>
+                <td><strong>Read-Only</strong></td>
+            </tr>
+            <tr>
+                <td>Data Accessed</td>
+                <td>Leads, Deals, Contacts, Tasks</td>
+            </tr>
+            <tr>
+                <td>Authentication</td>
+                <td>Access Token (ZOHO_ACCESS_TOKEN)</td>
+            </tr>
+            <tr>
+                <td>API Domain</td>
+                <td>Configurable (default: <REDACTED_URL></td>
+            </tr>
+            <tr>
+                <td>Refresh Mechanism</td>
+                <td>Manual token refresh (1-hour expiry)</td>
+            </tr>
+        </table>
+
+        <h4>Data Fields Audited:</h4>
+        <ul>
+            <li>
+                <strong>Lead:</strong> Owner, Status, Source, Email, Phone,
+                Company
+            </li>
+            <li>
+                <strong>Deal:</strong> Stage, Amount, Expected Close Date,
+                Contact, Account
+            </li>
+            <li>
+                <strong>Contact:</strong> Email, Phone, Mailing Address, Account
+            </li>
+            <li>
+                <strong>Task:</strong> Subject, Due Date, Status, Priority,
+                Owner
+            </li>
+        </ul>
+
+        <h3>4.2 Google Calendar Integration</h3>
+        <table>
+            <tr>
+                <th>Aspect</th>
+                <th>Details</th>
+            </tr>
+            <tr>
+                <td>Connection Type</td>
+                <td>Google Calendar API (OAuth 2.0)</td>
+            </tr>
+            <tr>
+                <td>Access Level</td>
+                <td><strong>Read-Only</strong></td>
+            </tr>
+            <tr>
+                <td>Data Accessed</td>
+                <td>Calendar Events (7-day window)</td>
+            </tr>
+            <tr>
+                <td>Authentication</td>
+                <td>Replit Connector (Managed OAuth)</td>
+            </tr>
+            <tr>
+                <td>Scopes</td>
+                <td>calendar.readonly</td>
+            </tr>
+        </table>
+
+        <h3>4.3 Email Integration (Replit Mail)</h3>
+        <table>
+            <tr>
+                <th>Aspect</th>
+                <th>Details</th>
+            </tr>
+            <tr>
+                <td>Connection Type</td>
+                <td>Replit Mail API</td>
+            </tr>
+            <tr>
+                <td>Access Level</td>
+                <td><strong>Send-Only</strong></td>
+            </tr>
+            <tr>
+                <td>Purpose</td>
+                <td>Quality report delivery</td>
+            </tr>
+            <tr>
+                <td>Authentication</td>
+                <td>Managed by Replit</td>
+            </tr>
+        </table>
+
+        <h2 class="page-break">5. Hosting & Infrastructure</h2>
+
+        <h3>5.1 Cloud Infrastructure</h3>
+        <table>
+            <tr>
+                <th>Component</th>
+                <th>Provider</th>
+                <th>Region</th>
+                <th>Details</th>
+            </tr>
+            <tr>
+                <td>Application Hosting</td>
+                <td>Replit</td>
+                <td>GCP US</td>
+                <td>Primary hosting environment</td>
+            </tr>
+            <tr>
+                <td>Database</td>
+                <td>Neon PostgreSQL</td>
+                <td>GCP US</td>
+                <td>Managed PostgreSQL service</td>
+            </tr>
+            <tr>
+                <td>Scheduler</td>
+                <td>Inngest</td>
+                <td>Replit</td>
+                <td>Cron job management</td>
+            </tr>
+            <tr>
+                <td>CDN/Edge</td>
+                <td>Replit</td>
+                <td>Global</td>
+                <td>Static asset delivery</td>
+            </tr>
+        </table>
+
+        <h3>5.2 Infrastructure Diagram</h3>
+        <div class="diagram">
+            +-------------------------------------------------------------+ |
+            REPLIT INFRASTRUCTURE | | (Google Cloud Platform) |
+            +-------------------------------------------------------------+ | |
+            | Region: United States (Primary) | | Alternative: India (Optional)
+            | | | | +-----------------+ +-----------------+ | | | APPLICATION |
+            | DATABASE | | | | CONTAINER | | (Neon/GCP) | | | | | | | | | | -
+            Node.js 20 | | - PostgreSQL | | | | - TypeScript | | - Auto-backup |
+            | | | - Mastra | | - Encryption | | | +-----------------+
+            +-----------------+ | | | |
+            +---------------------------------------------+ | | | DEPLOYMENT
+            FEATURES | | | | - Automatic SSL/TLS | | | | - Load Balancing | | |
+            | - Health Checks | | | | - Auto-scaling | | | | - .<REDACTED_HOST>
+            domain (or custom) | | |
+            +---------------------------------------------+ | | |
+            +-------------------------------------------------------------+
+        </div>
+
+        <h3>5.3 Environment Configuration</h3>
+        <table>
+            <tr>
+                <th>Variable</th>
+                <th>Purpose</th>
+                <th>Required</th>
+            </tr>
+            <tr>
+                <td>DATABASE_URL</td>
+                <td>PostgreSQL connection string</td>
+                <td>Yes (Auto)</td>
+            </tr>
+            <tr>
+                <td>ZOHO_ACCESS_TOKEN</td>
+                <td>Zoho CRM authentication</td>
+                <td>Yes (CRM)</td>
+            </tr>
+            <tr>
+                <td>ZOHO_API_DOMAIN</td>
+                <td>Zoho API endpoint</td>
+                <td>No</td>
+            </tr>
+            <tr>
+                <td>ADMIN_API_KEY</td>
+                <td>Admin panel authentication</td>
+                <td>Yes</td>
+            </tr>
+            <tr>
+                <td>SCHEDULE_CRON_EXPRESSION</td>
+                <td>Audit schedule</td>
+                <td>No (default: 0 8 * * 1)</td>
+            </tr>
+        </table>
+
+        <h2 class="page-break">6. Data Flow & Security</h2>
+
+        <h3>6.1 Data Flow Diagram</h3>
+        <div class="diagram">
+            +------------+ +------------+ +------------+ | ZOHO | --API-->|
+            MASTRA | --SQL-->| POSTGRESQL | | CRM |<--------| SERVER |<--------|
+            DATABASE | | (Read-Only)| | | | | +------------+ +-----+------+
+            +------------+ | +------------+ | +------------+ | GOOGLE |
+            --OAuth--> | <--HTTP-- | USER | | CALENDAR | | | BROWSER | |
+            (Read-Only)| | | | +------------+ | +------------+ |
+            +--------v--------+ | REPLIT MAIL | | (Send Only) |
+            +-----------------+
+        </div>
+
+        <h3>6.2 Authentication & Authorization</h3>
+        <table>
+            <tr>
+                <th>Interface</th>
+                <th>Method</th>
+                <th>Details</th>
+            </tr>
+            <tr>
+                <td>Dashboard</td>
+                <td>Public</td>
+                <td>Read-only quality metrics</td>
+            </tr>
+            <tr>
+                <td>Admin Panel</td>
+                <td>API Key</td>
+                <td>X-Admin-Key header required</td>
+            </tr>
+            <tr>
+                <td>ExampleOrg</td>
+                <td>API Key</td>
+                <td>X-Admin-Key header required</td>
+            </tr>
+            <tr>
+                <td>API Endpoints</td>
+                <td>API Key</td>
+                <td>Protected routes require authentication</td>
+            </tr>
+            <tr>
+                <td>Zoho CRM</td>
+                <td>OAuth Token</td>
+                <td>Bearer token authentication</td>
+            </tr>
+            <tr>
+                <td>Google Calendar</td>
+                <td>OAuth 2.0</td>
+                <td>Managed by Replit Connector</td>
+            </tr>
+        </table>
+
+        <h3>6.3 Data Security Measures</h3>
+        <table>
+            <tr>
+                <th>Measure</th>
+                <th>Implementation</th>
+            </tr>
+            <tr>
+                <td>Encryption in Transit</td>
+                <td>TLS 1.3 for all connections</td>
+            </tr>
+            <tr>
+                <td>Encryption at Rest</td>
+                <td>AES-256 for database storage</td>
+            </tr>
+            <tr>
+                <td>Secret Management</td>
+                <td>Replit Secrets (encrypted vault)</td>
+            </tr>
+            <tr>
+                <td>Access Control</td>
+                <td>API key authentication for admin functions</td>
+            </tr>
+            <tr>
+                <td>Audit Logging</td>
+                <td>All admin actions logged with timestamps</td>
+            </tr>
+            <tr>
+                <td>Rate Limiting</td>
+                <td>60-second cooldown on audit triggers</td>
+            </tr>
+        </table>
+
+        <h2 class="page-break">7. User Interfaces</h2>
+
+        <div class="two-column">
+            <div class="card">
+                <h4>Quality Dashboard (/dashboard)</h4>
+                <p>
+                    <strong>Purpose:</strong> Real-time quality metrics
+                    visualization
+                </p>
+                <p><strong>Access:</strong> Public</p>
+                <ul>
+                    <li>Overall quality score with rating</li>
+                    <li>Dimension breakdown</li>
+                    <li>Score trend charts</li>
+                    <li>Issues by category</li>
+                    <li>Customizable layout</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h4>Admin Panel (/admin)</h4>
+                <p><strong>Purpose:</strong> Governance configuration</p>
+                <p><strong>Access:</strong> Requires ADMIN_API_KEY</p>
+                <ul>
+                    <li>Governance Document Manager</li>
+                    <li>Scorecard Editor</li>
+                    <li>System Settings</li>
+                    <li>Activity Logging</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="highlight-box">
+            <h4>ExampleOrg (/qms)</h4>
+            <p>
+                <strong>Purpose:</strong> Quality Management System operations
+            </p>
+            <p><strong>Access:</strong> Requires ADMIN_API_KEY</p>
+            <ul>
+                <li>Deal Evaluations (pass/fail tracking)</li>
+                <li>CAPA Management (corrective actions)</li>
+                <li>Nonconformance Records</li>
+                <li>Training Compliance</li>
+                <li>Evaluation Framework Viewer</li>
+            </ul>
+        </div>
+
+        <h2>8. Compliance & Certifications</h2>
+
+        <h3>8.1 Platform Certifications (Replit Infrastructure)</h3>
+        <table>
+            <tr>
+                <th>Certification</th>
+                <th>Status</th>
+                <th>Details</th>
+            </tr>
+            <tr>
+                <td>SOC 2 Type 2</td>
+                <td><span class="check">&#10003; Certified</span></td>
+                <td>Security, Availability, Confidentiality</td>
+            </tr>
+            <tr>
+                <td>ISO 27001</td>
+                <td><span class="check">&#10003; Certified</span></td>
+                <td>Information Security Management</td>
+            </tr>
+            <tr>
+                <td>GDPR Compliant</td>
+                <td><span class="check">&#10003; Ready</span></td>
+                <td>Data protection compliance</td>
+            </tr>
+        </table>
+
+        <h3>8.2 Quality Framework Alignment</h3>
+        <table>
+            <tr>
+                <th>Framework</th>
+                <th>Implementation</th>
+            </tr>
+            <tr>
+                <td>ISO 9001</td>
+                <td>Quality management principles integrated</td>
+            </tr>
+            <tr>
+                <td>COPC</td>
+                <td>Customer operations performance standards</td>
+            </tr>
+            <tr>
+                <td>Six Sigma</td>
+                <td>Defect reduction and process improvement</td>
+            </tr>
+        </table>
+
+        <h2 class="page-break">9. Technical Specifications</h2>
+
+        <h3>9.1 Technology Stack</h3>
+        <table>
+            <tr>
+                <th>Layer</th>
+                <th>Technology</th>
+            </tr>
+            <tr>
+                <td>Frontend</td>
+                <td>HTML5, TailwindCSS, Chart.js, SortableJS</td>
+            </tr>
+            <tr>
+                <td>Backend</td>
+                <td>Node.js 20, TypeScript, Mastra Framework</td>
+            </tr>
+            <tr>
+                <td>Database</td>
+                <td>PostgreSQL 15 (Neon)</td>
+            </tr>
+            <tr>
+                <td>AI/ML</td>
+                <td>OpenAI GPT-4o (via Mastra Agent)</td>
+            </tr>
+            <tr>
+                <td>Scheduler</td>
+                <td>Inngest (Cron-based workflows)</td>
+            </tr>
+            <tr>
+                <td>Email</td>
+                <td>Replit Mail</td>
+            </tr>
+        </table>
+
+        <h3>9.2 API Endpoints Summary</h3>
+        <table>
+            <tr>
+                <th>Endpoint</th>
+                <th>Method</th>
+                <th>Authentication</th>
+                <th>Purpose</th>
+            </tr>
+            <tr>
+                <td>/api/dashboard</td>
+                <td>GET</td>
+                <td>None</td>
+                <td>Dashboard data</td>
+            </tr>
+            <tr>
+                <td>/api/audit/trigger</td>
+                <td>POST</td>
+                <td>None</td>
+                <td>Trigger audit</td>
+            </tr>
+            <tr>
+                <td>/api/audit/latest</td>
+                <td>GET</td>
+                <td>None</td>
+                <td>Latest audit result</td>
+            </tr>
+            <tr>
+                <td>/api/admin/*</td>
+                <td>ALL</td>
+                <td>X-Admin-Key</td>
+                <td>Admin operations</td>
+            </tr>
+            <tr>
+                <td>/api/qms/*</td>
+                <td>ALL</td>
+                <td>X-Admin-Key</td>
+                <td>QMS operations</td>
+            </tr>
+        </table>
+
+        <h3>9.3 Performance Specifications</h3>
+        <table>
+            <tr>
+                <th>Metric</th>
+                <th>Target</th>
+            </tr>
+            <tr>
+                <td>API Response Time</td>
+                <td>&lt; 500ms (95th percentile)</td>
+            </tr>
+            <tr>
+                <td>Dashboard Load Time</td>
+                <td>&lt; 2 seconds</td>
+            </tr>
+            <tr>
+                <td>Audit Processing Time</td>
+                <td>&lt; 60 seconds</td>
+            </tr>
+            <tr>
+                <td>Database Queries</td>
+                <td>&lt; 100ms average</td>
+            </tr>
+        </table>
+
+        <h2 class="page-break">10. Enterprise GRC Modules</h2>
+
+        <p>
+            The Enterprise GRC (Governance, Risk, and Compliance) modules extend the ExampleOrg platform with 
+            comprehensive risk management, policy governance, compliance tracking, audit readiness, vendor risk 
+            management, and data migration capabilities. All modules are accessible via the GRC Control Tower 
+            executive dashboard at <code>/grc</code>.
+        </p>
+
+        <h3>10.1 Enterprise Risk Register</h3>
+        <p><strong>Dashboard:</strong> <code>/risks</code></p>
+        <table>
+            <tr>
+                <th>Feature</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>Risk Scoring Matrix</td>
+                <td>Auto-calculated risk scores (Likelihood x Impact, 1-16 scale)</td>
+            </tr>
+            <tr>
+                <td>Risk Heat Map</td>
+                <td>Visual 4x4 grid showing risk distribution by severity</td>
+            </tr>
+            <tr>
+                <td>Treatment Workflows</td>
+                <td>Track risk treatments: Mitigate, Transfer, Accept, Avoid</td>
+            </tr>
+            <tr>
+                <td>Risk Categories</td>
+                <td>Operational, Financial, Strategic, Compliance, Technology, Reputational</td>
+            </tr>
+            <tr>
+                <td>AI Anomaly Detection</td>
+                <td>GPT-4o identifies unusual patterns in risk data</td>
+            </tr>
+            <tr>
+                <td>Audit Trail</td>
+                <td>Complete history of risk changes and assessments</td>
+            </tr>
+        </table>
+
+        <h4>API Endpoints</h4>
+        <table>
+            <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+            <tr><td>GET/POST</td><td>/api/risks</td><td>List/Create risks</td></tr>
+            <tr><td>GET/PUT/DELETE</td><td>/api/risks/:id</td><td>Get/Update/Delete risk</td></tr>
+            <tr><td>GET</td><td>/api/risks/summary</td><td>Dashboard summary</td></tr>
+            <tr><td>GET</td><td>/api/risks/heatmap</td><td>Heat map data</td></tr>
+            <tr><td>POST</td><td>/api/risks/:id/treatments</td><td>Add treatment</td></tr>
+        </table>
+
+        <h3>10.2 Policy & Document Governance</h3>
+        <p><strong>Dashboard:</strong> <code>/policies</code></p>
+        <table>
+            <tr>
+                <th>Feature</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>Document Lifecycle</td>
+                <td>States: Draft → Review → Approval → Published → Retired</td>
+            </tr>
+            <tr>
+                <td>Version Control</td>
+                <td>Track all document versions with change summaries</td>
+            </tr>
+            <tr>
+                <td>Approval Workflows</td>
+                <td>Multi-stage approval process with audit trail</td>
+            </tr>
+            <tr>
+                <td>Review Scheduling</td>
+                <td>Automatic review reminders (Annual, Bi-annual, Quarterly)</td>
+            </tr>
+            <tr>
+                <td>Category Management</td>
+                <td>Security, HR, Compliance, Operations, Quality, IT</td>
+            </tr>
+            <tr>
+                <td>Comment System</td>
+                <td>Discussion threads on policy documents</td>
+            </tr>
+        </table>
+
+        <h3>10.3 Compliance & Regulatory Tracker</h3>
+        <p><strong>Dashboard:</strong> <code>/compliance</code></p>
+        <h4>Pre-Seeded Regulatory Frameworks</h4>
+        <table>
+            <tr><th>Code</th><th>Name</th><th>Description</th></tr>
+            <tr><td>PDPL</td><td>Personal Data Protection Law</td><td>Saudi data privacy regulation</td></tr>
+            <tr><td>NCA-ECC</td><td>NCA Essential Cybersecurity Controls</td><td>Saudi cybersecurity requirements</td></tr>
+            <tr><td>NCA-DCC</td><td>NCA Data Cybersecurity Controls</td><td>Saudi data cybersecurity</td></tr>
+            <tr><td>ISO-9001</td><td>ISO 9001:2015</td><td>Quality management system</td></tr>
+            <tr><td>ISO-27001</td><td>ISO 27001:2022</td><td>Information security management</td></tr>
+            <tr><td>COPC</td><td>COPC CX Standard</td><td>Customer operations performance</td></tr>
+        </table>
+
+        <h4>Features</h4>
+        <ul>
+            <li>Track obligations with compliance status (Compliant, Partially Compliant, Non-Compliant)</li>
+            <li>Evidence attachment and management</li>
+            <li>Due date tracking with overdue alerts</li>
+            <li>Overall compliance scoring per framework</li>
+            <li>Priority-based obligation management</li>
+        </ul>
+
+        <h3>10.4 Audit Readiness Module</h3>
+        <p><strong>Dashboard:</strong> <code>/audits</code></p>
+        <table>
+            <tr>
+                <th>Feature</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>Audit Program Management</td>
+                <td>Schedule and track internal/external audits</td>
+            </tr>
+            <tr>
+                <td>Findings Register</td>
+                <td>Track audit findings with severity (Critical, Major, Minor, Observation)</td>
+            </tr>
+            <tr>
+                <td>Evidence Pack Generation</td>
+                <td>Compile all evidence for a specific audit</td>
+            </tr>
+            <tr>
+                <td>Corrective Action Tracking</td>
+                <td>Link findings to corrective actions with due dates</td>
+            </tr>
+            <tr>
+                <td>Audit Types</td>
+                <td>Internal, External, Regulatory, Certification</td>
+            </tr>
+        </table>
+
+        <h3>10.5 Vendor Risk Management</h3>
+        <p><strong>Dashboard:</strong> <code>/vendors</code></p>
+        <table>
+            <tr>
+                <th>Feature</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>Vendor Registry</td>
+                <td>Central repository of all third-party vendors</td>
+            </tr>
+            <tr>
+                <td>Risk Assessments</td>
+                <td>Periodic vendor risk evaluations with scoring</td>
+            </tr>
+            <tr>
+                <td>Criticality Ratings</td>
+                <td>Critical, High, Medium, Low vendor importance</td>
+            </tr>
+            <tr>
+                <td>Remediation Tracking</td>
+                <td>Track vendor issues and remediation progress</td>
+            </tr>
+            <tr>
+                <td>AI Risk Assessment</td>
+                <td>GPT-4o powered vendor risk analysis</td>
+            </tr>
+            <tr>
+                <td>Contract Management</td>
+                <td>Track contract start/end dates with expiry alerts</td>
+            </tr>
+        </table>
+
+        <h3>10.6 Data Migration Engine</h3>
+        <p><strong>Dashboard:</strong> <code>/migration</code></p>
+        <table>
+            <tr>
+                <th>Feature</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>Template-Based Import</td>
+                <td>Pre-configured templates for Risk, Policy, Compliance, Vendor data</td>
+            </tr>
+            <tr>
+                <td>AI Field Mapping</td>
+                <td>GPT-4o suggests column mappings from CSV/Excel headers</td>
+            </tr>
+            <tr>
+                <td>Deduplication Rules</td>
+                <td>7 pre-configured rules to prevent duplicate records</td>
+            </tr>
+            <tr>
+                <td>Validation Preview</td>
+                <td>Review data before import with error highlighting</td>
+            </tr>
+            <tr>
+                <td>Rollback Capability</td>
+                <td>Undo imports if issues are discovered</td>
+            </tr>
+            <tr>
+                <td>Import History</td>
+                <td>Complete audit trail of all migration operations</td>
+            </tr>
+        </table>
+
+        <h4>Pre-Configured Deduplication Rules</h4>
+        <table>
+            <tr><th>Rule</th><th>Module</th><th>Match Criteria</th></tr>
+            <tr><td>risk_title_match</td><td>Risks</td><td>Title similarity &gt;85%</td></tr>
+            <tr><td>risk_code_exact</td><td>Risks</td><td>Exact risk_code match</td></tr>
+            <tr><td>policy_docnum_exact</td><td>Policies</td><td>Exact document_number</td></tr>
+            <tr><td>policy_title_match</td><td>Policies</td><td>Title similarity &gt;90%</td></tr>
+            <tr><td>vendor_name_match</td><td>Vendors</td><td>Name similarity &gt;80%</td></tr>
+            <tr><td>compliance_code_exact</td><td>Compliance</td><td>Exact obligation_code</td></tr>
+            <tr><td>audit_name_date</td><td>Audits</td><td>Name + date combination</td></tr>
+        </table>
+
+        <h3>10.7 Quality-GRC Handoff Engine</h3>
+        <p>
+            The Handoff Engine automatically creates connections between Quality Management and GRC modules,
+            enabling seamless information flow and control effectiveness tracking.
+        </p>
+
+        <h4>Pre-Configured Handoff Rules</h4>
+        <table>
+            <tr><th>Rule</th><th>Source</th><th>Target</th><th>Trigger</th></tr>
+            <tr><td>CAPA → Risk</td><td>capa_records</td><td>risks</td><td>Severity &gt;= High</td></tr>
+            <tr><td>Call Sentiment → Compliance</td><td>call_records</td><td>compliance</td><td>Sentiment &lt; 3</td></tr>
+            <tr><td>Nonconformance → Finding</td><td>nonconformances</td><td>grc_audit_findings</td><td>Any nonconformance</td></tr>
+            <tr><td>Training Gap → Compliance</td><td>training_records</td><td>compliance</td><td>Overdue training</td></tr>
+        </table>
+
+        <h4>Control Mappings</h4>
+        <table>
+            <tr><th>Control</th><th>Type</th><th>Source Domain</th><th>Target Domain</th></tr>
+            <tr><td>CAPA Risk Escalation</td><td>Preventive</td><td>Quality</td><td>Risk Management</td></tr>
+            <tr><td>Call Quality Monitoring</td><td>Detective</td><td>Quality</td><td>Compliance</td></tr>
+            <tr><td>NCR Audit Linking</td><td>Corrective</td><td>Quality</td><td>Audit</td></tr>
+            <tr><td>Training Compliance Check</td><td>Preventive</td><td>Quality</td><td>Compliance</td></tr>
+            <tr><td>Vendor Quality Review</td><td>Detective</td><td>Quality</td><td>Vendor Risk</td></tr>
+            <tr><td>Document Control Sync</td><td>Preventive</td><td>Quality</td><td>Policy Governance</td></tr>
+        </table>
+
+        <h3>10.8 GRC Control Tower</h3>
+        <p><strong>Dashboard:</strong> <code>/grc</code></p>
+        <p>
+            The GRC Control Tower is the executive command center providing a unified view across all 
+            GRC modules with real-time metrics, cross-module integration, and strategic decision support.
+        </p>
+
+        <h4>Dashboard Sections</h4>
+        <ul>
+            <li><strong>Risk Heat Map:</strong> Visual 4x4 grid showing risk distribution by likelihood and impact</li>
+            <li><strong>Compliance Overview:</strong> Scores by framework (PDPL, NCA-ECC, ISO, COPC)</li>
+            <li><strong>Policy Lifecycle:</strong> Status breakdown (Draft, Review, Approval, Published, Retired)</li>
+            <li><strong>Audit Status:</strong> Upcoming audits, open findings by severity</li>
+            <li><strong>Vendor Risk:</strong> Critical vendors, expiring contracts, pending assessments</li>
+            <li><strong>Handoff Automation:</strong> Active rules, recent events, control effectiveness</li>
+        </ul>
+
+        <h4>GRC Database Schema (19 Tables)</h4>
+        <table>
+            <tr><th>Domain</th><th>Tables</th></tr>
+            <tr><td>Risk Management</td><td>risks, risk_treatments, risk_audits</td></tr>
+            <tr><td>Policy Governance</td><td>policies, policy_versions, policy_comments</td></tr>
+            <tr><td>Compliance</td><td>compliance_frameworks, compliance_obligations, compliance_evidence</td></tr>
+            <tr><td>Audit</td><td>grc_audits, grc_audit_findings, audit_evidence</td></tr>
+            <tr><td>Vendor Risk</td><td>vendors, vendor_assessments, vendor_remediations</td></tr>
+            <tr><td>Data Migration</td><td>migration_templates, migration_field_mappings, migration_imports, deduplication_rules</td></tr>
+            <tr><td>Handoff Engine</td><td>handoff_rules, handoff_events, control_mappings</td></tr>
+        </table>
+
+        <h2 class="page-break">Document Approval</h2>
+
+        <table class="signature-table">
+            <tr>
+                <th>Role</th>
+                <th>Name</th>
+                <th>Date</th>
+                <th>Signature</th>
+            </tr>
+            <tr>
+                <td>Product Owner</td>
+                <td>_____________________</td>
+                <td>____/____/____</td>
+                <td>_____________________</td>
+            </tr>
+            <tr>
+                <td>Technical Lead</td>
+                <td>_____________________</td>
+                <td>____/____/____</td>
+                <td>_____________________</td>
+            </tr>
+            <tr>
+                <td>Quality Manager</td>
+                <td>_____________________</td>
+                <td>____/____/____</td>
+                <td>_____________________</td>
+            </tr>
+            <tr>
+                <td>GRC Manager</td>
+                <td>_____________________</td>
+                <td>____/____/____</td>
+                <td>_____________________</td>
+            </tr>
+        </table>
+
+        <div class="footer">
+            <p><strong>Document Control:</strong></p>
+            <p>
+                Version: 2.0 | Created: December 4, 2024 | Last Modified:
+                December 23, 2024
+            </p>
+            <p>Classification: Internal Use Only</p>
+            <br />
+            <p>
+                <em
+                    >This document is property of ExampleOrg and contains
+                    confidential information.</em
+                >
+            </p>
+        </div>
+    </body>
+</html>

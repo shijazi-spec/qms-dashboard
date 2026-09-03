@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Adam — Scope of Work — ExampleOrg Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <script src="<REDACTED_URL>"></script>
+    <style>
+        html, body { font-family: 'Inter', 'Noto Sans Arabic', sans-serif; margin: 0; }
+        .grade-g1 { background: #f3f4f6; color: #374151; }
+        .grade-g2 { background: #dbeafe; color: #1e40af; }
+        .grade-g3 { background: #dcfce7; color: #166534; }
+        .grade-g4 { background: #fae8ff; color: #86198f; }
+        .mode-shadow     { background: #fef3c7; color: #92400e; }
+        .mode-assisted   { background: #dbeafe; color: #1e40af; }
+        .mode-autonomous { background: #dcfce7; color: #166534; }
+        .pill { display:inline-flex; align-items:center; padding:0.125rem 0.5rem; border-radius:9999px; font-size:0.75rem; font-weight:600; }
+        .chart-box { position: relative; height: 280px; }
+    </style>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.WalaPlusNav) WalaPlusNav.init('autonomous-resolution');
+        });
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+        }
+    </script>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+        <header class="flex items-start justify-between flex-wrap gap-3">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">🤖 Adam — Scope of Work</h1>
+                <p class="text-sm text-gray-600 mt-1">Adam's job description, skills &amp; lessons learned, grade &amp; path to the next level, and the duplicate-resolution work he runs on behalf of Sample User (every 6 hours; escalates the doubtful 1% to the AI Approvals queue).</p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+                <button data-on-click="refreshAll" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+                <button data-on-click="execBrief" id="execBriefBtn" title="Generate a board-ready summary for the CEO/CCO" class="px-3 py-2 text-sm rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100">📋 Executive brief</button>
+                <button data-on-click="testSlack" id="testSlackBtn" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">🔔 Send test ping</button>
+                <button data-on-click="cleanupSlackPings" id="cleanupPingsBtn" title="Delete the bot's old zero-progress 'applied 0' resolution pings from the Slack channel." class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">🧹 Clean zero pings</button>
+                <button data-on-click="runNow" id="runNowBtn" class="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">▶ Run now</button>
+            </div>
+        </header>
+
+        <!-- Scope of Work overview (Adam's job description, skills, growth path) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-3">📄 Scope of Work</h2>
+            <div class="grid md:grid-cols-2 gap-4 text-sm">
+                <div class="rounded-lg border border-gray-200 p-3">
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Role &amp; job description</div>
+                    <p class="text-gray-700 leading-relaxed">Adam is the GRQ Assistant. He keeps the CRM clean: detects duplicate Accounts / Contacts / Leads / Deals, proposes migrate-then-tag merges (never deletes), enforces the hygiene &amp; business rules below, and escalates anything doubtful to the AI Approvals queue for a human. He acts on behalf of Sample User queues every Zoho write for approval.</p>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-3">
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Skills &amp; lessons learned</div>
+                    <p class="text-gray-700 leading-relaxed">His skills are the <strong>Learning rules</strong> you approve and the <strong>safe-tier gate</strong> he applies. He learns from your decisions: rejections become "don't re-ask" + suggested rules (see "Why proposals get rejected"), and his competence per module is graded G1→G4 below.</p>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-3">
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">How he reaches the next grade</div>
+                    <ul class="list-disc ps-5 text-gray-700 leading-relaxed space-y-0.5">
+                        <li><strong>G1 → G2</strong>: ≥20 decisions at ≥85% agreement.</li>
+                        <li><strong>G2 → G3</strong>: agreement ≥92% &amp; override ≤10%.</li>
+                        <li><strong>G3 → G4</strong>: agreement ≥96% &amp; override ≤5%, sustained.</li>
+                        <li>Promotion is a recommendation — you flip the mode (segregation of duties).</li>
+                    </ul>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-3">
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Documents he reads</div>
+                    <ul class="list-disc ps-5 text-gray-700 leading-relaxed space-y-0.5">
+                        <li><a href="/policies" class="text-indigo-700 hover:underline">Account / Contact Master Data SOPs</a></li>
+                        <li><a href="/policies" class="text-indigo-700 hover:underline">Sales Management Process SOP (stage SLAs &amp; 7.5.10 docs)</a></li>
+                        <li><a href="/policies" class="text-indigo-700 hover:underline">SDR Process SOP · WP-SOP-011 · WP-DOC-004</a></li>
+                        <li>The hygiene &amp; business rules listed further down this page.</li>
+                    </ul>
+                </div>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-3">Current mode &amp; per-module grade are shown below. The goal: Adam clears the obvious thousands so the team only reviews the genuinely doubtful cases.</p>
+        </section>
+
+        <!-- Executive brief (shareable, board-ready) -->
+        <section id="execBriefCard" class="hidden bg-white rounded-xl border border-indigo-200 p-5">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-lg font-semibold text-gray-900">📋 Executive brief</h2>
+                <div class="flex items-center gap-2">
+                    <button data-on-click="copyExecBrief" id="copyBriefBtn" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">⧉ Copy</button>
+                    <button data-on-click="sendWeeklyBriefNow" id="sendBriefBtn" title="Post the brief now to the leadership channels (#grq-assistant + #automatic-audits)" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">📨 Send to leadership</button>
+                    <button data-on-click="postDigestNow" id="postDigestBtn" title="Post the operational apply-digest (per-tab status board) to the resolution Slack channel right now, instead of waiting for the 09:00 / 17:00 run." class="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">📨 Post digest now</button>
+                    <button data-on-click="hideExecBrief" class="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600">✕</button>
+                </div>
+            </div>
+            <pre id="execBriefText" class="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded-lg p-3 max-h-96 overflow-y-auto">Generating…</pre>
+            <div id="execBriefMeta" class="text-[11px] text-gray-400 mt-1"></div>
+        </section>
+
+        <!-- Queued proposals: safe-tier vs escalated + clear -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">Queued proposals</h2>
+                <div class="flex items-center gap-2">
+                    <button data-on-click="loadProposalTiers" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+                    <button data-on-click="clearShadowProposals" id="clearShadowBtn" title="Bulk-reject all pending shadow proposals — they were never applied to Zoho; this only clears the review backlog." class="px-3 py-1.5 text-xs rounded-lg bg-gray-700 text-white hover:bg-gray-800">🧹 Clear shadow proposals</button>
+                </div>
+            </div>
+            <div id="proposalTiers" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div class="text-gray-500">Loading…</div>
+            </div>
+            <p class="text-xs text-gray-500 mt-3">
+                <strong>Safe-tier</strong> = high-confidence, single-company, no deal value / field conflicts / attachments — exactly what the agent auto-applies in <strong>assisted</strong> mode. <strong>Needs review</strong> = escalated for a human. Flipping to <strong>assisted</strong> (Status panel below) auto-applies the safe tier going forward and queues only the escalated ones — it does NOT execute the proposals already listed here, which you can clear.
+            </p>
+        </section>
+
+        <!-- Status panel -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-3">Status</h2>
+            <div id="statusGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="text-sm text-gray-500">Loading…</div>
+            </div>
+            <div id="runResult" class="mt-4 hidden text-sm"></div>
+
+            <!-- Admin-only mode control (populated by loadStatus when can_manage) -->
+            <div id="modeControl" class="hidden mt-5 pt-4 border-t border-gray-200">
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                        <div class="text-sm font-semibold text-gray-900">Operating mode</div>
+                        <div class="text-xs text-gray-500">shadow → assisted → autonomous. assisted/autonomous write to Zoho. Applies on the next tick — no republish.</div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div id="modeButtons" class="inline-flex rounded-lg border border-gray-300 overflow-hidden"></div>
+                        <button id="writesToggle" data-on-click="toggleWrites" class="px-3 py-2 text-sm rounded-lg border"></button>
+                    </div>
+                </div>
+                <div id="modeMeta" class="text-xs text-gray-400 mt-2"></div>
+            </div>
+        </section>
+
+        <!-- Per-module breakdown -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-1">By module — duplicate clusters: total · solved · remaining</h2>
+            <p class="text-xs text-gray-500 mb-3">Counted in clusters (one decision each): solved = resolved; remaining = still active.</p>
+            <div id="moduleBreakdown" class="space-y-2 text-sm"><div class="text-gray-500">Loading…</div></div>
+        </section>
+
+        <!-- Progress by tab (daily burndown) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">📊 Progress by tab (daily)</h2>
+                <button data-on-click="loadProgress" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+            </div>
+            <p class="text-xs text-gray-500 mb-3"><strong>Total</strong> = open + solved (the count from the beginning, which grows as new duplicates are detected). <strong>Solved</strong> = clusters no longer active. <strong>Merged</strong> = real Zoho merges (survives a Rebuild). Recorded daily so the trend below shows real progress over time.</p>
+            <div id="progressTable" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm mb-4"><div class="text-gray-500">Loading…</div></div>
+            <div><canvas id="progressChart" height="120"></canvas></div>
+        </section>
+
+        <!-- Notification schedule (Adam's Slack cadence) — reviewed monthly -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-1">🗓️ Adam — Notification Schedule (KSA)</h2>
+            <p class="text-xs text-gray-500 mb-3">What Adam posts to Slack and when. Reviewed automatically on the 1st of each month (posted to #grq-assistant) — to change a timing, edit its env var or ask me.</p>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead><tr class="text-xs text-gray-500 text-start border-b border-gray-200">
+                        <th scope="col" class="px-3 py-2">When (KSA)</th><th scope="col" class="px-3 py-2">What</th><th scope="col" class="px-3 py-2">Channel</th>
+                    </tr></thead>
+                    <tbody id="notifScheduleBody"><tr><td colspan="3" class="px-3 py-3 text-gray-500">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Competence grades -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-1">Competence grades</h2>
+            <p class="text-xs text-gray-500 mb-3">G1 Trainee → G2 Assistant → G3 Trusted → G4 Autonomous Specialist. A promotion is a recommendation — flipping the mode stays your call.</p>
+            <div id="gradesCards" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+        </section>
+
+        <!-- Hygiene & business rules (read-only reference of what Adam enforces) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">🛡️ Hygiene &amp; business rules Adam enforces</h2>
+                <div class="flex items-center gap-2">
+                    <select id="hygieneTab" class="text-sm border border-gray-300 rounded-lg px-2 py-1"></select>
+                    <span id="hygieneCount" class="text-xs text-gray-500"></span>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">The agreed data-hygiene &amp; governance rules per Duplicate Radar tab. Pick a module to review its rules; "General" rules apply to every tab. Spot one that needs changing? Click <strong>✎ Flag for edit</strong> and I'll review it.</p>
+            <div id="hygieneRules" class="space-y-3 text-sm"><div class="text-gray-500">Loading…</div></div>
+        </section>
+
+        <!-- Why proposals get rejected (recommend-only learning) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">🧐 Why proposals get rejected</h2>
+                <button data-on-click="loadRejectionPatterns" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">What Adam should learn from your rejections (last 30 days). Suggestions are <strong>recommend-only</strong> — click "Use this rule" to load it into the Learning rules form below, then you decide whether to add it.</p>
+            <div id="rejectionPatterns" class="space-y-2 text-sm"><div class="text-gray-500">Loading…</div></div>
+        </section>
+
+        <!-- What's safe to auto-merge (learned from resolved data) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">✅ What's safe to auto-merge (learned)</h2>
+                <div class="flex items-center gap-2">
+                    <select id="acceptModule" class="text-sm border border-gray-300 rounded-lg px-2 py-1">
+                        <option value="Accounts" selected>Accounts</option>
+                        <option value="Contacts">Contacts</option>
+                        <option value="Deals">Deals</option>
+                        <option value="Leads">Leads</option>
+                        <option value="">All modules</option>
+                    </select>
+                    <button data-on-click="loadAcceptancePatterns" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">Auto-approve rule ideas Adam learns from what you've already merged (your manual merges + agent applies, last 90 days). <strong>Recommend-only</strong> — "Use this rule" loads it into the Learning rules form for you to add.</p>
+            <div id="acceptancePatterns" class="space-y-2 text-sm"><div class="text-gray-500">Loading…</div></div>
+        </section>
+
+        <!-- Learning rules -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-1">Learning rules</h2>
+            <p class="text-xs text-gray-500 mb-3">Your decisions become durable rules so the agent never re-asks the same kind of case.</p>
+
+            <!-- 📚 Adam's rulebook — read-only consolidation of EVERYTHING Adam
+                 operates by (his learning curve). Display only; doesn't change
+                 what the resolver auto-approves. -->
+            <div id="adamRulebook" class="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-sm">
+                <div class="text-xs text-gray-500">Loading Adam's rulebook…</div>
+            </div>
+
+            <div class="grid md:grid-cols-5 gap-2 items-end mb-4 p-3 bg-gray-50 rounded-lg">
+                <label class="text-xs text-gray-600">Module
+                    <select id="ruleModule" class="mt-1 w-full text-sm border border-gray-300 rounded-lg px-2 py-1">
+                        <option>Accounts</option><option>Leads</option><option>Deals</option><option>Contacts</option>
+                    </select>
+                </label>
+                <label class="text-xs text-gray-600">Decision
+                    <select id="ruleDecision" class="mt-1 w-full text-sm border border-gray-300 rounded-lg px-2 py-1">
+                        <option value="auto_approve">Auto-approve</option>
+                        <option value="never_merge">Never merge</option>
+                        <option value="always_link">Always link to account</option>
+                    </select>
+                </label>
+                <label class="text-xs text-gray-600 md:col-span-2">Case signature (JSON)
+                    <input id="ruleSignature" type="text" placeholder='{"layoutSplit":true}' class="mt-1 w-full text-sm border border-gray-300 rounded-lg px-2 py-1 font-mono" />
+                </label>
+                <button data-on-click="makeRule" class="px-3 py-2 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">+ Add rule</button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="text-start text-gray-500 border-b border-gray-200">
+                        <tr><th scope="col" class="py-2 pe-3">Module</th><th scope="col" class="py-2 pe-3">Decision</th><th scope="col" class="py-2 pe-3">Signature</th><th scope="col" class="py-2 pe-3">Used</th><th scope="col" class="py-2 pe-3">Status</th><th scope="col" class="py-2"></th></tr>
+                    </thead>
+                    <tbody id="rulesBody"><tr><td colspan="6" class="py-3 text-gray-500">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Learning curve (below the rules — reflects the rules data: refreshes
+             whenever a rule is added/toggled) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1">
+                <h2 class="text-lg font-semibold text-gray-900">Learning curve</h2>
+                <select id="curveModule" data-on-change="loadGrades" class="text-sm border border-gray-300 rounded-lg px-2 py-1">
+                    <option value="">All modules</option>
+                    <option value="Accounts">Accounts</option>
+                    <option value="Leads">Leads</option>
+                    <option value="Deals">Deals</option>
+                    <option value="Contacts">Contacts</option>
+                </select>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">Adam's grade per module over time. It rises as you teach rules above and his agreement improves — the curve reflects the current rules data and refreshes whenever you add or toggle a rule.</p>
+            <div class="chart-box"><canvas id="curveChart"></canvas></div>
+            <div id="curveEmpty" class="hidden text-sm text-gray-500 mt-2">No grade snapshots yet — they accumulate as the agent runs.</div>
+        </section>
+
+        <!-- Last run items -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-3">Last run decisions</h2>
+            <div id="runItems" class="text-sm text-gray-500">Run the agent to see its per-cluster decisions here.</div>
+        </section>
+    </main>
+
+    <script>
+        var curveChart = null;
+
+        function esc(s) { return window.escAttr ? window.escAttr(s) : String(s == null ? '' : s); }
+
+        function gradeClass(g) { return 'grade-g' + (g || 1); }
+
+        async function getJSON(url) {
+            var r = await fetch(url, { credentials: 'same-origin' });
+            if (r.status === 401) { window.location.href = '/login'; return null; }
+            return r.json();
+        }
+
+        async function loadStatus() {
+            var data = await getJSON('/api/duplicates/autonomous/status');
+            if (!data) return;
+            var cfg = data.config || {};
+            var modeClass = 'mode-' + (cfg.mode || 'shadow');
+            var enabledTxt = cfg.enabled
+                ? '<span class="pill grade-g3">writes ON</span>'
+                : '<span class="pill mode-shadow">kill-switch OFF (no writes)</span>';
+            var l = data.learnings || {};
+            var slackOn = data.slack && data.slack.configured;
+            var slackTxt = slackOn
+                ? '<span class="pill grade-g3">channel connected</span>'
+                : '<span class="pill mode-shadow">not set</span>';
+            var grid = document.getElementById('statusGrid');
+            grid.innerHTML =
+                cell('Mode', '<span class="pill ' + esc(modeClass) + '">' + esc(cfg.mode || 'shadow') + '</span>') +
+                cell('Writes', enabledTxt) +
+                cell('Max clusters / tick', esc(cfg.maxClusters != null ? cfg.maxClusters : '—')) +
+                cell('Decisions logged (incl. shadow)', esc(l.totalEvents != null ? l.totalEvents : '—')) +
+                cell('Slack ping', slackTxt);
+            renderGradeCards(data.grades_latest || []);
+            renderModeControl(cfg, !!data.can_manage);
+            renderModuleBreakdown(data.module_breakdown || []);
+        }
+
+        // Per-module duplicate scoreboard: total · solved · remaining, with a bar.
+        function renderModuleBreakdown(rows) {
+            var box = document.getElementById('moduleBreakdown');
+            if (!box) return;
+            if (!rows.length || !rows.some(function (r) { return r.total > 0; })) {
+                box.innerHTML = '<div class="text-gray-500">No duplicates detected yet — run a sync on Duplicates Radar.</div>';
+                return;
+            }
+            box.innerHTML = rows.map(function (r) {
+                var total = r.total || 0;
+                var solved = r.solved || 0;
+                var rest = r.rest || 0;
+                var pct = total > 0 ? Math.round((solved / total) * 100) : 0;
+                return '<div class="rounded-lg border border-gray-200 p-3">' +
+                    '<div class="flex items-center justify-between">' +
+                        '<span class="font-medium text-gray-800">▸ ' + esc(r.module) + ' Duplicates</span>' +
+                        '<span class="text-xs text-gray-600">' + esc(total) + ' total · ' +
+                            '<span class="text-emerald-700 font-medium">' + esc(solved) + ' solved</span> · ' +
+                            '<span class="text-amber-700 font-medium">' + esc(rest) + ' remaining</span></span>' +
+                    '</div>' +
+                    '<div class="mt-2 h-2 w-full bg-gray-100 rounded-full overflow-hidden">' +
+                        '<div class="h-2 bg-emerald-500 rounded-full" data-w="' + esc(pct) + '"></div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+            // CSP-safe width set (no inline style attribute in the markup).
+            box.querySelectorAll('[data-w]').forEach(function (el) {
+                el.style.width = (parseInt(el.getAttribute('data-w'), 10) || 0) + '%';
+            });
+        }
+
+        // Admin-only operating-mode control. Promotes shadow → assisted →
+        // autonomous (and the kill switch) from inside the platform.
+        var MODES = ['shadow', 'assisted', 'autonomous'];
+        function renderModeControl(cfg, canManage) {
+            var box = document.getElementById('modeControl');
+            if (!box) return;
+            if (!canManage) { box.classList.add('hidden'); return; }
+            box.classList.remove('hidden');
+            var current = cfg.mode || 'shadow';
+            document.getElementById('modeButtons').innerHTML = MODES.map(function (m) {
+                var active = m === current;
+                var cls = active
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50';
+                return '<button data-on-click="setMode" data-args="[' + esc(JSON.stringify(m)) + ']" ' +
+                    'class="px-3 py-2 text-sm border-e border-gray-300 last:border-e-0 ' + cls + '">' + esc(m) + '</button>';
+            }).join('');
+            var wt = document.getElementById('writesToggle');
+            if (cfg.enabled) {
+                wt.textContent = 'Writes ON — click to disable';
+                wt.className = 'px-3 py-2 text-sm rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
+            } else {
+                wt.textContent = 'Writes OFF (kill-switch) — click to enable';
+                wt.className = 'px-3 py-2 text-sm rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100';
+            }
+            var meta = document.getElementById('modeMeta');
+            meta.textContent = (cfg.source === 'override')
+                ? ('Set in-platform' + (cfg.updatedBy ? ' by ' + cfg.updatedBy : 'Sample User') + (cfg.updatedAt ? ' · ' + new Date(cfg.updatedAt).toLocaleString() : ''))
+                : 'Using the deployment default (env). Changing it here overrides that on the next tick.';
+        }
+
+        async function postMode(patch, confirmMsg) {
+            if (confirmMsg && !confirm(confirmMsg)) { loadStatus(); return; }
+            try {
+                var r = await fetch('/api/duplicates/autonomous/mode', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(patch)
+                });
+                var data = await r.json();
+                if (!r.ok || !data.ok) { alert('Could not change mode: ' + ((data && data.error) || r.status)); }
+            } catch (e) { alert('Mode change failed: ' + e); }
+            loadStatus();
+        }
+
+        function setMode(mode) {
+            var msg = (mode === 'shadow')
+                ? null
+                : 'Switch the agent to "' + mode + '" mode?\n\nIn this mode it will AUTO-APPLY the safe tier to Zoho on your behalf (the doubtful 1% still queues for approval). Make sure writes are enabled for it to act.';
+            postMode({ mode: mode }, msg);
+        }
+
+        function toggleWrites() {
+            // Read current state from the button label.
+            var wt = document.getElementById('writesToggle');
+            var turningOn = /enable/i.test(wt.textContent);
+            var msg = turningOn
+                ? 'Enable writes? The agent will be allowed to apply merges to Zoho (per the current mode). The doubtful 1% still queues for your approval.'
+                : 'Disable writes (kill switch)? The agent will stop ALL Zoho writes immediately on the next tick.';
+            postMode({ enabled: turningOn }, msg);
+        }
+
+        function cell(label, valueHtml) {
+            return '<div class="bg-gray-50 rounded-lg p-3">' +
+                '<div class="text-xs text-gray-500">' + esc(label) + '</div>' +
+                '<div class="mt-1 font-semibold text-gray-900">' + valueHtml + '</div></div>';
+        }
+
+        function renderGradeCards(list) {
+            var box = document.getElementById('gradesCards');
+            var modules = ['Accounts', 'Leads', 'Deals', 'Contacts'];
+            var byMod = {};
+            list.forEach(function (g) { byMod[g.module] = g; });
+            box.innerHTML = modules.map(function (m) {
+                var g = byMod[m];
+                var grade = g ? g.grade : 1;
+                var label = g ? g.label : 'Trainee';
+                var metrics = (g && g.metrics) || {};
+                var agree = metrics.agreementRate != null ? Math.round(metrics.agreementRate * 100) + '%' : '—';
+                var dec = metrics.decisions != null ? metrics.decisions : 0;
+                var r = readiness(grade);
+                return '<div class="rounded-lg border border-gray-200 p-3">' +
+                    '<div class="flex items-center justify-between">' +
+                    '<span class="font-medium text-gray-800">' + esc(m) + '</span>' +
+                    '<span class="pill ' + esc(gradeClass(grade)) + '">G' + esc(grade) + ' ' + esc(label) + '</span></div>' +
+                    '<div class="text-xs text-gray-500 mt-2">Agreement ' + esc(agree) + ' · ' + esc(dec) + ' decisions</div>' +
+                    '<div class="mt-2"><span class="pill ' + esc(r.cls) + '" title="' + esc(r.hint) + '">' + esc(r.label) + '</span></div></div>';
+            }).join('');
+        }
+
+        // Per-module "safe to promote" signal, mapped from the deterministic grade.
+        function readiness(grade) {
+            if (grade >= 4) return { label: '✅ Ready for autonomous', cls: 'grade-g4', hint: 'G4 sustained (agreement ≥96%, override ≤5%) — safe to run autonomously.' };
+            if (grade === 3) return { label: '✅ Ready for assisted', cls: 'grade-g3', hint: 'G3 Trusted (agreement ≥92%, override ≤10%) — comfortable leaving it in assisted daily.' };
+            if (grade === 2) return { label: '⏳ Watch in assisted', cls: 'mode-shadow', hint: 'G2 — agreeing well, but keep an eye on the Agent Activity log / Undos before trusting it unattended.' };
+            return { label: '🔒 Keep in shadow', cls: 'grade-g1', hint: 'G1 — not enough proven history yet (needs ≥20 decisions at high agreement). Let it run in shadow.' };
+        }
+
+        async function loadGrades() {
+            var mod = document.getElementById('curveModule').value;
+            var url = '/api/duplicates/autonomous/grades' + (mod ? ('?module=' + encodeURIComponent(mod)) : '');
+            var data = await getJSON(url);
+            if (!data) return;
+            var hist = (data.history || []).slice().reverse(); // oldest → newest
+            var empty = document.getElementById('curveEmpty');
+            if (!hist.length) { empty.classList.remove('hidden'); if (curveChart) { curveChart.destroy(); curveChart = null; } return; }
+            empty.classList.add('hidden');
+
+            var modules = ['Accounts', 'Leads', 'Deals', 'Contacts'];
+            var colors = { Accounts: '#6366f1', Leads: '#f59e0b', Deals: '#10b981', Contacts: '#ec4899' };
+            var labels = hist.map(function (h) { return (h.at || '').slice(0, 10); });
+            var datasets = modules.map(function (m) {
+                return {
+                    label: m,
+                    data: hist.map(function (h) { return h.module === m ? h.grade : null; }),
+                    borderColor: colors[m], backgroundColor: colors[m],
+                    stepped: true, spanGaps: true, tension: 0
+                };
+            }).filter(function (d) { return d.data.some(function (v) { return v != null; }); });
+
+            var ctx = document.getElementById('curveChart');
+            if (curveChart) curveChart.destroy();
+            curveChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: labels, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { y: { min: 1, max: 4, ticks: { stepSize: 1, callback: function (v) { return 'G' + v; } } } },
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        // 📚 Adam's rulebook — read-only consolidation of his hygiene rules,
+        // bulk auto-merge "skills", and learned case-rules (his learning curve).
+        async function loadAdamRulebook() {
+            var box = document.getElementById('adamRulebook');
+            if (!box) return;
+            try {
+                var hy = await getJSON('/api/duplicates/hygiene-rules');
+                var groups = (hy && hy.groups) || [];
+                var hygieneTotal = (hy && hy.totalRules) || 0;
+                // Auto-merge "skills" = the operational rules Sample User (ids contain 'automerge').
+                var autoMerge = [];
+                groups.forEach(function (g) {
+                    (g.rules || []).forEach(function (r) {
+                        if (/automerge/i.test(r.id || '')) autoMerge.push({ tab: g.title, rule: r.rule });
+                    });
+                });
+                var learned = 0;
+                try {
+                    var lr = await getJSON('/api/duplicates/autonomous/rules?all=1');
+                    learned = ((lr && lr.rules) || []).length;
+                } catch (e) { /* non-fatal */ }
+
+                var skillsHtml = autoMerge.length
+                    ? '<ul class="list-disc ps-6 mt-1 space-y-1">' + autoMerge.map(function (s) {
+                        return '<li class="text-gray-700 leading-relaxed"><span class="font-medium">' + esc(s.tab) + ':</span> ' + esc(s.rule) + '</li>';
+                    }).join('') + '</ul>'
+                    : '<div class="text-xs text-gray-400 mt-1">No auto-merge skills defined yet.</div>';
+
+                box.innerHTML =
+                    '<div class="font-semibold text-gray-900 mb-1">📚 Adam\'s rulebook <span class="text-xs font-normal text-gray-500">(everything he operates by — read-only)</span></div>' +
+                    '<div class="flex flex-wrap gap-2 mb-2">' +
+                    '<span class="pill grade-g3">' + hygieneTotal + ' hygiene &amp; business rules</span>' +
+                    '<span class="pill grade-g3">' + autoMerge.length + ' auto-merge skills</span>' +
+                    '<span class="pill ' + (learned > 0 ? 'grade-g3' : 'mode-shadow') + '">' + learned + ' learned case-rules</span>' +
+                    '</div>' +
+                    '<div class="text-xs text-gray-600">The full hygiene rules (per tab) are in the “🛡️ Hygiene &amp; business rules” panel above. Adam\'s operational <strong>auto-merge skills</strong>:</div>' +
+                    skillsHtml +
+                    '<div class="text-[11px] text-gray-400 mt-2">“Learned case-rules” below are the case-shapes you teach him via the form (auto-approve / never-merge). The hygiene rules + auto-merge skills are always in force; the resolver executes only the case-rules below.</div>';
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700 text-xs">Could not load rulebook: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+
+        async function loadRules() {
+            var data = await getJSON('/api/duplicates/autonomous/rules?all=1');
+            if (!data) return;
+            var body = document.getElementById('rulesBody');
+            var rules = data.rules || [];
+            if (!rules.length) { body.innerHTML = '<tr><td colspan="6" class="py-3 text-gray-500">No rules yet.</td></tr>'; return; }
+            body.innerHTML = rules.map(function (r) {
+                var sig = JSON.stringify(r.caseSignature || {});
+                var statusPill = r.enabled
+                    ? '<span class="pill grade-g3">enabled</span>'
+                    : '<span class="pill status-rejected mode-shadow">disabled</span>';
+                var toggleLabel = r.enabled ? 'Disable' : 'Enable';
+                return '<tr class="border-b border-gray-100">' +
+                    '<td class="py-2 pe-3">' + esc(r.module) + '</td>' +
+                    '<td class="py-2 pe-3 font-medium">' + esc(r.decision) + '</td>' +
+                    '<td class="py-2 pe-3 font-mono text-xs text-gray-600">' + esc(sig) + (r.scope === 'cluster' ? (' (cluster #' + esc(r.clusterId) + ')') : '') + '</td>' +
+                    '<td class="py-2 pe-3">' + esc(r.usageCount || 0) + '</td>' +
+                    '<td class="py-2 pe-3">' + statusPill + '</td>' +
+                    '<td class="py-2"><button data-on-click="toggleRule" data-args="[' + esc(r.id) + ',' + (!r.enabled) + ']" class="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50">' + toggleLabel + '</button></td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        async function makeRule() {
+            var module = document.getElementById('ruleModule').value;
+            var decision = document.getElementById('ruleDecision').value;
+            var sigRaw = document.getElementById('ruleSignature').value.trim();
+            var caseSignature = {};
+            if (sigRaw) {
+                try { caseSignature = JSON.parse(sigRaw); }
+                catch (e) { alert('Case signature must be valid JSON, e.g. {"layoutSplit":true}'); return; }
+            }
+            var r = await fetch('/api/duplicates/autonomous/rules', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ module: module, decision: decision, caseSignature: caseSignature })
+            });
+            var data = await r.json();
+            if (data && data.ok) {
+                document.getElementById('ruleSignature').value = '';
+                // Reflect the updated rules in the rulebook + learning curve.
+                loadRules(); loadAdamRulebook(); loadGrades();
+            }
+            else alert((data && data.error) || 'Could not create rule');
+        }
+
+        async function toggleRule(id, enabled) {
+            var r = await fetch('/api/duplicates/autonomous/rules/' + id, {
+                method: 'PATCH', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            });
+            await r.json().catch(function () {});
+            // Reflect the updated rules in the rulebook + learning curve.
+            loadRules(); loadAdamRulebook(); loadGrades();
+        }
+
+        async function runNow() {
+            var btn = document.getElementById('runNowBtn');
+            btn.disabled = true; btn.textContent = 'Running…';
+            try {
+                var r = await fetch('/api/duplicates/autonomous/run-now', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                var data = await r.json();
+                var s = (data && data.summary) || {};
+                var rr = document.getElementById('runResult');
+                rr.classList.remove('hidden');
+                rr.innerHTML = '<span class="pill mode-assisted">Scanned ' + esc(s.clustersScanned || 0) + '</span> ' +
+                    '<span class="pill grade-g3">Applied ' + esc(s.applied || 0) + '</span> ' +
+                    '<span class="pill mode-shadow">Queued ' + esc(s.queued || 0) + '</span> ' +
+                    '<span class="pill ' + ((s.errors || 0) ? 'status-failed' : 'status-rejected') + '">Errors ' + esc(s.errors || 0) + '</span>';
+                renderRunItems(s.items || []);
+                loadStatus(); loadGrades();
+            } catch (e) {
+                alert('Run failed: ' + e);
+            } finally {
+                btn.disabled = false; btn.textContent = '▶ Run now';
+            }
+        }
+
+        function renderRunItems(items) {
+            var box = document.getElementById('runItems');
+            if (!items.length) { box.innerHTML = '<span class="text-gray-500">No actionable clusters this run.</span>'; return; }
+            box.innerHTML = items.slice(0, 100).map(function (it) {
+                var actClass = it.action === 'applied' ? 'grade-g3' : (it.action === 'error' ? 'status-failed' : 'mode-shadow');
+                return '<div class="flex items-start gap-2 py-1.5 border-b border-gray-100">' +
+                    '<span class="pill ' + esc(actClass) + '">' + esc(it.action) + '</span>' +
+                    '<span class="text-gray-800">' + esc(it.module) + ' #' + esc(it.clusterId) + '</span>' +
+                    '<span class="text-gray-500">' + esc((it.reasons || []).slice(0, 2).join('; ') || 'safe-tier') + '</span>' +
+                    (it.detail ? '<span class="text-gray-400">— ' + esc(it.detail) + '</span>' : '') +
+                    '</div>';
+            }).join('');
+        }
+
+        async function testSlack() {
+            var btn = document.getElementById('testSlackBtn');
+            btn.disabled = true; btn.textContent = 'Sending…';
+            try {
+                var r = await fetch('/api/duplicates/autonomous/slack-test', {
+                    method: 'POST', credentials: 'same-origin'
+                });
+                var data = await r.json();
+                if (data && data.ok) {
+                    alert('✅ Test ping sent to the channel. Check grq-platform-assistant.');
+                } else {
+                    var hint = (data && /not_in_channel/.test(data.error || ''))
+                        ? '\n\nThe bot isn\'t a member of the channel — invite ExampleOrg QMS to it.'
+                        : (data && /invalid_auth|not_authed|token/.test(data.error || ''))
+                            ? '\n\nSLACK_BOT_TOKEN looks missing or invalid.'
+                            : '';
+                    alert('⚠️ Could not send: ' + ((data && data.error) || 'unknown error') + hint);
+                }
+            } catch (e) { alert('Test failed: ' + e); }
+            finally { btn.disabled = false; btn.textContent = '🔔 Send test ping'; }
+        }
+
+        async function cleanupSlackPings() {
+            if (!confirm('Delete the old zero-progress "applied 0" resolution pings from the Slack channel?\n\nOnly the bot\'s own pings are removed; nothing else is touched.')) return;
+            var btn = document.getElementById('cleanupPingsBtn');
+            btn.disabled = true; btn.textContent = 'Cleaning…';
+            try {
+                var r = await fetch('/api/duplicates/autonomous/cleanup-slack-pings', {
+                    method: 'POST', credentials: 'same-origin'
+                });
+                var data = await r.json();
+                if (data && data.success) {
+                    alert('✅ Removed ' + (data.deleted || 0) + ' zero-progress ping(s) (scanned ' + (data.scanned || 0) + ').');
+                } else {
+                    var hint = (data && /missing_scope|not_in_channel|cant_delete|history/.test(data.error || ''))
+                        ? '\n\nThe bot may lack channel-history / delete permission — you can delete the few remaining manually in Slack.'
+                        : '';
+                    alert('⚠️ Could not clean: ' + ((data && data.error) || 'unknown error') + hint);
+                }
+            } catch (e) { alert('Cleanup failed: ' + e); }
+            finally { btn.disabled = false; btn.textContent = '🧹 Clean zero pings'; }
+        }
+
+        // ── Executive brief (board-ready, shareable) ─────────────────────
+        window._execBrief = '';
+        async function execBrief() {
+            var card = document.getElementById('execBriefCard');
+            var txt = document.getElementById('execBriefText');
+            var meta = document.getElementById('execBriefMeta');
+            var btn = document.getElementById('execBriefBtn');
+            if (card) card.classList.remove('hidden');
+            if (txt) txt.textContent = 'Generating…';
+            if (btn) btn.disabled = true;
+            try {
+                var data = await getJSON('/api/duplicates/autonomous/executive-brief');
+                window._execBrief = (data && data.brief) || '';
+                if (txt) txt.textContent = window._execBrief || 'No data.';
+                if (meta) meta.textContent = data && data.generated_at ? ('Generated ' + new Date(data.generated_at).toLocaleString()) : '';
+            } catch (e) {
+                if (txt) txt.textContent = 'Could not generate the brief: ' + (e && e.message || e);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+            if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        function hideExecBrief() {
+            var card = document.getElementById('execBriefCard');
+            if (card) card.classList.add('hidden');
+        }
+        async function copyExecBrief() {
+            var btn = document.getElementById('copyBriefBtn');
+            var text = window._execBrief || (document.getElementById('execBriefText') || {}).textContent || '';
+            if (!text) return;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+                else { var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); }
+                if (btn) { var o = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(function () { btn.textContent = o; }, 1500); }
+            } catch (e) { if (btn) btn.textContent = 'Copy failed'; }
+        }
+        // Fire the weekly leadership brief NOW — posts to both channels
+        // (#grq-assistant + #automatic-audits) without recording a trend
+        // snapshot (so the Sunday-anchored week-over-week math stays intact).
+        async function sendWeeklyBriefNow() {
+            if (!confirm('Post the leadership brief now to #grq-assistant and #automatic-audits?')) return;
+            var btn = document.getElementById('sendBriefBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+            try {
+                var res = await fetch('/api/duplicates/autonomous/weekly-brief/send', {
+                    method: 'POST', credentials: 'same-origin'
+                });
+                var data = await res.json();
+                if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                var n = (data && data.posted && data.posted.length) || 0;
+                if (btn) { btn.textContent = '✓ Sent to ' + n + ' channel' + (n === 1 ? '' : 's'); setTimeout(function () { btn.textContent = '📨 Send to leadership'; btn.disabled = false; }, 2500); }
+            } catch (e) {
+                if (btn) { btn.textContent = 'Failed'; btn.disabled = false; }
+                alert('Could not send: ' + (e && e.message || e));
+            }
+        }
+
+        // Post the operational apply-digest (per-tab status board) to the
+        // resolution Slack channel on demand, instead of waiting for 09:00/17:00.
+        async function postDigestNow() {
+            if (!confirm('Post the operational digest now to the resolution Slack channel (#grq-assistant)?')) return;
+            var btn = document.getElementById('postDigestBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+            try {
+                var res = await fetch('/api/duplicates/autonomous/digest/send', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sinceHours: 8 })
+                });
+                var data = await res.json();
+                if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                if (btn) { btn.textContent = '✓ Posted to Slack'; setTimeout(function () { btn.textContent = '📨 Post digest now'; btn.disabled = false; }, 2500); }
+            } catch (e) {
+                if (btn) { btn.textContent = 'Failed'; btn.disabled = false; }
+                alert('Could not post digest: ' + (e && e.message || e));
+            }
+        }
+
+        async function loadNotificationSchedule() {
+            var body = document.getElementById('notifScheduleBody');
+            if (!body) return;
+            try {
+                var data = await getJSON('/api/duplicates/autonomous/notification-schedule');
+                var rows = (data && data.schedule) || [];
+                if (!rows.length) { body.innerHTML = '<tr><td colspan="3" class="px-3 py-3 text-gray-500">—</td></tr>'; return; }
+                body.innerHTML = rows.map(function (e) {
+                    var ch = e.postsToSlack
+                        ? '<span class="text-indigo-700">' + esc(e.channel) + '</span>'
+                        : '<span class="text-gray-400">background (no post)</span>';
+                    return '<tr class="border-t border-gray-100 align-top">' +
+                        '<td class="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">' + esc(e.time) + '</td>' +
+                        '<td class="px-3 py-2 text-gray-700">' + esc(e.what) + '</td>' +
+                        '<td class="px-3 py-2 text-xs whitespace-nowrap">' + ch + '</td>' +
+                        '</tr>';
+                }).join('');
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="3" class="px-3 py-3 text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</td></tr>';
+            }
+        }
+
+        async function loadProposalTiers() {
+            var box = document.getElementById('proposalTiers');
+            if (!box) return;
+            try {
+                var d = await getJSON('/api/duplicates/autonomous/proposal-tiers');
+                var card = function (label, value, cls, sub) {
+                    return '<div class="rounded-lg border border-gray-200 p-3">' +
+                        '<div class="text-xs text-gray-500">' + esc(label) + '</div>' +
+                        '<div class="text-2xl font-bold ' + cls + '">' + Number(value || 0).toLocaleString() + '</div>' +
+                        (sub ? '<div class="text-[11px] text-gray-400 mt-0.5">' + esc(sub) + '</div>' : '') +
+                        '</div>';
+                };
+                box.innerHTML =
+                    card('Safe-tier (agent confident)', d.safeTier, 'text-emerald-700', 'auto-applies in assisted mode') +
+                    card('Needs review (escalated)', d.escalated, 'text-amber-700', 'a human decides') +
+                    card('Total queued', d.total, 'text-gray-800', (d.other ? d.other + ' other' : ''));
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+
+        async function clearShadowProposals() {
+            if (!confirm('Clear ALL pending shadow proposals from the queue?\n\nThese were never applied to Zoho (shadow mode) — this only empties the review backlog so the queue shows real escalations. No CRM changes.')) return;
+            var btn = document.getElementById('clearShadowBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Clearing…'; }
+            try {
+                var res = await fetch('/api/duplicates/autonomous/clear-shadow-proposals', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                var data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                if (btn) { btn.textContent = '✓ Cleared ' + (data.cleared || 0); setTimeout(function () { btn.textContent = '🧹 Clear shadow proposals'; btn.disabled = false; }, 2500); }
+                loadProposalTiers();
+            } catch (e) {
+                if (btn) { btn.textContent = 'Failed'; btn.disabled = false; }
+                alert('Could not clear: ' + (e && e.message || e));
+            }
+        }
+
+        var _progressChart = null;
+        async function loadProgress() {
+            var table = document.getElementById('progressTable');
+            if (!table) return;
+            var mods = ['Leads', 'Deals', 'Contacts', 'Accounts'];
+            var nfmt = function (x) { return Number(x || 0).toLocaleString(); };
+            try {
+                var d = await getJSON('/api/duplicates/progress?days=30');
+                var cards = mods.map(function (m) {
+                    var b = d.byModule && d.byModule[m];
+                    var l = b && b.latest;
+                    if (!l) return '';
+                    var prevSolved = (b.previous && b.previous.solved != null) ? b.previous.solved : l.solved;
+                    var delta = l.solved - prevSolved;
+                    var deltaTxt = delta > 0
+                        ? '<span class="text-emerald-700 font-medium">+' + nfmt(delta) + ' today</span>'
+                        : '<span class="text-gray-400">no change today</span>';
+                    var pct = l.total > 0 ? Math.round((l.solved / l.total) * 100) : 0;
+                    return '<div class="rounded-lg border border-gray-200 p-3">' +
+                        '<div class="flex items-center justify-between"><span class="font-semibold text-gray-900">' + esc(m) + '</span>' +
+                        '<span class="text-xs">' + deltaTxt + '</span></div>' +
+                        '<div class="mt-1 text-gray-700">' + nfmt(l.solved) + ' solved / ' + nfmt(l.total) + ' total · ' + nfmt(l.open) + ' left · ' + nfmt(l.merged) + ' merged</div>' +
+                        '<div class="mt-2 h-2 w-full bg-gray-100 rounded-full overflow-hidden"><div class="progress-bar-fill h-2 bg-emerald-500 rounded-full" data-pct="' + pct + '"></div></div>' +
+                        '<div class="text-[11px] text-gray-400 mt-1">' + pct + '% solved</div>' +
+                        '</div>';
+                }).join('');
+                table.innerHTML = cards || '<div class="text-gray-500">No snapshots yet — the first is recorded after the next scan.</div>';
+                // Set bar widths via JS (CSP-safe — no inline style attributes in markup).
+                Array.prototype.forEach.call(table.querySelectorAll('.progress-bar-fill'), function (el) {
+                    el.style.width = (Number(el.getAttribute('data-pct')) || 0) + '%';
+                });
+                renderProgressChart(d, mods, nfmt);
+            } catch (e) {
+                table.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+        function renderProgressChart(d, mods, nfmt) {
+            var canvas = document.getElementById('progressChart');
+            if (!canvas || typeof Chart === 'undefined') return;
+            var dateSet = {};
+            mods.forEach(function (m) {
+                var b = d.byModule && d.byModule[m];
+                ((b && b.series) || []).forEach(function (p) { dateSet[p.date] = true; });
+            });
+            var dates = Object.keys(dateSet).sort();
+            var colors = { Leads: '#6366f1', Deals: '#f59e0b', Contacts: '#10b981', Accounts: '#ef4444' };
+            var datasets = mods.map(function (m) {
+                var b = d.byModule && d.byModule[m];
+                var map = {};
+                ((b && b.series) || []).forEach(function (p) { map[p.date] = p.solved; });
+                return {
+                    label: m + ' solved',
+                    data: dates.map(function (dt) { return map[dt] != null ? map[dt] : null; }),
+                    borderColor: colors[m], backgroundColor: colors[m],
+                    spanGaps: true, tension: 0.25, pointRadius: 2, borderWidth: 2,
+                };
+            });
+            if (_progressChart) { _progressChart.destroy(); }
+            _progressChart = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: { labels: dates, datasets: datasets },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        var _hygieneGroups = null;
+        async function loadHygieneRules() {
+            var box = document.getElementById('hygieneRules');
+            if (!box) return;
+            try {
+                if (!_hygieneGroups) {
+                    var d = await getJSON('/api/duplicates/hygiene-rules');
+                    _hygieneGroups = (d && d.groups) || [];
+                    // Populate the tab selector once (per-module tabs only; General
+                    // is always shown). Default to Accounts (Sample User's focus).
+                    var sel = document.getElementById('hygieneTab');
+                    if (sel && !sel.options.length) {
+                        var tabs = _hygieneGroups.filter(function (g) { return !g.general; });
+                        sel.innerHTML = tabs.map(function (g) {
+                            return '<option value="' + esc(g.key) + '"' + (g.key === 'accounts' ? ' selected' : '') + '>' + esc(g.title) + '</option>';
+                        }).join('');
+                    }
+                }
+                renderHygieneRules();
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+        function renderHygieneRules() {
+            var box = document.getElementById('hygieneRules');
+            if (!box || !_hygieneGroups) return;
+            var sel = document.getElementById('hygieneTab');
+            var tab = sel ? sel.value : 'accounts';
+            // Show the selected tab's group + all cross-cutting (general) groups.
+            var shown = _hygieneGroups.filter(function (g) { return g.general || g.key === tab; });
+            var cnt = document.getElementById('hygieneCount');
+            var total = shown.reduce(function (n, g) { return n + (g.rules || []).length; }, 0);
+            if (cnt) cnt.textContent = total + ' rules shown';
+            box.innerHTML = shown.map(function (g) {
+                var items = (g.rules || []).map(function (r) {
+                    var ref = r.ref ? ' <span class="text-[11px] text-gray-400">(' + esc(r.ref) + ')</span>' : '';
+                    return '<li class="text-gray-700 leading-relaxed">' + esc(r.rule) + ref +
+                        ' <button data-on-click="flagHygieneRule" data-tab="' + esc(g.key) + '" data-rule="' + esc(r.id) + '" class="text-[11px] text-indigo-600 hover:text-indigo-800 whitespace-nowrap">✎ Flag for edit</button></li>';
+                }).join('');
+                var openAttr = g.general ? '' : ' open';
+                return '<details class="rounded-lg border border-gray-200"' + openAttr + '>' +
+                    '<summary class="cursor-pointer select-none px-3 py-2 font-medium text-gray-800 bg-gray-50 rounded-lg">' +
+                    esc(g.title) + ' <span class="text-[11px] text-gray-400">(' + (g.rules || []).length + ')</span></summary>' +
+                    '<ul class="list-disc ps-8 pe-3 py-2 space-y-1">' + items + '</ul>' +
+                    '</details>';
+            }).join('');
+        }
+        async function flagHygieneRule(el) {
+            if (!el || !el.getAttribute) return;
+            var tab = el.getAttribute('data-tab');
+            var ruleId = el.getAttribute('data-rule');
+            var note = prompt('What should change about this rule? (your note is logged for review)');
+            if (!note || !note.trim()) return;
+            try {
+                var r = await fetch('/api/duplicates/hygiene-rules/flag', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tab: tab, ruleId: ruleId, note: note.trim() })
+                });
+                var data = await r.json();
+                if (!r.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + r.status));
+                alert('Flagged for edit — thanks, it will be reviewed.');
+            } catch (e) {
+                alert('Could not flag: ' + (e && e.message || e));
+            }
+        }
+
+        async function loadRejectionPatterns() {
+            var box = document.getElementById('rejectionPatterns');
+            if (!box) return;
+            try {
+                var d = await getJSON('/api/duplicates/autonomous/rejection-patterns?days=30');
+                var pats = (d && d.patterns) || [];
+                if (!d || !d.totalRejected) {
+                    box.innerHTML = '<div class="text-gray-500">No deliberate rejections in the last 30 days yet — reject a few proposals and patterns will appear here.</div>';
+                    return;
+                }
+                var head = '<div class="text-xs text-gray-500 mb-2">' + Number(d.totalRejected).toLocaleString() + ' rejected in the last ' + d.windowDays + ' days.</div>';
+                if (!pats.length) { box.innerHTML = head + '<div class="text-gray-500">No common pattern detected.</div>'; return; }
+                box.innerHTML = head + pats.map(function (p, i) {
+                    var pct = Math.max(2, Math.min(100, p.sharePct));
+                    var btn = p.suggestedRule
+                        ? '<button data-on-click="useRejectionRule" data-idx="' + i + '" class="shrink-0 px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Use this rule</button>'
+                        : '<span class="shrink-0 text-[11px] text-gray-400">config / review</span>';
+                    return '<div class="rounded-lg border border-gray-200 p-3">' +
+                        '<div class="flex items-center justify-between gap-3">' +
+                        '<span class="font-medium text-gray-900">' + esc(p.label) + '</span>' +
+                        '<span class="text-xs text-gray-500 whitespace-nowrap">' + Number(p.count).toLocaleString() + ' · ' + p.sharePct + '%</span>' +
+                        '</div>' +
+                        '<div class="mt-2 h-2 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-2 bg-amber-500 rounded-full reject-bar" data-pct="' + pct + '"></div></div>' +
+                        '<div class="flex items-start justify-between gap-3 mt-2">' +
+                        '<span class="text-[11px] text-gray-500 leading-relaxed">' + esc(p.advice || '') + '</span>' + btn +
+                        '</div></div>';
+                }).join('');
+                Array.prototype.forEach.call(box.querySelectorAll('.reject-bar'), function (el) {
+                    el.style.width = (Number(el.getAttribute('data-pct')) || 0) + '%';
+                });
+                window._rejectionPatterns = pats;
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+
+        // Recommend-only: load a suggested rule into the Learning-rules form so the
+        // operator reviews + clicks "Add rule". Never auto-creates the rule.
+        function useRejectionRule(el) {
+            var idx = el && el.getAttribute ? parseInt(el.getAttribute('data-idx'), 10) : -1;
+            var pats = window._rejectionPatterns || [];
+            var p = pats[idx];
+            if (!p || !p.suggestedRule) return;
+            var dec = document.getElementById('ruleDecision');
+            var sig = document.getElementById('ruleSignature');
+            if (dec) dec.value = p.suggestedRule.decision;
+            if (sig) sig.value = JSON.stringify(p.suggestedRule.signature);
+            if (sig) { sig.scrollIntoView({ behavior: 'smooth', block: 'center' }); sig.focus(); }
+        }
+
+        async function loadAcceptancePatterns() {
+            var box = document.getElementById('acceptancePatterns');
+            if (!box) return;
+            var modSel = document.getElementById('acceptModule');
+            var mod = modSel ? modSel.value : 'Accounts';
+            try {
+                var d = await getJSON('/api/duplicates/autonomous/acceptance-patterns?days=90' + (mod ? ('&module=' + encodeURIComponent(mod)) : ''));
+                var pats = (d && d.patterns) || [];
+                var note = '<div class="text-xs text-gray-500 mb-2">' + esc((d && d.note) || '') + '</div>';
+                if (!pats.length) {
+                    box.innerHTML = note + '<div class="text-gray-500">No auto-approve pattern yet for this module. As you approve more merges from the queue, safe shapes appear here.</div>';
+                    window._acceptPatterns = [];
+                    return;
+                }
+                box.innerHTML = note + pats.map(function (p, i) {
+                    return '<div class="rounded-lg border border-gray-200 p-3">' +
+                        '<div class="flex items-center justify-between gap-3">' +
+                        '<span class="font-medium text-gray-900">' + esc(p.label) + '</span>' +
+                        '<span class="text-xs text-gray-500 whitespace-nowrap">' + Number(p.count).toLocaleString() + ' · ' + p.sharePct + '%</span></div>' +
+                        '<div class="flex items-start justify-between gap-3 mt-2">' +
+                        '<span class="text-[11px] text-gray-500 leading-relaxed">' + esc(p.advice || '') + '</span>' +
+                        (p.suggestedRule ? '<button data-on-click="useAcceptanceRule" data-idx="' + i + '" class="shrink-0 px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Use this rule</button>' : '') +
+                        '</div></div>';
+                }).join('');
+                window._acceptPatterns = pats;
+                window._acceptModule = mod || 'Accounts';
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+
+        // Recommend-only: load a suggested auto-approve rule into the Learning-rules
+        // form (module + decision + signature). The operator clicks Add to apply.
+        function useAcceptanceRule(el) {
+            var idx = el && el.getAttribute ? parseInt(el.getAttribute('data-idx'), 10) : -1;
+            var pats = window._acceptPatterns || [];
+            var p = pats[idx];
+            if (!p || !p.suggestedRule) return;
+            var mod = document.getElementById('ruleModule');
+            var dec = document.getElementById('ruleDecision');
+            var sig = document.getElementById('ruleSignature');
+            if (mod && window._acceptModule) mod.value = window._acceptModule;
+            if (dec) dec.value = p.suggestedRule.decision;
+            if (sig) sig.value = JSON.stringify(p.suggestedRule.signature);
+            if (sig) { sig.scrollIntoView({ behavior: 'smooth', block: 'center' }); sig.focus(); }
+        }
+
+        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadAdamRulebook(); loadNotificationSchedule(); loadProposalTiers(); loadProgress(); loadHygieneRules(); loadRejectionPatterns(); loadAcceptancePatterns(); }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            refreshAll();
+            var am = document.getElementById('acceptModule');
+            if (am) am.addEventListener('change', loadAcceptancePatterns);
+            var ht = document.getElementById('hygieneTab');
+            if (ht) ht.addEventListener('change', renderHygieneRules);
+        });
+    </script>
+</body>
+</html>

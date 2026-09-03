@@ -1,0 +1,57 @@
+{
+  "$schema_version": "1.0",
+  "description": "Maps ExampleOrg SDR Quality Scorecard v1.0 attributes (A1-A9) to coaching topic keywords. Used by /api/calls/:id/coaching-suggestions to match low-scoring attributes against training_courses (name/description/department) via keyword search. course_ids array is an optional explicit pin — if non-empty, those courses are always shown for that attribute regardless of keyword match.",
+  "priority_thresholds": {
+    "urgent": { "max_pct": 50, "label": "Urgent", "label_ar": "عاجل" },
+    "high":   { "max_pct": 70, "label": "High",   "label_ar": "عالي" },
+    "medium": { "max_pct": 80, "label": "Medium", "label_ar": "متوسط" },
+    "low":    { "max_pct": 100, "label": "Low",   "label_ar": "منخفض" }
+  },
+  "attributes": {
+    "A1": {
+      "name": "Opening & Professional Introduction",
+      "keywords": ["opening", "greeting", "introduction", "rapport", "first impression", "tone", "professional greeting"],
+      "course_ids": []
+    },
+    "A2": {
+      "name": "Call Structure & Control",
+      "keywords": ["call control", "call structure", "agenda", "time management", "conversation flow", "call flow"],
+      "course_ids": []
+    },
+    "A3": {
+      "name": "Discovery & Qualification Questions",
+      "keywords": ["discovery", "qualification", "needs assessment", "open-ended questions", "active listening", "SPIN", "BANT"],
+      "course_ids": []
+    },
+    "A4": {
+      "name": "Data Verification",
+      "keywords": ["data verification", "CRM hygiene", "data accuracy", "customer details", "contact verification", "data quality"],
+      "course_ids": []
+    },
+    "A5": {
+      "name": "Product Knowledge",
+      "keywords": ["product knowledge", "product training", "features", "benefits", "use cases", "product certification"],
+      "course_ids": []
+    },
+    "A6": {
+      "name": "Value Proposition",
+      "keywords": ["value proposition", "ROI", "differentiation", "competitive positioning", "benefits articulation", "value selling"],
+      "course_ids": []
+    },
+    "A7": {
+      "name": "Objection Handling",
+      "keywords": ["objection handling", "objections", "rebuttal", "price objection", "concerns", "negotiation"],
+      "course_ids": []
+    },
+    "A8": {
+      "name": "Compliance & Professional Conduct",
+      "keywords": ["compliance", "ethics", "professional conduct", "PDPL", "policy", "code of conduct", "regulatory"],
+      "course_ids": []
+    },
+    "A9": {
+      "name": "Closing & Next Steps",
+      "keywords": ["closing", "next steps", "follow-up", "commitment", "meeting booking", "trial close", "ABC closing"],
+      "course_ids": []
+    }
+  }
+}

@@ -1,0 +1,1867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg Platform User Guide</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <style>
+        .screenshot {
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            background: #f8fafc;
+        }
+        .screenshot-header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .screenshot-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .screenshot-content {
+            padding: 20px;
+            background: white;
+        }
+        .nav-item {
+            transition: all 0.2s;
+        }
+        .nav-item:hover {
+            background: #f1f5f9;
+        }
+        .nav-item.active {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+        }
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .callout {
+            border-left: 4px solid;
+            padding: 16px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .callout-info {
+            background: #dbeafe;
+            border-color: #3b82f6;
+        }
+        .callout-success {
+            background: #d1fae5;
+            border-color: #10b981;
+        }
+        .callout-warning {
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+        .callout-danger {
+            background: #fee2e2;
+            border-color: #ef4444;
+        }
+        .flow-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            font-size: 24px;
+        }
+        .module-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .module-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .toc-link {
+            display: block;
+            padding: 8px 16px;
+            color: #475569;
+            text-decoration: none;
+            border-radius: 8px;
+        }
+        .toc-link:hover {
+            background: #f1f5f9;
+            color: #1e3a8a;
+        }
+        .correlation-line {
+            position: absolute;
+            border: 2px dashed #3b82f6;
+        }
+        @media print {
+            .no-print { display: none; }
+            .page-break { page-break-before: always; }
+        }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('guide');
+        });
+    </script>
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="nav.items.guide">User Guide</h1>
+        <!-- Hero Section -->
+        <div class="bg-gradient-to-r from-emerald-500 to-emerald-700 rounded-2xl p-8 mb-8 text-white">
+            <h1 class="text-4xl font-bold mb-4" data-i18n="guide.title">Welcome to ExampleOrg</h1>
+            <p class="text-xl text-blue-100 mb-6">Enterprise GRC & Quality Management Platform</p>
+            <p class="text-blue-100 max-w-3xl">
+                This comprehensive guide will teach you everything you need to know about using the ExampleOrg platform. 
+                Whether you're managing quality audits, tracking compliance, or monitoring vendor risks - this guide has you covered.
+            </p>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Table of Contents</h2>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <a href="#overview" class="toc-link">1. Platform Overview</a>
+                <a href="#navigation" class="toc-link">2. Navigation Guide</a>
+                <a href="#ai-specialist" class="toc-link">3. AI Quality Specialist</a>
+                <a href="#quality-dashboard" class="toc-link">4. Quality Dashboard</a>
+                <a href="#qms" class="toc-link">5. Quality Management System</a>
+                <a href="#tablef" class="toc-link">6. Table F Governance</a>
+                <a href="#calls" class="toc-link">7. Call Intelligence</a>
+                <a href="#grc-overview" class="toc-link">8. GRC Overview</a>
+                <a href="#risks" class="toc-link">9. Risk Register</a>
+                <a href="#policies" class="toc-link">10. Policy Governance</a>
+                <a href="#compliance" class="toc-link">11. Compliance Tracker</a>
+                <a href="#audits" class="toc-link">12. Audit Readiness</a>
+                <a href="#vendors" class="toc-link">13. Vendor Risk Management</a>
+                <a href="#migration" class="toc-link">14. Data Migration</a>
+                <a href="#handoffs" class="toc-link">15. Quality-GRC Handoffs</a>
+                <a href="#user-roles" class="toc-link">16. User Roles & Correlations</a>
+                <a href="#agent-performance" class="toc-link">17. Agent Performance (NEW)</a>
+                <a href="#multi-scorecard" class="toc-link">18. Multi-Scorecard Governance (NEW)</a>
+                <a href="#faq" class="toc-link">19. FAQ</a>
+            </div>
+        </div>
+
+        <!-- Section 1: Platform Overview -->
+        <section id="overview" class="bg-white rounded-xl shadow-sm p-8 mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">1. Platform Overview</h2>
+            
+            <div class="callout callout-info">
+                <strong>What is ExampleOrg?</strong>
+                <p class="mt-2">ExampleOrg is an AI-powered platform that combines Quality Management with Governance, Risk, and Compliance (GRC). It helps your organization maintain high quality standards while staying compliant with regulations.</p>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">The Two Main Areas</h3>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Quality Management -->
+                <div class="border-2 border-blue-200 rounded-xl p-6 bg-blue-50">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 <REDACTED_PHONE> 0z"/>
+                            </svg>
+                        </div>
+                        <h4 class="text-xl font-bold text-blue-800">Quality Management</h4>
+                    </div>
+                    <p class="text-gray-600 mb-4">Monitors and improves the quality of your operations, data, and customer interactions.</p>
+                    <ul class="space-y-2">
+                        <li class="flex items-center gap-2">
+                            <span class="text-blue-600">●</span>
+                            <span>AI-Powered Quality Audits</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-blue-600">●</span>
+                            <span>CRM Data Hygiene (Leads, Deals)</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-blue-600">●</span>
+                            <span>CAPA Management</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-blue-600">●</span>
+                            <span>Training Compliance</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-blue-600">●</span>
+                            <span>Call Intelligence & Analysis</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- GRC -->
+                <div class="border-2 border-slate-200 rounded-xl p-6 bg-slate-50">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.<REDACTED_PHONE>.944a11.<REDACTED_PHONE> 3.04A12.<REDACTED_PHONE> 9c0 <REDACTED_PHONE>.<REDACTED_PHONE> <REDACTED_PHONE>.052-.382-3.016z"/>
+                            </svg>
+                        </div>
+                        <h4 class="text-xl font-bold text-slate-800">Enterprise GRC</h4>
+                    </div>
+                    <p class="text-gray-600 mb-4">Manages governance, risk, and compliance across your organization.</p>
+                    <ul class="space-y-2">
+                        <li class="flex items-center gap-2">
+                            <span class="text-slate-600">●</span>
+                            <span>Enterprise Risk Register</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-slate-600">●</span>
+                            <span>Policy & Document Governance</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-slate-600">●</span>
+                            <span>Compliance Tracking (PDPL, NCA, ISO)</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-slate-600">●</span>
+                            <span>Audit Readiness</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-slate-600">●</span>
+                            <span>Vendor Risk Management</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Visual: How They Connect -->
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">How Quality & GRC Connect</h3>
+            <div class="bg-gradient-to-r from-blue-50 via-purple-50 to-slate-50 rounded-xl p-6 border">
+                <div class="flex flex-col md:flex-row items-center justify-center gap-4">
+                    <div class="bg-blue-600 text-white px-6 py-4 rounded-lg text-center">
+                        <div class="font-bold">Quality Issue Found</div>
+                        <div class="text-sm text-blue-200">CAPA, Nonconformance, Low Score</div>
+                    </div>
+                    <div class="flow-arrow">
+                        <svg class="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                        </svg>
+                    </div>
+                    <div class="bg-purple-600 text-white px-6 py-4 rounded-lg text-center">
+                        <div class="font-bold">Automatic Handoff</div>
+                        <div class="text-sm text-purple-200">System creates GRC record</div>
+                    </div>
+                    <div class="flow-arrow">
+                        <svg class="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                        </svg>
+                    </div>
+                    <div class="bg-slate-700 text-white px-6 py-4 rounded-lg text-center">
+                        <div class="font-bold">GRC Action Required</div>
+                        <div class="text-sm text-slate-300">Risk, Audit Finding, Compliance Gap</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Navigation Guide -->
+        <section id="navigation" class="bg-white rounded-xl shadow-sm p-8 mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">2. Navigation Guide</h2>
+            
+            <p class="text-gray-600 mb-6">Here's how to find your way around the platform. All dashboards are accessible from the main navigation.</p>
+
+            <!-- Screenshot: Main Dashboard Navigation -->
+            <div class="screenshot mb-8">
+                <div class="screenshot-header">
+                    <div class="screenshot-dot bg-red-500"></div>
+                    <div class="screenshot-dot bg-yellow-500"></div>
+                    <div class="screenshot-dot bg-green-500"></div>
+                    <span class="text-white text-sm ms-2">Quality Dashboard - Navigation</span>
+                </div>
+                <div class="screenshot-content">
+                    <div class="bg-white border-b p-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xl font-bold text-blue-800">ExampleOrg Quality Dashboard</h3>
+                            <div class="flex gap-3">
+                                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">Admin</span>
+                                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">QMS</span>
+                                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">Table F</span>
+                                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">Calls</span>
+                                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">ROI</span>
+                                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">Team</span>
+                                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">Projects</span>
+                                <span class="px-3 py-1 bg-slate-700 text-white rounded text-sm font-bold">GRC Control Tower</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-4 text-center text-gray-500">
+                        <p class="font-medium">← Click any button to go to that module</p>
+                        <p class="text-sm mt-2">The dark "GRC Control Tower" button takes you to the enterprise governance area</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- All Dashboards Map -->
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Complete Dashboard Map</h3>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Quality Modules -->
+                <div>
+                    <h4 class="font-bold text-blue-800 mb-3 flex items-center gap-2">
+                        <span class="w-3 h-3 bg-blue-600 rounded-full"></span>
+                        Quality Management Modules
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Quality Dashboard</span>
+                            <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">/</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Admin Panel</span>
+                            <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">/admin</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">ExampleOrg</span>
+                            <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">/qms</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Table F Governance</span>
+                            <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">/tablef</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Call Intelligence</span>
+                            <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">/calls</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">ROI Evaluation</span>
+                            <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">/roi</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Team Performance</span>
+                            <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">/team</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Project Portfolio</span>
+                            <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">/projects</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GRC Modules -->
+                <div>
+                    <h4 class="font-bold text-slate-800 mb-3 flex items-center gap-2">
+                        <span class="w-3 h-3 bg-slate-700 rounded-full"></span>
+                        Enterprise GRC Modules
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">GRC Control Tower</span>
+                            <code class="bg-slate-100 text-slate-800 px-2 py-1 rounded text-sm">/grc</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Risk Register</span>
+                            <code class="bg-red-100 text-red-800 px-2 py-1 rounded text-sm">/risks</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Policy Governance</span>
+                            <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">/policies</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Compliance Tracker</span>
+                            <code class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">/compliance</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Audit Readiness</span>
+                            <code class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm">/audits</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Vendor Risk</span>
+                            <code class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm">/vendors</code>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium">Data Migration</span>
+                            <code class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-sm">/migration</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: AI Quality Specialist -->
+        <section id="ai-specialist" class="bg-white rounded-xl shadow-sm p-8 mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">3. AI Quality Specialist</h2>
+            
+            <div class="callout callout-success">
+                <strong>What is the AI Quality Specialist?</strong>
+                <p class="mt-2">The AI Quality Specialist is an autonomous AI agent powered by GPT-4o that automatically audits your business data every week. It runs on its own - you don't need to do anything!</p>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">What Does the AI Audit?</h3>
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <!-- Leads -->
+                <div class="border rounded-xl p-5 text-center module-card">
+                    <div class="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg class="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 <REDACTED_PHONE>.857M17 20H7m10 0v-2c0-.<REDACTED_PHONE>.857M7 20H2v-2a3 <REDACTED_PHONE>.857M7 20v-2c0-.<REDACTED_PHONE>.857m0 0a5.<REDACTED_PHONE> 0M15 7a3 <REDACTED_PHONE> 0zm6 3a2 <REDACTED_PHONE> 0zM7 10a2 <REDACTED_PHONE> 0z"/>
+                        </svg>
+                    </div>
+                    <h4 class="font-bold text-gray-800 mb-2">Leads</h4>
+                    <p class="text-sm text-gray-600">Checks for missing emails, phone numbers, owner assignment, lead source</p>
+                </div>
+
+                <!-- Deals -->
+                <div class="border rounded-xl p-5 text-center module-card">
+                    <div class="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg class="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-<REDACTED_PHONE> 2s1.<REDACTED_PHONE>.343 2-3 2m0-8c1.<REDACTED_PHONE> 1M12 8V7m0 1v8m0 0v1m0-1c-<REDACTED_PHONE>-1M21 12a9 <REDACTED_PHONE> 0z"/>
+                        </svg>
+                    </div>
+                    <h4 class="font-bold text-gray-800 mb-2">Deals</h4>
+                    <p class="text-sm text-gray-600">Validates deal amount, stage, expected close date, contact association</p>
+                </div>
+
+                <!-- Contacts -->
+                <div class="border rounded-xl p-5 text-center module-card">
+                    <div class="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg class="w-7 h-7 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 <REDACTED_PHONE> 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                        </svg>
+                    </div>
+                    <h4 class="font-bold text-gray-800 mb-2">Contacts</h4>
+                    <p class="text-sm text-gray-600">Verifies email format, phone number, mailing address, account link</p>
+                </div>
+
+                <!-- Tasks -->
+                <div class="border rounded-xl p-5 text-center module-card">
+                    <div class="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg class="w-7 h-7 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                        </svg>
+                    </div>
+                    <h4 class="font-bold text-gray-800 mb-2">Tasks</h4>
+                    <p class="text-sm text-gray-600">Checks for overdue tasks, missing due dates, priority assignment</p>
+                </div>
+            </div>
+
+            <!-- How It Works -->
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">How the AI Audit Works</h3>
+            
+            <div class="bg-gray-50 rounded-xl p-6">
+                <div class="space-y-6">
+                    <!-- Step 1 -->
+                    <div class="flex gap-4">
+                        <div class="step-number">1</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Every Monday at 8 AM (UTC)</h4>
+                            <p class="text-gray-600">The system automatically wakes up and starts the audit process. You don't need to do anything.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="flex gap-4">
+                        <div class="step-number">2</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Connects to Zoho CRM</h4>
+                            <p class="text-gray-600">The AI securely connects to your Zoho CRM and downloads all your Leads, Deals, Contacts, and Tasks data.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="flex gap-4">
+                        <div class="step-number">3</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Checks Google Calendar</h4>
+                            <p class="text-gray-600">It also looks at your calendar events from the past 7 days to check meeting compliance.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="flex gap-4">
+                        <div class="step-number">4</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">AI Analysis with GPT-4o</h4>
+                            <p class="text-gray-600">The AI Quality Specialist analyzes all the data, looking for problems like missing information, duplicate records, stale deals, and process gaps.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 5 -->
+                    <div class="flex gap-4">
+                        <div class="step-number">5</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Calculates Quality Score</h4>
+                            <p class="text-gray-600">Based on what it finds, the AI calculates an overall quality score from 0-100, broken down into three dimensions:</p>
+                            <div class="grid grid-cols-3 gap-4 mt-3">
+                                <div class="bg-blue-100 p-3 rounded-lg text-center">
+                                    <div class="font-bold text-blue-800">People</div>
+                                    <div class="text-sm text-blue-600">25% weight</div>
+                                </div>
+                                <div class="bg-green-100 p-3 rounded-lg text-center">
+                                    <div class="font-bold text-green-800">Process</div>
+                                    <div class="text-sm text-green-600">35% weight</div>
+                                </div>
+                                <div class="bg-purple-100 p-3 rounded-lg text-center">
+                                    <div class="font-bold text-purple-800">Governance</div>
+                                    <div class="text-sm text-purple-600">40% weight</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 6 -->
+                    <div class="flex gap-4">
+                        <div class="step-number">6</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Generates Recommendations</h4>
+                            <p class="text-gray-600">The AI creates specific, actionable recommendations to fix the issues it found.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 7 -->
+                    <div class="flex gap-4">
+                        <div class="step-number">7</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Sends Email Report</h4>
+                            <p class="text-gray-600">A beautiful email report is automatically sent to <strong>user@example.invalid</strong> with all the findings and recommendations.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 8 -->
+                    <div class="flex gap-4">
+                        <div class="step-number">8</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Updates Dashboard</h4>
+                            <p class="text-gray-600">All results are saved and appear on the Quality Dashboard at <code class="bg-gray-200 px-2 py-1 rounded">/</code> for you to review anytime.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screenshot: Quality Dashboard -->
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">What You See on the Dashboard</h3>
+            
+            <div class="screenshot">
+                <div class="screenshot-header">
+                    <div class="screenshot-dot bg-red-500"></div>
+                    <div class="screenshot-dot bg-yellow-500"></div>
+                    <div class="screenshot-dot bg-green-500"></div>
+                    <span class="text-white text-sm ms-2">Quality Dashboard - AI Results</span>
+                </div>
+                <div class="screenshot-content">
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="bg-blue-50 p-4 rounded-lg text-center">
+                            <div class="text-3xl font-bold text-blue-800">87</div>
+                            <div class="text-sm text-gray-600">Overall Score</div>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg text-center">
+                            <div class="text-3xl font-bold text-green-800">92</div>
+                            <div class="text-sm text-gray-600">People Score</div>
+                        </div>
+                        <div class="bg-purple-50 p-4 rounded-lg text-center">
+                            <div class="text-3xl font-bold text-purple-800">85</div>
+                            <div class="text-sm text-gray-600">Process Score</div>
+                        </div>
+                        <div class="bg-orange-50 p-4 rounded-lg text-center">
+                            <div class="text-3xl font-bold text-orange-800">84</div>
+                            <div class="text-sm text-gray-600">Governance Score</div>
+                        </div>
+                    </div>
+                    <div class="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                        <div class="font-bold text-yellow-800 mb-2">AI Recommendations</div>
+                        <ul class="text-sm text-yellow-700 space-y-1">
+                            <li>• 15 leads are missing phone numbers - update within 48 hours</li>
+                            <li>• 8 deals have no expected close date - review with sales team</li>
+                            <li>• 3 contacts have invalid email formats - verify and correct</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="callout callout-warning mt-6">
+                <strong>Important:</strong> The AI only <em>reads</em> your CRM data - it never changes or deletes anything. Your data is completely safe.
+            </div>
+        </section>
+
+        <!-- Section 4: Quality Dashboard -->
+        <section id="quality-dashboard" class="bg-white rounded-xl shadow-sm p-8 mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">4. Quality Dashboard</h2>
+            
+            <p class="text-gray-600 mb-6">The Quality Dashboard is your main command center for monitoring quality across your organization. Access it at <code class="bg-gray-200 px-2 py-1 rounded">/</code></p>
+
+            <!-- Screenshot with annotations -->
+            <div class="screenshot mb-8">
+                <div class="screenshot-header">
+                    <div class="screenshot-dot bg-red-500"></div>
+                    <div class="screenshot-dot bg-yellow-500"></div>
+                    <div class="screenshot-dot bg-green-500"></div>
+                    <span class="text-white text-sm ms-2">Quality Dashboard - Full View</span>
+                </div>
+                <div class="screenshot-content">
+                    <!-- Mock Dashboard Layout -->
+                    <div class="grid grid-cols-12 gap-4">
+                        <!-- Score Card -->
+                        <div class="col-span-3 bg-gradient-to-br from-emerald-500 to-emerald-700 text-white p-6 rounded-xl">
+                            <div class="text-6xl font-bold">87</div>
+                            <div class="text-emerald-100">Overall Quality Score</div>
+                            <div class="mt-4 text-sm">
+                                <div>Last Audit: Dec 23, 2024</div>
+                                <div class="text-green-300">▲ +3 from last week</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 3D Score Breakdown -->
+                        <div class="col-span-5 bg-gray-50 p-4 rounded-xl">
+                            <div class="font-bold text-gray-700 mb-3">Score Breakdown</div>
+                            <div class="space-y-3">
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span>People (25%)</span>
+                                        <span class="font-bold">92</span>
+                                    </div>
+                                    <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-green-500 rounded-full" data-style="width: 92%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span>Process (35%)</span>
+                                        <span class="font-bold">85</span>
+                                    </div>
+                                    <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-blue-500 rounded-full" data-style="width: 85%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span>Governance (40%)</span>
+                                        <span class="font-bold">84</span>
+                                    </div>
+                                    <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-purple-500 rounded-full" data-style="width: 84%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Issues Summary -->
+                        <div class="col-span-4 bg-gray-50 p-4 rounded-xl">
+                            <div class="font-bold text-gray-700 mb-3">Issues by Category</div>
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm">Data Quality</span>
+                                    <span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-bold">23</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm">Process Gaps</span>
+                                    <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-bold">12</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm">Compliance</span>
+                                    <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-bold">5</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm">Training</span>
+                                    <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold">3</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Color Coding Explanation -->
+            <h3 class="text-xl font-semibold text-gray-700 mt-6 mb-4">Understanding the Colors</h3>
+            
+            <div class="grid md:grid-cols-4 gap-4">
+                <div class="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div class="w-8 h-8 bg-green-500 rounded-full"></div>
+                    <div>
+                        <div class="font-bold text-green-800">Green (90-100)</div>
+                        <div class="text-sm text-green-700">Excellent - Keep it up!</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="w-8 h-8 bg-blue-500 rounded-full"></div>
+                    <div>
+                        <div class="font-bold text-blue-800">Blue (75-89)</div>
+                        <div class="text-sm text-blue-700">Good - Minor improvements</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div class="w-8 h-8 bg-yellow-500 rounded-full"></div>
+                    <div>
+                        <div class="font-bold text-yellow-800">Yellow (50-74)</div>
+                        <div class="text-sm text-yellow-700">Warning - Needs attention</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div class="w-8 h-8 bg-red-500 rounded-full"></div>
+                    <div>
+                        <div class="font-bold text-red-800">Red (0-49)</div>
+                        <div class="text-sm text-red-700">Critical - Immediate action</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: ExampleOrg -->
+        <section id="qms" class="bg-white rounded-xl shadow-sm p-8 mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">5. Quality Management System (QMS)</h2>
+            
+            <p class="text-gray-600 mb-6">The ExampleOrg at <code class="bg-gray-200 px-2 py-1 rounded">/qms</code> helps you manage the day-to-day quality operations.</p>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- CAPA -->
+                <div class="border rounded-xl p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.<REDACTED_PHONE>-3L13.732 4c-.<REDACTED_PHONE>.464 0L3.34 16c-.<REDACTED_PHONE> 3z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-800">CAPA Management</h3>
+                    </div>
+                    <p class="text-gray-600 mb-4">Corrective and Preventive Actions - track issues and how you fix them.</p>
+                    <div class="space-y-3">
+                        <div class="flex gap-4 items-start">
+                            <div class="step-number text-sm">1</div>
+                            <div class="text-sm">Click "New CAPA" button</div>
+                        </div>
+                        <div class="flex gap-4 items-start">
+                            <div class="step-number text-sm">2</div>
+                            <div class="text-sm">Enter the problem description</div>
+                        </div>
+                        <div class="flex gap-4 items-start">
+                            <div class="step-number text-sm">3</div>
+                            <div class="text-sm">Assign severity (Critical, High, Medium, Low)</div>
+                        </div>
+                        <div class="flex gap-4 items-start">
+                            <div class="step-number text-sm">4</div>
+                            <div class="text-sm">Add corrective action plan</div>
+                        </div>
+                        <div class="flex gap-4 items-start">
+                            <div class="step-number text-sm">5</div>
+                            <div class="text-sm">Track progress until closed</div>
+                        </div>
+                    </div>
+                    <div class="callout callout-info mt-4">
+                        <strong>Auto-Handoff:</strong> High/Critical CAPAs automatically create a Risk in the GRC system!
+                    </div>
+                </div>
+
+                <!-- Nonconformance -->
+                <div class="border rounded-xl p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 <REDACTED_PHONE> 0z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-800">Nonconformance Tracking</h3>
+                    </div>
+                    <p class="text-gray-600 mb-4">Record when something doesn't meet quality standards.</p>
+                    <div class="space-y-3">
+                        <div class="flex gap-4 items-start">
+                            <div class="step-number text-sm">1</div>
+                            <div class="text-sm">Click "Record Nonconformance"</div>
+                        </div>
+                        <div class="flex gap-4 items-start">
+                            <div class="step-number text-sm">2</div>
+                            <div class="text-sm">Select the area (Process, Product, Service)</div>
+                        </div>
+                        <div class="flex gap-4 items-start">
+                            <div class="step-number text-sm">3</div>
+                            <div class="text-sm">Describe what went wrong</div>
+                        </div>
+                        <div class="flex gap-4 items-start">
+                            <div class="step-number text-sm">4</div>
+                            <div class="text-sm">Assign responsible person</div>
+                        </div>
+                        <div class="flex gap-4 items-start">
+                            <div class="step-number text-sm">5</div>
+                            <div class="text-sm">Document the fix and close</div>
+                        </div>
+                    </div>
+                    <div class="callout callout-info mt-4">
+                        <strong>Auto-Handoff:</strong> Nonconformances automatically create Audit Findings in GRC!
+                    </div>
+                </div>
+
+                <!-- Training -->
+                <div class="border rounded-xl p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.<REDACTED_PHONE> 5S4.<REDACTED_PHONE>.253v13C4.<REDACTED_PHONE>.5 18s3.<REDACTED_PHONE>.253m0-13C13.<REDACTED_PHONE>.5 5c1.<REDACTED_PHONE>.253v13C19.<REDACTED_PHONE> 16.5 18c-<REDACTED_PHONE>.253"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-800">Training Compliance</h3>
+                    </div>
+                    <p class="text-gray-600 mb-4">Track employee training requirements and completion.</p>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li>• View training matrix by employee</li>
+                        <li>• See overdue training (highlighted in red)</li>
+                        <li>• Record training completion</li>
+                        <li>• Set training due dates</li>
+                        <li>• Generate compliance reports</li>
+                    </ul>
+                    <div class="callout callout-info mt-4">
+                        <strong>Auto-Handoff:</strong> Overdue training creates Compliance gaps in GRC!
+                    </div>
+                </div>
+
+                <!-- Deal Evaluations -->
+                <div class="border rounded-xl p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 <REDACTED_PHONE> 0z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-800">Deal Evaluations</h3>
+                    </div>
+                    <p class="text-gray-600 mb-4">Score and evaluate deals for quality compliance.</p>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li>• Pull deals from Zoho CRM</li>
+                        <li>• Upload CSV/Excel files</li>
+                        <li>• Manual deal entry</li>
+                        <li>• Score against criteria (ISO, COPC, Six Sigma)</li>
+                        <li>• View evaluation history</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Continue with more sections... -->
+        <!-- Section 8: GRC Overview -->
+        <section id="grc-overview" class="bg-white rounded-xl shadow-sm p-8 mb-8 page-break">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">8. GRC Overview</h2>
+            
+            <div class="callout callout-info">
+                <strong>What is GRC?</strong>
+                <p class="mt-2">GRC stands for <strong>G</strong>overnance, <strong>R</strong>isk, and <strong>C</strong>ompliance. It's how organizations manage rules, identify potential problems, and ensure they follow regulations.</p>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">The GRC Control Tower</h3>
+            <p class="text-gray-600 mb-4">Access at <code class="bg-gray-200 px-2 py-1 rounded">/grc</code> - This is your executive dashboard showing everything at a glance.</p>
+
+            <!-- Screenshot: GRC Control Tower -->
+            <div class="screenshot mb-8">
+                <div class="screenshot-header bg-slate-700">
+                    <div class="screenshot-dot bg-red-500"></div>
+                    <div class="screenshot-dot bg-yellow-500"></div>
+                    <div class="screenshot-dot bg-green-500"></div>
+                    <span class="text-white text-sm ms-2">GRC Control Tower</span>
+                </div>
+                <div class="screenshot-content">
+                    <div class="grid grid-cols-12 gap-4">
+                        <!-- Risk Heat Map -->
+                        <div class="col-span-4 bg-gray-50 p-4 rounded-xl">
+                            <div class="font-bold text-gray-700 mb-3">Risk Heat Map</div>
+                            <div class="grid grid-cols-4 gap-1">
+                                <div class="h-8 bg-yellow-200 rounded flex items-center justify-center text-xs">1</div>
+                                <div class="h-8 bg-orange-300 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-red-400 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-red-600 rounded flex items-center justify-center text-xs font-bold text-white">1</div>
+                                <div class="h-8 bg-green-200 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-yellow-200 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-orange-300 rounded flex items-center justify-center text-xs">1</div>
+                                <div class="h-8 bg-red-400 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-green-100 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-green-200 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-yellow-200 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-orange-300 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-green-50 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-green-100 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-green-200 rounded flex items-center justify-center text-xs">0</div>
+                                <div class="h-8 bg-yellow-200 rounded flex items-center justify-center text-xs">0</div>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-2 text-center">Likelihood → | Impact ↑</div>
+                        </div>
+
+                        <!-- Compliance Scores -->
+                        <div class="col-span-4 bg-gray-50 p-4 rounded-xl">
+                            <div class="font-bold text-gray-700 mb-3">Compliance by Framework</div>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm">PDPL</span>
+                                    <span class="font-bold text-green-600">85%</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm">NCA-ECC</span>
+                                    <span class="font-bold text-yellow-600">72%</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm">ISO 27001</span>
+                                    <span class="font-bold text-green-600">91%</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm">COPC</span>
+                                    <span class="font-bold text-green-600">88%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Stats -->
+                        <div class="col-span-4 bg-gray-50 p-4 rounded-xl">
+                            <div class="font-bold text-gray-700 mb-3">Quick Stats</div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="bg-red-100 p-2 rounded text-center">
+                                    <div class="text-xl font-bold text-red-800">3</div>
+                                    <div class="text-xs text-red-600">Open Risks</div>
+                                </div>
+                                <div class="bg-blue-100 p-2 rounded text-center">
+                                    <div class="text-xl font-bold text-blue-800">2</div>
+                                    <div class="text-xs text-blue-600">Active Policies</div>
+                                </div>
+                                <div class="bg-purple-100 p-2 rounded text-center">
+                                    <div class="text-xl font-bold text-purple-800">0</div>
+                                    <div class="text-xs text-purple-600">Pending Audits</div>
+                                </div>
+                                <div class="bg-orange-100 p-2 rounded text-center">
+                                    <div class="text-xl font-bold text-orange-800">1</div>
+                                    <div class="text-xs text-orange-600">Vendors</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 9: Risk Register -->
+        <section id="risks" class="bg-white rounded-xl shadow-sm p-8 mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">9. Risk Register</h2>
+            
+            <p class="text-gray-600 mb-6">Access at <code class="bg-gray-200 px-2 py-1 rounded">/risks</code> - Track and manage all organizational risks.</p>
+
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">How to Add a New Risk</h3>
+            
+            <div class="bg-gray-50 rounded-xl p-6 mb-6">
+                <div class="space-y-6">
+                    <div class="flex gap-4">
+                        <div class="step-number">1</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Click "Add New Risk" Button</h4>
+                            <p class="text-gray-600">Located at the top right of the Risk Register dashboard</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="step-number">2</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Fill in Risk Details</h4>
+                            <div class="grid md:grid-cols-2 gap-4 mt-3">
+                                <div class="bg-white p-3 rounded border">
+                                    <label class="text-sm font-medium text-gray-600">Risk Title</label>
+                                    <div class="text-gray-400 text-sm mt-1">e.g., "Data breach risk from unsecured endpoints"</div>
+                                </div>
+                                <div class="bg-white p-3 rounded border">
+                                    <label class="text-sm font-medium text-gray-600">Category</label>
+                                    <div class="text-gray-400 text-sm mt-1">Operational, Financial, Strategic, Compliance, Technology, Reputational</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="step-number">3</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Set Likelihood (1-4)</h4>
+                            <div class="grid grid-cols-4 gap-2 mt-3">
+                                <div class="bg-green-100 p-2 rounded text-center text-sm">
+                                    <div class="font-bold">1</div>
+                                    <div class="text-xs">Rare</div>
+                                </div>
+                                <div class="bg-yellow-100 p-2 rounded text-center text-sm">
+                                    <div class="font-bold">2</div>
+                                    <div class="text-xs">Unlikely</div>
+                                </div>
+                                <div class="bg-orange-100 p-2 rounded text-center text-sm">
+                                    <div class="font-bold">3</div>
+                                    <div class="text-xs">Possible</div>
+                                </div>
+                                <div class="bg-red-100 p-2 rounded text-center text-sm">
+                                    <div class="font-bold">4</div>
+                                    <div class="text-xs">Likely</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="step-number">4</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Set Impact (1-4)</h4>
+                            <div class="grid grid-cols-4 gap-2 mt-3">
+                                <div class="bg-green-100 p-2 rounded text-center text-sm">
+                                    <div class="font-bold">1</div>
+                                    <div class="text-xs">Minor</div>
+                                </div>
+                                <div class="bg-yellow-100 p-2 rounded text-center text-sm">
+                                    <div class="font-bold">2</div>
+                                    <div class="text-xs">Moderate</div>
+                                </div>
+                                <div class="bg-orange-100 p-2 rounded text-center text-sm">
+                                    <div class="font-bold">3</div>
+                                    <div class="text-xs">Significant</div>
+                                </div>
+                                <div class="bg-red-100 p-2 rounded text-center text-sm">
+                                    <div class="font-bold">4</div>
+                                    <div class="text-xs">Severe</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="step-number">5</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Risk Score is Calculated Automatically</h4>
+                            <p class="text-gray-600">Score = Likelihood × Impact (1-16)</p>
+                            <div class="grid grid-cols-4 gap-2 mt-3">
+                                <div class="bg-green-500 text-white p-2 rounded text-center text-sm">
+                                    <div class="font-bold">1-3</div>
+                                    <div class="text-xs">Low</div>
+                                </div>
+                                <div class="bg-yellow-500 text-white p-2 rounded text-center text-sm">
+                                    <div class="font-bold">4-6</div>
+                                    <div class="text-xs">Medium</div>
+                                </div>
+                                <div class="bg-orange-500 text-white p-2 rounded text-center text-sm">
+                                    <div class="font-bold">8-9</div>
+                                    <div class="text-xs">High</div>
+                                </div>
+                                <div class="bg-red-600 text-white p-2 rounded text-center text-sm">
+                                    <div class="font-bold">12-16</div>
+                                    <div class="text-xs">Critical</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="step-number">6</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Add Treatment Plan</h4>
+                            <p class="text-gray-600">Choose how to handle the risk:</p>
+                            <div class="grid md:grid-cols-4 gap-2 mt-3">
+                                <div class="bg-blue-50 border border-blue-200 p-2 rounded text-center text-sm">
+                                    <div class="font-bold text-blue-800">Mitigate</div>
+                                    <div class="text-xs text-blue-600">Reduce the risk</div>
+                                </div>
+                                <div class="bg-purple-50 border border-purple-200 p-2 rounded text-center text-sm">
+                                    <div class="font-bold text-purple-800">Transfer</div>
+                                    <div class="text-xs text-purple-600">Insurance/outsource</div>
+                                </div>
+                                <div class="bg-gray-50 border border-gray-200 p-2 rounded text-center text-sm">
+                                    <div class="font-bold text-gray-800">Accept</div>
+                                    <div class="text-xs text-gray-600">Accept the risk</div>
+                                </div>
+                                <div class="bg-green-50 border border-green-200 p-2 rounded text-center text-sm">
+                                    <div class="font-bold text-green-800">Avoid</div>
+                                    <div class="text-xs text-green-600">Stop the activity</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 15: Quality-GRC Handoffs -->
+        <section id="handoffs" class="bg-white rounded-xl shadow-sm p-8 mb-8 page-break">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">15. Quality-GRC Handoffs</h2>
+            
+            <div class="callout callout-success">
+                <strong>What are Handoffs?</strong>
+                <p class="mt-2">Handoffs are automatic connections between Quality Management and GRC. When something happens in Quality, the system automatically creates a corresponding record in GRC - no manual work needed!</p>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">Automatic Handoff Rules</h3>
+            
+            <div class="space-y-4">
+                <!-- Rule 1: CAPA → Risk -->
+                <div class="bg-gradient-to-r from-blue-50 to-red-50 rounded-xl p-6 border">
+                    <div class="flex flex-col md:flex-row items-center gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.<REDACTED_PHONE>-3L13.732 4c-.<REDACTED_PHONE>.464 0L3.34 16c-.<REDACTED_PHONE> 3z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="font-bold text-blue-800">CAPA Record</div>
+                                <div class="text-sm text-blue-600">Quality Module</div>
+                            </div>
+                        </div>
+                        <div class="flex-1 flex items-center justify-center">
+                            <div class="text-center">
+                                <svg class="w-8 h-8 text-purple-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                                </svg>
+                                <div class="text-xs text-purple-600 font-medium mt-1">When Severity = High or Critical</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 <REDACTED_PHONE> 0z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="font-bold text-red-800">Risk Created</div>
+                                <div class="text-sm text-red-600">GRC Risk Register</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 bg-white rounded-lg p-3 text-sm text-gray-600">
+                        <strong>Example:</strong> Sara creates a CAPA for "Customer data exposed in test environment" with severity "Critical". 
+                        The system automatically creates a Risk in the Risk Register so Maram can track and treat it.
+                    </div>
+                </div>
+
+                <!-- Rule 2: Call Sentiment → Compliance -->
+                <div class="bg-gradient-to-r from-blue-50 to-green-50 rounded-xl p-6 border">
+                    <div class="flex flex-col md:flex-row items-center gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.<REDACTED_PHONE> 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.<REDACTED_PHONE> 6V5z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="font-bold text-blue-800">Low Sentiment Call</div>
+                                <div class="text-sm text-blue-600">Call Intelligence</div>
+                            </div>
+                        </div>
+                        <div class="flex-1 flex items-center justify-center">
+                            <div class="text-center">
+                                <svg class="w-8 h-8 text-purple-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                                </svg>
+                                <div class="text-xs text-purple-600 font-medium mt-1">When Sentiment Score &lt; 3</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.<REDACTED_PHONE>.944a11.<REDACTED_PHONE> 3.04A12.<REDACTED_PHONE> 9c0 <REDACTED_PHONE>.<REDACTED_PHONE> <REDACTED_PHONE>.052-.382-3.016z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="font-bold text-green-800">Compliance Gap</div>
+                                <div class="text-sm text-green-600">Compliance Tracker</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 bg-white rounded-lg p-3 text-sm text-gray-600">
+                        <strong>Example:</strong> A customer call is analyzed by AI and gets a sentiment score of 2 (poor). 
+                        The system flags this as a potential compliance issue for customer service standards.
+                    </div>
+                </div>
+
+                <!-- Rule 3: Nonconformance → Finding -->
+                <div class="bg-gradient-to-r from-orange-50 to-purple-50 rounded-xl p-6 border">
+                    <div class="flex flex-col md:flex-row items-center gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 <REDACTED_PHONE> 0z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="font-bold text-orange-800">Nonconformance</div>
+                                <div class="text-sm text-orange-600">QMS Module</div>
+                            </div>
+                        </div>
+                        <div class="flex-1 flex items-center justify-center">
+                            <div class="text-center">
+                                <svg class="w-8 h-8 text-purple-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                                </svg>
+                                <div class="text-xs text-purple-600 font-medium mt-1">Any nonconformance recorded</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="font-bold text-purple-800">Audit Finding</div>
+                                <div class="text-sm text-purple-600">Audit Readiness</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 bg-white rounded-lg p-3 text-sm text-gray-600">
+                        <strong>Example:</strong> Sara records a nonconformance "Process not followed for customer onboarding". 
+                        This automatically appears as an Audit Finding so it's documented for the next audit.
+                    </div>
+                </div>
+
+                <!-- Rule 4: Training Gap → Compliance -->
+                <div class="bg-gradient-to-r from-blue-50 to-green-50 rounded-xl p-6 border">
+                    <div class="flex flex-col md:flex-row items-center gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.<REDACTED_PHONE> 5S4.<REDACTED_PHONE>.253v13C4.<REDACTED_PHONE>.5 18s3.<REDACTED_PHONE>.253m0-13C13.<REDACTED_PHONE>.5 5c1.<REDACTED_PHONE>.253v13C19.<REDACTED_PHONE> 16.5 18c-<REDACTED_PHONE>.253"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="font-bold text-blue-800">Overdue Training</div>
+                                <div class="text-sm text-blue-600">Training Compliance</div>
+                            </div>
+                        </div>
+                        <div class="flex-1 flex items-center justify-center">
+                            <div class="text-center">
+                                <svg class="w-8 h-8 text-purple-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                                </svg>
+                                <div class="text-xs text-purple-600 font-medium mt-1">When training is overdue</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.<REDACTED_PHONE>.944a11.<REDACTED_PHONE> 3.04A12.<REDACTED_PHONE> 9c0 <REDACTED_PHONE>.<REDACTED_PHONE> <REDACTED_PHONE>.052-.382-3.016z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="font-bold text-green-800">Compliance Gap</div>
+                                <div class="text-sm text-green-600">Compliance Tracker</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 bg-white rounded-lg p-3 text-sm text-gray-600">
+                        <strong>Example:</strong> Employee Sample User's "Data Privacy Training" is 30 days overdue. 
+                        This creates a compliance gap against PDPL requirements for staff training.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 16: User Roles & Correlations -->
+        <section id="user-roles" class="bg-white rounded-xl shadow-sm p-8 mb-8 page-break">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">16. User Roles & Correlations</h2>
+            
+            <div class="callout callout-info">
+                <strong>One Platform, Connected Roles</strong>
+                <p class="mt-2">ExampleOrg is designed so that different team members can work in their own areas, while the system keeps everything connected. Here's how Sara (Quality Manager) and Maram (GRC Manager) work together.</p>
+            </div>
+
+            <!-- Visual: Sara and Maram -->
+            <div class="grid md:grid-cols-2 gap-8 mt-8">
+                <!-- Sara's Profile -->
+                <div class="border-2 border-blue-200 rounded-xl p-6 bg-blue-50">
+                    <div class="flex items-center gap-4 mb-6">
+                        <div class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">S</div>
+                        <div>
+                            <h3 class="text-xl font-bold text-blue-800">Sara</h3>
+                            <p class="text-blue-600">Quality Manager</p>
+                        </div>
+                    </div>
+                    
+                    <h4 class="font-bold text-gray-700 mb-3">Sara's Daily Work</h4>
+                    <ul class="space-y-2 text-sm">
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-600 mt-1">●</span>
+                            <span>Reviews the <strong>Quality Dashboard</strong> every morning</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-600 mt-1">●</span>
+                            <span>Reads the weekly <strong>AI Quality Report</strong> email</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-600 mt-1">●</span>
+                            <span>Creates <strong>CAPAs</strong> when issues are found</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-600 mt-1">●</span>
+                            <span>Records <strong>Nonconformances</strong> and fixes</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-600 mt-1">●</span>
+                            <span>Monitors <strong>Training Compliance</strong></span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-600 mt-1">●</span>
+                            <span>Analyzes <strong>Call Intelligence</strong> reports</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-600 mt-1">●</span>
+                            <span>Manages <strong>Team Performance</strong></span>
+                        </li>
+                    </ul>
+
+                    <div class="mt-6 p-4 bg-white rounded-lg">
+                        <h5 class="font-bold text-gray-700 mb-2">Sara's Main Dashboards</h5>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">/ (Quality)</span>
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">/qms</span>
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">/calls</span>
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">/team</span>
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">/tablef</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Maram's Profile -->
+                <div class="border-2 border-slate-200 rounded-xl p-6 bg-slate-50">
+                    <div class="flex items-center gap-4 mb-6">
+                        <div class="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center text-white text-2xl font-bold">M</div>
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800">Maram</h3>
+                            <p class="text-slate-600">GRC Manager</p>
+                        </div>
+                    </div>
+                    
+                    <h4 class="font-bold text-gray-700 mb-3">Maram's Daily Work</h4>
+                    <ul class="space-y-2 text-sm">
+                        <li class="flex items-start gap-2">
+                            <span class="text-slate-600 mt-1">●</span>
+                            <span>Reviews the <strong>GRC Control Tower</strong> dashboard</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-slate-600 mt-1">●</span>
+                            <span>Monitors <strong>Risk Register</strong> for new risks</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-slate-600 mt-1">●</span>
+                            <span>Manages <strong>Policy</strong> approvals and reviews</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-slate-600 mt-1">●</span>
+                            <span>Tracks <strong>Compliance</strong> obligations (PDPL, NCA)</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-slate-600 mt-1">●</span>
+                            <span>Prepares for <strong>Audits</strong></span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-slate-600 mt-1">●</span>
+                            <span>Assesses <strong>Vendor Risks</strong></span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-slate-600 mt-1">●</span>
+                            <span>Reviews <strong>Handoff Events</strong> from Quality</span>
+                        </li>
+                    </ul>
+
+                    <div class="mt-6 p-4 bg-white rounded-lg">
+                        <h5 class="font-bold text-gray-700 mb-2">Maram's Main Dashboards</h5>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-xs">/grc</span>
+                            <span class="px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-xs">/risks</span>
+                            <span class="px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-xs">/policies</span>
+                            <span class="px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-xs">/compliance</span>
+                            <span class="px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-xs">/audits</span>
+                            <span class="px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-xs">/vendors</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Correlation Diagram -->
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">How Sara and Maram's Work Connects</h3>
+            
+            <div class="bg-gradient-to-r from-blue-50 via-purple-50 to-slate-50 rounded-xl p-8 border">
+                <div class="grid md:grid-cols-3 gap-6">
+                    <!-- Sara's Action -->
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3">S</div>
+                        <h4 class="font-bold text-blue-800">Sara Creates</h4>
+                        <div class="mt-4 space-y-3">
+                            <div class="bg-white p-3 rounded-lg shadow-sm text-sm">
+                                <div class="font-bold text-blue-700">Critical CAPA</div>
+                                <div class="text-gray-500 text-xs">Data security incident</div>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg shadow-sm text-sm">
+                                <div class="font-bold text-orange-700">Nonconformance</div>
+                                <div class="text-gray-500 text-xs">Process deviation found</div>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg shadow-sm text-sm">
+                                <div class="font-bold text-red-700">Training Overdue</div>
+                                <div class="text-gray-500 text-xs">PDPL training expired</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connection -->
+                    <div class="flex flex-col items-center justify-center">
+                        <div class="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center text-white mb-3">
+                            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                            </svg>
+                        </div>
+                        <h4 class="font-bold text-purple-800 text-center">Automatic<br>Handoffs</h4>
+                        <p class="text-sm text-purple-600 text-center mt-2">System creates GRC records automatically</p>
+                    </div>
+
+                    <!-- Maram Sees -->
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3">M</div>
+                        <h4 class="font-bold text-slate-800">Maram Receives</h4>
+                        <div class="mt-4 space-y-3">
+                            <div class="bg-white p-3 rounded-lg shadow-sm text-sm">
+                                <div class="font-bold text-red-700">New Risk</div>
+                                <div class="text-gray-500 text-xs">Needs treatment plan</div>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg shadow-sm text-sm">
+                                <div class="font-bold text-purple-700">Audit Finding</div>
+                                <div class="text-gray-500 text-xs">Document for next audit</div>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg shadow-sm text-sm">
+                                <div class="font-bold text-green-700">Compliance Gap</div>
+                                <div class="text-gray-500 text-xs">PDPL obligation missed</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Correlation Examples -->
+                <div class="mt-8 grid md:grid-cols-2 gap-4">
+                    <div class="bg-white rounded-lg p-4 border-s-4 border-blue-500">
+                        <h5 class="font-bold text-blue-800 mb-2">Example Scenario 1</h5>
+                        <p class="text-sm text-gray-600">
+                            <strong>Sara</strong> discovers that customer data was accidentally sent to the wrong email address. 
+                            She creates a Critical CAPA in the QMS. The system <strong>automatically</strong> notifies 
+                            <strong>Maram</strong> by creating a Risk in the Risk Register. Maram can now track the 
+                            treatment and report to leadership.
+                        </p>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 border-s-4 border-slate-500">
+                        <h5 class="font-bold text-slate-800 mb-2">Example Scenario 2</h5>
+                        <p class="text-sm text-gray-600">
+                            <strong>Maram</strong> is preparing for an ISO 27001 audit. She checks the Audit Readiness 
+                            module and sees all the Nonconformances that <strong>Sara</strong> recorded throughout the year. 
+                            She can now compile the evidence pack showing how each issue was identified and resolved.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Both Can See -->
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">Shared Visibility</h3>
+            
+            <div class="bg-gray-50 rounded-xl p-6">
+                <p class="text-gray-600 mb-4">Both Sara and Maram can see everything - they just focus on different areas. This means:</p>
+                <div class="grid md:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-lg border">
+                        <div class="font-bold text-gray-800 mb-2">No Information Silos</div>
+                        <p class="text-sm text-gray-600">Quality issues are visible to GRC team, and GRC compliance status is visible to Quality team.</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border">
+                        <div class="font-bold text-gray-800 mb-2">Complete Audit Trail</div>
+                        <p class="text-sm text-gray-600">Every action is logged and can be traced from Quality issue to GRC resolution.</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border">
+                        <div class="font-bold text-gray-800 mb-2">Executive Visibility</div>
+                        <p class="text-sm text-gray-600">Leadership can see both Quality and GRC metrics on the Control Tower dashboard.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Role-Based Permissions (RBAC) -->
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">Role-Based Permissions</h3>
+            
+            <div class="callout callout-warning">
+                <strong>AI Detects, Humans Act with Proper Authorization</strong>
+                <p class="mt-2">The system uses Role-Based Access Control (RBAC) to ensure only authorized personnel can take governance actions. The AI provides recommendations, but critical decisions require human approval from the right role.</p>
+            </div>
+
+            <div class="bg-gray-50 rounded-xl p-6 mt-4">
+                <h4 class="font-bold text-gray-800 mb-4">Permission Summary</h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-200">
+                                <th scope="col" class="p-3 text-start">Action</th>
+                                <th scope="col" class="p-3 text-center">Sara (Quality)</th>
+                                <th scope="col" class="p-3 text-center">Maram (GRC)</th>
+                                <th scope="col" class="p-3 text-center">BU Owner</th>
+                                <th scope="col" class="p-3 text-center">Executive</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white">
+                            <tr class="border-b">
+                                <td class="p-3">Create CAPA</td>
+                                <td class="p-3 text-center text-green-600">✓</td>
+                                <td class="p-3 text-center text-green-600">✓</td>
+                                <td class="p-3 text-center text-green-600">✓</td>
+                                <td class="p-3 text-center text-red-500">✗</td>
+                            </tr>
+                            <tr class="border-b">
+                                <td class="p-3">Create Finding</td>
+                                <td class="p-3 text-center text-green-600">✓</td>
+                                <td class="p-3 text-center text-green-600">✓</td>
+                                <td class="p-3 text-center text-green-600">✓</td>
+                                <td class="p-3 text-center text-red-500">✗</td>
+                            </tr>
+                            <tr class="border-b bg-amber-50">
+                                <td class="p-3 font-medium">Accept Risk</td>
+                                <td class="p-3 text-center text-red-500">✗</td>
+                                <td class="p-3 text-center text-green-600 font-bold">✓</td>
+                                <td class="p-3 text-center text-red-500">✗</td>
+                                <td class="p-3 text-center text-red-500">✗</td>
+                            </tr>
+                            <tr class="border-b bg-amber-50">
+                                <td class="p-3 font-medium">Approve Policy</td>
+                                <td class="p-3 text-center text-red-500">✗</td>
+                                <td class="p-3 text-center text-green-600 font-bold">✓</td>
+                                <td class="p-3 text-center text-red-500">✗</td>
+                                <td class="p-3 text-center text-red-500">✗</td>
+                            </tr>
+                            <tr class="border-b">
+                                <td class="p-3">View Dashboards</td>
+                                <td class="p-3 text-center text-green-600">✓</td>
+                                <td class="p-3 text-center text-green-600">✓</td>
+                                <td class="p-3 text-center text-green-600">✓</td>
+                                <td class="p-3 text-center text-green-600">✓</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 p-4 bg-slate-100 rounded-lg">
+                    <p class="text-sm text-slate-700"><strong>Note:</strong> Risk acceptance and policy approval are GRC-only actions. If Sara tries to accept a risk, she will see a message asking her to contact Maram (GRC Manager) for approval.</p>
+                </div>
+            </div>
+
+            <!-- Dual Ownership -->
+            <h3 class="text-xl font-semibold text-gray-700 mt-8 mb-4">Dual Ownership for Policies</h3>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-blue-50 rounded-xl p-6 border border-blue-200">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                        </div>
+                        <h4 class="font-bold text-blue-800">Operational Owner</h4>
+                    </div>
+                    <p class="text-blue-700 text-sm">Responsible for day-to-day implementation and content accuracy. Usually a department head or process owner.</p>
+                    <ul class="mt-3 space-y-1 text-sm text-blue-600">
+                        <li>• Drafts policy content</li>
+                        <li>• Implements procedures</li>
+                        <li>• Tracks operational compliance</li>
+                    </ul>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.<REDACTED_PHONE>.944a11.<REDACTED_PHONE> 3.04A12.<REDACTED_PHONE> 9c0 <REDACTED_PHONE>.<REDACTED_PHONE> <REDACTED_PHONE>.052-.382-3.016z"/>
+                            </svg>
+                        </div>
+                        <h4 class="font-bold text-slate-800">Compliance Owner (GRC)</h4>
+                    </div>
+                    <p class="text-slate-700 text-sm">Ensures policy meets regulatory requirements and governance standards. Always a GRC team member.</p>
+                    <ul class="mt-3 space-y-1 text-sm text-slate-600">
+                        <li>• Reviews for regulatory compliance</li>
+                        <li>• Approves for publication</li>
+                        <li>• Manages audit evidence</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="callout callout-success mt-6">
+                <strong>Policy Publishing Workflow</strong>
+                <p class="mt-2">A policy cannot be published until <strong>both</strong> the Operational Owner has drafted/reviewed it AND the Compliance Owner (GRC) has approved it. This ensures both operational accuracy and regulatory compliance.</p>
+            </div>
+        </section>
+
+        <!-- Section 17: Agent Performance (NEW in v2.1) -->
+        <section id="agent-performance" class="bg-white rounded-xl shadow-sm p-8 mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">17. Agent Performance Tracking <span class="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full ms-2">NEW in v2.1</span></h2>
+            
+            <p class="text-gray-600 mb-6">Track real-time quality performance of your team members based on their CRM Lead Owner data. This feature shows how well each agent maintains data quality for the records they own.</p>
+
+            <div class="callout callout-info mb-6">
+                <strong>Where to Find It:</strong> Quality Dashboard (<code class="bg-gray-200 px-2 py-1 rounded">/</code>) → Agent Performance Widget
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-700 mt-6 mb-4">Understanding Agent Scores</h3>
+            
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div class="border rounded-xl p-6">
+                    <h4 class="font-bold text-gray-800 mb-3">How Scores Are Calculated</h4>
+                    <p class="text-gray-600 mb-4">Each agent's score is based on the data quality of CRM records they own:</p>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li class="flex items-center gap-2">
+                            <span class="w-3 h-3 bg-red-500 rounded-full"></span>
+                            <span><strong>Critical Issues:</strong> Missing email, invalid data (4x weight)</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="w-3 h-3 bg-orange-500 rounded-full"></span>
+                            <span><strong>High Issues:</strong> Missing lead source (3x weight)</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="w-3 h-3 bg-yellow-500 rounded-full"></span>
+                            <span><strong>Medium Issues:</strong> Incomplete fields (2x weight)</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="w-3 h-3 bg-blue-500 rounded-full"></span>
+                            <span><strong>Low Issues:</strong> Minor formatting (1x weight)</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="border rounded-xl p-6">
+                    <h4 class="font-bold text-gray-800 mb-3">Score Interpretation</h4>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+                            <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">90</div>
+                            <div>
+                                <div class="font-bold text-green-800">Excellent (85-100)</div>
+                                <div class="text-sm text-green-700">Agent maintains high data quality</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
+                            <div class="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center text-white font-bold">75</div>
+                            <div>
+                                <div class="font-bold text-yellow-800">Good (70-84)</div>
+                                <div class="text-sm text-yellow-700">Some improvement needed</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
+                            <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">55</div>
+                            <div>
+                                <div class="font-bold text-red-800">Needs Attention (&lt;70)</div>
+                                <div class="text-sm text-red-700">Coaching or training required</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-700 mt-6 mb-4">Using the Team Filter</h3>
+            <p class="text-gray-600 mb-4">Use the dropdown filter to view agents by team:</p>
+            <div class="flex flex-wrap gap-2 mb-4">
+                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">All Teams</span>
+                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">SDR</span>
+                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">Sales</span>
+                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">CS</span>
+                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">Marketplace</span>
+            </div>
+
+            <div class="callout callout-success">
+                <strong>Data Source:</strong> Agent names are pulled directly from Zoho CRM Lead Owner field. The system fetches ALL records (not just the first 200) using full pagination for accurate scoring.
+            </div>
+        </section>
+
+        <!-- Section 18: Multi-Scorecard Governance (NEW in v2.1) -->
+        <section id="multi-scorecard" class="bg-white rounded-xl shadow-sm p-8 mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">18. Multi-Scorecard Governance <span class="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full ms-2">NEW in v2.1</span></h2>
+            
+            <p class="text-gray-600 mb-6">Create and manage multiple named scorecards per team with versioning. Each team (SDR, Sales, CS, Marketplace) can have different evaluation criteria tailored to their specific needs.</p>
+
+            <div class="callout callout-info mb-6">
+                <strong>Where to Find It:</strong> Admin Panel (<code class="bg-gray-200 px-2 py-1 rounded">/admin</code>) → Scorecards Tab
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-700 mt-6 mb-4">Scorecard Components</h3>
+            
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div class="border rounded-xl p-6">
+                    <h4 class="font-bold text-gray-800 mb-3">Scorecard Properties</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-500 mt-1">●</span>
+                            <div><strong>Name:</strong> Descriptive name (e.g., "SDR Lead Quality v1.0")</div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-500 mt-1">●</span>
+                            <div><strong>Module/Team:</strong> SDR, Sales, CS, or Marketplace</div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-500 mt-1">●</span>
+                            <div><strong>Version:</strong> Track changes (v1.0, v1.1, v2.0)</div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-blue-500 mt-1">●</span>
+                            <div><strong>Active Status:</strong> Only one scorecard per team can be active</div>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="border rounded-xl p-6">
+                    <h4 class="font-bold text-gray-800 mb-3">Attribute Fields</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li class="flex items-start gap-2">
+                            <span class="text-purple-500 mt-1">●</span>
+                            <div><strong>Dimension:</strong> People, Process, or Governance</div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-purple-500 mt-1">●</span>
+                            <div><strong>Severity:</strong> Critical, Major, or Minor</div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-purple-500 mt-1">●</span>
+                            <div><strong>Evaluation Logic:</strong> How the AI should evaluate</div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-purple-500 mt-1">●</span>
+                            <div><strong>Evidence Source:</strong> Which CRM fields to check</div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-700 mt-6 mb-4">How to Manage Scorecards</h3>
+            
+            <div class="space-y-4">
+                <div class="flex gap-4 items-start p-4 bg-gray-50 rounded-lg">
+                    <div class="step-number">1</div>
+                    <div>
+                        <div class="font-bold text-gray-800">Select Module/Team</div>
+                        <div class="text-sm text-gray-600">Use the dropdown to choose which team's scorecards to view</div>
+                    </div>
+                </div>
+                <div class="flex gap-4 items-start p-4 bg-gray-50 rounded-lg">
+                    <div class="step-number">2</div>
+                    <div>
+                        <div class="font-bold text-gray-800">Create or Select Scorecard</div>
+                        <div class="text-sm text-gray-600">Click "Create New" or select an existing scorecard</div>
+                    </div>
+                </div>
+                <div class="flex gap-4 items-start p-4 bg-gray-50 rounded-lg">
+                    <div class="step-number">3</div>
+                    <div>
+                        <div class="font-bold text-gray-800">Add/Edit Attributes</div>
+                        <div class="text-sm text-gray-600">Define evaluation criteria with severity, logic, and evidence sources</div>
+                    </div>
+                </div>
+                <div class="flex gap-4 items-start p-4 bg-gray-50 rounded-lg">
+                    <div class="step-number">4</div>
+                    <div>
+                        <div class="font-bold text-gray-800">Set Active</div>
+                        <div class="text-sm text-gray-600">Toggle "Active" to make this the default scorecard for AI audits</div>
+                    </div>
+                </div>
+                <div class="flex gap-4 items-start p-4 bg-gray-50 rounded-lg">
+                    <div class="step-number">5</div>
+                    <div>
+                        <div class="font-bold text-gray-800">Clone for New Version</div>
+                        <div class="text-sm text-gray-600">Use "Clone" to create a new version when making significant changes</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="callout callout-warning mt-6">
+                <strong>AI Integration:</strong> When audits run, the AI agent automatically loads the active scorecard for each team, uses the evaluation logic, and generates findings based on your defined criteria.
+            </div>
+        </section>
+
+        <!-- Section 19: FAQ -->
+        <section id="faq" class="bg-white rounded-xl shadow-sm p-8 mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">19. Frequently Asked Questions</h2>
+            
+            <div class="space-y-4">
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-bold text-gray-800 mb-2">Q: Do I need to run the AI audit manually?</h4>
+                    <p class="text-gray-600">No! The AI Quality Specialist runs automatically every Monday at 8 AM UTC. You just need to check the results on the dashboard or in your email.</p>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-bold text-gray-800 mb-2">Q: Will the AI change my CRM data?</h4>
+                    <p class="text-gray-600">No. The AI only reads your data - it never modifies, deletes, or changes anything in Zoho CRM. Your data is completely safe.</p>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-bold text-gray-800 mb-2">Q: What if I don't have Zoho CRM credentials configured?</h4>
+                    <p class="text-gray-600">The system will gracefully handle this. You'll see a message on the dashboard, and you can still use all other features like CAPA, Training, and GRC modules.</p>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-bold text-gray-800 mb-2">Q: How do handoffs work?</h4>
+                    <p class="text-gray-600">When you create certain records in Quality (like a Critical CAPA), the system automatically creates corresponding records in GRC (like a Risk). You don't need to do anything extra.</p>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-bold text-gray-800 mb-2">Q: Can I import data from Excel or CSV?</h4>
+                    <p class="text-gray-600">Yes! Use the Data Migration module at /migration. Upload your file, and the AI will help map your columns to the correct fields.</p>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-bold text-gray-800 mb-2">Q: What regulations does the Compliance Tracker support?</h4>
+                    <p class="text-gray-600">We have 6 pre-configured frameworks: PDPL (Saudi data protection), NCA-ECC (Saudi cybersecurity), NCA-DCC (Saudi data controls), ISO 9001 (Quality), ISO 27001 (Security), and COPC (Customer operations).</p>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-bold text-gray-800 mb-2">Q: What do the colors mean on the dashboards?</h4>
+                    <p class="text-gray-600">
+                        <span class="inline-block w-4 h-4 bg-green-500 rounded me-1"></span> Green = Good/Compliant<br>
+                        <span class="inline-block w-4 h-4 bg-yellow-500 rounded me-1"></span> Yellow = Warning/Needs Attention<br>
+                        <span class="inline-block w-4 h-4 bg-red-500 rounded me-1"></span> Red = Critical/Urgent
+                    </p>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-bold text-gray-800 mb-2">Q: How do I print this guide?</h4>
+                    <p class="text-gray-600">Click the "Print Guide" button at the top of this page, or press Ctrl+P (Windows) or Cmd+P (Mac). You can save it as a PDF for offline reference.</p>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-bold text-gray-800 mb-2">Q: Why can't I accept a risk or approve a policy?</h4>
+                    <p class="text-gray-600">Risk acceptance and policy approval are GRC-only functions that require the GRC Manager role (Maram). If you need a risk accepted or policy approved, contact your GRC Manager. This is by design to ensure proper governance oversight - "AI detects, humans act with proper authorization."</p>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-bold text-gray-800 mb-2">Q: What are the different user roles in the system?</h4>
+                    <p class="text-gray-600">There are 6 roles: Quality Manager (Sara), GRC Manager (Maram), AI Specialist, Business Unit Owner, Executive, and Admin. Each role has specific permissions. GRC Manager has authority over risk acceptance and policy approval. See Section 16 for the full permission matrix.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <div class="text-center py-8 text-gray-500">
+            <p>ExampleOrg Enterprise GRC & Quality Management Platform</p>
+            <p class="text-sm">User Guide Version 2.0 | December 2024</p>
+        </div>
+    </div>
+
+    <script>
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

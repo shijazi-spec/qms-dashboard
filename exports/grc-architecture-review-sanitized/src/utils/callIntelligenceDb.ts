@@ -1,0 +1,3560 @@
+import pg from "pg";
+import { logger } from "./logger";
+const { Pool } = pg;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export interface CallRecord {
+  id?: number;
+  call_id: string;
+  source:
+    | "five9"
+    | "twilio"
+    | "mobile"
+    | "google_meet"
+    | "google_drive"
+    | "bulk_upload"
+    | "manual"
+    | "api"
+    | "zoho_calls";
+  lead_id?: string;
+  deal_id?: string;
+  contact_name?: string;
+  agent_email: string;
+  agent_name?: string;
+  direction: "inbound" | "outbound";
+  duration_seconds?: number;
+  recording_url?: string;
+  call_date?: Date;
+  status: CallStatus;
+  metadata?: any;
+  /** AI analysis blob persisted alongside the row. Free-form string (JSON). */
+  ai_insights?: string;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface CallTranscript {
+  id?: number;
+  call_record_id: number;
+  transcript_text: string;
+  speaker_segments?: any;
+  word_timestamps?: any;
+  language?: string;
+  confidence_score?: number;
+  created_at?: Date;
+}
+
+export interface CallAnalysis {
+  id?: number;
+  call_record_id: number;
+  sentiment_score: number;
+  sentiment_label: "positive" | "neutral" | "negative";
+  voice_of_customer?: string;
+  objections_detected?: any;
+  key_topics?: any;
+  action_items?: any;
+  next_steps?: any;
+  call_summary?: string;
+  talk_ratio?: number;
+  keywords?: any;
+  ai_insights?: string;
+  created_at?: Date;
+}
+
+export interface CallQAScore {
+  id?: number;
+  call_record_id: number;
+  scorecard_type: "sdr" | "sales";
+  total_score: number;
+  max_score: number;
+  score_percentage: number;
+  criteria_scores?: any;
+  strengths?: any;
+  improvements?: any;
+  coaching_notes?: string;
+  evaluator?: string;
+  evaluated_at?: Date;
+  created_at?: Date;
+}
+
+export interface CallCompliance {
+  id?: number;
+  call_record_id: number;
+  lead_id?: string;
+  deal_id?: string;
+  notes_updated: boolean;
+  call_logged: boolean;
+  task_created: boolean;
+  stage_updated: boolean;
+  meeting_outcome_logged: boolean;
+  overall_compliance: boolean;
+  compliance_score: number;
+  missing_actions?: any;
+  compliance_details?: any;
+  checked_at?: Date;
+  created_at?: Date;
+}
+
+export interface MeetingMOM {
+  id?: number;
+  call_record_id?: number;
+  calendar_event_id: string;
+  meeting_title: string;
+  meeting_date: Date;
+  attendees?: any;
+  summary: string;
+  key_decisions?: any;
+  action_items?: any;
+  follow_ups?: any;
+  next_meeting_date?: Date;
+  notes?: string;
+  created_at?: Date;
+}
+
+export interface CallGovernanceResult {
+  id?: number;
+  call_record_id: number;
+  ruleset_version: string | null;
+  verdict: "ok" | "needs_attention" | "critical";
+  critical_count: number;
+  warning_count: number;
+  info_count: number;
+  issues: any;
+  suggested_updates: any;
+  lead_match: any;
+  load_error: string | null;
+  evaluated_at?: Date;
+  created_at?: Date;
+}
+
+/**
+ * Pipeline-status enum for call_records (Phase 2 of the Call Evaluation
+ * tab improvement plan). The historical 4-state enum
+ *
+ *   "pending" | "processing" | "analyzed" | "failed"
+ *
+ * was migrated 1-to-1 onto a richer 8-state pipeline that surfaces the
+ * stages an operator and a QA reviewer care about:
+ *
+ *   uploaded            — file received, no transcription run yet
+ *   transcribing        — Whisper / Five9-recording-fetch in flight
+ *   transcribed         — transcript persisted; ready for evaluation
+ *   evaluating          — scorecard run in flight
+ *   evaluated           — AI evaluation complete; QA review may be pending
+ *   qa_review_pending   — flagged for human review (low confidence, threshold,
+ *                         critical fail, or explicit assignment)
+ *   qa_reviewed         — human reviewer finalised the evaluation
+ *   failed              — terminal: transcription or evaluation errored out
+ *
+ * Migration is hard-cut (option A approved): every historical row gets a
+ * deterministic new label. See `migrateCallStatusEnum()` below for the
+ * exact mapping. Calls to `updateCallStatus()` accept any of the new
+ * values; the legacy ones are no longer reachable from the typed API.
+ *
+ * Phase 2 only renames + introduces. The intermediate `transcribed` /
+ * `evaluating` / `qa_review_pending` / `qa_reviewed` states become
+ * reachable through the type system today but are wired into transitions
+ * by later phases (Phase 4-6 of the improvement plan).
+ */
+export type CallStatus =
+  | "uploaded"
+  | "transcribing"
+  | "transcribed"
+  | "evaluating"
+  | "evaluated"
+  | "qa_review_pending"
+  | "qa_reviewed"
+  | "failed";
+
+export const CALL_STATUS_VALUES: readonly CallStatus[] = [
+  "uploaded",
+  "transcribing",
+  "transcribed",
+  "evaluating",
+  "evaluated",
+  "qa_review_pending",
+  "qa_reviewed",
+  "failed",
+] as const;
+
+/**
+ * Idempotent one-way migration of legacy `call_records.status` values to
+ * the new 8-state pipeline enum. Runs unconditionally inside
+ * `initCallIntelligenceTables()` (and therefore on every server boot)
+ * because:
+ *
+ *   1. Postgres UPDATE with a no-op WHERE costs ~one indexed scan when
+ *      there are no legacy values left — cheap to leave in place.
+ *   2. A fresh-restore from a pre-migration backup must self-heal
+ *      without a manual step.
+ *
+ * The mapping:
+ *
+ *   pending     → uploaded     (file landed but no work has run yet)
+ *   processing  → transcribing (in-flight work; "transcribing" is the
+ *                               first sub-stage the old "processing"
+ *                               umbrella covered, conservatively chosen
+ *                               so historical in-flight rows don't
+ *                               jump straight to "evaluated")
+ *   analyzed    → evaluated    (terminal happy-path; aligns with the
+ *                               new naming used by the dashboard's
+ *                               summary cards)
+ *   failed      → failed       (no change)
+ *
+ * Any non-legacy value is left untouched, so re-running the migration
+ * after operators have started writing new states is safe.
+ */
+async function migrateCallStatusEnum(): Promise<void> {
+  // Single CASE statement so only rows in the legacy set are rewritten
+  // and the round-trip stays bounded by the partial index on status.
+  await pool.query(`
+    UPDATE call_records
+       SET status = CASE status
+         WHEN 'pending'    THEN 'uploaded'
+         WHEN 'processing' THEN 'transcribing'
+         WHEN 'analyzed'   THEN 'evaluated'
+         ELSE status
+       END,
+       updated_at = updated_at  -- preserve the row's original timestamp
+     WHERE status IN ('pending','processing','analyzed');
+  `);
+}
+
+// Memoization handle for initCallIntelligenceTables.
+//
+// The init runs 33 CREATE TABLE / CREATE INDEX / ALTER TABLE statements
+// across multiple tables. They're idempotent (IF NOT EXISTS / IF NOT EXISTS
+// COLUMN) so re-running is safe, but on a cold Replit container the first
+// run takes 5–15s because the pool has to open a fresh TCP+SSL+auth
+// connection and Postgres has to parse + plan + execute every statement.
+//
+// Every /api/calls* route handler called this at the top of the request:
+//
+//   await initCallIntelligenceTables();   // ← blocked the request 5–15s
+//
+// Three of them fire in parallel from the dashboard's refreshData
+// (Promise.allSettled with a 20s per-fetch abort), so on a cold start
+// all three races for the same warmup work and the abort wins. That's
+// the "Could not load call data from the server (timed out or 500)"
+// banner the user sees right after Republish.
+//
+// Fix: memoize so the work runs exactly once per process lifetime.
+// Subsequent calls await the same promise (cached on first invocation)
+// and return effectively for free. The first request still pays the
+// cold-start cost, but the parallel siblings hitch a ride on the same
+// promise instead of triggering three duplicate schema introspections.
+let _initPromise: Promise<void> | null = null;
+let _initDone = false;
+
+export async function initCallIntelligenceTables(): Promise<void> {
+  if (_initDone) return;
+  if (_initPromise) return _initPromise;
+  _initPromise = (async () => {
+    const startedAt = Date.now();
+    try {
+      await _doInitCallIntelligenceTables();
+      _initDone = true;
+      const ms = Date.now() - startedAt;
+      // Loud when it was slow so an operator tailing logs can spot a
+      // cold start (the legitimate 5–15s case) versus a recurring slow
+      // path (which would indicate the memoization broke).
+      if (ms > 2000) {
+        logger.warn(
+          `[callIntelligenceDb] initCallIntelligenceTables took ${ms}ms (cold start)`,
+        );
+      } else {
+        logger.info(
+          `[callIntelligenceDb] initCallIntelligenceTables completed in ${ms}ms`,
+        );
+      }
+    } catch (err) {
+      // If init failed, clear the cached promise so the next request
+      // retries. Otherwise we'd be permanently stuck on a transient
+      // connection blip.
+      _initPromise = null;
+      throw err;
+    }
+  })();
+  return _initPromise;
+}
+
+async function _doInitCallIntelligenceTables(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS call_records (
+      id SERIAL PRIMARY KEY,
+      call_id VARCHAR(255) UNIQUE NOT NULL,
+      source VARCHAR(50) NOT NULL,
+      lead_id VARCHAR(255),
+      deal_id VARCHAR(255),
+      contact_name VARCHAR(255),
+      agent_email VARCHAR(255) NOT NULL,
+      agent_name VARCHAR(255),
+      direction VARCHAR(20) NOT NULL DEFAULT 'outbound',
+      duration_seconds INTEGER,
+      recording_url TEXT,
+      call_date TIMESTAMP,
+      status VARCHAR(50) NOT NULL DEFAULT 'pending',
+      metadata JSONB DEFAULT '{}',
+      -- audio_blob* columns: persist the recording bytes in Postgres so
+      -- the audio survives a Replit redeploy that wipes the uploads/
+      -- filesystem. Declared in the canonical CREATE TABLE (not only
+      -- via the runtime ensureAudioBlobColumns() ALTER) so Replit's
+      -- deploy-time schema-diff tool sees them as expected columns and
+      -- doesn't propose dropping them on every Publish flow.
+      -- The runtime ensureAudioBlobColumns() ALTER is still kept as a
+      -- belt-and-braces safety net for environments where this CREATE
+      -- TABLE did not run with these columns (legacy snapshots).
+      audio_blob BYTEA,
+      audio_blob_mime VARCHAR(64),
+      audio_blob_size INTEGER,
+      -- audio_file_path: filesystem location of the recording for
+      -- environments that still write to disk. Kept in sync with the
+      -- audio_blob columns for fast playback / re-transcribe before
+      -- the blob is read. Was historically only added via a runtime
+      -- ALTER; declared here so the schema-diff tool doesn't flag it.
+      audio_file_path TEXT,
+      -- linked_via: diagnostic field that records how a Zoho Lead/Deal
+      -- was attached to this call (phone, activity, manual). Used by
+      -- the auto-link analytics + the "Why was this linked?" tooltip
+      -- in the CRM Link cell. Same story — declared here for schema
+      -- parity with the runtime ALTER at line ~659.
+      linked_via VARCHAR(20),
+      -- 2026-06-07 — when linked_via='phone_via_contact', stash WHICH
+      -- Contact bridged the phone → Deal match. Surfaces in the
+      -- dashboard tooltip ("via Contact: user@example.invalid")
+      -- so an operator auditing a phone-less Deal can see the link
+      -- provenance without re-running the matcher. Runtime ALTER in
+      -- ensureViaContactColumns covers upgrades.
+      via_contact_id VARCHAR(64),
+      via_contact_name VARCHAR(255),
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS call_transcripts (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER REFERENCES call_records(id) ON DELETE CASCADE,
+      transcript_text TEXT NOT NULL,
+      speaker_segments JSONB,
+      word_timestamps JSONB,
+      language VARCHAR(20) DEFAULT 'en',
+      confidence_score DECIMAL(5,2),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS call_analysis (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER REFERENCES call_records(id) ON DELETE CASCADE,
+      sentiment_score DECIMAL(5,2) NOT NULL,
+      sentiment_label VARCHAR(20) NOT NULL,
+      voice_of_customer TEXT,
+      objections_detected JSONB,
+      key_topics JSONB,
+      action_items JSONB,
+      next_steps JSONB,
+      call_summary TEXT,
+      talk_ratio DECIMAL(5,2),
+      keywords JSONB,
+      ai_insights TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS call_qa_scores (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER REFERENCES call_records(id) ON DELETE CASCADE,
+      scorecard_type VARCHAR(20) NOT NULL,
+      total_score DECIMAL(10,2) NOT NULL,
+      max_score DECIMAL(10,2) NOT NULL,
+      score_percentage DECIMAL(5,2) NOT NULL,
+      criteria_scores JSONB,
+      strengths JSONB,
+      improvements JSONB,
+      coaching_notes TEXT,
+      evaluator VARCHAR(255),
+      evaluated_at TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS call_compliance (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER REFERENCES call_records(id) ON DELETE CASCADE,
+      lead_id VARCHAR(255),
+      deal_id VARCHAR(255),
+      notes_updated BOOLEAN DEFAULT FALSE,
+      call_logged BOOLEAN DEFAULT FALSE,
+      task_created BOOLEAN DEFAULT FALSE,
+      stage_updated BOOLEAN DEFAULT FALSE,
+      meeting_outcome_logged BOOLEAN DEFAULT FALSE,
+      overall_compliance BOOLEAN DEFAULT FALSE,
+      compliance_score DECIMAL(5,2) DEFAULT 0,
+      missing_actions JSONB,
+      compliance_details JSONB,
+      checked_at TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS meeting_mom (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER REFERENCES call_records(id) ON DELETE SET NULL,
+      calendar_event_id VARCHAR(255) NOT NULL,
+      meeting_title VARCHAR(500) NOT NULL,
+      meeting_date TIMESTAMP NOT NULL,
+      attendees JSONB,
+      summary TEXT NOT NULL,
+      key_decisions JSONB,
+      action_items JSONB,
+      follow_ups JSONB,
+      next_meeting_date TIMESTAMP,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_training_feedback (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER REFERENCES call_records(id) ON DELETE CASCADE,
+      evaluation_id INTEGER,
+      feedback_type VARCHAR(50) NOT NULL,
+      details TEXT,
+      submitted_by VARCHAR(255),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS call_governance_results (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER NOT NULL UNIQUE REFERENCES call_records(id) ON DELETE CASCADE,
+      ruleset_version VARCHAR(64),
+      verdict VARCHAR(32) NOT NULL,
+      critical_count INTEGER NOT NULL DEFAULT 0,
+      warning_count INTEGER NOT NULL DEFAULT 0,
+      info_count INTEGER NOT NULL DEFAULT 0,
+      issues JSONB,
+      suggested_updates JSONB,
+      lead_match JSONB,
+      load_error TEXT,
+      evaluated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_call_governance_results_verdict ON call_governance_results(verdict);
+    CREATE INDEX IF NOT EXISTS idx_call_governance_results_evaluated_at ON call_governance_results(evaluated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_call_records_source ON call_records(source);
+    CREATE INDEX IF NOT EXISTS idx_call_records_agent ON call_records(agent_email);
+    CREATE INDEX IF NOT EXISTS idx_call_records_status ON call_records(status);
+    CREATE INDEX IF NOT EXISTS idx_call_records_lead ON call_records(lead_id);
+    CREATE INDEX IF NOT EXISTS idx_call_records_deal ON call_records(deal_id);
+    CREATE INDEX IF NOT EXISTS idx_call_records_date ON call_records(call_date);
+    -- Supports the sort=created_at path on /api/calls (powers the
+    -- Recent Uploads activity log on /calls). Without this, ORDER BY
+    -- cr.created_at DESC + LIMIT 25 triggers a sequential scan at
+    -- realistic table sizes (~50k+ rows). Costs nothing at small
+    -- volumes; the IF NOT EXISTS makes the migration idempotent.
+    CREATE INDEX IF NOT EXISTS idx_call_records_created_at ON call_records(created_at);
+    CREATE INDEX IF NOT EXISTS idx_call_records_original_filename
+      ON call_records ((metadata->>'original_filename'))
+      WHERE metadata->>'original_filename' IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_call_compliance_lead ON call_compliance(lead_id);
+    CREATE INDEX IF NOT EXISTS idx_meeting_mom_event ON meeting_mom(calendar_event_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_feedback_type ON ai_training_feedback(feedback_type);
+
+    CREATE TABLE IF NOT EXISTS sdr_call_evaluations (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER REFERENCES call_records(id) ON DELETE CASCADE,
+      scorecard_id INTEGER,
+      scorecard_name VARCHAR(255),
+      overall_score DECIMAL(5,2),
+      dimension_scores JSONB,
+      attribute_evaluations JSONB,
+      top_strengths JSONB,
+      top_gaps JSONB,
+      coaching_actions JSONB,
+      critical_risks JSONB,
+      coaching_message_ar TEXT,
+      coaching_message_en TEXT,
+      micro_training_topics JSONB,
+      key_moments JSONB,
+      evaluated_at TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW(),
+      -- DMAIC Scorecard Consolidation Step 5 — preserve v1.5 scores
+      -- when a row is backfilled against the COPC v2 scorecard so the
+      -- original (pre-consolidation) audit number stays visible
+      -- forever. Set by scripts/backfillScorecardV2.ts before the
+      -- COPC re-score writes the new overall_score / dimension_scores.
+      legacy_score_v1 DECIMAL(5,2),
+      legacy_dimension_scores_v1 JSONB,
+      legacy_scorecard_name_v1 VARCHAR(255),
+      backfilled_at TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_call ON sdr_call_evaluations(call_record_id);
+    -- Idempotent column adds for existing deployments where the
+    -- CREATE TABLE ran before the v2 legacy columns existed.
+    ALTER TABLE sdr_call_evaluations
+      ADD COLUMN IF NOT EXISTS legacy_score_v1 DECIMAL(5,2),
+      ADD COLUMN IF NOT EXISTS legacy_dimension_scores_v1 JSONB,
+      ADD COLUMN IF NOT EXISTS legacy_scorecard_name_v1 VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS backfilled_at TIMESTAMP;
+
+    CREATE TABLE IF NOT EXISTS sdr_evaluation_reviews (
+      id SERIAL PRIMARY KEY,
+      evaluation_id INTEGER NOT NULL REFERENCES sdr_call_evaluations(id) ON DELETE CASCADE,
+      call_record_id INTEGER NOT NULL REFERENCES call_records(id) ON DELETE CASCADE,
+      reviewer_email VARCHAR(255) NOT NULL,
+      reviewer_name VARCHAR(255),
+      review_status VARCHAR(20) NOT NULL CHECK (review_status IN ('approved','adjusted','disagreed')),
+      adjusted_overall_score DECIMAL(5,2),
+      adjusted_dimension_scores JSONB,
+      adjusted_attribute_evaluations JSONB,
+      review_notes TEXT,
+      reviewed_at TIMESTAMPTZ DEFAULT NOW(),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_eval ON sdr_evaluation_reviews(evaluation_id);
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_call ON sdr_evaluation_reviews(call_record_id);
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_reviewer ON sdr_evaluation_reviews(reviewer_email);
+
+    -- DMAIC Improve (P1, 2026-05-25): per-agent + per-attribute coaching
+    -- plan rows. Auto-generated when an SDR fails the same scorecard
+    -- attribute on 3+ calls within a rolling 14-day window. Managers
+    -- "deliver" the plan (capture SDR commitment + follow-up due date)
+    -- and the next-call evaluation auto-verifies whether the attribute
+    -- now passes. Granularity is per-attribute (not per-agent) so
+    -- coaching is measurable: "did Objection Handling pass on the next
+    -- call?" — confirmed with product 2026-05-25.
+    CREATE TABLE IF NOT EXISTS coaching_plans (
+      id SERIAL PRIMARY KEY,
+      agent_email VARCHAR(255) NOT NULL,
+      attribute_id VARCHAR(255) NOT NULL,
+      attribute_name VARCHAR(255),
+      dimension VARCHAR(50),
+      fail_count INTEGER NOT NULL DEFAULT 0,
+      failed_call_ids INTEGER[] NOT NULL DEFAULT '{}',
+      trigger_window_start TIMESTAMPTZ NOT NULL,
+      trigger_window_end TIMESTAMPTZ NOT NULL,
+      -- Lifecycle: pending_delivery → awaiting_verification →
+      --             (verified_passing | verified_failing_again | dismissed)
+      status VARCHAR(50) NOT NULL DEFAULT 'pending_delivery',
+      -- Manager delivery
+      delivered_at TIMESTAMPTZ,
+      delivered_by VARCHAR(255),
+      sdr_commitment TEXT,
+      follow_up_due_date DATE,
+      coaching_notes TEXT,
+      -- Verification (auto-set when a later eval passes/fails the attribute)
+      verification_call_id INTEGER REFERENCES call_records(id) ON DELETE SET NULL,
+      verified_at TIMESTAMPTZ,
+      verification_outcome VARCHAR(50), -- 'passing' | 'failing_again'
+      -- Dismissal
+      dismissed_at TIMESTAMPTZ,
+      dismissed_by VARCHAR(255),
+      dismissed_reason TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    -- Only ONE open plan per agent + attribute. Resolved plans don't
+    -- block a new plan from opening if the agent regresses. Achieved
+    -- via a partial unique index on the "open" lifecycle states.
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_coaching_plans_open
+      ON coaching_plans (agent_email, attribute_id)
+      WHERE status IN ('pending_delivery', 'awaiting_verification');
+    CREATE INDEX IF NOT EXISTS idx_coaching_plans_agent ON coaching_plans(agent_email);
+    CREATE INDEX IF NOT EXISTS idx_coaching_plans_status ON coaching_plans(status);
+    CREATE INDEX IF NOT EXISTS idx_coaching_plans_window ON coaching_plans(trigger_window_end DESC);
+  `);
+
+  // One-shot backfill: earlier versions of the bulk-audio upload
+  // stored the phone number extracted from the filename directly in
+  // call_records.lead_id. That value is not a Zoho Lead record-id, so
+  // the CRM Link cell built /crm/.../tab/Leads/+966... → Invalid URL,
+  // and the auto-link matcher then refused to overwrite the "already
+  // set" lead_id. Move the phone into metadata.contact_phone (where
+  // the renderer already looks for it) and clear lead_id so the
+  // matcher can populate the real id next time it runs.
+  //
+  // Idempotent: the WHERE filter only matches rows still in the bad
+  // state, so running this on every init is a no-op once clean.
+  try {
+    await pool.query(`
+      UPDATE call_records
+         SET metadata = COALESCE(metadata, '{}'::jsonb)
+                        || jsonb_build_object('contact_phone', lead_id),
+             lead_id = NULL
+       WHERE lead_id ~ '^\\+?\\d[\\d\\s\\-()]{4,}$'
+         AND (metadata->>'contact_phone') IS NULL
+    `);
+  } catch {
+    // Best-effort: never block init on a backfill failure.
+  }
+
+  // Fire-and-forget: legacy rows are missing phone metadata, audio
+  // duration, and CRM lead/deal links because they were ingested
+  // before the auto-link + whisper-1 fixes. The boot sweep is
+  // idempotent (each pass has a WHERE filter that skips already-
+  // populated rows) and the auto-link pass is per-boot-capped so
+  // a 200-row backlog can't blow through the Zoho daily quota in
+  // one cold start.
+  try {
+    const { backfillUnpopulatedCallData } = await import(
+      "./callIntelligenceBackfill"
+    );
+    void backfillUnpopulatedCallData().catch(() => {
+      /* swallowed inside the sweep itself */
+    });
+  } catch {
+    /* module load failure — never block init */
+  }
+
+  // Phase 2 migration: rewrite any legacy 4-state values
+  // (pending / processing / analyzed) into the new 8-state pipeline.
+  // Idempotent — see migrateCallStatusEnum() above for the mapping +
+  // safety reasoning. Awaited so the very next call to getCallById /
+  // listCallRecords sees the canonical values, never a mix.
+  await migrateCallStatusEnum();
+}
+
+/**
+ * Look up an existing call_record by the original filename captured in
+ * metadata at upload time. Used by the upload routes to reject duplicate
+ * uploads of the same audio file (same source filename) so analytics,
+ * SDR scores, and compliance trends are not skewed by re-ingesting the
+ * same call multiple times.
+ *
+ * Returns the first matching row (by ascending id) or null. Comparison
+ * is case-sensitive and exact — matches what the browser File API
+ * reports as `file.name`.
+ */
+export async function findCallRecordByOriginalFilename(
+  filename: string,
+): Promise<{ id: number; call_id: string; agent_email: string; call_date: Date | null; status: string } | null> {
+  if (!filename) return null;
+  const result = await pool.query(
+    `SELECT id, call_id, agent_email, call_date, status
+       FROM call_records
+      WHERE metadata->>'original_filename' = $1
+      ORDER BY id ASC
+      LIMIT 1`,
+    [filename],
+  );
+  return result.rows[0] || null;
+}
+
+export async function createCallRecord(
+  record: CallRecord,
+): Promise<CallRecord> {
+  const result = await pool.query(
+    `INSERT INTO call_records 
+     (call_id, source, lead_id, deal_id, contact_name, agent_email, agent_name, direction, duration_seconds, recording_url, call_date, status, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     ON CONFLICT (call_id) DO UPDATE SET
+       status = EXCLUDED.status,
+       updated_at = NOW()
+     RETURNING *`,
+    [
+      record.call_id,
+      record.source,
+      record.lead_id || null,
+      record.deal_id || null,
+      record.contact_name || null,
+      record.agent_email,
+      record.agent_name || null,
+      record.direction || "outbound",
+      record.duration_seconds || null,
+      record.recording_url || null,
+      record.call_date || new Date(),
+      record.status || "pending",
+      JSON.stringify(record.metadata || {}),
+    ],
+  );
+  return result.rows[0];
+}
+
+export async function updateCallRecord(
+  id: number,
+  updates: Partial<CallRecord>,
+): Promise<CallRecord | null> {
+  const fields: string[] = [];
+  const values: any[] = [];
+  let paramIndex = 1;
+
+  if (updates.status !== undefined) {
+    fields.push(`status = $${paramIndex}`);
+    values.push(updates.status);
+    paramIndex++;
+  }
+
+  if (updates.duration_seconds !== undefined) {
+    fields.push(`duration_seconds = $${paramIndex}`);
+    values.push(updates.duration_seconds);
+    paramIndex++;
+  }
+
+  if (updates.metadata !== undefined) {
+    fields.push(`metadata = $${paramIndex}`);
+    values.push(JSON.stringify(updates.metadata));
+    paramIndex++;
+  }
+
+  fields.push("updated_at = NOW()");
+
+  if (fields.length === 1) return null;
+
+  values.push(id);
+
+  const result = await pool.query(
+    `UPDATE call_records SET ${fields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    values,
+  );
+
+  return result.rows[0] || null;
+}
+
+export async function updateCallRecordLeadId(
+  id: number,
+  leadId: string,
+): Promise<CallRecord | null> {
+  const result = await pool.query(
+    `UPDATE call_records SET lead_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [leadId, id],
+  );
+  return result.rows[0] || null;
+}
+
+export async function updateCallRecordDealId(
+  id: number,
+  dealId: string,
+): Promise<CallRecord | null> {
+  const result = await pool.query(
+    `UPDATE call_records SET deal_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [dealId, id],
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Clear a call's CRM linkage (lead_id, deal_id, linked_via) and remove
+ * any persisted compliance row, so a subsequent re-link/compliance run
+ * starts from a clean slate. Used by the link-audit sweep when an
+ * existing link is found to be a phone mismatch (e.g. the historical
+ * Phone="11" junk-Lead collisions). Returns the updated row.
+ */
+export async function clearCallRecordCrmLink(
+  id: number,
+): Promise<CallRecord | null> {
+  await ensureLinkedViaColumn();
+  await pool.query(`DELETE FROM call_compliance WHERE call_record_id = $1`, [
+    id,
+  ]);
+  // 2026-06-07 — also null the via_contact_* annotation so a cleared link
+  // doesn't leave stale "via Contact: …" tooltips on the row. The
+  // re-link step (if it runs) re-populates these when appropriate.
+  await ensureViaContactColumns();
+  const result = await pool.query(
+    `UPDATE call_records
+        SET lead_id = NULL, deal_id = NULL, linked_via = NULL,
+            via_contact_id = NULL, via_contact_name = NULL,
+            updated_at = NOW()
+      WHERE id = $1
+      RETURNING *`,
+    [id],
+  );
+  return result.rows[0] || null;
+}
+
+// Persist which signal produced the CRM link — "phone" (digit match
+// against Leads/Deals) or "activity" (same-day same-agent CRM activity).
+// Diagnostic only; the eval panel surfaces this as a confidence badge.
+// Idempotent column add so existing deploys don't need a migration step.
+let _linkedViaColumnReady: Promise<void> | null = null;
+async function ensureLinkedViaColumn(): Promise<void> {
+  if (_linkedViaColumnReady) return _linkedViaColumnReady;
+  _linkedViaColumnReady = pool
+    .query(
+      `ALTER TABLE call_records ADD COLUMN IF NOT EXISTS linked_via VARCHAR(20)`,
+    )
+    .then(() => undefined)
+    .catch((err) => {
+      logger.warn("[CallDB] linked_via column add failed (will retry):", err);
+      _linkedViaColumnReady = null;
+    });
+  return _linkedViaColumnReady;
+}
+
+// Widened 2026-05-29 to include "phone_via_contact" — the Contact → Deal
+// fallback walk added in callLeadPhoneMatch.autoLinkLeadByPhone. The DB
+// column is VARCHAR(20) so any short tag fits; the union is the canonical
+// list of supported tags. Adding a new tag here requires adding it to the
+// CALL_STATUS_INFO / linked-via tooltip rendering on the dashboard side
+// for parity, but the DB write is safe regardless.
+export async function updateCallRecordLinkedVia(
+  id: number,
+  linkedVia: "phone" | "activity" | "phone_via_contact",
+): Promise<void> {
+  await ensureLinkedViaColumn();
+  await pool.query(
+    `UPDATE call_records SET linked_via = $1, updated_at = NOW() WHERE id = $2`,
+    [linkedVia, id],
+  );
+}
+
+// 2026-06-07 — when the Phone → Contact → Deal walk picks the link, also
+// stash WHICH Contact bridged the match. Surfaces in the dashboard
+// tooltip ("via Contact: user@example.invalid") so an operator can
+// audit a phone-less Deal at a glance without re-running the matcher.
+// Idempotent column adds — same pattern as linked_via above so existing
+// deploys don't need a manual migration.
+let _viaContactColumnsReady: Promise<void> | null = null;
+async function ensureViaContactColumns(): Promise<void> {
+  if (_viaContactColumnsReady) return _viaContactColumnsReady;
+  _viaContactColumnsReady = pool
+    .query(
+      `ALTER TABLE call_records
+         ADD COLUMN IF NOT EXISTS via_contact_id   VARCHAR(64),
+         ADD COLUMN IF NOT EXISTS via_contact_name VARCHAR(255)`,
+    )
+    .then(() => undefined)
+    .catch((err) => {
+      logger.warn("[CallDB] via_contact_* column add failed (will retry):", err);
+      _viaContactColumnsReady = null;
+    });
+  return _viaContactColumnsReady;
+}
+
+export async function updateCallRecordViaContact(
+  id: number,
+  contactId: string | null,
+  contactName: string | null,
+): Promise<void> {
+  await ensureViaContactColumns();
+  await pool.query(
+    `UPDATE call_records
+        SET via_contact_id = $1,
+            via_contact_name = $2,
+            updated_at = NOW()
+      WHERE id = $3`,
+    [contactId, contactName, id],
+  );
+}
+
+export async function getCallRecordById(
+  id: number,
+): Promise<CallRecord | null> {
+  const result = await pool.query("SELECT * FROM call_records WHERE id = $1", [
+    id,
+  ]);
+  return result.rows[0] || null;
+}
+
+/**
+ * Hard-delete a call record and its dependent rows. Returns the number of
+ * call_records rows actually removed (0 if the id did not exist).
+ *
+ * Children deleted in dependency order (best-effort: tables that may not exist
+ * in every install are wrapped so a missing-relation error doesn't abort the
+ * whole transaction).
+ */
+export async function deleteCallRecord(id: number): Promise<number> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const childTables = [
+      "call_transcripts",
+      "call_analysis",
+      "call_qa_scores",
+      "call_compliance",
+    ];
+    for (const tbl of childTables) {
+      try {
+        await client.query(`DELETE FROM ${tbl} WHERE call_record_id = $1`, [
+          id,
+        ]);
+      } catch (err: any) {
+        // Tolerate "relation does not exist" / "column does not exist" so a
+        // partial schema doesn't block the parent delete.
+        if (err && (err.code === "42P01" || err.code === "42703")) continue;
+        throw err;
+      }
+    }
+    const result = await client.query(
+      "DELETE FROM call_records WHERE id = $1",
+      [id],
+    );
+    await client.query("COMMIT");
+    return result.rowCount || 0;
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getCallRecordByCallId(
+  callId: string,
+): Promise<CallRecord | null> {
+  const result = await pool.query(
+    "SELECT * FROM call_records WHERE call_id = $1",
+    [callId],
+  );
+  return result.rows[0] || null;
+}
+
+// ---------------------------------------------------------------------------
+// List-query column allowlist.
+//
+// ROOT-CAUSE FIX (2026-05-29): the Records tab silently showed
+// "No call records found" even though rows existed. getCallRecords used
+// `SELECT cr.*`, which includes `call_records.audio_blob` — a BYTEA column
+// holding the full recording bytes (up to ~1 MB/row; ~9.5 MB across a
+// typical org). Pulling that for a 500-row list serializes ~10-20 MB of
+// binary into the JSON response, which blows past the dashboard's 20s fetch
+// abort. The `/api/calls` fetch times out, the frontend coerces the failure
+// into an empty array, and the tab renders "0 records" while Overview KPIs
+// (which never touch the blob) still load.
+//
+// The list never needs the audio bytes — the player streams them on demand
+// via /api/calls/:callId/audio. So we SELECT every column EXCEPT audio_blob.
+// Computed once from information_schema (cached per process) so columns added
+// later are picked up automatically and any new heavy column can be excluded
+// in exactly one place, preventing this regression from recurring.
+const CALL_RECORD_LIST_EXCLUDED_COLUMNS = new Set<string>(["audio_blob"]);
+
+// Explicit safe fallback used only if the information_schema lookup returns
+// nothing (e.g. the table genuinely has no columns yet). Intentionally omits
+// audio_blob.
+const CALL_RECORD_LIST_FALLBACK_COLUMNS = [
+  "id",
+  "call_id",
+  "source",
+  "lead_id",
+  "deal_id",
+  "contact_name",
+  "agent_email",
+  "agent_name",
+  "direction",
+  "duration_seconds",
+  "recording_url",
+  "call_date",
+  "status",
+  "metadata",
+  "audio_blob_mime",
+  "audio_blob_size",
+  "audio_file_path",
+  "linked_via",
+  "via_contact_id",
+  "via_contact_name",
+  "created_at",
+  "updated_at",
+];
+
+let _callRecordListColumnsCache: string | null = null;
+
+/**
+ * Returns the comma-separated `cr."col"` projection for call_records LIST
+ * queries, with the heavy audio_blob BYTEA excluded. Cached per process.
+ */
+async function getCallRecordListColumns(): Promise<string> {
+  if (_callRecordListColumnsCache) return _callRecordListColumnsCache;
+  let columns: string[] = [];
+  try {
+    // Scope to the active schema so a same-named table in another schema
+    // can't leak the wrong column set into the projection.
+    const res = await pool.query(
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_name = 'call_records'
+          AND table_schema = current_schema()
+        ORDER BY ordinal_position`,
+    );
+    columns = res.rows
+      .map((r: any) => r.column_name as string)
+      .filter((c) => !CALL_RECORD_LIST_EXCLUDED_COLUMNS.has(c));
+  } catch {
+    columns = [];
+  }
+  if (columns.length === 0) {
+    columns = CALL_RECORD_LIST_FALLBACK_COLUMNS.filter(
+      (c) => !CALL_RECORD_LIST_EXCLUDED_COLUMNS.has(c),
+    );
+  }
+  // Defense-in-depth: identifiers come from DB metadata (not user input),
+  // but escape embedded double-quotes anyway before quoting.
+  _callRecordListColumnsCache = columns
+    .map((c) => `cr."${c.replace(/"/g, '""')}"`)
+    .join(", ");
+  return _callRecordListColumnsCache;
+}
+
+/**
+ * Clears the cached call_records list-column projection so the next
+ * getCallRecords() call recomputes it from information_schema. Used to
+ * recover from a stale projection after live schema drift (column
+ * dropped/renamed without a process restart).
+ */
+export function clearCallRecordListColumnsCache(): void {
+  _callRecordListColumnsCache = null;
+}
+
+export async function getCallRecords(
+  options: {
+    limit?: number;
+    offset?: number;
+    source?: string;
+    agent_email?: string;
+    status?: string;
+    lead_id?: string;
+    startDate?: Date;
+    endDate?: Date;
+    // Sort key. Default is call_date (the call's own age) for the main
+    // Records tab. Pass 'created_at' to surface the most-recently UPLOADED
+    // calls — needed by the Recent Uploads activity-log section, which
+    // otherwise misrepresents back-dated manual uploads as "old".
+    // Whitelist-validated below so a stray query param can't inject SQL.
+    sort?: "call_date" | "created_at";
+  } = {},
+): Promise<{ records: CallRecord[]; total: number }> {
+  const {
+    limit = 50,
+    offset = 0,
+    source,
+    agent_email,
+    status,
+    lead_id,
+    startDate,
+    endDate,
+    sort,
+  } = options;
+  const ALLOWED_SORTS: Record<string, string> = {
+    call_date: "cr.call_date",
+    created_at: "cr.created_at",
+  };
+  const orderColumn = (sort && ALLOWED_SORTS[sort]) || "cr.call_date";
+
+  let whereClause = "WHERE 1=1";
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (source) {
+    whereClause += ` AND source = $${paramIndex}`;
+    params.push(source);
+    paramIndex++;
+  }
+
+  if (agent_email) {
+    whereClause += ` AND agent_email = $${paramIndex}`;
+    params.push(agent_email);
+    paramIndex++;
+  }
+
+  if (status) {
+    whereClause += ` AND status = $${paramIndex}`;
+    params.push(status);
+    paramIndex++;
+  }
+
+  if (lead_id) {
+    whereClause += ` AND lead_id = $${paramIndex}`;
+    params.push(lead_id);
+    paramIndex++;
+  }
+
+  if (startDate) {
+    whereClause += ` AND call_date >= $${paramIndex}`;
+    params.push(startDate);
+    paramIndex++;
+  }
+
+  if (endDate) {
+    whereClause += ` AND call_date <= $${paramIndex}`;
+    params.push(endDate);
+    paramIndex++;
+  }
+
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM call_records ${whereClause}`,
+    params,
+  );
+
+  // Medium #6 v1.1 — surface the canonical (adjusted-or-AI) SDR score
+  // on each row so the SDR Evaluation tab's score badge reflects what
+  // the manager review settled on. COALESCE picks the manager's
+  // adjusted_overall_score when a review exists, else the raw AI score.
+  // LATERAL subquery picks the most recent review per evaluation.
+  // SELECT every call_records column EXCEPT the heavy audio_blob BYTEA — see
+  // getCallRecordListColumns() for the full rationale (prevents the Records
+  // tab from timing out on a multi-MB binary payload). Audio is streamed on
+  // demand via /api/calls/:callId/audio, never needed in the list.
+  const runListQuery = async () => {
+    const listColumns = await getCallRecordListColumns();
+    return pool.query(
+      `SELECT ${listColumns},
+            COALESCE(latest_review.adjusted_overall_score, se.overall_score) AS sdr_overall_score,
+            se.overall_score AS sdr_ai_overall_score,
+            latest_review.adjusted_overall_score AS sdr_adjusted_overall_score,
+            latest_review.review_status AS sdr_latest_review_status
+       FROM call_records cr
+       LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+       LEFT JOIN LATERAL (
+         SELECT adjusted_overall_score, review_status
+         FROM sdr_evaluation_reviews sr
+         WHERE sr.evaluation_id = se.id
+         ORDER BY sr.reviewed_at DESC
+         LIMIT 1
+       ) latest_review ON TRUE
+       ${whereClause.replace(/\b(source|agent_email|status|lead_id|call_date)\b/g, "cr.$1")}
+       ORDER BY ${orderColumn} DESC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      [...params, limit, offset],
+    );
+  };
+
+  let result;
+  try {
+    result = await runListQuery();
+  } catch (err: any) {
+    // A cached projection can go stale if a column is dropped/renamed while
+    // the process stays up. Postgres reports an undefined-column error
+    // (SQLSTATE 42703). Clear the cache and retry once with a fresh column
+    // list before giving up.
+    if (err?.code === "42703") {
+      clearCallRecordListColumnsCache();
+      result = await runListQuery();
+    } else {
+      throw err;
+    }
+  }
+
+  return {
+    records: result.rows,
+    total: parseInt(countResult.rows[0].count),
+  };
+}
+
+export async function saveTranscript(
+  transcript: CallTranscript,
+): Promise<CallTranscript> {
+  const result = await pool.query(
+    `INSERT INTO call_transcripts
+     (call_record_id, transcript_text, speaker_segments, word_timestamps, language, confidence_score)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING *`,
+    [
+      transcript.call_record_id,
+      transcript.transcript_text,
+      JSON.stringify(transcript.speaker_segments || null),
+      JSON.stringify(transcript.word_timestamps || null),
+      transcript.language || "en",
+      transcript.confidence_score || null,
+    ],
+  );
+  await autoTriggerGovernanceAfterTranscript(transcript.call_record_id);
+  return result.rows[0];
+}
+
+export async function getTranscriptByCallId(
+  callRecordId: number,
+): Promise<CallTranscript | null> {
+  const result = await pool.query(
+    "SELECT * FROM call_transcripts WHERE call_record_id = $1",
+    [callRecordId],
+  );
+  return result.rows[0] || null;
+}
+
+export async function saveGovernanceResult(
+  result: CallGovernanceResult,
+): Promise<CallGovernanceResult> {
+  const row = await pool.query(
+    `INSERT INTO call_governance_results
+       (call_record_id, ruleset_version, verdict, critical_count, warning_count, info_count,
+        issues, suggested_updates, lead_match, load_error, evaluated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+     ON CONFLICT (call_record_id) DO UPDATE SET
+       ruleset_version    = EXCLUDED.ruleset_version,
+       verdict            = EXCLUDED.verdict,
+       critical_count     = EXCLUDED.critical_count,
+       warning_count      = EXCLUDED.warning_count,
+       info_count         = EXCLUDED.info_count,
+       issues             = EXCLUDED.issues,
+       suggested_updates  = EXCLUDED.suggested_updates,
+       lead_match         = EXCLUDED.lead_match,
+       load_error         = EXCLUDED.load_error,
+       evaluated_at       = NOW()
+     RETURNING *`,
+    [
+      result.call_record_id,
+      result.ruleset_version,
+      result.verdict,
+      result.critical_count,
+      result.warning_count,
+      result.info_count,
+      JSON.stringify(result.issues ?? []),
+      JSON.stringify(result.suggested_updates ?? []),
+      JSON.stringify(result.lead_match ?? null),
+      result.load_error,
+    ],
+  );
+  return row.rows[0];
+}
+
+export async function getGovernanceResultByCallId(
+  callRecordId: number,
+): Promise<CallGovernanceResult | null> {
+  const row = await pool.query(
+    "SELECT * FROM call_governance_results WHERE call_record_id = $1",
+    [callRecordId],
+  );
+  return row.rows[0] || null;
+}
+
+/**
+ * Auto-trigger hook: after a transcript is saved, run the SDR governance + reconciliation
+ * orchestrator and upsert the result. Error-isolated — a governance failure must never
+ * break the transcription flow. Dynamic import breaks the circular static dep with
+ * sdrCallValidation (which imports save/get from this module).
+ *
+ * Toggle off with SDR_GOVERNANCE_AUTOTRIGGER=off (e.g. for migration scripts).
+ */
+async function autoTriggerGovernanceAfterTranscript(callRecordId: number): Promise<void> {
+  if (process.env.SDR_GOVERNANCE_AUTOTRIGGER === "off") return;
+  try {
+    const { evaluateAndPersistGovernance } = await import("./sdrCallValidation");
+    await evaluateAndPersistGovernance(callRecordId);
+  } catch (err) {
+    logger.warn("[governance autotrigger] failed", {
+      call_record_id: callRecordId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+export async function saveCallAnalysis(
+  analysis: CallAnalysis,
+): Promise<CallAnalysis> {
+  const result = await pool.query(
+    `INSERT INTO call_analysis 
+     (call_record_id, sentiment_score, sentiment_label, voice_of_customer, objections_detected, 
+      key_topics, action_items, next_steps, call_summary, talk_ratio, keywords, ai_insights)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING *`,
+    [
+      analysis.call_record_id,
+      analysis.sentiment_score,
+      analysis.sentiment_label,
+      analysis.voice_of_customer || null,
+      JSON.stringify(analysis.objections_detected || null),
+      JSON.stringify(analysis.key_topics || null),
+      JSON.stringify(analysis.action_items || null),
+      JSON.stringify(analysis.next_steps || null),
+      analysis.call_summary || null,
+      analysis.talk_ratio || null,
+      JSON.stringify(analysis.keywords || null),
+      analysis.ai_insights || null,
+    ],
+  );
+  return result.rows[0];
+}
+
+export async function getAnalysisByCallId(
+  callRecordId: number,
+): Promise<CallAnalysis | null> {
+  const result = await pool.query(
+    "SELECT * FROM call_analysis WHERE call_record_id = $1",
+    [callRecordId],
+  );
+  return result.rows[0] || null;
+}
+
+export async function saveQAScore(score: CallQAScore): Promise<CallQAScore> {
+  const result = await pool.query(
+    `INSERT INTO call_qa_scores 
+     (call_record_id, scorecard_type, total_score, max_score, score_percentage, 
+      criteria_scores, strengths, improvements, coaching_notes, evaluator)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     RETURNING *`,
+    [
+      score.call_record_id,
+      score.scorecard_type,
+      score.total_score,
+      score.max_score,
+      score.score_percentage,
+      JSON.stringify(score.criteria_scores || null),
+      JSON.stringify(score.strengths || null),
+      JSON.stringify(score.improvements || null),
+      score.coaching_notes || null,
+      score.evaluator || "AI",
+    ],
+  );
+  return result.rows[0];
+}
+
+export async function getQAScoreByCallId(
+  callRecordId: number,
+): Promise<CallQAScore | null> {
+  const result = await pool.query(
+    "SELECT * FROM call_qa_scores WHERE call_record_id = $1",
+    [callRecordId],
+  );
+  return result.rows[0] || null;
+}
+
+export async function saveCompliance(
+  compliance: CallCompliance,
+): Promise<CallCompliance> {
+  const result = await pool.query(
+    `INSERT INTO call_compliance 
+     (call_record_id, lead_id, deal_id, notes_updated, call_logged, task_created, 
+      stage_updated, meeting_outcome_logged, overall_compliance, compliance_score, 
+      missing_actions, compliance_details)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING *`,
+    [
+      compliance.call_record_id,
+      compliance.lead_id || null,
+      compliance.deal_id || null,
+      compliance.notes_updated,
+      compliance.call_logged,
+      compliance.task_created,
+      compliance.stage_updated,
+      compliance.meeting_outcome_logged,
+      compliance.overall_compliance,
+      compliance.compliance_score,
+      JSON.stringify(compliance.missing_actions || null),
+      JSON.stringify(compliance.compliance_details || null),
+    ],
+  );
+  return result.rows[0];
+}
+
+export async function getComplianceByCallId(
+  callRecordId: number,
+): Promise<CallCompliance | null> {
+  const result = await pool.query(
+    "SELECT * FROM call_compliance WHERE call_record_id = $1",
+    [callRecordId],
+  );
+  return result.rows[0] || null;
+}
+
+export async function getComplianceRecords(
+  options: {
+    limit?: number;
+    offset?: number;
+    lead_id?: string;
+    agent_email?: string;
+  } = {},
+): Promise<{ records: CallCompliance[]; total: number }> {
+  const { limit = 50, offset = 0, lead_id, agent_email } = options;
+
+  // Phone is surfaced so the Compliance dashboard can group all calls
+  // placed to the same number — SDRs often log activity on one call out
+  // of three to the same lead, and grouping by phone makes that gap
+  // immediately visible. The phone lives in metadata.contact_phone
+  // (set by the bulk-upload filename parser and the Zoho Calls import);
+  // call_records has no dedicated phone column. Falls back to call_id
+  // for legacy rows where the early loader stuffed the phone fragment
+  // there before the metadata column existed (see migration at ~L553).
+  let query = `
+    SELECT cc.*,
+           cr.agent_email,
+           cr.agent_name,
+           cr.contact_name,
+           cr.call_date,
+           cr.call_id AS source_call_id,
+           cr.metadata->>'contact_phone' AS contact_phone
+    FROM call_compliance cc
+    JOIN call_records cr ON cc.call_record_id = cr.id
+    WHERE 1=1
+  `;
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (lead_id) {
+    query += ` AND cc.lead_id = $${paramIndex++}`;
+    params.push(lead_id);
+  }
+
+  if (agent_email) {
+    query += ` AND cr.agent_email = $${paramIndex++}`;
+    params.push(agent_email);
+  }
+
+  query += ` ORDER BY cc.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+  params.push(limit, offset);
+
+  const result = await pool.query(query, params);
+
+  let countQuery = `
+    SELECT COUNT(*) as total 
+    FROM call_compliance cc
+    JOIN call_records cr ON cc.call_record_id = cr.id
+    WHERE 1=1
+  `;
+  const countParams: any[] = [];
+  let countParamIndex = 1;
+
+  if (lead_id) {
+    countQuery += ` AND cc.lead_id = $${countParamIndex++}`;
+    countParams.push(lead_id);
+  }
+
+  if (agent_email) {
+    countQuery += ` AND cr.agent_email = $${countParamIndex++}`;
+    countParams.push(agent_email);
+  }
+
+  const countResult = await pool.query(countQuery, countParams);
+
+  return {
+    records: result.rows,
+    total: parseInt(countResult.rows[0].total),
+  };
+}
+
+export async function saveMeetingMOM(mom: MeetingMOM): Promise<MeetingMOM> {
+  const result = await pool.query(
+    `INSERT INTO meeting_mom 
+     (call_record_id, calendar_event_id, meeting_title, meeting_date, attendees, 
+      summary, key_decisions, action_items, follow_ups, next_meeting_date, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     RETURNING *`,
+    [
+      mom.call_record_id || null,
+      mom.calendar_event_id,
+      mom.meeting_title,
+      mom.meeting_date,
+      JSON.stringify(mom.attendees || null),
+      mom.summary,
+      JSON.stringify(mom.key_decisions || null),
+      JSON.stringify(mom.action_items || null),
+      JSON.stringify(mom.follow_ups || null),
+      mom.next_meeting_date || null,
+      mom.notes || null,
+    ],
+  );
+  return result.rows[0];
+}
+
+export async function getMOMByEventId(
+  calendarEventId: string,
+): Promise<MeetingMOM | null> {
+  const result = await pool.query(
+    "SELECT * FROM meeting_mom WHERE calendar_event_id = $1",
+    [calendarEventId],
+  );
+  return result.rows[0] || null;
+}
+
+export async function getCallWithFullAnalysis(callRecordId: number): Promise<{
+  record: CallRecord | null;
+  transcript: CallTranscript | null;
+  analysis: CallAnalysis | null;
+  qaScore: CallQAScore | null;
+  compliance: CallCompliance | null;
+}> {
+  const [record, transcript, analysis, qaScore, compliance] = await Promise.all(
+    [
+      getCallRecordById(callRecordId),
+      getTranscriptByCallId(callRecordId),
+      getAnalysisByCallId(callRecordId),
+      getQAScoreByCallId(callRecordId),
+      getComplianceByCallId(callRecordId),
+    ],
+  );
+
+  return { record, transcript, analysis, qaScore, compliance };
+}
+
+export async function getCallAnalyticsSummary(
+  options: {
+    startDate?: Date;
+    endDate?: Date;
+    agent_email?: string;
+  } = {},
+): Promise<{
+  totalCalls: number;
+  analyzedCalls: number;
+  avgSentimentScore: number;
+  avgQAScore: number;
+  avgComplianceScore: number;
+  callsBySource: any[];
+  callsByAgent: any[];
+  complianceBreakdown: any;
+  complianceCoverage: {
+    total_analyzed: number;
+    total_linked_to_crm: number;
+    total_with_compliance_row: number;
+    total_with_real_check: number;
+    total_not_checked_sentinel: number;
+    total_unlinked: number;
+  };
+  sentimentDistribution: Array<{ label: string; count: number }>;
+  qaScoreTrend: Array<{ week_start: string; avg_score: number; sample_size: number }>;
+}> {
+  const { startDate, endDate, agent_email } = options;
+
+  let whereClause = "WHERE 1=1";
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (startDate) {
+    whereClause += ` AND cr.call_date >= $${paramIndex}`;
+    params.push(startDate);
+    paramIndex++;
+  }
+
+  if (endDate) {
+    whereClause += ` AND cr.call_date <= $${paramIndex}`;
+    params.push(endDate);
+    paramIndex++;
+  }
+
+  if (agent_email) {
+    whereClause += ` AND cr.agent_email = $${paramIndex}`;
+    params.push(agent_email);
+    paramIndex++;
+  }
+
+  // Headline avg_qa_score uses the same canonical-score rule as the
+  // per-agent breakdown below: when a manager review carries an
+  // adjusted_overall_score, that value wins over the raw AI score.
+  // Prior to this fix the headline read from the legacy call_qa_scores
+  // table while per-agent rows read from sdr_call_evaluations with
+  // COALESCE — inconsistent UX where headline and rows disagreed.
+  const summaryResult = await pool.query(
+    `
+    SELECT
+      COUNT(DISTINCT cr.id) as total_calls,
+      -- "analyzed" in the legacy 4-state enum mapped to "the AI ran".
+      -- In the new 8-state pipeline the same semantics is covered by
+      -- any post-evaluation state (evaluated / qa_review_pending /
+      -- qa_reviewed). All three count as "analyzed" for dashboard stats.
+      COUNT(DISTINCT CASE WHEN cr.status IN ('evaluated','qa_review_pending','qa_reviewed') THEN cr.id END) as analyzed_calls,
+      AVG(ca.sentiment_score) as avg_sentiment,
+      AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) as avg_qa_score,
+      AVG(cc.compliance_score) as avg_compliance
+    FROM call_records cr
+    LEFT JOIN call_analysis ca ON cr.id = ca.call_record_id
+    LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+    LEFT JOIN LATERAL (
+      SELECT adjusted_overall_score
+      FROM sdr_evaluation_reviews sr
+      WHERE sr.evaluation_id = se.id
+        AND sr.adjusted_overall_score IS NOT NULL
+      ORDER BY sr.reviewed_at DESC
+      LIMIT 1
+    ) latest_review ON TRUE
+    LEFT JOIN call_compliance cc ON cr.id = cc.call_record_id
+    ${whereClause}
+  `,
+    params,
+  );
+
+  const bySourceResult = await pool.query(
+    `
+    SELECT source, COUNT(*) as count
+    FROM call_records cr
+    ${whereClause}
+    GROUP BY source
+  `,
+    params,
+  );
+
+  // Phase C — per-agent averages across every measurement surface
+  // (sentiment, QA score from Phase B, compliance). LEFT JOINs so an
+  // agent with calls but no analysis still appears (Avg columns fall
+  // to NULL → "--" in the UI). Wrapped in try/catch so a bad schema
+  // or missing table never 500s the whole analytics endpoint —
+  // falls back to a count-only query that always works.
+  //
+  // Medium #6 v1.1 — Canonical-score rule: when a manager review row
+  // exists with an adjusted_overall_score, that value wins over the
+  // raw AI score. Use a lateral subquery to pick the most recent
+  // review per evaluation; COALESCE makes the change transparent to
+  // every downstream consumer (eval list, Analytics, Excel export).
+  let byAgentResult: any;
+  try {
+    byAgentResult = await pool.query(
+      `
+      SELECT
+        cr.agent_email,
+        cr.agent_name,
+        COUNT(*) AS count,
+        AVG(ca.sentiment_score) AS avg_sentiment,
+        AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS avg_qa_score,
+        AVG(cc.compliance_score) AS avg_compliance
+      FROM call_records cr
+      LEFT JOIN call_analysis ca ON ca.call_record_id = cr.id
+      LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+      LEFT JOIN LATERAL (
+        SELECT adjusted_overall_score
+        FROM sdr_evaluation_reviews sr
+        WHERE sr.evaluation_id = se.id
+          AND sr.adjusted_overall_score IS NOT NULL
+        ORDER BY sr.reviewed_at DESC
+        LIMIT 1
+      ) latest_review ON TRUE
+      LEFT JOIN call_compliance cc ON cc.call_record_id = cr.id
+      ${whereClause}
+      GROUP BY cr.agent_email, cr.agent_name
+      ORDER BY count DESC
+      LIMIT 10
+    `,
+      params,
+    );
+  } catch (perAgentErr) {
+    logger.warn(
+      "Per-agent metrics query failed, falling back to count-only:",
+      perAgentErr,
+    );
+    byAgentResult = await pool.query(
+      `
+      SELECT agent_email, agent_name, COUNT(*) AS count
+      FROM call_records cr
+      ${whereClause}
+      GROUP BY agent_email, agent_name
+      ORDER BY count DESC
+      LIMIT 10
+    `,
+      params,
+    );
+  }
+
+  // Sentiment distribution + weekly QA trend power the Analytics charts.
+  // Until now the charts rendered hardcoded mock data (60/30/10 sentiment,
+  // 75/78/82/85 trend); managers couldn't tell whether the dashboard
+  // reflected reality. Wrapped in try/catch so a missing table never
+  // takes down the whole analytics response.
+  let sentimentDistribution: Array<{ label: string; count: number }> = [];
+  try {
+    const r = await pool.query(
+      `SELECT COALESCE(ca.sentiment_label, 'unknown') AS label, COUNT(*)::int AS count
+         FROM call_records cr
+         JOIN call_analysis ca ON ca.call_record_id = cr.id
+         ${whereClause}
+         GROUP BY ca.sentiment_label`,
+      params,
+    );
+    sentimentDistribution = r.rows.map((row: any) => ({
+      label: row.label,
+      count: row.count,
+    }));
+  } catch (e) {
+    logger.warn("Sentiment distribution query failed:", e);
+  }
+
+  let qaScoreTrend: Array<{ week_start: string; avg_score: number; sample_size: number }> = [];
+  try {
+    const r = await pool.query(
+      `SELECT
+         to_char(date_trunc('week', cr.call_date), 'YYYY-MM-DD') AS week_start,
+         AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS avg_score,
+         COUNT(*)::int AS sample_size
+       FROM call_records cr
+       JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+       LEFT JOIN LATERAL (
+         SELECT adjusted_overall_score FROM sdr_evaluation_reviews sr
+          WHERE sr.evaluation_id = se.id AND sr.adjusted_overall_score IS NOT NULL
+          ORDER BY sr.reviewed_at DESC LIMIT 1
+       ) latest_review ON TRUE
+       ${whereClause}
+       AND cr.call_date IS NOT NULL
+       GROUP BY date_trunc('week', cr.call_date)
+       ORDER BY date_trunc('week', cr.call_date) DESC
+       LIMIT 8`,
+      params,
+    );
+    // Oldest → newest for the chart x-axis.
+    qaScoreTrend = r.rows
+      .map((row: any) => ({
+        week_start: row.week_start,
+        avg_score: row.avg_score != null ? Math.round(parseFloat(row.avg_score) * 10) / 10 : 0,
+        sample_size: row.sample_size,
+      }))
+      .reverse();
+  } catch (e) {
+    logger.warn("Weekly QA trend query failed:", e);
+  }
+
+  const complianceResult = await pool.query(
+    `
+    SELECT
+      COUNT(*) as total,
+      SUM(CASE WHEN notes_updated THEN 1 ELSE 0 END) as notes_updated,
+      SUM(CASE WHEN call_logged THEN 1 ELSE 0 END) as call_logged,
+      SUM(CASE WHEN task_created THEN 1 ELSE 0 END) as task_created,
+      SUM(CASE WHEN stage_updated THEN 1 ELSE 0 END) as stage_updated,
+      SUM(CASE WHEN overall_compliance THEN 1 ELSE 0 END) as fully_compliant
+    FROM call_compliance cc
+    JOIN call_records cr ON cc.call_record_id = cr.id
+    ${whereClause}
+  `,
+    params,
+  );
+
+  // DMAIC Improve: compliance coverage diagnostics. The breakdown SUMs
+  // above are meaningless without a denominator — a manager looking at
+  // "0 Notes Updated" can't tell whether that's because 0 of 199 calls
+  // had a Note logged, or because 0 of 0 checked calls had a Note
+  // logged. We compute three explicit denominators:
+  //   - total_analyzed: every call that has finished the AI pipeline
+  //     (status IN evaluated, qa_review_pending, qa_reviewed). The
+  //     legacy 4-state enum used just 'analyzed' here — see Phase 2
+  //     migration in this file's header.
+  //   - total_with_compliance_row: any row in call_compliance (incl.
+  //     the "not_checked" sentinel rows written when Zoho was
+  //     unreachable / call had no linked Lead/Deal)
+  //   - total_with_real_check: rows where the check actually ran (excludes
+  //     the sentinels). This is the true denominator for "Notes Updated"
+  //     etc., and the difference exposes the backfill backlog so the
+  //     user knows how many calls still need the backfill button pressed.
+  //   - total_linked_to_crm: analyzed calls with a lead_id or deal_id
+  //     set. Calls without a CRM link cannot be compliance-checked at
+  //     all, so this exposes the upstream auto-link gap separately.
+  let complianceCoverage = {
+    total_analyzed: 0,
+    total_with_compliance_row: 0,
+    total_with_real_check: 0,
+    total_not_checked_sentinel: 0,
+    total_linked_to_crm: 0,
+    total_unlinked: 0,
+  };
+  try {
+    const cov = await pool.query(
+      `
+      SELECT
+        SUM(CASE WHEN cr.status IN ('evaluated','qa_review_pending','qa_reviewed') THEN 1 ELSE 0 END)::int AS total_analyzed,
+        SUM(CASE
+              WHEN cr.status IN ('evaluated','qa_review_pending','qa_reviewed')
+               AND (NULLIF(cr.lead_id, '') IS NOT NULL OR NULLIF(cr.deal_id, '') IS NOT NULL)
+              THEN 1 ELSE 0 END)::int AS total_linked_to_crm,
+        SUM(CASE WHEN cc.id IS NOT NULL THEN 1 ELSE 0 END)::int AS total_with_compliance_row,
+        SUM(CASE
+              WHEN cc.id IS NOT NULL
+               AND (cc.compliance_details->>'mode' IS DISTINCT FROM 'not_checked')
+              THEN 1 ELSE 0 END)::int AS total_with_real_check,
+        SUM(CASE
+              WHEN cc.id IS NOT NULL
+               AND (cc.compliance_details->>'mode' = 'not_checked')
+              THEN 1 ELSE 0 END)::int AS total_not_checked_sentinel
+      FROM call_records cr
+      LEFT JOIN call_compliance cc ON cc.call_record_id = cr.id
+      ${whereClause}
+      `,
+      params,
+    );
+    const r = cov.rows[0] || {};
+    complianceCoverage = {
+      total_analyzed: r.total_analyzed || 0,
+      total_linked_to_crm: r.total_linked_to_crm || 0,
+      total_with_compliance_row: r.total_with_compliance_row || 0,
+      total_with_real_check: r.total_with_real_check || 0,
+      total_not_checked_sentinel: r.total_not_checked_sentinel || 0,
+      total_unlinked:
+        (r.total_analyzed || 0) - (r.total_linked_to_crm || 0),
+    };
+  } catch (e) {
+    logger.warn("Compliance coverage query failed:", e);
+  }
+
+  const summary = summaryResult.rows[0];
+
+  return {
+    totalCalls: parseInt(summary.total_calls) || 0,
+    analyzedCalls: parseInt(summary.analyzed_calls) || 0,
+    avgSentimentScore: parseFloat(summary.avg_sentiment) || 0,
+    avgQAScore: parseFloat(summary.avg_qa_score) || 0,
+    avgComplianceScore: parseFloat(summary.avg_compliance) || 0,
+    callsBySource: bySourceResult.rows,
+    callsByAgent: byAgentResult.rows,
+    complianceBreakdown: complianceResult.rows[0] || {},
+    complianceCoverage,
+    sentimentDistribution,
+    qaScoreTrend,
+  };
+}
+
+// ===================================================================
+//  Weekly Report rollup — Phase 1 (Week 2-3 of the lean 5-week plan)
+//
+//  Per-agent aggregate over a date window, plus team totals and a
+//  trend indicator computed against the prior equal-length window.
+//  This is the foundation for the Weekly Report section on the
+//  Overview tab — the manager's Monday-morning home page.
+//
+//  Why a dedicated function instead of extending getCallAnalyticsSummary:
+//  the existing summary is consumed by the legacy KPI strip + charts
+//  and is shaped for those needs (sentiment distribution, qa trend
+//  by week). The Weekly Report needs different aggregates (critical
+//  fails per agent, coaching plan counts, gap-to-target, prior-window
+//  trend) that would bloat the summary response for callers that
+//  don't need them. Two endpoints, one source of truth (the same
+//  underlying tables + the same canonical-score rule for COALESCE).
+// ===================================================================
+
+export interface WeeklyReportAgent {
+  agent_email: string;
+  agent_name: string | null;
+  call_count: number;
+  evaluated_count: number;
+  avg_overall_score: number | null;
+  avg_compliance_score: number | null;
+  critical_fails: number;
+  coaching_plans_pending: number;
+  coaching_plans_awaiting_verification: number;
+  gap_to_target: number | null;
+  trend_direction: "up" | "down" | "flat" | null;
+  prior_avg_overall_score: number | null;
+}
+
+export interface WeeklyReportTotals {
+  total_calls: number;
+  total_evaluated: number;
+  avg_overall_score: number | null;
+  avg_compliance_score: number | null;
+  critical_fails: number;
+  /** Plans currently open for any agent (pending_delivery + awaiting_verification). */
+  coaching_plans_pending: number;
+  /** Plans created inside this window — drives "new this week" banner chip. */
+  new_coaching_plans: number;
+  active_agents: number;
+}
+
+export interface WeeklyReportRollup {
+  window: { start: string; end: string; label: string };
+  prior_window: { start: string; end: string };
+  totals: WeeklyReportTotals;
+  /**
+   * Team totals for the equal-length prior window. Drives the WoW
+   * deltas on the Critical Fails banner (Slice 4). `new_coaching_plans`
+   * is omitted — it's a "this window" concept that doesn't have a
+   * prior-window equivalent worth comparing.
+   */
+  prior_totals: {
+    total_calls: number;
+    total_evaluated: number;
+    avg_overall_score: number | null;
+    avg_compliance_score: number | null;
+    critical_fails: number;
+  };
+  agents: WeeklyReportAgent[];
+}
+
+/** Format a Date as a YYYY-MM-DD label using Asia/Riyadh local date. */
+function formatRiyadhDate(d: Date): string {
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+}
+
+/** Format a Date as a human "MMM d" label using Asia/Riyadh local date. */
+function formatRiyadhShortDate(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    timeZone: "Asia/Riyadh",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
+ * Per-agent rollup over a date window, with team totals and trend
+ * direction computed against the equal-length prior window.
+ *
+ *   gap_to_target = 75 - avg_overall_score  (positive = below target)
+ *   trend_direction = up | down | flat compared to prior_avg_overall_score
+ *     (threshold: ±3 points = flat, > = up, < = down — calibrated for
+ *      the COPC v2 scoring scale of 0-100)
+ *
+ * Agents are returned sorted by gap_to_target DESC (worst at the top
+ * of the leaderboard). Agents with no calls in the window aren't
+ * included — this is a "what happened this week" view, not a roster.
+ */
+export async function getWeeklyReportRollup(
+  options: {
+    startDate?: Date;
+    endDate?: Date;
+  } = {},
+): Promise<WeeklyReportRollup> {
+  // Default window: last 7 days ending now.
+  const endDate = options.endDate ?? new Date();
+  const startDate =
+    options.startDate ??
+    new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  // Prior window is equal-length, ending where this window starts.
+  const windowMs = endDate.getTime() - startDate.getTime();
+  const priorEndDate = startDate;
+  const priorStartDate = new Date(priorEndDate.getTime() - windowMs);
+
+  // Per-agent SQL: one query covers current + prior windows via
+  // a CASE / FILTER fan-out, so we hit the indexes once.
+  // Canonical-score rule (same as getCallAnalyticsSummary): manager-
+  // reviewed adjusted_overall_score wins over raw AI overall_score
+  // via a LATERAL join.
+  //
+  // Critical-fails detection: any call whose evaluation has a
+  // non-empty critical_risks JSONB array. Belt-and-braces with
+  // jsonb_typeof so a malformed row doesn't error the rollup.
+  let rows: any[] = [];
+  try {
+    const result = await pool.query(
+      `
+      WITH cur AS (
+        SELECT
+          cr.agent_email,
+          cr.agent_name,
+          COUNT(DISTINCT cr.id) AS call_count,
+          COUNT(DISTINCT se.id) AS evaluated_count,
+          AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS avg_overall_score,
+          AVG(cc.compliance_score) AS avg_compliance_score,
+          COUNT(DISTINCT CASE
+            WHEN se.critical_risks IS NOT NULL
+             AND jsonb_typeof(se.critical_risks) = 'array'
+             AND jsonb_array_length(se.critical_risks) > 0
+            THEN cr.id
+          END) AS critical_fails
+        FROM call_records cr
+        LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+        LEFT JOIN LATERAL (
+          SELECT adjusted_overall_score
+          FROM sdr_evaluation_reviews sr
+          WHERE sr.evaluation_id = se.id
+            AND sr.adjusted_overall_score IS NOT NULL
+          ORDER BY sr.reviewed_at DESC
+          LIMIT 1
+        ) latest_review ON TRUE
+        LEFT JOIN call_compliance cc ON cc.call_record_id = cr.id
+        WHERE cr.call_date >= $1 AND cr.call_date < $2
+          AND cr.agent_email IS NOT NULL
+        GROUP BY cr.agent_email, cr.agent_name
+      ),
+      prior AS (
+        SELECT
+          cr.agent_email,
+          AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS prior_avg
+        FROM call_records cr
+        LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+        LEFT JOIN LATERAL (
+          SELECT adjusted_overall_score
+          FROM sdr_evaluation_reviews sr
+          WHERE sr.evaluation_id = se.id
+            AND sr.adjusted_overall_score IS NOT NULL
+          ORDER BY sr.reviewed_at DESC
+          LIMIT 1
+        ) latest_review ON TRUE
+        WHERE cr.call_date >= $3 AND cr.call_date < $4
+          AND cr.agent_email IS NOT NULL
+        GROUP BY cr.agent_email
+      ),
+      plans AS (
+        SELECT
+          agent_email,
+          COUNT(*) FILTER (WHERE status = 'pending_delivery') AS pending,
+          COUNT(*) FILTER (WHERE status = 'awaiting_verification') AS awaiting
+        FROM coaching_plans
+        WHERE status IN ('pending_delivery', 'awaiting_verification')
+        GROUP BY agent_email
+      )
+      SELECT
+        cur.agent_email,
+        cur.agent_name,
+        cur.call_count,
+        cur.evaluated_count,
+        cur.avg_overall_score,
+        cur.avg_compliance_score,
+        cur.critical_fails,
+        prior.prior_avg,
+        COALESCE(plans.pending, 0) AS coaching_pending,
+        COALESCE(plans.awaiting, 0) AS coaching_awaiting
+      FROM cur
+      LEFT JOIN prior ON prior.agent_email = cur.agent_email
+      LEFT JOIN plans ON plans.agent_email = cur.agent_email
+      ORDER BY (75 - COALESCE(cur.avg_overall_score, 0)) DESC, cur.call_count DESC
+      `,
+      [startDate, endDate, priorStartDate, priorEndDate],
+    );
+    rows = result.rows;
+  } catch (err) {
+    logger.error("[WeeklyReport] Per-agent rollup query failed:", err);
+    rows = [];
+  }
+
+  // Prior-window team totals — drive the WoW deltas on the Critical
+  // Fails banner (Slice 4). Separate aggregate so the per-agent CTE
+  // above stays tight; this query is cheap and runs in parallel with
+  // the new-plan count below.
+  let priorTotalsRow: any = null;
+  let newCoachingPlansCount = 0;
+  try {
+    const [priorRes, newPlansRes] = await Promise.all([
+      pool.query(
+        `
+        SELECT
+          COUNT(DISTINCT cr.id) AS total_calls,
+          COUNT(DISTINCT se.id) AS total_evaluated,
+          AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS avg_overall_score,
+          AVG(cc.compliance_score) AS avg_compliance_score,
+          COUNT(DISTINCT CASE
+            WHEN se.critical_risks IS NOT NULL
+             AND jsonb_typeof(se.critical_risks) = 'array'
+             AND jsonb_array_length(se.critical_risks) > 0
+            THEN cr.id
+          END) AS critical_fails
+        FROM call_records cr
+        LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+        LEFT JOIN LATERAL (
+          SELECT adjusted_overall_score
+          FROM sdr_evaluation_reviews sr
+          WHERE sr.evaluation_id = se.id
+            AND sr.adjusted_overall_score IS NOT NULL
+          ORDER BY sr.reviewed_at DESC
+          LIMIT 1
+        ) latest_review ON TRUE
+        LEFT JOIN call_compliance cc ON cc.call_record_id = cr.id
+        WHERE cr.call_date >= $1 AND cr.call_date < $2
+          AND cr.agent_email IS NOT NULL
+        `,
+        [priorStartDate, priorEndDate],
+      ),
+      pool.query(
+        `
+        SELECT COUNT(*)::int AS new_plans
+          FROM coaching_plans
+         WHERE created_at >= $1 AND created_at < $2
+        `,
+        [startDate, endDate],
+      ),
+    ]);
+    priorTotalsRow = priorRes.rows[0] || null;
+    newCoachingPlansCount = newPlansRes.rows[0]?.new_plans || 0;
+  } catch (err) {
+    logger.warn("[WeeklyReport] prior totals / new plans query failed:", err);
+  }
+
+  const agents: WeeklyReportAgent[] = rows.map((r) => {
+    const avg = r.avg_overall_score === null ? null : parseFloat(r.avg_overall_score);
+    const prior = r.prior_avg === null ? null : parseFloat(r.prior_avg);
+    const compliance =
+      r.avg_compliance_score === null ? null : parseFloat(r.avg_compliance_score);
+
+    let trend: "up" | "down" | "flat" | null = null;
+    if (avg !== null && prior !== null) {
+      const delta = avg - prior;
+      if (delta > 3) trend = "up";
+      else if (delta < -3) trend = "down";
+      else trend = "flat";
+    }
+
+    return {
+      agent_email: r.agent_email,
+      agent_name: r.agent_name,
+      call_count: parseInt(r.call_count, 10) || 0,
+      evaluated_count: parseInt(r.evaluated_count, 10) || 0,
+      avg_overall_score: avg !== null && !isNaN(avg) ? Math.round(avg * 10) / 10 : null,
+      avg_compliance_score:
+        compliance !== null && !isNaN(compliance)
+          ? Math.round(compliance * 10) / 10
+          : null,
+      critical_fails: parseInt(r.critical_fails, 10) || 0,
+      coaching_plans_pending: parseInt(r.coaching_pending, 10) || 0,
+      coaching_plans_awaiting_verification: parseInt(r.coaching_awaiting, 10) || 0,
+      gap_to_target: avg !== null && !isNaN(avg) ? Math.round((75 - avg) * 10) / 10 : null,
+      trend_direction: trend,
+      prior_avg_overall_score:
+        prior !== null && !isNaN(prior) ? Math.round(prior * 10) / 10 : null,
+    };
+  });
+
+  // Team totals — sum / average across the agent rows so the
+  // headline numbers reconcile exactly with the leaderboard the
+  // user is looking at (rather than running a separate aggregate
+  // that might disagree due to NULL-agent rows or other edge cases).
+  const totalCalls = agents.reduce((s, a) => s + a.call_count, 0);
+  const totalEvaluated = agents.reduce((s, a) => s + a.evaluated_count, 0);
+  const totalCriticalFails = agents.reduce((s, a) => s + a.critical_fails, 0);
+  const totalPlansPending = agents.reduce(
+    (s, a) => s + a.coaching_plans_pending,
+    0,
+  );
+  const scoreSamples = agents
+    .filter((a) => a.avg_overall_score !== null && a.evaluated_count > 0)
+    .map((a) => ({ score: a.avg_overall_score as number, n: a.evaluated_count }));
+  const totalScoreWeight = scoreSamples.reduce((s, x) => s + x.n, 0);
+  const teamAvgScore =
+    totalScoreWeight > 0
+      ? Math.round(
+          (scoreSamples.reduce((s, x) => s + x.score * x.n, 0) /
+            totalScoreWeight) *
+            10,
+        ) / 10
+      : null;
+  const complianceSamples = agents
+    .filter((a) => a.avg_compliance_score !== null && a.call_count > 0)
+    .map((a) => ({ score: a.avg_compliance_score as number, n: a.call_count }));
+  const totalComplianceWeight = complianceSamples.reduce((s, x) => s + x.n, 0);
+  const teamAvgCompliance =
+    totalComplianceWeight > 0
+      ? Math.round(
+          (complianceSamples.reduce((s, x) => s + x.score * x.n, 0) /
+            totalComplianceWeight) *
+            10,
+        ) / 10
+      : null;
+
+  // Display window label uses "May 18 – May 24" style; the end date
+  // shown to the user is inclusive (one day before the exclusive
+  // SQL upper bound) so a "Last 7 days" filter labels correctly.
+  const inclusiveEnd = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+  const label = `${formatRiyadhShortDate(startDate)} – ${formatRiyadhShortDate(inclusiveEnd)}`;
+
+  return {
+    window: {
+      start: formatRiyadhDate(startDate),
+      end: formatRiyadhDate(endDate),
+      label,
+    },
+    prior_window: {
+      start: formatRiyadhDate(priorStartDate),
+      end: formatRiyadhDate(priorEndDate),
+    },
+    totals: {
+      total_calls: totalCalls,
+      total_evaluated: totalEvaluated,
+      avg_overall_score: teamAvgScore,
+      avg_compliance_score: teamAvgCompliance,
+      critical_fails: totalCriticalFails,
+      coaching_plans_pending: totalPlansPending,
+      new_coaching_plans: newCoachingPlansCount,
+      active_agents: agents.length,
+    },
+    prior_totals: {
+      total_calls: parseInt(priorTotalsRow?.total_calls, 10) || 0,
+      total_evaluated: parseInt(priorTotalsRow?.total_evaluated, 10) || 0,
+      avg_overall_score:
+        priorTotalsRow?.avg_overall_score == null
+          ? null
+          : Math.round(parseFloat(priorTotalsRow.avg_overall_score) * 10) / 10,
+      avg_compliance_score:
+        priorTotalsRow?.avg_compliance_score == null
+          ? null
+          : Math.round(parseFloat(priorTotalsRow.avg_compliance_score) * 10) / 10,
+      critical_fails: parseInt(priorTotalsRow?.critical_fails, 10) || 0,
+    },
+    agents,
+  };
+}
+
+// ===================================================================
+//  Weekly Report — per-agent drill (Slice 3 of Phase 1 Week 2-3)
+//
+//  Powers the inline drill panel that expands when a manager clicks
+//  a row on the Weekly Report leaderboard. Returns everything needed
+//  to decide whether/how to coach that agent in one request:
+//
+//    • top_failed_attributes: which scorecard attributes the agent
+//      failed most often inside the window (top 3, ordered by
+//      fail_count). Drives the "Sample User Handling
+//      4 times this week" headline in the case study.
+//
+//    • recent_calls: last 5 calls in the window with id, date,
+//      score, and a critical-flag boolean so each row can link
+//      straight into the existing Call Details modal.
+//
+//    • trend_series: per-week avg score + call count over the
+//      most-recent 8 weeks, so the panel can draw a sparkline
+//      that shows whether the gap is improving or worsening.
+//
+//    • coaching_plans: any open plan (pending_delivery or
+//      awaiting_verification) for the agent. The Coaching Actions
+//      panel (Slice 5) wires Deliver/Dismiss from here, but the
+//      drill panel already shows "1 plan pending" with the
+//      attribute it covers.
+//
+//  Single endpoint instead of three round-trips: managers click and
+//  scan; latency on a per-agent drill matters more than for the
+//  weekly rollup which fires once per page load.
+// ===================================================================
+
+export interface AgentDrillData {
+  agent_email: string;
+  agent_name: string | null;
+  window: { start: string; end: string; label: string };
+  top_failed_attributes: Array<{
+    attribute_id: string;
+    attribute_name: string;
+    dimension: string;
+    fail_count: number;
+  }>;
+  recent_calls: Array<{
+    call_id: number;
+    call_date: string | null;
+    duration_seconds: number | null;
+    overall_score: number | null;
+    has_critical: boolean;
+  }>;
+  trend_series: Array<{
+    week_start: string;
+    avg_overall_score: number | null;
+    call_count: number;
+  }>;
+  /**
+   * Number of ISO weeks the trend series covers. Scales with the
+   * requested window — fed by the UI's "{N}-week trend" label so it
+   * stays honest when the window is 7d (8 weeks) vs 90d (13 weeks)
+   * vs all-records (whatever it actually is).
+   */
+  trend_weeks: number;
+  coaching_plans: Array<{
+    id: number;
+    attribute_id: string;
+    attribute_name: string;
+    dimension: string | null;
+    fail_count: number;
+    status: string;
+    created_at: string | null;
+    follow_up_due_date: string | null;
+  }>;
+}
+
+export async function getAgentDrillData(
+  agentEmail: string,
+  options: { startDate?: Date; endDate?: Date } = {},
+): Promise<AgentDrillData | null> {
+  if (!agentEmail || !agentEmail.trim()) return null;
+
+  const endDate = options.endDate ?? new Date();
+  const startDate =
+    options.startDate ??
+    new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  // Lookup the human name once. Falls back to null if the agent has
+  // never set one — the UI shows the email in that case.
+  let agentName: string | null = null;
+  try {
+    const nameRes = await pool.query(
+      `SELECT agent_name FROM call_records
+        WHERE agent_email = $1 AND agent_name IS NOT NULL
+        ORDER BY call_date DESC LIMIT 1`,
+      [agentEmail],
+    );
+    agentName = nameRes.rows[0]?.agent_name ?? null;
+  } catch {
+    // Non-fatal — name lookup never blocks the drill.
+  }
+
+  // Top failed attributes — unroll attribute_evaluations JSONB and
+  // group by attribute. Wrapped in try/catch so a malformed JSONB row
+  // never 500s the whole drill response.
+  let topFailedAttributes: AgentDrillData["top_failed_attributes"] = [];
+  try {
+    const r = await pool.query(
+      `
+      SELECT
+        attr->>'attribute_id'   AS attribute_id,
+        attr->>'attribute_name' AS attribute_name,
+        attr->>'dimension'      AS dimension,
+        COUNT(*)::int           AS fail_count
+      FROM call_records cr
+      JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+      CROSS JOIN LATERAL jsonb_array_elements(
+        COALESCE(se.attribute_evaluations, '[]'::jsonb)
+      ) AS attr
+      WHERE cr.agent_email = $1
+        AND cr.call_date >= $2 AND cr.call_date < $3
+        AND attr->>'status' = 'FAIL'
+      GROUP BY attribute_id, attribute_name, dimension
+      ORDER BY fail_count DESC
+      LIMIT 3
+      `,
+      [agentEmail, startDate, endDate],
+    );
+    topFailedAttributes = r.rows.map((row: any) => ({
+      attribute_id: row.attribute_id || "",
+      attribute_name: row.attribute_name || row.attribute_id || "—",
+      dimension: row.dimension || "",
+      fail_count: parseInt(row.fail_count, 10) || 0,
+    }));
+  } catch (err) {
+    logger.warn("[AgentDrill] top_failed_attributes query failed:", err);
+  }
+
+  // Recent 5 calls in the window. Coalesces the canonical-score rule
+  // (manager-reviewed adjusted_overall_score wins over raw AI score).
+  let recentCalls: AgentDrillData["recent_calls"] = [];
+  try {
+    const r = await pool.query(
+      `
+      SELECT
+        cr.id,
+        cr.call_date,
+        cr.duration_seconds,
+        COALESCE(latest_review.adjusted_overall_score, se.overall_score) AS overall_score,
+        (se.critical_risks IS NOT NULL
+          AND jsonb_typeof(se.critical_risks) = 'array'
+          AND jsonb_array_length(se.critical_risks) > 0) AS has_critical
+      FROM call_records cr
+      LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+      LEFT JOIN LATERAL (
+        SELECT adjusted_overall_score
+        FROM sdr_evaluation_reviews sr
+        WHERE sr.evaluation_id = se.id
+          AND sr.adjusted_overall_score IS NOT NULL
+        ORDER BY sr.reviewed_at DESC LIMIT 1
+      ) latest_review ON TRUE
+      WHERE cr.agent_email = $1
+        AND cr.call_date >= $2 AND cr.call_date < $3
+      ORDER BY cr.call_date DESC NULLS LAST, cr.id DESC
+      LIMIT 5
+      `,
+      [agentEmail, startDate, endDate],
+    );
+    recentCalls = r.rows.map((row: any) => ({
+      call_id: row.id,
+      call_date: row.call_date
+        ? new Date(row.call_date).toISOString()
+        : null,
+      duration_seconds:
+        row.duration_seconds == null ? null : Number(row.duration_seconds),
+      overall_score:
+        row.overall_score == null
+          ? null
+          : Math.round(parseFloat(row.overall_score) * 10) / 10,
+      has_critical: row.has_critical === true,
+    }));
+  } catch (err) {
+    logger.warn("[AgentDrill] recent_calls query failed:", err);
+  }
+
+  // Trend window scales with the requested range so a "Last 90 days"
+  // filter doesn't still show only 8 weeks. Lookback = max(8 weeks,
+  // window length) so short windows (7d) still have meaningful
+  // historical context, and long windows (90d, all-records) get a
+  // proportionally longer trend. Buckets stay per-ISO-week (Monday)
+  // via date_trunc — short windows just see fewer buckets, not
+  // smaller ones. Empty weeks are NOT synthesised; the UI draws a
+  // flat segment between samples.
+  let trendSeries: AgentDrillData["trend_series"] = [];
+  let trendWeeks = 8;
+  try {
+    const eightWeeksMs = 8 * 7 * 24 * 60 * 60 * 1000;
+    const windowMsForTrend = Math.max(
+      eightWeeksMs,
+      endDate.getTime() - startDate.getTime(),
+    );
+    trendWeeks = Math.ceil(windowMsForTrend / (7 * 24 * 60 * 60 * 1000));
+    const trendStart = new Date(endDate.getTime() - windowMsForTrend);
+    const r = await pool.query(
+      `
+      SELECT
+        date_trunc('week', cr.call_date) AS week_start,
+        AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS avg_overall_score,
+        COUNT(DISTINCT se.id)::int AS call_count
+      FROM call_records cr
+      LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+      LEFT JOIN LATERAL (
+        SELECT adjusted_overall_score
+        FROM sdr_evaluation_reviews sr
+        WHERE sr.evaluation_id = se.id
+          AND sr.adjusted_overall_score IS NOT NULL
+        ORDER BY sr.reviewed_at DESC LIMIT 1
+      ) latest_review ON TRUE
+      WHERE cr.agent_email = $1
+        AND cr.call_date >= $2 AND cr.call_date < $3
+      GROUP BY week_start
+      ORDER BY week_start ASC
+      `,
+      [agentEmail, trendStart, endDate],
+    );
+    trendSeries = r.rows.map((row: any) => ({
+      week_start: row.week_start
+        ? new Date(row.week_start).toISOString().slice(0, 10)
+        : "",
+      avg_overall_score:
+        row.avg_overall_score == null
+          ? null
+          : Math.round(parseFloat(row.avg_overall_score) * 10) / 10,
+      call_count: parseInt(row.call_count, 10) || 0,
+    }));
+  } catch (err) {
+    logger.warn("[AgentDrill] trend_series query failed:", err);
+  }
+
+  // Open coaching plans (any non-resolved state). The list is bound
+  // to the agent regardless of the date window — if a plan was opened
+  // last month and is still pending delivery, it still belongs here.
+  let coachingPlans: AgentDrillData["coaching_plans"] = [];
+  try {
+    const r = await pool.query(
+      `
+      SELECT id, attribute_id, attribute_name, dimension, fail_count,
+             status, created_at, follow_up_due_date
+        FROM coaching_plans
+       WHERE agent_email = $1
+         AND status IN ('pending_delivery', 'awaiting_verification')
+       ORDER BY created_at DESC NULLS LAST, id DESC
+      `,
+      [agentEmail],
+    );
+    coachingPlans = r.rows.map((row: any) => ({
+      id: row.id,
+      attribute_id: row.attribute_id || "",
+      attribute_name: row.attribute_name || row.attribute_id || "—",
+      dimension: row.dimension || null,
+      fail_count: parseInt(row.fail_count, 10) || 0,
+      status: row.status,
+      created_at: row.created_at
+        ? new Date(row.created_at).toISOString()
+        : null,
+      follow_up_due_date: row.follow_up_due_date
+        ? new Date(row.follow_up_due_date).toISOString().slice(0, 10)
+        : null,
+    }));
+  } catch (err) {
+    logger.warn("[AgentDrill] coaching_plans query failed:", err);
+  }
+
+  const inclusiveEnd = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+  const label = `${formatRiyadhShortDate(startDate)} – ${formatRiyadhShortDate(inclusiveEnd)}`;
+
+  return {
+    agent_email: agentEmail,
+    agent_name: agentName,
+    window: {
+      start: formatRiyadhDate(startDate),
+      end: formatRiyadhDate(endDate),
+      label,
+    },
+    top_failed_attributes: topFailedAttributes,
+    recent_calls: recentCalls,
+    trend_series: trendSeries,
+    trend_weeks: trendWeeks,
+    coaching_plans: coachingPlans,
+  };
+}
+
+export async function createOrUpdateQAScore(
+  data: Omit<CallQAScore, "id" | "created_at">,
+): Promise<CallQAScore> {
+  logger.info(
+    "📝 [CallDB] Creating/updating QA score for call",
+    data.call_record_id,
+  );
+
+  const existingResult = await pool.query(
+    `SELECT id FROM call_qa_scores WHERE call_record_id = $1 AND scorecard_type = $2`,
+    [data.call_record_id, data.scorecard_type],
+  );
+
+  if (existingResult.rows.length > 0) {
+    const result = await pool.query(
+      `
+      UPDATE call_qa_scores SET
+        total_score = $1,
+        max_score = $2,
+        score_percentage = $3,
+        criteria_scores = $4,
+        coaching_notes = $5,
+        evaluator = $6,
+        evaluated_at = NOW()
+      WHERE call_record_id = $7 AND scorecard_type = $8
+      RETURNING *
+    `,
+      [
+        data.total_score,
+        data.max_score,
+        data.score_percentage,
+        JSON.stringify(data.criteria_scores || {}),
+        data.coaching_notes,
+        data.evaluator,
+        data.call_record_id,
+        data.scorecard_type,
+      ],
+    );
+    logger.info("✅ [CallDB] QA score updated", { id: result.rows[0].id });
+    return result.rows[0];
+  }
+
+  const result = await pool.query(
+    `
+    INSERT INTO call_qa_scores (
+      call_record_id, scorecard_type, total_score, max_score, score_percentage,
+      criteria_scores, coaching_notes, evaluator, evaluated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+    RETURNING *
+  `,
+    [
+      data.call_record_id,
+      data.scorecard_type,
+      data.total_score,
+      data.max_score,
+      data.score_percentage,
+      JSON.stringify(data.criteria_scores || {}),
+      data.coaching_notes,
+      data.evaluator,
+    ],
+  );
+
+  logger.info("✅ [CallDB] QA score created", { id: result.rows[0].id });
+  return result.rows[0];
+}
+
+export async function updateCallStatus(
+  callId: number,
+  status: CallRecord["status"],
+): Promise<void> {
+  logger.info("🔄 [CallDB] Updating call status", { callId, status });
+  await pool.query(
+    `UPDATE call_records SET status = $1, updated_at = NOW() WHERE id = $2`,
+    [status, callId],
+  );
+  logger.info("✅ [CallDB] Call status updated");
+}
+
+export interface SDREvaluationAttribute {
+  id: string;
+  name: string;
+  description: string;
+  dimension: "people" | "process" | "governance";
+  weight: number;
+  severity: "minor" | "major" | "critical";
+  evaluation_logic: string;
+  evidence_fields?: string[];
+  scoring_type: "numeric" | "pass_fail";
+  target?: number;
+}
+
+export interface SDRScorecardConfig {
+  id: number;
+  name: string;
+  version: string;
+  team_name?: string;
+  attributes: SDREvaluationAttribute[];
+}
+
+export async function getActiveSDRScorecard(
+  teamName?: string,
+): Promise<SDRScorecardConfig | null> {
+  logger.info("📊 [CallDB] Fetching active SDR scorecard", { teamName });
+
+  let query = `
+    SELECT id, name, version, team_name, dimensions 
+    FROM quality_scorecards 
+    WHERE is_active = true
+  `;
+  const params: any[] = [];
+
+  if (teamName) {
+    query += ` AND (team_name = $1 OR team_name IS NULL)`;
+    params.push(teamName);
+  }
+
+  query += ` ORDER BY team_name IS NOT NULL DESC, updated_at DESC LIMIT 1`;
+
+  const result = await pool.query(query, params);
+
+  if (result.rows.length === 0) {
+    logger.info("⚠️ [CallDB] No active scorecard found");
+    return null;
+  }
+
+  const row = result.rows[0];
+  const dimensions = row.dimensions?.dimensions || row.dimensions;
+
+  const attributes: SDREvaluationAttribute[] = [];
+
+  if (dimensions) {
+    for (const [dimKey, dimValue] of Object.entries(dimensions)) {
+      const dimension = dimValue as any;
+      if (dimension?.attributes && Array.isArray(dimension.attributes)) {
+        for (const attr of dimension.attributes) {
+          attributes.push({
+            id: attr.id || `${dimKey}_${attributes.length}`,
+            name: attr.name,
+            description: attr.description || "",
+            dimension: dimKey as "people" | "process" | "governance",
+            weight: attr.weight || 0.1,
+            severity:
+              attr.severityIfFailed === "critical"
+                ? "critical"
+                : attr.severityIfFailed === "high"
+                  ? "major"
+                  : "minor",
+            evaluation_logic:
+              attr.passingCriteria || attr.evaluationLogic || "",
+            evidence_fields: attr.zohoFields || [],
+            scoring_type:
+              attr.scoringType === "pass_fail" ? "pass_fail" : "numeric",
+            target: attr.target || 100,
+            // Fix tonight — preserve section_id + metric + data_dependency
+            // so buildSDREvaluationPrompt's router check
+            // (attributes.some(a => a.section_id != null)) fires and
+            // dispatches to buildCopcSDREvaluationPrompt. Without this the
+            // parser strips fields the COPC seed put on each attribute and
+            // the legacy Arabic prompt runs against COPC scorecards — which
+            // is why tonight's efficiency report had section_scores: [].
+            ...(attr.section_id ? { section_id: attr.section_id } : {}),
+            ...(attr.metric ? { metric: attr.metric } : {}),
+            ...(attr.data_dependency ? { data_dependency: attr.data_dependency } : {}),
+          } as any);
+        }
+      }
+    }
+  }
+
+  logger.info(
+    "✅ [CallDB] Loaded scorecard with",
+    attributes.length,
+    "attributes",
+  );
+
+  return {
+    id: row.id,
+    name: row.name,
+    version: row.version || "v1.0",
+    team_name: row.team_name,
+    attributes,
+  };
+}
+
+export interface SDREvaluationResult {
+  attribute_id: string;
+  attribute_name: string;
+  dimension: string;
+  score?: number;
+  status: "PASS" | "FAIL" | "NA";
+  severity: string;
+  evidence_quotes: string[];
+  evidence_timestamps?: string[];
+  comment: string;
+  improvement_tip: string;
+}
+
+export interface SDRCallEvaluation {
+  call_record_id: number;
+  scorecard_id: number;
+  scorecard_name: string;
+  /**
+   * Scorecard version at the time the evaluation was scored. Joined
+   * from quality_scorecards.version in getSDREvaluation so the Call
+   * Details modal's provenance chip can render
+   * "Scored against: ExampleOrg SDR QA Scorecard v2.0.0" instead of just
+   * the name. Optional because saveSDREvaluation doesn't write it
+   * (only the FK + name) — the version is always re-read from the
+   * scorecards table at fetch time. May be undefined when the
+   * scorecard row no longer exists (e.g. it was deleted post-eval).
+   */
+  scorecard_version?: string;
+  overall_score: number;
+  dimension_scores: {
+    people: number;
+    process: number;
+    governance: number;
+  };
+  attribute_evaluations: SDREvaluationResult[];
+  top_strengths: string[];
+  top_gaps: string[];
+  coaching_actions: string[];
+  critical_risks: string[];
+  coaching_message_ar: string;
+  coaching_message_en?: string;
+  micro_training_topics: string[];
+  key_moments: {
+    greeting?: { timestamp?: string; detected: boolean };
+    consent?: { timestamp?: string; detected: boolean };
+    discovery?: { timestamp?: string; detected: boolean };
+    objection_handling?: { timestamp?: string; detected: boolean };
+    closing?: { timestamp?: string; detected: boolean };
+    next_steps?: { timestamp?: string; detected: boolean };
+  };
+  evaluated_at: Date;
+}
+
+export async function saveSDREvaluation(
+  evaluation: SDRCallEvaluation,
+): Promise<number> {
+  logger.info("💾 [CallDB] Saving SDR evaluation", {
+    callRecordId: evaluation.call_record_id,
+  });
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sdr_call_evaluations (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER REFERENCES call_records(id) ON DELETE CASCADE,
+      scorecard_id INTEGER,
+      scorecard_name VARCHAR(255),
+      overall_score DECIMAL(5,2),
+      dimension_scores JSONB,
+      attribute_evaluations JSONB,
+      top_strengths JSONB,
+      top_gaps JSONB,
+      coaching_actions JSONB,
+      critical_risks JSONB,
+      coaching_message_ar TEXT,
+      coaching_message_en TEXT,
+      micro_training_topics JSONB,
+      key_moments JSONB,
+      evaluated_at TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_call ON sdr_call_evaluations(call_record_id);
+  `);
+
+  const existingResult = await pool.query(
+    `SELECT id FROM sdr_call_evaluations WHERE call_record_id = $1`,
+    [evaluation.call_record_id],
+  );
+
+  if (existingResult.rows.length > 0) {
+    const result = await pool.query(
+      `
+      UPDATE sdr_call_evaluations SET
+        scorecard_id = $1,
+        scorecard_name = $2,
+        overall_score = $3,
+        dimension_scores = $4,
+        attribute_evaluations = $5,
+        top_strengths = $6,
+        top_gaps = $7,
+        coaching_actions = $8,
+        critical_risks = $9,
+        coaching_message_ar = $10,
+        coaching_message_en = $11,
+        micro_training_topics = $12,
+        key_moments = $13,
+        evaluated_at = NOW()
+      WHERE call_record_id = $14
+      RETURNING id
+    `,
+      [
+        evaluation.scorecard_id,
+        evaluation.scorecard_name,
+        evaluation.overall_score,
+        JSON.stringify(evaluation.dimension_scores),
+        JSON.stringify(evaluation.attribute_evaluations),
+        JSON.stringify(evaluation.top_strengths),
+        JSON.stringify(evaluation.top_gaps),
+        JSON.stringify(evaluation.coaching_actions),
+        JSON.stringify(evaluation.critical_risks),
+        evaluation.coaching_message_ar,
+        evaluation.coaching_message_en || null,
+        JSON.stringify(evaluation.micro_training_topics),
+        JSON.stringify(evaluation.key_moments),
+        evaluation.call_record_id,
+      ],
+    );
+    logger.info("✅ [CallDB] SDR evaluation updated", {
+      id: result.rows[0].id,
+    });
+    return result.rows[0].id;
+  }
+
+  const result = await pool.query(
+    `
+    INSERT INTO sdr_call_evaluations (
+      call_record_id, scorecard_id, scorecard_name, overall_score, dimension_scores,
+      attribute_evaluations, top_strengths, top_gaps, coaching_actions, critical_risks,
+      coaching_message_ar, coaching_message_en, micro_training_topics, key_moments
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    RETURNING id
+  `,
+    [
+      evaluation.call_record_id,
+      evaluation.scorecard_id,
+      evaluation.scorecard_name,
+      evaluation.overall_score,
+      JSON.stringify(evaluation.dimension_scores),
+      JSON.stringify(evaluation.attribute_evaluations),
+      JSON.stringify(evaluation.top_strengths),
+      JSON.stringify(evaluation.top_gaps),
+      JSON.stringify(evaluation.coaching_actions),
+      JSON.stringify(evaluation.critical_risks),
+      evaluation.coaching_message_ar,
+      evaluation.coaching_message_en || null,
+      JSON.stringify(evaluation.micro_training_topics),
+      JSON.stringify(evaluation.key_moments),
+    ],
+  );
+
+  logger.info("✅ [CallDB] SDR evaluation saved", { id: result.rows[0].id });
+  return result.rows[0].id;
+}
+
+export async function getSDREvaluation(
+  callRecordId: number,
+): Promise<SDRCallEvaluation | null> {
+  logger.info("📊 [CallDB] Fetching SDR evaluation", { callRecordId });
+
+  // 2026-06-07 — LEFT JOIN quality_scorecards so the provenance chip
+  // ("Scored against: <name> v<version>") can render the version
+  // without a second round-trip. LEFT JOIN tolerates a since-deleted
+  // scorecard row (scorecard_version comes back null in that case).
+  const result = await pool.query(
+    `SELECT sce.*, qs.version AS scorecard_version
+       FROM sdr_call_evaluations sce
+       LEFT JOIN quality_scorecards qs ON qs.id = sce.scorecard_id
+      WHERE sce.call_record_id = $1`,
+    [callRecordId],
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  const row = result.rows[0];
+  return {
+    call_record_id: row.call_record_id,
+    scorecard_id: row.scorecard_id,
+    scorecard_name: row.scorecard_name,
+    scorecard_version: row.scorecard_version ?? undefined,
+    overall_score: parseFloat(row.overall_score),
+    dimension_scores: row.dimension_scores,
+    attribute_evaluations: row.attribute_evaluations,
+    top_strengths: row.top_strengths,
+    top_gaps: row.top_gaps,
+    coaching_actions: row.coaching_actions,
+    critical_risks: row.critical_risks,
+    coaching_message_ar: row.coaching_message_ar,
+    coaching_message_en: row.coaching_message_en,
+    micro_training_topics: row.micro_training_topics,
+    key_moments: row.key_moments,
+    evaluated_at: row.evaluated_at,
+    // DMAIC Step 5 — surface the backfilled-from-v1.5 audit trail so the
+    // UI can show "Previously: X (v1.5)" alongside the new COPC score.
+    // Nullable: only populated for evaluations that have been backfilled.
+    legacy_score_v1:
+      row.legacy_score_v1 != null ? parseFloat(row.legacy_score_v1) : null,
+    legacy_dimension_scores_v1: row.legacy_dimension_scores_v1 ?? null,
+    legacy_scorecard_name_v1: row.legacy_scorecard_name_v1 ?? null,
+    backfilled_at: row.backfilled_at ?? null,
+  } as any;
+}
+
+// =======================================================================
+// Manager Review Workflow (Quick Win #6 → Medium Improvement #1)
+//
+// AI-generated SDR evaluations become real coaching tools only when a
+// human manager approves or disagrees with the score. This table stores
+// those review actions per evaluation so the canonical "true" score for
+// each call becomes COALESCE(adjusted_overall_score, ai_overall_score)
+// once a review exists. Multiple reviews per evaluation are allowed
+// (most recent wins) — supports re-review after coaching cycles.
+// =======================================================================
+
+export type SDREvaluationReviewStatus =
+  | "approved"
+  | "adjusted"
+  | "disagreed";
+
+export interface SDREvaluationReview {
+  id?: number;
+  evaluation_id: number;
+  call_record_id: number;
+  reviewer_email: string;
+  reviewer_name?: string | null;
+  review_status: SDREvaluationReviewStatus;
+  adjusted_overall_score?: number | null;
+  adjusted_dimension_scores?: any;
+  adjusted_attribute_evaluations?: any;
+  review_notes?: string | null;
+  reviewed_at?: Date;
+  created_at?: Date;
+}
+
+async function ensureSDRReviewsTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sdr_evaluation_reviews (
+      id SERIAL PRIMARY KEY,
+      evaluation_id INTEGER NOT NULL REFERENCES sdr_call_evaluations(id) ON DELETE CASCADE,
+      call_record_id INTEGER NOT NULL REFERENCES call_records(id) ON DELETE CASCADE,
+      reviewer_email VARCHAR(255) NOT NULL,
+      reviewer_name VARCHAR(255),
+      review_status VARCHAR(20) NOT NULL CHECK (review_status IN ('approved','adjusted','disagreed')),
+      adjusted_overall_score DECIMAL(5,2),
+      adjusted_dimension_scores JSONB,
+      adjusted_attribute_evaluations JSONB,
+      review_notes TEXT,
+      reviewed_at TIMESTAMPTZ DEFAULT NOW(),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_eval ON sdr_evaluation_reviews(evaluation_id);
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_call ON sdr_evaluation_reviews(call_record_id);
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_reviewer ON sdr_evaluation_reviews(reviewer_email);
+  `);
+}
+
+export async function saveSDREvaluationReview(
+  review: SDREvaluationReview,
+): Promise<number> {
+  await ensureSDRReviewsTable();
+  logger.info("📝 [CallDB] Saving SDR evaluation review", {
+    evaluationId: review.evaluation_id,
+    callRecordId: review.call_record_id,
+    reviewStatus: review.review_status,
+    reviewer: review.reviewer_email,
+  });
+
+  const result = await pool.query(
+    `
+    INSERT INTO sdr_evaluation_reviews (
+      evaluation_id,
+      call_record_id,
+      reviewer_email,
+      reviewer_name,
+      review_status,
+      adjusted_overall_score,
+      adjusted_dimension_scores,
+      adjusted_attribute_evaluations,
+      review_notes
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING id
+  `,
+    [
+      review.evaluation_id,
+      review.call_record_id,
+      review.reviewer_email,
+      review.reviewer_name || null,
+      review.review_status,
+      review.adjusted_overall_score ?? null,
+      review.adjusted_dimension_scores
+        ? JSON.stringify(review.adjusted_dimension_scores)
+        : null,
+      review.adjusted_attribute_evaluations
+        ? JSON.stringify(review.adjusted_attribute_evaluations)
+        : null,
+      review.review_notes || null,
+    ],
+  );
+
+  logger.info("✅ [CallDB] SDR review saved", { id: result.rows[0].id });
+  return result.rows[0].id;
+}
+
+export async function getSDRReviewsForCall(
+  callRecordId: number,
+): Promise<SDREvaluationReview[]> {
+  await ensureSDRReviewsTable();
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM sdr_evaluation_reviews
+    WHERE call_record_id = $1
+    ORDER BY reviewed_at DESC, id DESC
+  `,
+    [callRecordId],
+  );
+  return result.rows.map((row: any) => ({
+    id: row.id,
+    evaluation_id: row.evaluation_id,
+    call_record_id: row.call_record_id,
+    reviewer_email: row.reviewer_email,
+    reviewer_name: row.reviewer_name,
+    review_status: row.review_status as SDREvaluationReviewStatus,
+    adjusted_overall_score:
+      row.adjusted_overall_score !== null
+        ? parseFloat(row.adjusted_overall_score)
+        : null,
+    adjusted_dimension_scores: row.adjusted_dimension_scores,
+    adjusted_attribute_evaluations: row.adjusted_attribute_evaluations,
+    review_notes: row.review_notes,
+    reviewed_at: row.reviewed_at,
+    created_at: row.created_at,
+  }));
+}
+
+/**
+ * COPC-aligned prompt — used when the active scorecard has the v2
+ * structure (every attribute carries a `section_id`). Scores each
+ * checkpoint on the 0/1/2 rubric (Not Met / Partially Met / Fully Met)
+ * with `null` for checkpoints whose data dependency is outside the
+ * transcript (Five9 timestamps, conversion ratios, etc.) — those are
+ * explicitly excluded from the weighted overall so a transcript-only
+ * evaluation doesn't get penalised for data the analyzer can't see.
+ *
+ * Result shape stays compatible with the legacy parser
+ * (attribute_evaluations[].status PASS/FAIL/NA) so the same downstream
+ * saveSDREvaluation path keeps working: score=2 → PASS, score 0|1 →
+ * FAIL, score=null → NA.
+ */
+export function buildCopcSDREvaluationPrompt(
+  transcript: string,
+  scorecard: SDRScorecardConfig,
+): string {
+  // Group attributes by their section_id so the prompt mirrors the
+  // scorecard's section structure exactly.
+  const bySection: Record<string, SDREvaluationAttribute[]> = {};
+  const sectionOrder: string[] = [];
+  for (const a of scorecard.attributes) {
+    const sid = (a as any).section_id || "ungrouped";
+    if (!bySection[sid]) {
+      bySection[sid] = [];
+      sectionOrder.push(sid);
+    }
+    bySection[sid].push(a);
+  }
+  const sectionsBlock = sectionOrder
+    .map((sid) => {
+      const attrs = bySection[sid];
+      const items = attrs
+        .map((a, i) => {
+          const target = (a as any).target || "-";
+          const metric = (a as any).metric || a.evaluation_logic || "";
+          const dep = (a as any).data_dependency || "";
+          const deferTag = dep.includes("five9_real_ingest")
+            ? " [DATA: deferred — score null]"
+            : dep.includes("NEW")
+              ? " [DATA: not yet available — score null if no evidence]"
+              : "";
+          return `  ${i + 1}. ${a.name} (${a.id})${deferTag}
+     Metric: ${metric}
+     Target: ${target}`;
+        })
+        .join("\n\n");
+      return `### Section: ${sid}\n${items}`;
+    })
+    .join("\n\n");
+
+  return `You are a Quality Assurance evaluator for SDR (Sales Development Representative) calls, applying the COPC-aligned ExampleOrg SDR QA Scorecard v2.
+
+Scoring rubric (per checkpoint):
+  0 = Not Met       (clear evidence the SDR missed or violated the standard)
+  1 = Partially Met (some evidence but inconsistent / incomplete)
+  2 = Fully Met     (clear, consistent evidence the SDR met the standard)
+  null = Cannot Score (no evidence in the transcript — do NOT penalise)
+
+Rules:
+  • Use \`null\` for checkpoints tagged [DATA: deferred] or [DATA: not yet available] — you cannot score Five9 login gaps, idle ratios, conversion funnels, etc. from a transcript alone.
+  • Provide a one-sentence evidence quote from the transcript when scoring 0 or 1, so the operator sees WHY.
+  • Treat Arabic / Saudi-dialect transcripts as first-class input. Polite phrasing and indirect requests count as evidence — do not over-penalise.
+  • Be consistent: the same behavior gets the same score across calls.
+
+## Transcript
+${transcript}
+
+## Scorecard
+${sectionsBlock}
+
+## Return JSON (exact shape — required for parsing)
+
+{
+  "attribute_evaluations": [
+    {
+      "attribute_id": "checkpoint_id_from_above",
+      "attribute_name": "Checkpoint Name",
+      "section_id": "section_id_from_above",
+      "score": 0 | 1 | 2 | null,
+      "status": "PASS" | "FAIL" | "NA",
+      "severity": "minor" | "major" | "critical",
+      "evidence_quotes": ["one sentence from transcript, in original language"],
+      "comment": "one professional sentence summarising the evidence",
+      "improvement_tip": "one actionable sentence the SDR can apply on the next call"
+    }
+  ],
+  "overall_summary": {
+    "overall_score": <integer 0..100>,
+    "section_scores": {
+      "<section_id>": { "avg_score_0_2": <number>, "scored_count": <int>, "deferred_count": <int>, "score_0_100": <number 0..100> }
+    },
+    "dimension_scores": {
+      "people": <0..100>, "process": <0..100>, "governance": <0..100>
+    },
+    "top_strengths": ["string", "string", "string"],
+    "top_gaps": ["string", "string", "string"],
+    "coaching_actions": ["string", "string", "string"],
+    "critical_risks": []
+  },
+  "coaching_recommendation": {
+    "message_ar": "Arabic coaching message for the agent (professional, constructive)",
+    "message_en": "Optional English version",
+    "micro_training_topics": ["topic", "topic", "topic"]
+  },
+  "key_moments": {
+    "greeting":            { "detected": true|false, "description": "" },
+    "consent":             { "detected": true|false, "description": "" },
+    "discovery":           { "detected": true|false, "description": "" },
+    "objection_handling":  { "detected": true|false, "description": "" },
+    "closing":             { "detected": true|false, "description": "" },
+    "next_steps":          { "detected": true|false, "description": "" }
+  },
+  "compliance_notes": "any explicit compliance or PDPL observations",
+  "ai_confidence": <0..100>
+}
+
+Status mapping rule: score=2 → "PASS"; score 0 or 1 → "FAIL"; score=null → "NA". Do not deviate.
+
+Overall score formula: for each section, compute mean(scored checkpoints, 0..2) ÷ 2 × 100 = section's score_0_100. Then overall_score = weighted average across sections using the section weights from the scorecard. Sections whose checkpoints are ALL null get weight=0 (re-normalize across remaining sections) — never assume the agent's score on a section we can't observe.`;
+}
+
+export function buildSDREvaluationPrompt(
+  transcript: string,
+  scorecard: SDRScorecardConfig,
+): string {
+  // Route based on scorecard shape: v2 (COPC) scorecards tag every
+  // attribute with a section_id (added by scripts/seedScorecardV2Copc.ts).
+  // Legacy v1.5 scorecards have no section_id → fall through to the
+  // existing Arabic pass/fail prompt.
+  const hasSectionIds = scorecard.attributes.some(
+    (a) => (a as any).section_id != null,
+  );
+  if (hasSectionIds) {
+    return buildCopcSDREvaluationPrompt(transcript, scorecard);
+  }
+  const attributesList = scorecard.attributes
+    .map(
+      (attr, idx) =>
+        `${idx + 1}. ${attr.name} (${attr.id})
+   - الوصف: ${attr.description}
+   - البُعد: ${attr.dimension === "people" ? "الأشخاص" : attr.dimension === "process" ? "العمليات" : "الحوكمة"}
+   - الوزن: ${(attr.weight * 100).toFixed(0)}%
+   - الخطورة: ${attr.severity === "critical" ? "حرجة" : attr.severity === "major" ? "عالية" : "متوسطة"}
+   - معايير التقييم: ${attr.evaluation_logic}
+   - نوع التقييم: ${attr.scoring_type === "pass_fail" ? "نجاح/إخفاق" : "رقمي (1-10)"}`,
+    )
+    .join("\n\n");
+
+  return `أنت خبير جودة مكالمات SDR (Sales Development Representative) محترف.
+مهمتك تقييم هذه المكالمة بشكل شامل وفقاً لنموذج التقييم المحدد.
+
+## تعليمات التقييم:
+1. اتبع معايير التقييم المحددة بدقة - لا تخترع قواعد جديدة
+2. استخدم الأدلة من نص المكالمة فقط
+3. إذا لم يكن هناك دليل أو لم تصل المكالمة لهذه المرحلة، ضع الحالة NA
+4. لا تعاقب الموظف على أشياء لم يسمح العميل بحدوثها
+5. كن متسقاً: السلوك المماثل يحصل على تقييم مماثل
+6. افهم اللهجة السعودية والتعبيرات غير المباشرة والعبارات المهذبة
+
+## نص المكالمة:
+${transcript}
+
+## نموذج التقييم (${scorecard.name} - ${scorecard.version}):
+${attributesList}
+
+## المطلوب - قدم الإجابة بصيغة JSON التالية:
+{
+  "transcript_analysis": {
+    "speaker_segments": [
+      {"speaker": "Agent|Customer", "text": "النص", "approximate_position": "بداية|وسط|نهاية"}
+    ],
+    "key_moments": {
+      "greeting": {"detected": true/false, "description": "وصف مختصر"},
+      "consent": {"detected": true/false, "description": ""},
+      "discovery": {"detected": true/false, "description": ""},
+      "objection_handling": {"detected": true/false, "description": ""},
+      "closing": {"detected": true/false, "description": ""},
+      "next_steps": {"detected": true/false, "description": ""}
+    },
+    "call_duration_assessment": "قصيرة|متوسطة|طويلة",
+    "call_outcome": "وصف نتيجة المكالمة"
+  },
+  "attribute_evaluations": [
+    {
+      "attribute_id": "معرف السمة",
+      "attribute_name": "اسم السمة",
+      "dimension": "people|process|governance",
+      "score": <1-10 للتقييم الرقمي أو null>,
+      "status": "PASS|FAIL|NA",
+      "severity": "minor|major|critical",
+      "evidence_quotes": ["اقتباس 1 من النص", "اقتباس 2"],
+      "comment": "تعليق مهني وموضوعي",
+      "improvement_tip": "نصيحة واحدة محددة للتحسين"
+    }
+  ],
+  "overall_summary": {
+    "overall_score": <0-100>,
+    "dimension_scores": {
+      "people": <0-100>,
+      "process": <0-100>,
+      "governance": <0-100>
+    },
+    "top_strengths": ["قوة 1", "قوة 2", "قوة 3"],
+    "top_gaps": ["فجوة 1", "فجوة 2", "فجوة 3"],
+    "coaching_actions": ["إجراء تدريبي 1", "إجراء 2", "إجراء 3", "إجراء 4", "إجراء 5"],
+    "critical_risks": ["مخاطر حرجة إن وجدت"]
+  },
+  "coaching_recommendation": {
+    "message_ar": "رسالة تدريبية للموظف باللغة العربية - مهنية وبناءة",
+    "message_en": "Optional English coaching message",
+    "micro_training_topics": ["موضوع تدريبي 1", "موضوع 2", "موضوع 3"]
+  },
+  "compliance_notes": "ملاحظات حول الامتثال والسياسات",
+  "ai_confidence": <0-100 مستوى ثقة التحليل>
+}`;
+}
+
+export async function submitAIFeedback(params: {
+  callRecordId: number;
+  evaluationId: number;
+  feedbackType: "accurate" | "partially_accurate" | "inaccurate";
+  details: string;
+  submittedBy: string;
+}): Promise<number> {
+  const result = await pool.query(
+    `INSERT INTO ai_training_feedback (call_record_id, evaluation_id, feedback_type, details, submitted_by)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id`,
+    [
+      params.callRecordId,
+      params.evaluationId,
+      params.feedbackType,
+      params.details,
+      params.submittedBy,
+    ],
+  );
+  return result.rows[0].id;
+}
+
+export async function getAITrainingStats(): Promise<{
+  reviewed: number;
+  accuracy: number;
+  corrections: number;
+  approved: number;
+  adjusted: number;
+  disagreed: number;
+  top_corrected_attributes: Array<{
+    attribute_id: string;
+    attribute_name: string;
+    adjustment_count: number;
+  }>;
+  legacy_feedback?: {
+    accurate: number;
+    partial: number;
+    inaccurate: number;
+  };
+}> {
+  // Medium #3 — the authoritative correction signal is sdr_evaluation_reviews
+  // (Approve / Adjust / Disagree from #6 + #6 v1.1). "Accuracy" = the rate at
+  // which managers Approve the AI score outright; "Corrections" = Adjusted +
+  // Disagreed. The old `ai_training_feedback` thumbs-rating signal is kept
+  // alongside as legacy_feedback so the panel can show both lenses without
+  // breaking the existing submit path. The schema for these tables was
+  // already in place from prior sessions; this is purely a rollup query.
+  await ensureSDRReviewsTable();
+  const reviewsResult = await pool.query(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN review_status = 'approved'  THEN 1 ELSE 0 END) AS approved,
+      SUM(CASE WHEN review_status = 'adjusted'  THEN 1 ELSE 0 END) AS adjusted,
+      SUM(CASE WHEN review_status = 'disagreed' THEN 1 ELSE 0 END) AS disagreed
+    FROM sdr_evaluation_reviews
+  `);
+  const r = reviewsResult.rows[0] || {};
+  const reviewed = parseInt(r.total) || 0;
+  const approved = parseInt(r.approved) || 0;
+  const adjusted = parseInt(r.adjusted) || 0;
+  const disagreed = parseInt(r.disagreed) || 0;
+  const corrections = adjusted + disagreed;
+  const accuracy = reviewed > 0 ? Math.round((approved / reviewed) * 100) : 0;
+
+  // Top corrected attributes — which attribute_ids do managers most often
+  // override on Adjusted reviews? Surfaces real prompt-tuning targets.
+  // Each adjusted_attribute_evaluations JSONB is the manager's final values;
+  // we count an attribute as "corrected" when its status or score differs
+  // from the AI's. Limited to top 5 to keep the panel compact.
+  let topCorrected: Array<{
+    attribute_id: string;
+    attribute_name: string;
+    adjustment_count: number;
+  }> = [];
+  if (adjusted > 0) {
+    try {
+      const correctedResult = await pool.query(`
+        WITH adjusted_pairs AS (
+          SELECT
+            sr.id AS review_id,
+            adj_elem ->> 'attribute_id' AS attribute_id,
+            adj_elem ->> 'attribute_name' AS attribute_name,
+            adj_elem ->> 'status' AS adj_status,
+            (adj_elem ->> 'score')::numeric AS adj_score,
+            se.attribute_evaluations AS ai_attrs
+          FROM sdr_evaluation_reviews sr
+          JOIN sdr_call_evaluations se ON se.id = sr.evaluation_id
+          CROSS JOIN LATERAL jsonb_array_elements(sr.adjusted_attribute_evaluations) AS adj_elem
+          WHERE sr.review_status = 'adjusted'
+            AND sr.adjusted_attribute_evaluations IS NOT NULL
+        ),
+        diffs AS (
+          SELECT
+            ap.attribute_id,
+            ap.attribute_name,
+            ap.review_id,
+            -- Find the matching AI attribute by attribute_id within the
+            -- evaluation's attribute_evaluations JSONB array.
+            (
+              SELECT ai_elem
+              FROM jsonb_array_elements(ap.ai_attrs) AS ai_elem
+              WHERE ai_elem ->> 'attribute_id' = ap.attribute_id
+              LIMIT 1
+            ) AS ai_elem,
+            ap.adj_status,
+            ap.adj_score
+          FROM adjusted_pairs ap
+        )
+        SELECT attribute_id, attribute_name, COUNT(DISTINCT review_id) AS adjustment_count
+        FROM diffs
+        WHERE
+          attribute_id IS NOT NULL
+          AND ai_elem IS NOT NULL
+          AND (
+            (ai_elem ->> 'status') IS DISTINCT FROM adj_status
+            OR (ai_elem ->> 'score')::numeric IS DISTINCT FROM adj_score
+          )
+        GROUP BY attribute_id, attribute_name
+        ORDER BY adjustment_count DESC, attribute_id
+        LIMIT 5
+      `);
+      topCorrected = correctedResult.rows.map((row: any) => ({
+        attribute_id: row.attribute_id,
+        attribute_name: row.attribute_name,
+        adjustment_count: parseInt(row.adjustment_count) || 0,
+      }));
+    } catch (err: any) {
+      logger.warn("[AITrainingStats] top-corrected query failed:", err?.message);
+      topCorrected = [];
+    }
+  }
+
+  // Legacy thumbs-rating signal kept alongside for backwards compat.
+  let legacy: { accurate: number; partial: number; inaccurate: number } | undefined;
+  try {
+    const legacyResult = await pool.query(`
+      SELECT
+        SUM(CASE WHEN feedback_type = 'accurate' THEN 1 ELSE 0 END) AS accurate,
+        SUM(CASE WHEN feedback_type = 'partially_accurate' THEN 1 ELSE 0 END) AS partial,
+        SUM(CASE WHEN feedback_type = 'inaccurate' THEN 1 ELSE 0 END) AS inaccurate
+      FROM ai_training_feedback
+    `);
+    const lr = legacyResult.rows[0] || {};
+    legacy = {
+      accurate: parseInt(lr.accurate) || 0,
+      partial: parseInt(lr.partial) || 0,
+      inaccurate: parseInt(lr.inaccurate) || 0,
+    };
+  } catch {
+    legacy = undefined;
+  }
+
+  return {
+    reviewed,
+    accuracy,
+    corrections,
+    approved,
+    adjusted,
+    disagreed,
+    top_corrected_attributes: topCorrected,
+    legacy_feedback: legacy,
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Call-record audio path + Five9 integration_config writes (Task #746)
+//
+// Moved out of `src/mastra/routes/callIntelligenceRoutes.ts` so all writes
+// against `call_records` and the Five9 `integration_config` row live in this
+// (grandfathered) module and the secret-leak coverage gate no longer has to
+// track the route file separately.
+// ──────────────────────────────────────────────────────────────────────────────
+export async function updateCallRecordAudioPath(
+  callRecordId: number,
+  audioFilePath: string,
+): Promise<void> {
+  await pool.query(
+    "UPDATE call_records SET audio_file_path = $1 WHERE id = $2",
+    [audioFilePath, callRecordId],
+  );
+}
+
+// Audio persistence across redeploys.
+// Replit (and most container hosts) wipe the local filesystem on each
+// redeploy — `uploads/calls/*.wav` files are gone, leaving call_records
+// rows pointing at paths that no longer exist. Storing the audio bytes
+// in Postgres (BYTEA) makes the recording survive container restarts so
+// managers can still play / re-transcribe / re-evaluate after a deploy.
+// Idempotent ALTER so existing deploys don't need a migration step.
+let _audioBlobColumnReady: Promise<void> | null = null;
+async function ensureAudioBlobColumns(): Promise<void> {
+  if (_audioBlobColumnReady) return _audioBlobColumnReady;
+  _audioBlobColumnReady = pool
+    .query(`
+      ALTER TABLE call_records ADD COLUMN IF NOT EXISTS audio_blob BYTEA;
+      ALTER TABLE call_records ADD COLUMN IF NOT EXISTS audio_blob_mime VARCHAR(64);
+      ALTER TABLE call_records ADD COLUMN IF NOT EXISTS audio_blob_size INTEGER;
+    `)
+    .then(() => undefined)
+    .catch((err) => {
+      logger.warn("[CallDB] audio_blob column add failed (will retry):", err);
+      _audioBlobColumnReady = null;
+    });
+  return _audioBlobColumnReady;
+}
+
+export async function setCallRecordAudioBlob(
+  callRecordId: number,
+  buffer: Buffer,
+  mime: string,
+): Promise<void> {
+  await ensureAudioBlobColumns();
+  await pool.query(
+    `UPDATE call_records
+     SET audio_blob = $1, audio_blob_mime = $2, audio_blob_size = $3,
+         updated_at = NOW()
+     WHERE id = $4`,
+    [buffer, mime, buffer.length, callRecordId],
+  );
+}
+
+export async function getCallRecordAudioBlob(
+  callRecordId: number,
+): Promise<{ buffer: Buffer; mime: string; size: number } | null> {
+  await ensureAudioBlobColumns();
+  const result = await pool.query(
+    `SELECT audio_blob, audio_blob_mime, audio_blob_size
+       FROM call_records WHERE id = $1`,
+    [callRecordId],
+  );
+  const row = result.rows[0];
+  if (!row || !row.audio_blob) return null;
+  // pg returns BYTEA as a Buffer already; defensive coerce just in case.
+  const buf = Buffer.isBuffer(row.audio_blob)
+    ? row.audio_blob
+    : Buffer.from(row.audio_blob);
+  return {
+    buffer: buf,
+    mime: row.audio_blob_mime || "audio/wav",
+    size: row.audio_blob_size || buf.length,
+  };
+}
+
+export async function hasCallRecordAudioBlob(
+  callRecordId: number,
+): Promise<boolean> {
+  await ensureAudioBlobColumns();
+  const result = await pool.query(
+    `SELECT 1 FROM call_records
+      WHERE id = $1 AND audio_blob IS NOT NULL LIMIT 1`,
+    [callRecordId],
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * Return blob metadata (MIME type and byte size) without loading the binary
+ * payload.  Used by the audio download route to build response headers and
+ * validate Range bounds before any BYTEA data is transferred from Postgres.
+ */
+export async function getCallRecordAudioBlobMeta(
+  callRecordId: number,
+): Promise<{ mime: string; size: number } | null> {
+  await ensureAudioBlobColumns();
+  const result = await pool.query(
+    `SELECT audio_blob_mime, audio_blob_size,
+            octet_length(audio_blob) AS actual_size
+       FROM call_records WHERE id = $1`,
+    [callRecordId],
+  );
+  const row = result.rows[0];
+  if (!row || row.actual_size == null) return null;
+  return {
+    mime: row.audio_blob_mime || "audio/wav",
+    size: row.audio_blob_size || parseInt(row.actual_size, 10),
+  };
+}
+
+/**
+ * Return a Web ReadableStream that reads the audio_blob BYTEA column in
+ * fixed-size chunks via `SUBSTRING(audio_blob FROM pos FOR len)`.
+ *
+ * Only the bytes in [startByte, endByte] (both 0-based, inclusive) are
+ * transferred.  Each pull fetches at most `chunkSize` bytes, so the maximum
+ * in-process memory per request equals one chunk (default 512 KB) rather than
+ * the full recording size (up to 200 MB).
+ *
+ * PostgreSQL SUBSTRING on BYTEA uses 1-based positions; the conversion is
+ * handled internally so callers always work in 0-based offsets.
+ */
+export function streamCallRecordAudioBlobRange(
+  callRecordId: number,
+  startByte: number,
+  endByte: number,
+  chunkSize = 512 * 1024,
+): ReadableStream<Uint8Array> {
+  let offset = startByte;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (offset > endByte) {
+        controller.close();
+        return;
+      }
+      const readLen = Math.min(chunkSize, endByte - offset + 1);
+      try {
+        const result = await pool.query<{ chunk: Buffer | null }>(
+          `SELECT SUBSTRING(audio_blob FROM $1 FOR $2) AS chunk
+             FROM call_records WHERE id = $3`,
+          [offset + 1, readLen, callRecordId],
+        );
+        const raw = result.rows[0]?.chunk;
+        if (!raw) {
+          controller.close();
+          return;
+        }
+        const buf: Buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+        controller.enqueue(new Uint8Array(buf));
+        offset += buf.length;
+        if (buf.length < readLen || offset > endByte) {
+          controller.close();
+        }
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+  });
+}
+
+let integrationConfigTableReady: Promise<void> | null = null;
+async function ensureIntegrationConfigTable(): Promise<void> {
+  if (integrationConfigTableReady) return integrationConfigTableReady;
+  integrationConfigTableReady = pool
+    .query(`
+      CREATE TABLE IF NOT EXISTS integration_config (
+        id SERIAL PRIMARY KEY,
+        integration_type VARCHAR(50) UNIQUE NOT NULL,
+        config JSONB NOT NULL,
+        is_active BOOLEAN DEFAULT true,
+        last_sync_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    .then(() => undefined);
+  return integrationConfigTableReady;
+}
+
+export async function upsertFive9IntegrationConfig(
+  config: Record<string, unknown>,
+): Promise<void> {
+  await ensureIntegrationConfigTable();
+  await pool.query(
+    `INSERT INTO integration_config (integration_type, config, is_active)
+     VALUES ('five9', $1, true)
+     ON CONFLICT (integration_type)
+     DO UPDATE SET config = $1, updated_at = NOW()`,
+    [JSON.stringify(config)],
+  );
+}
+
+export async function getActiveFive9IntegrationConfig(): Promise<Record<
+  string,
+  unknown
+> | null> {
+  await ensureIntegrationConfigTable();
+  const result = await pool.query(
+    "SELECT config FROM integration_config WHERE integration_type = 'five9' AND is_active = true",
+  );
+  return result.rows[0]?.config ?? null;
+}
+
+export async function markFive9IntegrationSynced(): Promise<void> {
+  await pool.query(
+    "UPDATE integration_config SET last_sync_at = NOW() WHERE integration_type = 'five9'",
+  );
+}
+
+export { pool as callIntelligencePool };

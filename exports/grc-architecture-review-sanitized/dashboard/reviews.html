@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg - Management Review</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .status-planned { background-color: #DBEAFE; color: #1E40AF; }
+        .status-in_progress { background-color: #FEF3C7; color: #D97706; }
+        .status-completed { background-color: #D1FAE5; color: #047857; }
+        .status-cancelled { background-color: #E5E7EB; color: #6B7280; }
+        .priority-critical { background-color: #B91C1C; color: white; }
+        .priority-high { background-color: #DC2626; color: white; }
+        .priority-medium { background-color: #F59E0B; color: white; }
+        .priority-low { background-color: #10B981; color: white; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/safe-render.js?v=1"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('reviews');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="reviews.title">Management Review</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="reviews.subtitle">ISO 9001 Clause 9.3 — Management review meetings, decisions, and action tracking</p>
+            </div>
+            <div class="flex gap-3">
+                <button data-on-click="showCreateModal" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    New Review
+                </button>
+            </div>
+        </div>
+
+        <!-- Action Summary Cards -->
+        <div id="actionSummary" class="grid grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+                <p class="text-2xl font-bold text-gray-900" id="totalActions">-</p>
+                <p class="text-xs text-gray-500">Total Actions</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+                <p class="text-2xl font-bold text-blue-600" id="openActions">-</p>
+                <p class="text-xs text-gray-500">Open</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+                <p class="text-2xl font-bold text-red-600" id="overdueActions">-</p>
+                <p class="text-xs text-gray-500">Overdue</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+                <p class="text-2xl font-bold text-green-600" id="completedActions">-</p>
+                <p class="text-xs text-gray-500">Completed</p>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex gap-3 mb-4">
+            <select id="statusFilter" data-on-change="loadReviews" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="" data-i18n="reviews.all_statuses">All Statuses</option>
+                <option value="planned" data-i18n="reviews.s_planned">Planned</option>
+                <option value="in_progress" data-i18n="common.in_progress">In Progress</option>
+                <option value="completed" data-i18n="reviews.completed">Completed</option>
+                <option value="cancelled" data-i18n="reviews.s_cancelled">Cancelled</option>
+            </select>
+            <select id="yearFilter" data-on-change="loadReviews" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="" data-i18n="reviews.all_years">All Years</option>
+            </select>
+        </div>
+
+        <!-- Reviews Table -->
+        <div class="bg-white rounded-xl shadow overflow-hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_review_no">Review #</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.date">Date</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_chair">Chair</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_next_review">Next Review</th>
+                        <th scope="col" class="px-4 py-3"></th>
+                    </tr>
+                </thead>
+                <tbody id="reviewsBody" class="divide-y divide-gray-200">
+                    <tr><td colspan="8" class="text-center py-8 text-gray-400">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Create/Edit Review Modal -->
+    <div id="createModal" class="modal">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold" id="modalTitle" data-i18n="reviews.new_review_modal">New Management Review</h2>
+                <button data-on-click="hideModal" data-args="[&quot;createModal&quot;]" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            <form id="reviewForm" data-on-submit="saveReview" data-pass-event="true">
+                <input type="hidden" id="editId">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="reviews.f_title">Title *</label>
+                        <input type="text" id="formTitle" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Q1 2026 Management Review">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="reviews.f_review_date">Review Date *</label>
+                        <input type="date" id="formDate" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="reviews.f_chair">Chair *</label>
+                        <input type="text" id="formChair" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Quality Manager">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="reviews.f_status">Status</label>
+                        <select id="formStatus" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <option value="planned" data-i18n="reviews.s_planned">Planned</option>
+                            <option value="in_progress" data-i18n="common.in_progress">In Progress</option>
+                            <option value="completed" data-i18n="reviews.completed">Completed</option>
+                        </select>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="reviews.f_attendees">Attendees (comma-separated)</label>
+                        <input type="text" id="formAttendees" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Quality Manager, Admin, Team Lead">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="reviews.f_next_review">Next Review Date</label>
+                        <input type="date" id="formNextDate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="reviews.f_minutes">Minutes / Notes</label>
+                    <textarea id="formMinutes" rows="4" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Meeting minutes..."></textarea>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="reviews.f_output">Output Summary / Decisions</label>
+                    <textarea id="formOutput" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Key decisions and outputs..."></textarea>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" data-on-click="hideModal" data-args="[&quot;createModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-sm">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700" data-i18n="reviews.save_review">Save Review</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Review Detail Modal -->
+    <div id="detailModal" class="modal">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold" id="detailTitle" data-i18n="reviews.review_details">Review Details</h2>
+                <button data-on-click="hideModal" data-args="[&quot;detailModal&quot;]" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            <div id="detailContent">Loading...</div>
+        </div>
+    </div>
+
+    <script>
+    const API = '';
+    let currentReviews = [];
+
+    async function loadReviews() {
+        const status = document.getElementById('statusFilter').value;
+        const year = document.getElementById('yearFilter').value;
+        let url = `${API}/api/management-reviews?limit=50`;
+        if (status) url += `&status=${status}`;
+        if (year) url += `&year=${year}`;
+
+        try {
+            const res = await fetch(url, { credentials: 'include' });
+            const data = await res.json();
+            currentReviews = data.reviews || [];
+            renderReviews();
+        } catch (e) {
+            document.getElementById('reviewsBody').innerHTML = '<tr><td colspan="8" class="text-center py-8 text-red-400">' + WalaPlusI18n.t('dyn.reviews.failed_load') + '</td></tr>';
+        }
+
+        loadActionSummary();
+    }
+
+    async function loadActionSummary() {
+        try {
+            const res = await fetch(`${API}/api/management-reviews/actions/summary`, { credentials: 'include' });
+            const data = await res.json();
+            document.getElementById('totalActions').textContent = data.total || 0;
+            document.getElementById('openActions').textContent = data.open || 0;
+            document.getElementById('overdueActions').textContent = data.overdue || 0;
+            document.getElementById('completedActions').textContent = data.completed || 0;
+        } catch {}
+    }
+
+    function renderReviews() {
+        const tbody = document.getElementById('reviewsBody');
+        if (!currentReviews.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">' + WalaPlusI18n.t('dyn.reviews.no_reviews') + '</td></tr>';
+            return;
+        }
+        tbody.innerHTML = currentReviews.map(r => `
+            <tr class="hover:bg-gray-50 cursor-pointer" data-on-click="showDetail" data-args="[${r.id}]">
+                <td class="px-4 py-3 text-sm font-mono">${esc(r.review_number)}</td>
+                <td class="px-4 py-3 text-sm font-medium">${esc(r.title)}</td>
+                <td class="px-4 py-3 text-sm">${r.review_date ? new Date(r.review_date).toLocaleDateString() : '-'}</td>
+                <td class="px-4 py-3 text-sm">${esc(r.chair)}</td>
+                <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium status-${r.status}">${r.status.replace('_', ' ')}</span></td>
+                <td class="px-4 py-3 text-sm">${Array.isArray(r.action_items) ? r.action_items.length : '-'}</td>
+                <td class="px-4 py-3 text-sm">${r.next_review_date ? new Date(r.next_review_date).toLocaleDateString() : '-'}</td>
+                <td class="px-4 py-3">
+                    <button data-on-click="event.stopPropagation,editReview" data-args="[[],[${r.id}]]" class="text-indigo-600 hover:text-indigo-800 text-sm me-2">Edit</button>
+                    <button data-on-click="event.stopPropagation,gatherInputs" data-args="[[],[${r.id}]]" class="text-green-600 hover:text-green-800 text-sm" title="Auto-gather QMS data as review inputs">Gather Data</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // HTML escape — delegate to the shared SafeRender helper. The previous
+    // inline implementation also did not escape `'`, which left attribute
+    // contexts using single quotes (e.g. data-args='[...]') vulnerable to
+    // breakouts; SafeRender.escape handles every relevant character. Fails
+    // closed if safe-render.js failed to load.
+    const esc = (str) => {
+        if (!window.SafeRender || typeof window.SafeRender.escape !== 'function') {
+            console.error('[reviews] SafeRender.escape unavailable — refusing to render unescaped content');
+            return '';
+        }
+        return window.SafeRender.escape(str);
+    };
+
+    function showCreateModal() {
+        document.getElementById('modalTitle').textContent = WalaPlusI18n.t('dyn.reviews.new_review_title');
+        document.getElementById('editId').value = '';
+        document.getElementById('reviewForm').reset();
+        document.getElementById('formDate').value = new Date().toISOString().split('T')[0];
+        showModal('createModal');
+    }
+
+    async function editReview(id) {
+        try {
+            const res = await fetch(`${API}/api/management-reviews/${id}`, { credentials: 'include' });
+            const review = await res.json();
+            document.getElementById('modalTitle').textContent = WalaPlusI18n.t('dyn.reviews.edit_review_title');
+            document.getElementById('editId').value = id;
+            document.getElementById('formTitle').value = review.title || '';
+            document.getElementById('formDate').value = review.review_date ? review.review_date.split('T')[0] : '';
+            document.getElementById('formChair').value = review.chair || '';
+            document.getElementById('formStatus').value = review.status || 'planned';
+            document.getElementById('formAttendees').value = Array.isArray(review.attendees) ? review.attendees.join(', ') : '';
+            document.getElementById('formNextDate').value = review.next_review_date ? review.next_review_date.split('T')[0] : '';
+            document.getElementById('formMinutes').value = review.minutes || '';
+            document.getElementById('formOutput').value = review.output_summary || '';
+            showModal('createModal');
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_load_review')); }
+    }
+
+    async function saveReview(e) {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const attendeesStr = document.getElementById('formAttendees').value;
+        const body = {
+            title: document.getElementById('formTitle').value,
+            review_date: document.getElementById('formDate').value,
+            chair: document.getElementById('formChair').value,
+            status: document.getElementById('formStatus').value,
+            attendees: attendeesStr ? attendeesStr.split(',').map(s => s.trim()).filter(Boolean) : [],
+            next_review_date: document.getElementById('formNextDate').value || null,
+            minutes: document.getElementById('formMinutes').value || null,
+            output_summary: document.getElementById('formOutput').value || null,
+        };
+
+        const url = id ? `${API}/api/management-reviews/${id}` : `${API}/api/management-reviews`;
+        const method = id ? 'PUT' : 'POST';
+        try {
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
+            if (!res.ok) throw new Error('Save failed');
+            hideModal('createModal');
+            loadReviews();
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_save_review')); }
+    }
+
+    async function gatherInputs(id) {
+        if (!confirm(WalaPlusI18n.t('dyn.reviews.confirm_gather_inputs'))) return;
+        try {
+            const res = await fetch(`${API}/api/management-reviews/${id}/gather-inputs`, { method: 'POST', credentials: 'include' });
+            const data = await res.json();
+            if (data.success) {
+                alert(WalaPlusI18n.t('dyn.reviews.inputs_gathered'));
+                loadReviews();
+            } else throw new Error();
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_gather_inputs')); }
+    }
+
+    async function showDetail(id) {
+        try {
+            const res = await fetch(`${API}/api/management-reviews/${id}`, { credentials: 'include' });
+            const r = await res.json();
+            document.getElementById('detailTitle').textContent = `${r.review_number} — ${r.title}`;
+
+            const attendees = Array.isArray(r.attendees) ? r.attendees : [];
+            const decisions = Array.isArray(r.decisions) ? r.decisions : [];
+            const actions = Array.isArray(r.action_items) ? r.action_items : [];
+            const inputs = r.input_summary || {};
+
+            let inputsHtml = '';
+            if (inputs.nc_summary || inputs.capa_summary || inputs.kpi_status || inputs.risk_status || inputs.audit_score !== undefined) {
+                inputsHtml = `<div class="mt-4">
+                    <h4 class="font-semibold text-sm mb-2">Review Inputs (Auto-gathered)</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                        ${inputs.nc_summary ? `<div class="bg-gray-50 rounded p-2"><div class="font-medium">NCs</div><div>Open: ${inputs.nc_summary.open} | Closed: ${inputs.nc_summary.closed}</div></div>` : ''}
+                        ${inputs.capa_summary ? `<div class="bg-gray-50 rounded p-2"><div class="font-medium">CAPAs</div><div>Open: ${inputs.capa_summary.open} | Effective: ${inputs.capa_summary.effective}</div></div>` : ''}
+                        ${inputs.audit_score ? `<div class="bg-gray-50 rounded p-2"><div class="font-medium">Audit Score</div><div>${inputs.audit_score}%</div></div>` : ''}
+                        ${inputs.kpi_status ? `<div class="bg-gray-50 rounded p-2"><div class="font-medium">KPIs</div><div>G:${inputs.kpi_status.green} A:${inputs.kpi_status.amber} R:${inputs.kpi_status.red}</div></div>` : ''}
+                        ${inputs.risk_status ? `<div class="bg-gray-50 rounded p-2"><div class="font-medium">Risks</div><div>C:${inputs.risk_status.critical} H:${inputs.risk_status.high} M:${inputs.risk_status.medium}</div></div>` : ''}
+                    </div>
+                </div>`;
+            }
+
+            let actionsHtml = '';
+            if (actions.length) {
+                actionsHtml = `<div class="mt-4">
+                    <h4 class="font-semibold text-sm mb-2">Action Items (${actions.length})</h4>
+                    <table class="w-full text-xs border">
+                        <thead><tr class="bg-gray-50"><th scope="col" class="px-2 py-1 text-start">#</th><th scope="col" class="px-2 py-1 text-start">Description</th><th scope="col" class="px-2 py-1 text-start">Assigned To</th><th scope="col" class="px-2 py-1 text-start">Due</th><th scope="col" class="px-2 py-1 text-start">Status</th><th scope="col" class="px-2 py-1"></th></tr></thead>
+                        <tbody>${actions.map(a => `
+                            <tr class="border-t"><td class="px-2 py-1">${a.action_number}</td><td class="px-2 py-1">${esc(a.description)}</td><td class="px-2 py-1">${esc(a.assigned_to)}</td>
+                            <td class="px-2 py-1">${a.due_date ? new Date(a.due_date).toLocaleDateString() : '-'}</td>
+                            <td class="px-2 py-1"><span class="px-1.5 py-0.5 rounded text-xs status-${a.status}">${a.status}</span></td>
+                            <td class="px-2 py-1"><button data-on-click="completeAction" data-args="[${a.id}]" class="text-green-600 hover:text-green-800 text-xs" ${a.status==='completed'?'disabled':''}>Complete</button></td></tr>
+                        `).join('')}</tbody>
+                    </table>
+                </div>`;
+            }
+
+            document.getElementById('detailContent').innerHTML = `
+                <div class="space-y-3 text-sm">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><span class="text-gray-500">Date:</span> ${r.review_date ? new Date(r.review_date).toLocaleDateString() : '-'}</div>
+                        <div><span class="text-gray-500">Status:</span> <span class="px-2 py-1 rounded-full text-xs font-medium status-${r.status}">${r.status.replace('_',' ')}</span></div>
+                        <div><span class="text-gray-500">Chair:</span> ${esc(r.chair)}</div>
+                        <div><span class="text-gray-500">Next Review:</span> ${r.next_review_date ? new Date(r.next_review_date).toLocaleDateString() : 'Not scheduled'}</div>
+                    </div>
+                    ${attendees.length ? `<div><span class="text-gray-500">Attendees:</span> ${attendees.map(a => esc(a)).join(', ')}</div>` : ''}
+                    ${r.minutes ? `<div class="mt-3"><h4 class="font-semibold text-sm mb-1">Minutes</h4><div class="bg-gray-50 rounded p-3 text-xs whitespace-pre-wrap">${esc(r.minutes)}</div></div>` : ''}
+                    ${r.output_summary ? `<div class="mt-3"><h4 class="font-semibold text-sm mb-1">Output / Decisions</h4><div class="bg-gray-50 rounded p-3 text-xs whitespace-pre-wrap">${esc(r.output_summary)}</div></div>` : ''}
+                    ${inputsHtml}
+                    ${actionsHtml}
+                    <div class="mt-4 border-t pt-3">
+                        <h4 class="font-semibold text-sm mb-2">Add Action Item</h4>
+                        <div class="grid grid-cols-4 gap-2">
+                            <input type="text" id="newActionDesc" class="col-span-2 border rounded px-2 py-1 text-xs" placeholder="Action description">
+                            <input type="text" id="newActionAssign" class="border rounded px-2 py-1 text-xs" placeholder="Assigned to">
+                            <input type="date" id="newActionDue" class="border rounded px-2 py-1 text-xs">
+                        </div>
+                        <div class="flex gap-2 mt-2">
+                            <select id="newActionPriority" class="border rounded px-2 py-1 text-xs">
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                                <option value="low">Low</option>
+                            </select>
+                            <button data-on-click="addAction" data-args="[${id}]" class="bg-indigo-600 text-white px-3 py-1 rounded text-xs hover:bg-indigo-700">Add</button>
+                        </div>
+                    </div>
+                </div>`;
+            showModal('detailModal');
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_load_details')); }
+    }
+
+    async function addAction(reviewId) {
+        const desc = document.getElementById('newActionDesc').value;
+        const assigned = document.getElementById('newActionAssign').value;
+        const due = document.getElementById('newActionDue').value;
+        const priority = document.getElementById('newActionPriority').value;
+        if (!desc || !assigned || !due) { alert(WalaPlusI18n.t('dyn.reviews.fill_action_fields')); return; }
+        try {
+            const res = await fetch(`${API}/api/management-reviews/${reviewId}/actions`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                body: JSON.stringify({ description: desc, assigned_to: assigned, due_date: due, priority })
+            });
+            if (!res.ok) throw new Error();
+            showDetail(reviewId);
+            loadActionSummary();
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_add_action')); }
+    }
+
+    async function completeAction(actionId) {
+        try {
+            const res = await fetch(`${API}/api/management-reviews/actions/${actionId}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                body: JSON.stringify({ status: 'completed', completion_date: new Date().toISOString().split('T')[0] })
+            });
+            if (!res.ok) throw new Error();
+            loadReviews();
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_complete_action')); }
+    }
+
+    function showModal(id) { document.getElementById(id).classList.add('active'); }
+    function hideModal(id) { document.getElementById(id).classList.remove('active'); }
+
+    // Populate year filter
+    const yearSelect = document.getElementById('yearFilter');
+    const curYear = new Date().getFullYear();
+    for (let y = curYear; y >= curYear - 5; y--) {
+        yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+    }
+
+    document.addEventListener('DOMContentLoaded', loadReviews);
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

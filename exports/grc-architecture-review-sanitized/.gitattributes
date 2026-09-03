@@ -1,0 +1,2 @@
+qms-backup.sql filter=lfs diff=lfs merge=lfs -text
+qms.sql filter=lfs diff=lfs merge=lfs -text

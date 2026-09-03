@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg - Documentation Live Tracker</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+        /* Connection pill. Three states; colour is backed by a text label so it
+           is not the only signal. */
+        .dtrack-conn { display:inline-flex; align-items:center; gap:6px; font-size:11px;
+                       padding:4px 10px; border-radius:9999px; border:1px solid transparent; }
+        .dtrack-conn-dot { width:8px; height:8px; border-radius:9999px; flex:none; }
+        .dtrack-live      { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+        .dtrack-live      .dtrack-conn-dot { background:#10B981; }
+        .dtrack-degraded  { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
+        .dtrack-degraded  .dtrack-conn-dot { background:#F59E0B; }
+        .dtrack-down      { background:#FEF2F2; color:#991B1B; border-color:#FECACA; }
+        .dtrack-down      .dtrack-conn-dot { background:#EF4444; }
+
+        /* Segmented review-state bar. Widths are driven through the --w custom
+           property (see .w-var in utilities.css) rather than an inline style
+           attribute, which CSP strips. */
+        .dtrack-progress { display:flex; width:100%; height:12px; border-radius:9999px;
+                           overflow:hidden; background:#F3F4F6; }
+        .dtrack-seg { height:100%; transition:width .3s ease; }
+        .dtrack-approved   { background:#10B981; }
+        .dtrack-mapped     { background:#3B82F6; }
+        .dtrack-in_review  { background:#F59E0B; }
+        .dtrack-commented  { background:#8B5CF6; }
+        .dtrack-blocked    { background:#EF4444; }
+        .dtrack-unreviewed { background:#D1D5DB; }
+
+        /* Row flash on a live update, so a change is visible without stealing
+           focus. Disabled under reduced-motion. */
+        @keyframes dtrackFlash { from { background:#FEF3C7; } to { background:transparent; } }
+        .dtrack-flash td { animation: dtrackFlash 2.2s ease-out; }
+        @media (prefers-reduced-motion: reduce) {
+            .dtrack-flash td { animation:none; box-shadow: inset 0 0 0 9999px rgba(251,191,36,.12); }
+            .dtrack-seg { transition:none; }
+        }
+
+        /* Link-state pill. 'unprojected' must never read as 'no coverage'. */
+        .dtrack-pill { display:inline-block; padding:1px 6px; border-radius:4px;
+                       font-size:10px; font-weight:600; white-space:nowrap; }
+        .dtrack-orphan      { background:#FEF3C7; color:#92400E; }
+        .dtrack-unprojected { background:#E5E7EB; color:#374151; }
+        .dtrack-linked      { background:#D1FAE5; color:#065F46; }
+        .dtrack-stale       { background:#FEE2E2; color:#991B1B; }
+
+        .dtrack-table thead th { position:sticky; top:0; background:#F9FAFB; z-index:1; }
+
+        /* Dark mode is written against html.wp-dark / html.dark, NOT Tailwind
+           dark: utilities — those live in a prefers-color-scheme media query and
+           follow the OS, not this app's theme toggle. */
+        html.wp-dark body, html.dark body { background:#0B1220; }
+        html.wp-dark .dtrack-table thead th,
+        html.dark .dtrack-table thead th { background:#111C33; color:#CBD5E1; }
+        html.wp-dark .dtrack-progress, html.dark .dtrack-progress { background:#1E293B; }
+        html.wp-dark .dtrack-unprojected, html.dark .dtrack-unprojected { background:#334155; color:#E2E8F0; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            WalaPlusNav.init('documentation-tracker');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- Header + liveness -->
+        <div class="flex flex-wrap justify-between items-start gap-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="doctracker.title">Documentation Live Tracker</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="doctracker.subtitle">The true state of the controlled documentation library on the file server — updated within seconds of a change on disk.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <span id="dtrackConn" class="dtrack-conn dtrack-degraded" role="status" aria-live="polite">
+                    <i class="dtrack-conn-dot" aria-hidden="true"></i>
+                    <!-- No data-i18n here on purpose: dtrackSetConn owns this
+                         text, and applyToDOM would otherwise overwrite the live
+                         state back to "Connecting…" on every translation pass. -->
+                    <span id="dtrackConnLabel">Connecting…</span>
+                    <span id="dtrackAgo" class="font-mono"></span>
+                </span>
+                <a href="/api/documentation-tracker/export.csv" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium text-sm" data-testid="link-tracker-export" data-i18n="doctracker.export">Export (CSV)</a>
+                <button type="button" data-on-click="dtrackReload" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium text-sm" data-testid="button-tracker-refresh" data-i18n="common.refresh">Refresh</button>
+            </div>
+        </div>
+
+        <!-- Collector staleness. Silence must never render as "nothing changed". -->
+        <div id="dtrackStale" class="hidden mb-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm"></div>
+
+        <!-- KPI row. grid-cols-2 / sm:grid-cols-3 / lg:grid-cols-5 is the only
+             guaranteed 5-across ladder — no xl: variants exist in the build. -->
+        <div id="dtrackKpis" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5"></div>
+
+        <!-- Review progress -->
+        <section class="bg-white rounded-lg shadow p-4 mb-5">
+            <div class="flex items-center justify-between gap-2 mb-2">
+                <span class="text-sm font-semibold text-gray-700" data-i18n="doctracker.progress_title">Review progress</span>
+                <span id="dtrackProgressPct" class="font-mono text-xs text-gray-500"></span>
+            </div>
+            <div class="dtrack-progress" id="dtrackProgress" role="img" aria-label="Review progress by state"></div>
+            <div id="dtrackLegend" class="flex flex-wrap gap-3 mt-2 text-xs"></div>
+        </section>
+
+        <!-- Filters -->
+        <section class="bg-white rounded-lg shadow p-4 mb-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div>
+                <label for="dtrackQ" class="block text-xs text-gray-500 mb-1" data-i18n="doctracker.f_search">Search</label>
+                <input id="dtrackQ" type="search" data-on-input="dtrackApplyFilters" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" data-i18n-placeholder="doctracker.f_search_ph" placeholder="Code, title or file…" />
+            </div>
+            <div>
+                <label for="dtrackState" class="block text-xs text-gray-500 mb-1" data-i18n="doctracker.f_state">Review state</label>
+                <select id="dtrackState" data-on-change="dtrackApplyFilters" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></select>
+            </div>
+            <div>
+                <label for="dtrackFamily" class="block text-xs text-gray-500 mb-1" data-i18n="doctracker.f_family">Type</label>
+                <select id="dtrackFamily" data-on-change="dtrackApplyFilters" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></select>
+            </div>
+            <div>
+                <label for="dtrackLang" class="block text-xs text-gray-500 mb-1" data-i18n="doctracker.f_lang">Language</label>
+                <select id="dtrackLang" data-on-change="dtrackApplyFilters" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <option value="" data-i18n="doctracker.f_all">All</option>
+                    <option value="EN">EN</option>
+                    <option value="AR">AR</option>
+                </select>
+            </div>
+            <div>
+                <label for="dtrackLink" class="block text-xs text-gray-500 mb-1" data-i18n="doctracker.f_link">Register link</label>
+                <select id="dtrackLink" data-on-change="dtrackApplyFilters" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></select>
+            </div>
+            <div class="flex items-end">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                    <input id="dtrackStaleOnly" type="checkbox" data-on-change="dtrackApplyFilters" class="rounded border-gray-300" />
+                    <span data-i18n="doctracker.f_stale">Changed since review</span>
+                </label>
+            </div>
+        </section>
+
+        <!-- Board -->
+        <section class="bg-white rounded-lg shadow mb-6">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dtrack-table" id="dtrackTable" data-no-sort>
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-start text-[11px] font-medium text-gray-500 uppercase" data-i18n="doctracker.c_code">Code</th>
+                            <th scope="col" class="px-3 py-2 text-start text-[11px] font-medium text-gray-500 uppercase min-w-[200px]" data-i18n="doctracker.c_title">Document</th>
+                            <th scope="col" class="px-3 py-2 text-start text-[11px] font-medium text-gray-500 uppercase" data-i18n="doctracker.c_lang">Lang</th>
+                            <th scope="col" class="px-3 py-2 text-start text-[11px] font-medium text-gray-500 uppercase" data-i18n="doctracker.c_link">Register</th>
+                            <th scope="col" class="px-3 py-2 text-start text-[11px] font-medium text-gray-500 uppercase" data-i18n="doctracker.c_review">Review</th>
+                            <th scope="col" class="px-3 py-2 text-start text-[11px] font-medium text-gray-500 uppercase" data-i18n="doctracker.c_refs">Refs</th>
+                            <th scope="col" class="px-3 py-2 text-start text-[11px] font-medium text-gray-500 uppercase" data-i18n="doctracker.c_issues">Issues</th>
+                            <th scope="col" class="px-3 py-2 text-start text-[11px] font-medium text-gray-500 uppercase" data-i18n="doctracker.c_modified">Modified</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dtrackBody" class="bg-white divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+            <div class="px-4 py-2 border-t border-gray-100 text-[11px] text-gray-500 flex flex-wrap items-center gap-4">
+                <span><span class="dtrack-pill dtrack-linked">linked</span> <span data-i18n="doctracker.lg_linked">coverage is meaningful</span></span>
+                <span><span class="dtrack-pill dtrack-unprojected">not analysed</span> <span data-i18n="doctracker.lg_unprojected">registered but never mapped — not a gap</span></span>
+                <span><span class="dtrack-pill dtrack-orphan">orphan</span> <span data-i18n="doctracker.lg_orphan">on disk, not on the master list</span></span>
+                <span id="dtrackCount" class="ms-auto tabular-nums"></span>
+            </div>
+        </section>
+
+        <!-- Registry findings -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <details class="bg-white rounded-lg shadow">
+                <summary class="px-4 py-3 cursor-pointer flex items-center justify-between gap-2">
+                    <span class="text-sm font-semibold text-gray-900" data-i18n="doctracker.orphans_title">Missing from the master list</span>
+                    <span id="dtrackOrphanCount" class="dtrack-pill dtrack-orphan">0</span>
+                </summary>
+                <div class="px-4 pb-4">
+                    <p class="text-xs text-gray-500 mb-2" data-i18n="doctracker.orphans_hint">On the file server but not in the controlled register. Promote adds it to the register; Arabic copies inherit their English sibling's details.</p>
+                    <button type="button" data-on-click="dtrackPromoteAll" id="dtrackPromoteAllBtn" class="mb-3 px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium disabled:opacity-60" data-i18n="doctracker.promote_all">Promote all shown</button>
+                    <div id="dtrackOrphans" class="text-xs"></div>
+                </div>
+            </details>
+            <details class="bg-white rounded-lg shadow">
+                <summary class="px-4 py-3 cursor-pointer flex items-center justify-between gap-2">
+                    <span class="text-sm font-semibold text-gray-900" data-i18n="doctracker.missing_title">Missing from disk</span>
+                    <span id="dtrackMissingCount" class="dtrack-pill dtrack-stale">0</span>
+                </summary>
+                <div class="px-4 pb-4">
+                    <p class="text-xs text-gray-500 mb-2" data-i18n="doctracker.missing_hint">On the controlled register but no longer found on the file server. This is a stronger finding than an orphan.</p>
+                    <div id="dtrackMissing" class="text-xs"></div>
+                </div>
+            </details>
+        </div>
+
+        <!-- Cross-reference findings -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <details class="bg-white rounded-lg shadow">
+                <summary class="px-4 py-3 cursor-pointer flex items-center justify-between gap-2">
+                    <span class="text-sm font-semibold text-gray-900" data-i18n="doctracker.dangling_title">Broken cross-references</span>
+                    <span id="dtrackDanglingCount" class="dtrack-pill dtrack-stale">0</span>
+                </summary>
+                <div class="px-4 pb-4">
+                    <p class="text-xs text-gray-500 mb-2" data-i18n="doctracker.dangling_hint">A controlled document points at another document that is not in the library — the reader is told to follow a procedure that does not exist.</p>
+                    <div id="dtrackDangling" class="text-xs"></div>
+                </div>
+            </details>
+            <details class="bg-white rounded-lg shadow">
+                <summary class="px-4 py-3 cursor-pointer flex items-center justify-between gap-2">
+                    <span class="text-sm font-semibold text-gray-900" data-i18n="doctracker.depended_title">Most depended upon</span>
+                    <span id="dtrackDependedCount" class="dtrack-pill dtrack-linked">0</span>
+                </summary>
+                <div class="px-4 pb-4">
+                    <p class="text-xs text-gray-500 mb-2" data-i18n="doctracker.depended_hint">How many other documents reference each one. Check this before revising a document — it is what tells you the blast radius of a change.</p>
+                    <div id="dtrackDepended" class="text-xs"></div>
+                </div>
+            </details>
+        </div>
+    </main>
+
+    <script>
+        // ─────────────────── Documentation Live Tracker ───────────────────
+        // Handlers must be plain top-level function declarations: safe-actions
+        // registers them by walking `window` at DOMContentLoaded, and a
+        // const-arrow would never be found. All prefixed dtrack* because the
+        // registry is first-write-wins — a name collision silently disables
+        // OUR handler, not the other one.
+        var DTRACK = {
+            rows: [],
+            overview: null,
+            orphans: { missingFromMaster: [], missingFromDisk: [] },
+            dangling: [],
+            depended: [],
+            es: null,
+            pollTimer: null,
+            agoTimer: null,
+            lastEventAt: 0,
+            dirty: Object.create(null)  // "code:field" while a local edit is in flight
+        };
+
+        function dtrackT(k, fb) {
+            return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb;
+        }
+
+        function dtrackEsc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // ── Load ────────────────────────────────────────────────────────
+        async function dtrackReload() {
+            await Promise.all([dtrackLoadOverview(), dtrackLoadDocuments(), dtrackLoadOrphans(), dtrackLoadRefs()]);
+        }
+
+        async function dtrackLoadRefs() {
+            try {
+                var r = await fetch('/api/documentation-tracker/refs/dangling', { credentials: 'same-origin' });
+                if (!r.ok) return;
+                var d = await r.json();
+                DTRACK.dangling = d.dangling || [];
+                DTRACK.depended = d.mostReferenced || [];
+                dtrackRenderRefs();
+            } catch (e) { /* non-fatal */ }
+        }
+
+        function dtrackRenderRefs() {
+            var dHost = document.getElementById('dtrackDangling');
+            var pHost = document.getElementById('dtrackDepended');
+            var dc = document.getElementById('dtrackDanglingCount');
+            var pc = document.getElementById('dtrackDependedCount');
+            var dangling = DTRACK.dangling || [];
+            var depended = DTRACK.depended || [];
+            if (dc) dc.textContent = String(dangling.length);
+            if (pc) pc.textContent = String(depended.length);
+
+            if (dHost) {
+                dHost.innerHTML = dangling.length === 0
+                    ? '<div class="text-gray-500 py-2">' + dtrackEsc(dtrackT('doctracker.none', 'Nothing here.')) + '</div>'
+                    : dangling.slice(0, 200).map(function (x) {
+                        return '<div class="flex items-center justify-between gap-2 py-1 border-b border-gray-100">'
+                            + '<span class="font-mono">' + dtrackEsc(x.from_code) + '</span>'
+                            + '<span class="text-gray-400">→</span>'
+                            + '<span class="font-mono text-red-700">' + dtrackEsc(x.to_code) + '</span>'
+                            + '<span class="text-gray-500 truncate flex-1" dir="auto">' + dtrackEsc(x.from_title || '') + '</span>'
+                            + '</div>';
+                    }).join('');
+            }
+            if (pHost) {
+                pHost.innerHTML = depended.length === 0
+                    ? '<div class="text-gray-500 py-2">' + dtrackEsc(dtrackT('doctracker.none', 'Nothing here.')) + '</div>'
+                    : depended.map(function (x) {
+                        // A heavily-referenced document that is NOT in the
+                        // library is the worst case: everything depends on
+                        // something that does not exist.
+                        var miss = x.in_library ? '' : ' <span class="dtrack-pill dtrack-stale">' + dtrackEsc(dtrackT('doctracker.not_in_library', 'not in library')) + '</span>';
+                        return '<div class="flex items-center justify-between gap-2 py-1 border-b border-gray-100">'
+                            + '<span class="font-mono">' + dtrackEsc(x.to_code) + '</span>' + miss
+                            + '<span class="text-gray-500 truncate flex-1" dir="auto">' + dtrackEsc(x.title || '') + '</span>'
+                            + '<span class="tabular-nums font-semibold">' + (x.inbound || 0) + '</span>'
+                            + '</div>';
+                    }).join('');
+            }
+        }
+
+        async function dtrackLoadOverview() {
+            try {
+                var r = await fetch('/api/documentation-tracker/overview', { credentials: 'same-origin' });
+                if (!r.ok) return;
+                DTRACK.overview = await r.json();
+                DTRACK.lastEventAt = Date.now();
+                dtrackRenderKpis();
+                dtrackRenderProgress();
+                dtrackRenderStale();
+            } catch (e) { /* poll will retry */ }
+        }
+
+        async function dtrackLoadDocuments() {
+            var body = document.getElementById('dtrackBody');
+            if (!body) return;
+            try {
+                var p = new URLSearchParams();
+                var q = (document.getElementById('dtrackQ') || {}).value || '';
+                var st = (document.getElementById('dtrackState') || {}).value || '';
+                var fam = (document.getElementById('dtrackFamily') || {}).value || '';
+                var lang = (document.getElementById('dtrackLang') || {}).value || '';
+                var link = (document.getElementById('dtrackLink') || {}).value || '';
+                var stale = (document.getElementById('dtrackStaleOnly') || {}).checked;
+                if (q) p.set('q', q);
+                if (st) p.set('state', st);
+                if (fam) p.set('family', fam);
+                if (lang) p.set('lang', lang);
+                if (link) p.set('link_status', link);
+                if (stale) p.set('stale', 'true');
+                p.set('page_size', '300');
+                var r = await fetch('/api/documentation-tracker/documents?' + p.toString(), { credentials: 'same-origin' });
+                var d = await r.json();
+                if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+                DTRACK.rows = d.rows || [];
+                dtrackRenderRows(d.total);
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-red-600">' + dtrackEsc(e.message) + '</td></tr>';
+            }
+        }
+
+        async function dtrackLoadOrphans() {
+            try {
+                var r = await fetch('/api/documentation-tracker/orphans', { credentials: 'same-origin' });
+                if (!r.ok) return;
+                DTRACK.orphans = await r.json();
+                dtrackRenderOrphans();
+            } catch (e) { /* non-fatal */ }
+        }
+
+        // ── Render ──────────────────────────────────────────────────────
+        function dtrackRenderKpis() {
+            var host = document.getElementById('dtrackKpis');
+            var o = DTRACK.overview;
+            if (!host || !o) return;
+            var d = o.documents || {};
+            function card(accent, label, value, sub) {
+                return '<div class="bg-white rounded-lg shadow p-3">'
+                    + '<div class="text-[11px] uppercase text-gray-500">' + dtrackEsc(label) + '</div>'
+                    + '<div class="text-2xl font-bold tabular-nums ' + accent + '">' + dtrackEsc(value) + '</div>'
+                    + '<div class="text-[11px] text-gray-500">' + dtrackEsc(sub) + '</div></div>';
+            }
+            host.innerHTML =
+                  card('text-gray-900', dtrackT('doctracker.k_tracked', 'Tracked'), d.total || 0, dtrackT('doctracker.k_tracked_sub', 'documents on disk'))
+                + card('text-emerald-700', dtrackT('doctracker.k_linked', 'Linked'), d.linked || 0, dtrackT('doctracker.k_linked_sub', 'coverage is meaningful'))
+                + card('text-gray-500', dtrackT('doctracker.k_unprojected', 'Not analysed'), d.unprojected || 0, dtrackT('doctracker.k_unprojected_sub', 'registered, never mapped'))
+                + card('text-amber-700', dtrackT('doctracker.k_orphan', 'Orphans'), d.orphan || 0, dtrackT('doctracker.k_orphan_sub', 'not on the master list'))
+                + card('text-red-700', dtrackT('doctracker.k_stale', 'Stale'), d.stale_since_review || 0, dtrackT('doctracker.k_stale_sub', 'changed after review'));
+        }
+
+        function dtrackRenderProgress() {
+            var bar = document.getElementById('dtrackProgress');
+            var legend = document.getElementById('dtrackLegend');
+            var pctEl = document.getElementById('dtrackProgressPct');
+            var o = DTRACK.overview;
+            if (!bar || !o) return;
+            var states = ['approved', 'mapped', 'commented', 'in_review', 'blocked', 'unreviewed'];
+            var counts = o.by_review_state || {};
+            var total = states.reduce(function (n, s) { return n + (counts[s] || 0); }, 0);
+            bar.innerHTML = states.map(function (s) {
+                return '<span class="dtrack-seg dtrack-' + s + ' w-var" data-state="' + s + '"></span>';
+            }).join('');
+            // Widths via the --w custom property: an inline style attribute is
+            // stripped by CSP, and setProperty is CSSOM so it is not.
+            var acc = 0;
+            states.forEach(function (s, i) {
+                var seg = bar.querySelector('[data-state="' + s + '"]');
+                if (!seg) return;
+                var pct = total > 0 ? ((counts[s] || 0) / total) * 100 : 0;
+                // Last segment absorbs the rounding so the bar always totals 100%.
+                var w = (i === states.length - 1) ? Math.max(0, 100 - acc) : Math.floor(pct * 100) / 100;
+                acc += w;
+                seg.style.setProperty('--w', w + '%');
+            });
+            var done = (counts.approved || 0) + (counts.mapped || 0);
+            if (pctEl) pctEl.textContent = total > 0 ? Math.round((done / total) * 100) + '%' : '—';
+            if (legend) {
+                legend.innerHTML = states.map(function (s) {
+                    return '<span class="inline-flex items-center gap-1">'
+                        + '<i class="dtrack-seg dtrack-' + s + ' inline-block rounded-full" data-style="width:10px;height:10px"></i>'
+                        + '<span class="text-gray-600">' + dtrackEsc(s.replace(/_/g, ' ')) + '</span>'
+                        + '<span class="tabular-nums text-gray-400">' + (counts[s] || 0) + '</span></span>';
+                }).join('');
+            }
+        }
+
+        function dtrackRenderStale() {
+            var el = document.getElementById('dtrackStale');
+            var o = DTRACK.overview;
+            if (!el || !o) return;
+            var cols = o.collectors || [];
+            // A collector that has stopped reporting is the dangerous case: the
+            // board still looks fine, so "no data" would silently read as
+            // "nothing changed".
+            var dead = cols.filter(function (c) {
+                return c.snapshot_age_seconds != null && c.snapshot_age_seconds > 26 * 3600;
+            });
+            if (cols.length === 0) {
+                el.className = 'mb-4 rounded-lg border border-gray-200 bg-gray-50 text-gray-600 px-4 py-3 text-sm';
+                el.textContent = dtrackT('doctracker.no_collector', 'No collector has reported yet — the tracker is showing no data, which is not the same as no changes.');
+                el.classList.remove('hidden');
+                return;
+            }
+            if (dead.length === 0) { el.classList.add('hidden'); return; }
+            el.className = 'mb-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm';
+            el.textContent = dtrackT('doctracker.stale_collector', 'Collector has not reported in over 26 hours — this board may be out of date.')
+                + ' (' + dead.map(function (c) { return c.collector_id; }).join(', ') + ')';
+            el.classList.remove('hidden');
+        }
+
+        function dtrackLinkPill(row) {
+            var s = row.link_status;
+            var label = s === 'linked' ? dtrackT('doctracker.s_linked', 'linked')
+                      : s === 'unprojected' ? dtrackT('doctracker.s_unprojected', 'not analysed')
+                      : dtrackT('doctracker.s_orphan', 'orphan');
+            return '<span class="dtrack-pill dtrack-' + dtrackEsc(s) + '">' + dtrackEsc(label) + '</span>';
+        }
+
+        function dtrackRenderRows(total) {
+            var body = document.getElementById('dtrackBody');
+            var countEl = document.getElementById('dtrackCount');
+            if (!body) return;
+            if (DTRACK.rows.length === 0) {
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">'
+                    + dtrackEsc(dtrackT('doctracker.empty', 'No documents tracked yet. The collector has not pushed a snapshot.')) + '</td></tr>';
+                if (countEl) countEl.textContent = '';
+                return;
+            }
+            var states = ['unreviewed', 'in_review', 'mapped', 'commented', 'approved', 'blocked'];
+            body.innerHTML = DTRACK.rows.map(function (r) {
+                var opts = states.map(function (s) {
+                    return '<option value="' + s + '"' + (r.review_state === s ? ' selected' : '') + '>' + dtrackEsc(s.replace(/_/g, ' ')) + '</option>';
+                }).join('');
+                var stale = r.stale_since_review
+                    ? ' <span class="dtrack-pill dtrack-stale">' + dtrackEsc(dtrackT('doctracker.s_stale', 'changed')) + '</span>' : '';
+                var issues = Array.isArray(r.issues) ? r.issues.length : 0;
+                return '<tr data-code="' + dtrackEsc(r.register_code) + '">'
+                    + '<td class="px-3 py-2 text-[11px] font-mono text-gray-700 whitespace-nowrap">' + dtrackEsc(r.register_code) + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-900" dir="auto">' + dtrackEsc(r.title || r.file_name || '') + '</td>'
+                    + '<td class="px-3 py-2 text-[11px] text-gray-500">' + dtrackEsc(r.lang || 'EN') + '</td>'
+                    + '<td class="px-3 py-2">' + dtrackLinkPill(r) + stale + '</td>'
+                    + '<td class="px-3 py-2"><select class="border border-gray-300 rounded px-2 py-1 text-xs" aria-label="Review state for ' + dtrackEsc(r.register_code) + '" data-on-change="dtrackSetReview" data-args=\'["' + dtrackEsc(r.register_code) + '","@this.value"]\'>' + opts + '</select></td>'
+                    + '<td class="px-3 py-2 text-[11px] tabular-nums text-gray-600">' + (r.ref_count || 0) + (r.dangling_count > 0 ? ' <span class="dtrack-pill dtrack-stale">' + r.dangling_count + '</span>' : '') + '</td>'
+                    + '<td class="px-3 py-2 text-[11px] tabular-nums ' + (issues > 0 ? 'text-red-700 font-semibold' : 'text-gray-400') + '">' + issues + '</td>'
+                    + '<td class="px-3 py-2 text-[11px] font-mono text-gray-500 whitespace-nowrap">' + dtrackEsc(r.modified_at ? new Date(r.modified_at).toLocaleDateString() : '—') + '</td>'
+                    + '</tr>';
+            }).join('');
+            if (countEl) {
+                countEl.textContent = dtrackT('doctracker.count', '{n} of {m} shown')
+                    .replace('{n}', DTRACK.rows.length).replace('{m}', total || DTRACK.rows.length);
+            }
+        }
+
+        function dtrackRenderOrphans() {
+            var host = document.getElementById('dtrackOrphans');
+            var missHost = document.getElementById('dtrackMissing');
+            var oc = document.getElementById('dtrackOrphanCount');
+            var mc = document.getElementById('dtrackMissingCount');
+            var o = DTRACK.orphans || {};
+            var orphans = o.missingFromMaster || [];
+            var missing = o.missingFromDisk || [];
+            if (oc) oc.textContent = String(orphans.length);
+            if (mc) mc.textContent = String(missing.length);
+            if (host) {
+                host.innerHTML = orphans.length === 0
+                    ? '<div class="text-gray-500 py-2">' + dtrackEsc(dtrackT('doctracker.none', 'Nothing here.')) + '</div>'
+                    : orphans.slice(0, 200).map(function (x) {
+                        return '<div class="flex items-center justify-between gap-2 py-1 border-b border-gray-100">'
+                            + '<span class="font-mono">' + dtrackEsc(x.register_code) + '</span>'
+                            + '<span class="text-gray-500 truncate" dir="auto">' + dtrackEsc(x.en_sibling_title || x.title || '') + '</span>'
+                            + '<button type="button" class="text-indigo-700 hover:text-indigo-900 font-medium" data-on-click="dtrackPromote" data-args=\'["' + dtrackEsc(x.register_code) + '"]\'>'
+                            + dtrackEsc(dtrackT('doctracker.promote', 'Promote')) + '</button></div>';
+                    }).join('');
+            }
+            if (missHost) {
+                missHost.innerHTML = missing.length === 0
+                    ? '<div class="text-gray-500 py-2">' + dtrackEsc(dtrackT('doctracker.none', 'Nothing here.')) + '</div>'
+                    : missing.slice(0, 200).map(function (x) {
+                        return '<div class="flex items-center justify-between gap-2 py-1 border-b border-gray-100">'
+                            + '<span class="font-mono">' + dtrackEsc(x.policy_number) + '</span>'
+                            + '<span class="text-gray-500 truncate" dir="auto">' + dtrackEsc(x.title || '') + '</span></div>';
+                    }).join('');
+            }
+        }
+
+        // ── Actions ─────────────────────────────────────────────────────
+        function dtrackApplyFilters() { dtrackLoadDocuments(); }
+
+        // Optimistic: the local edit wins over any inbound snapshot until the
+        // save is acknowledged, and reverts on failure.
+        async function dtrackSetReview(code, next) {
+            var row = DTRACK.rows.filter(function (r) { return r.register_code === code; })[0];
+            var prev = row ? row.review_state : null;
+            if (row) row.review_state = next;
+            DTRACK.dirty[code + ':review_state'] = Date.now();
+            try {
+                var r = await fetch('/api/documentation-tracker/documents/' + encodeURIComponent(code) + '/review', {
+                    method: 'PATCH', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reviewState: next })
+                });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                delete DTRACK.dirty[code + ':review_state'];
+                await dtrackLoadOverview();
+            } catch (e) {
+                if (row) row.review_state = prev;
+                delete DTRACK.dirty[code + ':review_state'];
+                dtrackRenderRows();
+                alert(dtrackT('doctracker.review_failed', 'Could not save the review state — the change was reverted.'));
+            }
+        }
+
+        async function dtrackPromote(code) {
+            try {
+                var r = await fetch('/api/documentation-tracker/documents/' + encodeURIComponent(code) + '/promote', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                var d = await r.json().catch(function () { return {}; });
+                if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+                await dtrackReload();
+            } catch (e) {
+                alert(dtrackT('doctracker.promote_failed', 'Promote failed') + ': ' + e.message);
+            }
+        }
+
+        async function dtrackPromoteAll() {
+            var orphans = (DTRACK.orphans && DTRACK.orphans.missingFromMaster) || [];
+            if (orphans.length === 0) return;
+            var codes = orphans.slice(0, 200).map(function (x) { return x.register_code; });
+            if (!confirm(dtrackT('doctracker.promote_all_confirm', 'Add {n} document(s) to the controlled register?').replace('{n}', codes.length))) return;
+            var btn = document.getElementById('dtrackPromoteAllBtn');
+            if (btn) btn.disabled = true;
+            try {
+                var r = await fetch('/api/documentation-tracker/promote-bulk', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ registerCodes: codes })
+                });
+                var d = await r.json().catch(function () { return {}; });
+                if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+                await dtrackReload();
+            } catch (e) {
+                alert(dtrackT('doctracker.promote_failed', 'Promote failed') + ': ' + e.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        // ── Liveness ────────────────────────────────────────────────────
+        function dtrackSetConn(state) {
+            var pill = document.getElementById('dtrackConn');
+            var label = document.getElementById('dtrackConnLabel');
+            if (!pill || !label) return;
+            pill.className = 'dtrack-conn dtrack-' + state;
+            label.textContent = state === 'live' ? dtrackT('doctracker.conn_live', 'Live')
+                : state === 'degraded' ? dtrackT('doctracker.conn_degraded', 'Reconnecting — polling')
+                : dtrackT('doctracker.conn_down', 'Offline');
+        }
+
+        function dtrackConnect() {
+            try {
+                var es = new EventSource('/api/documentation-tracker/stream');
+                DTRACK.es = es;
+                es.addEventListener('connected', function () { DTRACK.lastEventAt = Date.now(); dtrackSetConn('live'); });
+                es.addEventListener('snapshot', function () { DTRACK.lastEventAt = Date.now(); dtrackReload(); });
+                es.addEventListener('document', function () { DTRACK.lastEventAt = Date.now(); dtrackLoadDocuments(); });
+                es.onopen = function () { dtrackSetConn('live'); };
+                es.onerror = function () { dtrackSetConn('degraded'); };
+            } catch (e) { dtrackSetConn('degraded'); }
+        }
+
+        function dtrackTickAgo() {
+            var el = document.getElementById('dtrackAgo');
+            if (!el || !DTRACK.lastEventAt) return;
+            var s = Math.round((Date.now() - DTRACK.lastEventAt) / 1000);
+            el.textContent = s < 90 ? s + 's' : Math.round(s / 60) + 'm';
+        }
+
+        document.addEventListener('DOMContentLoaded', async function () {
+            // WAIT for translations before rendering anything.
+            // The WalaPlusI18n translate helper returns the LAST DOT-SEGMENT of a key when the
+            // catalogue has not loaded (i18n.js), not null — so the `|| fallback`
+            // in dtrackT never fires and the UI renders raw key fragments like
+            // "k_tracked" and "s_linked". init() is cached, so awaiting it here
+            // is cheap and idempotent alongside the footer bootstrap.
+            try {
+                if (window.WalaPlusI18n && window.WalaPlusI18n.init) {
+                    await window.WalaPlusI18n.init();
+                }
+            } catch (e) { /* fall through to the English fallbacks */ }
+
+            // Populate filter dropdowns that depend on i18n.
+            var st = document.getElementById('dtrackState');
+            if (st) {
+                st.innerHTML = '<option value="">' + dtrackEsc(dtrackT('doctracker.f_all', 'All')) + '</option>'
+                    + ['unreviewed', 'in_review', 'mapped', 'commented', 'approved', 'blocked'].map(function (s) {
+                        return '<option value="' + s + '">' + dtrackEsc(s.replace(/_/g, ' ')) + '</option>';
+                    }).join('');
+            }
+            var fam = document.getElementById('dtrackFamily');
+            if (fam) {
+                fam.innerHTML = '<option value="">' + dtrackEsc(dtrackT('doctracker.f_all', 'All')) + '</option>'
+                    + ['POL', 'DOC', 'SOP', 'FORM', 'CTL'].map(function (s) {
+                        return '<option value="' + s + '">' + s + '</option>';
+                    }).join('');
+            }
+            var link = document.getElementById('dtrackLink');
+            if (link) {
+                link.innerHTML = '<option value="">' + dtrackEsc(dtrackT('doctracker.f_all', 'All')) + '</option>'
+                    + '<option value="linked">' + dtrackEsc(dtrackT('doctracker.s_linked', 'linked')) + '</option>'
+                    + '<option value="unprojected">' + dtrackEsc(dtrackT('doctracker.s_unprojected', 'not analysed')) + '</option>'
+                    + '<option value="orphan">' + dtrackEsc(dtrackT('doctracker.s_orphan', 'orphan')) + '</option>';
+            }
+
+            dtrackReload();
+            dtrackConnect();
+            // The 60-second poll is the FLOOR, not a fallback. The SSE client
+            // registry is per-instance, so a browser on one instance can miss a
+            // broadcast entirely; correctness must not depend on it arriving.
+            DTRACK.pollTimer = setInterval(function () {
+                dtrackLoadOverview();
+                if (Object.keys(DTRACK.dirty).length === 0) dtrackLoadDocuments();
+            }, 60000);
+            DTRACK.agoTimer = setInterval(dtrackTickAgo, 1000);
+        });
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

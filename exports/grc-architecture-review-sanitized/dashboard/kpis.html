@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>KPI Engine - ExampleOrg Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <script src="<REDACTED_URL>"></script>
+    <style>
+        .status-green { background-color: #047857; }
+        .status-amber { background-color: #D97706; }
+        .status-red { background-color: #B91C1C; }
+        .status-no_data { background-color: #6B7280; }
+        .owner-quality_manager { border-inline-start: 4px solid #1E3A8A; }
+        .owner-grc_manager { border-inline-start: 4px solid #1E293B; }
+        .owner-governance_officer { border-inline-start: 4px solid #0891B2; }
+        .owner-shared { border-inline-start: 4px solid #6D28D9; }
+        .trend-improving::after { content: '↑'; color: #047857; margin-inline-start: 4px; }
+        .trend-declining::after { content: '↓'; color: #B91C1C; margin-inline-start: 4px; }
+        .trend-stable::after { content: '→'; color: #6B7280; margin-inline-start: 4px; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('kpis');
+        });
+    </script>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="kpis.title">KPI Engine</h1>
+                <p class="text-gray-600" data-i18n="kpis.subtitle">Role-based KPI tracking with automated calculations</p>
+                <p class="text-xs text-gray-500 mt-1">Department KPIs (SDR, Sales) now live in <a href="/quality-reports" class="text-blue-600 hover:underline">Quality Reports</a>, under each business unit.</p>
+                <span id="lastCalcTimestamp" class="text-xs text-gray-400"></span>
+            </div>
+            <div class="flex gap-2">
+                <button data-on-click="navigateTo" data-args="[&quot;/api/kpis/export-xlsx&quot;]" class="border border-emerald-700 text-emerald-700 px-3 py-2 rounded text-sm hover:bg-emerald-50 flex items-center gap-1" data-testid="button-export-xlsx" title="Multi-sheet workbook by category">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Excel
+                </button>
+                <button data-on-click="navigateTo" data-args="[&quot;/api/kpis/export&quot;]" class="border border-blue-600 text-blue-600 px-3 py-2 rounded text-sm hover:bg-blue-50 flex items-center gap-1" data-testid="button-export-csv">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    CSV
+                </button>
+                <button data-on-click="recalcKPIs" id="recalcBtn" class="border border-emerald-600 text-emerald-700 px-3 py-2 rounded text-sm hover:bg-emerald-50 flex items-center gap-1" title="Recompute live values from platform data + checklists">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.<REDACTED_PHONE> 9m0 0H9m11 11v-5h-.581m0 0a8.<REDACTED_PHONE>-2m15.357 2H15"/></svg>
+                    Recalculate
+                </button>
+                <button data-on-click="recalcKPIs" data-args="[true]" id="recalcCycleBtn" class="border border-amber-600 text-amber-700 px-3 py-2 rounded text-sm hover:bg-amber-50 flex items-center gap-1" title="Recalculate AND refresh the Sales Proposal/Agreement cycle times (SALES-KPI-03/04). Calls the Zoho API — up to 40 stage-history requests, so it can take minutes. Normally handled by the nightly job; use this when that has not run or is suspected of failing.">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 <REDACTED_PHONE> 0z"/></svg>
+                    + Cycle times
+                </button>
+                <button data-on-click="pushToLeadership" id="pushBtn" class="border border-purple-600 text-purple-700 px-3 py-2 rounded text-sm hover:bg-purple-50 flex items-center gap-1" title="Send the current KPI values to the Leadership Platform now (instead of waiting for its scheduled pull)">
+                    ⬆ Push to Leadership
+                </button>
+                <button data-on-click="openAddModal" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">+ Add KPI</button>
+            </div>
+        </div>
+
+        <!-- Leadership-platform status taxonomy (Total + 7 statuses) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-gray-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-gray-900" id="totalKPIs">0</div><div class="text-xs text-gray-600">Total KPIs</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-green-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-green-700" id="statOnTrack">0</div><div class="text-xs text-gray-600">On Track</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-teal-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-teal-700" id="statExceeded">0</div><div class="text-xs text-gray-600">Exceeded</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-amber-600" id="statAtRisk">0</div><div class="text-xs text-gray-600">At Risk</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-red-700" id="statOffTrack">0</div><div class="text-xs text-gray-600">Off Track</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-orange-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-orange-600" id="statBehind">0</div><div class="text-xs text-gray-600">Behind</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-slate-400 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-slate-600" id="statNotStarted">0</div><div class="text-xs text-gray-600">Not Started</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-blue-700" id="statCompleted">0</div><div class="text-xs text-gray-600">Completed</div></div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-xl shadow p-4">
+                <h3 class="font-semibold text-gray-900 mb-3" data-i18n="kpis.kpis_by_owner">KPIs by Owner</h3>
+                <figure>
+                    <canvas id="ownerChart" height="200" role="img" aria-label="KPIs by Owner: doughnut chart showing KPI distribution across owners" aria-describedby="ownerChart-summary"></canvas>
+                    <table id="ownerChart-summary" class="sr-only"><caption>KPIs by Owner</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                </figure>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4">
+                <h3 class="font-semibold text-gray-900 mb-3" data-i18n="kpis.status_distribution">Status Distribution</h3>
+                <figure>
+                    <canvas id="statusChart" height="200" role="img" aria-label="KPI Status Distribution: doughnut chart showing on-target, at-risk, off-target, and no-data counts" aria-describedby="statusChart-summary"></canvas>
+                    <table id="statusChart-summary" class="sr-only"><caption>KPI Status Distribution</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                </figure>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4">
+                <h3 class="font-semibold text-gray-900 mb-3" data-i18n="kpis.kpis_by_category">KPIs by Category</h3>
+                <figure>
+                    <canvas id="categoryChart" height="200" role="img" aria-label="KPIs by Category: bar chart showing KPI count per governance category" aria-describedby="categoryChart-summary"></canvas>
+                    <table id="categoryChart-summary" class="sr-only"><caption>KPIs by Category</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                </figure>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow">
+            <div class="px-4 pt-3 pb-2 border-b flex items-center gap-2 flex-wrap">
+                <span class="text-xs text-gray-500 me-1">View by quarter:</span>
+                <button data-on-click="selectQuarter" data-args="[0]" data-qtab="latest" class="px-3 py-1 text-sm rounded bg-indigo-600 text-white">Latest</button>
+                <button data-on-click="selectQuarter" data-args="[1]" data-qtab="1" class="px-3 py-1 text-sm rounded border text-gray-600 hover:bg-gray-50">Q1</button>
+                <button data-on-click="selectQuarter" data-args="[2]" data-qtab="2" class="px-3 py-1 text-sm rounded border text-gray-600 hover:bg-gray-50">Q2</button>
+                <button data-on-click="selectQuarter" data-args="[3]" data-qtab="3" class="px-3 py-1 text-sm rounded border text-gray-600 hover:bg-gray-50">Q3</button>
+                <button data-on-click="selectQuarter" data-args="[4]" data-qtab="4" class="px-3 py-1 text-sm rounded border text-gray-600 hover:bg-gray-50">Q4</button>
+                <span class="text-xs text-gray-500 ms-3 me-1">Year:</span>
+                <select id="kpiYear" class="border rounded px-2 py-1 text-sm text-gray-700" title="Pick a quarter to filter by year"></select>
+                <span class="text-xs text-gray-400 ms-2" id="quarterHint"></span>
+            </div>
+            <div class="p-4 border-b flex justify-between items-center">
+                <h2 class="font-semibold text-gray-900" data-i18n="kpis.kpi_catalog">KPI Catalog</h2>
+                <div class="flex gap-2 items-center flex-wrap">
+                    <select id="ownerFilter" class="border rounded px-2 py-1 text-sm" data-on-change="loadKPIs">
+                        <option value="" data-i18n="kpis.all_owners">All Owners</option>
+                        <option value="quality_manager">Sample User (Quality Manager)</option>
+                        <option value="grc_manager">Maram (GRC Manager)</option>
+                        <option value="grq_specialist">AlHanouf (GRQ Specialist)</option>
+                        <option value="legal_specialist">Ali Sample User (Legal Specialist)</option>
+                        <option value="shared">GRQ Team (Shared)</option>
+                    </select>
+                    <select id="statusFilter" class="border rounded px-2 py-1 text-sm" data-on-change="loadKPIs" data-testid="select-status-filter">
+                        <option value="" data-i18n="common.all_statuses">All Statuses</option>
+                        <option value="green">On Track</option>
+                        <option value="amber">At Risk</option>
+                        <option value="red">Off Track</option>
+                    </select>
+                    <input type="text" id="searchInput" placeholder="Search KPIs..." class="border rounded px-3 py-1 text-sm" data-on-input="filterKPIs">
+                    <select id="kpiSort" class="border rounded px-2 py-1 text-sm" data-on-change="filterKPIs" title="Sort by name" aria-label="Sort KPIs by name">
+                        <option value="">Sort: Default</option>
+                        <option value="name_asc">Name A → Z</option>
+                        <option value="name_desc">Name Z → A</option>
+                    </select>
+                </div>
+            </div>
+            <div id="kpiList" class="divide-y">
+            </div>
+        </div>
+    </div>
+
+    <div id="kpiModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="font-semibold text-gray-900" id="modalTitle">Add KPI</h3>
+                <button data-on-click="closeModal" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <form id="kpiForm" class="p-4 space-y-4">
+                <input type="hidden" id="kpiId">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_kpi_name">KPI Name</label>
+                        <input type="text" id="kpiName" required class="w-full border rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_kpi_code">KPI Code</label>
+                        <input type="text" id="kpiCode" required class="w-full border rounded px-3 py-2" placeholder="e.g., QM-GOV-002">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_description">Description</label>
+                    <textarea id="kpiDescription" rows="2" class="w-full border rounded px-3 py-2"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_owner">Owner</label>
+                        <select id="kpiOwnerType" required class="w-full border rounded px-3 py-2">
+                            <option value="quality_manager">Sample User (Quality Manager)</option>
+                            <option value="grc_manager">Maram (GRC Manager)</option>
+                            <option value="grq_specialist">AlHanouf (GRQ Specialist)</option>
+                            <option value="legal_specialist">Ali Sample User (Legal Specialist)</option>
+                            <option value="shared">GRQ Team (Shared)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_category">Category</label>
+                        <select id="kpiCategory" required class="w-full border rounded px-3 py-2">
+                            <option value="governance" data-i18n="kpis.c_governance">Governance</option>
+                            <option value="risk" data-i18n="kpis.c_risk">Risk</option>
+                            <option value="compliance" data-i18n="kpis.c_compliance">Compliance</option>
+                            <option value="audit" data-i18n="kpis.c_audit">Audit</option>
+                            <option value="quality" data-i18n="kpis.c_quality">Quality</option>
+                            <option value="vendor" data-i18n="kpis.c_vendor">Vendor</option>
+                            <option value="training" data-i18n="kpis.c_training">Training</option>
+                            <option value="ai" data-i18n="kpis.c_ai">AI</option>
+                            <option value="individual">Individual</option>
+                            <option value="process">Process</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_formula">Formula</label>
+                    <input type="text" id="kpiFormula" class="w-full border rounded px-3 py-2" placeholder="e.g., (Completed / Total) × 100">
+                </div>
+                <div class="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded px-3 py-2">
+                    <input type="checkbox" id="kpiNorthStar" class="w-4 h-4">
+                    <label for="kpiNorthStar" class="text-sm font-medium text-amber-800 cursor-pointer">⭐ Mark as North Star KPI</label>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_unit">Unit</label>
+                        <input type="text" id="kpiUnit" class="w-full border rounded px-3 py-2" value="%">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_frequency">Frequency</label>
+                        <select id="kpiFrequency" class="w-full border rounded px-3 py-2">
+                            <option value="daily" data-i18n="kpis.fr_daily">Daily</option>
+                            <option value="weekly" data-i18n="kpis.fr_weekly">Weekly</option>
+                            <option value="monthly" selected data-i18n="kpis.fr_monthly">Monthly</option>
+                            <option value="quarterly" data-i18n="kpis.fr_quarterly">Quarterly</option>
+                            <option value="annual" data-i18n="kpis.fr_annual">Annual</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_target">Target</label>
+                        <input type="number" id="kpiTarget" class="w-full border rounded px-3 py-2" step="0.01">
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-green-700 mb-1">Green ≥</label>
+                        <input type="number" id="thresholdGreen" required class="w-full border rounded px-3 py-2" step="0.01">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-amber-600 mb-1">Amber ≥</label>
+                        <input type="number" id="thresholdAmber" required class="w-full border rounded px-3 py-2" step="0.01">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-red-700 mb-1">Red Below</label>
+                        <input type="number" id="thresholdRed" required class="w-full border rounded px-3 py-2" step="0.01">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_direction">Direction</label>
+                        <select id="thresholdDirection" class="w-full border rounded px-3 py-2">
+                            <option value="higher_is_better" data-i18n="kpis.d_higher">Higher is Better</option>
+                            <option value="lower_is_better" data-i18n="kpis.d_lower">Lower is Better</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-4">
+                    <button type="button" data-on-click="closeModal" class="px-4 py-2 border rounded text-gray-600 hover:bg-gray-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save KPI</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="detailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="font-semibold text-gray-900" id="detailTitle">KPI Details</h3>
+                <button data-on-click="closeDetailModal" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div id="detailContent" class="p-4">
+            </div>
+        </div>
+    </div>
+
+    <!-- Checklist modal (for calc_mode='checklist' KPIs) -->
+    <div id="checklistModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b flex justify-between items-center">
+                <div>
+                    <h3 class="font-semibold text-gray-900" id="checklistTitle">Checklist</h3>
+                    <p class="text-xs text-gray-500">KPI value = % of action items completed</p>
+                </div>
+                <button data-on-click="closeChecklistModal" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div class="p-4">
+                <div id="checklistProgress" class="mb-3 text-sm font-medium text-gray-700"></div>
+                <div id="checklistItems" class="space-y-2 mb-4"></div>
+                <!-- Sectioned KPIs (e.g. BU Framework): add a Business Unit -->
+                <div id="checklistAddBu" class="hidden border-t pt-3 mt-2 flex gap-2">
+                    <input id="newChecklistBu" type="text" placeholder="Add a Business Unit…" class="border rounded px-3 py-2 text-sm flex-1" />
+                    <button data-on-click="addChecklistBu" class="bg-indigo-600 text-white px-3 py-2 rounded text-sm hover:bg-indigo-700">+ Add BU</button>
+                </div>
+                <!-- Flat KPIs: add a single checklist item -->
+                <div id="checklistFlatAdd" class="hidden flex gap-2">
+                    <input id="newChecklistItem" type="text" placeholder="Add a checklist item…" class="border rounded px-3 py-2 text-sm flex-1" />
+                    <button data-on-click="addChecklistItem" class="bg-amber-600 text-white px-3 py-2 rounded text-sm hover:bg-amber-700">+ Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BU Coverage modal (for calc_mode='bu_coverage', e.g. BU Coverage Rate) -->
+    <div id="buCoverageModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b flex justify-between items-center">
+                <div>
+                    <h3 class="font-semibold text-gray-900" id="buCoverageTitle">BU Coverage</h3>
+                    <p class="text-xs text-gray-500">KPI value = average coverage % across the Business Units</p>
+                </div>
+                <button data-on-click="closeBuCoverageModal" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div class="p-4">
+                <div id="buCoverageAvg" class="mb-3 text-sm font-medium text-gray-700"></div>
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-xs text-gray-500 border-b">
+                            <th scope="col" class="text-start py-1.5">Business Unit</th>
+                            <th scope="col" class="text-start py-1.5 w-24">Coverage %</th>
+                            <th scope="col" class="text-start py-1.5 w-36">Due date</th>
+                            <th scope="col" class="text-start py-1.5 w-32">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="buCoverageRows"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allKPIs = [];
+
+        // kpi_name is admin-editable free text and is interpolated into innerHTML in
+        // several places; escape it so a crafted name cannot inject markup.
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
+        function _kpiCategoryLabel(cat, fb) {
+            switch (cat) {
+                case 'governance': return WalaPlusI18n.t('kpis.c_governance', fb);
+                case 'risk':       return WalaPlusI18n.t('kpis.c_risk', fb);
+                case 'compliance': return WalaPlusI18n.t('kpis.c_compliance', fb);
+                case 'audit':      return WalaPlusI18n.t('kpis.c_audit', fb);
+                case 'quality':    return WalaPlusI18n.t('kpis.c_quality', fb);
+                case 'vendor':     return WalaPlusI18n.t('kpis.c_vendor', fb);
+                case 'training':   return WalaPlusI18n.t('kpis.c_training', fb);
+                case 'ai':         return WalaPlusI18n.t('kpis.c_ai', fb);
+                case 'individual': return 'Individual';
+                case 'process':    return 'Process';
+            }
+            return fb;
+        }
+        // Category options for the inline "Category" editor in the detail modal.
+        const _KPI_CATEGORY_OPTIONS = [
+            ['governance', 'Governance'], ['risk', 'Risk'], ['compliance', 'Compliance'],
+            ['audit', 'Audit'], ['quality', 'Quality'], ['vendor', 'Vendor'],
+            ['training', 'Training'], ['ai', 'AI'], ['individual', 'Individual'], ['process', 'Process'],
+        ];
+        function _kpiOwnerLabel(owner) {
+            switch (owner) {
+                case 'quality_manager':    return 'Sample User';
+                case 'grc_manager':        return 'Maram';
+                case 'grq_specialist':     return 'AlHanouf';
+                case 'governance_officer': return 'AlHanouf';
+                case 'legal_specialist':   return 'Ali Sample User';
+                case 'sdr_team':           return 'SDR Team';
+                case 'sales_team':         return 'Sales Team';
+                case 'shared':             return 'GRQ Team';
+            }
+            return owner;
+        }
+        function _kpiOwnerFullLabel(owner) {
+            switch (owner) {
+                case 'quality_manager':    return 'Sample User (Quality Manager)';
+                case 'grc_manager':        return 'Maram (GRC Manager)';
+                case 'grq_specialist':     return 'AlHanouf (GRQ Specialist)';
+                case 'governance_officer': return 'AlHanouf (GRQ Specialist)';
+                case 'legal_specialist':   return 'Ali Sample User (Legal Specialist)';
+                case 'sdr_team':           return 'SDR Team';
+                case 'sales_team':         return 'Sales Team';
+                case 'shared':             return 'GRQ Team (Shared)';
+            }
+            return owner;
+        }
+        // Owner options for the inline "Reassign to…" control (detail modal).
+        const _KPI_OWNER_OPTIONS = [
+            ['quality_manager', 'Sample User (Quality Manager)'],
+            ['grc_manager', 'Maram (GRC Manager)'],
+            ['grq_specialist', 'AlHanouf (GRQ Specialist)'],
+            ['legal_specialist', 'Ali Sample User (Legal Specialist)'],
+            ['shared', 'GRQ Team (Shared)'],
+        ];
+        function _kpiCalcModeBadge(mode) {
+            switch (mode) {
+                case 'auto':      return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium" title="Calculated automatically from platform data">⚙️ Auto</span>';
+                case 'checklist': return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-medium" title="Value = % of checklist items done">📋 Checklist</span>';
+                case 'manual':    return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium" title="Entered manually">✍️ Manual</span>';
+                case 'bu_coverage': return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-medium" title="Value = average coverage % across the Business Units">🏢 BU Coverage</span>';
+            }
+            return '';
+        }
+        // A methodology change means the series before and after are different metrics.
+        // Show a break so nobody reads the step as progress or regression.
+        function _methodologyBreakBadge(kpi) {
+            if (!kpi.methodology_changed_at) return '';
+            const note = kpi.methodology_note || '';
+            return `<span class="ms-2 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800"
+                          title="${escapeHtml(note)}"
+                          data-testid="kpi-methodology-break">${WalaPlusI18n.t('kpis.methodology_break')}</span>`;
+        }
+        const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
+        const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
+        function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
+        let charts = {};
+
+        let _autoRecalcTried = false;
+        let _selectedQuarter = null; // null = latest; 1..4 = that quarter
+        let _kpiYear = new Date().getFullYear();
+        /** Year options: this year +1 (for planning) back to -3. Newest first. */
+        function _initYearPicker() {
+            const sel = document.getElementById('kpiYear');
+            if (!sel) return;
+            const now = new Date().getFullYear();
+            const years = [];
+            for (let y = now + 1; y >= now - 3; y--) years.push(y);
+            sel.innerHTML = years.map(y => `<option value="${y}"${y === _kpiYear ? ' selected' : ''}>${y}</option>`).join('');
+            // safe-actions delegates clicks only, so wire change directly.
+            sel.addEventListener('change', function () {
+                _kpiYear = parseInt(sel.value, 10) || new Date().getFullYear();
+                // Changing the year is only meaningful on a quarter; if the user is
+                // on "Latest", move them to a quarter so the choice actually shows.
+                const currentQ = Math.floor(new Date().getMonth() / 3) + 1;
+                selectQuarter(_selectedQuarter || currentQ);
+            });
+            _syncYearPicker();
+        }
+        /** The year is meaningless on "Latest" (that's the newest value, any year). */
+        function _syncYearPicker() {
+            const sel = document.getElementById('kpiYear');
+            if (!sel) return;
+            sel.disabled = !_selectedQuarter;
+            sel.classList.toggle('opacity-50', !_selectedQuarter);
+            sel.title = _selectedQuarter
+                ? `Showing ${_kpiYear}`
+                : 'Pick a quarter to filter by year';
+        }
+        function selectQuarter(q) {
+            _selectedQuarter = (!q) ? null : q;
+            document.querySelectorAll('[data-qtab]').forEach(b => {
+                const t = b.getAttribute('data-qtab');
+                const on = (t === String(_selectedQuarter)) || (_selectedQuarter === null && t === 'latest');
+                b.className = 'px-3 py-1 text-sm rounded ' + (on ? 'bg-indigo-600 text-white' : 'border text-gray-600 hover:bg-gray-50');
+            });
+            const hint = document.getElementById('quarterHint');
+            if (hint) hint.textContent = _selectedQuarter ? `Showing Q${_selectedQuarter} ${_kpiYear} values (— if none recorded that quarter)` : '';
+            _syncYearPicker();
+            loadKPIs();
+        }
+        async function loadKPIs() {
+            const owner = document.getElementById('ownerFilter').value;
+            const qp = _selectedQuarter ? `quarter=${_selectedQuarter}&year=${_kpiYear}` : '';
+            let url = owner ? `/api/kpis?owner=${owner}` : '/api/kpis/summary';
+            if (qp) url += (url.includes('?') ? '&' : '?') + qp;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                if (owner) {
+                    allKPIs = data;
+                } else {
+                    allKPIs = data.kpiDetails || [];
+                }
+
+                // Apply status filter + search + sort via the shared view function.
+                filterKPIs();
+
+                if (!owner) {
+                    updateStats(data);
+                    window._lastKPIChartData = data;
+                    renderCharts(data);
+                } else {
+                    // Owner-filtered: the endpoint now returns real latestValue + status
+                    // per KPI, so compute the summary tiles from them (was forced to
+                    // no_data before, which under-counted On Track / Behind / etc.).
+                    updateStats({ kpiDetails: allKPIs });
+                }
+
+                // Self-heal: if no value has ever been computed (fresh deploy / new
+                // period — the scheduled job's 24h stale-gate may not have fired yet),
+                // run the engine once silently and reload so real numbers appear without
+                // the user having to find/click "Recalculate".
+                if (!_autoRecalcTried && !_selectedQuarter) {
+                    const anyValue = (allKPIs || []).some(k => k.latestValue !== null && k.latestValue !== undefined);
+                    if (!anyValue) {
+                        _autoRecalcTried = true;
+                        try {
+                            await fetch('/api/kpis/recalc', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ includeCycleTimes: false }),
+                            });
+                        } catch (e) { /* manual Recalculate remains available */ }
+                        return loadKPIs();
+                    }
+                }
+
+                const tsEl = document.getElementById('lastCalcTimestamp');
+                if (tsEl) tsEl.textContent = 'Last calculated: ' + new Date().toLocaleString();
+            } catch (error) {
+                console.error('Error loading KPIs:', error);
+            }
+        }
+
+        // Leadership 7-status taxonomy — mirrors leadershipStatus()/BASELINES/progressPct()
+        // in src/utils/leadershipKpiFeed.ts (the baseline→target pace logic we defined
+        // earlier). Behind vs Off Track is split by progress < 50% of the baseline→target
+        // span, NOT a flat threshold. Baselines default to 0; the seeded ones mirror the
+        // leadership-tracked KPIs (single conceptual source = leadershipKpiFeed.ts).
+        const _KPI_BASELINES = { 'QM-KPI-002': 40, 'QM-KPI-008': 0, 'GRC-KPI-008': 45, 'QM-KPI-015': 0 };
+        function _progressPct(value, baseline, target) {
+            const span = target - baseline;
+            if (span === 0) return value >= target ? 100 : 0;
+            return Math.max(0, Math.min(100, Math.round(((value - baseline) / span) * 1000) / 10));
+        }
+        function _leadershipStatus(kpi) {
+            const v = kpi.latestValue;
+            if (v === null || v === undefined) return 'Not Started';
+            const nv = Number(v);
+            const t = (kpi.target_value !== null && kpi.target_value !== undefined && kpi.target_value !== '') ? Number(kpi.target_value) : null;
+            const higher = (kpi.threshold_direction || 'higher_is_better') === 'higher_is_better';
+            if (t !== null) {
+                if (higher ? nv > t : nv < t) return 'Exceeded';
+                if (higher ? nv >= t : nv <= t) return 'Completed';
+            }
+            const s = kpi.status;
+            if (s === 'green') return 'On Track';
+            if (s === 'amber') return 'At Risk';
+            if (s === 'red') {
+                const baseline = _KPI_BASELINES[kpi.kpi_code] != null ? _KPI_BASELINES[kpi.kpi_code] : 0;
+                return (t !== null && _progressPct(nv, baseline, t) < 50) ? 'Behind' : 'Off Track';
+            }
+            return 'Not Started';
+        }
+        function _leadershipStatusBadge(status) {
+            const map = {
+                'On Track':    'bg-green-100 text-green-800',
+                'Exceeded':    'bg-teal-100 text-teal-800',
+                'At Risk':     'bg-amber-100 text-amber-800',
+                'Off Track':   'bg-red-100 text-red-800',
+                'Behind':      'bg-orange-100 text-orange-800',
+                'Not Started': 'bg-slate-100 text-slate-600',
+                'Completed':   'bg-blue-100 text-blue-800',
+            };
+            const cls = map[status] || 'bg-slate-100 text-slate-600';
+            return `<span class="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${cls}">${status}</span>`;
+        }
+        function updateStats(data) {
+            const details = data.kpiDetails || allKPIs || [];
+            document.getElementById('totalKPIs').textContent = _fn(data.total || details.length);
+            const counts = { 'On Track': 0, 'Exceeded': 0, 'At Risk': 0, 'Off Track': 0, 'Behind': 0, 'Not Started': 0, 'Completed': 0 };
+            details.forEach(k => { const s = _leadershipStatus(k); if (counts[s] !== undefined) counts[s]++; });
+            const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = _fn(n); };
+            set('statOnTrack', counts['On Track']);
+            set('statExceeded', counts['Exceeded']);
+            set('statAtRisk', counts['At Risk']);
+            set('statOffTrack', counts['Off Track']);
+            set('statBehind', counts['Behind']);
+            set('statNotStarted', counts['Not Started']);
+            set('statCompleted', counts['Completed']);
+        }
+
+        function renderCharts(data) {
+            if (charts.owner) charts.owner.destroy();
+            if (charts.status) charts.status.destroy();
+            if (charts.category) charts.category.destroy();
+
+            charts.owner = new Chart(document.getElementById('ownerChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Sample User (Quality)', 'Maram (GRC)', 'AlHanouf (Specialist)', 'Ali Sample User (Legal)', 'GRQ Team'],
+                    datasets: [{
+                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.grq_specialist || 0, data.byOwner?.legal_specialist || 0, data.byOwner?.shared || 0],
+                        backgroundColor: ['#1E3A8A', '#1E293B', '#7C3AED', '#B45309', '#6D28D9']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('ownerChart', charts.owner, 'KPIs by Owner');
+
+            charts.status = new Chart(document.getElementById('statusChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: [
+                        'On Track',
+                        'At Risk',
+                        'Off Track',
+                        'No Data'
+                    ],
+                    datasets: [{
+                        data: [data.byStatus?.green || 0, data.byStatus?.amber || 0, data.byStatus?.red || 0, data.byStatus?.no_data || 0],
+                        backgroundColor: ['#047857', '#D97706', '#B91C1C', '#6B7280']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('statusChart', charts.status, 'KPI Status Distribution');
+
+            const cats = Object.entries(data.byCategory || {});
+            charts.category = new Chart(document.getElementById('categoryChart'), {
+                type: 'bar',
+                data: {
+                    labels: cats.map(c => _kpiCategoryLabel(c[0], c[0].charAt(0).toUpperCase() + c[0].slice(1))),
+                    datasets: [{
+                        label: WalaPlusI18n.t('dyn.kpis.chart_kpis'),
+                        data: cats.map(c => c[1]),
+                        backgroundColor: '#4F46E5'
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } } }
+            });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('categoryChart', charts.category, 'KPIs by Category');
+        }
+
+        function renderKPIList(kpis) {
+            const container = document.getElementById('kpiList');
+            if (!kpis.length) {
+                container.innerHTML = '<div class="p-8 text-center text-gray-500">' + WalaPlusI18n.t('dyn.kpis.no_kpis') + '</div>';
+                return;
+            }
+            
+            container.innerHTML = kpis.map(kpi => {
+                const ownerLabel = _kpiOwnerLabel(kpi.owner_type || 'shared');
+                const hasNavMap = kpi.navigation_map && kpi.navigation_map.length > 0;
+                const statusClass = kpi.status || 'no_data';
+                const trendClass = kpi.trend ? `trend-${kpi.trend}` : '';
+                
+                return `
+                    <div class="p-4 hover:bg-gray-50 cursor-pointer owner-${kpi.owner_type}" data-on-click="showDetail" data-args="[${kpi.id}]">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-3 h-3 rounded-full status-${statusClass}"></span>
+                                    <span class="font-medium text-gray-900">${escapeHtml(kpi.kpi_name)}</span>
+                                    <span class="text-xs text-gray-500">${kpi.kpi_code}</span>
+                                    ${_kpiCalcModeBadge(kpi.calc_mode)}
+                                    ${_methodologyBreakBadge(kpi)}
+                                </div>
+                                ${kpi.is_north_star ? '<div class="text-xs font-semibold text-amber-600 mt-0.5">⭐ North Star</div>' : ''}
+                                <p class="text-sm text-gray-600 mt-1">${escapeHtml(kpi.description || '')}</p>
+                                <div class="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                                    <span>${WalaPlusI18n.t('dyn.kpis.owner_label', { name: ownerLabel })}</span>
+                                    <span>${WalaPlusI18n.t('dyn.kpis.category_label', { name: _kpiCategoryLabel(kpi.category, kpi.category) })}</span>
+                                    <span>${WalaPlusI18n.t('dyn.kpis.frequency_label', { name: kpi.frequency })}</span>
+                                    ${(kpi.weight !== null && kpi.weight !== undefined && Number(kpi.weight) > 0) ? `<span title="Weightage — this KPI's share of its owner's scorecard">Weight: ${Number(kpi.weight)}%</span>` : ''}
+                                    ${hasNavMap ? `<span class="text-cyan-600 font-medium">📋 ${WalaPlusI18n.t('dyn.kpis.has_steps')}</span>` : ''}
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div class="text-2xl font-bold text-gray-900 ${trendClass}">
+                                    ${kpi.latestValue !== null && kpi.latestValue !== undefined ? _fn(kpi.latestValue) + (kpi.unit || '%') : '--'}
+                                </div>
+                                <div class="text-xs text-gray-500">${WalaPlusI18n.t('dyn.kpis.target_label', { value: (kpi.target_value !== null && kpi.target_value !== undefined ? _fn(kpi.target_value) : '--') + (kpi.unit || '%') })}</div>
+                                <div class="mt-1">${_leadershipStatusBadge(_leadershipStatus(kpi))}</div>
+                                ${(kpi.latestValue !== null && kpi.latestValue !== undefined && kpi.target_value !== null && kpi.target_value !== undefined && kpi.target_value !== '') ? `<div class="mt-1 text-[11px] text-gray-400">${_progressPct(Number(kpi.latestValue), (_KPI_BASELINES[kpi.kpi_code] != null ? _KPI_BASELINES[kpi.kpi_code] : 0), Number(kpi.target_value))}% to target</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Single source of truth for the catalog view: status filter + search + sort.
+        // Called by the search box, the sort dropdown, loadKPIs, and language change.
+        function filterKPIs() {
+            const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
+            const statusFilter = document.getElementById('statusFilter')?.value || '';
+            let list = allKPIs;
+            if (statusFilter) list = list.filter(k => k.status === statusFilter);
+            if (search) list = list.filter(k =>
+                k.kpi_name.toLowerCase().includes(search) ||
+                k.kpi_code.toLowerCase().includes(search) ||
+                (k.description && k.description.toLowerCase().includes(search))
+            );
+            const sort = document.getElementById('kpiSort')?.value || '';
+            if (sort === 'name_asc') list = [...list].sort((a, b) => (a.kpi_name || '').localeCompare(b.kpi_name || ''));
+            else if (sort === 'name_desc') list = [...list].sort((a, b) => (b.kpi_name || '').localeCompare(a.kpi_name || ''));
+            // Always pin North Star KPIs to the top for each role (stable — keeps the
+            // chosen sort order within the starred and non-starred groups).
+            list = [...list].sort((a, b) => (b.is_north_star ? 1 : 0) - (a.is_north_star ? 1 : 0));
+            renderKPIList(list);
+        }
+
+        async function showDetail(id) {
+            try {
+                const res = await fetch(`/api/kpis/${id}`);
+                const kpi = await res.json();
+                
+                const ownerLabel = _kpiOwnerFullLabel(kpi.owner_type || 'shared');
+                const navMap = kpi.navigation_map ? (typeof kpi.navigation_map === 'string' ? JSON.parse(kpi.navigation_map) : kpi.navigation_map) : null;
+                const statusLabel = kpi.latestValue?.status || WalaPlusI18n.t('dyn.kpis.no_data_status');
+                
+                document.getElementById('detailTitle').innerHTML = escapeHtml(kpi.kpi_name) + _methodologyBreakBadge(kpi);
+                document.getElementById('detailContent').innerHTML = `
+                    <div class="grid grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-3">${WalaPlusI18n.t('dyn.kpis.definition')}</h4>
+                            <div class="space-y-2 text-sm">
+                                <div><span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.code_label')}</span> ${kpi.kpi_code}</div>
+                                <div><span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.owner_kw')}</span> ${ownerLabel}</div>
+                                <div><span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.category_kw')}</span> ${kpi.category}</div>
+                                <div><span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.frequency_kw')}</span> ${kpi.frequency}</div>
+                                <div><span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.unit_kw')}</span> ${kpi.unit}</div>
+                            </div>
+                            <div class="mt-4">
+                                <span class="text-gray-500 text-sm">${WalaPlusI18n.t('dyn.kpis.description_kw')}</span>
+                                <p class="text-sm text-gray-700 mt-1">${escapeHtml(kpi.description || WalaPlusI18n.t('dyn.kpis.no_description'))}</p>
+                            </div>
+                            <div class="mt-4">
+                                <span class="text-gray-500 text-sm">${WalaPlusI18n.t('dyn.kpis.formula_kw')}</span>
+                                <p class="text-sm text-gray-700 mt-1 font-mono bg-gray-50 p-2 rounded">${kpi.formula || WalaPlusI18n.t('dyn.kpis.not_specified')}</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-3">${WalaPlusI18n.t('dyn.kpis.thresholds')}</h4>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between p-2 bg-green-50 rounded">
+                                    <span class="text-green-700">${WalaPlusI18n.t('dyn.kpis.green_on_target')}</span>
+                                    <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '≥' : '≤'} ${_fn(kpi.threshold_green)}${kpi.unit}</span>
+                                </div>
+                                <div class="flex items-center justify-between p-2 bg-amber-50 rounded">
+                                    <span class="text-amber-700">${WalaPlusI18n.t('dyn.kpis.amber_at_risk')}</span>
+                                    <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '≥' : '≤'} ${_fn(kpi.threshold_amber)}${kpi.unit}</span>
+                                </div>
+                                <div class="flex items-center justify-between p-2 bg-red-50 rounded">
+                                    <span class="text-red-700">${WalaPlusI18n.t('dyn.kpis.red_off_target')}</span>
+                                    <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '<' : '>'} ${_fn(kpi.threshold_red)}${kpi.unit}</span>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <span class="text-gray-500 text-sm">${WalaPlusI18n.t('dyn.kpis.target_value')}</span>
+                                <p class="text-2xl font-bold text-blue-800">${kpi.target_value !== null && kpi.target_value !== undefined ? _fn(kpi.target_value) : '--'}${kpi.unit}</p>
+                            </div>
+                        </div>
+                    </div>
+                    ${navMap && navMap.length > 0 ? `
+                    <div class="mt-6">
+                        <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                            <span class="w-6 h-6 bg-cyan-100 text-cyan-600 rounded me-2 flex items-center justify-center text-sm">📋</span>
+                            ${WalaPlusI18n.t('dyn.kpis.nav_steps')}
+                        </h4>
+                        <div class="space-y-3">
+                            ${navMap.map(step => `
+                                <div class="border-s-4 border-cyan-500 bg-gray-50 rounded-e-lg p-3">
+                                    <div class="flex items-start gap-3">
+                                        <div class="w-7 h-7 rounded-full bg-cyan-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">${_fn(step.step)}</div>
+                                        <div class="flex-1">
+                                            <div class="font-medium text-gray-900">${step.action}</div>
+                                            <div class="text-sm text-gray-600 mt-1">
+                                                <span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.screen_kw')}</span> 
+                                                <a href="${step.route}" class="text-cyan-600 hover:underline">${step.screen}</a>
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
+                                                <div class="bg-white rounded p-2">
+                                                    <div class="text-gray-500 uppercase font-medium">${WalaPlusI18n.t('dyn.kpis.what_to_check')}</div>
+                                                    <div class="text-gray-700">${step.what_to_check}</div>
+                                                </div>
+                                                <div class="bg-amber-50 rounded p-2">
+                                                    <div class="text-amber-600 uppercase font-medium">${WalaPlusI18n.t('dyn.kpis.if_result')}</div>
+                                                    <div class="text-gray-700">${step.if_result}</div>
+                                                </div>
+                                            </div>
+                                            <div class="bg-green-50 rounded p-2 mt-2 text-xs">
+                                                <div class="text-green-600 uppercase font-medium">${WalaPlusI18n.t('dyn.kpis.then_action')}</div>
+                                                <div class="text-gray-700">${step.then_action}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                    <div class="mt-6">
+                        <h4 class="font-semibold text-gray-900 mb-3">${WalaPlusI18n.t('dyn.kpis.history_title')}</h4>
+                        ${kpi.history && kpi.history.length ? `
+                            <figure>
+                                <canvas id="historyChart" height="120" role="img" aria-label="KPI value history: line chart comparing actual values to target over time" aria-describedby="historyChart-summary"></canvas>
+                                <table id="historyChart-summary" class="sr-only"><caption>KPI Value History</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                            </figure>
+                        ` : '<p class="text-gray-500 text-sm">' + WalaPlusI18n.t('dyn.kpis.no_history') + '</p>'}
+                    </div>
+                    <div class="mt-6 flex flex-wrap justify-between items-center gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <label class="text-sm text-gray-600">Owner:</label>
+                            <select data-on-change="reassignOwner" data-args="[${kpi.id}, &quot;@this.value&quot;]" class="border rounded px-2 py-1.5 text-sm">
+                                ${_KPI_OWNER_OPTIONS.map(([val, lbl]) => `<option value="${val}" ${kpi.owner_type === val ? 'selected' : ''}>${lbl}</option>`).join('')}
+                            </select>
+                            <label class="text-sm text-gray-600 ms-2">Category:</label>
+                            <select data-on-change="changeCategory" data-args="[${kpi.id}, &quot;@this.value&quot;]" class="border rounded px-2 py-1.5 text-sm">
+                                ${_KPI_CATEGORY_OPTIONS.map(([val, lbl]) => `<option value="${val}" ${kpi.category === val ? 'selected' : ''}>${lbl}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="flex gap-2">
+                            <a href="/kpi/${kpi.id}" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900 text-sm">🔍 Open full view</a>
+                            ${kpi.calc_mode === 'checklist' ? `<button data-on-click="openChecklistModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm">📋 Manage Checklist</button>` : ''}
+                            ${kpi.calc_mode === 'bu_coverage' ? `<button data-on-click="openBuCoverageModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm">🏢 Manage BU Coverage</button>` : ''}
+                            <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">${WalaPlusI18n.t('dyn.kpis.record_value_btn')}</button>
+                            <button data-on-click="editKPI" data-args="[${kpi.id}]" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">${WalaPlusI18n.t('dyn.kpis.edit_kpi_btn')}</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('detailModal').classList.remove('hidden');
+                
+                if (kpi.history && kpi.history.length) {
+                    setTimeout(() => {
+                        const ctx = document.getElementById('historyChart');
+                        if (ctx) {
+                            const histChart = new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: kpi.history.reverse().map(h => _fd(h.period_end)),
+                                    datasets: [{
+                                        label: WalaPlusI18n.t('dyn.kpis.chart_actual'),
+                                        data: kpi.history.map(h => h.actual_value),
+                                        borderColor: '#1E3A8A',
+                                        tension: 0.3
+                                    }, {
+                                        label: WalaPlusI18n.t('dyn.kpis.chart_target'),
+                                        data: kpi.history.map(() => kpi.target_value),
+                                        borderColor: '#9CA3AF',
+                                        borderDash: [5, 5]
+                                    }]
+                                },
+                                options: { responsive: true }
+                            });
+                            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('historyChart', histChart, 'KPI Value History');
+                        }
+                    }, 100);
+                }
+            } catch (error) {
+                console.error('Error loading KPI details:', error);
+            }
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModal').classList.add('hidden');
+        }
+
+        function openAddModal() {
+            document.getElementById('modalTitle').textContent = WalaPlusI18n.t('dyn.kpis.modal_add');
+            document.getElementById('kpiForm').reset();
+            document.getElementById('kpiId').value = '';
+            document.getElementById('kpiModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('kpiModal').classList.add('hidden');
+        }
+
+        async function editKPI(id) {
+            closeDetailModal();
+            try {
+                const res = await fetch(`/api/kpis/${id}`);
+                const kpi = await res.json();
+                
+                document.getElementById('modalTitle').textContent = WalaPlusI18n.t('dyn.kpis.modal_edit');
+                document.getElementById('kpiId').value = kpi.id;
+                document.getElementById('kpiName').value = kpi.kpi_name;
+                document.getElementById('kpiCode').value = kpi.kpi_code;
+                document.getElementById('kpiDescription').value = kpi.description || '';
+                document.getElementById('kpiOwnerType').value = kpi.owner_type;
+                document.getElementById('kpiCategory').value = kpi.category;
+                document.getElementById('kpiFormula').value = kpi.formula || '';
+                document.getElementById('kpiUnit').value = kpi.unit || '%';
+                document.getElementById('kpiFrequency').value = kpi.frequency;
+                document.getElementById('kpiTarget').value = kpi.target_value || '';
+                document.getElementById('thresholdGreen').value = kpi.threshold_green;
+                document.getElementById('thresholdAmber').value = kpi.threshold_amber;
+                document.getElementById('thresholdRed').value = kpi.threshold_red;
+                document.getElementById('thresholdDirection').value = kpi.threshold_direction;
+                document.getElementById('kpiNorthStar').checked = !!kpi.is_north_star;
+
+                document.getElementById('kpiModal').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading KPI for edit:', error);
+            }
+        }
+
+        document.getElementById('kpiForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const id = document.getElementById('kpiId').value;
+            const payload = {
+                kpi_name: document.getElementById('kpiName').value,
+                kpi_code: document.getElementById('kpiCode').value,
+                description: document.getElementById('kpiDescription').value,
+                owner_type: document.getElementById('kpiOwnerType').value,
+                category: document.getElementById('kpiCategory').value,
+                formula: document.getElementById('kpiFormula').value,
+                unit: document.getElementById('kpiUnit').value,
+                frequency: document.getElementById('kpiFrequency').value,
+                target_value: parseFloat(document.getElementById('kpiTarget').value) || null,
+                threshold_green: parseFloat(document.getElementById('thresholdGreen').value),
+                threshold_amber: parseFloat(document.getElementById('thresholdAmber').value),
+                threshold_red: parseFloat(document.getElementById('thresholdRed').value),
+                threshold_direction: document.getElementById('thresholdDirection').value,
+                is_active: true,
+                is_north_star: document.getElementById('kpiNorthStar').checked
+            };
+            
+            try {
+                const method = id ? 'PUT' : 'POST';
+                const url = id ? `/api/kpis/${id}` : '/api/kpis';
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.ok) {
+                    closeModal();
+                    loadKPIs();
+                } else {
+                    alert(WalaPlusI18n.t('dyn.kpis.failed_save'));
+                }
+            } catch (error) {
+                console.error('Error saving KPI:', error);
+                alert(WalaPlusI18n.t('dyn.kpis.error_save'));
+            }
+        });
+
+        function openRecordValueModal(kpiId) {
+            const raw = prompt(WalaPlusI18n.t('dyn.kpis.prompt_value'));
+            if (raw === null) return; // cancelled
+            // Accept "50", "50%", "50 %" — strip a trailing % and spaces before parsing.
+            const cleaned = String(raw).replace('%', '').trim();
+            const value = parseFloat(cleaned);
+            if (!isFinite(value)) {
+                alert('Please enter a number (e.g. 50). "' + raw + '" is not a valid value.');
+                return;
+            }
+            // Record the value against the quarter currently being viewed, so entering
+            // a number while looking at Q2 lands in Q2 (not always "this month").
+            recordValue(kpiId, value);
+        }
+
+        async function recordValue(kpiId, value) {
+            // Stamp the period to the selected quarter tab (or the current month for "Latest").
+            let periodStart, periodEnd;
+            const q = (typeof _selectedQuarter !== 'undefined') ? _selectedQuarter : 0;
+            const yr = (typeof _kpiYear !== 'undefined' && _kpiYear) ? _kpiYear : new Date().getFullYear();
+            if (q >= 1 && q <= 4) {
+                periodStart = new Date(yr, (q - 1) * 3, 1);
+                periodEnd = new Date(yr, q * 3, 0); // last day of the quarter
+            } else {
+                const now = new Date();
+                periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            }
+            try {
+                const res = await fetch(`/api/kpis/${kpiId}/values`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        actual_value: value,
+                        period_start: periodStart.toISOString().split('T')[0],
+                        period_end: periodEnd.toISOString().split('T')[0]
+                    })
+                });
+                if (res.ok) {
+                    closeDetailModal();
+                    loadKPIs();
+                } else {
+                    // Surface the real reason instead of a generic failure (e.g. permission).
+                    let reason = '';
+                    try { reason = (await res.json()).error || ''; } catch {}
+                    if (res.status === 403) reason = 'You don’t have permission to record KPI values. Ask an admin/quality manager to grant KPI write access.';
+                    alert((WalaPlusI18n.t('dyn.kpis.failed_record_value') || 'Failed to record value') + (reason ? '\n\n' + reason : ''));
+                }
+            } catch (error) {
+                console.error('Error recording value:', error);
+                alert('Network error while recording the value. Please try again.');
+            }
+        }
+
+        // Quick owner reassignment from the detail modal — change owner_type and
+        // the server derives the matching owner_name. Any KPI → any team member.
+        async function reassignOwner(kpiId, ownerType) {
+            try {
+                const res = await fetch(`/api/kpis/${kpiId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ owner_type: ownerType })
+                });
+                if (res.ok) {
+                    closeDetailModal();
+                    await loadKPIs();
+                } else {
+                    const d = await res.json().catch(() => ({}));
+                    alert(d.error || 'Failed to reassign KPI owner.');
+                }
+            } catch (e) {
+                console.error('Reassign owner error:', e);
+                alert('Failed to reassign KPI owner.');
+            }
+        }
+
+        // Quick category change from the detail modal — updates kpi_definitions.category.
+        async function changeCategory(kpiId, category) {
+            try {
+                const res = await fetch(`/api/kpis/${kpiId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category })
+                });
+                if (res.ok) {
+                    closeDetailModal();
+                    await loadKPIs();
+                } else {
+                    const d = await res.json().catch(() => ({}));
+                    alert(d.error || 'Failed to change category.');
+                }
+            } catch (e) {
+                console.error('Change category error:', e);
+                alert('Failed to change category.');
+            }
+        }
+
+        async function pushToLeadership() {
+            const btn = document.getElementById('pushBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Pushing…'; }
+            try {
+                const res = await fetch('/api/kpis/push-to-leadership', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) { alert(data.error || 'Push failed.'); return; }
+                if (data.configured === false) {
+                    alert('Push not configured.\n\n' + (data.error || 'Set PLATFORM_WEBHOOK_URL and WEBHOOK_SECRET in Replit Secrets, then republish.'));
+                    return;
+                }
+                const lines = (data.pushed || []).map(p => `${p.ok ? '✓' : '—'} ${p.code}${p.value != null ? ' = ' + p.value + '%' : ''}${p.note ? '  (' + p.note + ')' : ''}`);
+                alert(`Pushed ${data.ok_count} of ${(data.pushed || []).length} KPI(s) to the Leadership Platform:\n\n${lines.join('\n')}`);
+            } catch (e) {
+                console.error('Push error:', e); alert('Network error during push.');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+        // The Sales cycle-time KPIs (SALES-KPI-03 Proposal, SALES-KPI-04
+        // Agreement) are the only step that calls the Zoho API — up to 40
+        // sequential per-deal stage-history requests. They are therefore
+        // EXCLUDED from the plain Recalculate button, which must stay fast, and
+        // normally run only in the nightly job. `withCycleTimes` is the
+        // on-demand path for when the nightly run hasn't happened yet or is
+        // suspected of failing: the endpoint takes ?cycleTimes=1.
+        //
+        // The two runs cannot share a button because the slow one can take
+        // minutes and would make the fast path look hung.
+        async function recalcKPIs(withCycleTimes) {
+            const slow = withCycleTimes === true;
+            const btn = document.getElementById(slow ? 'recalcCycleBtn' : 'recalcBtn');
+            const other = document.getElementById(slow ? 'recalcBtn' : 'recalcCycleBtn');
+            const orig = btn ? btn.innerHTML : '';
+            // Disable BOTH so the two runs can't overlap — they write the same
+            // kpi_values rows, and the slow one holds a Zoho token.
+            if (btn) { btn.disabled = true; btn.innerHTML = slow ? 'Recalculating + Zoho…' : 'Recalculating…'; }
+            if (other) other.disabled = true;
+            try {
+                const url = slow ? '/api/kpis/recalc?cycleTimes=1' : '/api/kpis/recalc';
+                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await res.json();
+                if (res.ok) {
+                    await loadKPIs();
+                    let msg = `Recalculated. Recorded ${data.recorded} live value(s), skipped ${data.skipped} (no data / manual).`;
+                    if (slow) {
+                        // Report the two KPIs this run exists for by name. Without
+                        // this the operator only sees a total and cannot tell
+                        // whether the Zoho step actually worked — which is the
+                        // whole reason for running it on demand.
+                        const details = Array.isArray(data.details) ? data.details : [];
+                        const cycle = details.filter(d => d && (d.code === 'SALES-KPI-03' || d.code === 'SALES-KPI-04'));
+                        msg += '\n\nSales cycle times:';
+                        if (!cycle.length) {
+                            msg += '\n  • not reported by this run — the Zoho stage-history step did not run. Check the server log for "[KPIProcessCalc] cycle-times failed".';
+                        } else {
+                            cycle.forEach(d => {
+                                msg += `\n  • ${d.code}: ` + (d.value !== undefined && d.value !== null ? `${d.value}` : `no value — ${d.reason || 'unknown reason'}`);
+                            });
+                        }
+                    }
+                    alert(msg);
+                } else {
+                    alert(data.error || 'Failed to recalculate KPIs.');
+                }
+            } catch (e) {
+                console.error('Recalc error:', e);
+                alert(slow
+                    ? 'Failed to recalculate with cycle times. This run calls Zoho and can take minutes — if it timed out, the plain Recalculate still works.'
+                    : 'Failed to recalculate KPIs.');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+                if (other) other.disabled = false;
+            }
+        }
+
+        // ===== Checklist modal =====
+        let _checklistKpiId = null;
+        let _buDateWired = false;
+        async function openChecklistModal(kpiId) {
+            _checklistKpiId = kpiId;
+            const kpi = allKPIs.find(k => k.id === kpiId);
+            document.getElementById('checklistTitle').textContent = 'Checklist — ' + (kpi ? kpi.kpi_name : ('KPI #' + kpiId));
+            document.getElementById('checklistModal').classList.remove('hidden');
+            // Wire the per-BU date inputs once (delegated change on the items container).
+            if (!_buDateWired) {
+                const wrap = document.getElementById('checklistItems');
+                if (wrap) {
+                    wrap.addEventListener('change', (e) => {
+                        const el = e.target;
+                        if (el && el.matches && el.matches('input[data-bu-date]')) {
+                            saveBuSchedule(el.getAttribute('data-bu'), el.getAttribute('data-bu-date'), el.value);
+                        }
+                    });
+                    _buDateWired = true;
+                }
+            }
+            await loadChecklist();
+        }
+        async function saveBuSchedule(bu, field, value) {
+            if (_checklistKpiId == null || !bu || !field) return;
+            await flushTicks();
+            // Update local model first so the badge refreshes instantly.
+            (_checklistData?.sections || []).forEach(s => { if (s.section === bu) s[field] = value || null; });
+            _renderChecklist();
+            try {
+                const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist/bu-schedule`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bu, [field]: value || null })
+                });
+                if (!res.ok) {
+                    let reason = ''; try { reason = (await res.json()).error || ''; } catch {}
+                    if (res.status === 403) reason = 'You don’t have permission to edit BU schedules.';
+                    alert('Failed to save the date' + (reason ? '\n\n' + reason : ''));
+                    await loadChecklist(); // revert to server truth
+                }
+            } catch (e) {
+                console.error('Save BU schedule error:', e);
+                await loadChecklist();
+            }
+        }
+        async function closeChecklistModal() {
+            await flushTicks(); // don't lose pending marks on close
+            document.getElementById('checklistModal').classList.add('hidden');
+            _checklistKpiId = null;
+            // Refresh the list so the recomputed value/RAG shows.
+            loadKPIs();
+        }
+        const _esc = (s) => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+        const _slug = (s) => (s || '').replace(/[^a-z0-9]+/gi, '_');
+        const _collapsedBUs = new Set();
+        const _collapsedStages = new Set();
+        // Per-BU start date + deadline row, with an overdue / due-soon / on-time badge.
+        function _buScheduleRow(s) {
+            const bu = _esc(s.section);
+            const start = s.start_date || '';
+            const dl = s.deadline || '';
+            let badge = '';
+            if (dl) {
+                const today = new Date().toISOString().split('T')[0];
+                if (s.complete) badge = '<span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">Completed</span>';
+                else if (dl < today) badge = '<span class="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700">⚠ Overdue</span>';
+                else {
+                    const days = Math.ceil((new Date(dl) - new Date(today)) / 86400000);
+                    badge = `<span class="text-xs px-2 py-0.5 rounded ${days <= 14 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}">${days}d left</span>`;
+                }
+            }
+            return `<div class="flex flex-wrap items-center gap-3 px-2 py-2 mb-2 bg-gray-50 rounded text-xs">
+                <label class="flex items-center gap-1 text-gray-600">Start
+                    <input type="date" data-bu-date="start_date" data-bu="${bu}" value="${start}" class="border rounded px-1 py-0.5 text-xs">
+                </label>
+                <label class="flex items-center gap-1 text-gray-600">Deadline
+                    <input type="date" data-bu-date="deadline" data-bu="${bu}" value="${dl}" class="border rounded px-1 py-0.5 text-xs">
+                </label>
+                ${badge}
+            </div>`;
+        }
+        function _renderStages(s) {
+            const order = [], map = {};
+            (s.items || []).forEach(it => { const st = it.stage || 'Steps'; if (!map[st]) { map[st] = []; order.push(st); } map[st].push(it); });
+            return order.map((st, i) => {
+                const items = map[st];
+                const done = items.filter(i => i.is_done).length, total = items.length;
+                const pct = total ? Math.round(done / total * 100) : 0;
+                const key = s.section + '::' + st;
+                const open = !_collapsedStages.has(key);
+                const col = pct >= 100 ? 'text-emerald-600' : pct > 0 ? 'text-amber-600' : 'text-gray-400';
+                return `<div class="border rounded ms-1">
+                    <div class="flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-gray-50" data-on-click="toggleStage" data-args="[&quot;${_esc(key)}&quot;]">
+                        <span class="text-gray-400 text-[10px]">${open ? '▾' : '▸'}</span>
+                        <span class="text-sm text-gray-800 flex-1">${i + 1}. ${_esc(st)}</span>
+                        <span class="text-[11px] text-gray-500">${done}/${total}</span>
+                        <span class="text-[11px] font-semibold ${col} w-9 text-end">${pct}%</span>
+                    </div>
+                    ${open ? `<div class="px-2 pb-2 space-y-1">${items.map(_itemRow).join('')}</div>` : ''}
+                </div>`;
+            }).join('');
+        }
+        function toggleStage(key) {
+            if (_collapsedStages.has(key)) _collapsedStages.delete(key); else _collapsedStages.add(key);
+            _renderChecklist();
+        }
+        function _itemRow(it) {
+            return `
+                <div class="flex items-center gap-2 border rounded px-2 py-1.5">
+                    <input type="checkbox" ${it.is_done ? 'checked' : ''} data-on-change="toggleChecklistItem" data-args="[${it.id}, ${!it.is_done}]" class="w-4 h-4" />
+                    <span class="flex-1 text-sm ${it.is_done ? 'line-through text-gray-400' : 'text-gray-800'}">${_esc(it.item_text)}</span>
+                    <button data-on-click="deleteChecklistItem" data-args="[${it.id}]" class="text-gray-400 hover:text-red-600 text-sm" title="Delete">&times;</button>
+                </div>`;
+        }
+        function _barColor(pct) { return pct >= 100 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-gray-400'; }
+        let _checklistData = null;
+        async function loadChecklist() {
+            if (_checklistKpiId == null) return;
+            try {
+                const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist`);
+                _checklistData = await res.json();
+                _renderChecklist();
+            } catch (e) {
+                console.error('Load checklist error:', e);
+            }
+        }
+        // Recompute per-BU + overall totals locally so ticks reflect instantly (no round-trip).
+        function _recomputeChecklist() {
+            const d = _checklistData; if (!d) return;
+            (d.sections || []).forEach(s => {
+                const its = s.items || [];
+                s.total = its.length;
+                s.done = its.filter(i => i.is_done).length;
+                s.pct = s.total ? Math.round(s.done / s.total * 100) : 0;
+                s.complete = s.total > 0 && s.done === s.total;
+            });
+            const bus = (d.sections || []).filter(s => s.section);
+            d.bu_summary = { complete: bus.filter(s => s.complete).length, total: bus.length };
+            const all = (d.sections || []).flatMap(s => s.items || []);
+            const done = all.filter(i => i.is_done).length;
+            d.progress = { total: all.length, done, pct: all.length ? Math.round(done / all.length * 100) : 0 };
+            // Keep the schedule-scoped headline in sync while ticking (mirrors the server:
+            // score only BUs due by end of this quarter).
+            const now = new Date();
+            const qEnd = new Date(Date.UTC(now.getUTCFullYear(), (Math.floor(now.getUTCMonth() / 3) + 1) * 3, 0)).toISOString().slice(0, 10);
+            const scheduled = bus.filter(s => s.deadline);
+            if (scheduled.length) {
+                const inScope = scheduled.filter(s => String(s.deadline).slice(0, 10) <= qEnd);
+                if (!inScope.length) { d.scoped_rate = null; }
+                else {
+                    const c = inScope.filter(s => s.complete).length;
+                    d.scoped_rate = { value: Math.round(c / inScope.length * 1000) / 10, complete: c, total: inScope.length, total_bus: bus.length, scoped: true };
+                }
+            } else {
+                d.scoped_rate = { value: bus.length ? Math.round(bus.filter(s => s.complete).length / bus.length * 1000) / 10 : 0, complete: bus.filter(s => s.complete).length, total: bus.length, total_bus: bus.length, scoped: false };
+            }
+        }
+        function _renderChecklist() {
+            const data = _checklistData;
+            if (!data) return;
+            try {
+                const items = data.items || [];
+                const prog = data.progress || { total: 0, done: 0, pct: 0 };
+                const sections = data.sections || [];
+                const buSummary = data.bu_summary || { complete: 0, total: 0 };
+                const sectioned = sections.some(s => s.section);
+                const wrap = document.getElementById('checklistItems');
+                const scroller = wrap.closest('.overflow-y-auto') || wrap.parentElement;
+                const sTop = scroller ? scroller.scrollTop : 0;
+                document.getElementById('checklistAddBu').classList.toggle('hidden', !sectioned);
+                document.getElementById('checklistFlatAdd').classList.toggle('hidden', sectioned);
+
+                if (sectioned) {
+                    const sr = data.scoped_rate;
+                    if (sr && sr.scoped) {
+                        // Scored against BUs DUE by end of this quarter (deadline-based).
+                        document.getElementById('checklistProgress').innerHTML =
+                            `KPI: <span class="text-gray-900 font-semibold">${sr.value}%</span> &middot; ${sr.complete} of ${sr.total} BUs due this quarter complete <span class="text-gray-400">(${sr.total_bus} BUs total; later-quarter BUs not counted yet)</span>`;
+                    } else if (sr === null) {
+                        document.getElementById('checklistProgress').innerHTML =
+                            `KPI: <span class="text-gray-900 font-semibold">—</span> <span class="text-gray-400">&middot; no BUs due this quarter yet (set a deadline to bring a BU into scope)</span>`;
+                    } else {
+                        document.getElementById('checklistProgress').innerHTML =
+                            `KPI: <span class="text-gray-900 font-semibold">${buSummary.total ? Math.round(buSummary.complete / buSummary.total * 100) : 0}%</span> &middot; ${buSummary.complete} of ${buSummary.total} BUs complete <span class="text-gray-400">(a BU counts only at 100%)</span> &middot; <span class="text-gray-400">sub-steps ${prog.pct}%</span>`;
+                    }
+                    wrap.innerHTML = sections.filter(s => s.section).map(s => {
+                        const open = !_collapsedBUs.has(s.section);
+                        return `
+                        <div class="border rounded-lg">
+                            <div class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50" data-on-click="toggleBuSection" data-args="[&quot;${_esc(s.section)}&quot;]">
+                                <span class="text-gray-400 text-xs">${open ? '▾' : '▸'}</span>
+                                <span class="font-medium text-gray-900 flex-1">${s.complete ? '✅ ' : ''}${_esc(s.section)}</span>
+                                ${(s.deadline && !s.complete && s.deadline < new Date().toISOString().split('T')[0]) ? '<span class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700">⚠</span>' : ''}
+                                <span class="text-xs text-gray-500">${s.done}/${s.total}</span>
+                                <div class="w-24 h-2 bg-gray-100 rounded overflow-hidden"><div class="h-2 ${_barColor(s.pct)}" data-style="width:${s.pct}%"></div></div>
+                                <span class="text-xs font-semibold text-gray-700 w-9 text-end">${s.pct}%</span>
+                                <button data-on-click="renameBuPrompt" data-args="[&quot;${_esc(s.section)}&quot;]" class="text-gray-400 hover:text-indigo-600 px-1" title="Rename BU">✏️</button>
+                                <button data-on-click="removeBuConfirm" data-args="[&quot;${_esc(s.section)}&quot;]" class="text-gray-400 hover:text-red-600 px-1" title="Remove BU">🗑️</button>
+                            </div>
+                            ${open ? `<div class="px-3 pb-3 space-y-2">
+                                ${_buScheduleRow(s)}
+                                ${_renderStages(s)}
+                            </div>` : ''}
+                        </div>`;
+                    }).join('');
+                } else {
+                    document.getElementById('checklistProgress').textContent = `${prog.done} / ${prog.total} done — ${prog.pct}%`;
+                    wrap.innerHTML = items.length
+                        ? items.map(_itemRow).join('')
+                        : '<p class="text-sm text-gray-500">No items yet. Add the completion checkpoints for this KPI.</p>';
+                }
+                if (scroller) scroller.scrollTop = sTop;
+            } catch (e) {
+                console.error('Render checklist error:', e);
+            }
+        }
+        function toggleBuSection(section) {
+            if (_collapsedBUs.has(section)) _collapsedBUs.delete(section); else _collapsedBUs.add(section);
+            _renderChecklist();
+        }
+        async function addChecklistItem(section) {
+            // section provided → per-BU input; otherwise the flat input.
+            const input = section ? document.getElementById('addItem-' + _slug(section)) : document.getElementById('newChecklistItem');
+            const text = (input && input.value || '').trim();
+            if (!text || _checklistKpiId == null) return;
+            await flushTicks();
+            try {
+                const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_text: text, section: section || undefined })
+                });
+                if (res.ok) { input.value = ''; await loadChecklist(); }
+                else { alert('Failed to add item.'); }
+            } catch (e) { console.error('Add checklist item error:', e); }
+        }
+        async function addChecklistBu() {
+            const input = document.getElementById('newChecklistBu');
+            const name = (input.value || '').trim();
+            if (!name || _checklistKpiId == null) return;
+            await flushTicks();
+            try {
+                const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist/bu`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                if (res.ok) { input.value = ''; await loadChecklist(); }
+                else { const d = await res.json().catch(()=>({})); alert(d.error || 'Failed to add BU.'); }
+            } catch (e) { console.error('Add BU error:', e); }
+        }
+        async function renameBuPrompt(bu) {
+            const to = prompt('Rename BU "' + bu + '" to:', bu);
+            if (to === null) return;
+            const name = to.trim();
+            if (!name || name === bu) return;
+            await _buAdminCall('PUT', `/api/kpis/${_checklistKpiId}/checklist/bu/rename`, { from: bu, to: name }, 'rename');
+        }
+        async function removeBuConfirm(bu) {
+            if (!confirm('Remove BU "' + bu + '" and ALL its checklist items and dates? This cannot be undone.')) return;
+            await _buAdminCall('DELETE', `/api/kpis/${_checklistKpiId}/checklist/bu`, { bu }, 'remove');
+        }
+        async function _buAdminCall(method, url, body, label) {
+            if (_checklistKpiId == null) return;
+            await flushTicks(); // persist any pending checkbox marks first
+            try {
+                const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                if (res.ok) { await loadChecklist(); }
+                else {
+                    let reason = ''; try { reason = (await res.json()).error || ''; } catch {}
+                    if (res.status === 403) reason = 'You don’t have permission to edit BUs.';
+                    alert('Failed to ' + label + ' BU' + (reason ? '\n\n' + reason : ''));
+                }
+            } catch (e) { console.error(label + ' BU error:', e); alert('Network error while trying to ' + label + ' the BU.'); }
+        }
+
+        // ===== BU Coverage modal (per-BU completion % + due date) =====
+        let _buCoverageKpiId = null;
+        const _BU_STATUS = [['not_started','Not started'],['in_progress','In progress'],['postponed','Postponed'],['done','Done']];
+        async function openBuCoverageModal(kpiId) {
+            _buCoverageKpiId = kpiId;
+            const kpi = allKPIs.find(k => k.id === kpiId);
+            document.getElementById('buCoverageTitle').textContent = 'BU Coverage — ' + (kpi ? kpi.kpi_name : ('KPI #' + kpiId));
+            document.getElementById('buCoverageModal').classList.remove('hidden');
+            await loadBuCoverage();
+        }
+        function closeBuCoverageModal() {
+            document.getElementById('buCoverageModal').classList.add('hidden');
+            _buCoverageKpiId = null;
+            loadKPIs();
+        }
+        const _expandedBUs = new Set();
+        async function loadBuCoverage() {
+            if (_buCoverageKpiId == null) return;
+            try {
+                const res = await fetch(`/api/kpis/${_buCoverageKpiId}/bu-coverage`);
+                const data = await res.json();
+                const rows = data.rows || [];
+                const _ph = (phases, text) => (phases || []).some(p => p.item_text === text && p.is_done);
+                const pub = rows.filter(r => _ph(r.phases, 'Process Releasing')).length;
+                const gov = rows.filter(r => _ph(r.phases, 'Process Releasing') && _ph(r.phases, 'Trial Audit Report')).length;
+                document.getElementById('buCoverageAvg').innerHTML =
+                    `Framework Completion: <span class="text-gray-900 font-semibold">${pub}/${rows.length} published</span> &middot; BU Coverage: <span class="text-gray-900 font-semibold">${gov}/${rows.length} published + audited</span>` +
+                    `<div class="text-xs text-gray-500 mt-1">Tick a BU's <strong>Process Releasing</strong> phase to mark its framework <strong>published</strong>; tick <strong>Trial Audit Report</strong> to mark it <strong>audited</strong>. Framework Completion = published BUs ÷ ${rows.length}; BU Coverage = published + audited ÷ ${rows.length} (stricter).</div>`;
+                document.getElementById('buCoverageRows').innerHTML = rows.map(r => {
+                    const slug = _slug(r.bu_name);
+                    const phases = r.phases || [];
+                    const pdone = phases.filter(p => p.is_done).length;
+                    const published = _ph(phases, 'Process Releasing');
+                    const audited = _ph(phases, 'Trial Audit Report');
+                    const badges =
+                        (published ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">Published</span> ' : '') +
+                        (audited ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-800">Audited</span>' : '');
+                    const phaseList = phases.map(p => `
+                        <label class="flex items-center gap-2 py-1 text-sm">
+                            <input type="checkbox" ${p.is_done ? 'checked' : ''} data-on-change="toggleBuPhase" data-args="[${p.id}, ${!p.is_done}]" class="w-4 h-4" />
+                            <span class="${p.is_done ? 'line-through text-gray-400' : 'text-gray-700'}">${_esc(p.item_text)}</span>
+                        </label>`).join('');
+                    return `
+                    <tr class="border-b">
+                        <td class="py-2">
+                            <button data-on-click="toggleBuPhases" data-args="[&quot;${slug}&quot;]" class="flex items-center gap-1 text-gray-800 hover:text-indigo-700 font-medium">
+                                <span id="caret-${slug}" class="text-xs text-gray-400">${_expandedBUs.has(slug) ? '▾' : '▸'}</span> ${_esc(r.bu_name)}
+                            </button>
+                        </td>
+                        <td class="py-2">${badges || '<span class="text-xs text-gray-400">not started</span>'} <span class="text-xs text-gray-400 ms-1">${pdone}/${phases.length} phases</span></td>
+                        <td class="py-2"><input type="date" value="${r.due_date ? String(r.due_date).slice(0,10) : ''}" data-on-change="saveBuCoverage" data-args="[${r.id}, &quot;due_date&quot;, &quot;@this.value&quot;]" class="border rounded px-2 py-1 text-sm" /></td>
+                        <td class="py-2"><select data-on-change="saveBuCoverage" data-args="[${r.id}, &quot;status&quot;, &quot;@this.value&quot;]" class="border rounded px-2 py-1 text-sm">${_BU_STATUS.map(([v, l]) => `<option value="${v}" ${r.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+                    </tr>
+                    <tr id="phases-${slug}" class="${_expandedBUs.has(slug) ? '' : 'hidden'} bg-gray-50"><td colspan="4" class="px-6 py-2">${phaseList || '<span class="text-xs text-gray-400">No checklist phases for this BU.</span>'}</td></tr>`;
+                }).join('');
+            } catch (e) { console.error('Load BU coverage error:', e); }
+        }
+        function toggleBuPhases(slug) {
+            const el = document.getElementById('phases-' + slug);
+            const caret = document.getElementById('caret-' + slug);
+            if (!el) return;
+            const nowHidden = el.classList.toggle('hidden');
+            if (nowHidden) _expandedBUs.delete(slug); else _expandedBUs.add(slug);
+            if (caret) caret.textContent = nowHidden ? '▸' : '▾';
+        }
+        async function toggleBuPhase(itemId, isDone) {
+            try {
+                const res = await fetch(`/api/kpis/checklist/${itemId}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_done: isDone })
+                });
+                if (res.ok) { await loadBuCoverage(); } else { alert('Failed to update phase.'); }
+            } catch (e) { console.error('Toggle BU phase error:', e); }
+        }
+        async function saveBuCoverage(rowId, field, value) {
+            try {
+                const body = {};
+                body[field] = (field === 'completion_pct') ? Number(value) : value;
+                const res = await fetch(`/api/kpis/bu-coverage/${rowId}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!res.ok) { alert('Failed to save BU coverage.'); return; }
+                // Re-render so the milestone counts/badges stay accurate (expanded
+                // BUs are preserved via _expandedBUs).
+                await loadBuCoverage();
+            } catch (e) { console.error('Save BU coverage error:', e); }
+        }
+        // Pending checkbox changes, flushed as ONE batch request shortly after the
+        // user stops clicking — so marking a whole BU is a single write, not 19
+        // (which tripped the rate limiter with "Too many requests").
+        const _pendingTicks = new Map();
+        let _tickFlushTimer = null;
+        function toggleChecklistItem(itemId, isDone) {
+            // Optimistic: flip locally + re-render instantly (feels immediate).
+            let hit = false;
+            (_checklistData?.sections || []).forEach(s =>
+                (s.items || []).forEach(it => { if (it.id === itemId) { it.is_done = isDone; hit = true; } }));
+            (_checklistData?.items || []).forEach(it => { if (it.id === itemId) it.is_done = isDone; });
+            if (hit) { _recomputeChecklist(); _renderChecklist(); }
+            _pendingTicks.set(itemId, isDone);
+            if (_tickFlushTimer) clearTimeout(_tickFlushTimer);
+            _tickFlushTimer = setTimeout(flushTicks, 600);
+        }
+        async function flushTicks() {
+            if (_tickFlushTimer) { clearTimeout(_tickFlushTimer); _tickFlushTimer = null; }
+            if (!_pendingTicks.size) return;
+            const updates = [..._pendingTicks.entries()].map(([id, is_done]) => ({ id, is_done }));
+            _pendingTicks.clear();
+            try {
+                const res = await fetch('/api/kpis/checklist/batch', {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ updates })
+                });
+                if (!res.ok) {
+                    let reason = ''; try { reason = (await res.json()).error || ''; } catch {}
+                    if (res.status === 429) reason = 'Please wait a moment — too many changes at once.';
+                    if (reason) console.warn('Batch tick save:', reason);
+                    await loadChecklist(); // revert to server truth
+                }
+            } catch (e) {
+                console.error('Flush ticks error:', e);
+                await loadChecklist();
+            }
+        }
+        async function deleteChecklistItem(itemId) {
+            await flushTicks();
+            try {
+                const res = await fetch(`/api/kpis/checklist/${itemId}`, { method: 'DELETE' });
+                if (res.ok) await loadChecklist();
+            } catch (e) { console.error('Delete checklist item error:', e); }
+        }
+
+        _runWhenI18nReady(function () { _initYearPicker(); loadKPIs(); });
+
+        // Re-render the catalog list and rebuild Chart.js doughnuts/bars when
+        // the operator switches language so localized labels appear without
+        // waiting on the page reload that follows. Safe even when the reload
+        // is fast — destroy() guards against duplicate canvases.
+        document.addEventListener('walaPlusLanguageChange', function () {
+            try {
+                filterKPIs();
+                if (window._lastKPIChartData) renderCharts(window._lastKPIChartData);
+            } catch (_) {}
+        });
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

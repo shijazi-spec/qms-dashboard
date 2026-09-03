@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Sign In - ExampleOrg QMS</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <script src="/js/i18n.js?v=1.1"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .google-btn {
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+        }
+        .google-btn:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-1px);
+        }
+        .google-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+    </style>
+    <script src="/js/safe-actions.js?v=2"></script>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-8">
+            <!-- Brand badge — matches the green-shield favicon (PR #56).
+                 Same shield-check icon, same emerald colour family so
+                 the browser-tab favicon and the login-page logo read as
+                 the same mark. Sign-in button below is also emerald for
+                 brand consistency. -->
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 mb-4 shadow-lg">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.<REDACTED_PHONE>.944a11.<REDACTED_PHONE> 3.04A12.<REDACTED_PHONE> 9c0 <REDACTED_PHONE>.<REDACTED_PHONE> <REDACTED_PHONE>.052-.382-3.016z"/>
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900" data-i18n="login.title">ExampleOrg</h1>
+            <p class="text-sm text-gray-500 mt-1" data-i18n="login.subtitle">Enterprise Quality & GRC Platform</p>
+            <p class="text-xs text-emerald-600 mt-2 inline-flex items-center gap-1.5" data-testid="status-app-online">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span data-i18n="login.status_online">App is online &middot; Sign in to continue</span>
+            </p>
+        </div>
+
+        <!-- Iframe banner (only shown when this page is loaded inside an iframe, e.g. the Replit preview pane).
+             Sign-in requires a top-level navigation; iframes cannot share session cookies cross-site. -->
+        <div id="iframe-banner" class="hidden mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z"/></svg>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold text-amber-900" data-i18n="login.iframe_title">Sign in once in a new tab</p>
+                    <p class="text-xs text-amber-800 mt-1" data-i18n="login.iframe_body">Open the app in its own tab to sign in. Once you do, this preview pane will load your dashboard automatically next time.</p>
+                    <a id="open-in-new-tab" href="/" target="_blank" rel="noopener"
+                       data-testid="link-open-new-tab"
+                       class="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded-lg transition-colors">
+                        <span data-i18n="login.open_new_tab">Open in new tab</span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+            <h2 class="text-xl font-semibold text-gray-900 text-center mb-2" data-i18n="login.welcome">Welcome back</h2>
+            <p class="text-sm text-gray-500 text-center mb-8" data-i18n="login.welcome_sub">Sign in to access your dashboard</p>
+
+            <div id="error-banner" class="hidden mb-6 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p class="text-sm text-red-700" id="error-message"></p>
+            </div>
+
+            <a href="/api/login" data-testid="button-login"
+               class="google-btn w-full flex items-center justify-center gap-3 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 border-2 border-transparent rounded-xl text-white font-medium hover:from-emerald-600 hover:to-emerald-700">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                    <polyline points="<REDACTED_PHONE>"/>
+                    <line x1="15" y1="12" x2="3" y2="12"/>
+                </svg>
+                <span data-i18n="login.sign_in_btn">Sign in to ExampleOrg</span>
+            </a>
+            <p class="text-xs text-gray-400 text-center mt-3" data-i18n="login.sign_in_options">Sign in with Google, GitHub, Apple, or email</p>
+
+        </div>
+
+        <p class="text-xs text-gray-400 text-center mt-6" data-i18n="login.footer">&copy; 2026 ExampleOrg. Enterprise Quality Management.</p>
+    </div>
+
+    <script>
+        // Iframe detection: if this page is rendered inside an iframe (e.g. the Replit preview pane),
+        // surface the friendly explainer + "Open in new tab" CTA so users don't think the app is down.
+        (function detectIframe() {
+            let inIframe = false;
+            try { inIframe = window.self !== window.top; } catch (e) { inIframe = true; }
+            if (inIframe) {
+                const banner = document.getElementById('iframe-banner');
+                if (banner) banner.classList.remove('hidden');
+                // Make the new-tab link point at the absolute top-level URL so it opens correctly
+                // even when the iframe sandbox rewrites relative paths.
+                const link = document.getElementById('open-in-new-tab');
+                if (link) link.href = window.location.origin + '/';
+            }
+        })();
+
+
+        // Translate error messages using i18n if available, with English fallback.
+        // Each known key is enumerated as a literal _t('full.key') call so the
+        // i18n guardrail can statically verify it.
+        function _loginT(key, fallback) {
+            try {
+                if (window.WalaPlusI18n && typeof window.WalaPlusI18n.t === 'function') {
+                    var I18N = window.WalaPlusI18n;
+                    var v;
+                    switch (key) {
+                        case 'login.errors.auth_denied':       v = I18N.t('login.errors.auth_denied'); break;
+                        case 'login.errors.no_code':           v = I18N.t('login.errors.no_code'); break;
+                        case 'login.errors.no_email':          v = I18N.t('login.errors.no_email'); break;
+                        case 'login.errors.callback_failed':   v = I18N.t('login.errors.callback_failed'); break;
+                        case 'login.errors.invalid_state':     v = I18N.t('login.errors.invalid_state'); break;
+                        case 'login.errors.session_expired':   v = I18N.t('login.errors.session_expired'); break;
+                        case 'login.errors.invalid_admin_key': v = I18N.t('login.errors.invalid_admin_key'); break;
+                        case 'login.errors.auth_failed':       v = I18N.t('login.errors.auth_failed'); break;
+                    }
+                    if (v && v !== key.split('.').pop()) return v;
+                }
+            } catch (_) {}
+            return fallback;
+        }
+
+        function showLoginError(msgEl, key, fallback) {
+            // Show fallback immediately; re-translate after i18n loads
+            msgEl.textContent = _loginT(key, fallback);
+            if (window.WalaPlusI18n && typeof window.WalaPlusI18n.onReady === 'function') {
+                window.WalaPlusI18n.onReady(function() {
+                    if (msgEl.isConnected) msgEl.textContent = _loginT(key, fallback);
+                });
+            }
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const error = params.get('error');
+        if (error) {
+            const banner = document.getElementById('error-banner');
+            const msg = document.getElementById('error-message');
+            banner.classList.remove('hidden');
+            const errorMap = {
+                'auth_denied':      { key: 'login.errors.auth_denied',     fallback: 'Sign-in was cancelled. Please try again.' },
+                'no_code':          { key: 'login.errors.no_code',          fallback: 'Authentication failed. No authorization code received.' },
+                'no_email':         { key: 'login.errors.no_email',         fallback: 'Could not retrieve your email. Please try again.' },
+                'callback_failed':  { key: 'login.errors.callback_failed',  fallback: 'Authentication failed. Please try again.' },
+                'invalid_state':    { key: 'login.errors.invalid_state',    fallback: 'Session expired. Please try signing in again.' },
+                'session_expired':  { key: 'login.errors.session_expired',  fallback: 'Your session has expired. Please sign in again.' },
+                // Sample User 2026-06-18 — account-status messages. The auth
+                // server already redirects to /login?error=<status>
+                // when the OIDC sign-in succeeds but the user record
+                // isn't 'active'. Before this entry the fallback was
+                // "Authentication failed" which misled newly-invited
+                // users into thinking their credentials were wrong.
+                'pending_approval': { key: 'login.errors.pending_approval', fallback: 'Sign-in succeeded. Your account is waiting for an administrator to approve your access. You will be notified by email once approved.' },
+                'access_denied':    { key: 'login.errors.access_denied',    fallback: 'Sign-in succeeded, but your access request was declined. Please contact your administrator if you believe this is an error.' },
+                'account_disabled': { key: 'login.errors.account_disabled', fallback: 'Sign-in succeeded, but your account is disabled. Please contact your administrator to reactivate it.' },
+            };
+            const e = errorMap[error] || { key: 'login.errors.callback_failed', fallback: 'An error occurred during sign-in. Please try again.' };
+            showLoginError(msg, e.key, e.fallback);
+        }
+
+        fetch('/api/auth/me')
+            .then(r => r.json())
+            .then(data => {
+                if (data.authenticated) {
+                    window.location.href = '/';
+                }
+            })
+            .catch(() => {});
+
+        // Initialize i18n on login page (no nav, standalone)
+        window.addEventListener('DOMContentLoaded', () => {
+            if (window.WalaPlusI18n) {
+                window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+            }
+        });
+    </script>
+</body>
+</html>

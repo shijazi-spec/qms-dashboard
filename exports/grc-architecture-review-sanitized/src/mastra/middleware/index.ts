@@ -1,0 +1,805 @@
+import { randomBytes } from "crypto";
+import { getSessionFromCookie } from "../routes/authRoutes";
+import { sanitizeRequestBody } from "../../utils/inputSanitizer";
+import { checkRateLimit, parseClientIp } from "../../utils/rateLimiter";
+import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
+import { deepRedactSecretLikeStrings, redactSecretLikeStrings } from "../../utils/eventLogsDatabase";
+
+// Per-IP in-memory sampler: caps how many `rate_limit_429` rows we write per
+// minute per source IP so a single attacker (or misconfigured client) can't
+// fill `system_events` with thousands of identical rows per minute. The cap is
+// configurable via env (default 20/min/IP). Suppressed counts are folded into
+// the next emitted row's metadata so ops can see the true volume.
+const RATE_LIMIT_429_LOG_MAX_PER_MIN = (() => {
+  const raw = process.env.RATE_LIMIT_429_LOG_MAX_PER_MIN;
+  const parsed = parseInt(raw ?? '20', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
+})();
+
+interface RateLimit429SampleBucket {
+  windowStartMinute: number;
+  emitted: number;
+  suppressed: number;
+}
+const rateLimit429Samples = new Map<string, RateLimit429SampleBucket>();
+const RATE_LIMIT_429_SAMPLES_MAX_KEYS = 10_000;
+
+function evictStaleSampleBuckets(currentMinute: number): void {
+  // First pass: drop anything not in the current OR previous minute
+  // (previous-minute buckets are kept only long enough to carry their
+  // suppressed count forward — see the carryover branch below).
+  for (const [k, v] of rateLimit429Samples) {
+    if (v.windowStartMinute < currentMinute - 1) rateLimit429Samples.delete(k);
+  }
+  // Second pass: if still over budget (e.g. >10k unique IPs in a single
+  // minute — a high-cardinality attack), drop previous-minute buckets too.
+  // We accept losing the suppressed-count carryover for those keys in
+  // exchange for hard-bounded memory.
+  if (rateLimit429Samples.size > RATE_LIMIT_429_SAMPLES_MAX_KEYS) {
+    for (const [k, v] of rateLimit429Samples) {
+      if (v.windowStartMinute < currentMinute) rateLimit429Samples.delete(k);
+      if (rateLimit429Samples.size <= RATE_LIMIT_429_SAMPLES_MAX_KEYS) break;
+    }
+  }
+}
+
+function evaluateRateLimit429Sampling(ip: string): { log: boolean; suppressedCarryover: number } {
+  const minute = Math.floor(Date.now() / 60_000);
+  const key = ip || 'unknown';
+  const bucket = rateLimit429Samples.get(key);
+
+  if (!bucket || bucket.windowStartMinute !== minute) {
+    const suppressedCarryover = bucket && bucket.windowStartMinute === minute - 1 ? bucket.suppressed : 0;
+    if (rateLimit429Samples.size >= RATE_LIMIT_429_SAMPLES_MAX_KEYS) {
+      evictStaleSampleBuckets(minute);
+      // If we're STILL at the cap (every key is from the current minute),
+      // skip tracking this new IP. We still emit the log so observability
+      // doesn't go dark — the only thing we lose is per-IP sampling for
+      // IPs that didn't make it into the budget this minute.
+      if (rateLimit429Samples.size >= RATE_LIMIT_429_SAMPLES_MAX_KEYS) {
+        return { log: true, suppressedCarryover };
+      }
+    }
+    rateLimit429Samples.set(key, { windowStartMinute: minute, emitted: 1, suppressed: 0 });
+    return { log: true, suppressedCarryover };
+  }
+
+  if (bucket.emitted < RATE_LIMIT_429_LOG_MAX_PER_MIN) {
+    bucket.emitted += 1;
+    return { log: true, suppressedCarryover: 0 };
+  }
+
+  bucket.suppressed += 1;
+  return { log: false, suppressedCarryover: 0 };
+}
+
+function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter?: number): void {
+  const { log, suppressedCarryover } = evaluateRateLimit429Sampling(ip);
+  if (!log) return;
+
+  // Fire-and-forget — never block the request or surface DB errors back to clients.
+  import("../../utils/database")
+    .then(({ logSystemEvent }) =>
+      logSystemEvent({
+        event_type: 'rate_limit_429',
+        event_category: 'security',
+        description: `429 Too Many Requests on ${method} ${urlPath}`,
+        severity: 'warning',
+        source: 'rateLimiter',
+        metadata: {
+          path: urlPath,
+          method,
+          ip,
+          retry_after: retryAfter ?? null,
+          sampling_cap_per_min: RATE_LIMIT_429_LOG_MAX_PER_MIN,
+          ...(suppressedCarryover > 0 ? { suppressed_in_previous_minute: suppressedCarryover } : {}),
+        },
+      }),
+    )
+    .catch(() => { /* swallow — observability must never break the request path */ });
+}
+
+// PUBLIC_PATHS lists the URL paths that bypass `checkPageAuth` (HTML routes)
+// and `checkApiAuth` (API routes) entirely. EVERY entry here grants
+// UNAUTHENTICATED access to the matching route(s) — adding to this list is a
+// privilege-escalation vector and must be justified.
+//
+// MATCHING RULES (see `isPublicPath` below):
+//   * Entries WITHOUT a trailing `/` match the URL path EXACTLY.
+//   * Entries WITH a trailing `/` match the literal prefix (i.e. that path
+//     and any subpath beneath it).
+//
+// FOOT-GUN HISTORY: prior to this list's audit (task #447), matching used
+// `urlPath.startsWith(p)` for every entry. That meant `/api/health` silently
+// allowed unauthenticated access to `/api/health-index` (an unrelated
+// quality-metrics endpoint with no handler-side auth) and would have done
+// the same for any future `/api/health-foo` route. Always prefer EXACT entries
+// unless the prefix is genuinely a subtree, and in that case write the entry
+// with an explicit trailing `/` so a sibling path can never be swallowed by
+// accident.
+//
+// Audit cross-reference (task #447): every entry has a documented reason for
+// being public. Removed since previous audit:
+//   - `/sop`, `/api/sop`  — the ExampleOrg SOP doc is classified "Internal Use
+//     Only / Distribution: All platform users (internal)"; it has no business
+//     being readable without a session. The handlers in sopRoutes.ts now
+//     enforce session-or-admin-key on their own as defense-in-depth.
+//   - `/test/slack`, `/webhooks/slack`, `/api/webhooks/slack` — were removed
+//     when slackTriggers.ts was unimported. RE-ADDED 2026-06-10: the GRQ
+//     Assistant (Adam) two-way Slack chat wires registerSlackTrigger +
+//     registerGrqAssistantSlackRoutes in src/mastra/index.ts, so the webhook
+//     routes exist again and Slack needs unauthenticated access (see the
+//     Slack Events API webhook entry below). Per the per-route re-evaluation
+//     note: ONLY the POST webhook is public; the diagnostic SSE route
+//     `/test/slack` (opens DMs / posts to Slack) stays behind auth.
+//   - `/api/telemetry/pageview` — no such route exists in the codebase.
+export const PUBLIC_PATHS = [
+  // ---- Tech Requests: assignee response (token-gated, no login) ----
+  // Assignees are usually OUTSIDE the org and have no platform account. Both
+  // entries are guarded by a 256-bit unguessable token in the URL, and the GET
+  // only renders a confirmation page — the mutation is the POST.
+  '/r/',                            // GET: confirmation page for one request
+  '/api/tech-requests/respond/',    // POST: records that assignee's response
+
+  // ---- Auth flow (login, OIDC callback, logout) ----
+  '/login',                         // login page (rendered before sign-in)
+  '/api/login',                     // POST: legacy email/password login
+  '/api/callback',                  // OIDC redirect target from the IDP
+  '/api/logout',                    // GET: clears cookies + IDP redirect
+  '/api/auth/',                     // /api/auth/me + /api/auth/logout — each
+                                    // handler returns 401/clears cookies on
+                                    // its own, so the bypass is harmless.
+
+  // ---- Admin-key bootstrap (cookie issuance + clear) ----
+  // Listed as two EXACT entries instead of one `/api/admin/auth` prefix
+  // because a future `/api/admin/auth-something` must NOT inherit the
+  // bypass automatically.
+  '/api/admin/auth',                // POST: exchange ADMIN_API_KEY → cookie
+  '/api/admin/auth/logout',         // POST: clears admin_session + admin_key cookies
+
+  // ---- Invitation acceptance (caller has no session yet) ----
+  '/accept-invite',                 // landing page invitees see pre-session
+  '/api/invitations/validate/',     // .../validate/:token — token IS the auth
+  '/api/invitations/accept',        // POST: completes the invite, then issues
+                                    // a session cookie
+
+  // ---- Static assets (CSS / JS / locale JSON — cookies don't gate these) ----
+  '/css/',
+  '/js/',
+  '/dashboard/tailwind.css',
+  '/dashboard/i18n/',               // /dashboard/i18n/:lang locale JSON
+
+  // ---- Streaming-download service worker + its iframe-trigger URL pattern ----
+  // The SW file must load without an auth redirect (browsers fetch it
+  // independently of cookies). The trigger URL is intercepted by the SW
+  // before reaching the network, so the public allowlist is just defensive
+  // 404 plumbing for browsers without SW support.
+  '/streaming-download-sw.js',
+  '/_stream-download/',
+
+  // ---- Operational health checks (uptime monitoring) ----
+  // EXACT entry — must NOT swallow `/api/health-index` (a quality-metrics
+  // endpoint that aggregates audit/NC/CAPA data and was previously exposed
+  // by a `startsWith` foot-gun) or `/api/health/pulse*` (which has its own
+  // admin-only `authorize()` check, but we still keep this entry exact so
+  // the bypass never applies to either route).
+  '/api/health',
+  '/api/smoke',                     // smoke test for orchestrator
+
+  // ---- Anonymous language preference (so unauthenticated visitors can
+  // still pick a UI language before signing in) ----
+  '/api/user/language-preference',
+
+  // ---- Accessibility statement (WCAG / regulator-facing public page) ----
+  '/a11y',
+
+  // ---- Slack Events API webhook (GRQ Assistant / Adam two-way chat) ----
+  // Slack POSTs here for URL-verification (challenge) and every subscribed
+  // event. Slack is unauthenticated to our session model and does NOT follow
+  // redirects — so without this bypass the request hits checkPageAuth and
+  // gets a 302→/login, which Slack reports as "challenge_failed". The handler
+  // in src/triggers/slackTriggers.ts is self-defending: it echoes only the
+  // challenge, dedups event_id, and ignores bot_id messages (no reply loop).
+  // EXACT entries — these are the only Slack routes that may be public. The
+  // diagnostic SSE route `/test/slack` (which opens DMs / posts to Slack) is
+  // deliberately NOT listed and stays behind auth.
+  '/webhooks/slack/action',
+  '/api/webhooks/slack/action',
+
+  // ---- Leadership KPI feed (server-to-server pull) ----
+  // The ExampleOrg Leadership Platform (a separate Replit app) pulls this feed
+  // to auto-refresh its KPI "Current" values. It has no platform session, so
+  // the route self-authenticates via the X-Feed-Key header (constant-time
+  // compare vs LEADERSHIP_FEED_KEY) in src/mastra/routes/leadershipFeedRoutes.ts
+  // and fails closed (503) when the key is unset. EXACT entry.
+  '/api/kpis/leadership-feed',
+
+  // ---- Documentation Live Tracker collector (server-to-server push) ----
+  // A Windows collector on the controlled-documentation file server pushes
+  // snapshots here. It has no platform session, so each route self-authenticates
+  // via the X-Tracker-Key header (constant-time compare vs
+  // DOC_TRACKER_INGEST_KEY) in routes/documentationTrackerRoutes.ts and fails
+  // closed (503) when the key is unset.
+  //
+  // EXACT entries — no trailing slash. A '/api/documentation-tracker/' prefix
+  // entry would make the ENTIRE tracker read surface (documents, coverage,
+  // review state) unauthenticated, which is the same class of bug as
+  // '/api/health' once swallowing '/api/health-index'.
+  //
+  // These are rate-limited under a dedicated 'doc-tracker' category (see
+  // utils/rateLimiter.ts) because the default unauthenticated write budget is
+  // 3/min per IP, which a watcher plus heartbeat plus retry exceeds instantly.
+  '/api/documentation-tracker/ingest',
+  '/api/documentation-tracker/heartbeat',
+  '/api/documentation-tracker/collector-config',
+];
+
+const MASTRA_INTERNAL_PREFIXES = ['/api/workflows/', '/api/memory/'];
+
+function getAllowedOrigins(): string[] {
+  return (process.env.REPLIT_DOMAINS || '').split(',')
+    .map((d: string) => `<REDACTED_URL>`)
+    .filter(Boolean);
+}
+
+export function isPublicPath(urlPath: string): boolean {
+  // See PUBLIC_PATHS comment for matching rules. Entries ending in `/` are
+  // subtree (prefix) matches; everything else must match exactly. This
+  // intentionally rejects substring matches like
+  //   urlPath = '/api/health-index', entry = '/api/health'
+  // which previously slipped through the unguarded `startsWith`.
+  return PUBLIC_PATHS.some(p =>
+    p.endsWith('/') ? urlPath.startsWith(p) : urlPath === p,
+  );
+}
+
+function isMastraInternal(urlPath: string): boolean {
+  return MASTRA_INTERNAL_PREFIXES.some(p => urlPath.startsWith(p)) ||
+    (urlPath.startsWith('/api/agents/') && !urlPath.startsWith('/api/agents/performance'));
+}
+
+function handleCors(c: any, allowedOrigins: string[]): Response | null {
+  const method = c.req.method;
+  if (method === 'OPTIONS') {
+    const origin = c.req.header('Origin') || '';
+    const allowedOrigin = allowedOrigins.includes(origin) ? origin : (allowedOrigins[0] || '');
+    c.header('Access-Control-Allow-Origin', allowedOrigin);
+    c.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    c.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Admin-Key');
+    c.header('Access-Control-Allow-Credentials', 'true');
+    c.header('Access-Control-Max-Age', '3600');
+    return c.text('', 204);
+  }
+  const origin = c.req.header('Origin') || '';
+  const resolvedOrigin = (origin && allowedOrigins.includes(origin)) ? origin : (allowedOrigins[0] || '');
+  if (resolvedOrigin) {
+    c.header('Access-Control-Allow-Origin', resolvedOrigin);
+    c.header('Access-Control-Allow-Credentials', 'true');
+  }
+  return null;
+}
+
+function applySecurityHeaders(c: any, cspNonce: string): void {
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('X-XSS-Protection', '1; mode=block');
+  // Sample User 2026-06-20 — CSP fixes for two recurring console-noise errors:
+  //
+  // (1) Replit injects a floating "Open in Replit" pill into preview-domain
+  //     pages from <REDACTED_URL>
+  //     Without <REDACTED_URL> in script-src the browser blocks the
+  //     load and logs a CSP violation every page open. Added it under
+  //     script-src — same vendor as the platform host, same trust boundary.
+  //
+  // (2) DevTools fetches the source maps for chart.js (<REDACTED_HOST>) and
+  //     other libraries when the Console / Sources tab is open. The fetch
+  //     uses connect-src, not script-src, so the existing script-src
+  //     allowance for those CDNs doesn't cover it. Mirrored the CDN list
+  //     into connect-src so developers see clean console output.
+  c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> style-src 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> font-src 'self' <REDACTED_URL> <REDACTED_URL> img-src 'self' data: https:; connect-src 'self' <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> <REDACTED_URL> frame-ancestors 'none'; form-action 'self'`);
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  (c as any)._cspNonce = cspNonce;
+}
+
+function checkInngestAccess(c: any, urlPath: string): Response | null {
+  if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
+    if (!hasValidAdminApiKey(c)) {
+      return c.json({ error: 'Access denied' }, 403);
+    }
+  }
+  return null;
+}
+
+function checkPageAuth(c: any): Response | null {
+  const session = getSessionFromCookie(c.req.header('Cookie'));
+  if (!session && !hasValidAdminApiKey(c)) {
+    return c.redirect('/login');
+  }
+  return null;
+}
+
+async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Response | null> {
+  const session = getSessionFromCookie(c.req.header('Cookie'));
+  const hasAdminKey = hasValidAdminApiKey(c);
+
+  const isAuthenticated = !!(session || hasAdminKey);
+
+  const ip = parseClientIp(c.req.header('x-forwarded-for'), c.req.header('x-real-ip'));
+  const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  // Cheap public preference lookup hit on every page load by every browser
+  // tab — rate-limiting it produces user-visible 429s and test flakes for
+  // a no-op endpoint. Bypass the limiter for this exact path only.
+  const isLanguagePreference = urlPath === '/api/user/language-preference';
+  // Authenticated batch-upload endpoints. The 10-write/min default is too
+  // tight for legitimate SDR call-recording batches (typical session uploads
+  // 20–50 .wav files at once). Auth + session checks downstream still apply,
+  // so abuse risk is bounded to a logged-in user's own work.
+  const isBatchCallUpload =
+    isAuthenticated &&
+    (urlPath === '/api/calls/upload' ||
+      urlPath === '/api/calls/upload-audio' ||
+      urlPath.startsWith('/api/calls/upload/') ||
+      urlPath.startsWith('/api/calls/upload-audio/'));
+  const skipRateLimit = isLanguagePreference || isBatchCallUpload;
+  const rateCheck = skipRateLimit
+    ? { allowed: true as const }
+    : await checkRateLimit(ip, isWrite, urlPath, isAuthenticated, session?.userId ? String(session.userId) : undefined);
+  if (!rateCheck.allowed) {
+    c.header('Retry-After', String((rateCheck as any).retryAfter || 60));
+    logRateLimit429(urlPath, method, ip, (rateCheck as any).retryAfter);
+    return c.json({ error: 'Too many requests' }, 429);
+  }
+
+  // Admin-key authentication is intentionally scoped to /api/admin/* routes
+  // and the /api/inngest* server-to-server webhook path.  All other /api/*
+  // routes require a real OIDC user session.  Accepting the shared key as a
+  // universal credential would allow any service or operator holding the key
+  // to read and mutate unrelated regulated business data.
+  const isAdminRoute = urlPath.startsWith('/api/admin/') || urlPath === '/api/admin';
+  // /api/inngest uses key-based machine auth via checkInngestAccess() which
+  // runs before checkApiAuth() in the middleware chain.  We must not reject
+  // key-only callers here, or the Inngest serve handler will never be reached.
+  const isInngestRoute = urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest/');
+  const isKeyAllowedRoute = isAdminRoute || isInngestRoute;
+
+  if (!session && !(hasAdminKey && isKeyAllowedRoute)) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+
+  if (session) {
+    const { checkPlatformUserActive } = await import('../../utils/rbacMiddleware');
+    const isActive = await checkPlatformUserActive(session.email);
+    if (!isActive) {
+      return c.json({ error: 'Account is not active or has been disabled' }, 403);
+    }
+  }
+
+  if (isAdminRoute) {
+    if (!hasAdminKey) {
+      return c.json({ error: 'X-Admin-Key header required for admin endpoints' }, 403);
+    }
+    // Valid admin key on an admin route: allow without further RBAC checks.
+    return null;
+  }
+
+  if (isInngestRoute) {
+    // Valid admin key on the Inngest webhook path: allow without RBAC.
+    // checkInngestAccess() already validated the signing key; we only reach
+    // here when that check passed and control falls through to checkApiAuth().
+    if (hasAdminKey) return null;
+    // Session callers on /api/inngest fall through to normal RBAC below.
+  }
+
+  // For all non-admin routes enforce RBAC unconditionally.  The admin key
+  // does not bypass route-level permission checks outside /api/admin/*.
+  const { enforceRoutePermission } = await import('../../utils/rbacMiddleware');
+  const result = await enforceRoutePermission(c, urlPath, method);
+  if (!result.allowed) {
+    return c.json({ error: result.error || 'Insufficient permissions' }, 403);
+  }
+
+  return null;
+}
+
+/**
+ * Maximum JSON body size that `applyBodySanitization` will buffer into memory.
+ * Multipart requests are skipped entirely — file-size limits are enforced
+ * per-route before `formData()` is called.  1 MB is generous for any
+ * legitimate JSON API call; raise via MAX_JSON_BODY_BYTES env if needed.
+ */
+const MAX_JSON_BODY_BYTES = (() => {
+  const raw = process.env.MAX_JSON_BODY_BYTES;
+  // 8 MB default (2026-06-17): legitimate authenticated bulk operations — e.g.
+  // the Preflight flagged-rows export, which POSTs ~1,300+ matched rows with
+  // their recommended-action text and CRM links — exceed the old 1 MB cap.
+  // Still a sane DoS guard for JSON APIs; override via MAX_JSON_BODY_BYTES.
+  const n = parseInt(raw ?? String(8 * 1024 * 1024), 10);
+  return Number.isFinite(n) && n > 0 ? n : 8 * 1024 * 1024;
+})();
+
+/**
+ * Read a ReadableStream up to `maxBytes`, aborting mid-stream if the limit
+ * is exceeded.  Returns the decoded text on success or `{ tooLarge: true }`
+ * when the limit is hit.  This is the only safe way to cap body buffering
+ * regardless of whether the client sent a Content-Length header.
+ */
+async function readStreamWithLimit(
+  stream: ReadableStream<Uint8Array> | null | undefined,
+  maxBytes: number,
+): Promise<{ text: string } | { tooLarge: true }> {
+  if (!stream) return { text: '' };
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value && value.byteLength > 0) {
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          // Cancel the stream so the underlying connection is released
+          // promptly rather than waiting for the sender to finish.
+          void reader.cancel().catch(() => { });
+          return { tooLarge: true };
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    try { reader.releaseLock(); } catch { /* noop */ }
+  }
+  let offset = 0;
+  const combined = new Uint8Array(totalBytes);
+  for (const chunk of chunks) { combined.set(chunk, offset); offset += chunk.byteLength; }
+  return { text: new TextDecoder().decode(combined) };
+}
+
+async function applyBodySanitization(c: any, urlPath: string, method: string): Promise<Response | null> {
+  if (!['POST', 'PUT', 'PATCH'].includes(method)) return null;
+
+  const contentType = c.req.header('Content-Type') || '';
+
+  // Multipart form-data bodies are not JSON and must not be buffered here.
+  // Each upload route enforces Content-Length before calling formData() and
+  // requires the header to be present (411) so there is no need to touch
+  // the stream in the middleware.
+  if (contentType.includes('multipart/')) return null;
+
+  // Fast-path: reject when Content-Length is declared and already exceeds
+  // the cap so we never open the stream at all.
+  const declaredLength = parseInt(c.req.header('Content-Length') || '0', 10);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BODY_BYTES) {
+    return c.json({ error: 'Request body too large' }, 413);
+  }
+
+  try {
+    // Use streaming read so the limit is enforced regardless of whether the
+    // client sent Content-Length (chunked TE can omit it).
+    const cloned = c.req.raw.clone();
+    const result = await readStreamWithLimit(cloned.body, MAX_JSON_BODY_BYTES);
+    if ('tooLarge' in result) {
+      return c.json({ error: 'Request body too large' }, 413);
+    }
+    const bodyText = result.text;
+    let parsedBody: any;
+    let isJson = false;
+    try {
+      parsedBody = JSON.parse(bodyText);
+      isJson = true;
+    } catch (_) { }
+    if (isJson) {
+      const sanitized = sanitizeRequestBody(parsedBody, urlPath);
+      const sanitizedJson = JSON.stringify(sanitized);
+      const newHeaders = new Headers(c.req.raw.headers);
+      newHeaders.set('Content-Type', 'application/json');
+      const newRequest = new Request(c.req.url, {
+        method: c.req.method,
+        headers: newHeaders,
+        body: sanitizedJson,
+      });
+      (c.req as any).raw = newRequest;
+      (c.req as any).bodyCache = {};
+      (c.req as any).cachedBody = undefined;
+    }
+  } catch (_) { }
+  return null;
+}
+
+/**
+ * Symmetric defense for the API-response boundary.  We already scrub
+ * credential-shaped substrings before WRITING anything to the database
+ * (event_logs, change_history, ai_pending_actions) via
+ * `redactSecretLikeStrings` / `deepRedactSecretLikeStrings`.  However, when
+ * a tool or a downstream SDK fails and echoes the credential back in its
+ * exception message (e.g. "Invalid token sk-live-…"), the route's catch
+ * block typically returns `c.json({ error: 'Failed to …', details: error.message }, 500)`
+ * — so the secret can still reach the user-facing HTTP response and a
+ * client-side toast even though it would be redacted at write time.
+ *
+ * `redactSecretsInResponse(c)` runs after `next()` and walks the response
+ * body of any 4xx/5xx JSON response, replacing credential-shaped substrings
+ * in every string leaf with `REDACTED_SENTINEL`.  This is intentionally a
+ * *post-processor* rather than something each route has to remember to
+ * call, so a new route or a future contributor can't forget to sanitise
+ * the catch path and reintroduce the leak.
+ *
+ * Only error responses are scanned — successful 2xx bodies are passed
+ * through untouched (they're real entity payloads, not free-form error
+ * text, and walking a multi-MB list response on every request would be
+ * wasted work).  Non-JSON responses (HTML pages, file streams, redirects)
+ * are also skipped.
+ */
+export async function redactSecretsInResponse(c: any): Promise<void> {
+  const res = c?.res;
+  if (!res) return;
+  const status = res.status;
+  if (typeof status !== 'number' || status < 400) return;
+  const contentType = (res.headers?.get?.('Content-Type') || '').toLowerCase();
+  if (!contentType.includes('application/json')) return;
+  let text: string;
+  try {
+    text = await res.clone().text();
+  } catch (_) {
+    return;
+  }
+  if (!text) return;
+  let parsed: any;
+  try {
+    parsed = JSON.parse(text);
+  } catch (_) {
+    // Body is JSON-typed but not parseable — fall back to a string-level
+    // scrub so a raw error blob can't leak credentials either.
+    const scrubbed = redactSecretLikeStrings(text) as string;
+    if (scrubbed === text) return;
+    c.res = new Response(scrubbed, { status: res.status, headers: res.headers });
+    return;
+  }
+  const redacted = deepRedactSecretLikeStrings(parsed);
+  const redactedJson = JSON.stringify(redacted);
+  if (redactedJson === text) return;
+  c.res = new Response(redactedJson, { status: res.status, headers: res.headers });
+}
+
+async function injectCspNonce(c: any, cspNonce: string, urlPath: string): Promise<void> {
+  // Do not inject nonces into dynamically generated API HTML responses (e.g.
+  // /api/reports/*). API HTML responses embed database values in their markup
+  // and nonce injection would stamp a valid CSP nonce onto any attacker-
+  // supplied <script substring that survived into the output, defeating the
+  // nonce-based CSP entirely for those responses. Page routes (non-/api/)
+  // still receive nonce injection for their trusted inline scripts.
+  if (urlPath.startsWith('/api/')) return;
+  const contentType = c.res.headers.get('Content-Type') || '';
+  if (contentType.includes('text/html') && c.res.body) {
+    try {
+      const originalBody = await c.res.text();
+      const nonceInjected = originalBody
+        .replace(/<script(?!\s+nonce=)/gi, `<script nonce="${cspNonce}"`)
+        .replace(/<style(?!\s+nonce=)(\s|>)/gi, `<style nonce="${cspNonce}"$1`);
+      c.res = new Response(nonceInjected, {
+        status: c.res.status,
+        headers: c.res.headers,
+      });
+    } catch (_) { }
+  }
+}
+
+export const globalMiddleware = [
+  async (c: any, next: any) => {
+    const mastra = c.get("mastra");
+    const logger = mastra?.getLogger();
+    logger?.debug("[Request]", { method: c.req.method, url: c.req.url });
+
+    const urlPath = new URL(c.req.url).pathname;
+    const method = c.req.method;
+    const allowedOrigins = getAllowedOrigins();
+
+    const corsEarlyReturn = handleCors(c, allowedOrigins);
+    if (corsEarlyReturn) return corsEarlyReturn;
+
+    const cspNonce = randomBytes(16).toString('base64');
+    applySecurityHeaders(c, cspNonce);
+
+    const inngestGuard = checkInngestAccess(c, urlPath);
+    if (inngestGuard) return inngestGuard;
+
+    const publicPath = isPublicPath(urlPath);
+    const isApi = urlPath.startsWith('/api/');
+    const mastraInternal = isMastraInternal(urlPath);
+
+    if (!publicPath && !isApi) {
+      const authResult = checkPageAuth(c);
+      if (authResult) return authResult;
+    }
+
+    if (isApi && !publicPath && !mastraInternal) {
+      const apiAuthResult = await checkApiAuth(c, urlPath, method);
+      if (apiAuthResult) return apiAuthResult;
+    } else if (isApi && mastraInternal && !publicPath) {
+      // Raw Mastra-internal routes (/api/memory/*, /api/workflows/*, /api/agents/*)
+      // bypass the application's RBAC model entirely — they trust caller-supplied
+      // agentId/resourceId/threadId without any ownership or role checks. Restrict
+      // access to admin-key callers only (server-to-server / platform ops).
+      // Regular authenticated browser sessions must use the guarded product routes
+      // (/api/consultant/*, /api/audit/*, etc.) instead of these raw endpoints.
+      if (!hasValidAdminApiKey(c)) {
+        return c.json({ error: 'Access denied' }, 403);
+      }
+    } else if (isApi && publicPath) {
+      // Cheap public preference lookup hit on every page load by every browser
+      // tab — rate-limiting it produces user-visible 429s and test flakes for
+      // a no-op endpoint. Bypass the limiter for this exact path only.
+      if (urlPath !== '/api/user/language-preference') {
+        const ip = parseClientIp(c.req.header('x-forwarded-for'), c.req.header('x-real-ip'));
+        const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+        const rateCheck = await checkRateLimit(ip, isWrite, urlPath, false);
+        if (!rateCheck.allowed) {
+          c.header('Retry-After', String(rateCheck.retryAfter || 60));
+          logRateLimit429(urlPath, method, ip, rateCheck.retryAfter);
+          return c.json({ error: 'Too many requests' }, 429);
+        }
+      }
+    }
+
+    // Reject clearly oversized request bodies before any parsing occurs.
+    // This is a byte-volume guard: even if a caller stays within the
+    // request-count rate limit, we refuse to accept bodies that exceed
+    // the largest upload we would ever accept (260 MB covers the 250 MB
+    // aggregate bulk-upload limit plus multipart framing overhead).
+    // JSON endpoints are further capped at 10 MB inside applyBodySanitization.
+    // We only act when Content-Length is declared; chunked bodies without
+    // Content-Length are caught by the per-handler size checks instead.
+    if (isApi && ['POST', 'PUT', 'PATCH'].includes(method)) {
+      const rawCL = c.req.header('Content-Length');
+      if (rawCL !== null && rawCL !== undefined) {
+        const declaredBytes = parseInt(rawCL, 10);
+        const MAX_REQUEST_BODY_BYTES = 260 * 1024 * 1024; // 260 MB
+        if (Number.isFinite(declaredBytes) && declaredBytes > MAX_REQUEST_BODY_BYTES) {
+          return c.json({ error: 'Request body too large' }, 413);
+        }
+      }
+    }
+
+    if (isApi) {
+      const sanitizationError = await applyBodySanitization(c, urlPath, method);
+      if (sanitizationError) return sanitizationError;
+    }
+
+    try {
+      await next();
+    } catch (error) {
+      // ──────────────────────────────────────────────────────────────────
+      // This catch is defense-in-depth ONLY. In production it is
+      // unreachable: the Mastra deployer installs an `app.onError`
+      // handler (see node_modules/@mastra/deployer/dist/server/index.js —
+      // function `errorHandler`, registered at line 12240) which is
+      // invoked by Hono's per-dispatch try/catch in `compose()` BEFORE
+      // this `await next()` can reject. Hono's compose converts every
+      // uncaught throw into a Response inside the per-dispatch try/catch
+      // and the surrounding `await next()` resolves normally — so any
+      // throw originating from a downstream route, middleware or Mastra
+      // workflow surface comes back to us as a rendered Response, never
+      // as a re-throw.
+      //
+      // Concretely, three classes of throw all hit Mastra's onError and
+      // never reach this block:
+      //   1. plain Error / MastraError / ZodError / any non-HTTPException
+      //      → rendered as the static `{ error: "Internal Server Error" }`
+      //        body (status 500); `error.message` never reaches the wire.
+      //   2. HTTPException → rendered as `{ error: err.message }` at the
+      //        configured status; the body still flows through
+      //        `redactSecretsInResponse(c)` below, so any credential
+      //        echoed in `err.message` is scrubbed there.
+      //   3. Throws from inside Inngest `step.run` callbacks invoked via
+      //        `/api/inngest` → captured by Inngest's serve handler and
+      //        reported in its 200 response payload (the HTTP request
+      //        itself does not reject), so they likewise never escape
+      //        `await next()` as a throw.
+      //
+      // History: an earlier version of this file had an
+      //   if (error instanceof MastraError) { throw new NonRetriableError(...) }
+      //   else if (error instanceof z.ZodError) { throw new NonRetriableError(...) }
+      // ladder followed by a `throw redactErrorForRethrow(error)` at the
+      // bottom. Task #538 proved the bottom rewrap was dead code and
+      // removed it. Task #576 verified the two `instanceof` branches were
+      // dead by exactly the same mechanism (they live inside the same
+      // unreachable catch block) and removed them too — they cannot fire
+      // in any production code path because Mastra's onError takes the
+      // throw first; wrapping in `NonRetriableError` therefore had no
+      // effect on Inngest's serve handler. The integration test
+      // `tests/safeErrorResponseRedaction.integration.test.ts` exercises
+      // the MastraError- and ZodError-throwing paths through the real
+      // Mastra/Hono dispatch and asserts the static fallback is what
+      // reaches the wire — making the regression observable if a future
+      // edit re-adds the dead branches.
+      //
+      // We still keep the `try { await next() }` wrapper as a belt-and-
+      // suspenders log line: if a future Mastra upgrade ever removes
+      // `app.onError`, an unscrubbed throw would still hit this block
+      // and we want at least a structured log entry pointing at the URL
+      // that failed before it bubbles further.
+      // ──────────────────────────────────────────────────────────────────
+      logger?.error("[Response]", { method: c.req.method, url: c.req.url });
+      throw error;
+    }
+
+    if (isApi && !publicPath && !mastraInternal && c.res.status === 404) {
+      return c.json({ error: 'Insufficient permissions' }, 403);
+    }
+
+    // Sample User 2026-06-20 — friendly 500 page for browser requests.
+    //
+    // Mastra's deployer installs `app.onError` (see comment block above)
+    // which serializes every uncaught exception as the static body
+    // `{ error: "Internal Server Error" }` with status 500. For an API
+    // caller that's correct — JSON in, JSON out, no leak of error.message.
+    // For a BROWSER navigation, though, what the user sees is just the
+    // raw text "Internal Server Error" with no context, no retry hint,
+    // no support path. That's what flagged this fix.
+    //
+    // After Mastra's onError returns, we land here with c.res.status =
+    // 500. For HTML-accepting browser requests we replace the response
+    // with a real HTML error page (refresh + contact hint). API callers
+    // and asset/script requests keep the existing JSON behaviour so
+    // automation isn't broken. We also log the failed URL explicitly so
+    // it's findable in Replit deploy logs without re-deriving from the
+    // upstream `app.onError` log line.
+    if (
+      !isApi &&
+      c.res.status === 500 &&
+      (c.req.header('Accept') || '').includes('text/html')
+    ) {
+      logger?.error('[500-served-to-browser]', {
+        method: c.req.method,
+        url: c.req.url,
+        path: urlPath,
+        ua: c.req.header('User-Agent'),
+      });
+      return c.html(
+        `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Something went wrong — ExampleOrg</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1f2937;background:linear-gradient(135deg,#f8fafc 0%,#e0e7ff 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{max-width:520px;width:100%;background:#fff;border-radius:14px;box-shadow:0 20px 60px -10px rgba(15,23,42,.15);padding:36px 32px;text-align:center}
+    .badge{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;background:#fef3c7;color:#b45309;font-size:32px;margin-bottom:18px}
+    h1{margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a}
+    p{margin:8px 0;line-height:1.55;color:#475569;font-size:15px}
+    .actions{display:flex;gap:10px;justify-content:center;margin-top:22px;flex-wrap:wrap}
+    a.btn,button.btn{background:#2563eb;color:#fff;border:0;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+    a.btn.secondary{background:#fff;color:#2563eb;border:1px solid #2563eb}
+    a.btn:hover{background:#1d4ed8}
+    .ref{margin-top:18px;font-size:12px;color:#94a3b8;font-family:ui-monospace,Menlo,monospace;word-break:break-all}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">⚠</div>
+    <h1>Something went wrong on our side</h1>
+    <p>The page couldn't load just now. The request has been logged and the team has been notified.</p>
+    <p>This is usually a brief hiccup — refreshing the page once or twice fixes it. If it keeps happening, contact your administrator.</p>
+    <div class="actions">
+      <a class="btn" href="javascript:location.reload()">Refresh</a>
+      <a class="btn secondary" href="/">Go to dashboard</a>
+    </div>
+    <div class="ref">Path: ${urlPath.replace(/[<>&]/g, (m) => ({'<':'&lt;','>':'&gt;','&':'&amp;'} as any)[m])}<br/>Time: ${new Date().toISOString()}</div>
+  </div>
+</body>
+</html>`,
+        500,
+      );
+    }
+
+    // Symmetric with storage-side defense: scrub credential-shaped substrings
+    // out of any 4xx/5xx JSON error body before it leaves the server. See
+    // `redactSecretsInResponse` doc-comment for rationale.
+    await redactSecretsInResponse(c);
+
+    await injectCspNonce(c, cspNonce, urlPath);
+  },
+];

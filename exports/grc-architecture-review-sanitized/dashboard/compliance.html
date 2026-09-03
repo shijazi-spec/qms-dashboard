@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg - Compliance & Regulatory Tracker</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .status-compliant { background-color: #D1FAE5; color: #047857; }
+        .status-partially { background-color: #FEF3C7; color: #D97706; }
+        .status-non-compliant { background-color: #FEE2E2; color: #B91C1C; }
+        .status-not-assessed { background-color: #E5E7EB; color: #6B7280; }
+        .priority-critical { background-color: #B91C1C; color: white; }
+        .priority-high { background-color: #DC2626; color: white; }
+        .priority-medium { background-color: #F59E0B; color: white; }
+        .priority-low { background-color: #10B981; color: white; }
+        .fade-in { animation: fadeIn 0.4s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .score-gauge { position: relative; width: 120px; height: 120px; }
+        .score-gauge svg { transform: rotate(-90deg); }
+        .score-gauge circle { fill: none; stroke-width: 10; }
+        .score-gauge .bg { stroke: #E5E7EB; }
+        .score-gauge .progress { stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
+        /* Sticky filter bar — sits below the topstrip (48px) */
+        .filter-bar {
+            position: sticky;
+            top: 48px;
+            z-index: 20;
+            background: #FFFFFF;
+            border: 1px solid #E5E7EB;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            background: #EEF2FF;
+            color: #4338CA;
+        }
+        .chip button { color: inherit; opacity: 0.7; }
+        .chip button:hover { opacity: 1; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('compliance');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- ─── Header ──────────────────────────────────────────────── -->
+        <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="compliance.title_milestones">Certification Milestones</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="compliance.subtitle">PDPL, NCA/ECC, ISO standards tracking and obligation management</p>
+            </div>
+            <div class="flex gap-3">
+                <button data-on-click="navigateTo" data-args="[&quot;/api/compliance/export&quot;]" class="px-4 py-2 border border-green-700 text-green-700 rounded-lg hover:bg-green-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span data-i18n="compliance.export_csv">Export CSV</span>
+                </button>
+                <button data-on-click="openIngestStandardModal" class="px-4 py-2 border border-indigo-600 text-indigo-700 rounded-lg hover:bg-indigo-50 font-medium flex items-center gap-2" data-testid="button-ingest-standard">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V20a2 2 0 01-2 2z"/></svg>
+                    <span data-i18n="compliance.ingest_standard">Ingest Standard</span>
+                </button>
+                <button data-on-click="openAddObligationModal" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2" data-testid="button-add-obligation">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    <span data-i18n="compliance.add_obligation">Add Obligation</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ─── Certification Milestone Plan (GRQ-PLAN-2026-01) ───── -->
+        <section data-testid="section-cert-milestones" class="mb-6 space-y-4">
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <h2 class="font-semibold text-gray-800" data-i18n="compliance.milestone_timeline">Milestone Timeline</h2>
+                <p class="text-xs text-gray-500" id="milestonePlanProvenance"></p>
+                <div id="milestoneTimeline" class="mt-3"></div>
+            </div>
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <h2 class="font-semibold text-gray-800" data-i18n="compliance.compliant_from">Compliant From, by Framework</h2>
+                <div id="milestoneFrameworks" class="mt-3"></div>
+            </div>
+            <div class="bg-white rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <h2 class="font-semibold text-amber-900" data-i18n="compliance.dependencies">Dependencies &amp; Blockers</h2>
+                <div id="milestoneDependencies" class="mt-3"></div>
+            </div>
+        </section>
+        <h2 class="text-lg font-semibold text-gray-800 mb-2" data-i18n="compliance.framework_section">Framework Compliance &amp; Obligations</h2>
+
+        <!-- ─── Sticky filter bar (drives every section below) ────── -->
+        <div class="filter-bar mb-6 px-4 py-3" data-testid="filter-bar">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 items-end">
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_framework">Framework</label>
+                    <select id="fltFramework" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-framework">
+                        <option value="" data-i18n="compliance.all_regulations">All Regulations</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_lifecycle">Lifecycle</label>
+                    <select id="fltLifecycle" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-lifecycle">
+                        <option value="" data-i18n="compliance.flt_all">All</option>
+                        <option value="applicable" data-i18n="compliance.lc_applicable">Applicable</option>
+                        <option value="pending_review" data-i18n="compliance.lc_pending_review">Pending Review</option>
+                        <option value="exempt" data-i18n="compliance.lc_exempt">Exempt</option>
+                        <option value="not_applicable" data-i18n="compliance.lc_not_applicable">Not Applicable</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_assessment">Assessment</label>
+                    <select id="fltAssessment" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-assessment">
+                        <option value="" data-i18n="compliance.flt_all">All</option>
+                        <option value="compliant" data-i18n="compliance.s_compliant">Compliant</option>
+                        <option value="partially_compliant" data-i18n="compliance.s_partially_compliant">Partially Compliant</option>
+                        <option value="non_compliant" data-i18n="compliance.s_non_compliant">Non-Compliant</option>
+                        <option value="not_assessed" data-i18n="compliance.s_not_assessed">Not Assessed</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_priority">Priority</label>
+                    <select id="fltPriority" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-priority">
+                        <option value="" data-i18n="compliance.flt_all">All</option>
+                        <option value="critical" data-i18n="compliance.p_critical">Critical</option>
+                        <option value="high" data-i18n="compliance.p_high">High</option>
+                        <option value="medium" data-i18n="compliance.p_medium">Medium</option>
+                        <option value="low" data-i18n="compliance.p_low">Low</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_domain">Domain</label>
+                    <select id="fltDomain" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-domain">
+                        <option value="" data-i18n="compliance.flt_all">All</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_owner">Owner</label>
+                    <select id="fltOwner" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-owner">
+                        <option value="" data-i18n="compliance.flt_all">All</option>
+                    </select>
+                </div>
+                <div class="flex items-end justify-end gap-2">
+                    <button type="button" data-on-click="resetFilters" class="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50" data-testid="button-reset-filters" data-i18n="compliance.flt_reset">Reset</button>
+                </div>
+            </div>
+            <div id="filterChips" class="mt-2 flex flex-wrap gap-1 text-xs hidden" aria-live="polite"></div>
+            <div id="filterMatchCount" class="mt-2 text-xs text-gray-500" data-testid="filter-match-count"></div>
+        </div>
+
+        <!-- ─── KPI Row ─────────────────────────────────────────────── -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow p-6 flex items-center gap-4">
+                <div class="score-gauge" id="scoreGauge">
+                    <svg width="120" height="120">
+                        <circle class="bg" cx="60" cy="60" r="50"></circle>
+                        <circle class="progress" cx="60" cy="60" r="50" stroke="#10B981" stroke-dasharray="314" stroke-dashoffset="314" id="scoreProgress"></circle>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span id="scoreValue" class="text-2xl font-bold">-</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-500" data-i18n="compliance.overall_score_label">Overall Compliance</div>
+                    <div class="text-lg font-semibold text-gray-900" data-i18n="compliance.score_label">Score</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="text-sm text-gray-500" data-i18n="compliance.active_regulations">Active Regulations</div>
+                <div id="activeRegulations" class="text-3xl font-bold text-blue-600 mt-2">-</div>
+                <div class="text-xs text-gray-400 mt-1" data-i18n="compliance.frameworks_tracked">Frameworks tracked</div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="text-sm text-gray-500" data-i18n="compliance.total_obligations">Total Obligations</div>
+                <div id="totalObligations" class="text-3xl font-bold text-gray-900 mt-2">-</div>
+                <div class="text-xs text-gray-400 mt-1" data-i18n="compliance.compliance_requirements">Compliance requirements</div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="text-sm text-gray-500" data-i18n="compliance.pending_remediations">Pending Remediations</div>
+                <div id="pendingRemediations" class="text-3xl font-bold text-amber-600 mt-2">-</div>
+                <div class="text-xs text-red-500 mt-1"><span id="overdueRemediations">0</span> <span data-i18n="compliance.overdue">overdue</span></div>
+            </div>
+        </div>
+
+        <!-- ─── Status counters (each is clickable → sets Assessment filter) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <button type="button" data-on-click="setAssessmentFilter" data-args="[&quot;compliant&quot;]" class="bg-green-50 border border-green-200 rounded-lg p-4 text-center hover:bg-green-100 transition" data-testid="counter-compliant">
+                <div id="compliantCount" class="text-2xl font-bold text-green-700">-</div>
+                <div class="text-sm text-green-600" data-i18n="compliance.compliant">Compliant</div>
+            </button>
+            <button type="button" data-on-click="setAssessmentFilter" data-args="[&quot;partially_compliant&quot;]" class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center hover:bg-amber-100 transition" data-testid="counter-partial">
+                <div id="partialCount" class="text-2xl font-bold text-amber-700">-</div>
+                <div class="text-sm text-amber-600" data-i18n="compliance.partially_compliant">Partially Compliant</div>
+            </button>
+            <button type="button" data-on-click="setAssessmentFilter" data-args="[&quot;non_compliant&quot;]" class="bg-red-50 border border-red-200 rounded-lg p-4 text-center hover:bg-red-100 transition" data-testid="counter-non-compliant">
+                <div id="nonCompliantCount" class="text-2xl font-bold text-red-700">-</div>
+                <div class="text-sm text-red-600" data-i18n="compliance.non_compliant">Non-Compliant</div>
+            </button>
+            <button type="button" data-on-click="setAssessmentFilter" data-args="[&quot;not_assessed&quot;]" class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center hover:bg-gray-100 transition" data-testid="counter-not-assessed">
+                <div id="notAssessedCount" class="text-2xl font-bold text-gray-600">-</div>
+                <div class="text-sm text-gray-500" data-i18n="compliance.not_assessed">Not Assessed</div>
+            </button>
+        </div>
+
+        <!-- ─── Frameworks (with Regulation Library + frameworks grid) -->
+        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-frameworks">
+            <div class="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.frameworks_title">Frameworks</h2>
+                    <p class="text-xs text-gray-500" data-i18n="compliance.frameworks_subtitle">Each framework card shows its clauses, % assessed, and % compliant. Click a card to open its clauses & document mapping below.</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-4">
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-white rounded-lg shadow">
+                        <div class="p-4 border-b border-gray-200">
+                            <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.regulation_library">Regulation Library</h2>
+                        </div>
+                        <div id="regulationsList" class="divide-y divide-gray-200">
+                            <div class="p-4 text-center text-gray-400">Loading regulations...</div>
+                        </div>
+                        <input type="file" id="regulationDocFileInput" accept="application/pdf,.pdf" class="hidden" data-testid="input-regulation-document-file" />
+                    </div>
+                    <a href="/document-mapping" class="text-xs text-emerald-700 hover:text-emerald-800 font-medium" data-testid="link-document-mapping" data-i18n="compliance.go_doc_mapping">Open Document Mapping →</a>
+                </div>
+                <div id="frameworksGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading frameworks…</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── Open framework: summary + Clauses & Document Mapping panel -->
+        <section id="frameworkDetail" class="bg-white rounded-lg shadow mb-6 hidden fade-in" data-testid="section-framework-detail">
+            <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <div class="text-sm font-semibold text-gray-900" id="frameworkDetailName">—</div>
+                    <div class="text-xs text-gray-500" id="frameworkDetailMeta">—</div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span id="frameworkDetailClauses" class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">0 clauses</span>
+                    <span id="frameworkDetailDocs" class="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-800">0 documents linked</span>
+                    <a id="frameworkGapPdfLink" href="#" target="_blank" rel="noopener" class="text-xs px-3 py-1 border border-blue-700 text-blue-700 rounded hover:bg-blue-50 font-medium" data-i18n="compliance.gap_pdf">Gap Analysis PDF</a>
+                    <a id="frameworkAuditRunLink" href="/audit-readiness" class="text-xs px-3 py-1 border border-emerald-700 text-emerald-700 rounded hover:bg-emerald-50 font-medium" data-i18n="compliance.start_audit_run">Start Audit Run</a>
+                    <button type="button" data-on-click="closeFramework" class="text-xs text-gray-500 hover:text-gray-800" data-testid="button-close-framework" data-i18n="common.close">Close</button>
+                </div>
+            </div>
+            <!-- Compliance v2 — Framework Gap Analysis snapshot -->
+            <div class="p-4 border-b border-gray-200 bg-blue-50">
+                <h3 class="text-sm font-semibold text-blue-900" data-i18n="compliance.framework_gap_title">Framework Gap Analysis (latest assessment per clause)</h3>
+                <div id="frameworkGapSummary" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-center">
+                    <div class="bg-white rounded p-2"><div class="text-lg font-bold text-emerald-700" id="gapCntCompliant">—</div><div class="text-[10px] uppercase text-gray-500" data-i18n="compliance.assess_compliant">Compliant</div></div>
+                    <div class="bg-white rounded p-2"><div class="text-lg font-bold text-amber-600" id="gapCntPartial">—</div><div class="text-[10px] uppercase text-gray-500" data-i18n="compliance.assess_partial">Partially</div></div>
+                    <div class="bg-white rounded p-2"><div class="text-lg font-bold text-red-700" id="gapCntNoncompliant">—</div><div class="text-[10px] uppercase text-gray-500" data-i18n="compliance.assess_noncompliant">Non-Compliant</div></div>
+                    <div class="bg-white rounded p-2"><div class="text-lg font-bold text-gray-500" id="gapCntNotAssessed">—</div><div class="text-[10px] uppercase text-gray-500" data-i18n="compliance.assess_not">Not Assessed</div></div>
+                </div>
+            </div>
+            <div class="p-4 border-b border-gray-200">
+                <h3 class="text-sm font-semibold text-gray-700" data-i18n="compliance.clause_mapping_title">Clauses & Document Mapping</h3>
+                <p class="text-xs text-gray-500 mt-0.5" data-i18n="compliance.clause_mapping_subtitle">Each clause below can be linked to one or more uploaded documents from the QMS library.</p>
+            </div>
+            <div id="clause-cards" class="divide-y divide-gray-200">
+                <div class="p-6 text-center text-gray-400">Loading clauses…</div>
+            </div>
+        </section>
+
+        <!-- ─── Analytics row: By Priority + By Domain + Upcoming Deadlines -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-base font-semibold text-gray-900 mb-3" data-i18n="compliance.by_priority">By Priority</h2>
+                <div id="byPriorityChart" class="space-y-2">
+                    <div class="text-gray-400 text-center py-4 text-sm">Loading…</div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-base font-semibold text-gray-900 mb-3" data-i18n="compliance.by_domain">By Domain</h2>
+                <div id="byDomainChart" class="space-y-2 max-h-64 overflow-y-auto pe-1">
+                    <div class="text-gray-400 text-center py-4 text-sm">Loading…</div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-base font-semibold text-gray-900 mb-3" data-i18n="compliance.upcoming_deadlines">Upcoming Deadlines</h2>
+                <div id="upcomingDeadlines" class="space-y-2">
+                    <div class="text-gray-400 text-center py-4 text-sm">Loading…</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ─── Single combined Obligations & Assessments table ───── -->
+        <section class="bg-white rounded-lg shadow" data-testid="section-obligations">
+            <div class="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-2">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.obligations_assessments_title">Obligations & Assessments</h2>
+                    <p class="text-xs text-gray-500" data-i18n="compliance.obligations_assessments_subtitle">All clauses with their lifecycle status, latest assessment, and last review date. Use the filter bar to narrow.</p>
+                </div>
+                <div class="text-xs text-gray-500" id="obligationsResultCount" data-testid="text-result-count"></div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_code">Code</th>
+                            <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_obligation">Obligation</th>
+                            <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_framework">Framework</th>
+                            <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_domain">Domain</th>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_priority">Priority</th>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_lifecycle">Lifecycle</th>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_assessment">Assessment</th>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_score">Score</th>
+                            <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_last_assessed">Last Assessed</th>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="obligationsTableBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="10" class="px-4 py-8 text-center text-gray-400">Loading obligations…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- ─── Ingest Standard modal (Compliance v2 Pillar 1) -->
+    <div id="ingestStandardModal" class="modal" role="dialog" aria-modal="true">
+        <div class="bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="compliance.ingest_modal_title">Ingest Standard from Document</h3>
+                    <p class="text-xs text-gray-500 mt-1" data-i18n="compliance.ingest_modal_subtitle">Upload a regulation/standard PDF in the QMS library first, then pick it here. AI drafts the clauses; you review before they become obligations.</p>
+                </div>
+                <button data-on-click="closeModal" data-args="[&quot;ingestStandardModal&quot;]" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="ingestStandardForm" data-on-submit="submitIngestStandard" data-pass-event="true" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.ingest_pick_regulation">Existing regulation (optional)</label>
+                    <select name="regulation_id" id="ingestRegulationSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">— Create new regulation later —</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1" data-i18n="compliance.ingest_pick_regulation_help">Pick a regulation if you want the extracted clauses to land under an existing framework. Leave empty for a fresh framework you'll name later.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.ingest_pick_doc">Source document *</label>
+                    <select name="document_id" id="ingestDocumentSelect" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">— Pick an uploaded document —</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1" data-i18n="compliance.ingest_pick_doc_help">Only documents whose text has been extracted appear here. Upload via Documentations / QMS library if yours is missing.</p>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800">
+                    <span data-i18n="compliance.ingest_warning">Heads up: AI-extracted clauses are a draft. Review every row in the import-review screen before applying.</span>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t">
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;ingestStandardModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="common.cancel">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" data-i18n="compliance.ingest_start">Start Extraction</button>
+                </div>
+                <p id="ingestStandardMsg" class="text-sm"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- ─── Add Obligation modal (unchanged from previous version) -->
+    <div id="addObligationModal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="compliance.add_obligation">Add Compliance Obligation</h3>
+                <button data-on-click="closeModal" data-args="[&quot;addObligationModal&quot;]" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="addObligationForm" data-on-submit="submitObligation" data-pass-event="true" class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_obligation_code">Obligation Code *</label>
+                        <input type="text" name="obligation_code" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., PDPL-001">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_regulation">Regulation *</label>
+                        <select name="regulation_id" required id="modalRegulationSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="" data-i18n="compliance.select_regulation">Select regulation</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_article_ref">Article Reference</label>
+                    <input type="text" name="article_reference" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., Article 5, Clause 2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_title">Title *</label>
+                    <input type="text" name="title" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Obligation title">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_description">Description *</label>
+                    <textarea name="description" required rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Detailed description of the compliance requirement"></textarea>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_priority">Priority *</label>
+                        <select name="priority" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="critical" data-i18n="compliance.p_critical">Critical</option>
+                            <option value="high" data-i18n="compliance.p_high">High</option>
+                            <option value="medium" selected data-i18n="compliance.p_medium">Medium</option>
+                            <option value="low" data-i18n="compliance.p_low">Low</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_requirement_type">Requirement Type</label>
+                        <select name="requirement_type" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="mandatory" data-i18n="compliance.rt_mandatory">Mandatory</option>
+                            <option value="recommended" data-i18n="compliance.rt_recommended">Recommended</option>
+                            <option value="optional" data-i18n="compliance.rt_optional">Optional</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_frequency">Frequency</label>
+                        <select name="compliance_frequency" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="continuous" data-i18n="compliance.fr_continuous">Continuous</option>
+                            <option value="monthly" data-i18n="compliance.fr_monthly">Monthly</option>
+                            <option value="quarterly" data-i18n="compliance.fr_quarterly">Quarterly</option>
+                            <option value="annual" selected data-i18n="compliance.fr_annual">Annual</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_responsible_dept">Responsible Department</label>
+                        <input type="text" name="responsible_department" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., IT, Legal, Compliance">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_responsible_role">Responsible Role</label>
+                        <input type="text" name="responsible_role" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., DPO, CISO">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_evidence_req">Evidence Requirements</label>
+                    <textarea name="evidence_requirements" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="What evidence is needed to demonstrate compliance?"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Target date to be mapped</label>
+                    <input type="date" name="target_date" class="w-full border border-gray-300 rounded-lg px-3 py-2" title="When this obligation must be mapped (control + owner + evidence) — drives the per-quarter Compliance Coverage KPI">
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t">
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addObligationModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="common.cancel">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800" data-i18n="compliance.create_obligation">Create Obligation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ─── Assessment modal (unchanged) -->
+    <div id="assessmentModal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="compliance.record_assessment">Record Assessment</h3>
+                <button data-on-click="closeModal" data-args="[&quot;assessmentModal&quot;]" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="assessmentForm" data-on-submit="submitAssessment" data-pass-event="true" class="p-6 space-y-4">
+                <input type="hidden" name="obligation_id" id="assessmentObligationId">
+                <div id="assessmentObligationInfo" class="bg-gray-50 p-3 rounded-lg text-sm mb-4"></div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_compliance_status">Compliance Status *</label>
+                    <select name="compliance_status" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="compliant" data-i18n="compliance.s_compliant">Compliant</option>
+                        <option value="partially_compliant" data-i18n="compliance.s_partially_compliant">Partially Compliant</option>
+                        <option value="non_compliant" data-i18n="compliance.s_non_compliant">Non-Compliant</option>
+                        <option value="not_assessed" data-i18n="compliance.s_not_assessed">Not Assessed</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_assessed_by">Assessed By *</label>
+                    <input type="text" name="assessed_by" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Your name">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_evidence_provided">Evidence Provided</label>
+                    <textarea name="evidence_provided" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Describe the evidence reviewed"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_gaps">Gaps Identified</label>
+                    <textarea name="gaps_identified" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Describe any compliance gaps found"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_comments">Comments</label>
+                    <textarea name="comments" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Additional notes"></textarea>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t">
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;assessmentModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="common.cancel">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800" data-i18n="compliance.record_assessment">Record Assessment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ─── Clause-documents modal (unchanged) -->
+    <div id="clauseDocsModal" class="modal" role="dialog" aria-modal="true">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="compliance.clause_documents">Clause Documents</h3>
+                    <div class="text-xs text-gray-500 mt-1" id="clauseDocsTitle">—</div>
+                </div>
+                <button data-on-click="closeModal" data-args="[&quot;clauseDocsModal&quot;]" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-5">
+                <div>
+                    <div class="text-sm font-semibold text-gray-700 mb-2" data-i18n="compliance.linked_documents">Linked documents</div>
+                    <div id="clauseDocsList" class="border border-gray-200 rounded-lg divide-y divide-gray-100">
+                        <div class="p-3 text-center text-gray-400 text-sm">Loading…</div>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-sm font-semibold text-gray-700 mb-2" data-i18n="compliance.bulk_upload_to_clause">Bulk upload to this clause</div>
+                    <form id="clauseBulkForm" data-testid="form-clause-bulk-upload">
+                        <input type="hidden" id="clauseBulkObligationId">
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="compliance.f_category">Category</label>
+                                <select id="clauseBulkCategory" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                                    <option value="documents" data-i18n="compliance.cat_documents">Documents</option>
+                                    <option value="policies" data-i18n="compliance.cat_policies">Policies</option>
+                                    <option value="forms" data-i18n="compliance.cat_forms">Forms</option>
+                                    <option value="security_controls" data-i18n="compliance.cat_security_controls">Security Controls</option>
+                                    <option value="sops" data-i18n="compliance.cat_sops">SOPs</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="compliance.f_notes">Notes (optional)</label>
+                                <input id="clauseBulkNotes" type="text" maxlength="500" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            </div>
+                        </div>
+                        <input id="clauseBulkFiles" type="file" multiple required
+                               accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="input-clause-bulk-files">
+                        <p id="clauseBulkCount" class="text-xs text-gray-500 mt-1"></p>
+                        <div class="flex justify-end mt-3">
+                            <button type="submit" id="btnClauseBulkUpload" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm" data-testid="button-submit-clause-bulk" data-i18n="compliance.upload_and_link">Upload & Link</button>
+                        </div>
+                        <p id="clauseBulkMsg" class="mt-2 text-sm"></p>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ──────────────────────── State ────────────────────────────────
+        let regulations = [];                     // full reg list
+        let allObligations = [];                  // raw /obligations
+        let gapByCode = {};                       // /gap-analysis indexed by obligation_code
+        let evidenceCountByObId = {};             // doc count per clause (lazy)
+        let mergedRows = [];                      // merged + reusable view-model
+        let activeRegulationCode = null;          // for clause-mapping panel
+        const obligationTitles = {};
+
+        const filterState = {
+            framework: '', lifecycle: '', assessment: '',
+            priority: '', domain: '', owner: ''
+        };
+
+        // ──────────────────────── Helpers ──────────────────────────────
+        function escAttr(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function _ct(k, fb) {
+            return (window.WalaPlusI18n && window.WalaPlusI18n.t) ? (window.WalaPlusI18n.t(k) || fb) : fb;
+        }
+        function _td(prefix, value) {
+            if (!value) return '';
+            return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic) ? (window.WalaPlusI18n.tDynamic(prefix, value) || value) : value;
+        }
+
+        // ─── Certification Milestone Plan (GRQ-PLAN-2026-01). Only 'plan'
+        // rows score GRC-KPI-002; the other two sections are context,
+        // rendered read-only. Uses escAttr (this file's existing HTML-escape
+        // helper) for every value interpolated from the database.
+        function _mStatus(m) {
+            if (m.delivered_date && m.planned_date) {
+                const onTime = new Date(m.delivered_date) <= new Date(m.planned_date);
+                return onTime
+                    ? `<span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">${_ct('compliance.ms_on_time', 'On time')}</span>`
+                    : `<span class="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">${_ct('compliance.ms_late', 'Late')}</span>`;
+            }
+            if (!m.planned_date) return `<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">${_ct('compliance.ms_no_date', 'No date')}</span>`;
+            const overdue = new Date(m.planned_date) < new Date();
+            return overdue
+                ? `<span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800">${_ct('compliance.ms_overdue', 'Overdue')}</span>`
+                : `<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">${_ct('compliance.ms_planned', 'Planned')}</span>`;
+        }
+
+        function _mRow(m) {
+            return `<div class="flex items-start gap-3 py-2 border-b border-gray-100 last:border-0">
+                <div class="w-24 shrink-0 text-xs text-gray-500">${escAttr(m.planned_date || '—')}</div>
+                <div class="flex-1">
+                    <div class="text-sm text-gray-800">${escAttr(m.milestone_name)}</div>
+                    <div class="text-xs text-gray-500">${escAttr(m.certification)}${m.owner ? ' · ' + escAttr(m.owner) : ''}</div>
+                </div>
+                <div class="shrink-0">${_mStatus(m)}</div>
+            </div>`;
+        }
+
+        function _mLoadError() {
+            const msg = escAttr(_ct('compliance.ms_load_error', 'Could not load milestones.'));
+            document.getElementById('milestoneTimeline').innerHTML = `<div class="text-sm text-red-500">${msg}</div>`;
+            document.getElementById('milestoneFrameworks').innerHTML = `<div class="text-sm text-red-500">${msg}</div>`;
+            document.getElementById('milestoneDependencies').innerHTML = `<div class="text-sm text-red-500">${msg}</div>`;
+        }
+        async function loadMilestones() {
+            try {
+                const res = await fetch('/api/certification-milestones');
+                if (!res.ok) { _mLoadError(); return; }
+                const d = await res.json();
+                document.getElementById('milestonePlanProvenance').textContent =
+                    `${d.source_doc} v${d.plan_version}`;
+                document.getElementById('milestoneTimeline').innerHTML =
+                    (d.plan || []).map(_mRow).join('') || `<div class="text-sm text-gray-500">${_ct('compliance.ms_empty_plan', 'No milestones.')}</div>`;
+                document.getElementById('milestoneFrameworks').innerHTML =
+                    (d.framework_target || []).map(_mRow).join('') || `<div class="text-sm text-gray-500">${_ct('compliance.ms_empty_frameworks', 'No framework targets.')}</div>`;
+                document.getElementById('milestoneDependencies').innerHTML =
+                    (d.dependency || []).map(_mRow).join('') || `<div class="text-sm text-gray-500">${_ct('compliance.ms_empty_deps', 'No open dependencies.')}</div>`;
+            } catch (e) {
+                console.error('Error loading milestones:', e);
+                _mLoadError();
+            }
+        }
+        function getLifecycleClass(status) {
+            const classes = {
+                'applicable': 'bg-blue-100 text-blue-800',
+                'not_applicable': 'bg-gray-100 text-gray-600',
+                'pending_review': 'bg-amber-100 text-amber-800',
+                'exempt': 'bg-purple-100 text-purple-800'
+            };
+            return classes[status] || 'bg-gray-100 text-gray-700';
+        }
+        function getAssessmentClass(status) {
+            const classes = {
+                'compliant': 'status-compliant',
+                'partially_compliant': 'status-partially',
+                'non_compliant': 'status-non-compliant',
+                'not_assessed': 'status-not-assessed'
+            };
+            return classes[status] || 'status-not-assessed';
+        }
+        function formatLifecycle(status) {
+            const map = {
+                'applicable':     _ct('compliance.lc_applicable',     'Applicable'),
+                'not_applicable': _ct('compliance.lc_not_applicable', 'Not Applicable'),
+                'pending_review': _ct('compliance.lc_pending_review', 'Pending Review'),
+                'exempt':         _ct('compliance.lc_exempt',         'Exempt')
+            };
+            return map[status] || String(status || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        function formatAssessment(status) {
+            const map = {
+                'compliant':           _ct('compliance.s_compliant',           'Compliant'),
+                'partially_compliant': _ct('compliance.s_partial_short',       'Partial'),
+                'non_compliant':       _ct('compliance.s_non_compliant',       'Non-Compliant'),
+                'not_assessed':        _ct('compliance.s_not_assessed',        'Not Assessed')
+            };
+            return map[status] || _ct('compliance.s_not_assessed', 'Not Assessed');
+        }
+        function getJurisdictionColor(jurisdiction) {
+            const colors = {
+                'saudi':         'bg-green-700',
+                'gcc':           'bg-blue-700',
+                'international': 'bg-purple-700',
+                'internal':      'bg-gray-700'
+            };
+            return colors[jurisdiction] || 'bg-gray-600';
+        }
+
+        // ──────────────────────── Data fetching ────────────────────────
+        async function loadSummary() {
+            try {
+                const res = await fetch('/api/compliance/summary');
+                const data = await res.json();
+
+                document.getElementById('activeRegulations').textContent = data.active_regulations || 0;
+                document.getElementById('totalObligations').textContent = data.total_obligations || 0;
+                document.getElementById('pendingRemediations').textContent = data.pending_remediations || 0;
+                document.getElementById('overdueRemediations').textContent = data.overdue_remediations || 0;
+
+                const score = data.overall_compliance_score || 0;
+                document.getElementById('scoreValue').textContent = score + '%';
+                const progress = document.getElementById('scoreProgress');
+                const circumference = 2 * Math.PI * 50;
+                progress.style.strokeDashoffset = circumference - (score / 100 * circumference);
+                if (score >= 80)      progress.style.stroke = '#10B981';
+                else if (score >= 50) progress.style.stroke = '#F59E0B';
+                else                  progress.style.stroke = '#EF4444';
+            } catch (e) {
+                console.error('Error loading summary:', e);
+            }
+        }
+
+        async function loadAllData() {
+            try {
+                const [regsRes, oblsRes, gapRes] = await Promise.all([
+                    fetch('/api/compliance/regulations'),
+                    fetch('/api/compliance/obligations'),
+                    fetch('/api/compliance/gap-analysis')
+                ]);
+                regulations    = (await regsRes.json()).regulations || [];
+                allObligations = (await oblsRes.json()).obligations  || [];
+                const gaps     = (await gapRes.json()).gap_analysis  || [];
+
+                gapByCode = {};
+                gaps.forEach(function (g) { gapByCode[g.obligation_code] = g; });
+
+                buildMergedRows();
+                hydrateFilterDropdowns();
+                populateModalRegulationDropdown();
+                applyFilters();
+            } catch (e) {
+                console.error('Error loading data:', e);
+                document.getElementById('obligationsTableBody').innerHTML =
+                    '<tr><td colspan="10" class="px-4 py-8 text-center text-red-500">Failed to load obligations.</td></tr>';
+            }
+        }
+
+        // Merge /obligations + /gap-analysis (by obligation_code) into a
+        // single array each row of which has every field used by every
+        // section of the page.
+        function buildMergedRows() {
+            mergedRows = allObligations.map(function (o) {
+                const g = gapByCode[o.obligation_code] || {};
+                obligationTitles[o.id] = o.obligation_code + ' — ' + (o.title || '');
+                return {
+                    id: o.id,
+                    obligation_code: o.obligation_code,
+                    title: o.title,
+                    description: o.description,
+                    article_reference: o.article_reference,
+                    regulation_id: o.regulation_id,
+                    regulation_code: o.regulation_code || g.regulation_code || '',
+                    regulation_name: g.regulation_name || '',
+                    section_domain: o.section_domain || g.section_domain || '',
+                    priority: o.priority,
+                    lifecycle_status: o.status,
+                    responsible_department: o.responsible_department || '',
+                    assessment_status: g.latest_status || 'not_assessed',
+                    score: g.latest_score,
+                    last_assessed: g.last_assessed
+                };
+            });
+        }
+
+        async function loadDeadlines() {
+            try {
+                const res = await fetch('/api/compliance/deadlines');
+                const data = await res.json();
+                renderDeadlines(data.upcoming || [], data.overdue || []);
+            } catch (e) {
+                console.error('Error loading deadlines:', e);
+            }
+        }
+
+        function renderByRegulation(regs) {
+            const container = document.getElementById('byRegulationChart');
+            if (!regs || regs.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">' + _t('dyn.compliance.chart_no_data') + '</div>';
+                return;
+            }
+            container.innerHTML = regs.map(r => `
+                <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                    <span class="text-sm font-medium">${r.regulation_code}</span>
+                    <span class="text-sm text-gray-600">${_t('dyn.compliance.chart_obligations_count', { count: r.obligation_count })}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderByPriority(priorities) {
+            const container = document.getElementById('byPriorityChart');
+            if (!priorities || priorities.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">' + _t('dyn.compliance.chart_no_data') + '</div>';
+                return;
+            }
+            const colors = {
+                'critical': 'bg-red-100 text-red-800',
+                'high': 'bg-orange-100 text-orange-800',
+                'medium': 'bg-yellow-100 text-yellow-800',
+                'low': 'bg-green-100 text-green-800'
+            };
+            container.innerHTML = priorities.map(p => `
+                <div class="flex justify-between items-center p-2 rounded ${colors[p.priority] || 'bg-gray-100'}">
+                    <span class="text-sm font-medium capitalize">${_td('dyn.compliance.priority', p.priority)}</span>
+                    <span class="text-sm font-bold">${p.count}</span>
+                </div>
+            `).join('');
+        }
+
+        // Cached current-user role used to gate the regulation document
+        // upload / replace / remove buttons. Filled by loadCurrentUser()
+        // and re-checked by canManageRegulationDocs() so the UI never
+        // shows an action the API would refuse.
+        let currentUserRole = null;
+        const REGULATION_DOC_ROLES = ['admin', 'grc_manager'];
+        function canManageRegulationDocs() {
+            return REGULATION_DOC_ROLES.includes(currentUserRole);
+        }
+        async function loadCurrentUser() {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                if (!res.ok) { currentUserRole = null; return; }
+                const data = await res.json();
+                currentUserRole = (data && data.user && data.user.role) || null;
+            } catch (_e) {
+                currentUserRole = null;
+            }
+        }
+
+        async function loadRegulations() {
+            try {
+                if (currentUserRole === null) await loadCurrentUser();
+                const res = await fetch('/api/compliance/regulations');
+                const data = await res.json();
+                const regs = data.regulations || [];
+                const container = document.getElementById('regulationsList');
+                if (!container) return;
+                renderRegulations(regs, container);
+            } catch (e) {
+                console.error('Error loading regulations:', e);
+            }
+        }
+
+        // ──────────────────────── Filter state ─────────────────────────
+        function readFilterState() {
+            filterState.framework  = document.getElementById('fltFramework').value;
+            filterState.lifecycle  = document.getElementById('fltLifecycle').value;
+            filterState.assessment = document.getElementById('fltAssessment').value;
+            filterState.priority   = document.getElementById('fltPriority').value;
+            filterState.domain     = document.getElementById('fltDomain').value;
+            filterState.owner      = document.getElementById('fltOwner').value;
+        }
+        function onFilterChange() { readFilterState(); applyFilters(); }
+        function resetFilters() {
+            ['fltFramework','fltLifecycle','fltAssessment','fltPriority','fltDomain','fltOwner']
+                .forEach(function (id) { document.getElementById(id).value = ''; });
+            onFilterChange();
+        }
+        function setAssessmentFilter(status) {
+            const sel = document.getElementById('fltAssessment');
+            sel.value = (sel.value === status) ? '' : status;   // toggle
+            onFilterChange();
+            document.querySelector('[data-testid="section-obligations"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        function applyFilterChip(field, value) {
+            // Helper used by the framework cards: clicking a card sets framework filter.
+            const map = {
+                framework: 'fltFramework', lifecycle: 'fltLifecycle', assessment: 'fltAssessment',
+                priority: 'fltPriority', domain: 'fltDomain', owner: 'fltOwner'
+            };
+            const id = map[field];
+            if (!id) return;
+            document.getElementById(id).value = value || '';
+            onFilterChange();
+        }
+
+        function getFilteredRows() {
+            return mergedRows.filter(function (r) {
+                if (filterState.framework  && String(r.regulation_id) !== String(filterState.framework)) return false;
+                if (filterState.lifecycle  && r.lifecycle_status   !== filterState.lifecycle)         return false;
+                if (filterState.assessment && r.assessment_status  !== filterState.assessment)        return false;
+                if (filterState.priority   && r.priority           !== filterState.priority)          return false;
+                if (filterState.domain     && (r.section_domain || '') !== filterState.domain)        return false;
+                if (filterState.owner      && (r.responsible_department || '') !== filterState.owner) return false;
+                return true;
+            });
+        }
+
+        function renderRegulations(regs, container) {
+            const canManage = canManageRegulationDocs();
+            container.innerHTML = regs.map(r => {
+                const src = r.source_url ? String(r.source_url).trim() : '';
+                const safeSrc = src && /^https?:\/\//i.test(src) ? src : '';
+                const sourceLink = safeSrc
+                    ? `<a href="${escAttr(safeSrc)}" target="_blank" rel="noopener noreferrer"
+                          class="text-xs text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1"
+                          data-testid="link-regulation-source-${escAttr(r.regulation_code)}"
+                          title="${escAttr(safeSrc)}">
+                          View source
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                       </a>`
+                    : '';
+                const hasDoc = !!r.document_path;
+                const docHref = '/api/compliance/regulations/' + encodeURIComponent(r.id) + '/document';
+                const docTitle = r.document_filename
+                    ? r.document_filename + (r.document_size ? ' (' + Math.round(r.document_size / 1024) + ' KB)' : '')
+                    : 'Uploaded document';
+                const docLink = hasDoc
+                    ? `<a href="${escAttr(docHref)}" target="_blank" rel="noopener noreferrer"
+                          class="text-xs text-emerald-700 hover:text-emerald-900 hover:underline inline-flex items-center gap-1"
+                          data-testid="link-regulation-document-${escAttr(r.regulation_code)}"
+                          title="${escAttr(docTitle)}">
+                          View document
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                       </a>`
+                    : '';
+                const uploadBtn = canManage
+                    ? `<button type="button"
+                          data-on-click="triggerRegulationDocUpload"
+                          data-args="[${r.id},&quot;${escAttr(r.regulation_code)}&quot;]"
+                          class="text-xs ${hasDoc ? 'text-amber-700 hover:text-amber-900' : 'text-blue-700 hover:text-blue-900'} hover:underline inline-flex items-center gap-1"
+                          data-testid="button-regulation-document-${hasDoc ? 'replace' : 'upload'}-${escAttr(r.regulation_code)}">
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5m0 0l5 5m-5-5v12"/></svg>
+                          ${hasDoc ? 'Replace document' : 'Upload document'}
+                       </button>`
+                    : '';
+                const removeBtn = canManage && hasDoc
+                    ? `<button type="button"
+                          data-on-click="removeRegulationDoc"
+                          data-args="[${r.id},&quot;${escAttr(r.regulation_code)}&quot;]"
+                          class="text-xs text-red-600 hover:text-red-800 hover:underline inline-flex items-center gap-1"
+                          data-testid="button-regulation-document-remove-${escAttr(r.regulation_code)}">
+                          Remove
+                       </button>`
+                    : '';
+                return `
+                <div class="p-4 hover:bg-gray-50 flex justify-between items-center" data-testid="row-regulation-${escAttr(r.regulation_code)}">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-xs ${getJurisdictionColor(r.jurisdiction)}">
+                            ${r.regulation_code.substring(0, 3)}
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-900">${r.name}</div>
+                            <div class="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
+                                <span>${r.regulation_code} | ${r.issuing_body || 'Unknown'}</span>
+                                ${sourceLink}
+                                ${docLink}
+                                ${uploadBtn}
+                                ${removeBtn}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="px-2 py-1 text-xs rounded-full ${r.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}">${_td('dyn.compliance.reg_status', r.status)}</span>
+                        <span class="text-sm text-gray-500 capitalize">${_td('dyn.compliance.jurisdiction', r.jurisdiction)}</span>
+                    </div>
+                </div>
+            `;}).join('');
+        }
+
+        function renderFilterChips() {
+            const wrap = document.getElementById('filterChips');
+            if (!wrap) return;
+            const labels = {
+                framework: _ct('compliance.flt_framework', 'Framework'),
+                lifecycle: _ct('compliance.flt_lifecycle', 'Lifecycle'),
+                assessment: _ct('compliance.flt_assessment', 'Assessment'),
+                priority: _ct('compliance.flt_priority', 'Priority'),
+                domain: _ct('compliance.flt_domain', 'Domain'),
+                owner: _ct('compliance.flt_owner', 'Owner')
+            };
+            const valueLabel = function (field, raw) {
+                if (field === 'framework') {
+                    const r = regulations.find(function (x) { return String(x.id) === String(raw); });
+                    return r ? r.regulation_code : raw;
+                }
+                if (field === 'lifecycle')  return formatLifecycle(raw);
+                if (field === 'assessment') return formatAssessment(raw);
+                if (field === 'priority')   return _td('dyn.compliance.priority', raw) || raw;
+                return raw;
+            };
+            const chips = [];
+            Object.keys(filterState).forEach(function (k) {
+                if (filterState[k]) {
+                    chips.push('<span class="chip" data-testid="chip-' + k + '">'
+                        + escAttr(labels[k]) + ': ' + escAttr(valueLabel(k, filterState[k]))
+                        + '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;' + k + '&quot;,&quot;&quot;]" aria-label="Clear ' + labels[k] + '">×</button>'
+                        + '</span>');
+                }
+            });
+            if (chips.length === 0) {
+                wrap.classList.add('hidden');
+                wrap.innerHTML = '';
+            } else {
+                wrap.classList.remove('hidden');
+                wrap.innerHTML = chips.join(' ');
+            }
+        }
+
+        // ──────────────────────── Apply filters everywhere ─────────────
+        function applyFilters() {
+            const rows = getFilteredRows();
+            renderObligationsTable(rows);
+            renderStatusCounters(rows);
+            renderByPriority(rows);
+            renderByDomain(rows);
+            renderFrameworksGrid(rows);
+            renderFilterChips();
+            const cnt = document.getElementById('filterMatchCount');
+            if (cnt) cnt.textContent = rows.length + ' / ' + mergedRows.length + ' ' + _ct('compliance.matching_clauses', 'matching clauses');
+        }
+
+        // ──────────────────────── Filter dropdown population ───────────
+        function hydrateFilterDropdowns() {
+            // Framework
+            const fw = document.getElementById('fltFramework');
+            const cur = fw.value;
+            fw.innerHTML = '<option value="" data-i18n="compliance.all_regulations">' + _ct('compliance.all_regulations', 'All Regulations') + '</option>'
+                + regulations.map(function (r) {
+                    return '<option value="' + r.id + '">' + escAttr(r.regulation_code + ' — ' + r.name) + '</option>';
+                }).join('');
+            fw.value = cur;
+
+            // Domain (from data)
+            const domains = Array.from(new Set(mergedRows.map(function (r) { return r.section_domain; }).filter(Boolean))).sort();
+            const dom = document.getElementById('fltDomain');
+            const curDom = dom.value;
+            dom.innerHTML = '<option value="">' + _ct('compliance.flt_all', 'All') + '</option>'
+                + domains.map(function (d) { return '<option value="' + escAttr(d) + '">' + escAttr(d) + '</option>'; }).join('');
+            dom.value = curDom;
+
+            // Owner (from data)
+            const owners = Array.from(new Set(mergedRows.map(function (r) { return r.responsible_department; }).filter(Boolean))).sort();
+            const own = document.getElementById('fltOwner');
+            const curOwn = own.value;
+            own.innerHTML = '<option value="">' + _ct('compliance.flt_all', 'All') + '</option>'
+                + owners.map(function (d) { return '<option value="' + escAttr(d) + '">' + escAttr(d) + '</option>'; }).join('');
+            own.value = curOwn;
+        }
+
+        function populateModalRegulationDropdown() {
+            const sel = document.getElementById('modalRegulationSelect');
+            sel.innerHTML = '<option value="" data-i18n="compliance.select_regulation">' + _ct('compliance.select_regulation', 'Select regulation') + '</option>'
+                + regulations.map(function (r) { return '<option value="' + r.id + '">' + escAttr(r.regulation_code + ' - ' + r.name) + '</option>'; }).join('');
+        }
+
+        // ──────────────────────── Render: status counters ──────────────
+        function renderStatusCounters(rows) {
+            let c = 0, p = 0, n = 0, na = 0;
+            rows.forEach(function (r) {
+                if (r.assessment_status === 'compliant') c++;
+                else if (r.assessment_status === 'partially_compliant') p++;
+                else if (r.assessment_status === 'non_compliant') n++;
+                else na++;
+            });
+            document.getElementById('compliantCount').textContent = c;
+            document.getElementById('partialCount').textContent = p;
+            document.getElementById('nonCompliantCount').textContent = n;
+            document.getElementById('notAssessedCount').textContent = na;
+        }
+
+        // ──────────────────────── Render: framework cards ──────────────
+        function renderFrameworksGrid(filteredRows) {
+            const grid = document.getElementById('frameworksGrid');
+            if (!regulations.length) {
+                grid.innerHTML = '<div class="text-sm text-gray-400 col-span-full text-center py-6">No regulations seeded yet.</div>';
+                return;
+            }
+            // Compute per-framework metrics from FILTERED rows (so the cards reflect current filters)
+            const byReg = {};
+            filteredRows.forEach(function (r) {
+                if (!r.regulation_id) return;
+                const k = r.regulation_id;
+                if (!byReg[k]) byReg[k] = { total: 0, assessed: 0, compliant: 0 };
+                byReg[k].total++;
+                if (r.assessment_status && r.assessment_status !== 'not_assessed') byReg[k].assessed++;
+                if (r.assessment_status === 'compliant') byReg[k].compliant++;
+            });
+
+            grid.innerHTML = regulations.map(function (r) {
+                const m = byReg[r.id] || { total: 0, assessed: 0, compliant: 0 };
+                const assessedPct = m.total ? Math.round((m.assessed / m.total) * 100) : 0;
+                const compliantPct = m.total ? Math.round((m.compliant / m.total) * 100) : 0;
+                const isOpen = activeRegulationCode === r.regulation_code;
+                const safeName = escAttr(r.name);
+                const safeCode = escAttr(r.regulation_code);
+                let band = 'border-gray-200 hover:border-emerald-400';
+                if (isOpen) band = 'border-emerald-600 ring-2 ring-emerald-100';
+                return ''
+                    + '<div class="border ' + band + ' rounded-lg p-4 transition" data-testid="framework-card-' + safeCode + '">'
+                        + '<div class="flex items-start justify-between gap-3 mb-3">'
+                            + '<div class="flex items-center gap-2 min-w-0">'
+                                + '<div class="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-[11px] ' + getJurisdictionColor(r.jurisdiction) + '">' + escAttr((r.regulation_code || '').substring(0, 3)) + '</div>'
+                                + '<div class="min-w-0">'
+                                    + '<div class="text-sm font-semibold text-gray-900 truncate" title="' + safeName + '">' + safeName + '</div>'
+                                    + '<div class="text-[11px] text-gray-500 truncate">' + safeCode + ' · ' + escAttr(r.jurisdiction || '—') + '</div>'
+                                + '</div>'
+                            + '</div>'
+                        + '</div>'
+                        + '<div class="grid grid-cols-3 gap-2 text-center mb-3">'
+                            + '<div><div class="text-lg font-bold text-gray-900">' + m.total + '</div><div class="text-[10px] text-gray-500 uppercase tracking-wide" data-i18n="compliance.clauses_short">Clauses</div></div>'
+                            + '<div><div class="text-lg font-bold text-blue-700">' + assessedPct + '%</div><div class="text-[10px] text-gray-500 uppercase tracking-wide" data-i18n="compliance.assessed_short">Assessed</div></div>'
+                            + '<div><div class="text-lg font-bold text-green-700">' + compliantPct + '%</div><div class="text-[10px] text-gray-500 uppercase tracking-wide" data-i18n="compliance.compliant">Compliant</div></div>'
+                        + '</div>'
+                        + '<div class="flex items-center gap-2">'
+                            + '<button type="button" data-on-click="openFramework" data-args="[' + r.id + ']" class="flex-1 text-xs px-3 py-1.5 bg-emerald-700 text-white rounded hover:bg-emerald-800 font-medium" data-testid="button-open-' + safeCode + '">'
+                                + (isOpen ? '<span data-i18n="compliance.opened">Opened</span>' : '<span data-i18n="compliance.open_btn">Open</span>')
+                            + '</button>'
+                            + '<a href="/api/compliance/regulations/' + r.id + '/audit-readiness/pdf" target="_blank" rel="noopener" class="text-xs px-3 py-1.5 border border-emerald-700 text-emerald-700 rounded hover:bg-emerald-50 font-medium" data-testid="button-pdf-' + safeCode + '" data-i18n="compliance.audit_pdf_short">Audit PDF</a>'
+                        + '</div>'
+                    + '</div>';
+            }).join('');
+            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(grid);
+        }
+
+        async function openFramework(regulationId) {
+            const reg = regulations.find(function (r) { return String(r.id) === String(regulationId); });
+            if (!reg) return;
+            // Set the framework filter so the rest of the page narrows to this framework
+            document.getElementById('fltFramework').value = String(regulationId);
+            onFilterChange();
+
+            // Show the framework detail panel and load clause cards
+            const panel = document.getElementById('frameworkDetail');
+            activeRegulationCode = reg.regulation_code;
+            document.getElementById('frameworkDetailName').textContent = reg.name + ' (' + reg.regulation_code + ')';
+            document.getElementById('frameworkDetailMeta').textContent =
+                (reg.issuing_body || '—') + ' · ' + (reg.jurisdiction || '—') + ' · v' + (reg.version || '—');
+            // Compliance v2 — Gap Analysis PDF link uses the regulation's id;
+            // the audit-run start link funnels into the new audit-readiness page
+            // with the framework pre-filtered.
+            const gapLink = document.getElementById('frameworkGapPdfLink');
+            if (gapLink) gapLink.href = '/api/compliance/regulations/' + reg.id + '/gap-analysis.pdf';
+            const auditLink = document.getElementById('frameworkAuditRunLink');
+            if (auditLink) auditLink.href = '/audit-readiness';
+            panel.classList.remove('hidden');
+            await loadClauseCards(reg.regulation_code);
+            renderFrameworkGapSummary(reg.regulation_code);
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function renderFrameworkGapSummary(regCode) {
+            // Compliance v2 — quick gap snapshot for the open framework
+            // computed from the merged obligations+gap-analysis rows the
+            // page already loaded. Keeps the panel a 1-RTT operation;
+            // the full PDF is the deeper view.
+            const rows = (typeof mergedRows !== 'undefined' && Array.isArray(mergedRows))
+                ? mergedRows.filter(function (r) { return r.regulation_code === regCode; })
+                : [];
+            const counts = { compliant: 0, partial: 0, non: 0, none: 0 };
+            rows.forEach(function (r) {
+                const s = (r.compliance_status || r.assessment_status || '').toLowerCase();
+                if (s === 'compliant') counts.compliant++;
+                else if (s === 'partially_compliant') counts.partial++;
+                else if (s === 'non_compliant') counts.non++;
+                else counts.none++;
+            });
+            const set = function (id, v) {
+                const el = document.getElementById(id);
+                if (el) el.textContent = String(v);
+            };
+            set('gapCntCompliant', counts.compliant);
+            set('gapCntPartial', counts.partial);
+            set('gapCntNoncompliant', counts.non);
+            set('gapCntNotAssessed', counts.none);
+        }
+
+        function closeFramework() {
+            document.getElementById('frameworkDetail').classList.add('hidden');
+            activeRegulationCode = null;
+            applyFilters();   // re-render framework cards so highlight is cleared
+        }
+
+        // ──────────────────────── Render: charts ───────────────────────
+        function renderByPriority(rows) {
+            const container = document.getElementById('byPriorityChart');
+            const buckets = { critical: 0, high: 0, medium: 0, low: 0 };
+            rows.forEach(function (r) { if (r.priority && buckets[r.priority] != null) buckets[r.priority]++; });
+            const total = rows.length || 1;
+            const colors = {
+                critical: { bg: 'bg-red-50',    bar: 'bg-red-600',    text: 'text-red-800' },
+                high:     { bg: 'bg-orange-50', bar: 'bg-orange-500', text: 'text-orange-800' },
+                medium:   { bg: 'bg-yellow-50', bar: 'bg-yellow-500', text: 'text-yellow-800' },
+                low:      { bg: 'bg-green-50',  bar: 'bg-green-500',  text: 'text-green-800' }
+            };
+            container.innerHTML = ['critical','high','medium','low'].map(function (p) {
+                const c = colors[p];
+                const pct = Math.round(buckets[p] / total * 100);
+                const label = _td('dyn.compliance.priority', p) || p;
+                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;priority&quot;,&quot;' + p + '&quot;]" class="w-full text-start ' + c.bg + ' rounded p-2 hover:opacity-90" data-testid="chart-priority-' + p + '">'
+                    + '<div class="flex justify-between items-center text-xs ' + c.text + ' font-medium mb-1"><span class="capitalize">' + escAttr(label) + '</span><span>' + buckets[p] + ' (' + pct + '%)</span></div>'
+                    + '<div class="h-1.5 w-full bg-white/70 rounded-full overflow-hidden"><div class="h-full ' + c.bar + '" data-style="width:' + pct + '%"></div></div>'
+                    + '</button>';
+            }).join('');
+            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(container);
+        }
+
+        function renderByDomain(rows) {
+            const container = document.getElementById('byDomainChart');
+            const buckets = {};
+            rows.forEach(function (r) {
+                const d = r.section_domain || '—';
+                buckets[d] = (buckets[d] || 0) + 1;
+            });
+            const entries = Object.entries(buckets).sort(function (a, b) { return b[1] - a[1]; });
+            if (entries.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">No data</div>';
+                return;
+            }
+            const max = entries[0][1];
+            container.innerHTML = entries.map(function (e) {
+                const name = e[0]; const n = e[1];
+                const pct = Math.round(n / max * 100);
+                const safe = escAttr(name);
+                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;domain&quot;,&quot;' + safe.replace(/"/g, '\\&quot;') + '&quot;]" class="w-full text-start p-1.5 rounded hover:bg-gray-50">'
+                    + '<div class="flex justify-between items-center text-xs text-gray-700 mb-0.5"><span class="truncate" title="' + safe + '">' + safe + '</span><span class="text-gray-500">' + n + '</span></div>'
+                    + '<div class="h-1 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-indigo-500" data-style="width:' + pct + '%"></div></div>'
+                    + '</button>';
+            }).join('');
+        }
+
+        function renderDeadlines(upcoming, overdue) {
+            const container = document.getElementById('upcomingDeadlines');
+            const all = [].concat(overdue.map(function (o) { return Object.assign({}, o, { isOverdue: true }); }), upcoming);
+            if (all.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">' + _ct('compliance.no_deadlines', 'No upcoming deadlines') + '</div>';
+                return;
+            }
+            container.innerHTML = all.slice(0, 6).map(function (d) {
+                return '<div class="p-2 rounded border ' + (d.isOverdue ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200') + '">'
+                    + '<div class="font-medium text-xs truncate">' + escAttr(d.obligation_title) + '</div>'
+                    + '<div class="flex justify-between items-center mt-1">'
+                        + '<span class="text-[10px] text-gray-500 capitalize">' + escAttr(_td('dyn.compliance.event_type', d.event_type) || d.event_type) + '</span>'
+                        + '<span class="text-[10px] ' + (d.isOverdue ? 'text-red-600 font-bold' : 'text-gray-600') + '">' + new Date(d.scheduled_date).toLocaleDateString() + '</span>'
+                    + '</div>'
+                + '</div>';
+            }).join('');
+        }
+
+        // ──────────────────────── Render: combined obligations table ───
+        function renderObligationsTable(rows) {
+            const tbody = document.getElementById('obligationsTableBody');
+            const cnt = document.getElementById('obligationsResultCount');
+            if (cnt) cnt.textContent = rows.length + ' ' + _ct('compliance.results_label', 'result' + (rows.length === 1 ? '' : 's'));
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-10 text-center text-gray-400">'
+                    + _ct('compliance.no_match', 'No clauses match the current filters.')
+                    + ' <button type="button" data-on-click="resetFilters" class="text-emerald-700 hover:underline ms-1">'
+                    + _ct('compliance.flt_reset', 'Reset')
+                    + '</button>'
+                    + '</td></tr>';
+                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(tbody);
+                return;
+            }
+            tbody.innerHTML = rows.map(function (r) {
+                const dt = r.last_assessed ? new Date(r.last_assessed).toLocaleDateString() : '—';
+                return '<tr class="hover:bg-gray-50" data-testid="row-obligation-' + r.id + '">'
+                    + '<td class="px-3 py-2.5 text-sm font-medium text-blue-600 whitespace-nowrap">' + escAttr(r.obligation_code) + '</td>'
+                    + '<td class="px-3 py-2.5">'
+                        + '<div class="text-sm font-medium text-gray-900 max-w-xs truncate" title="' + escAttr(r.title) + '">' + escAttr(r.title) + '</div>'
+                        + (r.responsible_department ? '<div class="text-[11px] text-gray-500 truncate">' + escAttr(r.responsible_department) + '</div>' : '')
+                    + '</td>'
+                    + '<td class="px-3 py-2.5 text-xs text-gray-700 font-mono">' + escAttr(r.regulation_code) + '</td>'
+                    + '<td class="px-3 py-2.5 text-xs text-gray-500">' + escAttr(r.section_domain || '—') + '</td>'
+                    + '<td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 text-xs rounded-full priority-' + escAttr(r.priority) + '">' + escAttr(_td('dyn.compliance.priority', r.priority) || r.priority) + '</span></td>'
+                    + '<td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 text-xs rounded-full ' + getLifecycleClass(r.lifecycle_status) + '">' + escAttr(formatLifecycle(r.lifecycle_status)) + '</span></td>'
+                    + '<td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 text-xs rounded-full ' + getAssessmentClass(r.assessment_status) + '">' + escAttr(formatAssessment(r.assessment_status)) + '</span></td>'
+                    + '<td class="px-3 py-2.5 text-center text-sm font-medium text-gray-700">' + (r.score != null ? (r.score + '%') : '—') + '</td>'
+                    + '<td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">' + escAttr(dt) + '</td>'
+                    + '<td class="px-3 py-2.5 text-center whitespace-nowrap">'
+                        + '<button data-title="' + escAttr(r.title) + '" data-on-click="openAssessmentModal" data-args="[' + r.id + ',&quot;@this.dataset.title&quot;]" class="text-green-600 hover:text-green-800 text-xs font-medium me-2" data-testid="button-assess-' + r.id + '" data-i18n="compliance.assess_short">Assess</button>'
+                        + '<button data-on-click="openClauseDocsModal" data-args="[' + r.id + ',&quot;' + escAttr(r.obligation_code + ' — ' + (r.title || '')) + '&quot;]" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium" data-testid="button-link-' + r.id + '" data-i18n="compliance.link_docs_short">Link Docs</button>'
+                    + '</td>'
+                + '</tr>';
+            }).join('');
+            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(tbody);
+        }
+
+        // ──────────────────────── Modals & writes ──────────────────────
+        function openAddObligationModal() {
+            document.getElementById('addObligationForm').reset();
+            document.getElementById('addObligationModal').classList.add('active');
+        }
+
+        // ── Ingest Standard from Document (Compliance v2 Pillar 1) ───
+        async function openIngestStandardModal() {
+            const modal = document.getElementById('ingestStandardModal');
+            const regSel = document.getElementById('ingestRegulationSelect');
+            const docSel = document.getElementById('ingestDocumentSelect');
+            const msg = document.getElementById('ingestStandardMsg');
+            msg.textContent = '';
+            regSel.innerHTML = '<option value="">— Create new regulation later —</option>';
+            docSel.innerHTML = '<option value="">— Pick an uploaded document —</option>';
+            modal.classList.add('active');
+            try {
+                const [regs, docs] = await Promise.all([
+                    fetch('/api/compliance/regulations').then(function (r) { return r.json(); }),
+                    fetch('/api/qms-docs?extracted=1').then(function (r) { return r.json(); }).catch(function () { return { documents: [] }; })
+                ]);
+                (regs.regulations || []).forEach(function (r) {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = r.regulation_code + ' — ' + r.name;
+                    regSel.appendChild(opt);
+                });
+                const docList = docs.documents || docs.items || [];
+                docList.filter(function (d) { return d.extraction_status === 'extracted' || d.extracted_text; }).forEach(function (d) {
+                    const opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = (d.title || d.file_name || ('Doc #' + d.id)) + ' (' + (d.category || '?') + ')';
+                    docSel.appendChild(opt);
+                });
+                if (docSel.options.length === 1) {
+                    msg.className = 'text-sm text-amber-700';
+                    msg.textContent = _ct('compliance.ingest_no_docs', 'No extracted documents found. Upload a regulation PDF in the QMS library first; text extraction runs automatically and finishes within a minute.');
+                }
+            } catch (e) {
+                msg.className = 'text-sm text-red-600';
+                msg.textContent = 'Failed to load options: ' + e.message;
+            }
+        }
+
+        async function submitIngestStandard(event) {
+            event.preventDefault();
+            const form = event.target;
+            const documentId = Number(form.document_id.value);
+            const regulationId = form.regulation_id.value ? Number(form.regulation_id.value) : null;
+            const msg = document.getElementById('ingestStandardMsg');
+            msg.className = 'text-sm text-gray-600';
+            msg.textContent = _ct('compliance.ingest_starting', 'Starting extraction…');
+            try {
+                const r = await fetch('/api/compliance/imports', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ document_id: documentId, regulation_id: regulationId })
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    msg.className = 'text-sm text-red-600';
+                    msg.textContent = 'Failed: ' + (data.error || ('HTTP ' + r.status));
+                    return;
+                }
+                msg.className = 'text-sm text-green-700';
+                msg.textContent = _ct('compliance.ingest_kicked_off', 'Extraction started — opening review screen…');
+                setTimeout(function () {
+                    window.location.href = '/import-review?id=' + data.import.id;
+                }, 600);
+            } catch (e) {
+                msg.className = 'text-sm text-red-600';
+                msg.textContent = 'Network error: ' + e.message;
+            }
+        }
+
+        function openAssessmentModal(obligationId, title) {
+            document.getElementById('assessmentObligationId').value = obligationId;
+            const infoEl = document.getElementById('assessmentObligationInfo');
+            infoEl.innerHTML = '';
+            const strong = document.createElement('strong');
+            strong.textContent = _ct('compliance.lbl_obligation', 'Obligation:');
+            infoEl.appendChild(strong);
+            infoEl.appendChild(document.createTextNode(' ' + title));
+            document.getElementById('assessmentForm').reset();
+            document.getElementById('assessmentObligationId').value = obligationId;
+            document.getElementById('assessmentModal').classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // === Per-regulation document upload (PDF only, ≤25MB) =============
+        // The visible button has no native file input; we open the shared
+        // hidden <input> and remember which regulation it belongs to.
+        let pendingRegulationDocId = null;
+        let pendingRegulationDocCode = null;
+
+        function triggerRegulationDocUpload(regulationId, regulationCode) {
+            if (!canManageRegulationDocs()) {
+                alert('Only admins or GRC managers can upload regulation documents.');
+                return;
+            }
+            const input = document.getElementById('regulationDocFileInput');
+            if (!input) return;
+            pendingRegulationDocId = regulationId;
+            pendingRegulationDocCode = regulationCode;
+            input.value = '';
+            input.click();
+        }
+
+        async function handleRegulationDocFileChange(event) {
+            const input = event.target;
+            const file = input && input.files && input.files[0];
+            const regulationId = pendingRegulationDocId;
+            const regulationCode = pendingRegulationDocCode;
+            pendingRegulationDocId = null;
+            pendingRegulationDocCode = null;
+            if (!file || !regulationId) return;
+
+            // Client-side guards mirror the server-side rules so we can fail
+            // fast without burning a network round-trip.
+            const isPdf = (file.type === 'application/pdf')
+                || /\.pdf$/i.test(file.name);
+            if (!isPdf) {
+                alert('Only PDF files are allowed.');
+                return;
+            }
+            const MAX = 25 * 1024 * 1024;
+            if (file.size > MAX) {
+                alert('File size exceeds the 25 MB limit.');
+                return;
+            }
+
+            try {
+                const fd = new FormData();
+                fd.append('file', file);
+                const res = await fetch(
+                    '/api/compliance/regulations/' + encodeURIComponent(regulationId) + '/document',
+                    { method: 'POST', credentials: 'same-origin', body: fd }
+                );
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    alert('Upload failed for ' + regulationCode + ': ' + (data.error || ('HTTP ' + res.status)));
+                    return;
+                }
+                await loadRegulations();
+            } catch (err) {
+                alert('Network error while uploading document.');
+            } finally {
+                if (input) input.value = '';
+            }
+        }
+
+        async function removeRegulationDoc(regulationId, regulationCode) {
+            if (!canManageRegulationDocs()) {
+                alert('Only admins or GRC managers can remove regulation documents.');
+                return;
+            }
+            if (!confirm('Remove the uploaded document for ' + regulationCode + '?')) return;
+            try {
+                const res = await fetch(
+                    '/api/compliance/regulations/' + encodeURIComponent(regulationId) + '/document',
+                    { method: 'DELETE', credentials: 'same-origin' }
+                );
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    alert('Remove failed: ' + (data.error || ('HTTP ' + res.status)));
+                    return;
+                }
+                await loadRegulations();
+            } catch (err) {
+                alert('Network error while removing document.');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const input = document.getElementById('regulationDocFileInput');
+            if (input) input.addEventListener('change', handleRegulationDocFileChange);
+        });
+
+        async function submitObligation(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const data = Object.fromEntries(formData.entries());
+            data.regulation_id = parseInt(data.regulation_id);
+            try {
+                const res = await fetch('/api/compliance/obligations', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+                });
+                if (res.ok) {
+                    closeModal('addObligationModal');
+                    await reloadAll();
+                    alert(_ct('compliance.obligation_created', 'Obligation created successfully!'));
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + (err.error || 'Failed to create obligation'));
+                }
+            } catch (e) {
+                console.error('Error creating obligation:', e);
+                alert('Error creating obligation');
+            }
+        }
+
+        async function submitAssessment(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const data = Object.fromEntries(formData.entries());
+            data.obligation_id = parseInt(data.obligation_id);
+            try {
+                const res = await fetch('/api/compliance/assessments', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+                });
+                if (res.ok) {
+                    closeModal('assessmentModal');
+                    await reloadAll();
+                    alert(_ct('compliance.assessment_recorded', 'Assessment recorded successfully!'));
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + (err.error || 'Failed to record assessment'));
+                }
+            } catch (e) {
+                console.error('Error recording assessment:', e);
+                alert('Error recording assessment');
+            }
+        }
+
+        // ──────────────────────── Clause-mapping panel (preserved) ─────
+        async function loadClauseCards(regulationCode) {
+            const wrap = document.getElementById('clause-cards');
+            wrap.innerHTML = '<div class="p-6 text-center text-gray-400">Loading clauses…</div>';
+            try {
+                const obligations = allObligations.filter(function (o) { return String(o.regulation_code || '') === String(regulationCode); });
+                const counts = {};
+                await Promise.all(obligations.map(async function (o) {
+                    try {
+                        const r = await fetch('/api/compliance/obligations/' + o.id + '/documents');
+                        if (r.ok) {
+                            const dd = await r.json();
+                            counts[o.id] = (dd.documents || []).length;
+                        } else { counts[o.id] = 0; }
+                    } catch (e) { counts[o.id] = 0; }
+                }));
+                const totalDocs = Object.values(counts).reduce(function (a, b) { return a + b; }, 0);
+                document.getElementById('frameworkDetailClauses').textContent = obligations.length + ' clause' + (obligations.length === 1 ? '' : 's');
+                document.getElementById('frameworkDetailDocs').textContent = totalDocs + ' document' + (totalDocs === 1 ? '' : 's') + ' linked';
+
+                if (obligations.length === 0) {
+                    wrap.innerHTML = '<div class="p-6 text-center text-gray-400">No clauses defined for this regulation yet. Use <strong>+ Add Obligation</strong> above to create one.</div>';
+                    return;
+                }
+                wrap.innerHTML = obligations.map(function (o) {
+                    obligationTitles[o.id] = o.obligation_code + ' — ' + (o.title || '');
+                    const docCount = counts[o.id] || 0;
+                    return '<div class="p-4 hover:bg-gray-50 flex justify-between items-start gap-4" data-testid="clause-card-' + o.id + '">' +
+                        '<div class="flex-1 min-w-0">' +
+                            '<div class="flex items-center gap-2 flex-wrap">' +
+                                '<span class="text-sm font-mono text-blue-600">' + escAttr(o.obligation_code) + '</span>' +
+                                (o.article_reference ? '<span class="text-xs text-gray-400">' + escAttr(o.article_reference) + '</span>' : '') +
+                                '<span class="text-xs px-2 py-0.5 rounded-full priority-' + o.priority + '">' + escAttr(o.priority) + '</span>' +
+                            '</div>' +
+                            '<div class="text-sm font-medium text-gray-900 mt-1">' + escAttr(o.title) + '</div>' +
+                            '<div class="text-xs text-gray-500 mt-1 line-clamp-2">' + escAttr(o.description || '') + '</div>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2 flex-shrink-0">' +
+                            '<span class="text-xs px-2 py-1 rounded-full ' + (docCount > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500') + '" data-testid="badge-doc-count-' + o.id + '">' + docCount + ' doc' + (docCount === 1 ? '' : 's') + '</span>' +
+                            '<button type="button" data-on-click="openClauseDocsModal" data-args="[' + o.id + ']" class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" data-testid="button-manage-docs-' + o.id + '">Manage Docs</button>' +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+            } catch (e) {
+                wrap.innerHTML = '<div class="p-6 text-center text-red-500">Failed to load clauses.</div>';
+            }
+        }
+
+        async function openClauseDocsModal(obligationId, title) {
+            document.getElementById('clauseDocsTitle').textContent = title || obligationTitles[obligationId] || '';
+            document.getElementById('clauseBulkObligationId').value = obligationId;
+            document.getElementById('clauseBulkFiles').value = '';
+            document.getElementById('clauseBulkNotes').value = '';
+            document.getElementById('clauseBulkCount').textContent = '';
+            document.getElementById('clauseBulkMsg').textContent = '';
+            document.getElementById('clauseDocsModal').classList.add('active');
+            await loadClauseDocs(obligationId);
+        }
+
+        async function loadClauseDocs(obligationId) {
+            const list = document.getElementById('clauseDocsList');
+            list.innerHTML = '<div class="p-3 text-center text-gray-400 text-sm">Loading…</div>';
+            try {
+                const r = await fetch('/api/compliance/obligations/' + obligationId + '/documents');
+                if (!r.ok) { list.innerHTML = '<div class="p-3 text-center text-red-500 text-sm">Failed to load documents.</div>'; return; }
+                const data = await r.json();
+                const docs = data.documents || [];
+                if (docs.length === 0) {
+                    list.innerHTML = '<div class="p-3 text-center text-gray-400 text-sm">No documents linked yet. Use bulk upload below.</div>';
+                    return;
+                }
+                list.innerHTML = docs.map(function (d) {
+                    return '<div class="p-3 flex items-center justify-between gap-2" data-testid="linked-doc-' + d.document_id + '">' +
+                        '<div class="min-w-0">' +
+                            '<div class="text-sm font-medium text-gray-900 truncate">' + escAttr(d.title) + '</div>' +
+                            '<div class="text-xs text-gray-500 truncate">' + escAttr(d.file_name) + ' · ' + escAttr(d.category) + '</div>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2 flex-shrink-0">' +
+                            '<a href="/api/qms-docs/' + d.document_id + '/download" class="text-blue-600 hover:underline text-xs" data-testid="link-download-clause-' + d.document_id + '">Download</a>' +
+                            '<button data-on-click="unlinkClauseDoc" data-args="[' + obligationId + ',' + d.document_id + ']" class="text-red-600 hover:underline text-xs" data-testid="button-unlink-' + d.document_id + '">Unlink</button>' +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+            } catch (e) {
+                list.innerHTML = '<div class="p-3 text-center text-red-500 text-sm">Network error.</div>';
+            }
+        }
+
+        async function unlinkClauseDoc(obligationId, docId) {
+            if (!confirm(_ct('compliance.confirm_unlink', 'Remove this document from this clause? The file remains in the QMS library.'))) return;
+            try {
+                const r = await fetch('/api/compliance/obligations/' + obligationId + '/documents/' + docId, {
+                    method: 'DELETE', credentials: 'same-origin'
+                });
+                if (r.ok) {
+                    await loadClauseDocs(obligationId);
+                    if (activeRegulationCode) await loadClauseCards(activeRegulationCode);
+                } else {
+                    alert('Failed to unlink.');
+                }
+            } catch (e) { alert('Network error.'); }
+        }
+
+        // ──────────────────────── Boot ─────────────────────────────────
+        async function reloadAll() {
+            await Promise.all([loadSummary(), loadMilestones(), loadAllData(), loadDeadlines()]);
+        }
+
+        document.addEventListener('walaPlusLanguageChange', function () {
+            try { loadAll(); } catch (_) {}
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            reloadAll();
+
+            // Bulk-upload form (preserved from previous version)
+            const filesEl = document.getElementById('clauseBulkFiles');
+            if (filesEl) {
+                filesEl.addEventListener('change', function () {
+                    const n = filesEl.files ? filesEl.files.length : 0;
+                    document.getElementById('clauseBulkCount').textContent = n ? n + ' file' + (n === 1 ? '' : 's') + ' selected' : '';
+                });
+            }
+            const cForm = document.getElementById('clauseBulkForm');
+            if (cForm) {
+                cForm.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+                    const oblId = document.getElementById('clauseBulkObligationId').value;
+                    const msg = document.getElementById('clauseBulkMsg');
+                    const btn = document.getElementById('btnClauseBulkUpload');
+                    msg.className = 'mt-2 text-sm text-gray-600';
+                    msg.textContent = _ct('compliance.uploading', 'Uploading…');
+                    btn.disabled = true;
+                    const fEl = document.getElementById('clauseBulkFiles');
+                    if (!fEl.files || fEl.files.length === 0) {
+                        msg.className = 'mt-2 text-sm text-red-600';
+                        msg.textContent = _ct('compliance.choose_files', 'Please choose at least one file.');
+                        btn.disabled = false;
+                        return;
+                    }
+                    const fd = new FormData();
+                    for (const f of fEl.files) fd.append('file', f);
+                    fd.append('category', document.getElementById('clauseBulkCategory').value);
+                    fd.append('notes', document.getElementById('clauseBulkNotes').value.trim());
+                    try {
+                        const r = await fetch('/api/compliance/obligations/' + oblId + '/bulk-upload', {
+                            method: 'POST', credentials: 'same-origin', body: fd
+                        });
+                        const data = await r.json().catch(function () { return {}; });
+                        if (!r.ok) {
+                            msg.className = 'mt-2 text-sm text-red-600';
+                            msg.textContent = 'Upload failed: ' + (data.error || ('HTTP ' + r.status));
+                        } else {
+                            const ok = data.uploaded_count || 0;
+                            const fail = data.failed_count || 0;
+                            msg.className = 'mt-2 text-sm ' + (fail ? 'text-amber-700' : 'text-green-700');
+                            msg.textContent = ok + ' uploaded & linked' + (fail ? ', ' + fail + ' failed' : '') + '.';
+                            await loadClauseDocs(oblId);
+                            if (activeRegulationCode) await loadClauseCards(activeRegulationCode);
+                        }
+                    } catch (err) {
+                        msg.className = 'mt-2 text-sm text-red-600';
+                        msg.textContent = 'Network error during upload.';
+                    } finally {
+                        btn.disabled = false;
+                    }
+                });
+            }
+        });
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

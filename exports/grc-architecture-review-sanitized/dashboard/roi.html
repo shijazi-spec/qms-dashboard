@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ROI & NPV Evaluation Engine - ExampleOrg</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <script src="<REDACTED_URL>"></script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        :root {
+            --qms-blue: #1E3A8A;
+            --qms-blue-light: #2563EB;
+            --qms-blue-bg: #DBEAFE;
+            --qms-green: #047857;
+            --qms-green-light: #22C55E;
+            --qms-green-bg: #D1FAE5;
+            --qms-amber: #D97706;
+            --qms-amber-light: #F59E0B;
+            --qms-amber-bg: #FEF3C7;
+            --qms-red: #B91C1C;
+            --qms-red-light: #EF4444;
+            --qms-red-bg: #FEE2E2;
+            --qms-purple: #6D28D9;
+            --qms-purple-light: #A855F7;
+            --qms-purple-bg: #EDE9FE;
+        }
+        html { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .hidden { display: none !important; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .badge-approve { background-color: var(--qms-green-bg); color: var(--qms-green); }
+        .badge-evaluate { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+        .badge-reject { background-color: var(--qms-red-bg); color: var(--qms-red); }
+        .chart-container { position: relative; height: 280px; width: 100%; }
+        .modal-backdrop { background: rgba(0, 0, 0, 0.5); }
+        .tooltip-icon { cursor: pointer; transition: all 0.2s; }
+        .tooltip-icon:hover { transform: scale(1.1); }
+        .tooltip-popup { position: absolute; z-index: 1000; width: 320px; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; animation: tooltipFadeIn 0.2s ease; }
+        @keyframes tooltipFadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .tooltip-popup::before { content: ''; position: absolute; top: -8px; left: 20px; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 8px solid white; }
+        .field-with-tooltip { position: relative; }
+        .field-with-tooltip label { display: flex; align-items: center; gap: 6px; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('roi');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="nav.items.roi">ROI &amp; NPV</h1>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="roi.total_initiatives">Total Initiatives</p>
+                        <p id="totalInitiatives" class="text-3xl font-bold text-gray-900">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="roi.avg_roi">Average ROI</p>
+                        <p id="avgROI" class="text-3xl font-bold text-green-600">0%</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="roi.total_npv">Total NPV</p>
+                        <p id="totalNPV" class="text-3xl font-bold text-indigo-600">SAR 0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-<REDACTED_PHONE> 2s1.<REDACTED_PHONE>.343 2-3 2m0-8c1.<REDACTED_PHONE> 1M12 8V7m0 1v8m0 0v1m0-1c-<REDACTED_PHONE>-1M21 12a9 <REDACTED_PHONE> 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="roi.avg_payback">Avg Payback</p>
+                        <p id="avgPayback" class="text-3xl font-bold text-amber-600">0 mo</p>
+                    </div>
+                    <div class="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 <REDACTED_PHONE> 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="roi.sec_ai_recs">AI Recommendations</h3>
+                <div class="chart-container">
+                    <canvas id="recommendationChart" role="img" aria-label="AI Recommendations: doughnut chart showing approve, evaluate, and reject counts" aria-describedby="recommendationChart-summary"></canvas>
+                    <table id="recommendationChart-summary" class="sr-only"><caption>AI Recommendations</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 lg:col-span-2">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="roi.sec_npv_by_dept">NPV by Department</h3>
+                <div class="chart-container">
+                    <canvas id="departmentChart" role="img" aria-label="NPV by Department: bar chart showing total NPV in SAR per department" aria-describedby="departmentChart-summary"></canvas>
+                    <table id="departmentChart-summary" class="sr-only"><caption>NPV by Department</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="roi.sec_initiatives">Initiatives</h3>
+                <div class="flex items-center gap-4">
+                    <select id="filterRecommendation" data-on-change="loadInitiatives" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                        <option value="" data-i18n="roi.opt_all_recommendations">All Recommendations</option>
+                        <option value="approve" data-i18n="roi.opt_approve">Approve</option>
+                        <option value="evaluate" data-i18n="roi.opt_evaluate">Evaluate</option>
+                        <option value="reject" data-i18n="roi.opt_reject">Reject</option>
+                    </select>
+                    <select id="sortBy" data-on-change="loadInitiatives" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                        <option value="created" data-i18n="roi.opt_recently_added">Recently Added</option>
+                        <option value="roi" data-i18n="roi.opt_highest_roi">Highest ROI</option>
+                        <option value="npv" data-i18n="roi.opt_highest_npv">Highest NPV</option>
+                        <option value="payback" data-i18n="roi.opt_shortest_payback">Shortest Payback</option>
+                    </select>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_project">Project</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="common.department">Department</th>
+                            <th scope="col" class="text-end px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_roi">ROI %</th>
+                            <th scope="col" class="text-end px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_npv">NPV (SAR)</th>
+                            <th scope="col" class="text-end px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_payback">Payback</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_ai_rec">AI Recommendation</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="initiativesTable" class="divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="8" class="px-6 py-12 text-center text-gray-500">
+                                <div class="flex flex-col items-center">
+                                    <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    <p data-i18n="roi.no_initiatives">No initiatives found. Create your first ROI evaluation.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="newInitiativeModal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-backdrop absolute inset-0" data-on-click="closeNewInitiativeModal"></div>
+        <div class="absolute inset-0 flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
+                <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+                    <h2 class="text-xl font-bold text-gray-900" data-i18n="roi.modal_new">New ROI Initiative - Hybrid Model</h2>
+                    <button data-on-click="closeNewInitiativeModal" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <form id="initiativeForm" data-on-submit="submitInitiative" data-pass-event="true" class="p-6 space-y-6">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_initiative_name">Initiative Name *</label>
+                            <input type="text" name="project_name" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_department_req">Department *</label>
+                            <select name="department" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="" data-i18n="roi.opt_select_dept">Select Department</option>
+                                <option value="Quality" data-i18n="roi.dept_quality">Quality</option>
+                                <option value="Sales" data-i18n="projects.dept_sales">Sales</option>
+                                <option value="Marketplace" data-i18n="roi.dept_marketplace">Marketplace</option>
+                                <option value="CS" data-i18n="roi.dept_cs">Customer Service</option>
+                                <option value="BD" data-i18n="roi.dept_bd">Business Development</option>
+                                <option value="WalaOne" data-i18n="roi.dept_walaone">WalaOne</option>
+                                <option value="Operations" data-i18n="projects.dept_operations">Operations</option>
+                                <option value="IT">IT</option>
+                                <option value="HR">HR</option>
+                                <option value="Finance" data-i18n="projects.dept_finance">Finance</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.priority">Priority</label>
+                            <select name="priority" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="low" data-i18n="common.low">Low</option>
+                                <option value="medium" selected data-i18n="common.medium">Medium</option>
+                                <option value="high" data-i18n="common.high">High</option>
+                            </select>
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_problem">Problem Statement</label>
+                            <textarea name="problem_statement" rows="2" placeholder="Describe the problem this initiative solves..." class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                        </div>
+                        <div class="field-with-tooltip">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <span data-i18n="roi.f_expected_savings">Expected Monthly Savings - High Level (SAR)</span>
+                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;expected_savings_monthly&quot;]" data-pass-event="true">
+                                    <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 <REDACTED_PHONE> 0zm-8-3a1 <REDACTED_PHONE>.731-1A3 3 0 0113 8a3.<REDACTED_PHONE>.83V11a1 1 0 11-2 0v-1a1 <REDACTED_PHONE>-2zm0 8a1 <REDACTED_PHONE> 2z" clip-rule="evenodd"/></svg>
+                                </span>
+                            </label>
+                            <input type="number" name="expected_savings_monthly" value="0" min="0" step="0.01" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="field-with-tooltip">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <span data-i18n="roi.f_high_level_cost">High-Level Implementation Cost (SAR)</span>
+                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;implementation_cost&quot;]" data-pass-event="true">
+                                    <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 <REDACTED_PHONE> 0zm-8-3a1 <REDACTED_PHONE>.731-1A3 3 0 0113 8a3.<REDACTED_PHONE>.83V11a1 1 0 11-2 0v-1a1 <REDACTED_PHONE>-2zm0 8a1 <REDACTED_PHONE> 2z" clip-rule="evenodd"/></svg>
+                                </span>
+                            </label>
+                            <input type="number" name="implementation_cost" value="0" min="0" step="0.01" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="field-with-tooltip">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <span data-i18n="roi.f_project_duration">Project Duration (months)</span>
+                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;project_duration_months&quot;]" data-pass-event="true">
+                                    <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 <REDACTED_PHONE> 0zm-8-3a1 <REDACTED_PHONE>.731-1A3 3 0 0113 8a3.<REDACTED_PHONE>.83V11a1 1 0 11-2 0v-1a1 <REDACTED_PHONE>-2zm0 8a1 <REDACTED_PHONE> 2z" clip-rule="evenodd"/></svg>
+                                </span>
+                            </label>
+                            <input type="number" name="project_duration_months" value="12" min="1" max="120" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="field-with-tooltip">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <span data-i18n="roi.f_discount_rate">Discount Rate (%)</span>
+                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;discount_rate&quot;]" data-pass-event="true">
+                                    <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 <REDACTED_PHONE> 0zm-8-3a1 <REDACTED_PHONE>.731-1A3 3 0 0113 8a3.<REDACTED_PHONE>.83V11a1 1 0 11-2 0v-1a1 <REDACTED_PHONE>-2zm0 8a1 <REDACTED_PHONE> 2z" clip-rule="evenodd"/></svg>
+                                </span>
+                            </label>
+                            <input type="number" name="discount_rate" value="10" min="0" max="100" step="0.1" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-200 pt-4">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;manpowerSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
+                            <span class="text-lg font-semibold text-gray-900">B. Manpower Cost Breakdown</span>
+                            <svg id="manpowerSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div id="manpowerSection" class="hidden mt-4 space-y-4">
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_avg_monthly_salary">Average Monthly Salary (SAR)</label>
+                                    <input type="number" name="avg_monthly_salary" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_gosi">GOSI % </label>
+                                    <input type="number" name="gosi_percent" value="12" min="0" max="100" step="0.1" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_insurance_cost">Insurance Cost (SAR/month)</label>
+                                    <input type="number" name="insurance_cost" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_laptop">Laptop & Equipment (amortized/month)</label>
+                                    <input type="number" name="equipment_cost" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_software">Software Seat Cost (SAR/month)</label>
+                                    <input type="number" name="software_seat_cost" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_hours_wasted">Hours Wasted/Employee/Week</label>
+                                    <input type="number" name="hours_wasted_per_week" value="0" min="0" step="0.1" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div class="field-with-tooltip">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        <span data-i18n="roi.f_employees_impacted">Number of Employees Impacted</span>
+                                        <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;headcount_affected&quot;]" data-pass-event="true">
+                                            <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 <REDACTED_PHONE> 0zm-8-3a1 <REDACTED_PHONE>.731-1A3 3 0 0113 8a3.<REDACTED_PHONE>.83V11a1 1 0 11-2 0v-1a1 <REDACTED_PHONE>-2zm0 8a1 <REDACTED_PHONE> 2z" clip-rule="evenodd"/></svg>
+                                        </span>
+                                    </label>
+                                    <input type="number" name="employees_impacted" value="0" min="0" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_loaded_salary">Fully Loaded Salary</label>
+                                    <input type="text" name="fully_loaded_salary" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_cost_per_hour">Cost per Hour</label>
+                                    <input type="text" name="cost_per_hour" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_monthly_time_loss">Monthly Time Loss Cost</label>
+                                    <input type="text" name="monthly_time_loss_cost" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 font-semibold">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-200 pt-4">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;platformSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
+                            <span class="text-lg font-semibold text-gray-900">C. Platform & Tool Costs</span>
+                            <svg id="platformSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div id="platformSection" class="hidden mt-4 space-y-4">
+                            <div id="platformToolsList" class="space-y-3"></div>
+                            <button type="button" data-on-click="addPlatformTool" class="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                </svg>
+                                <span>+ Add Tool</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-200 pt-4">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;errorSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
+                            <span class="text-lg font-semibold text-gray-900">D. Error, Rework & SLA Costs</span>
+                            <svg id="errorSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div id="errorSection" class="hidden mt-4 space-y-4">
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <div class="field-with-tooltip">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        <span data-i18n="roi.f_current_error_rate">Current Error Rate (%)</span>
+                                        <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;error_rate_percent&quot;]" data-pass-event="true">
+                                            <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 <REDACTED_PHONE> 0zm-8-3a1 <REDACTED_PHONE>.731-1A3 3 0 0113 8a3.<REDACTED_PHONE>.83V11a1 1 0 11-2 0v-1a1 <REDACTED_PHONE>-2zm0 8a1 <REDACTED_PHONE> 2z" clip-rule="evenodd"/></svg>
+                                        </span>
+                                    </label>
+                                    <input type="number" name="current_error_rate" value="0" min="0" max="100" step="0.1" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_monthly_transactions">Monthly Transactions</label>
+                                    <input type="number" name="monthly_transactions" value="0" min="0" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_cost_per_error">Cost per Error (SAR)</label>
+                                    <input type="number" name="cost_per_error" value="0" min="0" step="0.01" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_rework_hours">Rework Hours per Error</label>
+                                    <input type="number" name="rework_hours_per_error" value="0" min="0" step="0.1" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_sla_penalties">SLA Penalties (SAR/month)</label>
+                                    <input type="number" name="sla_penalties" value="0" min="0" step="0.01" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_expected_reduction">Expected Reduction (%)</label>
+                                    <input type="number" name="expected_error_reduction" value="0" min="0" max="100" step="0.1" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                            </div>
+                            <div class="pt-4 border-t border-gray-100">
+                                <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_calculated_error_savings">Calculated Error Savings (SAR/month)</label>
+                                <input type="text" name="calculated_error_savings" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 font-semibold">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-200 pt-4">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;revenueSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
+                            <span class="text-lg font-semibold text-gray-900">E. Revenue Impact</span>
+                            <svg id="revenueSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div id="revenueSection" class="hidden mt-4 space-y-4">
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_leads_saved">Leads Saved</label>
+                                    <input type="number" name="leads_saved" value="0" min="0" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_conversion_rate">Conversion Rate (%)</label>
+                                    <input type="number" name="conversion_rate" value="0" min="0" max="100" step="0.1" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_revenue_per_lead">Revenue per Lead (SAR)</label>
+                                    <input type="number" name="revenue_per_lead" value="0" min="0" step="0.01" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_churn_reduction">Churn Reduction (%)</label>
+                                    <input type="number" name="churn_reduction" value="0" min="0" max="100" step="0.1" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_upsell_opps">Upsell Opportunities</label>
+                                    <input type="number" name="upsell_opportunities" value="0" min="0" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                            </div>
+                            <div class="pt-4 border-t border-gray-100">
+                                <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_calculated_revenue_impact">Calculated Revenue Impact (SAR/month)</label>
+                                <input type="text" name="calculated_revenue_impact" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 font-semibold">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-200 pt-4">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;implementationSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
+                            <span class="text-lg font-semibold text-gray-900">F. Implementation Breakdown</span>
+                            <svg id="implementationSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div id="implementationSection" class="hidden mt-4 space-y-4">
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_vendor_costs">Vendor Costs (SAR)</label>
+                                    <input type="number" name="vendor_costs" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_setup_fees">Setup Fees (SAR)</label>
+                                    <input type="number" name="setup_fees" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_api_fees">API/License Fees (SAR)</label>
+                                    <input type="number" name="api_license_fees" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div class="col-span-2 md:col-span-3 grid grid-cols-4 gap-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_developer_hours">Developer Hours</label>
+                                        <input type="number" name="developer_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_rate_sar_hr">Rate (SAR/hr)</label>
+                                        <input type="number" name="developer_rate" value="150" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_qa_hours">QA Hours</label>
+                                        <input type="number" name="qa_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_rate_sar_hr">Rate (SAR/hr)</label>
+                                        <input type="number" name="qa_rate" value="100" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                </div>
+                                <div class="col-span-2 md:col-span-3 grid grid-cols-4 gap-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_product_hours">Product Hours</label>
+                                        <input type="number" name="product_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_rate_sar_hr">Rate (SAR/hr)</label>
+                                        <input type="number" name="product_rate" value="120" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_architect_hours">Architect Hours</label>
+                                        <input type="number" name="architect_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_rate_sar_hr">Rate (SAR/hr)</label>
+                                        <input type="number" name="architect_rate" value="200" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_training_cost">Training Cost (SAR)</label>
+                                    <input type="number" name="training_cost" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_change_mgmt">Change Management Cost (SAR)</label>
+                                    <input type="number" name="change_management_cost" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_monthly_recurring">Monthly Recurring Cost (SAR)</label>
+                                    <input type="number" name="monthly_recurring_cost" value="0" min="0" step="0.01" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                            </div>
+                            <div class="pt-4 border-t border-gray-100">
+                                <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_calc_total_impl">Calculated Total Implementation (SAR)</label>
+                                <input type="text" name="calculated_implementation_total" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 font-semibold">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-200 pt-4">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;riskSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
+                            <span class="text-lg font-semibold text-gray-900">G. Risk & Confidence Inputs</span>
+                            <svg id="riskSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div id="riskSection" class="hidden mt-4 space-y-4">
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_confidence_level">Confidence Level</label>
+                                    <select name="confidence_level" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <option value="low" data-i18n="common.low">Low</option>
+                                        <option value="medium" selected data-i18n="common.medium">Medium</option>
+                                        <option value="high" data-i18n="common.high">High</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_prob_success">Probability of Success (%)</label>
+                                    <input type="number" name="probability_of_success" value="70" min="0" max="100" step="1" data-on-input="calculateRiskAdjustedNPV" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_risk_factor">Risk Adjustment Factor</label>
+                                    <input type="number" name="risk_adjustment_factor" value="1.0" min="0" max="2" step="0.1" data-on-input="calculateRiskAdjustedNPV" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div class="col-span-2 md:col-span-3">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_dependencies">Dependencies</label>
+                                    <textarea name="dependencies" rows="2" placeholder="List key dependencies, blockers, or assumptions..." class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                                </div>
+                            </div>
+                            <div class="pt-4 border-t border-gray-100">
+                                <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_risk_adj_npv">Risk-Adjusted NPV (SAR)</label>
+                                <input type="text" name="risk_adjusted_npv" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 font-semibold">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="previewSection" class="hidden border-t border-gray-200 pt-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="roi.sec_ai_calc_preview">AI Calculation Preview</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                                <p class="text-sm text-gray-500" data-i18n="roi.k_roi">ROI</p>
+                                <p id="previewROI" class="text-xl font-bold text-green-600">0%</p>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                                <p class="text-sm text-gray-500" data-i18n="roi.k_npv">NPV</p>
+                                <p id="previewNPV" class="text-xl font-bold text-indigo-600">SAR 0</p>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                                <p class="text-sm text-gray-500" data-i18n="roi.k_payback">Payback</p>
+                                <p id="previewPayback" class="text-xl font-bold text-amber-600">0 mo</p>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                                <p class="text-sm text-gray-500" data-i18n="roi.k_recommendation">Recommendation</p>
+                                <p id="previewRecommendation" class="text-xl font-bold">-</p>
+                            </div>
+                        </div>
+                        <div id="previewInsights" class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800"></div>
+                    </div>
+
+                    <div id="validationSection" class="hidden border-t border-gray-200 pt-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <svg class="w-5 h-5 me-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.<REDACTED_PHONE>.944a11.<REDACTED_PHONE> 3.04A12.<REDACTED_PHONE> 9c0 <REDACTED_PHONE>.<REDACTED_PHONE> <REDACTED_PHONE>.052-.382-3.016z"/>
+                            </svg>
+                            AI Validation Results
+                        </h3>
+                        <div id="validationResults" class="space-y-3"></div>
+                    </div>
+
+                    <div class="flex items-center justify-between border-t border-gray-200 pt-6">
+                        <div class="flex gap-3">
+                            <button type="button" data-on-click="calculatePreview" class="text-indigo-600 hover:text-indigo-800 font-medium flex items-center">
+                                <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                </svg>
+                                <span data-i18n="roi.calculate_preview">Calculate Preview</span>
+                            </button>
+                            <button type="button" data-on-click="runAIValidation" class="text-purple-600 hover:text-purple-800 font-medium flex items-center" id="validateBtn">
+                                <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.<REDACTED_PHONE>.469V19a2 2 0 11-4 0v-.531c0-.<REDACTED_PHONE>.386l-.548-.547z"/>
+                                </svg>
+                                <span data-i18n="roi.ai_validate_inputs">AI Validate Inputs</span>
+                            </button>
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="button" data-on-click="closeNewInitiativeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="roi.cancel">Cancel</button>
+                            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" data-i18n="roi.create_initiative">Create Initiative</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let recommendationChart = null;
+        let departmentChart = null;
+        let platformTools = [];
+        let tooltipsCache = {};
+        let activeTooltip = null;
+
+        async function loadTooltips() {
+            try {
+                const res = await fetch('/api/onboarding/tooltips?module=roi');
+                const data = await res.json();
+                if (data.tooltips) {
+                    data.tooltips.forEach(t => {
+                        tooltipsCache[t.field_id] = t;
+                    });
+                }
+            } catch (e) {
+                console.log('Tooltips not available:', e);
+            }
+        }
+
+        async function showTooltip(event, fieldId) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            hideActiveTooltip();
+            
+            let tooltip = tooltipsCache[fieldId];
+            if (!tooltip) {
+                try {
+                    const res = await fetch(`/api/onboarding/tooltip/${fieldId}`);
+                    const data = await res.json();
+                    if (data.tooltip) {
+                        tooltip = data.tooltip;
+                        tooltipsCache[fieldId] = tooltip;
+                    }
+                } catch (e) {
+                    console.log('Tooltip fetch failed:', e);
+                }
+            }
+            
+            if (!tooltip) {
+                tooltip = {
+                    field_label: fieldId.replace(/_/g, ' '),
+                    tooltip_text: 'Help information for this field.',
+                    calculation_hint: null,
+                    data_source_hint: null
+                };
+            }
+            
+            const popup = document.createElement('div');
+            popup.className = 'tooltip-popup';
+            popup.id = 'activeTooltip';
+            popup.innerHTML = `
+                <div class="p-4">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-medium" data-i18n="roi.ai_help">AI Help</span>
+                            <h4 class="font-semibold text-gray-900 text-sm">${tooltip.field_label || fieldId.replace(/_/g, ' ')}</h4>
+                        </div>
+                        <button data-on-click="hideActiveTooltip" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <p class="text-gray-700 text-sm mb-3">${tooltip.tooltip_text}</p>
+                    ${tooltip.calculation_hint ? `
+                    <div class="bg-blue-50 border border-blue-100 rounded-lg p-2 mb-2">
+                        <p class="text-xs font-medium text-blue-800 mb-1" data-i18n="roi.how_to_calc">How to calculate:</p>
+                        <p class="text-xs text-blue-700">${tooltip.calculation_hint}</p>
+                    </div>` : ''}
+                    ${tooltip.data_source_hint ? `
+                    <div class="bg-green-50 border border-green-100 rounded-lg p-2">
+                        <p class="text-xs font-medium text-green-800 mb-1" data-i18n="roi.where_data">Where to find data:</p>
+                        <p class="text-xs text-green-700">${tooltip.data_source_hint}</p>
+                    </div>` : ''}
+                </div>
+            `;
+            
+            const icon = event.target.closest('.tooltip-icon');
+            const rect = icon.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            
+            popup.style.position = 'absolute';
+            popup.style.top = (rect.bottom + scrollTop + 10) + 'px';
+            popup.style.left = Math.max(10, rect.left - 150) + 'px';
+            
+            document.body.appendChild(popup);
+            activeTooltip = popup;
+            
+            setTimeout(() => {
+                document.addEventListener('click', handleOutsideClick);
+            }, 100);
+        }
+
+        function hideActiveTooltip() {
+            const existing = document.getElementById('activeTooltip');
+            if (existing) {
+                existing.remove();
+            }
+            activeTooltip = null;
+            document.removeEventListener('click', handleOutsideClick);
+        }
+
+        function handleOutsideClick(event) {
+            if (activeTooltip && !activeTooltip.contains(event.target) && !event.target.closest('.tooltip-icon')) {
+                hideActiveTooltip();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTooltips();
+        });
+
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            const icon = document.getElementById(sectionId + '-icon');
+            if (section.classList.contains('hidden')) {
+                section.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                section.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        }
+
+        function calculateManpowerCosts() {
+            const form = document.getElementById('initiativeForm');
+            const salary = parseFloat(form.avg_monthly_salary.value) || 0;
+            const gosiPercent = parseFloat(form.gosi_percent.value) || 12;
+            const insurance = parseFloat(form.insurance_cost.value) || 0;
+            const equipment = parseFloat(form.equipment_cost.value) || 0;
+            const software = parseFloat(form.software_seat_cost.value) || 0;
+            const hoursWasted = parseFloat(form.hours_wasted_per_week.value) || 0;
+            const employees = parseInt(form.employees_impacted.value) || 0;
+
+            const gosiCost = salary * (gosiPercent / 100);
+            const fullyLoaded = salary + gosiCost + insurance + equipment + software;
+            const costPerHour = fullyLoaded / 176;
+            const monthlyTimeLoss = costPerHour * hoursWasted * 4.33 * employees;
+
+            form.fully_loaded_salary.value = `SAR ${fullyLoaded.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            form.cost_per_hour.value = `SAR ${costPerHour.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            form.monthly_time_loss_cost.value = `SAR ${monthlyTimeLoss.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
+
+        function calculateErrorSavings() {
+            const form = document.getElementById('initiativeForm');
+            const errorRate = parseFloat(form.current_error_rate.value) || 0;
+            const transactions = parseInt(form.monthly_transactions.value) || 0;
+            const costPerError = parseFloat(form.cost_per_error.value) || 0;
+            const reworkHours = parseFloat(form.rework_hours_per_error.value) || 0;
+            const slaPenalties = parseFloat(form.sla_penalties.value) || 0;
+            const expectedReduction = parseFloat(form.expected_error_reduction.value) || 0;
+
+            const currentErrors = transactions * (errorRate / 100);
+            const currentErrorCost = currentErrors * costPerError;
+            const reworkCostPerHour = 100;
+            const currentReworkCost = currentErrors * reworkHours * reworkCostPerHour;
+            const totalCurrentCost = currentErrorCost + currentReworkCost + slaPenalties;
+            const savings = totalCurrentCost * (expectedReduction / 100);
+
+            form.calculated_error_savings.value = `SAR ${savings.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
+
+        function calculateRevenueImpact() {
+            const form = document.getElementById('initiativeForm');
+            const leadsSaved = parseInt(form.leads_saved.value) || 0;
+            const conversionRate = parseFloat(form.conversion_rate.value) || 0;
+            const revenuePerLead = parseFloat(form.revenue_per_lead.value) || 0;
+            const churnReduction = parseFloat(form.churn_reduction.value) || 0;
+            const upsellOpportunities = parseInt(form.upsell_opportunities.value) || 0;
+
+            const leadsRevenue = leadsSaved * (conversionRate / 100) * revenuePerLead;
+            const churnValue = churnReduction * 1000;
+            const upsellValue = upsellOpportunities * 500;
+            const totalRevenue = leadsRevenue + churnValue + upsellValue;
+
+            form.calculated_revenue_impact.value = `SAR ${totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
+
+        function calculateImplementationCost() {
+            const form = document.getElementById('initiativeForm');
+            const vendorCosts = parseFloat(form.vendor_costs.value) || 0;
+            const setupFees = parseFloat(form.setup_fees.value) || 0;
+            const apiLicenseFees = parseFloat(form.api_license_fees.value) || 0;
+            const devHours = parseFloat(form.developer_hours.value) || 0;
+            const devRate = parseFloat(form.developer_rate.value) || 150;
+            const qaHours = parseFloat(form.qa_hours.value) || 0;
+            const qaRate = parseFloat(form.qa_rate.value) || 100;
+            const productHours = parseFloat(form.product_hours.value) || 0;
+            const productRate = parseFloat(form.product_rate.value) || 120;
+            const architectHours = parseFloat(form.architect_hours.value) || 0;
+            const architectRate = parseFloat(form.architect_rate.value) || 200;
+            const trainingCost = parseFloat(form.training_cost.value) || 0;
+            const changeMgmtCost = parseFloat(form.change_management_cost.value) || 0;
+
+            const total = vendorCosts + setupFees + apiLicenseFees +
+                (devHours * devRate) + (qaHours * qaRate) +
+                (productHours * productRate) + (architectHours * architectRate) +
+                trainingCost + changeMgmtCost;
+
+            form.calculated_implementation_total.value = `SAR ${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            form.implementation_cost.value = total;
+        }
+
+        function calculateRiskAdjustedNPV() {
+            const form = document.getElementById('initiativeForm');
+            const probability = parseFloat(form.probability_of_success.value) || 70;
+            const riskFactor = parseFloat(form.risk_adjustment_factor.value) || 1.0;
+            const previewNPV = document.getElementById('previewNPV').textContent;
+            const npvMatch = previewNPV.match(/[\d,]+/);
+            const npv = npvMatch ? parseFloat(npvMatch[0].replace(/,/g, '')) : 0;
+
+            const riskAdjustedNPV = npv * (probability / 100) * riskFactor;
+            form.risk_adjusted_npv.value = `SAR ${riskAdjustedNPV.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
+
+        function addPlatformTool() {
+            const index = platformTools.length;
+            platformTools.push({ name: '', cost: 0, seats: 0, toBeRemoved: false, vendorSupport: 0 });
+            renderPlatformTools();
+        }
+
+        function removePlatformTool(index) {
+            platformTools.splice(index, 1);
+            renderPlatformTools();
+        }
+
+        function updatePlatformTool(index, field, value) {
+            platformTools[index][field] = value;
+        }
+
+        function renderPlatformTools() {
+            const container = document.getElementById('platformToolsList');
+            container.innerHTML = platformTools.map((tool, index) => `
+                <div class="bg-gray-50 rounded-lg p-4 relative">
+                    <button type="button" data-on-click="removePlatformTool" data-args="[${index}]" class="absolute top-2 end-2 text-red-500 hover:text-red-700">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="roi.tool_name">Tool Name</label>
+                            <input type="text" value="${tool.name}" data-on-change="updatePlatformTool" data-args="[${index},&quot;name&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="roi.cost_per_month">Cost/Month (SAR)</label>
+                            <input type="number" value="${tool.cost}" data-on-change="updatePlatformTool" data-args="[${index},&quot;cost&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="roi.seats_impacted">Seats Impacted</label>
+                            <input type="number" value="${tool.seats}" data-on-change="updatePlatformTool" data-args="[${index},&quot;seats&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="roi.vendor_support">Vendor Support</label>
+                            <input type="number" value="${tool.vendorSupport}" data-on-change="updatePlatformTool" data-args="[${index},&quot;vendorSupport&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="flex items-center">
+                            <label class="flex items-center gap-2 text-sm text-gray-700">
+                                <input type="checkbox" ${tool.toBeRemoved ? 'checked' : ''} data-on-change="updatePlatformTool" data-args="[${index},&quot;toBeRemoved&quot;,&quot;@this.checked&quot;]" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span data-i18n="roi.to_be_removed">To Be Removed</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadAnalytics() {
+            try {
+                const response = await fetch('/api/roi/analytics');
+                const data = await response.json();
+
+                document.getElementById('totalInitiatives').textContent = data.totalInitiatives || 0;
+                document.getElementById('avgROI').textContent = `${(data.avgROI || 0).toFixed(1)}%`;
+                document.getElementById('totalNPV').textContent = WalaPlusI18n.t('dyn.roi.currency_prefix') + (data.totalNPV || 0).toLocaleString();
+                document.getElementById('avgPayback').textContent = `${(data.avgPayback || 0).toFixed(1)} mo`;
+
+                if (recommendationChart) recommendationChart.destroy();
+                const recCtx = document.getElementById('recommendationChart').getContext('2d');
+                recommendationChart = new Chart(recCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Approve', 'Evaluate', 'Reject'],
+                        datasets: [{
+                            data: [
+                                data.byRecommendation?.approve || 0,
+                                data.byRecommendation?.evaluate || 0,
+                                data.byRecommendation?.reject || 0
+                            ],
+                            backgroundColor: ['#22C55E', '#F59E0B', '#EF4444'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        }
+                    }
+                });
+                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('recommendationChart', recommendationChart, 'AI Recommendations');
+
+                if (departmentChart) departmentChart.destroy();
+                const deptCtx = document.getElementById('departmentChart').getContext('2d');
+                const deptData = data.byDepartment || [];
+                departmentChart = new Chart(deptCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: deptData.map(d => d.department),
+                        datasets: [{
+                            label: 'Total NPV (SAR)',
+                            data: deptData.map(d => d.total_npv),
+                            backgroundColor: '#2563EB'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: v => 'SAR ' + v.toLocaleString()
+                                }
+                            }
+                        }
+                    }
+                });
+                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('departmentChart', departmentChart, 'NPV by Department');
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+            }
+        }
+
+        async function loadInitiatives() {
+            try {
+                const recommendation = document.getElementById('filterRecommendation').value;
+                const sortBy = document.getElementById('sortBy').value;
+                
+                let url = `/api/roi?sortBy=${sortBy}&sortOrder=desc`;
+                if (recommendation) url += `&recommendation=${recommendation}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                const tbody = document.getElementById('initiativesTable');
+                
+                if (!data.initiatives || data.initiatives.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" class="px-6 py-12 text-center text-gray-500">
+                                <div class="flex flex-col items-center">
+                                    <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    <p data-i18n="roi.no_initiatives">No initiatives found. Create your first ROI evaluation.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                tbody.innerHTML = data.initiatives.map(i => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4">
+                            <div class="font-medium text-gray-900">${i.project_name}</div>
+                            <div class="text-sm text-gray-500">${i.owner}</div>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${i.department}</td>
+                        <td class="px-6 py-4 text-end">
+                            <span class="${parseFloat(i.roi_percentage) >= 0 ? 'text-green-600' : 'text-red-600'} font-semibold">
+                                ${parseFloat(i.roi_percentage).toFixed(1)}%
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-end">
+                            <span class="${parseFloat(i.npv) >= 0 ? 'text-indigo-600' : 'text-red-600'} font-semibold">
+                                ${parseFloat(i.npv).toLocaleString()}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-end text-gray-600">${parseFloat(i.payback_period_months).toFixed(1)} mo</td>
+                        <td class="px-6 py-4 text-center">
+                            <span class="px-3 py-1 rounded-full text-xs font-medium badge-${i.ai_recommendation}">
+                                ${i.ai_recommendation?.charAt(0).toUpperCase() + i.ai_recommendation?.slice(1)}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <span class="px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                ${i.status?.charAt(0).toUpperCase() + i.status?.slice(1)}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <button data-on-click="viewInitiative" data-args="[${i.id}]" class="text-indigo-600 hover:text-indigo-800 me-2">${_t('roi.view','View')}</button>
+                            <button data-on-click="deleteInitiative" data-args="[${i.id}]" class="text-red-600 hover:text-red-800">${_t('roi.delete','Delete')}</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading initiatives:', error);
+            }
+        }
+
+        function openNewInitiativeModal() {
+            document.getElementById('newInitiativeModal').classList.remove('hidden');
+            document.getElementById('previewSection').classList.add('hidden');
+        }
+
+        function closeNewInitiativeModal() {
+            document.getElementById('newInitiativeModal').classList.add('hidden');
+            document.getElementById('initiativeForm').reset();
+            platformTools = [];
+            renderPlatformTools();
+            ['manpowerSection', 'platformSection', 'errorSection', 'revenueSection', 'implementationSection', 'riskSection'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+                document.getElementById(id + '-icon').classList.remove('rotate-180');
+            });
+            document.getElementById('validationSection').classList.add('hidden');
+            document.getElementById('validationResults').innerHTML = '';
+        }
+
+        async function runAIValidation() {
+            const form = document.getElementById('initiativeForm');
+            const formData = new FormData(form);
+            const validateBtn = document.getElementById('validateBtn');
+            validateBtn.disabled = true;
+            validateBtn.innerHTML = `
+                <svg class="w-4 h-4 me-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.<REDACTED_PHONE> 9m0 0H9m11 11v-5h-.581m0 0a8.<REDACTED_PHONE>-2m15.357 2H15"/>
+                </svg>
+                Validating...
+            `;
+
+            const validationData = {
+                manpower: {
+                    avg_monthly_salary: parseFloat(formData.get('avg_monthly_salary')) || 0,
+                    gosi_percent: parseFloat(formData.get('gosi_percent')) || 12,
+                    hours_wasted_per_week: parseFloat(formData.get('hours_wasted_per_week')) || 0,
+                    employees_impacted: parseInt(formData.get('employees_impacted')) || 0
+                },
+                errors: {
+                    current_error_rate: parseFloat(formData.get('current_error_rate')) || 0,
+                    expected_error_reduction: parseFloat(formData.get('expected_error_reduction')) || 0
+                },
+                implementation: {
+                    total_cost: parseFloat(formData.get('implementation_cost')) || 0,
+                    expected_savings: parseFloat(formData.get('expected_savings_monthly')) || 0
+                },
+                risk: {
+                    probability_of_success: parseFloat(formData.get('probability_of_success')) || 70,
+                    risk_adjustment_factor: parseFloat(formData.get('risk_adjustment_factor')) || 1.0
+                }
+            };
+
+            const validationResults = [];
+
+            if (validationData.manpower.avg_monthly_salary > 0 && validationData.manpower.avg_monthly_salary < 3000) {
+                validationResults.push({
+                    type: 'warning',
+                    field: 'Salary',
+                    message: 'Average monthly salary is below SAR 3,000. This seems unusually low for the Saudi market.'
+                });
+            }
+            if (validationData.manpower.avg_monthly_salary > 100000) {
+                validationResults.push({
+                    type: 'warning',
+                    field: 'Salary',
+                    message: 'Average monthly salary exceeds SAR 100,000. Please verify this is correct.'
+                });
+            }
+            if (validationData.errors.current_error_rate > 50) {
+                validationResults.push({
+                    type: 'warning',
+                    field: 'Error Rate',
+                    message: 'Error rate above 50% is unusually high. Consider verifying data quality.'
+                });
+            }
+            if (validationData.errors.expected_error_reduction > 90) {
+                validationResults.push({
+                    type: 'info',
+                    field: 'Error Reduction',
+                    message: 'Expected error reduction above 90% is ambitious. Ensure realistic expectations.'
+                });
+            }
+            if (validationData.implementation.total_cost > 0 && validationData.implementation.expected_savings > 0) {
+                const ratio = validationData.implementation.total_cost / (validationData.implementation.expected_savings * 12);
+                if (ratio > 2) {
+                    validationResults.push({
+                        type: 'warning',
+                        field: 'Cost/Savings Ratio',
+                        message: `Implementation cost is ${ratio.toFixed(1)}x the annual expected savings. Consider if ROI justifies investment.`
+                    });
+                }
+            }
+            if (validationData.risk.probability_of_success < 50) {
+                validationResults.push({
+                    type: 'critical',
+                    field: 'Success Probability',
+                    message: 'Probability of success below 50% indicates high risk. Consider risk mitigation strategies.'
+                });
+            }
+            if (validationData.manpower.hours_wasted_per_week > 40) {
+                validationResults.push({
+                    type: 'warning',
+                    field: 'Hours Wasted',
+                    message: 'Hours wasted per week exceeds a full work week. Please verify this input.'
+                });
+            }
+            if (validationData.manpower.avg_monthly_salary > 0 && validationData.implementation.total_cost === 0) {
+                validationResults.push({
+                    type: 'info',
+                    field: 'Implementation Cost',
+                    message: 'You have manpower costs but no implementation cost. Consider adding implementation details.'
+                });
+            }
+
+            if (validationResults.length === 0) {
+                validationResults.push({
+                    type: 'success',
+                    field: 'Validation',
+                    message: 'All inputs pass validation checks. The data appears reasonable and complete.'
+                });
+            }
+
+            const resultsHtml = validationResults.map(r => {
+                const bgColor = r.type === 'critical' ? 'bg-red-50 border-red-200' :
+                                r.type === 'warning' ? 'bg-amber-50 border-amber-200' :
+                                r.type === 'success' ? 'bg-green-50 border-green-200' :
+                                'bg-blue-50 border-blue-200';
+                const textColor = r.type === 'critical' ? 'text-red-800' :
+                                  r.type === 'warning' ? 'text-amber-800' :
+                                  r.type === 'success' ? 'text-green-800' :
+                                  'text-blue-800';
+                const icon = r.type === 'critical' ? '🚨' :
+                             r.type === 'warning' ? '⚠️' :
+                             r.type === 'success' ? '✅' : 'ℹ️';
+                return `
+                    <div class="${bgColor} border rounded-lg p-3 flex items-start">
+                        <span class="me-2 text-lg">${icon}</span>
+                        <div>
+                            <span class="font-semibold ${textColor}">${r.field}:</span>
+                            <span class="${textColor}">${r.message}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('validationResults').innerHTML = resultsHtml;
+            document.getElementById('validationSection').classList.remove('hidden');
+            
+            validateBtn.disabled = false;
+            validateBtn.innerHTML = `
+                <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.<REDACTED_PHONE>.469V19a2 2 0 11-4 0v-.531c0-.<REDACTED_PHONE>.386l-.548-.547z"/>
+                </svg>
+                AI Validate Inputs
+            `;
+        }
+
+        async function calculatePreview() {
+            const form = document.getElementById('initiativeForm');
+            const formData = new FormData(form);
+            const data = {
+                expected_savings_monthly: parseFloat(formData.get('expected_savings_monthly')) || 0,
+                implementation_cost: parseFloat(formData.get('implementation_cost')) || 0,
+                project_duration_months: parseInt(formData.get('project_duration_months')) || 12,
+                discount_rate: (parseFloat(formData.get('discount_rate')) || 10) / 100,
+                expected_revenue_increase: parseFloat(formData.get('expected_revenue_increase')) || 0,
+                avoided_cost: parseFloat(formData.get('avoided_cost')) || 0
+            };
+
+            try {
+                const response = await fetch('/api/roi/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+
+                document.getElementById('previewROI').textContent = `${result.roi_percentage?.toFixed(1)}%`;
+                document.getElementById('previewROI').className = `text-xl font-bold ${result.roi_percentage >= 0 ? 'text-green-600' : 'text-red-600'}`;
+                document.getElementById('previewNPV').textContent = WalaPlusI18n.t('dyn.roi.currency_prefix') + result.npv?.toLocaleString();
+                document.getElementById('previewNPV').className = `text-xl font-bold ${result.npv >= 0 ? 'text-indigo-600' : 'text-red-600'}`;
+                document.getElementById('previewPayback').textContent = `${result.payback_period_months?.toFixed(1)} mo`;
+                
+                const recEl = document.getElementById('previewRecommendation');
+                recEl.textContent = result.ai_recommendation?.charAt(0).toUpperCase() + result.ai_recommendation?.slice(1);
+                recEl.className = `text-xl font-bold ${
+                    result.ai_recommendation === 'approve' ? 'text-green-600' :
+                    result.ai_recommendation === 'evaluate' ? 'text-amber-600' : 'text-red-600'
+                }`;
+
+                document.getElementById('previewInsights').textContent = result.ai_insights || '';
+                document.getElementById('previewSection').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error calculating preview:', error);
+            }
+        }
+
+        async function submitInitiative(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            
+            const manpowerBreakdown = {
+                avg_monthly_salary: parseFloat(formData.get('avg_monthly_salary')) || 0,
+                gosi_percentage: parseFloat(formData.get('gosi_percent')) || 12,
+                insurance_cost_monthly: parseFloat(formData.get('insurance_cost')) || 0,
+                laptop_equipment_cost_monthly: parseFloat(formData.get('equipment_cost')) || 0,
+                software_seat_cost_monthly: parseFloat(formData.get('software_seat_cost')) || 0,
+                hours_wasted_per_week: parseFloat(formData.get('hours_wasted_per_week')) || 0,
+                employees_impacted: parseInt(formData.get('employees_impacted')) || 0
+            };
+
+            const errorBreakdown = {
+                current_error_rate: parseFloat(formData.get('current_error_rate')) || 0,
+                monthly_transactions: parseInt(formData.get('monthly_transactions')) || 0,
+                cost_per_error: parseFloat(formData.get('cost_per_error')) || 0,
+                rework_hours_per_error: parseFloat(formData.get('rework_hours_per_error')) || 0,
+                sla_penalties: parseFloat(formData.get('sla_penalties')) || 0,
+                expected_error_reduction: parseFloat(formData.get('expected_error_reduction')) || 0
+            };
+
+            const revenueBreakdown = {
+                leads_saved: parseInt(formData.get('leads_saved')) || 0,
+                conversion_rate: parseFloat(formData.get('conversion_rate')) || 0,
+                revenue_per_lead: parseFloat(formData.get('revenue_per_lead')) || 0,
+                churn_reduction: parseFloat(formData.get('churn_reduction')) || 0,
+                upsell_opportunities: parseInt(formData.get('upsell_opportunities')) || 0
+            };
+
+            const implementationBreakdown = {
+                vendor_costs: parseFloat(formData.get('vendor_costs')) || 0,
+                setup_fees: parseFloat(formData.get('setup_fees')) || 0,
+                api_license_fees: parseFloat(formData.get('api_license_fees')) || 0,
+                developer_hours: parseFloat(formData.get('developer_hours')) || 0,
+                developer_rate: parseFloat(formData.get('developer_rate')) || 150,
+                qa_hours: parseFloat(formData.get('qa_hours')) || 0,
+                qa_rate: parseFloat(formData.get('qa_rate')) || 100,
+                product_hours: parseFloat(formData.get('product_hours')) || 0,
+                product_rate: parseFloat(formData.get('product_rate')) || 120,
+                architect_hours: parseFloat(formData.get('architect_hours')) || 0,
+                architect_rate: parseFloat(formData.get('architect_rate')) || 200,
+                training_cost: parseFloat(formData.get('training_cost')) || 0,
+                change_management_cost: parseFloat(formData.get('change_management_cost')) || 0,
+                monthly_recurring_cost: parseFloat(formData.get('monthly_recurring_cost')) || 0
+            };
+
+            const riskInputs = {
+                confidence_level: formData.get('confidence_level') || 'medium',
+                probability_of_success: parseFloat(formData.get('probability_of_success')) || 70,
+                dependencies: formData.get('dependencies') || '',
+                risk_adjustment_factor: parseFloat(formData.get('risk_adjustment_factor')) || 1.0
+            };
+
+            const data = {
+                project_name: formData.get('project_name'),
+                owner: formData.get('project_name'),
+                department: formData.get('department'),
+                description: formData.get('problem_statement'),
+                baseline_cost: 0,
+                expected_savings_monthly: parseFloat(formData.get('expected_savings_monthly')) || 0,
+                implementation_cost: parseFloat(formData.get('implementation_cost')) || 0,
+                project_duration_months: parseInt(formData.get('project_duration_months')) || 12,
+                discount_rate: (parseFloat(formData.get('discount_rate')) || 10) / 100,
+                expected_revenue_increase: 0,
+                avoided_cost: 0,
+                priority: formData.get('priority'),
+                status: 'draft',
+                manpower_breakdown: manpowerBreakdown,
+                platform_tools: platformTools.map(t => ({
+                    tool_name: t.name,
+                    cost_per_month: t.cost,
+                    seats_impacted: t.seats,
+                    to_be_removed: t.toBeRemoved,
+                    vendor_support_cost: t.vendorSupport
+                })),
+                error_breakdown: errorBreakdown,
+                revenue_breakdown: revenueBreakdown,
+                implementation_breakdown: implementationBreakdown,
+                risk_inputs: riskInputs
+            };
+
+            try {
+                const response = await fetch('/api/roi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    closeNewInitiativeModal();
+                    loadAnalytics();
+                    loadInitiatives();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || WalaPlusI18n.t('dyn.roi.failed_create_initiative'));
+                }
+            } catch (error) {
+                console.error('Error creating initiative:', error);
+                alert(WalaPlusI18n.t('dyn.roi.failed_create_initiative'));
+            }
+        }
+
+        async function viewInitiative(id) {
+            try {
+                const response = await fetch(`/api/roi/${id}`);
+                const data = await response.json();
+                alert(WalaPlusI18n.t('dyn.roi.initiative_summary', { name: data.project_name, roi: data.roi_percentage, npv: parseFloat(data.npv).toLocaleString(), payback: data.payback_period_months, insights: data.ai_insights }));
+            } catch (error) {
+                console.error('Error viewing initiative:', error);
+            }
+        }
+
+        async function deleteInitiative(id) {
+            if (!confirm(WalaPlusI18n.t('dyn.roi.confirm_delete_initiative'))) return;
+            
+            try {
+                const response = await fetch(`/api/roi/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    loadAnalytics();
+                    loadInitiatives();
+                } else {
+                    alert(WalaPlusI18n.t('dyn.roi.failed_delete_initiative'));
+                }
+            } catch (error) {
+                console.error('Error deleting initiative:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAnalytics();
+            loadInitiatives();
+        });
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

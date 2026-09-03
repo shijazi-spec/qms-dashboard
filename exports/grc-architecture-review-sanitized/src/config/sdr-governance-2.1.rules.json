@@ -1,0 +1,113 @@
+{
+  "ruleset_version": "2.1.0",
+  "source_artifacts": [
+    "WalaPlus_SDR_2.1_04.12.2025_EN.pdf",
+    "SDR Call Script_AR [Updated].pdf",
+    "WalaPlus_SDR_Stages Reasons_2.1_04.12.2025.xlsx",
+    "Five9_SDR_QA_Scorecard_COPC_Template.xlsx"
+  ],
+  "notes": "Placeholder phrases — replace with exact script lines and COPC rows when Quality exports from governance PDFs/XLSX.",
+  "rules": [
+    {
+      "id": "meaningful_transcript",
+      "code": "sdr_gov_transcript_too_short",
+      "severity": "warning",
+      "message": "Transcript is very short; SDR process checks may not apply (voicemail, drop, or partial capture).",
+      "suggestion": "Confirm recording length and transcription completeness per SDR Governance 2.1.",
+      "match": { "type": "min_transcript_length", "min_chars": 120 }
+    },
+    {
+      "id": "opening_acknowledgement",
+      "code": "sdr_gov_opening_pattern",
+      "severity": "info",
+      "message": "No clear opening / greeting pattern detected in transcript (EN or AR).",
+      "suggestion": "Verify against SDR Call Script opening (ExampleOrg SDR 2.1 supporting docs).",
+      "match": {
+        "type": "contains_any",
+        "min_transcript_chars": 200,
+        "phrases": [
+          "hello",
+          "good morning",
+          "good afternoon",
+          "hi ",
+          "this is",
+          "speaking with",
+          "calling from",
+          "thank you for",
+          "مرحبا",
+          "السلام عليكم",
+          "معك",
+          "اتصل"
+        ]
+      }
+    },
+    {
+      "id": "purpose_or_agenda",
+      "code": "sdr_gov_call_purpose",
+      "severity": "warning",
+      "message": "Transcript lacks clear call-purpose framing (reason for call / value to lead).",
+      "suggestion": "Cross-check SDR stages matrix (reason for call, next step) in WalaPlus_SDR_Stages Reasons workbook.",
+      "match": {
+        "type": "contains_any",
+        "min_transcript_chars": 250,
+        "phrases": [
+          "reason for",
+          "calling regarding",
+          "follow up",
+          "wanted to",
+          "discuss",
+          "share",
+          "offer",
+          "بخصوص",
+          "اتصلت",
+          "عرض",
+          "خدمة",
+          "متابعة"
+        ]
+      }
+    },
+    {
+      "id": "next_step_closure",
+      "code": "sdr_gov_next_step",
+      "severity": "info",
+      "message": "No explicit next-step or meeting language detected.",
+      "suggestion": "Align with COPC scorecard closure / commitment items from Five9_SDR_QA_Scorecard template.",
+      "match": {
+        "type": "contains_any",
+        "min_transcript_chars": 300,
+        "phrases": [
+          "next step",
+          "schedule",
+          "calendar",
+          "send you",
+          "follow up",
+          "call you back",
+          "meeting",
+          "موعد",
+          "أرسل",
+          "نتابع",
+          "أتصل",
+          "خطوة"
+        ]
+      }
+    },
+    {
+      "id": "compliance_forbidden_guarantee",
+      "code": "sdr_gov_forbidden_claim",
+      "severity": "critical",
+      "message": "Possible prohibited guarantee / absolute outcome language in transcript.",
+      "suggestion": "Review against SDR Governance 2.1 compliance and legal guardrails.",
+      "match": {
+        "type": "forbidden_substring",
+        "phrases": [
+          "guaranteed approval",
+          "100% approved",
+          "no risk",
+          "ضمان الموافقة",
+          "بدون مخاطر",
+          "مضمون 100"
+        ]
+      }
+    }
+  ]
+}

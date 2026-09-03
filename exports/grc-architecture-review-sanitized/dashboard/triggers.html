@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg - Trigger Alerts</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .severity-critical { background-color: #FEE2E2; color: #B91C1C; }
+        .severity-warning  { background-color: #FEF3C7; color: #D97706; }
+        .severity-info     { background-color: #DBEAFE; color: #1E3A8A; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            WalaPlusNav.init('triggers');
+            loadTriggers();
+            // Light auto-refresh so the operator does not have to F5 to see
+            // new alerts as the audit cron drops them in.
+            setInterval(loadTriggers, 60000);
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Trigger Alerts</h1>
+                <p class="text-sm text-gray-500 mt-1">Live feed of pending audit triggers, decisions and notifications</p>
+            </div>
+            <button id="btn-refresh-triggers" data-on-click="loadTriggers" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium" data-testid="button-refresh-triggers">
+                Refresh
+            </button>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-5 rounded-xl border border-gray-200">
+                <p class="text-sm text-gray-500">Pending Triggers</p>
+                <p class="text-3xl font-bold text-amber-600 mt-1" id="trigger-pending-count" data-testid="text-pending-count">0</p>
+            </div>
+            <div class="bg-white p-5 rounded-xl border border-gray-200">
+                <p class="text-sm text-gray-500">Decisions Pending</p>
+                <p class="text-3xl font-bold text-red-600 mt-1" id="trigger-decisions-count" data-testid="text-decisions-count">0</p>
+            </div>
+            <div class="bg-white p-5 rounded-xl border border-gray-200">
+                <p class="text-sm text-gray-500">Acknowledged</p>
+                <p class="text-3xl font-bold text-blue-600 mt-1" id="trigger-acknowledged-count" data-testid="text-acknowledged-count">0</p>
+            </div>
+            <div class="bg-white p-5 rounded-xl border border-gray-200">
+                <p class="text-sm text-gray-500">Actioned</p>
+                <p class="text-3xl font-bold text-green-600 mt-1" id="trigger-actioned-count" data-testid="text-actioned-count">0</p>
+            </div>
+        </div>
+
+        <section class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Pending Audit Triggers</h2>
+            <div id="triggers-list" class="space-y-3" data-testid="list-triggers">
+                <p class="text-gray-500 text-center py-4">Loading…</p>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Notifications</h2>
+            <div id="notifications-list" class="space-y-3" data-testid="list-notifications">
+                <p class="text-gray-500 text-center py-4">Loading…</p>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function getSeverityBadgeClass(s) {
+            if (s === 'critical') return 'severity-critical';
+            if (s === 'warning')  return 'severity-warning';
+            return 'severity-info';
+        }
+        function getSeverityBgClass(s) {
+            if (s === 'critical') return 'bg-red-50 border-red-200';
+            if (s === 'warning')  return 'bg-amber-50 border-amber-200';
+            return 'bg-blue-50 border-blue-200';
+        }
+        function escapeHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        async function loadTriggers() {
+            try {
+                const [statsRes, triggersRes, notificationsRes] = await Promise.all([
+                    fetch('/api/triggers/stats', { credentials: 'same-origin' }),
+                    fetch('/api/triggers',       { credentials: 'same-origin' }),
+                    fetch('/api/notifications',  { credentials: 'same-origin' })
+                ]);
+                const stats = await statsRes.json().catch(() => ({}));
+                const triggersData = await triggersRes.json().catch(() => ({ triggers: [] }));
+                const notificationsData = await notificationsRes.json().catch(() => ({ notifications: [] }));
+
+                if (stats.success) {
+                    document.getElementById('trigger-pending-count').textContent      = stats.pendingCount       || 0;
+                    document.getElementById('trigger-decisions-count').textContent    = stats.pendingDecisions   || 0;
+                    document.getElementById('trigger-acknowledged-count').textContent = stats.acknowledgedCount  || 0;
+                    document.getElementById('trigger-actioned-count').textContent     = stats.actionedCount      || 0;
+                }
+
+                const triggersContainer = document.getElementById('triggers-list');
+                const triggers = (triggersData && triggersData.triggers) || [];
+                if (triggersData.success && triggers.length > 0) {
+                    triggersContainer.innerHTML = triggers.map(function (t) {
+                        return '<div class="border rounded-lg p-4 ' + getSeverityBgClass(t.severity) + '">' +
+                            '<div class="flex justify-between items-start">' +
+                                '<div class="flex-1">' +
+                                    '<div class="flex items-center gap-2">' +
+                                        '<span class="text-xs px-2 py-1 rounded ' + getSeverityBadgeClass(t.severity) + '">' + escapeHtml((t.severity || '').toUpperCase()) + '</span>' +
+                                        '<span class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700">' + escapeHtml(t.trigger_type || '') + '</span>' +
+                                    '</div>' +
+                                    '<h4 class="font-semibold mt-2">' + escapeHtml(t.title || '') + '</h4>' +
+                                    '<p class="text-sm text-gray-600 mt-1">' + escapeHtml(t.description || '') + '</p>' +
+                                    (t.action_required ? '<p class="text-sm text-amber-700 mt-2"><strong>Action Required:</strong> ' + escapeHtml(t.action_required) + '</p>' : '') +
+                                    '<p class="text-xs text-gray-500 mt-2">Assigned to: ' + escapeHtml(t.assigned_role || 'N/A') + ' | Created: ' + escapeHtml(new Date(t.created_at).toLocaleString()) + '</p>' +
+                                '</div>' +
+                                '<div class="flex flex-wrap gap-2 ms-4 justify-end max-w-xs">' +
+                                    '<button data-on-click="acknowledgeTrigger" data-args="[' + Number(t.id) + ']" class="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 border border-blue-300 rounded">Acknowledge</button>' +
+                                    (t.severity === 'critical' ? '<button data-on-click="proposeTriggerHITL" data-args="[' + Number(t.id) + ']" title="Send this decision to /ai-approvals" class="text-purple-700 hover:text-purple-900 text-sm px-2 py-1 border border-purple-300 rounded bg-purple-50">Propose via HITL</button>' : '') +
+                                    (t.trigger_type === 'DECISION_PENDING'
+                                        ? '<button data-on-click="decideTrigger" data-args="[' + Number(t.id) + ',&quot;approved&quot;]" class="text-green-600 hover:text-green-800 text-sm px-2 py-1 border border-green-300 rounded">Approve</button>' +
+                                          '<button data-on-click="decideTrigger" data-args="[' + Number(t.id) + ',&quot;rejected&quot;]" class="text-red-600 hover:text-red-800 text-sm px-2 py-1 border border-red-300 rounded">Reject</button>'
+                                        : '') +
+                                    '<button data-on-click="dismissTrigger" data-args="[' + Number(t.id) + ']" title="Dismissal requires written justification, auto-re-evaluated in 24h" class="text-gray-500 hover:text-gray-700 text-sm px-2 py-1 border border-gray-300 rounded">Dismiss</button>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>';
+                    }).join('');
+                } else {
+                    triggersContainer.innerHTML = '<p class="text-gray-500 text-center py-6">No pending triggers — the queue is clean.</p>';
+                }
+
+                const notificationsContainer = document.getElementById('notifications-list');
+                const notifications = (notificationsData && notificationsData.notifications) || [];
+                if (notificationsData.success && notifications.length > 0) {
+                    notificationsContainer.innerHTML = notifications.map(function (n) {
+                        return '<div class="border rounded-lg p-4 bg-gray-50 flex justify-between items-start">' +
+                            '<div>' +
+                                '<h4 class="font-semibold">' + escapeHtml(n.subject || '') + '</h4>' +
+                                '<p class="text-sm text-gray-600 mt-1">' + escapeHtml(n.message || '') + '</p>' +
+                                '<p class="text-xs text-gray-500 mt-2">For: ' + escapeHtml(n.recipient_role || '') + ' | ' + escapeHtml(new Date(n.created_at).toLocaleString()) + '</p>' +
+                            '</div>' +
+                            '<button data-on-click="markNotificationRead" data-args="[' + Number(n.id) + ']" class="text-blue-600 hover:text-blue-800 text-sm">Mark Read</button>' +
+                        '</div>';
+                    }).join('');
+                } else {
+                    notificationsContainer.innerHTML = '<p class="text-gray-500 text-center py-6">No unread notifications.</p>';
+                }
+            } catch (err) {
+                console.error('loadTriggers error:', err);
+                document.getElementById('triggers-list').innerHTML =
+                    '<p class="text-red-500 text-center py-4">Failed to load triggers. Try Refresh.</p>';
+            }
+        }
+
+        async function acknowledgeTrigger(triggerId) {
+            try {
+                const res = await fetch('/api/triggers/' + triggerId + '/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ action: 'acknowledge' })
+                });
+                if (res.ok) loadTriggers();
+                else alert('Failed to acknowledge trigger.');
+            } catch (e) { alert('Error acknowledging trigger.'); }
+        }
+
+        async function dismissTrigger(triggerId) {
+            const reason = prompt('Reason for dismissal (min 10 chars, audited):');
+            if (reason === null) return;
+            if (!reason || reason.trim().length < 10) {
+                alert('Dismissal reason must be at least 10 characters.');
+                return;
+            }
+            try {
+                const res = await fetch('/api/triggers/' + triggerId + '/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ action: 'dismiss', dismiss_reason: reason.trim() })
+                });
+                if (res.ok) loadTriggers();
+                else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('Failed to dismiss: ' + (err.error || res.statusText));
+                }
+            } catch (e) { alert('Error dismissing trigger.'); }
+        }
+
+        async function proposeTriggerHITL(triggerId) {
+            const notes = prompt('Notes for the Quality Manager (optional):');
+            if (notes === null) return;
+            try {
+                const res = await fetch('/api/triggers/' + triggerId + '/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ action: 'propose_hitl', decision: 'approve_action', notes: notes || null })
+                });
+                if (res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    alert('Routed to /ai-approvals — ticket: ' + (data.hitl_action_code || '(unknown)'));
+                    loadTriggers();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('Failed to propose: ' + (err.error || res.statusText));
+                }
+            } catch (e) { alert('Error proposing HITL.'); }
+        }
+
+        async function decideTrigger(triggerId, decision) {
+            const notes = prompt('Notes for ' + decision + ' decision (optional):');
+            const decidedBy = prompt('Your name (audit trail):');
+            if (!decidedBy) { alert('Decision requires a name.'); return; }
+            try {
+                const res = await fetch('/api/triggers/' + triggerId + '/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ action: 'decide', decision: decision, decided_by: decidedBy, notes: notes || null })
+                });
+                if (res.ok) loadTriggers();
+                else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('Failed: ' + (err.error || res.statusText));
+                }
+            } catch (e) { alert('Error submitting decision.'); }
+        }
+
+        async function markNotificationRead(id) {
+            try {
+                await fetch('/api/notifications/' + id + '/read', { method: 'POST', credentials: 'same-origin' });
+                loadTriggers();
+            } catch (e) {}
+        }
+    </script>
+    <script>
+        // i18n bootstrap — translates every data-i18n attribute on the page
+        // (matches the pattern used by every other dashboard page; required
+        // by scripts/check-i18n.cjs "Page wiring" check).
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

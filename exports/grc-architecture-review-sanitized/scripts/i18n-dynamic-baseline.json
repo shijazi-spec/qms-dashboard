@@ -1,0 +1,41 @@
+{
+  "_comment": "Pre-existing dynamic WalaPlusI18n.t(variable) call sites tracked by Task #295. Adding a new call site here is an explicit attestation that the dynamic key cannot be made static. Regenerate with: node scripts/check-i18n.cjs --update-baseline",
+  "entries": [
+    {
+      "snippet": "t('calls.' + key, vars);",
+      "source": "dashboard/calls.html (inline <script>)"
+    },
+    {
+      "snippet": "rt(confirmKey, fallbackMsg))) return;",
+      "source": "dashboard/document-mapping.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k) : null) || fb; }",
+      "source": "dashboard/document-mapping.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k) : null) || fb; };",
+      "source": "dashboard/document-mapping.html (inline <script>)"
+    },
+    {
+      "snippet": "t('duplicates.er_badge_' + (m[reason] ? reason : 'empty'));",
+      "source": "dashboard/js/duplicates-app.js"
+    },
+    {
+      "snippet": "t(_isTest ? 'duplicates.er_test_ready' : 'duplicates.er_empty_",
+      "source": "dashboard/js/duplicates-app.js"
+    },
+    {
+      "snippet": "t('policies.' + k);",
+      "source": "dashboard/policies.html (inline <script>)"
+    },
+    {
+      "snippet": "t('policies.conf_' + conf) || conf)}</td>",
+      "source": "dashboard/policies.html (inline <script>)"
+    },
+    {
+      "snippet": "t('policies.conf_' + conf))}</span></p>",
+      "source": "dashboard/policies.html (inline <script>)"
+    }
+  ]
+}

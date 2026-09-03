@@ -1,0 +1,77 @@
+name: AI Approval Redaction Integration
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ai-approval-redaction-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  approval-redaction-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_ENV: development
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Gate by required secrets
+        id: gate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+        run: |
+          if [ -z "${DATABASE_URL}" ] || [ -z "${SESSION_SECRET}" ]; then
+            echo "run_e2e=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping AI approval redaction integration (DATABASE_URL/SESSION_SECRET not configured)."
+          else
+            echo "run_e2e=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Start dev server
+        if: steps.gate.outputs.run_e2e == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+        run: |
+          nohup npm run dev > /tmp/dev-server.log 2>&1 &
+
+      - name: Wait for server readiness
+        if: steps.gate.outputs.run_e2e == 'true'
+        run: |
+          for i in {1..90}; do
+            if curl -fsS <REDACTED_URL> >/dev/null; then
+              echo "Server is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Server did not become ready in time."
+          sed -n '1,220p' /tmp/dev-server.log || true
+          exit 1
+
+      - name: Run AI approval redaction integration suite
+        if: steps.gate.outputs.run_e2e == 'true'
+        env:
+          BASE_URL: <REDACTED_URL>
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+        run: bash scripts/run-ai-approval-redaction-integration.sh
+
+      - name: Upload dev server log on failure
+        if: failure() && steps.gate.outputs.run_e2e == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-approval-redaction-dev-server-log
+          path: /tmp/dev-server.log

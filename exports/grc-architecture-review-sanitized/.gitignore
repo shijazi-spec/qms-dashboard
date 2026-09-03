@@ -1,0 +1,64 @@
+# Dependencies
+node_modules
+
+# Build artifacts
+dist
+.mastra
+
+# Environment & secrets — NEVER commit these
+.env
+.<REDACTED_HOST>
+.env.development
+.env.production
+.env.*.local
+
+# Database files
+*.db
+*.db-*
+
+# SQL dumps / snapshots — never check in. Treat as backup artifacts and
+# park them outside the repo (e.g. a OneDrive backup folder). Tracked
+# dumps balloon the repo and make every clone slow. Covers plain SQL
+# (pg_dump default), custom-format pg_dump (.dump), and gzipped variants.
+*.sql
+*.sql.gz
+*.dump
+
+# Test outputs
+test-results/
+a11y-report.json
+a11y-playwright-report.json
+
+# Operational scan / audit outputs (regenerated, not source code)
+reports/
+audit-evidence/
+
+# Replit agent attachments — ad-hoc screenshots, timestamped code backups,
+# data exports, recordings. NOT source of truth. One exception below.
+attached_assets/*
+# Keep the single governance PDF referenced by file_path in
+# src/mastra/routes/adminApiRoutes.ts and scripts/seedGovernanceData.ts.
+# When that provenance reference moves to a proper location (e.g.
+# docs/governance/), delete this exception.
+!attached_assets/WalaPlus_Sales_1.1_01.12.2025_EN_1764681400933.pdf
+
+# Screenshots / generated images — operational artifacts, not code
+generated_images/
+screenshots/
+infographic-samples/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Superpowers plugin scratch space — running task logs, SDD progress files,
+# working notes. Regenerated per session. Should never be tracked; if it
+# lands in the repo it's just noise the next contributor has to skip past.
+.superpowers/

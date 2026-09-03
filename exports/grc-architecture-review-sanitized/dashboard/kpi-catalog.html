@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KPI Catalog — by Owner</title>
+  <link rel="stylesheet" href="/dashboard/tailwind.css" />
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+  <style>
+    .badge { padding:2px 9px; border-radius:9999px; font-size:.72rem; font-weight:600; white-space:nowrap; }
+    .green { background:#dcfce7; color:#166534; }
+    .amber { background:#fef9c3; color:#854d0e; }
+    .red   { background:#fee2e2; color:#991b1b; }
+    .muted { background:#f1f5f9; color:#475569; }
+    .pending { background:#ede9fe; color:#5b21b6; }
+    .box-body { display:block; }
+    .box-body.collapsed { display:none; }
+  </style>
+  <script src="/js/i18n.js?v=1.0"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div id="ExampleOrg-nav"></div>
+  <script src="/js/navigation.js"></script>
+  <script src="/js/csp-styles.js?v=1"></script>
+  <script src="/js/safe-actions.js?v=2"></script>
+  <script>try { WalaPlusNav.init('kpi-catalog'); } catch (e) {}</script>
+
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-1">
+      <h1 class="text-2xl font-bold text-blue-900">KPI Catalog</h1>
+      <button id="refresh" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 text-sm">↻ Refresh</button>
+    </div>
+    <p class="text-gray-500 mb-2">All KPIs grouped by owner. QM &amp; GRC are auto-calculated; SDR &amp; Shared are manual. Click a box header to collapse.</p>
+    <div id="generated" class="text-xs text-gray-400 mb-6"></div>
+
+    <div id="boxes"></div>
+    <div id="error" class="hidden mt-6 p-4 bg-red-50 text-red-700 rounded-lg"></div>
+  </div>
+
+  <script>
+    const esc = (s) => String(s==null?"":s).replace(/[&<>"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+    // Inline hex (avoids Tailwind purging dynamically-built class names).
+    const COLOR = {
+      quality_manager:{ bg:"#ecfdf5", fg:"#065f46" },
+      grc_manager:{ bg:"#eef2ff", fg:"#3730a3" },
+      sdr_team:{ bg:"#f0f9ff", fg:"#075985" },
+      sales_team:{ bg:"#fffbeb", fg:"#92400e" },
+      cs_team:{ bg:"#fff1f2", fg:"#9f1239" },
+      shared:{ bg:"#f8fafc", fg:"#334155" },
+    };
+
+    function valCell(k) {
+      if (k.value === null || k.value === undefined) {
+        return `<span class="badge pending">${esc(k.status_label || "Not Started")}</span>`;
+      }
+      const cls = k.status || "muted";
+      const lbl = k.status_label ? " · " + esc(k.status_label) : "";
+      return `<span class="badge ${cls}">${esc(k.value)}${esc(k.unit||"")}${lbl}</span>`;
+    }
+
+    function box(g, i) {
+      const c = COLOR[g.key] || COLOR.shared;
+      const rows = g.kpis.length
+        ? `<table class="w-full text-sm"><tbody>${g.kpis.map((k)=>`
+            <tr class="border-t">
+              <td class="px-4 py-2">
+                <span class="font-medium text-gray-800">${esc(k.name)}</span>
+                <span class="text-xs text-gray-400 ms-2">${esc(k.code)}</span>
+                ${k.source==="auto"?'<span class="text-[10px] text-emerald-600 ms-1">auto</span>':''}
+              </td>
+              <td class="px-4 py-2 text-end text-gray-500 text-xs">${k.target!=null?("Target: "+esc(k.target)+esc(k.unit||"")):""}</td>
+              <td class="px-4 py-2 text-end">${valCell(k)}</td>
+            </tr>`).join("")}</tbody></table>`
+        : '<div class="px-4 py-4 text-sm text-gray-400">No KPIs defined for this owner yet.</div>';
+      return `<div class="bg-white rounded-xl shadow mb-4 overflow-hidden">
+        <button class="w-full flex items-center justify-between px-4 py-3 text-start" data-style="background:${c.bg}"
+                data-on-click="toggleClass" data-args='["b-${i}","collapsed"]'>
+          <span class="font-semibold" data-style="color:${c.fg}">${esc(g.label)}</span>
+          <span class="text-xs text-gray-500">${g.kpis.length} KPI${g.kpis.length===1?"":"s"} ▾</span>
+        </button>
+        <div class="box-body" id="b-${i}">${rows}</div>
+      </div>`;
+    }
+
+    async function load() {
+      const err = document.getElementById("error"); err.classList.add("hidden");
+      try {
+        const r = await fetch("/api/kpi-catalog", { credentials:"same-origin" });
+        if (!r.ok) throw new Error("HTTP " + r.status + (r.status===403?" — needs Quality/GRC/admin role":""));
+        const { generated_at, groups } = await r.json();
+        document.getElementById("generated").textContent = "Generated " + (generated_at||"");
+        document.getElementById("boxes").innerHTML = groups.map((g,i)=>box(g,i)).join("");
+      } catch (e) {
+        err.textContent = "Could not load KPI catalog: " + e.message; err.classList.remove("hidden");
+      }
+    }
+    document.getElementById("refresh").addEventListener("click", load);
+    load();
+  </script>
+  <script>
+    if (window.WalaPlusI18n) {
+      window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+    }
+  </script>
+</body>
+</html>

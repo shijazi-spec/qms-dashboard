@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>System Event Logs - ExampleOrg</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <script src="<REDACTED_URL>"></script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        :root {
+            --qms-blue: #1E3A8A;
+            --qms-blue-light: #2563EB;
+            --qms-blue-bg: #DBEAFE;
+            --qms-green: #047857;
+            --qms-green-light: #22C55E;
+            --qms-green-bg: #D1FAE5;
+            --qms-amber: #D97706;
+            --qms-amber-light: #F59E0B;
+            --qms-amber-bg: #FEF3C7;
+            --qms-red: #B91C1C;
+            --qms-red-light: #EF4444;
+            --qms-red-bg: #FEE2E2;
+            --qms-purple: #6D28D9;
+            --qms-purple-light: #A855F7;
+            --qms-purple-bg: #EDE9FE;
+        }
+        html { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .hidden { display: none !important; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .badge-info { background-color: var(--qms-blue-bg); color: var(--qms-blue); }
+        .badge-warning { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+        .badge-critical { background-color: var(--qms-red-bg); color: var(--qms-red); }
+        .badge-ai-yes { background-color: var(--qms-purple-bg); color: var(--qms-purple); }
+        .badge-ai-no { background-color: #F3F4F6; color: #6B7280; }
+        .chart-container { position: relative; height: 280px; width: 100%; }
+        .log-details { transition: max-height 0.3s ease-out; overflow: hidden; }
+        .log-row:hover { background-color: #F9FAFB; }
+        .log-row { cursor: pointer; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script src="/js/streaming-download.js?v=2.2.0"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('logs');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="nav.items.logs">System Logs</h1>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="logs.total_logs">Total Logs</p>
+                        <p id="totalLogs" class="text-3xl font-bold text-gray-900">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="logs.last_24h">Last 24 Hours</p>
+                        <p id="last24Hours" class="text-3xl font-bold text-green-600">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 <REDACTED_PHONE> 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="logs.critical_events">Critical Events</p>
+                        <p id="criticalEvents" class="text-3xl font-bold text-red-600">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.<REDACTED_PHONE>-3L13.732 4c-.<REDACTED_PHONE>.464 0L3.34 16c-.<REDACTED_PHONE> 3z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="logs.ai_actions">AI Actions</p>
+                        <p id="aiActions" class="text-3xl font-bold text-purple-600">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-redaction-sweep">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.<REDACTED_PHONE>.944a11.<REDACTED_PHONE> 3.04A12.<REDACTED_PHONE> 9c0 <REDACTED_PHONE>.<REDACTED_PHONE> <REDACTED_PHONE>.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Last Redaction Sweep</h3>
+                        <p class="text-sm text-gray-500">Boot-time secret-redaction status</p>
+                    </div>
+                </div>
+                <span id="sweepStatusBadge" class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" data-testid="status-redaction-sweep">Loading...</span>
+            </div>
+            <div id="sweepBody" class="text-sm text-gray-700">
+                <p class="text-gray-500" data-testid="text-sweep-loading">Loading last sweep status...</p>
+            </div>
+        </div>
+
+        <div id="postRestoreAlertsCard" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-post-restore-alerts">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.<REDACTED_PHONE>-3L13.732 4c-.<REDACTED_PHONE>.464 0L3.34 16c-.<REDACTED_PHONE> 3z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Post-Restore Sweep Alerts</h3>
+                        <p class="text-sm text-gray-500">Critical notifications fired when the boot sweep rewrote historical rows. Each row deep-links to the matching event-log entry.</p>
+                    </div>
+                </div>
+                <span id="postRestoreAlertsBadge" class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" data-testid="status-post-restore-alerts">Loading...</span>
+            </div>
+            <div id="postRestoreAlertsBody" class="text-sm text-gray-700">
+                <p class="text-gray-500" data-testid="text-post-restore-alerts-loading">Loading post-restore sweep alerts...</p>
+            </div>
+        </div>
+
+        <div id="alertRecipientsCard" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-alert-recipients">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Post-Restore Sweep Alert Recipients</h3>
+                        <p class="text-sm text-gray-500">Email addresses paged when the boot redaction sweep rewrites historical rows</p>
+                    </div>
+                </div>
+                <span id="alertRecipientsBadge" class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" data-testid="status-alert-recipients">Loading...</span>
+            </div>
+            <div id="alertRecipientsBody" class="text-sm text-gray-700">
+                <p class="text-gray-500" data-testid="text-alert-recipients-loading">Loading recipient list...</p>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="logs.sec_activity">Log Activity (Last 7 Days)</h3>
+            <div class="chart-container">
+                <canvas id="activityChart"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="logs.sec_filters">Filters</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="logs.from_date">From Date</label>
+                    <input type="date" id="filterFromDate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="logs.to_date">To Date</label>
+                    <input type="date" id="filterToDate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="logs.action_type">Action Type</label>
+                    <select id="filterActionType" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">All Actions</option>
+                        <option value="CREATE">CREATE</option>
+                        <option value="UPDATE">UPDATE</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="STATUS_CHANGE">STATUS_CHANGE</option>
+                        <option value="ASSIGN">ASSIGN</option>
+                        <option value="AI_ACTION">AI_ACTION</option>
+                        <option value="LOGIN">LOGIN</option>
+                        <option value="LOGOUT">LOGOUT</option>
+                        <option value="EXPORT">EXPORT</option>
+                        <option value="IMPORT">IMPORT</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="logs.entity_type">Entity Type</label>
+                    <select id="filterEntityType" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">All Entities</option>
+                        <option value="PROJECT">PROJECT</option>
+                        <option value="TRAINING">TRAINING</option>
+                        <option value="ROI">ROI</option>
+                        <option value="USER">USER</option>
+                        <option value="TEAM_MEMBER">TEAM_MEMBER</option>
+                        <option value="CALL">CALL</option>
+                        <option value="NC">NC</option>
+                        <option value="CAPA">CAPA</option>
+                        <option value="TABLE_F">TABLE_F</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.module">Module</label>
+                    <select id="filterModule" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">All Modules</option>
+                        <option value="ROI">ROI</option>
+                        <option value="QMS">QMS</option>
+                        <option value="Team">Team</option>
+                        <option value="Projects">Projects</option>
+                        <option value="Calls">Calls</option>
+                        <option value="TableF">Table F</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Dashboard">Dashboard</option>
+                        <option value="security/redaction-sweep">Post-Restore Sweep</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.severity">Severity</label>
+                    <select id="filterSeverity" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">All Severities</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARNING">WARNING</option>
+                        <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="logs.ai_involved">AI Involved</label>
+                    <select id="filterAI" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">All</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.search">Search</label>
+                    <input type="text" id="filterSearch" placeholder="User or description..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-4">
+                <button data-on-click="clearFilters" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
+                    Clear Filters
+                </button>
+                <button data-on-click="applyFilters" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                    Apply Filters
+                </button>
+                <button id="exportLogsBtn" data-on-click="exportCSV" data-pass-event="true" data-estimate-url="/api/logs/export" data-testid="button-export-logs-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition font-medium">
+                    Export CSV <span data-size-hint class="ms-1 text-xs opacity-90"></span>
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="logs.sec_logs">Event Logs</h3>
+                <div class="text-sm text-gray-500">
+                    Showing <span id="showingFrom">0</span>-<span id="showingTo">0</span> of <span id="totalRecords">0</span> records
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">User</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Role</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Action</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity Type</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Description</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">AI</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Severity</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTable" class="divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="9" class="px-6 py-12 text-center text-gray-500">
+                                <div class="flex flex-col items-center">
+                                    <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    <p>Loading event logs...</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-700">Page Size:</span>
+                    <select id="pageSize" data-on-change="loadLogs" data-args="[1]" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="prevPage" data-on-click="loadLogs" data-args="[${currentPage - 1}]" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Previous
+                    </button>
+                    <span class="text-sm text-gray-700">Page <span id="currentPageNum">1</span> of <span id="totalPages">1</span></span>
+                    <button id="nextPage" data-on-click="loadLogs" data-args="[${currentPage + 1}]" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Next
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let currentPage = 1;
+        let totalPagesCount = 1;
+        let activityChart = null;
+        let expandedRows = new Set();
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/logs/stats');
+                const stats = await response.json();
+                
+                document.getElementById('totalLogs').textContent = (stats.totalLogs || 0).toLocaleString();
+                document.getElementById('last24Hours').textContent = (stats.last24Hours || 0).toLocaleString();
+                document.getElementById('criticalEvents').textContent = (stats.criticalEvents || 0).toLocaleString();
+                document.getElementById('aiActions').textContent = (stats.aiActions || 0).toLocaleString();
+                
+                if (stats.activityByDay) {
+                    updateActivityChart(stats.activityByDay);
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        function updateActivityChart(activityData) {
+            const ctx = document.getElementById('activityChart').getContext('2d');
+            
+            const labels = activityData.map(d => {
+                const date = new Date(d.date);
+                return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            });
+            const data = activityData.map(d => d.count);
+            
+            if (activityChart) {
+                activityChart.destroy();
+            }
+            
+            activityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Log Events',
+                        data: data,
+                        borderColor: '#2563EB',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#2563EB',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadLogs(page = 1) {
+            currentPage = page;
+            const pageSize = document.getElementById('pageSize').value;
+            
+            const params = new URLSearchParams({
+                page: page.toString(),
+                pageSize: pageSize
+            });
+            
+            const fromDate = document.getElementById('filterFromDate').value;
+            const toDate = document.getElementById('filterToDate').value;
+            const actionType = document.getElementById('filterActionType').value;
+            const entityType = document.getElementById('filterEntityType').value;
+            const module = document.getElementById('filterModule').value;
+            const severity = document.getElementById('filterSeverity').value;
+            const aiInvolved = document.getElementById('filterAI').value;
+            const search = document.getElementById('filterSearch').value;
+            
+            if (fromDate) params.append('fromDate', fromDate);
+            if (toDate) params.append('toDate', toDate);
+            if (actionType) params.append('actionType', actionType);
+            if (entityType) params.append('entityType', entityType);
+            if (module) params.append('module', module);
+            if (severity) params.append('severity', severity);
+            if (aiInvolved) params.append('aiInvolved', aiInvolved);
+            if (search) params.append('search', search);
+            
+            try {
+                const response = await fetch(`/api/logs?${params}`);
+                const data = await response.json();
+                
+                renderLogsTable(data.logs || []);
+                updatePagination(data);
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                document.getElementById('logsTable').innerHTML = `
+                    <tr>
+                        <td colspan="9" class="px-6 py-12 text-center text-red-500">
+                            Error loading logs. Please try again.
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function renderLogsTable(logs) {
+            const tbody = document.getElementById('logsTable');
+            
+            if (!logs || logs.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="px-6 py-12 text-center text-gray-500">
+                            <div class="flex flex-col items-center">
+                                <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                <p>No event logs found.</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = logs.map(log => `
+                <tr class="log-row" data-on-click="toggleLogDetails" data-args="[${log.id}]">
+                    <td class="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                        ${formatDateTime(log.timestamp || log.created_at)}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                        ${log.user_name || 'System'}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        ${log.user_role || '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm font-medium text-gray-900">
+                        ${log.action_type || '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        ${log.entity_type || '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                        ${log.entity_name || log.entity_id || '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title="${log.description || ''}">
+                        ${log.description || '-'}
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        ${renderAIBadge(log.ai_involved)}
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        ${renderSeverityBadge(log.severity)}
+                    </td>
+                </tr>
+                <tr id="details-${log.id}" class="hidden bg-gray-50">
+                    <td colspan="9" class="px-6 py-4">
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p class="font-medium text-gray-700 mb-1">Old Value:</p>
+                                <pre class="bg-white border border-gray-200 rounded p-2 text-xs overflow-x-auto max-h-40">${formatJson(log.old_value)}</pre>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-700 mb-1">New Value:</p>
+                                <pre class="bg-white border border-gray-200 rounded p-2 text-xs overflow-x-auto max-h-40">${formatJson(log.new_value)}</pre>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-700">IP Address:</p>
+                                <p class="text-gray-600">${log.ip_address || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-700">User Agent:</p>
+                                <p class="text-gray-600 truncate" title="${log.user_agent || ''}">${log.user_agent || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-700">Correlation ID:</p>
+                                <p class="text-gray-600 font-mono text-xs">${renderCorrelationId(log.correlation_id)}</p>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-700">Checksum:</p>
+                                <p class="text-gray-600 font-mono text-xs">${log.checksum || 'N/A'}</p>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function toggleLogDetails(id) {
+            const detailsRow = document.getElementById(`details-${id}`);
+            if (detailsRow) {
+                if (expandedRows.has(id)) {
+                    detailsRow.classList.add('hidden');
+                    expandedRows.delete(id);
+                } else {
+                    detailsRow.classList.remove('hidden');
+                    expandedRows.add(id);
+                }
+            }
+        }
+
+        function formatJson(obj) {
+            if (!obj) return 'N/A';
+            try {
+                if (typeof obj === 'string') {
+                    obj = JSON.parse(obj);
+                }
+                return JSON.stringify(obj, null, 2);
+            } catch {
+                return String(obj);
+            }
+        }
+
+        // Task #545: when an event_log row's correlation_id is an AI
+        // approval action code (APR-YYYYMMDD-XXXXXX), surface it as a
+        // clickable deep-link into the Approvals dashboard so auditors
+        // can pivot from a log entry straight to the action's detail
+        // panel. Non-matching values render unchanged.
+        function renderCorrelationId(corr) {
+            if (!corr) return 'N/A';
+            const safe = escapeAttribute(corr);
+            if (/^APR-\d{8}-[A-Z0-9]{4,12}$/i.test(corr)) {
+                const href = '/ai-approvals#action=' + encodeURIComponent(corr);
+                return '<a href="' + escapeAttribute(href) +
+                    '" class="text-indigo-700 hover:text-indigo-900 underline" ' +
+                    'data-testid="link-correlation-' + safe + '">' +
+                    safe + '</a>';
+            }
+            return safe;
+        }
+
+        function escapeAttribute(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[c]));
+        }
+
+        function formatDateTime(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        function renderSeverityBadge(severity) {
+            const severityUpper = (severity || 'INFO').toUpperCase();
+            const classes = {
+                'INFO': 'badge-info',
+                'WARNING': 'badge-warning',
+                'CRITICAL': 'badge-critical'
+            };
+            const badgeClass = classes[severityUpper] || 'badge-info';
+            return `<span class="px-2 py-1 rounded-full text-xs font-medium ${badgeClass}">${severityUpper}</span>`;
+        }
+
+        function renderAIBadge(aiInvolved) {
+            if (aiInvolved) {
+                return '<span class="px-2 py-1 rounded-full text-xs font-medium badge-ai-yes">Yes</span>';
+            }
+            return '<span class="px-2 py-1 rounded-full text-xs font-medium badge-ai-no">No</span>';
+        }
+
+        function updatePagination(data) {
+            const total = data.total || 0;
+            const pageSize = parseInt(document.getElementById('pageSize').value);
+            totalPagesCount = Math.ceil(total / pageSize) || 1;
+            
+            const from = total === 0 ? 0 : ((currentPage - 1) * pageSize) + 1;
+            const to = Math.min(currentPage * pageSize, total);
+            
+            document.getElementById('showingFrom').textContent = from;
+            document.getElementById('showingTo').textContent = to;
+            document.getElementById('totalRecords').textContent = total;
+            document.getElementById('currentPageNum').textContent = currentPage;
+            document.getElementById('totalPages').textContent = totalPagesCount;
+            
+            document.getElementById('prevPage').disabled = currentPage <= 1;
+            document.getElementById('nextPage').disabled = currentPage >= totalPagesCount;
+        }
+
+        function buildLogsExportUrl() {
+            const params = new URLSearchParams();
+            const fromDate = document.getElementById('filterFromDate').value;
+            const toDate = document.getElementById('filterToDate').value;
+            const actionType = document.getElementById('filterActionType').value;
+            const entityType = document.getElementById('filterEntityType').value;
+            const module = document.getElementById('filterModule').value;
+            const severity = document.getElementById('filterSeverity').value;
+            const aiInvolved = document.getElementById('filterAI').value;
+            const search = document.getElementById('filterSearch').value;
+            if (fromDate) params.append('fromDate', fromDate);
+            if (toDate) params.append('toDate', toDate);
+            if (actionType) params.append('actionType', actionType);
+            if (entityType) params.append('entityType', entityType);
+            if (module) params.append('module', module);
+            if (severity) params.append('severity', severity);
+            if (aiInvolved) params.append('aiInvolved', aiInvolved);
+            if (search) params.append('search', search);
+            return `/api/logs/export${params.toString() ? '?' + params.toString() : ''}`;
+        }
+
+        function refreshLogsExportHint() {
+            if (!window.streamingDownload || !streamingDownload.fetchEstimate) return;
+            const btn = document.getElementById('exportLogsBtn');
+            if (!btn) return;
+            const url = buildLogsExportUrl();
+            streamingDownload.fetchEstimate(url)
+                .then((est) => streamingDownload.applySizeHint(btn, est))
+                .catch(() => { /* hint is best-effort */ });
+        }
+
+        function applyFilters() {
+            loadLogs(1);
+            refreshLogsExportHint();
+        }
+
+        function clearFilters() {
+            document.getElementById('filterFromDate').value = '';
+            document.getElementById('filterToDate').value = '';
+            document.getElementById('filterActionType').value = '';
+            document.getElementById('filterEntityType').value = '';
+            document.getElementById('filterModule').value = '';
+            document.getElementById('filterSeverity').value = '';
+            document.getElementById('filterAI').value = '';
+            document.getElementById('filterSearch').value = '';
+            loadLogs(1);
+            refreshLogsExportHint();
+        }
+
+        function exportCSV(event) {
+            const url = buildLogsExportUrl();
+            const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            return streamingDownloadFromEvent(event || null, url, { filename: `event-logs-${ts}.csv` });
+        }
+
+        function escapeHtml(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+                return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+            });
+        }
+
+        function formatSweepTimestamp(iso) {
+            if (!iso) return 'Unknown';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return escapeHtml(iso);
+            return d.toLocaleString();
+        }
+
+        function renderSweepBreakdownRow(label, info) {
+            if (info && typeof info === 'object' && 'skipped' in info) {
+                return '<tr>' +
+                    '<td class="py-1 pe-4 text-gray-600">' + escapeHtml(label) + '</td>' +
+                    '<td class="py-1 text-gray-400 italic">skipped (' + escapeHtml(info.skipped) + ')</td>' +
+                    '</tr>';
+            }
+            const updated = info && typeof info === 'object' && 'rows_updated' in info ? info.rows_updated : info;
+            const scanned = info && typeof info === 'object' && 'scanned' in info ? info.scanned : null;
+            let value = escapeHtml(updated == null ? 0 : updated);
+            if (scanned !== null) value += ' <span class="text-gray-400">(scanned ' + escapeHtml(scanned) + ')</span>';
+            return '<tr>' +
+                '<td class="py-1 pe-4 text-gray-600">' + escapeHtml(label) + '</td>' +
+                '<td class="py-1 text-gray-900 font-medium">' + value + '</td>' +
+                '</tr>';
+        }
+
+        /* ----------------------------------------------------------------
+         * Task #625: surface the flagged_action_codes evidence list (added
+         * by Task #488 to last-sweep.json) directly in the dashboard panel
+         * so operators don't have to crack open the raw JSON file to see
+         * WHICH legacy approval rows the credential sweep retroactively
+         * flagged. Each code links to the AI approvals page with the
+         * existing ?code= deep link, which auto-opens the detail modal
+         * for that ticket. We render nothing when the list is empty (the
+         * common "clean sweep" case) to avoid visual noise.
+         * ---------------------------------------------------------------- */
+        function renderFlaggedActionCodesRow(info) {
+            if (!info || typeof info !== 'object' || 'skipped' in info) return '';
+            const codes = Array.isArray(info.flagged_action_codes) ? info.flagged_action_codes : [];
+            if (codes.length === 0) return '';
+            const truncated = Number(info.flagged_action_codes_truncated || 0);
+            const links = codes.map(function (code) {
+                const safe = escapeHtml(code);
+                return '<a href="/ai-approvals?code=' + encodeURIComponent(code) + '" ' +
+                    'class="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline" ' +
+                    'data-testid="link-flagged-action-code-' + safe + '">' + safe + '</a>';
+            }).join(' <span class="text-gray-300">·</span> ');
+            let suffix = '';
+            if (truncated > 0) {
+                suffix = ' <span class="text-gray-400 text-xs" data-testid="text-flagged-action-codes-truncated">' +
+                    '+' + escapeHtml(truncated) + ' more (see audit-evidence/last-sweep.json)' +
+                    '</span>';
+            }
+            return '<tr data-testid="row-flagged-action-codes">' +
+                '<td class="py-1 pe-4 text-gray-500 align-top">  ↳ flagged approvals</td>' +
+                '<td class="py-1 text-gray-900">' +
+                    '<div class="flex flex-wrap gap-x-2 gap-y-1 items-center">' + links + suffix + '</div>' +
+                '</td>' +
+                '</tr>';
+        }
+
+        function renderRedactionSweep(payload) {
+            const badge = document.getElementById('sweepStatusBadge');
+            const body = document.getElementById('sweepBody');
+            if (!badge || !body) return;
+
+            if (!payload || !payload.recorded || !payload.sweep) {
+                badge.textContent = 'No sweep recorded yet';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700';
+                body.innerHTML = '<p class="text-gray-500" data-testid="text-sweep-empty">' +
+                    'No on-boot redaction sweep has been recorded yet. The status will appear here after the next application startup.' +
+                    '</p>';
+                return;
+            }
+
+            const sweep = payload.sweep;
+            const total = Number(sweep.total_rows_updated || 0);
+            badge.textContent = total === 0 ? 'Clean (0 rows redacted)' : total + ' rows redacted';
+            badge.className = 'px-3 py-1 rounded-full text-xs font-medium ' +
+                (total === 0 ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700');
+
+            const rows = [
+                renderSweepBreakdownRow('event_logs', sweep.event_logs_updated),
+                renderSweepBreakdownRow('nc_change_history', sweep.nc_change_history_updated),
+                renderSweepBreakdownRow('  ↳ change_reason', sweep.nc_change_history_change_reason_updated),
+                renderSweepBreakdownRow('capa_change_history', sweep.capa_change_history_updated),
+                renderSweepBreakdownRow('  ↳ change_reason', sweep.capa_change_history_change_reason_updated),
+                renderSweepBreakdownRow('ai_pending_actions', sweep.ai_pending_actions),
+                renderSweepBreakdownRow('ai_pending_actions credential warnings', sweep.ai_pending_actions_credential_warnings),
+                renderFlaggedActionCodesRow(sweep.ai_pending_actions_credential_warnings),
+                renderSweepBreakdownRow('ai_call_metrics', sweep.ai_call_metrics)
+            ].join('');
+
+            body.innerHTML =
+                '<div class="flex flex-wrap gap-x-8 gap-y-2 mb-4">' +
+                    '<div><span class="text-gray-500">Sweep timestamp:</span> ' +
+                        '<span class="text-gray-900 font-medium" data-testid="text-sweep-timestamp">' +
+                            escapeHtml(formatSweepTimestamp(sweep.sweep_timestamp)) +
+                        '</span></div>' +
+                    '<div><span class="text-gray-500">Total rows updated:</span> ' +
+                        '<span class="text-gray-900 font-medium" data-testid="text-sweep-total">' +
+                            escapeHtml(total) +
+                        '</span></div>' +
+                '</div>' +
+                '<div class="overflow-x-auto"><table class="text-sm" data-testid="table-sweep-breakdown">' +
+                    '<tbody class="divide-y divide-gray-100">' + rows + '</tbody>' +
+                '</table></div>';
+        }
+
+        async function loadRedactionSweepStatus() {
+            const badge = document.getElementById('sweepStatusBadge');
+            const body = document.getElementById('sweepBody');
+            try {
+                const response = await fetch('/api/admin/redaction-sweep/status', { credentials: 'same-origin' });
+                if (response.status === 401 || response.status === 403) {
+                    if (badge) {
+                        badge.textContent = 'Admin only';
+                        badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500';
+                    }
+                    if (body) {
+                        body.innerHTML = '<p class="text-gray-500" data-testid="text-sweep-forbidden">' +
+                            'Sign in as an administrator to view the redaction sweep status.' +
+                            '</p>';
+                    }
+                    return;
+                }
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                renderRedactionSweep(data);
+            } catch (err) {
+                console.error('Error loading redaction sweep status:', err);
+                if (badge) {
+                    badge.textContent = 'Unavailable';
+                    badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700';
+                }
+                if (body) {
+                    body.innerHTML = '<p class="text-red-600" data-testid="text-sweep-error">' +
+                        'Could not load the redaction sweep status. Please try again later.' +
+                        '</p>';
+                }
+            }
+        }
+
+        const POST_RESTORE_SWEEP_MODULE = 'security/redaction-sweep';
+        const POST_RESTORE_SWEEP_ENTITY_ID = 'boot_redaction_sweep';
+
+        function formatPostRestoreTimestamp(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return escapeHtml(iso);
+            return d.toLocaleString();
+        }
+
+        function postRestoreSweepPriorityClass(priority) {
+            const p = String(priority || '').toLowerCase();
+            if (p === 'critical') return 'bg-red-100 text-red-800';
+            if (p === 'high') return 'bg-orange-100 text-orange-800';
+            if (p === 'medium') return 'bg-amber-100 text-amber-800';
+            return 'bg-gray-100 text-gray-700';
+        }
+
+        function postRestoreSweepStatusClass(status) {
+            const s = String(status || '').toLowerCase();
+            if (s === 'unread') return 'bg-blue-100 text-blue-800';
+            if (s === 'read') return 'bg-green-100 text-green-800';
+            if (s === 'dismissed') return 'bg-gray-100 text-gray-600';
+            return 'bg-gray-100 text-gray-700';
+        }
+
+        // Task #656: per-table sweep counts shown as inline badges on each
+        // alert row. The order here is the same as the dispatcher's
+        // detail line so operators reading the dashboard, the alert email,
+        // and the audit-log entry see the same shape everywhere.
+        const POST_RESTORE_TRIGGER_TABLES = [
+            { key: 'event_logs', label: 'event_logs' },
+            { key: 'nc_change_history', label: 'nc_change_history' },
+            { key: 'capa_change_history', label: 'capa_change_history' },
+            { key: 'ai_pending_actions', label: 'ai_pending_actions' },
+            { key: 'ai_call_metrics', label: 'ai_call_metrics' },
+        ];
+
+        function postRestoreTriggerBadgeClass(count, skipped) {
+            if (skipped) return 'bg-gray-100 text-gray-500 border border-dashed border-gray-300';
+            if (count === null || count === undefined) return 'bg-gray-100 text-gray-500 border border-dashed border-gray-300';
+            if (count === 0) return 'bg-gray-100 text-gray-500';
+            return 'bg-red-100 text-red-700';
+        }
+
+        function postRestoreTriggerBadgeText(count, skipped) {
+            if (skipped) return 'skipped';
+            if (count === null || count === undefined) return '?';
+            return String(count);
+        }
+
+        function postRestoreTriggerBadgeTitle(table, count, skipped) {
+            if (skipped) return table + ' was skipped (' + skipped + ')';
+            if (count === null || count === undefined) return table + ': count unavailable (event_logs join failed)';
+            if (count === 0) return table + ': 0 rows rewritten — table was already clean';
+            return table + ': ' + count + ' historical row(s) rewritten';
+        }
+
+        function postRestoreChannelBadgeClass(channel) {
+            const c = String(channel || '').toLowerCase();
+            if (c === 'email') return 'bg-purple-100 text-purple-800';
+            if (c === 'slack') return 'bg-emerald-100 text-emerald-800';
+            if (c === 'in_app') return 'bg-sky-100 text-sky-800';
+            return 'bg-gray-100 text-gray-700';
+        }
+
+        function postRestoreChannelLabel(channel) {
+            const c = String(channel || '').toLowerCase();
+            if (c === 'in_app') return 'In-app';
+            if (!c) return 'unknown';
+            return c.charAt(0).toUpperCase() + c.slice(1);
+        }
+
+        function copyPostRestoreSweepEventLogLink(eventLogId, sweepTimestamp) {
+            // Build a deep-link to the event_logs row that backs this alert.
+            // Operators paste this into incident tickets / Slack threads so
+            // anyone clicking it lands on the same audit row the alert was
+            // derived from. The path mirrors the existing
+            // viewPostRestoreSweepEventLog flow (module + entity_id + a
+            // narrow time window) so the shareable URL keeps working even
+            // if the row's surrogate id changes between deploys.
+            const params = new URLSearchParams();
+            params.set('module', POST_RESTORE_SWEEP_MODULE);
+            params.set('entity_id', POST_RESTORE_SWEEP_ENTITY_ID);
+            if (eventLogId) params.set('event_log_id', String(eventLogId));
+            if (sweepTimestamp) params.set('sweep_timestamp', sweepTimestamp);
+            const url = window.location.origin + window.location.pathname + '?' + params.toString();
+            const fallback = function () {
+                try {
+                    window.prompt('Copy this link to share the alert\'s event_logs entry:', url);
+                } catch (_e) { /* ignore */ }
+            };
+            if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(function () {
+                    if (typeof showToast === 'function') {
+                        showToast('Event-log link copied to clipboard');
+                    }
+                }).catch(fallback);
+            } else {
+                fallback();
+            }
+        }
+
+        function togglePostRestoreAlertDetail(id) {
+            const row = document.querySelector('[data-testid="row-post-restore-alert-detail-' + id + '"]');
+            const chevron = document.querySelector('[data-testid="button-toggle-post-restore-alert-' + id + '"]');
+            if (!row) return;
+            const isHidden = row.classList.contains('hidden');
+            if (isHidden) {
+                row.classList.remove('hidden');
+                if (chevron) {
+                    chevron.setAttribute('aria-expanded', 'true');
+                    chevron.textContent = '▾';
+                }
+            } else {
+                row.classList.add('hidden');
+                if (chevron) {
+                    chevron.setAttribute('aria-expanded', 'false');
+                    chevron.textContent = '▸';
+                }
+            }
+        }
+
+        function renderPostRestoreAlerts(payload) {
+            const badge = document.getElementById('postRestoreAlertsBadge');
+            const body = document.getElementById('postRestoreAlertsBody');
+            if (!badge || !body) return;
+
+            const items = (payload && Array.isArray(payload.notifications)) ? payload.notifications : [];
+            const total = (payload && typeof payload.total === 'number') ? payload.total : items.length;
+
+            if (items.length === 0) {
+                badge.textContent = 'No alerts';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700';
+                body.innerHTML = '<p class="text-gray-500" data-testid="text-post-restore-alerts-empty">' +
+                    'No post-restore sweep alerts have been recorded. The boot sweep stays silent when it rewrites zero rows; ' +
+                    'an entry will appear here only if a sweep actually rewrote historical rows.' +
+                    '</p>';
+                return;
+            }
+
+            badge.textContent = total + (total === 1 ? ' alert' : ' alerts');
+            badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700';
+
+            const rows = items.map(function (n) {
+                const id = n && n.id != null ? String(n.id) : '';
+                const createdAt = n && (n.created_at || n.createdAt) || null;
+                const priority = (n && n.priority) || 'medium';
+                const status = (n && n.status) || 'unread';
+                const title = (n && n.title) || 'Post-restore sweep alert';
+                const message = (n && n.message) || '';
+                const createdAtIso = createdAt ? new Date(createdAt).toISOString() : '';
+                const triggers = (n && n.triggers) || {};
+                const triggersSource = (n && n.triggers_source) || 'none';
+                const eventLogId = (n && n.event_log_id) || '';
+                const sweepTimestamp = (n && n.sweep_timestamp) || '';
+                const recipient = (n && n.recipient) || '';
+                const channel = (n && n.channel) || '';
+
+                // Empty / zero-row marker: a fully-zero sweep should not
+                // normally produce a notification (the dispatcher gates on
+                // total>0), but if a future change ever does emit one — or
+                // if the join fails so we can't tell — make sure it's
+                // visually distinct from a real incident row.
+                const triggerCounts = POST_RESTORE_TRIGGER_TABLES.map(function (t) {
+                    const trig = triggers[t.key] || {};
+                    return { count: trig.count, skipped: trig.skipped };
+                });
+                const allKnown = triggerCounts.every(function (t) { return t.count !== null && t.count !== undefined; });
+                const totalRewritten = triggerCounts.reduce(function (sum, t) { return sum + (typeof t.count === 'number' ? t.count : 0); }, 0);
+                const isZeroRowSweep = allKnown && totalRewritten === 0;
+
+                const triggerBadgesHtml = POST_RESTORE_TRIGGER_TABLES.map(function (t) {
+                    const trig = triggers[t.key] || {};
+                    const cls = postRestoreTriggerBadgeClass(trig.count, trig.skipped);
+                    const txt = postRestoreTriggerBadgeText(trig.count, trig.skipped);
+                    const ttl = postRestoreTriggerBadgeTitle(t.label, trig.count, trig.skipped);
+                    return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono ' + cls + '" ' +
+                        'title="' + escapeHtml(ttl) + '" ' +
+                        'data-testid="badge-post-restore-alert-count-' + escapeHtml(t.key) + '-' + escapeHtml(id) + '">' +
+                        '<span class="text-[10px] uppercase tracking-wide text-gray-500">' + escapeHtml(t.label) + '</span>' +
+                        '<span class="font-semibold">' + escapeHtml(txt) + '</span>' +
+                        '</span>';
+                }).join('');
+
+                const recipientHtml = recipient
+                    ? '<div class="text-[11px] text-gray-600 mt-1 truncate max-w-[14rem]" ' +
+                        'title="' + escapeHtml(recipient) + '" ' +
+                        'data-testid="text-post-restore-alert-recipient-' + escapeHtml(id) + '">' +
+                        escapeHtml(recipient) +
+                      '</div>'
+                    : '<div class="text-[11px] text-gray-400 italic mt-1" ' +
+                        'data-testid="text-post-restore-alert-recipient-' + escapeHtml(id) + '">no recipient</div>';
+
+                const zeroRowBanner = isZeroRowSweep
+                    ? '<div class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 uppercase tracking-wide" ' +
+                        'data-testid="badge-post-restore-alert-zero-' + escapeHtml(id) + '">' +
+                        'zero-row sweep' +
+                      '</div>'
+                    : '';
+
+                const sourceHint = triggersSource === 'event_logs'
+                    ? 'Counts joined from event_logs.new_value.'
+                    : (triggersSource === 'message'
+                        ? 'Counts parsed from the alert message (event_logs row not found).'
+                        : 'Per-table counts unavailable for this alert.');
+
+                const mainRow = '<tr class="align-top hover:bg-gray-50" data-testid="row-post-restore-alert-' + escapeHtml(id) + '">' +
+                    '<td class="py-3 pe-2 align-top">' +
+                        '<button type="button" ' +
+                            'class="text-gray-400 hover:text-gray-700 text-xs px-1" ' +
+                            'aria-label="Toggle alert details" ' +
+                            'aria-expanded="false" ' +
+                            'data-on-click="togglePostRestoreAlertDetail" ' +
+                            'data-args=\'["' + escapeHtml(id) + '"]\' ' +
+                            'data-testid="button-toggle-post-restore-alert-' + escapeHtml(id) + '">' +
+                            '▸' +
+                        '</button>' +
+                    '</td>' +
+                    '<td class="py-3 pe-4 text-sm text-gray-900 whitespace-nowrap" data-testid="text-post-restore-alert-time-' + escapeHtml(id) + '">' +
+                        escapeHtml(formatPostRestoreTimestamp(createdAt)) +
+                    '</td>' +
+                    '<td class="py-3 pe-4">' +
+                        '<span class="px-2 py-1 rounded-full text-xs font-medium ' + postRestoreSweepPriorityClass(priority) + '" ' +
+                            'data-testid="badge-post-restore-alert-priority-' + escapeHtml(id) + '">' +
+                            escapeHtml(String(priority).toUpperCase()) +
+                        '</span>' +
+                    '</td>' +
+                    '<td class="py-3 pe-4">' +
+                        '<div class="flex flex-col gap-1">' +
+                            '<span class="px-2 py-1 rounded-full text-xs font-medium self-start ' + postRestoreSweepStatusClass(status) + '" ' +
+                                'data-testid="badge-post-restore-alert-status-' + escapeHtml(id) + '">' +
+                                escapeHtml(String(status)) +
+                            '</span>' +
+                            '<span class="px-2 py-0.5 rounded text-[11px] font-medium self-start ' + postRestoreChannelBadgeClass(channel) + '" ' +
+                                'data-testid="badge-post-restore-alert-channel-' + escapeHtml(id) + '">' +
+                                escapeHtml(postRestoreChannelLabel(channel)) +
+                            '</span>' +
+                            recipientHtml +
+                        '</div>' +
+                    '</td>' +
+                    '<td class="py-3 pe-4">' +
+                        '<div class="flex flex-wrap gap-1" data-testid="group-post-restore-alert-counts-' + escapeHtml(id) + '">' +
+                            triggerBadgesHtml +
+                        '</div>' +
+                        zeroRowBanner +
+                    '</td>' +
+                    '<td class="py-3 pe-4 text-sm text-gray-900">' +
+                        '<div class="font-medium" data-testid="text-post-restore-alert-title-' + escapeHtml(id) + '">' +
+                            escapeHtml(title) +
+                        '</div>' +
+                        (message
+                            ? '<div class="text-xs text-gray-500 mt-1 max-w-md line-clamp-2 overflow-hidden" data-testid="text-post-restore-alert-message-' + escapeHtml(id) + '">' + escapeHtml(message) + '</div>'
+                            : '') +
+                    '</td>' +
+                    '<td class="py-3 text-end whitespace-nowrap">' +
+                        '<button type="button" ' +
+                            'class="px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition" ' +
+                            'data-on-click="viewPostRestoreSweepEventLog" ' +
+                            'data-args=\'["' + escapeHtml(createdAtIso) + '"]\' ' +
+                            'data-testid="button-view-event-log-' + escapeHtml(id) + '">' +
+                            'View event log' +
+                        '</button>' +
+                    '</td>' +
+                '</tr>';
+
+                const detailRow = '<tr class="hidden bg-gray-50" data-testid="row-post-restore-alert-detail-' + escapeHtml(id) + '">' +
+                    '<td></td>' +
+                    '<td colspan="6" class="py-3 pe-4">' +
+                        '<div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Full message</div>' +
+                        '<pre class="text-xs text-gray-800 whitespace-pre-wrap font-mono bg-white border border-gray-200 rounded p-2 max-w-3xl" ' +
+                            'data-testid="text-post-restore-alert-full-message-' + escapeHtml(id) + '">' +
+                            escapeHtml(message || '(no message)') +
+                        '</pre>' +
+                        '<div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-600">' +
+                            (eventLogId
+                                ? '<span data-testid="text-post-restore-alert-event-log-id-' + escapeHtml(id) + '">event_logs.id: <code>' + escapeHtml(String(eventLogId)) + '</code></span>'
+                                : '<span class="italic text-gray-400" data-testid="text-post-restore-alert-event-log-id-missing-' + escapeHtml(id) + '">event_logs row not found</span>') +
+                            (sweepTimestamp
+                                ? '<span data-testid="text-post-restore-alert-sweep-ts-' + escapeHtml(id) + '">sweep_timestamp: <code>' + escapeHtml(sweepTimestamp) + '</code></span>'
+                                : '') +
+                            '<button type="button" ' +
+                                'class="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs hover:bg-gray-100 transition" ' +
+                                'data-on-click="copyPostRestoreSweepEventLogLink" ' +
+                                'data-args=\'["' + escapeHtml(String(eventLogId)) + '","' + escapeHtml(sweepTimestamp) + '"]\' ' +
+                                'data-testid="button-copy-event-log-link-' + escapeHtml(id) + '">' +
+                                'Copy event-log link' +
+                            '</button>' +
+                            '<span class="text-gray-400" data-testid="text-post-restore-alert-source-' + escapeHtml(id) + '">' +
+                                escapeHtml(sourceHint) +
+                            '</span>' +
+                        '</div>' +
+                    '</td>' +
+                '</tr>';
+
+                return mainRow + detailRow;
+            }).join('');
+
+            body.innerHTML =
+                '<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-post-restore-alerts">' +
+                    '<thead><tr class="text-start text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
+                        '<th scope="col" class="py-2 pe-2 w-6"></th>' +
+                        '<th scope="col" class="py-2 pe-4">When</th>' +
+                        '<th scope="col" class="py-2 pe-4">Priority</th>' +
+                        '<th scope="col" class="py-2 pe-4">Status / channel</th>' +
+                        '<th scope="col" class="py-2 pe-4">Per-table counts</th>' +
+                        '<th scope="col" class="py-2 pe-4">Alert</th>' +
+                        '<th scope="col" class="py-2 text-end">Action</th>' +
+                    '</tr></thead>' +
+                    '<tbody class="divide-y divide-gray-100">' + rows + '</tbody>' +
+                '</table></div>' +
+                '<p class="text-xs text-gray-500 mt-3" data-testid="text-post-restore-alerts-hint">' +
+                    'Per-table counts are joined from the matching <code>event_logs</code> row\'s <code>new_value</code>. ' +
+                    'Click the chevron on any row to see the full alert message and copy a deep-link to its <code>event_logs</code> entry. ' +
+                    '"View event log" filters the table below to <code>module=' + escapeHtml(POST_RESTORE_SWEEP_MODULE) + '</code> ' +
+                    'around the alert\'s timestamp and auto-expands the closest <code>entity_id=' + escapeHtml(POST_RESTORE_SWEEP_ENTITY_ID) + '</code> row.' +
+                '</p>';
+        }
+
+        async function loadPostRestoreAlerts() {
+            const badge = document.getElementById('postRestoreAlertsBadge');
+            const body = document.getElementById('postRestoreAlertsBody');
+            try {
+                const response = await fetch(
+                    '/api/admin/redaction-sweep/alerts?limit=20',
+                    { credentials: 'same-origin' }
+                );
+                if (response.status === 401 || response.status === 403) {
+                    if (badge) {
+                        badge.textContent = 'Admin only';
+                        badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500';
+                    }
+                    if (body) {
+                        body.innerHTML = '<p class="text-gray-500" data-testid="text-post-restore-alerts-forbidden">' +
+                            'Sign in as an administrator to view post-restore sweep alerts.' +
+                            '</p>';
+                    }
+                    return;
+                }
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                renderPostRestoreAlerts(data);
+            } catch (err) {
+                console.error('Error loading post-restore sweep alerts:', err);
+                if (badge) {
+                    badge.textContent = 'Unavailable';
+                    badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700';
+                }
+                if (body) {
+                    body.innerHTML = '<p class="text-red-600" data-testid="text-post-restore-alerts-error">' +
+                        'Could not load post-restore sweep alerts. Please try again later.' +
+                        '</p>';
+                }
+            }
+        }
+
+        function isoDateInputValue(d) {
+            // <input type="date"> wants YYYY-MM-DD in local time; the
+            // backend filter compares against the `timestamp` column with a
+            // `>=`/`<=` so a one-day window around the alert is plenty.
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
+        }
+
+        // Task #656 — extracted helper. Both `viewPostRestoreSweepEventLog`
+        // (button click) and `applyPostRestoreSweepDeepLink` (page-load
+        // query-param hydration of a copied event-log link) need to set
+        // the same filter inputs and then auto-expand the matching log
+        // row, so the logic is shared here. The function does NOT call
+        // `loadLogs` itself — callers chain that themselves so they can
+        // pass their own `.then` to wire up the auto-expand step.
+        function configurePostRestoreSweepFilters(sweepTimestampMs) {
+            const moduleSelect = document.getElementById('filterModule');
+            const fromInput = document.getElementById('filterFromDate');
+            const toInput = document.getElementById('filterToDate');
+            const severitySelect = document.getElementById('filterSeverity');
+            const aiSelect = document.getElementById('filterAI');
+            const actionSelect = document.getElementById('filterActionType');
+            const entityTypeSelect = document.getElementById('filterEntityType');
+            const searchInput = document.getElementById('filterSearch');
+
+            if (moduleSelect) moduleSelect.value = POST_RESTORE_SWEEP_MODULE;
+            if (severitySelect) severitySelect.value = '';
+            if (aiSelect) aiSelect.value = '';
+            if (actionSelect) actionSelect.value = '';
+            if (entityTypeSelect) entityTypeSelect.value = '';
+            // Don't set the search filter — description text varies between
+            // sweep variants ("Automatic on-boot…" vs "Backfilled
+            // redactSecretLikeStrings…") and the entity_id is not in the
+            // searchable columns. Module + date window already narrow the
+            // table to exactly the matching sweep row(s).
+            if (searchInput) searchInput.value = '';
+
+            if (sweepTimestampMs != null && !isNaN(sweepTimestampMs)) {
+                // Widen the date filter to a full day on either side of the
+                // alert. The dashboard's <input type="date"> only carries
+                // YYYY-MM-DD; postgres parses that as midnight, which would
+                // otherwise exclude rows on the upper-bound date itself.
+                const from = new Date(sweepTimestampMs - 24 * 60 * 60 * 1000);
+                const to = new Date(sweepTimestampMs + 24 * 60 * 60 * 1000);
+                if (fromInput) fromInput.value = isoDateInputValue(from);
+                if (toInput) toInput.value = isoDateInputValue(to);
+            } else {
+                if (fromInput) fromInput.value = '';
+                if (toInput) toInput.value = '';
+            }
+        }
+
+        // Task #656 — auto-expand the row identified by `eventLogId` when
+        // present (exact match), falling back to the closest-by-timestamp
+        // row when only a sweep_timestamp is known. Returns the id of the
+        // row that was expanded, or null if no candidate was found.
+        function expandPostRestoreSweepLogRow(opts) {
+            const eventLogId = opts && opts.eventLogId != null ? String(opts.eventLogId) : null;
+            const sweepTimestampMs = opts && typeof opts.sweepTimestampMs === 'number' ? opts.sweepTimestampMs : null;
+            const tbody = document.getElementById('logsTable');
+            if (!tbody) return null;
+
+            let targetId = null;
+            if (eventLogId) {
+                tbody.querySelectorAll('tr.log-row').forEach(function (row) {
+                    const args = row.getAttribute('data-args');
+                    if (!args) return;
+                    try {
+                        const parsed = JSON.parse(args);
+                        const id = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
+                        if (id != null && String(id) === eventLogId) targetId = id;
+                    } catch (e) { /* ignore */ }
+                });
+            }
+
+            if (targetId == null && sweepTimestampMs != null && !isNaN(sweepTimestampMs)) {
+                let bestId = null;
+                let bestDelta = Infinity;
+                tbody.querySelectorAll('tr.log-row').forEach(function (row) {
+                    const args = row.getAttribute('data-args');
+                    if (!args) return;
+                    let id = null;
+                    try {
+                        const parsed = JSON.parse(args);
+                        if (Array.isArray(parsed) && parsed.length > 0) id = parsed[0];
+                    } catch (e) { /* ignore */ }
+                    if (id == null) return;
+                    const cellText = row.querySelector('td') ? row.querySelector('td').textContent.trim() : '';
+                    const rowMs = new Date(cellText).getTime();
+                    if (isNaN(rowMs)) return;
+                    const delta = Math.abs(rowMs - sweepTimestampMs);
+                    if (delta < bestDelta) { bestDelta = delta; bestId = id; }
+                });
+                targetId = bestId;
+            }
+
+            if (targetId != null && typeof toggleLogDetails === 'function' &&
+                typeof expandedRows !== 'undefined' && !expandedRows.has(targetId)) {
+                toggleLogDetails(targetId);
+            }
+            return targetId;
+        }
+
+        function viewPostRestoreSweepEventLog(createdAtIso) {
+            const ts = createdAtIso ? new Date(createdAtIso) : null;
+            const tsMs = ts && !isNaN(ts.getTime()) ? ts.getTime() : null;
+            configurePostRestoreSweepFilters(tsMs);
+
+            loadLogs(1).then(function () {
+                expandPostRestoreSweepLogRow({ sweepTimestampMs: tsMs });
+            }).catch(function () { /* loadLogs already surfaces errors */ });
+
+            const target = document.getElementById('logsTable');
+            if (target && target.scrollIntoView) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            refreshLogsExportHint();
+        }
+        window.viewPostRestoreSweepEventLog = viewPostRestoreSweepEventLog;
+
+        // Task #656 — consume the query-string written by
+        // `copyPostRestoreSweepEventLogLink`. When an operator pastes a
+        // copied event-log link, the page must land on the targeted
+        // event_logs row instead of just rendering the default first
+        // page. Returns true iff the URL carried deep-link params and
+        // we therefore handled the initial loadLogs() call ourselves;
+        // the caller falls back to the normal page-load behaviour
+        // when this returns false.
+        function applyPostRestoreSweepDeepLink() {
+            let params;
+            try {
+                params = new URLSearchParams(window.location.search || '');
+            } catch (e) { return false; }
+
+            const moduleParam = params.get('module');
+            const entityIdParam = params.get('entity_id');
+            const eventLogIdParam = params.get('event_log_id');
+            const sweepTsParam = params.get('sweep_timestamp');
+
+            // Only act on links that target the post-restore sweep panel.
+            // A bare `?event_log_id=…` without the matching module is not
+            // ours to handle and the rest of the page is left alone.
+            if (moduleParam !== POST_RESTORE_SWEEP_MODULE) return false;
+            if (entityIdParam && entityIdParam !== POST_RESTORE_SWEEP_ENTITY_ID) return false;
+            if (!eventLogIdParam && !sweepTsParam) return false;
+
+            const sweepTs = sweepTsParam ? new Date(sweepTsParam) : null;
+            const sweepTsMs = sweepTs && !isNaN(sweepTs.getTime()) ? sweepTs.getTime() : null;
+            configurePostRestoreSweepFilters(sweepTsMs);
+
+            loadLogs(1).then(function () {
+                expandPostRestoreSweepLogRow({
+                    eventLogId: eventLogIdParam,
+                    sweepTimestampMs: sweepTsMs,
+                });
+                const target = document.getElementById('logsTable');
+                if (target && target.scrollIntoView) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }).catch(function () { /* loadLogs already surfaces errors */ });
+
+            refreshLogsExportHint();
+            return true;
+        }
+        window.applyPostRestoreSweepDeepLink = applyPostRestoreSweepDeepLink;
+
+        const ALERT_CHANNEL_POST_RESTORE = 'post_restore_sweep';
+
+        function formatAlertTimestamp(ts) {
+            if (!ts) return '—';
+            try {
+                const d = new Date(ts);
+                if (isNaN(d.getTime())) return String(ts);
+                return d.toLocaleString();
+            } catch (e) { return String(ts); }
+        }
+
+        function renderAlertRecipients(data) {
+            const badge = document.getElementById('alertRecipientsBadge');
+            const body = document.getElementById('alertRecipientsBody');
+            if (!badge || !body) return;
+            const recipients = Array.isArray(data && data.recipients) ? data.recipients : [];
+            const audit = Array.isArray(data && data.audit) ? data.audit : [];
+            const envFallback = Array.isArray(data && data.env_fallback) ? data.env_fallback : [];
+            const usingEnv = !!(data && data.using_env_fallback);
+            if (usingEnv) {
+                badge.textContent = 'Env fallback (' + envFallback.length + ')';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800';
+            } else if (recipients.length > 0) {
+                badge.textContent = recipients.length + ' configured';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800';
+            } else {
+                badge.textContent = 'No recipients';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600';
+            }
+
+            let recipientRows = '';
+            if (recipients.length === 0) {
+                recipientRows =
+                    '<tr><td colspan="3" class="py-3 text-gray-500" data-testid="text-alert-recipients-empty">' +
+                        'No recipients configured. ' +
+                        (envFallback.length > 0
+                            ? 'Currently falling back to the <code>POST_RESTORE_SWEEP_ALERT_EMAIL</code> env var (' + envFallback.length + ' entries).'
+                            : 'Sweep alert emails are disabled.') +
+                    '</td></tr>';
+            } else {
+                recipientRows = recipients.map(function (r) {
+                    const emailEsc = escapeHtml(r.email || '');
+                    return '<tr data-testid="row-alert-recipient-' + emailEsc + '">' +
+                        '<td class="py-2 pe-4 font-mono text-gray-900" data-testid="text-alert-recipient-email-' + emailEsc + '">' + emailEsc + '</td>' +
+                        '<td class="py-2 pe-4 text-gray-500">' + escapeHtml(r.added_by || '—') + '</td>' +
+                        '<td class="py-2 pe-4 text-gray-500">' + escapeHtml(formatAlertTimestamp(r.added_at)) + '</td>' +
+                        '<td class="py-2 text-end">' +
+                            '<button class="text-red-600 hover:text-red-800 text-xs font-medium" ' +
+                                'data-on-click="removeAlertRecipient" data-args=\'["' + emailEsc + '"]\' ' +
+                                'data-testid="button-remove-alert-recipient-' + emailEsc + '">Remove</button>' +
+                        '</td>' +
+                    '</tr>';
+                }).join('');
+            }
+
+            const envHint = envFallback.length > 0 && !usingEnv
+                ? '<p class="text-xs text-gray-500 mt-2">Env fallback (<code>POST_RESTORE_SWEEP_ALERT_EMAIL</code>) is also configured with ' +
+                    envFallback.length + ' entries but is currently overridden by the list above.</p>'
+                : '';
+
+            let auditRows = '';
+            if (audit.length === 0) {
+                auditRows = '<tr><td colspan="4" class="py-2 text-gray-400 text-xs">No changes recorded yet.</td></tr>';
+            } else {
+                auditRows = audit.map(function (a) {
+                    const colour = a.action === 'remove' ? 'text-red-700' : 'text-green-700';
+                    return '<tr>' +
+                        '<td class="py-1 pe-4 text-xs text-gray-500">' + escapeHtml(formatAlertTimestamp(a.changed_at)) + '</td>' +
+                        '<td class="py-1 pe-4 text-xs ' + colour + ' font-medium">' + escapeHtml(a.action) + '</td>' +
+                        '<td class="py-1 pe-4 text-xs font-mono text-gray-900">' + escapeHtml(a.email) + '</td>' +
+                        '<td class="py-1 text-xs text-gray-500">' + escapeHtml(a.changed_by) + '</td>' +
+                    '</tr>';
+                }).join('');
+            }
+
+            body.innerHTML =
+                '<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-alert-recipients">' +
+                    '<thead><tr class="text-start text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
+                        '<th scope="col" class="py-2 pe-4">Email</th>' +
+                        '<th scope="col" class="py-2 pe-4">Added by</th>' +
+                        '<th scope="col" class="py-2 pe-4">Added at</th>' +
+                        '<th scope="col" class="py-2"></th>' +
+                    '</tr></thead>' +
+                    '<tbody class="divide-y divide-gray-100">' + recipientRows + '</tbody>' +
+                '</table></div>' +
+                envHint +
+                '<form class="mt-4 flex flex-wrap items-end gap-3" data-on-submit="addAlertRecipient" data-pass-event="true">' +
+                    '<div class="flex-1 min-w-[240px]">' +
+                        '<label for="alertRecipientEmailInput" class="block text-xs font-medium text-gray-600 mb-1">Add recipient email</label>' +
+                        '<input id="alertRecipientEmailInput" type="email" required ' +
+                            'placeholder="user@example.invalid" ' +
+                            'class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" ' +
+                            'data-testid="input-alert-recipient-email">' +
+                    '</div>' +
+                    '<button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition" data-testid="button-add-alert-recipient">Add</button>' +
+                '</form>' +
+                '<div id="alertRecipientFormError" class="text-sm text-red-600 mt-2 hidden" data-testid="text-alert-recipient-error"></div>' +
+                '<details class="mt-4">' +
+                    '<summary class="text-xs text-gray-500 cursor-pointer">Recent changes (audit log)</summary>' +
+                    '<div class="overflow-x-auto mt-2"><table class="w-full" data-testid="table-alert-recipients-audit">' +
+                        '<thead><tr class="text-start text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">' +
+                            '<th scope="col" class="py-1 pe-4">When</th>' +
+                            '<th scope="col" class="py-1 pe-4">Action</th>' +
+                            '<th scope="col" class="py-1 pe-4">Email</th>' +
+                            '<th scope="col" class="py-1">By</th>' +
+                        '</tr></thead>' +
+                        '<tbody class="divide-y divide-gray-50">' + auditRows + '</tbody>' +
+                    '</table></div>' +
+                '</details>';
+        }
+
+        async function loadAlertRecipients() {
+            const badge = document.getElementById('alertRecipientsBadge');
+            const body = document.getElementById('alertRecipientsBody');
+            try {
+                const response = await fetch(
+                    '/api/admin/alert-recipients?channel=' + encodeURIComponent(ALERT_CHANNEL_POST_RESTORE),
+                    { credentials: 'same-origin' }
+                );
+                if (response.status === 401 || response.status === 403) {
+                    if (badge) {
+                        badge.textContent = 'Admin only';
+                        badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500';
+                    }
+                    if (body) {
+                        body.innerHTML = '<p class="text-gray-500" data-testid="text-alert-recipients-forbidden">' +
+                            'Sign in as an administrator to manage alert recipients.' +
+                            '</p>';
+                    }
+                    return;
+                }
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                renderAlertRecipients(data);
+            } catch (err) {
+                console.error('Error loading alert recipients:', err);
+                if (badge) {
+                    badge.textContent = 'Unavailable';
+                    badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700';
+                }
+                if (body) {
+                    body.innerHTML = '<p class="text-red-600" data-testid="text-alert-recipients-error">' +
+                        'Could not load the alert recipients list. Please try again later.' +
+                        '</p>';
+                }
+            }
+        }
+
+        function showAlertRecipientError(msg) {
+            const el = document.getElementById('alertRecipientFormError');
+            if (!el) { alert(msg); return; }
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        async function addAlertRecipient(event) {
+            if (event && event.preventDefault) event.preventDefault();
+            const input = document.getElementById('alertRecipientEmailInput');
+            const errEl = document.getElementById('alertRecipientFormError');
+            if (errEl) errEl.classList.add('hidden');
+            if (!input || !input.value.trim()) {
+                showAlertRecipientError('Please enter an email address.');
+                return;
+            }
+            const email = input.value.trim();
+            try {
+                const response = await fetch('/api/admin/alert-recipients', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ channel: ALERT_CHANNEL_POST_RESTORE, email: email }),
+                });
+                const data = await response.json().catch(function () { return {}; });
+                if (!response.ok) {
+                    showAlertRecipientError(data && data.error ? data.error : ('Add failed (HTTP ' + response.status + ')'));
+                    return;
+                }
+                if (data && data.added === false && data.reason === 'duplicate') {
+                    showAlertRecipientError('This email is already on the list.');
+                } else {
+                    if (input) input.value = '';
+                }
+                loadAlertRecipients();
+            } catch (err) {
+                console.error('Error adding alert recipient:', err);
+                showAlertRecipientError('Network error. Please try again.');
+            }
+        }
+        window.addAlertRecipient = addAlertRecipient;
+
+        async function removeAlertRecipient(email) {
+            if (!email) return;
+            if (!window.confirm('Remove ' + email + ' from the post-restore sweep alert list?')) return;
+            const errEl = document.getElementById('alertRecipientFormError');
+            if (errEl) errEl.classList.add('hidden');
+            try {
+                const response = await fetch('/api/admin/alert-recipients', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ channel: ALERT_CHANNEL_POST_RESTORE, email: email }),
+                });
+                const data = await response.json().catch(function () { return {}; });
+                if (!response.ok) {
+                    showAlertRecipientError(data && data.error ? data.error : ('Remove failed (HTTP ' + response.status + ')'));
+                    return;
+                }
+                loadAlertRecipients();
+            } catch (err) {
+                console.error('Error removing alert recipient:', err);
+                showAlertRecipientError('Network error. Please try again.');
+            }
+        }
+        window.removeAlertRecipient = removeAlertRecipient;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            // Task #656 — when the URL carries the deep-link query params
+            // written by `copyPostRestoreSweepEventLogLink` (a copied
+            // event-log link from the post-restore alerts panel), let
+            // `applyPostRestoreSweepDeepLink()` own the initial load so
+            // it can pre-fill the filters and auto-expand the targeted
+            // event_logs row. Otherwise fall back to the normal
+            // unfiltered first page.
+            const handledByDeepLink = (typeof applyPostRestoreSweepDeepLink === 'function')
+                ? applyPostRestoreSweepDeepLink()
+                : false;
+            if (!handledByDeepLink) {
+                loadLogs(1);
+            }
+            loadRedactionSweepStatus();
+            loadPostRestoreAlerts();
+            loadAlertRecipients();
+            refreshLogsExportHint();
+
+            const filterIds = ['filterFromDate', 'filterToDate', 'filterActionType', 'filterEntityType', 'filterModule', 'filterSeverity', 'filterAI', 'filterSearch'];
+            filterIds.forEach(function(id) {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('change', refreshLogsExportHint);
+            });
+        });
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

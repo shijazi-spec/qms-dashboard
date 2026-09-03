@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Sample User | ExampleOrg QMS</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="<REDACTED_URL>"></script>
+    <style>
+        .kpi-card { transition: all 0.3s ease; }
+        .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        .nav-step { animation: fadeIn 0.3s ease forwards; opacity: 0; }
+        .nav-step:nth-child(1) { animation-delay: 0.1s; }
+        .nav-step:nth-child(2) { animation-delay: 0.2s; }
+        .nav-step:nth-child(3) { animation-delay: 0.3s; }
+        .nav-step:nth-child(4) { animation-delay: 0.4s; }
+        @keyframes fadeIn { to { opacity: 1; } }
+        .gauge-bg { stroke-dasharray: 283; stroke-dashoffset: 283; }
+        .gauge-fill { stroke-dasharray: 283; transition: stroke-dashoffset 1s ease-out; }
+        .status-green { background: linear-gradient(135deg, #10b981 0%, #<REDACTED_PHONE>%); }
+        .status-amber { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .status-red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+    </style>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center">
+                            <span class="text-white font-bold text-lg">W+</span>
+                        </div>
+                        <div>
+                            <span class="text-xl font-bold text-gray-900">ExampleOrg</span>
+                            <span class="text-sm text-gray-500 ms-2" data-i18n="scorecard.sec_label">Scorecard</span>
+                        </div>
+                    </a>
+                </div>
+                <div class="flex items-center gap-4">
+                    <a href="/" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100" data-i18n="nav.items.dashboard">Dashboard</a>
+                    <a href="/qms" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100" data-i18n="nav.items.qms">QMS</a>
+                    <a href="/grc" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100" data-i18n="nav.items.grc">GRC</a>
+                    <a href="/kpis" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100" data-i18n="nav.items.kpis">KPIs</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div id="loading" class="flex items-center justify-center min-h-96">
+            <div class="text-center">
+                <div class="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p class="mt-4 text-gray-600" data-i18n="scorecard.loading">Loading scorecard...</p>
+            </div>
+        </div>
+
+        <div id="content" class="hidden">
+            <div class="mb-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 id="employeeName" class="text-3xl font-bold text-gray-900" data-i18n="scorecard.title">Sample User</h1>
+                        <p id="employeeRole" class="text-lg text-gray-600 mt-1" data-i18n="scorecard.emp_role">Quality & GRC Governance Officer</p>
+                        <p id="employeeMission" class="text-sm text-blue-600 mt-2 italic" data-i18n="scorecard.emp_mission">"Ensure governance discipline, visibility & readiness — NOT execution"</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <button data-on-click="refreshScorecard" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            <span data-i18n="common.refresh">Refresh</span>
+                        </button>
+                        <button data-on-click="saveSnapshot" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            <span data-i18n="scorecard.save_snapshot">Save Snapshot</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-2xl shadow-lg p-6 col-span-1">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-4 text-center" data-i18n="scorecard.sec_weighted">Weighted Score</h3>
+                    <div class="relative w-48 h-48 mx-auto">
+                        <svg viewBox="0 0 100 100" class="w-full h-full transform -rotate-90">
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="#e5e7eb" stroke-width="10" class="gauge-bg"/>
+                            <circle id="weightedGauge" cx="50" cy="50" r="45" fill="none" stroke-width="10" stroke-linecap="round" class="gauge-fill"/>
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span id="weightedScore" class="text-4xl font-bold text-gray-900">--</span>
+                            <span class="text-sm text-gray-500" data-i18n="scorecard.kpi_weighted_pct">Weighted %</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-lg p-6 col-span-1">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-4 text-center" data-i18n="scorecard.sec_overall">Overall Score</h3>
+                    <div class="relative w-48 h-48 mx-auto">
+                        <svg viewBox="0 0 100 100" class="w-full h-full transform -rotate-90">
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="#e5e7eb" stroke-width="10" class="gauge-bg"/>
+                            <circle id="overallGauge" cx="50" cy="50" r="45" fill="none" stroke-width="10" stroke-linecap="round" class="gauge-fill"/>
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span id="overallScore" class="text-4xl font-bold text-gray-900">--</span>
+                            <span class="text-sm text-gray-500" data-i18n="scorecard.kpi_avg_pct">Average %</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-lg p-6 col-span-1">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-4" data-i18n="scorecard.kpi_status_summary">KPI Status Summary</h3>
+                    <div id="kpiStatusSummary" class="space-y-3">
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <p id="lastUpdated" class="text-xs text-gray-500"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4" data-i18n="scorecard.six_kpis_title">Sample User's 6 KPIs (2026 Framework)</h2>
+                <p class="text-sm text-gray-600 mb-4" data-i18n="scorecard.six_kpis_subtitle">All KPIs measure TRACKING & READINESS, not execution or decision-making</p>
+            </div>
+
+            <div id="kpiCards" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            </div>
+
+            <div id="navigationMapModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+                <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                    <div class="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
+                        <h3 id="modalKpiName" class="text-xl font-bold text-gray-900"></h3>
+                        <button data-on-click="closeNavigationMap" class="p-2 hover:bg-gray-100 rounded-lg">
+                            <i data-lucide="x" class="w-6 h-6 text-gray-500"></i>
+                        </button>
+                    </div>
+                    <div id="modalContent" class="p-6">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Wrapper kept because the call sites below pass an English fallback
+        // string as the second argument. The i18n guardrail treats this as a
+        // static wrapper alias (its body forwards the key parameter to
+        // WalaPlusI18n.t), so every literal call site is validated against
+        // en.json and ar.json.
+        const _t = (k, v) => (window.WalaPlusI18n && WalaPlusI18n.t) ? (WalaPlusI18n.t(k) || v || k) : (v || k);
+        const API_BASE = '/api/scorecard';
+        let scorecardData = null;
+
+        async function loadScorecard() {
+            try {
+                const response = await fetch(`${API_BASE}/Sample User`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    scorecardData = result.data;
+                    renderScorecard(scorecardData);
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('content').classList.remove('hidden');
+                } else {
+                    throw new Error(result.error || 'Failed to load scorecard');
+                }
+            } catch (error) {
+                console.error('Error loading scorecard:', error);
+                document.getElementById('loading').innerHTML = `
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i data-lucide="alert-circle" class="w-8 h-8 text-red-600"></i>
+                        </div>
+                        <p class="text-red-600">${error.message}</p>
+                        <button data-on-click="loadScorecard" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">${_t('scorecard.retry','Retry')}</button>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        }
+
+        function renderScorecard(data) {
+            document.getElementById('employeeName').textContent = data.employee.name;
+            document.getElementById('employeeRole').textContent = data.employee.role;
+            document.getElementById('employeeMission').textContent = `"${data.employee.mission}"`;
+
+            animateGauge('weightedGauge', 'weightedScore', data.weighted_score);
+            animateGauge('overallGauge', 'overallScore', data.overall_score);
+
+            renderStatusSummary(data.kpis);
+            renderKPICards(data.kpis);
+
+            document.getElementById('lastUpdated').textContent = WalaPlusI18n.t('dyn.scorecard.last_updated_prefix') + new Date(data.generated_at).toLocaleString();
+            
+            lucide.createIcons();
+        }
+
+        function animateGauge(gaugeId, scoreId, value) {
+            const gauge = document.getElementById(gaugeId);
+            const scoreEl = document.getElementById(scoreId);
+            const circumference = 2 * Math.PI * 45;
+            const offset = circumference - (value / 100) * circumference;
+            
+            let color = '#10b981';
+            if (value < 85) color = '#f59e0b';
+            if (value < 70) color = '#ef4444';
+            
+            gauge.style.stroke = color;
+            setTimeout(() => {
+                gauge.style.strokeDashoffset = offset;
+            }, 100);
+            
+            let current = 0;
+            const interval = setInterval(() => {
+                current += 1;
+                if (current >= value) {
+                    current = value;
+                    clearInterval(interval);
+                }
+                scoreEl.textContent = Math.round(current) + '%';
+            }, 20);
+        }
+
+        function renderStatusSummary(kpis) {
+            const summary = { green: 0, amber: 0, red: 0 };
+            kpis.forEach(k => summary[k.status]++);
+            
+            document.getElementById('kpiStatusSummary').innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-full bg-green-500"></div>
+                        <span class="text-sm text-gray-600">${_t('scorecard.on_track','On Track')}</span>
+                    </div>
+                    <span class="font-bold text-green-600">${summary.green}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-full bg-amber-500"></div>
+                        <span class="text-sm text-gray-600">${_t('scorecard.at_risk','At Risk')}</span>
+                    </div>
+                    <span class="font-bold text-amber-600">${summary.amber}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-full bg-red-500"></div>
+                        <span class="text-sm text-gray-600">${_t('scorecard.critical','Critical')}</span>
+                    </div>
+                    <span class="font-bold text-red-600">${summary.red}</span>
+                </div>
+            `;
+        }
+
+        function renderKPICards(kpis) {
+            const container = document.getElementById('kpiCards');
+            container.innerHTML = kpis.map((kpi, index) => {
+                const statusColors = {
+                    green: { bg: 'bg-green-50 border-green-200', text: 'text-green-700', bar: 'bg-green-500' },
+                    amber: { bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700', bar: 'bg-amber-500' },
+                    red: { bg: 'bg-red-50 border-red-200', text: 'text-red-700', bar: 'bg-red-500' }
+                };
+                const colors = statusColors[kpi.status] || statusColors.amber;
+                
+                return `
+                    <div class="kpi-card bg-white rounded-2xl shadow-lg border ${colors.bg} overflow-hidden">
+                        <div class="p-6">
+                            <div class="flex items-start justify-between mb-4">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span class="px-2 py-1 rounded-full text-xs font-medium ${colors.text} ${colors.bg}">${kpi.weight}% Weight</span>
+                                        <span class="text-xs text-gray-500">${kpi.kpi_id}</span>
+                                    </div>
+                                    <h3 class="text-lg font-bold text-gray-900">${kpi.kpi_name}</h3>
+                                    <p class="text-sm text-gray-600 mt-1">${kpi.description}</p>
+                                </div>
+                                <div class="text-end ms-4">
+                                    <div class="text-3xl font-bold ${colors.text}">${kpi.current_value}%</div>
+                                    <div class="text-xs text-gray-500">${_t('scorecard.target_label','Target')}: ${kpi.target}%</div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <div class="flex justify-between text-xs text-gray-500 mb-1">
+                                    <span>${_t('scorecard.progress','Progress')}</span>
+                                    <span>${kpi.current_value}% / ${kpi.target}%</span>
+                                </div>
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div class="h-full ${colors.bar} rounded-full transition-all duration-500" data-style="width: ${Math.min(100, (kpi.current_value / kpi.target) * 100)}%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+                                <div class="flex flex-wrap gap-1">
+                                    ${kpi.data_sources.slice(0, 2).map(src => `
+                                        <span class="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">${src}</span>
+                                    `).join('')}
+                                </div>
+                                <button data-on-click="openNavigationMap" data-args="[${index}]" class="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                    <i data-lucide="map" class="w-4 h-4"></i>
+                                    <span>${_t('scorecard.view_steps','View Steps')}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            lucide.createIcons();
+        }
+
+        function openNavigationMap(index) {
+            const kpi = scorecardData.kpis[index];
+            document.getElementById('modalKpiName').textContent = WalaPlusI18n.t('dyn.scorecard.navigation_map_prefix') + kpi.kpi_name;
+            
+            const statusColors = {
+                green: 'border-green-500',
+                amber: 'border-amber-500',
+                red: 'border-red-500'
+            };
+            
+            document.getElementById('modalContent').innerHTML = `
+                <div class="mb-6 p-4 bg-blue-50 rounded-xl">
+                    <p class="text-sm text-blue-800"><strong>${_t('scorecard.measurement','Measurement')}:</strong> ${kpi.measurement}</p>
+                    <p class="text-sm text-blue-800 mt-1"><strong>${_t('scorecard.current_value','Current Value')}:</strong> ${kpi.current_value}% | <strong>${_t('scorecard.target_label','Target')}:</strong> ${kpi.target}%</p>
+                </div>
+                
+                <div class="space-y-4">
+                    ${kpi.navigation_map.map(step => `
+                        <div class="nav-step border-s-4 ${statusColors[kpi.status]} bg-white rounded-lg shadow p-4">
+                            <div class="flex items-start gap-4">
+                                <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                    ${step.step}
+                                </div>
+                                <div class="flex-1">
+                                    <h4 class="font-semibold text-gray-900">${step.action}</h4>
+                                    <p class="text-sm text-gray-600 mt-1">
+                                        <span class="font-medium">${_t('scorecard.screen_label','Screen')}:</span> 
+                                        <a href="${step.route}" class="text-blue-600 hover:underline">${step.screen}</a>
+                                    </p>
+                                    <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div class="bg-gray-50 rounded-lg p-3">
+                                            <p class="text-xs text-gray-500 uppercase font-medium mb-1">${_t('scorecard.what_to_check','What to Check')}</p>
+                                            <p class="text-sm text-gray-700">${step.what_to_check}</p>
+                                        </div>
+                                        <div class="bg-amber-50 rounded-lg p-3">
+                                            <p class="text-xs text-amber-600 uppercase font-medium mb-1">${_t('scorecard.if_result','If Result')}</p>
+                                            <p class="text-sm text-gray-700">${step.if_result}</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 bg-green-50 rounded-lg p-3">
+                                        <p class="text-xs text-green-600 uppercase font-medium mb-1">${_t('scorecard.then_action','Then Action')}</p>
+                                        <p class="text-sm text-gray-700">${step.then_action}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="mt-6 p-4 bg-gray-100 rounded-xl">
+                    <h4 class="font-semibold text-gray-700 mb-2">${_t('scorecard.data_sources','Data Sources')}</h4>
+                    <div class="flex flex-wrap gap-2">
+                        ${kpi.data_sources.map(src => `
+                            <span class="px-3 py-1 bg-white rounded-full text-sm text-gray-700 shadow-sm">${src}</span>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('navigationMapModal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeNavigationMap() {
+            document.getElementById('navigationMapModal').classList.add('hidden');
+        }
+
+        async function refreshScorecard() {
+            document.getElementById('content').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('loading').innerHTML = `
+                <div class="text-center">
+                    <div class="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p class="mt-4 text-gray-600">${_t('scorecard.refreshing','Refreshing scorecard...')}</p>
+                </div>
+            `;
+            await loadScorecard();
+        }
+
+        async function saveSnapshot() {
+            try {
+                const response = await fetch(`${API_BASE}/snapshot`, { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(WalaPlusI18n.t('dyn.scorecard.snapshot_saved'));
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                alert(WalaPlusI18n.t('dyn.scorecard.error_saving_snapshot', { msg: error.message }));
+            }
+        }
+
+        document.getElementById('navigationMapModal').addEventListener('click', (e) => {
+            if (e.target.id === 'navigationMapModal') {
+                closeNavigationMap();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeNavigationMap();
+            }
+        });
+
+        loadScorecard();
+        lucide.createIcons();
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

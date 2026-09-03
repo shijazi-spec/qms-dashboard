@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>AI Approvals Queue — ExampleOrg Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html, body { font-family: 'Inter', 'Noto Sans Arabic', sans-serif; margin: 0; }
+        .risk-critical { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .risk-high     { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+        .risk-medium   { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .risk-low      { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+        .status-pending  { background: #fef3c7; color: #92400e; }
+        .status-approved { background: #dbeafe; color: #1e40af; }
+        .status-executed { background: #d1fae5; color: #065f46; }
+        .status-rejected { background: #e5e7eb; color: #374151; }
+        .status-failed   { background: #fee2e2; color: #991b1b; }
+        .status-expired  { background: #f3f4f6; color: #6b7280; }
+        .prose-compact { font-size: 0.8125rem; line-height: 1.35; }
+        .prose-compact p { margin: 0.2rem 0; }
+
+        /* Detail modal — scoped to this page so we don't depend on a global
+           dialog stylesheet. Uses fixed positioning + a translucent backdrop;
+           the inner card scrolls when the viewer history is long. */
+        #actionDetailModal {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50;
+            padding: 1rem;
+        }
+        #actionDetailModal.hidden { display: none; }
+        .detail-modal-box {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+            max-width: 720px;
+            width: 100%;
+            max-height: calc(100vh - 2rem);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        .detail-modal-body { overflow-y: auto; padding: 1rem 1.25rem 1.25rem; }
+        .viewer-avatar {
+            width: 2rem; height: 2rem;
+            border-radius: 9999px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 600; color: white;
+            flex-shrink: 0;
+        }
+    </style>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.WalaPlusNav) WalaPlusNav.init('ai-approvals');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto p-6">
+        <div class="flex items-start justify-between mb-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="ai_approvals.title">AI Approvals Queue</h1>
+                <p class="text-sm text-gray-600 mt-1">
+                    Human-in-the-loop gate for AI-proposed QMS actions.
+                    Governed by <a href="/policies?policy_number=WP-SOP-011" class="text-indigo-700 underline">WP-SOP-011</a>
+                    (Automated Decision and Processing) and
+                    <a href="/policies?policy_number=WP-DOC-004" class="text-indigo-700 underline">WP-DOC-004</a>
+                    (AI Adoption Guidelines).
+                </p>
+            </div>
+            <!-- Header action buttons removed (Sample User 2026-06-20): the global
+                 header Refresh already reloads, and the floating Adam chat
+                 launcher (bottom-right) replaces "Open Consultant". -->
+        </div>
+
+        <!-- Controlled Document Registry reminder -->
+        <div class="bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-4 mb-4 text-xs text-blue-900">
+            <strong>Controlled-document control phase.</strong>
+            Each approval card links to its cited WP-coded documents (policies/SOPs/forms). If a document has no file attached yet,
+            upload the approved <code>.docx</code>/<code>.pdf</code> via the
+            <a href="/policies" class="underline font-medium">Policy Governance</a> page — it will auto-version and all existing
+            approval cards will resolve to the new revision.
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 mb-4 flex flex-wrap gap-3 items-center">
+            <!-- Search by request code / text (Sample User 2026-06-18): paste the
+                 APR-… ticket Adam gives you and jump straight to it. -->
+            <label class="text-xs text-gray-600 flex items-center gap-1">
+                <span data-i18n="ai_approvals.filter_search">Search</span>
+                <input id="fltSearch" type="search" autocomplete="off"
+                       aria-label="Search approvals by request code or text"
+                       data-testid="input-search"
+                       placeholder="APR-… code, company, cluster…"
+                       class="border border-gray-300 rounded px-2 py-1 text-sm w-56" />
+            </label>
+
+            <!-- Source filter (Sample User 2026-06-18): separate the autonomous
+                 resolver's SHADOW proposals from requests made WITH ADAM in chat. -->
+            <span class="inline-flex items-center gap-1 whitespace-nowrap">
+                <span class="text-xs text-gray-600" data-i18n="ai_approvals.filter_source">Source</span>
+                <select id="fltSource" aria-label="Filter by request source"
+                        data-testid="select-source"
+                        class="border border-gray-300 rounded px-2 py-1 text-sm">
+                    <option value="adam" selected data-i18n="ai_approvals.source_adam">Adam (chat requests)</option>
+                    <option value="autonomous" data-i18n="ai_approvals.source_autonomous">Autonomous (shadow proposals)</option>
+                    <option value="" data-i18n="ai_approvals.source_any">All sources</option>
+                </select>
+            </span>
+
+            <label class="text-xs text-gray-600" data-i18n="ai_approvals.filter_status">Status</label>
+            <select id="fltStatus" aria-label="Filter by approval status" class="border border-gray-300 rounded px-2 py-1 text-sm">
+                <!-- Task #618: the five operator-facing status options own
+                     their textContent in JS so the inline " (N)" count is
+                     not clobbered by i18n.applyToDOM(). `data-base-i18n`
+                     lets the JS re-translate the label without the suffix;
+                     `data-base-label` is the untranslated fallback.
+                     `approved` (transient executing state) and `all` (meta)
+                     keep their plain `data-i18n` because they don't carry
+                     a count. -->
+                <option value="pending" selected
+                        data-testid="option-status-pending"
+                        data-base-i18n="ai_approvals.status_pending"
+                        data-base-label="Pending">Pending</option>
+                <option value="approved" data-i18n="ai_approvals.status_approved">Approved (executing)</option>
+                <option value="executed"
+                        data-testid="option-status-executed"
+                        data-base-i18n="ai_approvals.status_executed"
+                        data-base-label="Executed">Executed</option>
+                <option value="rejected"
+                        data-testid="option-status-rejected"
+                        data-base-i18n="ai_approvals.status_rejected"
+                        data-base-label="Rejected">Rejected</option>
+                <option value="failed"
+                        data-testid="option-status-failed"
+                        data-base-i18n="ai_approvals.status_failed"
+                        data-base-label="Failed">Failed</option>
+                <option value="expired"
+                        data-testid="option-status-expired"
+                        data-base-i18n="ai_approvals.status_expired"
+                        data-base-label="Expired">Expired</option>
+                <option value="pending,executed,rejected,failed,expired" data-i18n="ai_approvals.status_all">All</option>
+            </select>
+
+            <label class="text-xs text-gray-600 ms-2 flex items-center gap-1">
+                <span data-i18n="ai_approvals.filter_risk">Risk</span>
+                <!-- Task #619: drop-everything signal for a Critical pile-up.
+                     Re-uses the count already fetched by refreshRiskLevelCounts()
+                     so this badge costs no extra request. Hidden until the
+                     Critical bucket reaches CRITICAL_BADGE_THRESHOLD. -->
+                <span id="badgeCriticalRisk"
+                      data-testid="badge-critical-risk"
+                      class="hidden ms-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
+                      title="Pending approvals at Critical risk level">0</span>
+            </label>
+            <select id="fltRisk" aria-label="Filter by risk level" class="border border-gray-300 rounded px-2 py-1 text-sm">
+                <option value="" data-i18n="ai_approvals.risk_any">Any</option>
+                <!-- Task #536: these four options own their textContent in JS so
+                     the inline " (N)" count is not clobbered by i18n.applyToDOM().
+                     `data-base-i18n` lets the JS re-translate the label without
+                     the suffix; `data-base-label` is the untranslated fallback. -->
+                <option value="critical"
+                        data-testid="option-risk-critical"
+                        data-base-i18n="ai_approvals.risk_critical"
+                        data-base-label="Critical">Critical</option>
+                <option value="high"
+                        data-testid="option-risk-high"
+                        data-base-i18n="ai_approvals.risk_high"
+                        data-base-label="High">High</option>
+                <option value="medium"
+                        data-testid="option-risk-medium"
+                        data-base-i18n="ai_approvals.risk_medium"
+                        data-base-label="Medium">Medium</option>
+                <option value="low"
+                        data-testid="option-risk-low"
+                        data-base-i18n="ai_approvals.risk_low"
+                        data-base-label="Low">Low</option>
+            </select>
+
+            <label class="text-xs text-gray-600 ms-2 flex items-center gap-1">
+                <input id="fltMine" type="checkbox" class="rounded"> <span data-i18n="ai_approvals.only_my">Only my proposals</span>
+            </label>
+
+            <label class="text-xs text-gray-600 ms-2" data-i18n="ai_approvals.filter_review">Review</label>
+            <select id="fltReview" aria-label="Filter by review status"
+                    data-testid="select-review-filter"
+                    class="border border-gray-300 rounded px-2 py-1 text-sm"
+                    title="Show only actions you (or anyone) haven't opened the detail page for yet.">
+                <option value="" data-i18n="ai_approvals.review_any">Any</option>
+                <!-- Task #513: these two options own their textContent in JS so
+                     the inline " (N)" count is not clobbered by i18n.applyToDOM().
+                     `data-base-i18n` lets the JS re-translate the label without
+                     the suffix; `data-base-label` is the untranslated fallback. -->
+                <option value="unreviewed_by_me"
+                        data-testid="option-review-unreviewed-by-me"
+                        data-base-i18n="ai_approvals.review_unreviewed_by_me"
+                        data-base-label="Unreviewed by me">Unreviewed by me</option>
+                <option value="no_reviewers"
+                        data-testid="option-review-no-reviewers"
+                        data-base-i18n="ai_approvals.review_no_reviewers"
+                        data-base-label="No reviewer yet">No reviewer yet</option>
+            </select>
+
+            <!-- Sort by request date (Sample User 2026-06-18): newest or oldest first.
+                 Label + select kept together (inline-flex, no wrap between). -->
+            <span class="inline-flex items-center gap-1 ms-2 whitespace-nowrap">
+                <span class="text-xs text-gray-600" data-i18n="ai_approvals.filter_sort">Date</span>
+                <select id="fltSort" aria-label="Sort by request date"
+                        data-testid="select-sort"
+                        class="border border-gray-300 rounded px-2 py-1 text-sm">
+                    <option value="desc" selected data-i18n="ai_approvals.sort_newest">Newest first</option>
+                    <option value="asc" data-i18n="ai_approvals.sort_oldest">Oldest first</option>
+                </select>
+            </span>
+
+            <label class="text-xs text-gray-600 ms-2 flex items-center gap-1" title="Limit the list to rows where credential-shaped values were detected in the payload.">
+                <input id="fltCredWarn" type="checkbox" class="rounded" data-testid="input-credential-warnings-only">
+                <span data-i18n="ai_approvals.only_credential_warnings">Credential warnings only</span>
+                <span id="badgeCredWarn"
+                      data-testid="badge-credential-warnings"
+                      class="hidden ms-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
+                      title="Pending approvals flagged for credential-shaped values">0</span>
+            </label>
+
+            <!-- Bulk-clear the autonomous SHADOW proposals — shown only when the
+                 Source filter is set to Autonomous (Sample User 2026-06-18). These were
+                 never applied to Zoho (shadow), so this only empties the review
+                 backlog; no CRM change. -->
+            <button id="btnClearShadow" type="button"
+                    class="hidden ms-2 px-3 py-2 bg-gray-700 text-white rounded text-sm hover:bg-gray-800"
+                    title="Reject all pending shadow proposals — they were never applied to Zoho; this only clears the review backlog.">🧹 Clear shadow proposals</button>
+
+            <div id="summaryCounts" class="ms-auto text-xs text-gray-600 flex gap-3">
+                <span><span data-i18n="ai_approvals.pending">Pending</span>: <b id="cntPending">—</b></span>
+                <span><span data-i18n="ai_approvals.executed_today">Executed today</span>: <b id="cntExecutedToday">—</b></span>
+            </div>
+        </div>
+
+        <!-- List -->
+        <div id="approvalsList" class="space-y-3">
+            <div class="text-center text-gray-500 text-sm py-10">Loading…</div>
+        </div>
+
+        <!-- Pagination (Sample User 2026-06-18): page through ALL matching requests,
+             not just the first 100. -->
+        <div id="pagerBar" class="hidden mt-4 flex items-center justify-between gap-3 text-sm">
+            <span id="pagerInfo" class="text-gray-600"></span>
+            <div class="flex items-center gap-2">
+                <button id="pagerPrev" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">‹ Previous</button>
+                <button id="pagerNext" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next ›</button>
+            </div>
+        </div>
+    </main>
+
+    <!--
+      Action Detail Modal (Task #297)
+      ---------------------------------------------------------------------
+      Opens when an operator clicks "Details" on a queue card. Surfaces the
+      action metadata plus the full prior_viewers list (with timestamps and
+      per-user view counts) returned by GET /api/ai/approvals/:code, so the
+      detail view matches what auditors see in the audit trail. The summary
+      chips on the queue card are truncated to 5 viewers; this panel shows
+      every reviewer who has opened the action, ordered by most recent view.
+    -->
+    <div id="actionDetailModal" class="hidden" role="dialog" aria-modal="true"
+         aria-labelledby="actionDetailTitle" aria-describedby="actionDetailSummary"
+         tabindex="-1" data-testid="modal-action-detail">
+        <div class="detail-modal-box">
+            <div class="flex items-start justify-between gap-3 px-5 py-3 border-b border-gray-200">
+                <div class="min-w-0">
+                    <h2 id="actionDetailTitle" class="text-base font-semibold text-gray-900 truncate"
+                        data-i18n="dyn.ai_approvals.action_detail_title"
+                        data-testid="text-action-detail-title">AI action detail</h2>
+                    <p id="actionDetailSummary" class="text-xs text-gray-500 mt-0.5"
+                       data-i18n="dyn.ai_approvals.loading_action_details">
+                        Loading action details…
+                    </p>
+                </div>
+                <button id="actionDetailClose" type="button"
+                        aria-label="Close action detail dialog"
+                        data-testid="button-close-action-detail"
+                        class="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="actionDetailBody" class="detail-modal-body" data-testid="container-action-detail-body">
+                <div class="text-sm text-gray-500 py-6 text-center">Loading…</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+(function () {
+    // Task #751: this helper used to forward its first argument straight
+    // to the translator (a t-of-variable shape), but the i18n guardrail
+    // in scripts/check-i18n.cjs cannot statically verify that pattern —
+    // which means a missing Arabic key could silently regress the page
+    // for ar-locale users. We now dispatch by literal key below so every
+    // translator call site is a string literal the gate can validate
+    // against en.json + ar.json. To add a new dynamic message, add the
+    // case below AND the matching entry under `dyn.ai_approvals` in
+    // dashboard/i18n/en.json + dashboard/i18n/ar.json.
+    const _t = (k, v) => {
+        if (!window.WalaPlusI18n) return k;
+        switch (k) {
+            case 'dyn.ai_approvals.no_approvals':
+                return WalaPlusI18n.t('dyn.ai_approvals.no_approvals', v);
+            case 'dyn.ai_approvals.prompt_rejection_reason':
+                return WalaPlusI18n.t('dyn.ai_approvals.prompt_rejection_reason', v);
+            case 'dyn.ai_approvals.reason_required':
+                return WalaPlusI18n.t('dyn.ai_approvals.reason_required', v);
+            case 'dyn.ai_approvals.loading':
+                return WalaPlusI18n.t('dyn.ai_approvals.loading', v);
+            case 'dyn.ai_approvals.action_not_found_title':
+                return WalaPlusI18n.t('dyn.ai_approvals.action_not_found_title', v);
+            case 'dyn.ai_approvals.action_not_found_body':
+                return WalaPlusI18n.t('dyn.ai_approvals.action_not_found_body', v);
+            case 'dyn.ai_approvals.failed_load':
+                return WalaPlusI18n.t('dyn.ai_approvals.failed_load', v);
+            case 'dyn.ai_approvals.processing':
+                return WalaPlusI18n.t('dyn.ai_approvals.processing', v);
+            case 'dyn.ai_approvals.details':
+                return WalaPlusI18n.t('dyn.ai_approvals.details', v);
+            case 'dyn.ai_approvals.action_detail_title':
+                return WalaPlusI18n.t('dyn.ai_approvals.action_detail_title', v);
+            case 'dyn.ai_approvals.loading_action_details':
+                return WalaPlusI18n.t('dyn.ai_approvals.loading_action_details', v);
+            case 'dyn.ai_approvals.close_action_detail_dialog':
+                return WalaPlusI18n.t('dyn.ai_approvals.close_action_detail_dialog', v);
+            case 'dyn.ai_approvals.viewed_by':
+                return WalaPlusI18n.t('dyn.ai_approvals.viewed_by', v);
+            case 'dyn.ai_approvals.viewers_explainer':
+                return WalaPlusI18n.t('dyn.ai_approvals.viewers_explainer', v);
+            case 'dyn.ai_approvals.no_prior_viewers':
+                return WalaPlusI18n.t('dyn.ai_approvals.no_prior_viewers', v);
+            case 'dyn.ai_approvals.prior_reviewers_aria':
+                return WalaPlusI18n.t('dyn.ai_approvals.prior_reviewers_aria', v);
+            case 'dyn.ai_approvals.last_viewed_label':
+                return WalaPlusI18n.t('dyn.ai_approvals.last_viewed_label', v);
+            case 'dyn.ai_approvals.unknown_reviewer':
+                return WalaPlusI18n.t('dyn.ai_approvals.unknown_reviewer', v);
+            case 'dyn.ai_approvals.malformed_response':
+                return WalaPlusI18n.t('dyn.ai_approvals.malformed_response', v);
+            case 'dyn.ai_approvals.view_zero':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_zero', v);
+            case 'dyn.ai_approvals.view_one':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_one', v);
+            case 'dyn.ai_approvals.view_two':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_two', v);
+            case 'dyn.ai_approvals.view_few':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_few', v);
+            case 'dyn.ai_approvals.view_many':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_many', v);
+            case 'dyn.ai_approvals.view_other':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_other', v);
+            case 'dyn.ai_approvals.reviewer_zero':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_zero', v);
+            case 'dyn.ai_approvals.reviewer_one':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_one', v);
+            case 'dyn.ai_approvals.reviewer_two':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_two', v);
+            case 'dyn.ai_approvals.reviewer_few':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_few', v);
+            case 'dyn.ai_approvals.reviewer_many':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_many', v);
+            case 'dyn.ai_approvals.reviewer_other':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_other', v);
+            default:
+                return k;
+        }
+    };
+    // Pluralisation helper. Picks the right CLDR plural category for the
+    // active language (Arabic uses 6 categories — zero/one/two/few/many/other
+    // — versus English's two), formats the count with locale-appropriate
+    // numerals, then dispatches to the matching literal _t key. The switch
+    // here keeps every key visible to the i18n guardrail (Task #295).
+    const _plural = (base, n) => {
+        const lang = (window.WalaPlusI18n && window.WalaPlusI18n.currentLang)
+            ? window.WalaPlusI18n.currentLang() : 'en';
+        let cat = 'other';
+        try { cat = new Intl.PluralRules(lang).select(n); } catch (_) {}
+        const formatted = (window.WalaPlusI18n && window.WalaPlusI18n.formatNumber)
+            ? window.WalaPlusI18n.formatNumber(n) : String(n);
+        const v = { n: formatted };
+        if (base === 'view') {
+            switch (cat) {
+                case 'zero': return _t('dyn.ai_approvals.view_zero', v);
+                case 'one':  return _t('dyn.ai_approvals.view_one',  v);
+                case 'two':  return _t('dyn.ai_approvals.view_two',  v);
+                case 'few':  return _t('dyn.ai_approvals.view_few',  v);
+                case 'many': return _t('dyn.ai_approvals.view_many', v);
+                default:     return _t('dyn.ai_approvals.view_other', v);
+            }
+        }
+        if (base === 'reviewer') {
+            switch (cat) {
+                case 'zero': return _t('dyn.ai_approvals.reviewer_zero', v);
+                case 'one':  return _t('dyn.ai_approvals.reviewer_one',  v);
+                case 'two':  return _t('dyn.ai_approvals.reviewer_two',  v);
+                case 'few':  return _t('dyn.ai_approvals.reviewer_few',  v);
+                case 'many': return _t('dyn.ai_approvals.reviewer_many', v);
+                default:     return _t('dyn.ai_approvals.reviewer_other', v);
+            }
+        }
+        return String(n);
+    };
+    var listEl = document.getElementById('approvalsList');
+    var fltStatus = document.getElementById('fltStatus');
+    var fltRisk = document.getElementById('fltRisk');
+    var fltMine = document.getElementById('fltMine');
+    var fltReview = document.getElementById('fltReview');
+    var fltCredWarn = document.getElementById('fltCredWarn');
+    var fltSearch = document.getElementById('fltSearch');
+    var fltSort = document.getElementById('fltSort');
+    var fltSource = document.getElementById('fltSource');
+    var btnClearShadow = document.getElementById('btnClearShadow');
+    var badgeCredWarn = document.getElementById('badgeCredWarn');
+    // Task #619: header-level "drop everything" badge for Critical pile-ups.
+    // Threshold defaults to 1 (badge shows for ANY critical action) but can be
+    // raised by other queue-config code via window.WP_CRITICAL_RISK_BADGE_THRESHOLD,
+    // matching how the rest of the queue page reads optional admin overrides.
+    var badgeCriticalRisk = document.getElementById('badgeCriticalRisk');
+    var CRITICAL_BADGE_THRESHOLD = (function () {
+        var n = parseInt(window.WP_CRITICAL_RISK_BADGE_THRESHOLD, 10);
+        return (isFinite(n) && n >= 1) ? n : 1;
+    })();
+    var optUnreviewedByMe = fltReview.querySelector('option[value="unreviewed_by_me"]');
+    var optNoReviewers = fltReview.querySelector('option[value="no_reviewers"]');
+    // Task #536: risk-dropdown options that get inline " (N)" counts.
+    var optRiskCritical = fltRisk.querySelector('option[value="critical"]');
+    var optRiskHigh     = fltRisk.querySelector('option[value="high"]');
+    var optRiskMedium   = fltRisk.querySelector('option[value="medium"]');
+    var optRiskLow      = fltRisk.querySelector('option[value="low"]');
+    // Task #618: status-dropdown options that get inline " (N)" counts.
+    // We deliberately omit `approved` (transient executing state) and the
+    // `all` meta-option — they don't represent a triage backlog the
+    // operator can act on at a glance.
+    var optStatusPending  = fltStatus.querySelector('option[value="pending"]');
+    var optStatusExecuted = fltStatus.querySelector('option[value="executed"]');
+    var optStatusRejected = fltStatus.querySelector('option[value="rejected"]');
+    var optStatusFailed   = fltStatus.querySelector('option[value="failed"]');
+    var optStatusExpired  = fltStatus.querySelector('option[value="expired"]');
+    var cntPending = document.getElementById('cntPending');
+    var cntExecutedToday = document.getElementById('cntExecutedToday');
+
+    // Pagination state (Sample User 2026-06-18): page through ALL matching requests.
+    var PAGE_SIZE = 100;
+    var pageOffset = 0;
+    var lastTotal = 0;
+    var pagerBar = document.getElementById('pagerBar');
+    var pagerInfo = document.getElementById('pagerInfo');
+    var pagerPrev = document.getElementById('pagerPrev');
+    var pagerNext = document.getElementById('pagerNext');
+
+    // Cache the most recent server response so the credential-warning toggle
+    // can re-filter without round-tripping the API.
+    var lastRows = [];
+
+    function hasCredentialWarning(row) {
+        return Array.isArray(row && row.credential_warnings) && row.credential_warnings.length > 0;
+    }
+
+    // Task #513: refresh the inline counts shown next to each option of the
+    // "Review" filter dropdown ("Unreviewed by me (N)" / "No reviewer yet (M)").
+    // We send the same Status / Risk / mine query params as the LIST request
+    // so the numbers stay coherent with the visible queue. Soft-fail: on
+    // error we drop the suffix rather than render a stale count.
+    function _baseLabel(opt) {
+        // Prefer the live i18n key (re-translates after applyToDOM); fall
+        // back to the static data-base-label so the dropdown still reads
+        // sensibly if i18n is unavailable.
+        //
+        // Task #668: this used to read the key from the option's
+        // `data-base-i18n` attribute and pass that variable into the
+        // translator helper. The dynamic-key guardrail (Task #295) cannot
+        // statically verify variable keys, so we now map the option's
+        // `value` to a STATIC literal key below. The `data-base-i18n`
+        // attributes on the markup remain — they are still picked up by
+        // `applyToDOM` for the initial render; this helper only handles
+        // the post-count re-render.
+        var fallback = opt.getAttribute('data-base-label') || opt.textContent;
+        if (!opt || !window.WalaPlusI18n) return fallback;
+        // The translator helper returns the key itself when no translation
+        // exists; treat that as "no translation" and use the fallback.
+        var key, translated;
+        switch (opt.value) {
+            case 'unreviewed_by_me':
+                key = 'ai_approvals.review_unreviewed_by_me';
+                translated = WalaPlusI18n.t('ai_approvals.review_unreviewed_by_me');
+                break;
+            case 'no_reviewers':
+                key = 'ai_approvals.review_no_reviewers';
+                translated = WalaPlusI18n.t('ai_approvals.review_no_reviewers');
+                break;
+            default:
+                return fallback;
+        }
+        if (translated && translated !== key) return translated;
+        return fallback;
+    }
+    function _formatNumber(n) {
+        if (window.WalaPlusI18n && typeof WalaPlusI18n.formatNumber === 'function') {
+            try { return WalaPlusI18n.formatNumber(n); } catch (_) { /* fall through */ }
+        }
+        return String(n);
+    }
+    function _setOptionCount(opt, n) {
+        if (!opt) return;
+        var base = _baseLabel(opt);
+        if (n == null) {
+            opt.textContent = base;
+        } else {
+            opt.textContent = base + ' (' + _formatNumber(n) + ')';
+        }
+    }
+    // Cache the most recent counts so we can re-render the option labels
+    // when i18n becomes ready (translations swap in) or the user toggles
+    // language. Without this, a slow-network race where applyToDOM() runs
+    // AFTER our first count fetch would have left the labels in their
+    // English fallback wording.
+    var lastReviewCounts = { unreviewed_by_me: null, no_reviewers: null };
+
+    function _applyReviewLabels() {
+        _setOptionCount(optUnreviewedByMe, lastReviewCounts.unreviewed_by_me);
+        _setOptionCount(optNoReviewers, lastReviewCounts.no_reviewers);
+    }
+
+    function refreshReviewStatusCounts() {
+        var p = new URLSearchParams();
+        p.set('status', fltStatus.value);
+        if (fltRisk.value) p.set('risk_level', fltRisk.value);
+        if (fltMine.checked) p.set('mine', 'true');
+        fetch('/api/ai/approvals/review-status-counts?' + p.toString(), { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                lastReviewCounts.unreviewed_by_me =
+                    typeof data.unreviewed_by_me === 'number' ? data.unreviewed_by_me : 0;
+                lastReviewCounts.no_reviewers =
+                    typeof data.no_reviewers === 'number' ? data.no_reviewers : 0;
+                _applyReviewLabels();
+            })
+            .catch(function () {
+                // Soft-fail: drop the suffix so the operator never sees a
+                // stale or misleading count.
+                lastReviewCounts.unreviewed_by_me = null;
+                lastReviewCounts.no_reviewers = null;
+                _applyReviewLabels();
+            });
+    }
+
+    // Task #536: same shape as the Review-status counts above, but for the
+    // four Risk options. Counts honour the operator's current Status /
+    // "Only my proposals" / Review filter selections so they stay coherent
+    // with the visible queue. Soft-fail drops the suffix on error so we
+    // never render a stale or misleading count.
+    var lastRiskCounts = { critical: null, high: null, medium: null, low: null };
+
+    function _applyRiskLabels() {
+        _setOptionCount(optRiskCritical, lastRiskCounts.critical);
+        _setOptionCount(optRiskHigh,     lastRiskCounts.high);
+        _setOptionCount(optRiskMedium,   lastRiskCounts.medium);
+        _setOptionCount(optRiskLow,      lastRiskCounts.low);
+        _applyCriticalRiskBadge();
+    }
+
+    // Task #619: surface a header-level red badge whenever the Critical bucket
+    // is at or above CRITICAL_BADGE_THRESHOLD. Re-uses lastRiskCounts so we
+    // never make an extra request. Soft-fails (null counts from the catch
+    // branch above) just hide the badge — same approach as the count suffix.
+    function _applyCriticalRiskBadge() {
+        if (!badgeCriticalRisk) return;
+        var c = lastRiskCounts.critical;
+        var visible = (typeof c === 'number') && (c >= CRITICAL_BADGE_THRESHOLD);
+        badgeCriticalRisk.textContent = visible ? String(c) : '0';
+        badgeCriticalRisk.classList.toggle('hidden', !visible);
+    }
+
+    function refreshRiskLevelCounts() {
+        var p = new URLSearchParams();
+        p.set('status', fltStatus.value);
+        if (fltMine.checked) p.set('mine', 'true');
+        // Pass the Review filter through so the four buckets agree with
+        // the visible list when the operator narrows by review-state.
+        // We DO NOT send risk_level: the whole point of these counts is
+        // to show every bucket regardless of which one is selected.
+        if (fltReview.value) p.set('review_filter', fltReview.value);
+        fetch('/api/ai/approvals/risk-level-counts?' + p.toString(), { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                lastRiskCounts.critical = typeof data.critical === 'number' ? data.critical : 0;
+                lastRiskCounts.high     = typeof data.high     === 'number' ? data.high     : 0;
+                lastRiskCounts.medium   = typeof data.medium   === 'number' ? data.medium   : 0;
+                lastRiskCounts.low      = typeof data.low      === 'number' ? data.low      : 0;
+                _applyRiskLabels();
+            })
+            .catch(function () {
+                lastRiskCounts.critical = null;
+                lastRiskCounts.high     = null;
+                lastRiskCounts.medium   = null;
+                lastRiskCounts.low      = null;
+                _applyRiskLabels();
+            });
+    }
+
+    // Task #618: same shape as the Risk-level counts above, but for the
+    // five Status options. Counts honour the operator's current Risk /
+    // "Only my proposals" / Review filter selections so they stay
+    // coherent with the visible queue. We DO NOT send the Status filter
+    // itself: the whole point of these counts is to show every status
+    // bucket regardless of which one is selected, otherwise four of the
+    // five labels would always read "(0)" and the operator could never
+    // see a backlog or failure spike at a glance. Soft-fail drops the
+    // suffix on error so we never render a stale or misleading count.
+    var lastStatusCounts = {
+        pending: null,
+        executed: null,
+        rejected: null,
+        failed: null,
+        expired: null,
+    };
+
+    function _applyStatusLabels() {
+        _setOptionCount(optStatusPending,  lastStatusCounts.pending);
+        _setOptionCount(optStatusExecuted, lastStatusCounts.executed);
+        _setOptionCount(optStatusRejected, lastStatusCounts.rejected);
+        _setOptionCount(optStatusFailed,   lastStatusCounts.failed);
+        _setOptionCount(optStatusExpired,  lastStatusCounts.expired);
+    }
+
+    function refreshStatusCounts() {
+        var p = new URLSearchParams();
+        if (fltRisk.value) p.set('risk_level', fltRisk.value);
+        if (fltMine.checked) p.set('mine', 'true');
+        if (fltReview.value) p.set('review_filter', fltReview.value);
+        // Keep the Status dropdown counts consistent with the Source filter.
+        if (fltSource && fltSource.value) p.set('source', fltSource.value);
+        fetch('/api/ai/approvals/status-counts?' + p.toString(), { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                lastStatusCounts.pending  = typeof data.pending  === 'number' ? data.pending  : 0;
+                lastStatusCounts.executed = typeof data.executed === 'number' ? data.executed : 0;
+                lastStatusCounts.rejected = typeof data.rejected === 'number' ? data.rejected : 0;
+                lastStatusCounts.failed   = typeof data.failed   === 'number' ? data.failed   : 0;
+                lastStatusCounts.expired  = typeof data.expired  === 'number' ? data.expired  : 0;
+                _applyStatusLabels();
+            })
+            .catch(function () {
+                lastStatusCounts.pending  = null;
+                lastStatusCounts.executed = null;
+                lastStatusCounts.rejected = null;
+                lastStatusCounts.failed   = null;
+                lastStatusCounts.expired  = null;
+                _applyStatusLabels();
+            });
+    }
+
+    // Re-apply our labels once i18n finishes its initial load — covers the
+    // race where the count fetch resolves BEFORE applyToDOM() runs and the
+    // sibling "Any" option still owns its data-i18n key. We also re-translate
+    // the base label from the i18n key when this fires.
+    document.addEventListener('walaPlusI18nReady', function () {
+        _applyReviewLabels();
+        _applyRiskLabels();
+        _applyStatusLabels();
+    });
+
+    // The credential-warning badge always reflects the GLOBAL pending queue —
+    // not whatever subset the operator has currently filtered to. We hit a
+    // dedicated count endpoint so the count is correct even when the page is
+    // showing executed rows, paginated past the first 100, or narrowed by
+    // risk/mine. Visibility-scoped server-side: admins / quality_managers
+    // see the global count; everyone else sees their own.
+    function refreshGlobalCredentialBadge() {
+        fetch('/api/ai/approvals/credential-warning-count', { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                applyBadgeCount(typeof data.count === 'number' ? data.count : 0);
+            })
+            .catch(function () {
+                // Soft-fail: hide the badge rather than show a stale count.
+                applyBadgeCount(0);
+            });
+    }
+
+    function applyBadgeCount(n) {
+        var safe = Math.max(0, n | 0);
+        badgeCredWarn.textContent = String(safe);
+        badgeCredWarn.classList.toggle('hidden', safe === 0);
+    }
+
+    function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+    function _td(prefix, value) {
+        if (!value) return '';
+        return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic)
+            ? (window.WalaPlusI18n.tDynamic(prefix, value) || escapeHtml(value))
+            : escapeHtml(value);
+    }
+
+    function riskClass(r) { return 'risk-' + (r || 'low'); }
+    function statusClass(s) { return 'status-' + (s || 'pending'); }
+
+    function buildQuery() {
+        var p = new URLSearchParams();
+        p.set('status', fltStatus.value);
+        if (fltRisk.value) p.set('risk_level', fltRisk.value);
+        if (fltMine.checked) p.set('mine', 'true');
+        // Task #298: review-status filter is included in every request,
+        // including the 30s auto-refresh, so the operator's selection
+        // persists across reloads without extra client-side bookkeeping.
+        if (fltReview.value) p.set('review_filter', fltReview.value);
+        // Search by APR-code / company / cluster text + date sort (Sample User 2026-06-18).
+        if (fltSearch && fltSearch.value.trim()) p.set('search', fltSearch.value.trim());
+        if (fltSort && fltSort.value === 'asc') p.set('sort', 'asc');
+        if (fltSource && fltSource.value) p.set('source', fltSource.value);
+        p.set('limit', String(PAGE_SIZE));
+        p.set('offset', String(pageOffset));
+        return p.toString();
+    }
+
+    function renderEmpty() {
+        listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10 bg-white rounded-xl shadow-sm border border-gray-200">' + _t('dyn.ai_approvals.no_approvals') + '</div>';
+    }
+
+    function renderPriorViewers(viewers) {
+        if (!viewers || viewers.length === 0) return '';
+        var MAX = 5;
+        var shown = viewers.slice(0, MAX);
+        var extra = viewers.length > MAX ? ' +' + (viewers.length - MAX) + ' more' : '';
+        var chips = shown.map(function (v) {
+            var label = escapeHtml(v.user_name || v.user_email || 'Unknown');
+            var role  = escapeHtml(v.user_role || '');
+            var count = v.view_count > 1 ? ' ×' + v.view_count : '';
+            var title = (v.user_email ? escapeHtml(v.user_email) + ' · ' : '') + role + (v.last_viewed_at ? ' · ' + new Date(v.last_viewed_at).toLocaleString() : '');
+            return '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs" title="' + title + '">' +
+                '<svg class="w-2.5 h-2.5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="7" r="4"/><path d="M2 17a8 8 0 0116 0H2z"/></svg>' +
+                label + (role ? ' <span class="opacity-60">(' + role + ')</span>' : '') + (count ? '<span class="opacity-50">' + escapeHtml(count) + '</span>' : '') +
+                '</span>';
+        }).join('');
+        return '<div class="flex flex-wrap items-center gap-1 mt-1">' +
+            '<span class="text-xs text-gray-400 shrink-0">Viewed by:</span>' +
+            chips +
+            (extra ? '<span class="text-xs text-gray-400">' + escapeHtml(extra) + '</span>' : '') +
+            '</div>';
+    }
+
+    // Task #477: render the "credential-shaped values detected" banner
+    // when the AI tool boundary flagged the submission. Lists up to five
+    // offending field paths inline; the rest collapse into a "+N more"
+    // counter so the row stays a fixed height.
+    function renderCredentialWarnings(warnings) {
+        if (!warnings || warnings.length === 0) return '';
+        var MAX = 5;
+        var shown = warnings.slice(0, MAX);
+        var extra = warnings.length > MAX ? ' (+' + (warnings.length - MAX) + ' more)' : '';
+        var chips = shown.map(function (w) {
+            var kindLabel = w.kind === 'sensitive-key' ? 'sensitive field name'
+                : w.kind === 'regex' ? ('matches ' + (w.patternName || 'known credential pattern'))
+                : w.kind === 'password' ? 'looks like a password'
+                : w.kind === 'entropy' ? 'high-entropy token'
+                : w.kind;
+            return '<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-mono text-xs" ' +
+                'title="' + escapeHtml(kindLabel) + '">' +
+                escapeHtml(w.path) + '</span>';
+        }).join(' ');
+        return '<div class="mt-2 p-2 rounded border border-red-300 bg-red-50" data-credential-warning>' +
+            '<div class="flex items-start gap-2">' +
+                '<svg class="w-4 h-4 text-red-600 mt-0.5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">' +
+                  '<path fill-rule="evenodd" d="M8.485 2.495c.<REDACTED_PHONE> 3.03 0l6.28 10.875c.<REDACTED_PHONE>.516 2.625H3.72c-<REDACTED_PHONE>.515-2.625L8.485 2.495zM10 6a1 1 0 011 1v3a1 1 0 11-2 0V7a1 1 0 011-1zm0 8a1 <REDACTED_PHONE> 2z" clip-rule="evenodd"/>' +
+                '</svg>' +
+                '<div class="flex-1 min-w-0">' +
+                  '<div class="text-xs font-semibold text-red-900">' +
+                    'This payload contains values that look like credentials.' +
+                  '</div>' +
+                  '<div class="text-xs text-red-800 mt-0.5">' +
+                    'Route real secrets through the secret store, not through chat. ' +
+                    'The values have already been redacted on disk, but the requester should be coached.' +
+                  '</div>' +
+                  '<div class="flex flex-wrap items-center gap-1 mt-1">' + chips +
+                    (extra ? '<span class="text-xs text-red-700">' + escapeHtml(extra) + '</span>' : '') +
+                  '</div>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderRow(a) {
+        var previewText = (a.payload_preview || '').replace(/\*\*/g, '').slice(0, 260);
+        var cited = (a.compliance_refs || [])
+            .filter(function (r) { return /^WP-/.test(r); })
+            .slice(0, 4)
+            .map(function (r) {
+                var code = /^(WP-[A-Z]+-\d+)/.exec(r);
+                return code
+                    ? '<a href="/policies?policy_number=' + code[1] + '" target="_blank" class="text-indigo-700 underline">' + code[1] + '</a>'
+                    : escapeHtml(r);
+            }).join(' · ');
+
+        var actionsHtml = '';
+        if (a.status === 'pending') {
+            // Single approve path (Sample User 2026-06-18): approval is via the admin
+            // password only — the old plain "Approve" button was removed to avoid
+            // two competing approve actions on the same card.
+            actionsHtml =
+                '<button data-code="' + a.action_code + '" data-act="approve-key" class="px-3 py-2 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700">Approve with admin password 🔑</button>' +
+                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-2 bg-white border border-red-300 text-red-700 rounded text-sm hover:bg-red-50 ms-2">Reject</button>';
+        } else if (a.status === 'executed') {
+            // Show "already applied via APR-…" for a twin auto-closed because an
+            // identical request was the one actually executed (Sample User 2026-06-18).
+            var supNote = '';
+            try {
+                var er = a.execution_result
+                    ? (typeof a.execution_result === 'string' ? JSON.parse(a.execution_result) : a.execution_result)
+                    : null;
+                if (er && er.superseded_by) supNote = ' (already applied via ' + er.superseded_by + ')';
+            } catch (e) { /* ignore */ }
+            actionsHtml = '<span class="text-xs text-green-700">' + (a.result_entity_id ? '→ ' + escapeHtml(a.result_entity_id) : 'Done') + escapeHtml(supNote) + '</span>';
+        } else if (a.status === 'rejected') {
+            actionsHtml = '<span class="text-xs text-gray-700" title="' + escapeHtml(a.rejection_reason || '') + '">✗ ' + escapeHtml((a.rejection_reason || '').slice(0, 40)) + '</span>';
+        } else {
+            actionsHtml = '<span class="text-xs text-gray-500">' + _td('dyn.ai_approvals.status', a.status) + '</span>';
+        }
+
+        // Task #297: a "Details" link sits below the row's primary action
+        // buttons and opens the detail modal. We render it for every row
+        // (regardless of status) because the viewer history is interesting
+        // for executed/rejected actions too — auditors care who reviewed
+        // the action before it shipped, not only while it was pending.
+        actionsHtml += '<button type="button" data-code="' + a.action_code + '" data-act="details" ' +
+            'data-testid="button-details-' + escapeHtml(a.action_code) + '" ' +
+            'class="text-xs text-indigo-700 hover:text-indigo-900 underline mt-1">' +
+            escapeHtml(_t('dyn.ai_approvals.details')) + '</button>';
+
+        return (
+            '<div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4" data-code="' + a.action_code + '">' +
+              '<div class="flex items-start justify-between gap-3">' +
+                '<div class="flex-1 min-w-0">' +
+                  '<div class="flex items-center gap-2 mb-1">' +
+                    '<span class="px-2 py-0.5 rounded text-xs font-medium ' + riskClass(a.risk_level) + '">' + _td('dyn.ai_approvals.risk_level', a.risk_level) + '</span>' +
+                    '<span class="px-2 py-0.5 rounded text-xs font-medium ' + statusClass(a.status) + '">' + _td('dyn.ai_approvals.status', a.status) + '</span>' +
+                    '<span class="font-mono text-xs text-gray-400">' + escapeHtml(a.action_code) + '</span>' +
+                    '<span class="text-xs text-gray-400">· ' + new Date(a.created_at).toLocaleString() + '</span>' +
+                  '</div>' +
+                  '<div class="text-sm font-semibold text-gray-900 truncate">' + escapeHtml(a.tool_label) + '</div>' +
+                  '<div class="text-xs text-gray-600 mt-0.5 truncate">' + escapeHtml(previewText) + '</div>' +
+                  (cited ? '<div class="text-xs text-gray-500 mt-1">Per: ' + cited + '</div>' : '') +
+                  '<div class="text-xs text-gray-400 mt-0.5">Requested by ' + escapeHtml(a.requested_by_name || a.requested_by_email || 'unknown') + '</div>' +
+                  renderPriorViewers(a.prior_viewers) +
+                  renderCredentialWarnings(a.credential_warnings) +
+                '</div>' +
+                '<div class="flex flex-col items-end gap-1 shrink-0" data-actions>' + actionsHtml + '</div>' +
+              '</div>' +
+            '</div>'
+        );
+    }
+
+    function bindRowActions() {
+        listEl.querySelectorAll('button[data-code]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var code = btn.getAttribute('data-code');
+                var act = btn.getAttribute('data-act');
+                if (act === 'details') {
+                    openDetailModal(code);
+                    return;
+                }
+                var row = listEl.querySelector('[data-code="' + code + '"]');
+                var actionsEl = row.querySelector('[data-actions]');
+                if (act === 'reject') {
+                    var reason = prompt(_t('dyn.ai_approvals.prompt_rejection_reason'));
+                    if (!reason || reason.trim().length < 3) { alert(_t('dyn.ai_approvals.reason_required')); return; }
+                    postAction(code, 'reject', { reason: reason.trim() }, actionsEl);
+                } else if (act === 'approve-key') {
+                    var key = prompt('Enter the admin password to apply this change now:');
+                    if (!key || !key.trim()) return;
+                    postAction(code, 'approve', {}, actionsEl, key.trim());
+                } else {
+                    postAction(code, 'approve', {}, actionsEl);
+                }
+            });
+        });
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  Action Detail Modal (Task #297)
+     *
+     *  When the operator clicks "Details" on a queue card we fetch the
+     *  full record from GET /api/ai/approvals/:code and render an
+     *  accessible modal. The viewer history panel is the focus of this
+     *  task — the queue card only shows the first 5 viewers as truncated
+     *  chips, but auditors and reviewers need to see the complete list
+     *  with timestamps and per-user view counts.
+     *
+     *  Accessibility:
+     *    - role="dialog" + aria-modal="true" + aria-labelledby/describedby
+     *    - Escape key + backdrop click close the modal
+     *    - Focus moves into the modal on open and back to the trigger
+     *      element when it closes
+     *    - The viewer list is announced as a labelled region with an
+     *      aria-live polite update so SR users hear it after the fetch
+     * ---------------------------------------------------------------- */
+    var detailModal     = document.getElementById('actionDetailModal');
+    var detailTitle     = document.getElementById('actionDetailTitle');
+    var detailSummary   = document.getElementById('actionDetailSummary');
+    var detailBody      = document.getElementById('actionDetailBody');
+    var detailCloseBtn  = document.getElementById('actionDetailClose');
+    var detailLastFocus = null;
+    // Monotonically-increasing request id. Each openDetailModal() call
+    // bumps it; the response handler discards data whose id no longer
+    // matches the current one. Prevents a slow response from action A
+    // from overwriting the panel after the operator quickly opened
+    // action B (or closed the modal entirely).
+    var detailRequestId = 0;
+
+    function openDetailModal(code) {
+        detailLastFocus = document.activeElement;
+        var myRequestId = ++detailRequestId;
+        // Refresh the close-button aria-label on every open so a mid-session
+        // language change (Task #543) immediately localises the dialog.
+        // The static markup carries an English fallback for the case where
+        // i18n hasn't loaded yet (e.g. cached page open while offline).
+        detailCloseBtn.setAttribute(
+            'aria-label',
+            _t('dyn.ai_approvals.close_action_detail_dialog'),
+        );
+        detailTitle.textContent = code;
+        // Subtitle uses the dedicated "Loading action details…" copy
+        // (Task #543) so screen readers get a meaningful announcement
+        // instead of the generic "Loading…" used inside the body.
+        detailSummary.textContent = _t('dyn.ai_approvals.loading_action_details');
+        detailBody.innerHTML = '<div class="text-sm text-gray-500 py-6 text-center" aria-live="polite">' +
+            _t('dyn.ai_approvals.loading') + '</div>';
+        detailModal.classList.remove('hidden');
+        // Defer focus to the next frame so screen readers register the
+        // dialog before we move focus inside it.
+        requestAnimationFrame(function () { detailCloseBtn.focus(); });
+
+        // Wrap fetch failures so the .catch() can distinguish a 404
+        // ("action not found") from a generic network/server failure
+        // and show a friendly toast inside the modal instead of the
+        // generic "failed to load" message — Task #545.
+        fetch('/api/ai/approvals/' + encodeURIComponent(code), { credentials: 'same-origin' })
+            .then(function (r) {
+                if (r.ok) return r.json();
+                var err = new Error('http_' + r.status);
+                err.status = r.status;
+                return r.json().catch(function () { return null; }).then(function (body) {
+                    err.body = body;
+                    throw err;
+                });
+            })
+            .then(function (data) {
+                if (myRequestId !== detailRequestId) return;        // stale: superseded
+                if (detailModal.classList.contains('hidden')) return; // stale: closed
+                renderActionDetail(data);
+            })
+            .catch(function (err) {
+                if (myRequestId !== detailRequestId) return;
+                if (detailModal.classList.contains('hidden')) return;
+                // Friendly 404 path: the operator followed a stale or
+                // mistyped deep link (e.g. from an old email reminder).
+                // Surface a "not found" toast inside the dialog rather
+                // than the generic load-error so they understand the
+                // code itself is the problem, not the network.
+                var is404 = err && (err.status === 404 ||
+                    (err.body && err.body.code === 'NOT_FOUND'));
+                if (is404) {
+                    detailSummary.textContent = '';
+                    // Always render the action code in plain text alongside
+                    // the i18n message so the operator sees which code is
+                    // missing even if a translation is unavailable (the
+                    // i18n loader may not have resolved the key, in which
+                    // case `_t` returns the raw key without interpolating
+                    // {code}). The code is also the most useful piece of
+                    // info if the operator needs to file a bug.
+                    detailBody.innerHTML =
+                        '<div role="alert" data-testid="text-action-not-found" ' +
+                            'class="rounded-md border border-amber-200 bg-amber-50 p-4 text-center">' +
+                          '<div class="text-sm font-semibold text-amber-900">' +
+                            escapeHtml(_t('dyn.ai_approvals.action_not_found_title')) +
+                          '</div>' +
+                          '<div class="mt-1 text-xs text-amber-800">' +
+                            escapeHtml(_t('dyn.ai_approvals.action_not_found_body', { code: code })) +
+                          '</div>' +
+                          '<div class="mt-2 font-mono text-xs text-amber-900" ' +
+                              'data-testid="text-action-not-found-code">' +
+                            escapeHtml(code) +
+                          '</div>' +
+                        '</div>';
+                    return;
+                }
+                detailBody.innerHTML = '<div class="text-sm text-red-600 py-6 text-center" role="alert">' +
+                    _t('dyn.ai_approvals.failed_load') + '</div>';
+                detailSummary.textContent = '';
+            });
+    }
+
+    function closeDetailModal() {
+        if (detailModal.classList.contains('hidden')) return;
+        // Bumping the id invalidates any in-flight detail fetch so a late
+        // response won't paint into a closed dialog (or worse, the next
+        // dialog the operator opens for a different action).
+        detailRequestId++;
+        detailModal.classList.add('hidden');
+        detailBody.innerHTML = '';
+        if (detailLastFocus && typeof detailLastFocus.focus === 'function') {
+            try { detailLastFocus.focus(); } catch (_) { /* ignore */ }
+        }
+        detailLastFocus = null;
+        // Task #545: if the modal was opened via a deep link
+        // (#action=APR-... or ?action=APR-...) clear that token on
+        // close so a refresh doesn't re-open the same dialog and the
+        // back button does what the operator expects. We strip both
+        // the hash form and the query-param form for parity.
+        try {
+            var loc = window.location;
+            var hashIsAction = loc.hash && /^#(?:action=|APR-)/i.test(loc.hash);
+            var newSearch = loc.search;
+            if (loc.search) {
+                var params = new URLSearchParams(loc.search);
+                if (params.has('action')) {
+                    params.delete('action');
+                    var s = params.toString();
+                    newSearch = s ? '?' + s : '';
+                }
+            }
+            if (hashIsAction || newSearch !== loc.search) {
+                history.replaceState(null, '',
+                    loc.pathname + newSearch + (hashIsAction ? '' : loc.hash));
+            }
+        } catch (_) { /* ignore */ }
+    }
+
+    detailCloseBtn.addEventListener('click', closeDetailModal);
+    // Click on the backdrop (the modal element itself, not the inner box) closes the dialog.
+    detailModal.addEventListener('click', function (e) {
+        if (e.target === detailModal) closeDetailModal();
+    });
+
+    // Lightweight focus trap — when the dialog is open, a Tab from the
+    // last focusable element wraps to the first (and Shift+Tab from the
+    // first wraps to the last). Keeps keyboard focus inside the dialog
+    // for screen-reader and keyboard-only users without pulling in a
+    // heavyweight a11y dependency.
+    function focusableElementsInDialog() {
+        var nodes = detailModal.querySelectorAll(
+            'a[href], button:not([disabled]), input:not([disabled]),' +
+            ' select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        return Array.prototype.filter.call(nodes, function (el) {
+            // Visible + not aria-hidden. offsetParent is null for display:none.
+            return el.offsetParent !== null && el.getAttribute('aria-hidden') !== 'true';
+        });
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (detailModal.classList.contains('hidden')) return;
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeDetailModal();
+            return;
+        }
+        if (e.key !== 'Tab') return;
+        var focusables = focusableElementsInDialog();
+        if (focusables.length === 0) {
+            e.preventDefault();
+            detailCloseBtn.focus();
+            return;
+        }
+        var first = focusables[0];
+        var last  = focusables[focusables.length - 1];
+        var active = document.activeElement;
+        if (e.shiftKey && active === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && active === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    });
+
+    /**
+     * Returns a deterministic background color for an avatar bubble so the
+     * same reviewer always gets the same color across re-renders. Uses a
+     * tiny hash of the user identity (id, email, or name) modulo a curated
+     * palette of accessible WCAG-AA-on-white colors.
+     */
+    function avatarColor(seed) {
+        var palette = ['#4f46e5','#0891b2','#16a34a','#ca8a04','#db2777','#9333ea','#dc2626','#0d9488'];
+        var s = String(seed || '?');
+        var hash = 0;
+        for (var i = 0; i < s.length; i++) hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0;
+        return palette[Math.abs(hash) % palette.length];
+    }
+
+    function avatarInitials(viewer) {
+        var src = (viewer.user_name || viewer.user_email || '?').trim();
+        if (!src) return '?';
+        // First letter of first two whitespace-separated tokens, uppercased.
+        var parts = src.split(/[\s@._-]+/).filter(Boolean);
+        var first = parts[0] ? parts[0][0] : '?';
+        var second = parts[1] ? parts[1][0] : '';
+        return (first + second).toUpperCase().slice(0, 2);
+    }
+
+    function fmtDate(iso) {
+        if (!iso) return '';
+        try { return new Date(iso).toLocaleString(); } catch (_) { return String(iso); }
+    }
+
+    /**
+     * Renders the full prior_viewers panel — the heart of Task #297.
+     * Each viewer is a row with an initials avatar, name+email, role,
+     * the per-user view count, and the most-recent view timestamp.
+     */
+    function renderFullPriorViewers(viewers) {
+        if (!viewers || viewers.length === 0) {
+            return '<div class="rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-xs text-gray-500 text-center"' +
+                ' data-testid="text-no-prior-viewers">' +
+                escapeHtml(_t('dyn.ai_approvals.no_prior_viewers')) +
+                '</div>';
+        }
+        var rows = viewers.map(function (v, idx) {
+            var name      = v.user_name || v.user_email || _t('dyn.ai_approvals.unknown_reviewer');
+            var email     = v.user_email && v.user_email !== name ? v.user_email : '';
+            var role      = v.user_role || '';
+            var viewCount = Math.max(1, v.view_count | 0);
+            var lastSeen  = fmtDate(v.last_viewed_at);
+            var seed      = v.user_id != null ? 'u' + v.user_id : (v.user_email || name);
+            var color     = avatarColor(seed);
+            var initials  = avatarInitials(v);
+
+            // Per-user view count: locale-aware pluralisation via Intl.PluralRules
+            // (Arabic has 6 plural categories; English has 2). Single string so
+            // SR users hear it as one phrase next to the timestamp.
+            var countLabel = _plural('view', viewCount);
+
+            // Avatar background-color is a per-row inline style (8 fixed
+            // colors, deterministic), kept here because it's the only way
+            // to vary an attribute per element without injecting a
+            // <style> tag per row. csp-styles.js allows scoped inline
+            // background-color via its style helpers, but we play it safe
+            // by setting it imperatively after render.
+            return '<li class="flex items-start gap-3 py-2" ' +
+                       'data-testid="row-prior-viewer-' + idx + '">' +
+                     '<span class="viewer-avatar" data-avatar-color="' + color + '" aria-hidden="true">' +
+                       escapeHtml(initials) +
+                     '</span>' +
+                     '<div class="min-w-0 flex-1">' +
+                       '<div class="flex flex-wrap items-baseline gap-x-2">' +
+                         '<span class="text-sm font-medium text-gray-900 truncate" data-testid="text-viewer-name-' + idx + '">' +
+                           escapeHtml(name) +
+                         '</span>' +
+                         (role
+                            ? '<span class="text-xs text-gray-500" data-testid="text-viewer-role-' + idx + '">' +
+                                escapeHtml(role) +
+                              '</span>'
+                            : '') +
+                       '</div>' +
+                       (email
+                          ? '<div class="text-xs text-gray-500 truncate">' + escapeHtml(email) + '</div>'
+                          : '') +
+                       '<div class="text-xs text-gray-500 mt-0.5">' +
+                         '<span data-testid="text-viewer-count-' + idx + '">' + escapeHtml(countLabel) + '</span>' +
+                         (lastSeen
+                            ? ' <span aria-hidden="true">·</span> ' +
+                              '<span><span class="sr-only">' + escapeHtml(_t('dyn.ai_approvals.last_viewed_label')) + '</span>' +
+                                '<time datetime="' + escapeHtml(v.last_viewed_at || '') + '" ' +
+                                'data-testid="text-viewer-last-' + idx + '">' +
+                                  escapeHtml(lastSeen) +
+                                '</time>' +
+                              '</span>'
+                            : '') +
+                       '</div>' +
+                     '</div>' +
+                   '</li>';
+        }).join('');
+
+        return '<ol class="divide-y divide-gray-100" data-testid="list-prior-viewers" ' +
+                  'aria-label="' + escapeHtml(_t('dyn.ai_approvals.prior_reviewers_aria')) + '">' +
+                  rows + '</ol>';
+    }
+
+    // For a duplicate-resolution request, render the full merge plan so the
+    // reviewer can decide: the survivor (kept), the duplicates to tag, the
+    // field conflicts (survivor value vs the differing ones), and why it was
+    // escalated. Returns '' for non-duplicate actions or when no plan is present.
+    function renderResolutionDetail(a) {
+        var p = a && a.payload;
+        if (!p || !p.plan || a.tool_id !== 'duplicate-resolution') return '';
+        var plan = p.plan;
+        var module = p.module || plan.module || '';
+        var tab = module === 'Deals' ? 'Potentials' : module;
+        function zlink(id) {
+            if (!id) return '';
+            var s = String(id);
+            if (/^(test_|LEAD_|DEAL_|CONTACT_|ACCOUNT_)/.test(s)) return '';
+            return ' <a href="<REDACTED_URL>' + tab + '/' + encodeURIComponent(s) +
+                '" target="_blank" class="text-blue-600 hover:underline text-[11px]">↗ Zoho</a>';
+        }
+        var reasons = Array.isArray(p.reasons) ? p.reasons : [];
+        var records = Array.isArray(plan.records) ? plan.records : [];
+        var conflicts = (Array.isArray(plan.fieldDecisions) ? plan.fieldDecisions : [])
+            .filter(function (f) { return f && f.action === 'conflict'; });
+
+        var recRows = records.map(function (r) {
+            var role = r.isMaster
+                ? '<span class="text-emerald-700 font-semibold">SURVIVOR (keep)</span>'
+                : (r.included === false
+                    ? '<span class="text-gray-500">excluded</span>'
+                    : '<span class="text-amber-700">tag Duplicate-Delete</span>');
+            var meta = [];
+            if (r.owner) meta.push('owner ' + escapeHtml(r.owner));
+            if (r.layout) meta.push(escapeHtml(r.layout));
+            if (r.stage) meta.push('stage ' + escapeHtml(r.stage));
+            if (r.accountName) meta.push('acct ' + escapeHtml(r.accountName));
+            if (typeof r.completeness === 'number') meta.push(Math.round(r.completeness * 100) + '% complete');
+            return '<tr class="border-t border-gray-100"><td class="px-2 py-1">' +
+                escapeHtml(r.name || '(no name)') + zlink(r.zohoId) + '</td>' +
+                '<td class="px-2 py-1 text-xs whitespace-nowrap">' + role + '</td>' +
+                '<td class="px-2 py-1 text-[11px] text-gray-500">' + meta.join(' · ') + '</td></tr>';
+        }).join('');
+
+        var confRows = conflicts.map(function (f) {
+            var alts = (Array.isArray(f.alternatives) ? f.alternatives : []).map(function (al) {
+                return escapeHtml(String(al && al.value != null ? al.value : '—')) +
+                    (al && al.recordName ? ' <span class="text-gray-400">(' + escapeHtml(al.recordName) + ')</span>' : '');
+            }).join(' · ');
+            return '<tr class="border-t border-gray-100"><td class="px-2 py-1 font-medium">' +
+                escapeHtml(f.label || f.field || '') + '</td>' +
+                '<td class="px-2 py-1 text-emerald-700">' + escapeHtml(String(f.chosenValue == null ? '—' : f.chosenValue)) + '</td>' +
+                '<td class="px-2 py-1 text-amber-700">' + alts + '</td></tr>';
+        }).join('');
+
+        var html = '<section class="mb-4">' +
+            '<h3 class="text-sm font-semibold text-gray-900 mb-1">What this would do</h3>';
+        if (plan.rationale) html += '<p class="text-xs text-gray-700 mb-2">' + escapeHtml(plan.rationale) + '</p>';
+        html += '<div class="text-xs text-gray-600 mb-2">Module: <strong>' + escapeHtml(module) + '</strong>' +
+            ' · cluster #' + escapeHtml(String(p.clusterId || plan.clusterId || '')) +
+            ' · survivor kept, ' + (Array.isArray(plan.duplicateZohoIds) ? plan.duplicateZohoIds.length : 0) + ' tagged Duplicate-Delete' +
+            (plan.linkAccountZohoId ? ' · link to account ' + escapeHtml(String(plan.linkAccountZohoId)) : '') +
+            '</div>';
+        if (recRows) html += '<div class="overflow-x-auto mb-3"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>' +
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Record</th>' +
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Action</th>' +
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Details</th></tr></thead><tbody>' + recRows + '</tbody></table></div>';
+        if (confRows) html += '<div class="text-xs font-semibold text-gray-900 mb-1">Field conflicts (' + conflicts.length + ') — survivor value kept, other values differ</div>' +
+            '<div class="overflow-x-auto mb-3"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>' +
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Field</th>' +
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Kept (survivor)</th>' +
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Other values</th></tr></thead><tbody>' + confRows + '</tbody></table></div>';
+        if (reasons.length) html += '<div class="text-xs font-semibold text-gray-900 mb-1">Why it needs your review</div>' +
+            '<ul class="list-disc ms-5 text-xs text-amber-800">' +
+            reasons.map(function (rs) { return '<li>' + escapeHtml(String(rs)) + '</li>'; }).join('') + '</ul>';
+        html += '</section>';
+        return html;
+    }
+
+    function renderActionDetail(data) {
+        if (!data || !data.action) {
+            detailBody.innerHTML = '<div class="text-sm text-red-600 py-6 text-center" role="alert">' +
+                escapeHtml(_t('dyn.ai_approvals.malformed_response')) +
+                '</div>';
+            return;
+        }
+        var a = data.action;
+        var viewers = Array.isArray(data.prior_viewers) ? data.prior_viewers : [];
+
+        // Header summary (visible label below the dialog title).
+        detailTitle.textContent = a.tool_label || a.action_code;
+        var statusText = _td('dyn.ai_approvals.status', a.status) || a.status;
+        var riskText   = _td('dyn.ai_approvals.risk_level', a.risk_level) || a.risk_level;
+        detailSummary.textContent = a.action_code + ' · ' + riskText + ' risk · ' + statusText;
+
+        var requester = escapeHtml(a.requested_by_name || a.requested_by_email || 'unknown');
+        var preview   = (a.payload_preview || '').replace(/\*\*/g, '').slice(0, 600);
+
+        detailBody.innerHTML =
+            '<section class="mb-4">' +
+              '<div class="flex flex-wrap items-center gap-2 mb-2">' +
+                '<span class="px-2 py-0.5 rounded text-xs font-medium ' + riskClass(a.risk_level) + '">' +
+                  escapeHtml(riskText) +
+                '</span>' +
+                '<span class="px-2 py-0.5 rounded text-xs font-medium ' + statusClass(a.status) + '">' +
+                  escapeHtml(statusText) +
+                '</span>' +
+                '<span class="font-mono text-xs text-gray-500">' + escapeHtml(a.action_code) + '</span>' +
+              '</div>' +
+              '<div class="text-xs text-gray-600 mb-1">' +
+                'Requested by ' + requester +
+                ' · ' + escapeHtml(fmtDate(a.created_at)) +
+              '</div>' +
+              (preview
+                 ? '<div class="text-xs text-gray-700 bg-gray-50 border border-gray-100 rounded p-2 prose-compact whitespace-pre-wrap">' +
+                     escapeHtml(preview) +
+                   '</div>'
+                 : '') +
+            '</section>' +
+
+            renderResolutionDetail(a) +
+
+            '<section aria-labelledby="actionDetailViewersHeading">' +
+              '<div class="flex items-baseline justify-between mb-2">' +
+                '<h3 id="actionDetailViewersHeading" class="text-sm font-semibold text-gray-900">' +
+                  escapeHtml(_t('dyn.ai_approvals.viewed_by')) +
+                '</h3>' +
+                '<span class="text-xs text-gray-500" data-testid="text-prior-viewers-count">' +
+                  escapeHtml(_plural('reviewer', viewers.length)) +
+                '</span>' +
+              '</div>' +
+              '<p class="text-xs text-gray-500 mb-2">' +
+                escapeHtml(_t('dyn.ai_approvals.viewers_explainer')) +
+              '</p>' +
+              '<div aria-live="polite">' +
+                renderFullPriorViewers(viewers) +
+              '</div>' +
+            '</section>';
+
+        // Apply the per-row avatar background colors imperatively. We avoid
+        // building a `style="..."` attribute in the HTML string so the
+        // page's CSP-style sweeper (csp-styles.js) doesn't flag it.
+        detailBody.querySelectorAll('.viewer-avatar[data-avatar-color]').forEach(function (el) {
+            el.style.backgroundColor = el.getAttribute('data-avatar-color');
+        });
+    }
+
+    function postAction(code, act, payload, actionsEl, adminKey) {
+        actionsEl.innerHTML = '<span class="text-xs text-gray-500">' + _t('dyn.ai_approvals.processing') + '</span>';
+        var headers = { 'Content-Type': 'application/json' };
+        if (adminKey) headers['x-admin-key'] = adminKey;
+        fetch('/api/ai/approvals/' + encodeURIComponent(code) + '/' + act, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: headers,
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+        .then(function (res) {
+            if (!res.ok) throw new Error(res.body.error || 'Failed');
+            load();
+        })
+        .catch(function (err) {
+            actionsEl.innerHTML = '<span class="text-xs text-red-600">' + escapeHtml(err.message) + '</span>';
+        });
+    }
+
+    function renderRows(rows) {
+        var visible = fltCredWarn.checked ? rows.filter(hasCredentialWarning) : rows;
+        if (!visible || visible.length === 0) { renderEmpty(); return; }
+        listEl.innerHTML = visible.map(renderRow).join('');
+        bindRowActions();
+    }
+
+    function load(silent) {
+        // Auto-refresh passes silent=true: refresh the data in place WITHOUT
+        // blanking the list to "Loading…" first (that flash was the jarring
+        // "open and close" every tick). Manual refresh / filter changes still
+        // show the loading state for immediate feedback.
+        if (!silent) {
+            listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10">' + _t('dyn.ai_approvals.loading') + '</div>';
+        }
+        fetch('/api/ai/approvals?' + buildQuery(), { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                lastRows = (data && Array.isArray(data.rows)) ? data.rows : [];
+                lastTotal = (data && typeof data.total === 'number') ? data.total : lastRows.length;
+                renderRows(lastRows);
+                updateSummary(lastRows);
+                renderPager();
+                refreshGlobalCredentialBadge();
+                refreshReviewStatusCounts();
+                refreshRiskLevelCounts();
+                refreshStatusCounts();
+            })
+            .catch(function (err) {
+                // On a SILENT auto-refresh failure, keep whatever is on screen —
+                // don't replace the list with an error (that would be the same
+                // disruptive flash). Only a manual/foreground load surfaces it.
+                if (silent) return;
+                lastRows = [];
+                lastTotal = 0;
+                listEl.innerHTML = '<div class="text-center text-red-600 text-sm py-10">' + _t('dyn.ai_approvals.failed_load') + ' ' +
+                    (err && err.statusText ? escapeHtml(err.statusText) : '') + '</div>';
+                updateSummary(lastRows);
+                renderPager();
+                refreshGlobalCredentialBadge();
+                refreshReviewStatusCounts();
+                refreshRiskLevelCounts();
+                refreshStatusCounts();
+            });
+    }
+
+    // Auto-refresh that does NOT disrupt the operator: it refreshes silently
+    // (no "Loading…" flash) and SKIPS the tick entirely while the user is busy
+    // — typing in Search, a detail modal open, or the browser tab in the
+    // background. So the queue stays current without "opening and closing".
+    function autoRefresh() {
+        if (document.hidden) return;
+        if (fltSearch && document.activeElement === fltSearch) return;
+        var modal = document.getElementById('actionDetailModal');
+        if (modal && !modal.classList.contains('hidden')) return;
+        load(true);
+    }
+
+    function updateSummary(rows) {
+        var today = new Date().toISOString().slice(0, 10);
+        // Show the TRUE total matching the current filters (not just the loaded
+        // page) so "Pending" agrees with the Status dropdown count instead of
+        // capping at the page size.
+        cntPending.textContent = Number(lastTotal || 0).toLocaleString();
+        cntExecutedToday.textContent = rows.filter(function (r) {
+            return r.status === 'executed' && r.executed_at && r.executed_at.startsWith(today);
+        }).length;
+    }
+
+    // Render the pager: "Showing 1–100 of 3,475" + Prev/Next, paging by
+    // PAGE_SIZE through every matching request.
+    function renderPager() {
+        if (!pagerBar) return;
+        var total = Number(lastTotal || 0);
+        var shown = lastRows.length;
+        if (total <= PAGE_SIZE && pageOffset === 0) {
+            pagerBar.classList.add('hidden');
+            return;
+        }
+        pagerBar.classList.remove('hidden');
+        var start = total === 0 ? 0 : pageOffset + 1;
+        var end = pageOffset + shown;
+        if (pagerInfo) {
+            pagerInfo.textContent =
+                'Showing ' + start.toLocaleString() + '–' + end.toLocaleString() +
+                ' of ' + total.toLocaleString();
+        }
+        if (pagerPrev) pagerPrev.disabled = pageOffset <= 0;
+        if (pagerNext) pagerNext.disabled = pageOffset + shown >= total;
+    }
+
+    // The clear button adapts to the Source filter:
+    //   All sources → Clear ALL pending; Adam → Clear Adam requests;
+    //   Autonomous → Clear shadow proposals.
+    function _clearScope() {
+        var v = fltSource ? fltSource.value : '';
+        if (v === 'adam') return { group: 'adam', label: '🧹 Clear Adam requests', confirm: 'Reject ALL pending Adam (chat) requests?\n\nThis empties the review backlog. Nothing here was applied to Zoho, so no CRM changes.' };
+        if (v === 'autonomous') return { group: 'autonomous', label: '🧹 Clear shadow proposals', confirm: 'Reject ALL pending shadow proposals?\n\nThese were never applied to Zoho (shadow mode) — this only empties the review backlog. No CRM changes.' };
+        return { group: 'all', label: '🧹 Clear ALL pending', confirm: 'Reject EVERY pending request in the queue (all sources)?\n\nFull backlog reset. Nothing here was applied to Zoho, so no CRM changes are made. The agent re-evaluates clusters fresh on its next run.' };
+    }
+    function syncClearShadowBtn() {
+        if (!btnClearShadow) return;
+        btnClearShadow.classList.remove('hidden');
+        btnClearShadow.textContent = _clearScope().label;
+    }
+
+    function clearShadowProposals() {
+        var scope = _clearScope();
+        if (!confirm(scope.confirm)) return;
+        btnClearShadow.disabled = true;
+        var prev = btnClearShadow.textContent;
+        btnClearShadow.textContent = 'Clearing…';
+        fetch('/api/duplicates/autonomous/clear-shadow-proposals', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceGroup: scope.group })
+        })
+        .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+        .then(function (res) {
+            if (!res.ok || !res.body.success) throw new Error((res.body && res.body.error) || ('HTTP ' + (res.body && res.body.status)));
+            btnClearShadow.textContent = '✓ Cleared ' + (res.body.cleared || 0);
+            pageOffset = 0;
+            setTimeout(function () { btnClearShadow.textContent = prev; btnClearShadow.disabled = false; load(); }, 1200);
+        })
+        .catch(function (err) {
+            btnClearShadow.textContent = prev; btnClearShadow.disabled = false;
+            alert('Could not clear: ' + (err && err.message || err));
+        });
+    }
+
+    // Any filter/search/sort change resets to the first page.
+    function resetAndLoad() { pageOffset = 0; syncClearShadowBtn(); load(); }
+    [fltStatus, fltRisk, fltMine, fltReview, fltSort, fltSource].forEach(function (el) { if (el) el.addEventListener('change', resetAndLoad); });
+    if (btnClearShadow) btnClearShadow.addEventListener('click', clearShadowProposals);
+    fltCredWarn.addEventListener('change', function () { renderRows(lastRows); });
+    if (pagerPrev) pagerPrev.addEventListener('click', function () {
+        if (pageOffset <= 0) return;
+        pageOffset = Math.max(0, pageOffset - PAGE_SIZE);
+        load();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    if (pagerNext) pagerNext.addEventListener('click', function () {
+        if (pageOffset + lastRows.length >= lastTotal) return;
+        pageOffset += PAGE_SIZE;
+        load();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    // Debounced search: reload as the operator types the APR-code / text.
+    if (fltSearch) {
+        var _searchTimer = null;
+        fltSearch.addEventListener('input', function () {
+            if (_searchTimer) clearTimeout(_searchTimer);
+            _searchTimer = setTimeout(resetAndLoad, 300);
+        });
+    }
+    var _btnRefresh = document.getElementById('btnRefresh');
+    if (_btnRefresh) _btnRefresh.addEventListener('click', load);
+
+    /* ---------------------------------------------------------------- *
+     *  Deep link handling (Task #485)
+     *
+     *  The security-reviewer notifier (`securityApprovalNotifier.ts`)
+     *  pages Slack/email with a link of the form
+     *      <SECURITY_REVIEWER_APP_URL>/ai-approvals?code=APR-...
+     *  so a reviewer who clicks the page lands directly on the flagged
+     *  approval card. We honour that ?code= parameter once the queue
+     *  has loaded by auto-opening the detail modal for that ticket.
+     *
+     *  Behaviour notes:
+     *   - We do NOT mutate the queue filters so the surrounding context
+     *     (e.g. status=pending) stays meaningful — the modal fetches the
+     *     row by code regardless of whether the row is in the visible
+     *     list.
+     *   - The parameter is stripped from the URL after the modal opens
+     *     so a manual page refresh doesn't keep re-opening the modal
+     *     after the operator dismissed it.
+     *   - Validation: action codes follow APR-YYYYMMDD-XXXXXX so we
+     *     accept only the alphanumeric-and-dashes shape to keep this
+     *     handler from being abused as a generic XSS surface (the modal
+     *     already escapes its inputs, but defense-in-depth is cheap).
+     * ---------------------------------------------------------------- */
+    function handleDeepLink() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var code = params.get('code');
+            if (!code) return;
+            if (!/^[A-Z0-9-]{1,64}$/i.test(code)) return;
+            openDetailModal(code);
+            // Strip ?code= so a reload doesn't re-open the modal.
+            params.delete('code');
+            var qs = params.toString();
+            var newUrl = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+            window.history.replaceState({}, '', newUrl);
+        } catch (_) { /* ignore — deep link is best-effort UX */ }
+    }
+
+    // Run the initial load, then attempt the deep link once it resolves.
+    // Wrapping handleDeepLink in load()'s .then chain would couple it to
+    // the API succeeding; we instead call it after kicking off load() so
+    // the modal can open even when the queue list errors out.
+    syncClearShadowBtn();
+    load();
+    handleDeepLink();
+    // Silent, non-disruptive auto-refresh every 60s (was a blanking reload
+    // every 30s — the "open and close" flash Sample User).
+    setInterval(autoRefresh, 60000);
+
+    /* ---------------------------------------------------------------- *
+     *  Deep-linking (Task #545)
+     *
+     *  Notification surfaces (audit log links, in-app alerts, follow-up
+     *  emails, ...) reference a specific approval by code. Visiting
+     *      /ai-approvals#action=APR-YYYYMMDD-XXXXXX
+     *  or
+     *      /ai-approvals?action=APR-YYYYMMDD-XXXXXX
+     *  should open the detail modal for that code as soon as the page
+     *  is interactive — without making the operator scroll the queue.
+     *
+     *  Validation: action codes follow APR-YYYYMMDD-<6+ alphanum>. We
+     *  reject anything that doesn't match so a hostile or mistyped hash
+     *  can never be reflected as-is into a fetch URL.
+     * ---------------------------------------------------------------- */
+    var ACTION_CODE_RE = /^APR-\d{8}-[A-Z0-9]{4,12}$/i;
+
+    function readDeepLinkCode() {
+        var code = '';
+        try {
+            var params = new URLSearchParams(window.location.search || '');
+            code = params.get('action') || '';
+            if (!code && window.location.hash) {
+                var h = window.location.hash.replace(/^#/, '');
+                var hp = new URLSearchParams(h);
+                code = hp.get('action') || '';
+                // Bare-hash form: #APR-YYYYMMDD-XXXXXX (also accepted).
+                if (!code && /^APR-/i.test(h)) code = h;
+            }
+        } catch (_) { /* ignore malformed URLs */ }
+        code = (code || '').trim();
+        return ACTION_CODE_RE.test(code) ? code.toUpperCase() : '';
+    }
+
+    function maybeOpenFromDeepLink() {
+        var code = readDeepLinkCode();
+        if (!code) return;
+        // If the modal is already open for this code, leave it alone.
+        if (!detailModal.classList.contains('hidden') &&
+            detailTitle.textContent === code) {
+            return;
+        }
+        openDetailModal(code);
+    }
+
+    // On first load: open the deep-linked modal. Don't wait for the
+    // /api/ai/approvals list to settle — the detail endpoint is a
+    // separate fetch, so the modal can paint as soon as the page is
+    // parsed and is responsive even when the queue is slow.
+    maybeOpenFromDeepLink();
+
+    // React to client-side hash changes (e.g. an audit-log row clicked
+    // while the dashboard is already open in the same tab) so we don't
+    // force a full page reload to switch actions.
+    window.addEventListener('hashchange', maybeOpenFromDeepLink);
+})();
+</script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

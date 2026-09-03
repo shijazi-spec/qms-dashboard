@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg - Compliance Import Review</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html, body { font-family: 'Inter', sans-serif; }
+        .priority-critical { background-color: #B91C1C; color: white; }
+        .priority-high     { background-color: #DC2626; color: white; }
+        .priority-medium   { background-color: #F59E0B; color: white; }
+        .priority-low      { background-color: #10B981; color: white; }
+        .row-rejected      { opacity: 0.45; background: #F9FAFB; }
+        .status-pill       { padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+        .status-extracting { background: #DBEAFE; color: #1E40AF; }
+        .status-awaiting   { background: #FEF3C7; color: #92400E; }
+        .status-applied    { background: #D1FAE5; color: #047857; }
+        .status-failed     { background: #FEE2E2; color: #B91C1C; }
+        .status-rejected   { background: #E5E7EB; color: #4B5563; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () { WalaPlusNav.init('compliance'); });
+    </script>
+
+    <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-start gap-3 mb-4">
+            <div>
+                <a href="/compliance" class="text-xs text-gray-500 hover:text-gray-700" data-i18n="compliance.back_to_compliance">← Back to Compliance</a>
+                <h1 class="text-2xl font-bold text-gray-900 mt-1" data-i18n="compliance.import_review_title">Compliance Import Review</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="compliance.import_review_subtitle">AI-extracted clauses from your standard document. Edit, accept/reject each row, then apply to the obligations register.</p>
+            </div>
+            <div class="text-end">
+                <div class="text-xs text-gray-500" data-i18n="compliance.import_status_label">Status</div>
+                <span id="importStatus" class="status-pill status-extracting">extracting…</span>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-4 mb-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+                <div class="text-xs text-gray-500 uppercase" data-i18n="compliance.import_source_doc">Source Document</div>
+                <div id="sourceDocLabel" class="font-medium text-gray-900 mt-1">—</div>
+            </div>
+            <div>
+                <div class="text-xs text-gray-500 uppercase" data-i18n="compliance.import_target_reg">Target Regulation</div>
+                <div id="targetRegLabel" class="font-medium text-gray-900 mt-1">—</div>
+            </div>
+            <div>
+                <div class="text-xs text-gray-500 uppercase" data-i18n="compliance.import_counts">Counts</div>
+                <div id="importCounts" class="font-medium text-gray-900 mt-1">—</div>
+            </div>
+        </div>
+
+        <!-- Target regulation picker (only shown when import has no regulation_id yet) -->
+        <div id="targetPickerWrap" class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 hidden">
+            <div class="text-sm text-amber-900 mb-2" data-i18n="compliance.import_pick_target">No target regulation set. Pick an existing one (or create a new framework on the Compliance page first):</div>
+            <select id="applyRegulationSelect" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="">— Select a regulation —</option>
+            </select>
+        </div>
+
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
+                <h2 class="text-base font-semibold text-gray-900" data-i18n="compliance.import_draft_clauses">Draft Clauses</h2>
+                <div class="flex gap-2">
+                    <button data-on-click="bulkAccept" class="text-xs px-3 py-1.5 rounded border border-emerald-700 text-emerald-700 hover:bg-emerald-50" data-testid="button-bulk-accept" data-i18n="compliance.import_bulk_accept">Accept All</button>
+                    <button data-on-click="bulkReject" class="text-xs px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50" data-testid="button-bulk-reject" data-i18n="compliance.import_bulk_reject">Reject All</button>
+                    <button data-on-click="saveDraft" class="text-xs px-3 py-1.5 rounded border border-blue-600 text-blue-700 hover:bg-blue-50" data-testid="button-save-draft" data-i18n="compliance.import_save_draft">Save Draft</button>
+                    <button data-on-click="applyImport" id="applyBtn" class="text-xs px-3 py-1.5 rounded bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50" data-testid="button-apply" data-i18n="compliance.import_apply">Apply to Obligations</button>
+                </div>
+            </div>
+            <div id="draftMessage" class="px-4 py-2 text-sm"></div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Use</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Code</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Article / Clause</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Title</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Description</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Priority</th>
+                        </tr>
+                    </thead>
+                    <tbody id="draftBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="7" class="px-4 py-12 text-center text-gray-400">Loading draft…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function _ct(k, fb) { return (window.WalaPlusI18n && window.WalaPlusI18n.t) ? (window.WalaPlusI18n.t(k) || fb) : fb; }
+        function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+        let importId = null;
+        let importRow = null;
+        let pollTimer = null;
+
+        function getId() {
+            const m = window.location.search.match(/[?&]id=(\d+)/);
+            return m ? Number(m[1]) : null;
+        }
+
+        async function loadImport() {
+            const r = await fetch('/api/compliance/imports/' + importId);
+            if (!r.ok) {
+                document.getElementById('draftMessage').innerHTML = '<span class="text-red-600">Failed to load import.</span>';
+                return;
+            }
+            const data = await r.json();
+            importRow = data.import;
+            renderHeader();
+            renderTable();
+            if (importRow.status === 'extracting') {
+                if (!pollTimer) pollTimer = setInterval(loadImport, 4000);
+            } else if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+        }
+
+        function renderHeader() {
+            const statusEl = document.getElementById('importStatus');
+            statusEl.className = 'status-pill status-' + importRow.status.replace('awaiting_review', 'awaiting');
+            statusEl.textContent = importRow.status.replace(/_/g, ' ');
+            document.getElementById('sourceDocLabel').textContent =
+                importRow.document_id ? '#' + importRow.document_id : '—';
+            document.getElementById('targetRegLabel').textContent =
+                importRow.regulation_id ? '#' + importRow.regulation_id : 'Not set';
+            const accepted = importRow.draft_clauses.filter(function (c) { return c.accepted !== false; }).length;
+            document.getElementById('importCounts').textContent =
+                accepted + ' accepted / ' + importRow.draft_clauses.length + ' draft';
+            const pickerWrap = document.getElementById('targetPickerWrap');
+            if (!importRow.regulation_id && importRow.status === 'awaiting_review') {
+                pickerWrap.classList.remove('hidden');
+                if (document.getElementById('applyRegulationSelect').options.length <= 1) {
+                    fetch('/api/compliance/regulations').then(function (r) { return r.json(); }).then(function (d) {
+                        const sel = document.getElementById('applyRegulationSelect');
+                        (d.regulations || []).forEach(function (r) {
+                            const opt = document.createElement('option');
+                            opt.value = r.id;
+                            opt.textContent = r.regulation_code + ' — ' + r.name;
+                            sel.appendChild(opt);
+                        });
+                    });
+                }
+            } else {
+                pickerWrap.classList.add('hidden');
+            }
+            document.getElementById('applyBtn').disabled = importRow.status === 'applied' || importRow.status === 'rejected';
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('draftBody');
+            if (!importRow.draft_clauses.length) {
+                if (importRow.status === 'extracting') {
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-12 text-center text-gray-400">AI is extracting clauses… this usually takes 20-60 seconds.</td></tr>';
+                } else if (importRow.status === 'failed') {
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-12 text-center text-red-600">Extraction failed: ' + escAttr(importRow.error || 'unknown') + '</td></tr>';
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-12 text-center text-gray-400">No clauses extracted.</td></tr>';
+                }
+                return;
+            }
+            tbody.innerHTML = importRow.draft_clauses.map(function (c, i) {
+                const accepted = c.accepted !== false;
+                const rowClass = accepted ? '' : 'row-rejected';
+                return '<tr class="' + rowClass + '" data-row="' + i + '">'
+                    + '<td class="px-3 py-2 text-center"><input type="checkbox" data-on-change="toggleRow" data-args="[' + i + ']" ' + (accepted ? 'checked' : '') + ' aria-label="Use clause"></td>'
+                    + '<td class="px-3 py-2"><input type="text" value="' + escAttr(c.obligation_code || '') + '" data-on-change="updateField" data-args="[' + i + ',&quot;obligation_code&quot;]" class="w-full text-xs font-mono border border-gray-200 rounded px-2 py-1"></td>'
+                    + '<td class="px-3 py-2"><input type="text" value="' + escAttr(c.article_reference || c.clause_number || '') + '" data-on-change="updateField" data-args="[' + i + ',&quot;article_reference&quot;]" class="w-full text-xs border border-gray-200 rounded px-2 py-1"></td>'
+                    + '<td class="px-3 py-2"><input type="text" value="' + escAttr(c.title || '') + '" data-on-change="updateField" data-args="[' + i + ',&quot;title&quot;]" class="w-full text-sm border border-gray-200 rounded px-2 py-1"></td>'
+                    + '<td class="px-3 py-2"><textarea rows="2" data-on-change="updateField" data-args="[' + i + ',&quot;description&quot;]" class="w-full text-xs border border-gray-200 rounded px-2 py-1">' + escAttr(c.description || '') + '</textarea></td>'
+                    + '<td class="px-3 py-2"><input type="text" value="' + escAttr(c.section_domain || '') + '" data-on-change="updateField" data-args="[' + i + ',&quot;section_domain&quot;]" class="w-full text-xs border border-gray-200 rounded px-2 py-1"></td>'
+                    + '<td class="px-3 py-2 text-center">'
+                        + '<select data-on-change="updateField" data-args="[' + i + ',&quot;priority&quot;]" class="text-xs border border-gray-200 rounded px-1 py-1">'
+                        + ['critical','high','medium','low'].map(function (p) {
+                            return '<option value="' + p + '"' + (c.priority === p ? ' selected' : '') + '>' + p + '</option>';
+                        }).join('')
+                        + '</select>'
+                    + '</td>'
+                + '</tr>';
+            }).join('');
+        }
+
+        function updateField(rowIdx, field, ev) {
+            if (!importRow || !importRow.draft_clauses[rowIdx]) return;
+            const value = ev && ev.target ? ev.target.value : null;
+            importRow.draft_clauses[rowIdx][field] = value;
+        }
+        function toggleRow(rowIdx, ev) {
+            if (!importRow || !importRow.draft_clauses[rowIdx]) return;
+            importRow.draft_clauses[rowIdx].accepted = ev.target.checked;
+            renderHeader();
+            const row = document.querySelector('tr[data-row="' + rowIdx + '"]');
+            if (row) row.className = ev.target.checked ? '' : 'row-rejected';
+        }
+        function bulkAccept() {
+            importRow.draft_clauses.forEach(function (c) { c.accepted = true; });
+            renderHeader();
+            renderTable();
+        }
+        function bulkReject() {
+            importRow.draft_clauses.forEach(function (c) { c.accepted = false; });
+            renderHeader();
+            renderTable();
+        }
+        async function saveDraft() {
+            // Collect any unsaved <textarea>/<input> changes from the DOM in case the change event hasn't fired
+            collectDomEdits();
+            const msg = document.getElementById('draftMessage');
+            msg.innerHTML = '<span class="text-gray-600">Saving…</span>';
+            const r = await fetch('/api/compliance/imports/' + importId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ draft_clauses: importRow.draft_clauses })
+            });
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok) {
+                msg.innerHTML = '<span class="text-red-600">Save failed: ' + escAttr(data.error || ('HTTP ' + r.status)) + '</span>';
+                return;
+            }
+            msg.innerHTML = '<span class="text-green-700">Draft saved.</span>';
+        }
+        async function applyImport() {
+            collectDomEdits();
+            const regulationId = importRow.regulation_id || Number(document.getElementById('applyRegulationSelect').value || 0);
+            if (!regulationId) {
+                document.getElementById('draftMessage').innerHTML = '<span class="text-red-600">Pick a target regulation first.</span>';
+                return;
+            }
+            // Save before apply so server sees latest edits.
+            await saveDraft();
+            const msg = document.getElementById('draftMessage');
+            msg.innerHTML = '<span class="text-gray-600">Applying…</span>';
+            const r = await fetch('/api/compliance/imports/' + importId + '/apply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ regulation_id: regulationId })
+            });
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok) {
+                msg.innerHTML = '<span class="text-red-600">Apply failed: ' + escAttr(data.error || ('HTTP ' + r.status)) + '</span>';
+                return;
+            }
+            msg.innerHTML = '<span class="text-green-700">Applied: ' + data.inserted + ' inserted, ' + data.skipped + ' skipped. Redirecting to Compliance…</span>';
+            setTimeout(function () { window.location.href = '/compliance'; }, 1500);
+        }
+        function collectDomEdits() {
+            const rows = document.querySelectorAll('#draftBody tr[data-row]');
+            rows.forEach(function (row) {
+                const idx = Number(row.getAttribute('data-row'));
+                if (!importRow.draft_clauses[idx]) return;
+                const inputs = row.querySelectorAll('input, textarea, select');
+                inputs.forEach(function (inp) {
+                    const args = inp.getAttribute('data-args');
+                    if (!args) return;
+                    const m = args.match(/\d+,&quot;(\w+)&quot;/);
+                    if (m && m[1]) {
+                        if (inp.type === 'checkbox') {
+                            importRow.draft_clauses[idx].accepted = inp.checked;
+                        } else {
+                            importRow.draft_clauses[idx][m[1]] = inp.value;
+                        }
+                    }
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            importId = getId();
+            if (!importId) {
+                document.getElementById('draftMessage').innerHTML = '<span class="text-red-600">Missing ?id=… in URL.</span>';
+                return;
+            }
+            loadImport();
+        });
+    </script>
+    <script>
+        if (window.WalaPlusI18n) { window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); }); }
+    </script>
+</body>
+</html>

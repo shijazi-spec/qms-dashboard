@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Platform Health Pulse - ExampleOrg Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <script src="<REDACTED_URL>"></script>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <style>
+        .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 2px rgba(255,255,255,0.6) inset; }
+        .dot-pass { background: #10B981; }
+        .dot-warn { background: #F59E0B; }
+        .dot-fail { background: #EF4444; }
+        .dot-skipped { background: #9CA3AF; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.55; }
+        }
+        .check-row { transition: background-color 0.15s; }
+        .check-row:hover { background-color: #F9FAFB; }
+        .badge {
+            display: inline-block; padding: 2px 8px; border-radius: 9999px;
+            font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+        }
+        .badge-pass { background: #D1FAE5; color: #065F46; }
+        .badge-warn { background: #FEF3C7; color: #92400E; }
+        .badge-fail { background: #FEE2E2; color: #991B1B; }
+        .badge-skipped { background: #F3F4F6; color: #4B5563; }
+        details summary { cursor: pointer; user-select: none; list-style: none; }
+        details summary::-webkit-details-marker { display: none; }
+        details[open] summary .chev { transform: rotate(90deg); }
+        .chev { transition: transform 0.15s; display: inline-block; }
+        pre.json {
+            background: #0F172A; color: #E2E8F0; font-size: 11px;
+            padding: 10px 14px; border-radius: 6px; overflow-x: auto;
+            margin-top: 8px; max-height: 240px;
+        }
+        .filter-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 12px; border-radius: 9999px;
+            font-size: 12px; font-weight: 500; line-height: 1.4;
+            border: 1px solid #E5E7EB; background: #FFFFFF; color: #374151;
+            cursor: pointer; transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .filter-chip:hover { background: #F3F4F6; border-color: #D1D5DB; }
+        .filter-chip:focus-visible {
+            outline: 2px solid #2563EB; outline-offset: 2px;
+        }
+        .filter-chip[aria-pressed="true"] {
+            background: #2563EB; border-color: #2563EB; color: #FFFFFF;
+        }
+        .filter-chip[aria-pressed="true"]:hover {
+            background: #1D4ED8; border-color: #1D4ED8;
+        }
+        .filter-chip-count {
+            font-variant-numeric: tabular-nums; opacity: 0.85; font-size: 11px;
+        }
+        .sparkline-row {
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 10px;
+        }
+        .sparkline-label {
+            font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+            color: #6B7280; text-transform: uppercase; white-space: nowrap;
+        }
+        .sparkline-svg { display: block; }
+        .sparkline-svg rect { transition: opacity 0.15s; }
+        .sparkline-svg rect:hover { opacity: 0.75; }
+        .sparkline-empty {
+            font-size: 11px; color: #9CA3AF; font-style: italic;
+        }
+        /* "Copy filtered link" lives next to the filter chips so admins
+           triaging an incident can grab the exact URL with one click. */
+        .copy-link-row {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 12px; flex-wrap: wrap;
+        }
+        .copy-link-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 12px; border-radius: 9999px;
+            font-size: 12px; font-weight: 500; line-height: 1.4;
+            border: 1px solid #2563EB; background: #FFFFFF; color: #1D4ED8;
+            cursor: pointer; transition: background-color 0.15s, color 0.15s;
+        }
+        .copy-link-btn:hover { background: #EFF6FF; }
+        .copy-link-btn:focus-visible {
+            outline: 2px solid #2563EB; outline-offset: 2px;
+        }
+        .copy-link-btn[aria-disabled="true"] {
+            opacity: 0.6; cursor: default;
+        }
+        .copy-link-icon { width: 12px; height: 12px; flex: 0 0 auto; }
+        .copy-link-status {
+            font-size: 12px; font-weight: 500;
+            color: #047857;
+        }
+        .copy-link-status[data-tone="error"] { color: #B91C1C; }
+        .copy-link-status[hidden] { display: none; }
+        /* Per-row "Copy link to this check" — small icon button rendered
+           in the right gutter of each check summary so admins can grab a
+           direct link that auto-expands a single failing check. */
+        .row-copy-link-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 26px; height: 26px; border-radius: 6px;
+            border: 1px solid transparent; background: transparent;
+            color: #6B7280; cursor: pointer; flex: 0 0 auto;
+            transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .row-copy-link-btn:hover {
+            background: #EFF6FF; color: #1D4ED8; border-color: #DBEAFE;
+        }
+        .row-copy-link-btn:focus-visible {
+            outline: 2px solid #2563EB; outline-offset: 2px;
+        }
+        .row-copy-link-btn[data-state="copied"] { color: #047857; }
+        .row-copy-link-btn[data-state="error"]  { color: #B91C1C; }
+        .row-copy-link-btn svg { width: 14px; height: 14px; }
+        /* Briefly highlight the target row when arriving via ?check=<id>
+           so a teammate's eye lands on the right check immediately. */
+        details.check-row.is-deep-link-target {
+            background-color: #FEF3C7;
+            transition: background-color 1.5s ease-out;
+        }
+        /* Read-only mirror of the URL the copy button would copy. Lets
+           admins eyeball the params (e.g. confirm no PII) before pasting
+           the link into an incident channel. */
+        .copy-link-url {
+            flex: 1 1 240px; min-width: 220px; max-width: 520px;
+            padding: 4px 10px; border-radius: 6px;
+            font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            border: 1px solid #D1D5DB; background: #F9FAFB; color: #374151;
+        }
+        .copy-link-url:focus-visible {
+            outline: 2px solid #2563EB; outline-offset: 2px;
+            background: #FFFFFF;
+        }
+        .sparkline-mini {
+            display: inline-block; vertical-align: middle; flex-shrink: 0;
+            margin-right: 4px;
+        }
+        .sparkline-mini rect { transition: opacity 0.15s; }
+        .sparkline-mini:hover rect { opacity: 0.85; }
+        .sparkline-mini rect:hover { opacity: 1; }
+        /* Amber "flapping" pill rendered next to the check label when its
+           recent status history shows more than FLAP_THRESHOLD transitions
+           in the last FLAP_WINDOW runs. The visual treatment mirrors the
+           warn badge but uses an outline + icon so it reads as a meta
+           indicator about the row, not as the row's primary status. */
+        .badge-flapping {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 2px 8px; border-radius: 9999px;
+            font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+            background: #FEF3C7; color: #92400E;
+            border: 1px solid #F59E0B;
+            cursor: help; flex: 0 0 auto;
+        }
+        .badge-flapping svg { width: 11px; height: 11px; flex: 0 0 auto; }
+    </style>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.WalaPlusNav) WalaPlusNav.init('health');
+        });
+    </script>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="flex justify-between items-start mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-testid="text-page-title" data-i18n="health.title">Platform Health Pulse</h1>
+                <p class="text-gray-600 text-sm mt-1" data-i18n="health.subtitle">Continuous platform-wide health checks. Each run executes the full battery of assertions; degraded or failing runs trigger notifications automatically.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="btn-refresh" data-testid="button-refresh" data-i18n="common.refresh" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-50">
+                    Refresh
+                </button>
+                <button id="btn-run" data-testid="button-run-now" data-i18n="health.run_now" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed">
+                    Run now
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading state -->
+        <div id="loading-state" data-i18n="health.loading_pulse" class="bg-white rounded-xl shadow p-8 text-center text-gray-500">
+            Loading latest pulse...
+        </div>
+
+        <!-- Empty state (never run) -->
+        <div id="empty-state" class="hidden bg-white rounded-xl shadow p-8 text-center">
+            <div class="text-gray-400 text-lg mb-2" data-i18n="health.empty_title">No pulse runs yet</div>
+            <p class="text-gray-600 text-sm mb-4">Click <strong>Run now</strong> above to execute the first health pulse.</p>
+        </div>
+
+        <!-- Error state -->
+        <div id="error-state" class="hidden bg-red-50 border border-red-200 text-red-800 rounded-xl p-4">
+            <div class="font-semibold" data-i18n="health.error_title">Couldn't load Health Pulse data</div>
+            <div id="error-message" class="text-sm mt-1"></div>
+        </div>
+
+        <!-- In-panel alert banner: surfaces failing/warning checks above the fold -->
+        <div id="alert-banner" class="hidden mb-6" role="alert" aria-live="polite" data-testid="banner-health-alert">
+            <div id="alert-banner-inner" class="rounded-xl border p-4">
+                <div class="flex items-start gap-3">
+                    <span id="alert-banner-icon" class="dot mt-1" aria-hidden="true"></span>
+                    <div class="flex-1">
+                        <div id="alert-banner-title" class="font-semibold" data-testid="text-alert-banner-title"></div>
+                        <ul id="alert-banner-list" class="mt-2 text-sm space-y-1 list-disc ps-5" data-testid="list-alert-banner"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main content -->
+        <div id="main-content" class="hidden">
+            <!-- Top summary cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div id="overall-card" class="rounded-xl shadow-lg p-6 text-white">
+                    <div class="text-sm opacity-80 uppercase tracking-wider" data-i18n="health.kpi_overall">Overall Status</div>
+                    <div class="text-3xl font-bold mt-2" id="overall-status" data-testid="text-overall-status">--</div>
+                    <div class="text-sm opacity-80 mt-2" id="overall-time">Last run --</div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="text-sm text-gray-500 uppercase tracking-wider" data-i18n="health.kpi_passing">Passing</div>
+                    <div class="text-3xl font-bold text-emerald-600 mt-2" id="count-pass" data-testid="text-pass-count">0</div>
+                    <div class="text-sm text-gray-500 mt-2" data-i18n="health.checks_healthy">checks healthy</div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="text-sm text-gray-500 uppercase tracking-wider" data-i18n="health.kpi_warnings">Warnings</div>
+                    <div class="text-3xl font-bold text-amber-600 mt-2" id="count-warn" data-testid="text-warn-count">0</div>
+                    <div class="text-sm text-gray-500 mt-2" data-i18n="health.need_attention">need attention</div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="text-sm text-gray-500 uppercase tracking-wider" data-i18n="health.kpi_failures">Failures</div>
+                    <div class="text-3xl font-bold text-red-600 mt-2" id="count-fail" data-testid="text-fail-count">0</div>
+                    <div class="text-sm text-gray-500 mt-2" id="count-skipped">0 skipped</div>
+                </div>
+            </div>
+
+            <!-- History trend -->
+            <div class="bg-white rounded-xl shadow p-6 mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900" data-i18n="health.sec_history">Run history</h2>
+                        <p class="text-sm text-gray-500" data-i18n="health.history_subtitle">Last 50 runs · pass / warn / fail counts over time</p>
+                    </div>
+                    <div class="text-sm text-gray-500" id="history-meta"></div>
+                </div>
+                <div class="relative chart-h-220">
+                    <canvas id="historyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Per-check breakdown -->
+            <div class="bg-white rounded-xl shadow">
+                <div class="px-6 py-4 border-b">
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="health.sec_breakdown">Latest run · per-check breakdown</h2>
+                    <p class="text-sm text-gray-500" data-i18n="health.click_row">Click a row to inspect details</p>
+                </div>
+                <div id="checks-filter" class="hidden px-6 py-3 border-b bg-gray-50" role="group" data-testid="group-checks-filter">
+                    <!-- populated by JS -->
+                </div>
+                <div id="checks-list" data-testid="list-checks">
+                    <!-- populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STATUS_COLOR = {
+            healthy:  { card: 'linear-gradient(135deg, #047857, #10B981)', get label() { return WalaPlusI18n.t('dyn.health.status_healthy'); } },
+            degraded: { card: 'linear-gradient(135deg, #D97706, #F59E0B)', get label() { return WalaPlusI18n.t('dyn.health.status_degraded'); } },
+            critical: { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', get label() { return WalaPlusI18n.t('dyn.health.status_critical'); } },
+            down:     { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', get label() { return WalaPlusI18n.t('dyn.health.status_down'); } },
+        };
+
+        // Same palette as the .dot-* classes — kept in sync so the inline
+        // per-check sparkline reads the same as the pill on its row.
+        const STATUS_BAR_COLOR = {
+            pass:    '#10B981',
+            warn:    '#F59E0B',
+            fail:    '#EF4444',
+            skipped: '#9CA3AF',
+        };
+
+        const CATEGORY_LABELS = {
+            get infrastructure() { return WalaPlusI18n.t('dyn.health.cat_infrastructure'); },
+            get audits() { return WalaPlusI18n.t('dyn.health.cat_audits'); },
+            get data() { return WalaPlusI18n.t('dyn.health.cat_data'); },
+            get integrations() { return WalaPlusI18n.t('dyn.health.cat_integrations'); },
+            get scheduler() { return WalaPlusI18n.t('dyn.health.cat_scheduler'); },
+            get endpoints() { return WalaPlusI18n.t('dyn.health.cat_endpoints'); },
+            get ai() { return WalaPlusI18n.t('dyn.health.cat_ai'); },
+            get duplicates() { return WalaPlusI18n.t('dyn.health.cat_duplicates'); },
+            get kpis() { return WalaPlusI18n.t('dyn.health.cat_kpis'); },
+            get other() { return WalaPlusI18n.t('dyn.health.cat_other'); },
+        };
+
+        // Window + threshold for the per-row "flapping" indicator. We
+        // look at the most recent FLAP_WINDOW history entries for a
+        // check and count how many times the status differs from the
+        // previous entry; > FLAP_THRESHOLD transitions earns the badge.
+        // Tunable here so a future task can expose it as a setting.
+        const FLAP_WINDOW = 10;
+        const FLAP_THRESHOLD = 2;
+
+        /**
+         * Count status transitions in the last `window` entries of a
+         * check's history. Skipped runs are treated as their own status
+         * value (matching how the sparkline colors them) so a flap to/
+         * from "skipped" still surfaces — operators care about any
+         * recent instability, not just pass↔fail churn.
+         * Returns 0 for empty / single-entry histories.
+         */
+        function computeFlapCount(history, windowSize) {
+            if (!Array.isArray(history) || history.length < 2) return 0;
+            const recent = history.slice(-windowSize);
+            let flips = 0;
+            for (let i = 1; i < recent.length; i++) {
+                const prev = recent[i - 1] && recent[i - 1].status;
+                const curr = recent[i] && recent[i].status;
+                if (prev && curr && prev !== curr) flips++;
+            }
+            return flips;
+        }
+
+        // Sort order for category groups in the per-check breakdown.
+        // Infrastructure is pinned to the top so failures of the 429 pruner
+        // and other plumbing checks aren't buried below alphabetised peers.
+        const CATEGORY_ORDER = [
+            'infrastructure', 'endpoints', 'ai', 'audits',
+            'duplicates', 'data', 'integrations', 'kpis', 'scheduler',
+        ];
+
+        const FILTER_STORAGE_KEY = 'health.filterCategory';
+        const FILTER_QUERY_PARAM = 'category';
+        const STATUS_STORAGE_KEY = 'health.filterStatus';
+        const STATUS_QUERY_PARAM = 'status';
+        const STATUS_VALUES = ['all', 'fail', 'warn', 'pass', 'skipped'];
+        // Deep-link param: when present, the matching row is auto-expanded
+        // and scrolled into view on first render. The param is preserved
+        // alongside ?category and ?status so a single URL can carry the
+        // full triage context.
+        const CHECK_QUERY_PARAM = 'check';
+
+        function readInitialFilter() {
+            try {
+                const url = new URL(window.location.href);
+                const fromQuery = url.searchParams.get(FILTER_QUERY_PARAM);
+                if (fromQuery) return fromQuery;
+            } catch { /* noop */ }
+            try {
+                return sessionStorage.getItem(FILTER_STORAGE_KEY) || 'all';
+            } catch { return 'all'; }
+        }
+
+        function readInitialStatusFilter() {
+            try {
+                const url = new URL(window.location.href);
+                const fromQuery = url.searchParams.get(STATUS_QUERY_PARAM);
+                if (fromQuery && STATUS_VALUES.includes(fromQuery)) return fromQuery;
+            } catch { /* noop */ }
+            try {
+                const stored = sessionStorage.getItem(STATUS_STORAGE_KEY);
+                if (stored && STATUS_VALUES.includes(stored)) return stored;
+            } catch { /* noop */ }
+            return 'all';
+        }
+
+        let selectedCategory = readInitialFilter();
+        let selectedStatus = readInitialStatusFilter();
+        // Cached so chip clicks can re-render without re-fetching.
+        let lastLatest = null;
+        // Cached per-check history so chip clicks reuse the same sparkline
+        // payload from the last /api/health/pulse fetch.
+        let lastPerCheckHistory = {};
+        let historyChart = null;
+
+        function persistFilter(cat) {
+            try { sessionStorage.setItem(FILTER_STORAGE_KEY, cat); } catch { /* noop */ }
+            try {
+                const url = new URL(window.location.href);
+                if (cat === 'all') url.searchParams.delete(FILTER_QUERY_PARAM);
+                else url.searchParams.set(FILTER_QUERY_PARAM, cat);
+                window.history.replaceState({}, '', url.toString());
+            } catch { /* noop */ }
+        }
+
+        function persistStatusFilter(status) {
+            try { sessionStorage.setItem(STATUS_STORAGE_KEY, status); } catch { /* noop */ }
+            try {
+                const url = new URL(window.location.href);
+                if (status === 'all') url.searchParams.delete(STATUS_QUERY_PARAM);
+                else url.searchParams.set(STATUS_QUERY_PARAM, status);
+                window.history.replaceState({}, '', url.toString());
+            } catch { /* noop */ }
+        }
+
+        function categoryLabel(cat) {
+            return CATEGORY_LABELS[cat] || cat;
+        }
+
+        function el(id) { return document.getElementById(id); }
+
+        function show(id) { el(id).classList.remove('hidden'); }
+        function hide(id) { el(id).classList.add('hidden'); }
+
+        function fmtTime(iso) {
+            if (!iso) return '--';
+            try {
+                const d = new Date(iso);
+                return d.toLocaleString();
+            } catch { return iso; }
+        }
+
+        function fmtRelative(iso) {
+            if (!iso) return '--';
+            const ms = Date.now() - new Date(iso).getTime();
+            const min = Math.floor(ms / 60000);
+            if (min < 1) return 'just now';
+            if (min < 60) return `${min} min ago`;
+            const hr = Math.floor(min / 60);
+            if (hr < 24) return `${hr}h ago`;
+            const d = Math.floor(hr / 24);
+            return `${d}d ago`;
+        }
+
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        /**
+         * Build a small inline SVG sparkline showing this check's status
+         * across recent runs. Each rect is one run (oldest left → newest
+         * right) and carries a native <title> tooltip with the run
+         * timestamp + status, so hovering any bar surfaces the context.
+         */
+        function renderCheckSparkline(checkId, history) {
+            if (!Array.isArray(history) || history.length === 0) {
+                return '<div class="sparkline-empty" data-testid="sparkline-empty-' + escapeHtml(checkId) + '">' + WalaPlusI18n.t('dyn.health.sparkline_no_history') + '</div>';
+            }
+            if (history.length < 2) {
+                return '<div class="sparkline-empty" data-testid="sparkline-single-' + escapeHtml(checkId) + '">' + WalaPlusI18n.t('dyn.health.sparkline_one_run') + '</div>';
+            }
+            const barWidth = 6;
+            const barGap = 2;
+            const barHeight = 20;
+            const total = history.length;
+            const width = total * (barWidth + barGap) - barGap;
+            const bars = history.map((entry, i) => {
+                const x = i * (barWidth + barGap);
+                const status = entry && entry.status ? entry.status : 'skipped';
+                const color = STATUS_BAR_COLOR[status] || STATUS_BAR_COLOR.skipped;
+                const tip = fmtTime(entry && entry.run_at) + ' — ' + status.toUpperCase();
+                return '<rect x="' + x + '" y="0" width="' + barWidth + '" height="' + barHeight + '" fill="' + color + '" rx="1">'
+                    + '<title>' + escapeHtml(tip) + '</title>'
+                    + '</rect>';
+            }).join('');
+            const labelText = WalaPlusI18n.t('dyn.health.sparkline_label', { count: total });
+            const ariaLabel = WalaPlusI18n.t('dyn.health.sparkline_aria', { count: total, id: checkId });
+            return '<div class="sparkline-row" data-testid="sparkline-row-' + escapeHtml(checkId) + '">'
+                + '<span class="sparkline-label">' + escapeHtml(labelText) + '</span>'
+                + '<svg class="sparkline-svg" viewBox="0 0 ' + width + ' ' + barHeight + '" '
+                + 'width="' + width + '" height="' + barHeight + '" '
+                + 'role="img" aria-label="' + escapeHtml(ariaLabel) + '" '
+                + 'data-testid="sparkline-' + escapeHtml(checkId) + '">'
+                + bars
+                + '</svg>'
+                + '</div>';
+        }
+
+        /**
+         * Compact inline sparkline shown directly in the collapsed row so
+         * admins can scan flapping checks across the whole breakdown
+         * without expanding each one. Reuses the same per-check history
+         * payload as the full-size sparkline (`/api/health/pulse`); just
+         * trims to the most recent ~10 runs for a row-friendly footprint.
+         */
+        function renderMiniSparkline(checkId, history) {
+            if (!Array.isArray(history) || history.length < 2) {
+                return '';
+            }
+            const recent = history.slice(-10);
+            const barWidth = 4;
+            const barGap = 2;
+            const barHeight = 16;
+            const total = recent.length;
+            const width = total * (barWidth + barGap) - barGap;
+            const bars = recent.map((entry, i) => {
+                const x = i * (barWidth + barGap);
+                const status = entry && entry.status ? entry.status : 'skipped';
+                const color = STATUS_BAR_COLOR[status] || STATUS_BAR_COLOR.skipped;
+                const tip = fmtTime(entry && entry.run_at) + ' — ' + status.toUpperCase();
+                return '<rect x="' + x + '" y="0" width="' + barWidth + '" height="' + barHeight + '" fill="' + color + '" rx="1">'
+                    + '<title>' + escapeHtml(tip) + '</title>'
+                    + '</rect>';
+            }).join('');
+            const ariaLabel = WalaPlusI18n.t('dyn.health.sparkline_mini_aria', { count: total, id: checkId });
+            return '<svg class="sparkline-mini" viewBox="0 0 ' + width + ' ' + barHeight + '" '
+                + 'width="' + width + '" height="' + barHeight + '" '
+                + 'role="img" aria-label="' + escapeHtml(ariaLabel) + '" '
+                + 'data-testid="sparkline-mini-' + escapeHtml(checkId) + '">'
+                + bars
+                + '</svg>';
+        }
+
+        function renderAlertBanner(latest) {
+            const banner = el('alert-banner');
+            const inner = el('alert-banner-inner');
+            const icon = el('alert-banner-icon');
+            const titleEl = el('alert-banner-title');
+            const list = el('alert-banner-list');
+
+            const checks = Array.isArray(latest.checks) ? latest.checks : [];
+            const failing = checks.filter(c => c.status === 'fail');
+            const warning = checks.filter(c => c.status === 'warn');
+
+            if (failing.length === 0 && warning.length === 0) {
+                banner.classList.add('hidden');
+                return;
+            }
+
+            const hasFail = failing.length > 0;
+            const tone = hasFail
+                ? { cls: 'bg-red-50 border-red-200 text-red-800', dot: 'dot-fail' }
+                : { cls: 'bg-amber-50 border-amber-200 text-amber-800', dot: 'dot-warn' };
+
+            inner.className = 'rounded-xl border p-4 ' + tone.cls;
+            icon.className = 'dot mt-1 ' + tone.dot;
+
+            const titleParams = { fail: failing.length, warn: warning.length };
+            titleEl.textContent = hasFail
+                ? WalaPlusI18n.t('dyn.health.alert_failing_title', titleParams)
+                : WalaPlusI18n.t('dyn.health.alert_warning_title', titleParams);
+
+            const items = [...failing, ...warning].map(c => {
+                const badgeClass = 'badge badge-' + c.status;
+                const msg = c.message ? ' — ' + escapeHtml(c.message) : '';
+                return '<li data-testid="item-alert-' + escapeHtml(c.id) + '">'
+                    + '<span class="' + badgeClass + '">' + c.status.toUpperCase() + '</span> '
+                    + '<strong>' + escapeHtml(c.label || c.id) + '</strong>'
+                    + ' <span class="text-xs opacity-75">(' + escapeHtml(c.id) + ')</span>'
+                    + msg
+                    + '</li>';
+            }).join('');
+            list.innerHTML = items;
+
+            banner.classList.remove('hidden');
+        }
+
+        function renderLatest(latest, perCheckHistory) {
+            lastLatest = latest;
+            lastPerCheckHistory = perCheckHistory || {};
+            const status = latest.overall_status || 'healthy';
+            const meta = STATUS_COLOR[status] || STATUS_COLOR.healthy;
+            el('overall-card').style.background = meta.card;
+            el('overall-status').textContent = meta.label;
+            el('overall-time').textContent = WalaPlusI18n.t('dyn.health.last_run_prefix') + fmtRelative(latest.run_at) + ' · ' + latest.duration_ms + 'ms';
+
+            el('count-pass').textContent = latest.pass_count ?? 0;
+            el('count-warn').textContent = latest.warn_count ?? 0;
+            el('count-fail').textContent = latest.fail_count ?? 0;
+            el('count-skipped').textContent = (latest.skipped_count ?? 0) + ' ' + WalaPlusI18n.t('dyn.health.label_skipped');
+
+            // Alert banner ignores the active filter so failing/warning checks
+            // are never hidden when an admin is focused on one category.
+            renderAlertBanner(latest);
+
+            renderChecksWithFilter();
+        }
+
+        function statusFilterLabel(status) {
+            switch (status) {
+                case 'all': return WalaPlusI18n.t('dyn.health.filter_status_all');
+                case 'fail': return WalaPlusI18n.t('dyn.health.filter_status_fail');
+                case 'warn': return WalaPlusI18n.t('dyn.health.filter_status_warn');
+                case 'pass': return WalaPlusI18n.t('dyn.health.filter_status_pass');
+                case 'skipped': return WalaPlusI18n.t('dyn.health.filter_status_skipped');
+                default: return status;
+            }
+        }
+
+        function renderChecksWithFilter() {
+            const latest = lastLatest;
+            if (!latest) return;
+
+            const allChecks = Array.isArray(latest.checks) ? latest.checks : [];
+
+            // Group checks by category (preserving order)
+            const grouped = {};
+            for (const c of allChecks) {
+                const cat = c.category || 'other';
+                (grouped[cat] = grouped[cat] || []).push(c);
+            }
+
+            const orderedCats = Object.keys(grouped).sort((a, b) => {
+                const ai = CATEGORY_ORDER.indexOf(a);
+                const bi = CATEGORY_ORDER.indexOf(b);
+                if (ai === -1 && bi === -1) return a.localeCompare(b);
+                if (ai === -1) return 1;
+                if (bi === -1) return -1;
+                return ai - bi;
+            });
+
+            // If the persisted filter is for a category that no longer exists
+            // in the latest run, fall back to "all" so the user isn't stuck
+            // staring at an empty list.
+            if (selectedCategory !== 'all' && !grouped[selectedCategory]) {
+                selectedCategory = 'all';
+                persistFilter('all');
+            }
+
+            // Counts for category chips reflect the active status filter
+            // (and vice-versa) so an admin can see at a glance how many
+            // results would remain after composing the two filters.
+            const categoryCounts = {};
+            for (const cat of orderedCats) {
+                categoryCounts[cat] = grouped[cat].filter(c => matchesStatus(c, selectedStatus)).length;
+            }
+            const categoryTotal = Object.values(categoryCounts).reduce((a, b) => a + b, 0);
+
+            const checksForStatusCounts = selectedCategory === 'all'
+                ? allChecks
+                : (grouped[selectedCategory] || []);
+            const statusCounts = {
+                all: checksForStatusCounts.length,
+                fail: checksForStatusCounts.filter(c => c.status === 'fail').length,
+                warn: checksForStatusCounts.filter(c => c.status === 'warn').length,
+                pass: checksForStatusCounts.filter(c => c.status === 'pass').length,
+                skipped: checksForStatusCounts.filter(c => c.status === 'skipped').length,
+            };
+
+            renderFilterChips(orderedCats, categoryCounts, categoryTotal, statusCounts);
+
+            const visibleCats = selectedCategory === 'all'
+                ? orderedCats
+                : orderedCats.filter(c => c === selectedCategory);
+
+            const html = visibleCats.map(cat => {
+                const rowsArr = grouped[cat].filter(c => matchesStatus(c, selectedStatus));
+                if (rowsArr.length === 0) return '';
+                const rows = rowsArr.map(c => {
+                    const detailJson = c.details ? `<pre class="json">${escapeHtml(JSON.stringify(c.details, null, 2))}</pre>` : '';
+                    const message = c.message ? `<div class="text-sm text-gray-600 mt-1 mb-2">${escapeHtml(c.message)}</div>` : '';
+                    const checkHistory = lastPerCheckHistory[c.id];
+                    const sparkline = renderCheckSparkline(c.id, checkHistory);
+                    const miniSparkline = renderMiniSparkline(c.id, checkHistory);
+                    const rowCopyAria = WalaPlusI18n.t('dyn.health.copy_check_link_aria', { id: c.id });
+                    // Flapping badge: amber pill rendered next to the
+                    // check label when recent history shows churn beyond
+                    // FLAP_THRESHOLD. Uses the same per-check history
+                    // payload already in `lastPerCheckHistory` — no extra
+                    // fetch required.
+                    const flapCount = computeFlapCount(checkHistory, FLAP_WINDOW);
+                    const flapBadge = flapCount >= FLAP_THRESHOLD
+                        ? '<span class="badge-flapping" role="status"'
+                            + ' title="' + escapeHtml(WalaPlusI18n.t('dyn.health.flapping_tooltip', { flips: flapCount, window: FLAP_WINDOW })) + '"'
+                            + ' aria-label="' + escapeHtml(WalaPlusI18n.t('dyn.health.flapping_aria', { flips: flapCount, window: FLAP_WINDOW })) + '"'
+                            + ' data-testid="badge-flapping-' + escapeHtml(c.id) + '">'
+                            + '<svg viewBox="0 0 12 12" fill="none" xmlns="<REDACTED_URL>" aria-hidden="true">'
+                            + '<path d="M2 4 L5 7 L8 3 L10 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>'
+                            + '</svg>'
+                            + '<span>' + escapeHtml(WalaPlusI18n.t('dyn.health.flapping_badge')) + '</span>'
+                            + '</span>'
+                        : '';
+                    return `
+                        <details class="check-row border-t border-gray-100" data-check-id="${escapeHtml(c.id)}" data-testid="row-check-${escapeHtml(c.id)}">
+                            <summary class="flex items-center gap-3 px-6 py-3">
+                                <span class="chev text-gray-400">▸</span>
+                                <span class="dot dot-${c.status}"></span>
+                                <div class="flex-1">
+                                    <div class="text-sm font-medium text-gray-900 flex items-center gap-2 flex-wrap">
+                                        <span>${escapeHtml(c.label || c.id)}</span>
+                                        ${flapBadge}
+                                    </div>
+                                    <div class="text-xs text-gray-500">${escapeHtml(c.id)} · ${c.duration_ms}ms</div>
+                                </div>
+                                ${miniSparkline}
+                                <span class="badge badge-${c.status}">${c.status.toUpperCase()}</span>
+                                <button type="button" class="row-copy-link-btn"
+                                    data-check-copy="${escapeHtml(c.id)}"
+                                    aria-label="${escapeHtml(rowCopyAria)}"
+                                    title="${escapeHtml(WalaPlusI18n.t('dyn.health.copy_check_link'))}"
+                                    data-testid="button-copy-check-link-${escapeHtml(c.id)}">
+                                    <svg viewBox="0 0 16 16" fill="none" xmlns="<REDACTED_URL>" aria-hidden="true">
+                                        <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                                        <path d="M3 10.5V3.5C3 <REDACTED_PHONE> 2.5H10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                                    </svg>
+                                </button>
+                            </summary>
+                            <div class="px-6 pb-4 ps-16">
+                                ${message}
+                                ${sparkline}
+                                ${detailJson}
+                            </div>
+                        </details>
+                    `;
+                }).join('');
+                return `
+                    <div data-testid="group-category-${escapeHtml(cat)}">
+                        <div class="px-6 py-2 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            ${escapeHtml(categoryLabel(cat))}
+                        </div>
+                        ${rows}
+                    </div>
+                `;
+            }).join('');
+
+            const filtersActive = selectedCategory !== 'all' || selectedStatus !== 'all';
+            let placeholder;
+            if (!html && filtersActive && allChecks.length > 0) {
+                // There ARE checks in the latest run, just none matching the
+                // composed category + status filter. Show a tailored empty
+                // state that names the active filters and offers a one-click
+                // reset, so operators don't mistake this for a broken pulse.
+                const statusLabel = statusFilterLabel(selectedStatus);
+                const categoryName = selectedCategory === 'all'
+                    ? WalaPlusI18n.t('dyn.health.filter_all')
+                    : categoryLabel(selectedCategory);
+                const msg = WalaPlusI18n.t('dyn.health.no_matching_checks', {
+                    status: statusLabel,
+                    category: categoryName,
+                });
+                placeholder = '<div class="px-6 py-8 text-center text-gray-500 text-sm" data-testid="text-no-matching-filters">'
+                    + '<div>' + escapeHtml(msg) + '</div>'
+                    + '<button type="button" class="mt-3 text-sm font-medium text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"'
+                    + ' data-testid="button-clear-filters">'
+                    + escapeHtml(WalaPlusI18n.t('dyn.health.clear_filters'))
+                    + '</button>'
+                    + '</div>';
+            } else {
+                placeholder = '<div class="px-6 py-8 text-center text-gray-500 text-sm" data-testid="text-no-matching-checks">' + WalaPlusI18n.t('dyn.health.no_checks') + '</div>';
+            }
+            el('checks-list').innerHTML = html || placeholder;
+            if (!html && filtersActive && allChecks.length > 0) {
+                const clearBtn = el('checks-list').querySelector('[data-testid="button-clear-filters"]');
+                if (clearBtn) {
+                    clearBtn.addEventListener('click', () => {
+                        selectedCategory = 'all';
+                        selectedStatus = 'all';
+                        persistFilter('all');
+                        persistStatusFilter('all');
+                        renderChecksWithFilter();
+                    });
+                }
+            }
+            // Wire each row's per-check copy-link button. stopPropagation()
+            // is critical: the button lives inside <summary>, and a bare
+            // click would also toggle the <details> open/close state.
+            el('checks-list').querySelectorAll('[data-check-copy]').forEach(btn => {
+                btn.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    const checkId = btn.getAttribute('data-check-copy');
+                    copyCheckLink(checkId, btn);
+                });
+            });
+            // Apply ?check=<id> deep-link if present. We do it after the
+            // list is in the DOM so querySelector can find the row, and
+            // we only auto-expand once per page load to avoid yanking
+            // focus on the 60s auto-refresh.
+            applyCheckDeepLink();
+        }
+
+        function matchesStatus(check, status) {
+            if (status === 'all') return true;
+            return check.status === status;
+        }
+
+        function renderFilterChips(orderedCats, categoryCounts, categoryTotal, statusCounts) {
+            const container = el('checks-filter');
+            if (!orderedCats.length) {
+                container.classList.add('hidden');
+                container.innerHTML = '';
+                return;
+            }
+            container.classList.remove('hidden');
+
+            // Category chips
+            const catChips = [];
+            const allActive = selectedCategory === 'all';
+            catChips.push(
+                '<button type="button" class="filter-chip" data-filter="category" data-value="all"'
+                + ' aria-pressed="' + allActive + '"'
+                + ' aria-label="' + escapeHtml(WalaPlusI18n.t('dyn.health.filter_all_aria')) + '"'
+                + ' data-testid="chip-filter-all">'
+                + '<span>' + escapeHtml(WalaPlusI18n.t('dyn.health.filter_all')) + '</span>'
+                + '<span class="filter-chip-count">' + categoryTotal + '</span>'
+                + '</button>'
+            );
+            for (const cat of orderedCats) {
+                const active = selectedCategory === cat;
+                const label = categoryLabel(cat);
+                catChips.push(
+                    '<button type="button" class="filter-chip" data-filter="category" data-value="' + escapeHtml(cat) + '"'
+                    + ' aria-pressed="' + active + '"'
+                    + ' aria-label="' + escapeHtml(WalaPlusI18n.t('dyn.health.filter_aria', { category: label })) + '"'
+                    + ' data-testid="chip-filter-' + escapeHtml(cat) + '">'
+                    + '<span>' + escapeHtml(label) + '</span>'
+                    + '<span class="filter-chip-count">' + (categoryCounts[cat] || 0) + '</span>'
+                    + '</button>'
+                );
+            }
+
+            // Status chips
+            const statusChips = [];
+            for (const status of STATUS_VALUES) {
+                const active = selectedStatus === status;
+                const label = statusFilterLabel(status);
+                const ariaLabel = status === 'all'
+                    ? WalaPlusI18n.t('dyn.health.filter_status_all_aria')
+                    : WalaPlusI18n.t('dyn.health.filter_status_aria', { status: label });
+                statusChips.push(
+                    '<button type="button" class="filter-chip" data-filter="status" data-value="' + escapeHtml(status) + '"'
+                    + ' aria-pressed="' + active + '"'
+                    + ' aria-label="' + escapeHtml(ariaLabel) + '"'
+                    + ' data-testid="chip-status-' + escapeHtml(status) + '">'
+                    + '<span>' + escapeHtml(label) + '</span>'
+                    + '<span class="filter-chip-count">' + (statusCounts[status] || 0) + '</span>'
+                    + '</button>'
+                );
+            }
+
+            // The "Copy filtered link" affordance only makes sense when a
+            // filter is active — otherwise the URL is just /dashboard/health
+            // and there's nothing to "share that wouldn't be discoverable
+            // from the nav. Visibility is keyed off the live ?category /
+            // ?status query params so it tracks whatever persistFilter() /
+            // persistStatusFilter() most recently wrote.
+            const filtersActive = selectedCategory !== 'all' || selectedStatus !== 'all';
+            const currentUrl = window.location.href;
+            const copyLinkRow = filtersActive
+                ? '<div class="copy-link-row" data-testid="row-copy-filtered-link">'
+                    + '<button type="button" class="copy-link-btn"'
+                    + ' data-testid="button-copy-filtered-link"'
+                    + ' aria-label="' + escapeHtml(WalaPlusI18n.t('dyn.health.copy_link_aria')) + '">'
+                    + '<svg class="copy-link-icon" viewBox="0 0 16 16" fill="none"'
+                    + ' xmlns="<REDACTED_URL>" aria-hidden="true">'
+                    + '<rect x="4.5" y="4.5" width="8" height="8" rx="1.5"'
+                    + ' stroke="currentColor" stroke-width="1.3"/>'
+                    + '<path d="M3 10.5V3.5C3 <REDACTED_PHONE> 2.5H10"'
+                    + ' stroke="currentColor" stroke-width="1.3"'
+                    + ' stroke-linecap="round"/>'
+                    + '</svg>'
+                    + '<span data-testid="text-copy-filtered-link">'
+                    + escapeHtml(WalaPlusI18n.t('dyn.health.copy_link')) + '</span>'
+                    + '</button>'
+                    + '<input type="text" readonly class="copy-link-url"'
+                    + ' value="' + escapeHtml(currentUrl) + '"'
+                    + ' aria-label="' + escapeHtml(WalaPlusI18n.t('dyn.health.copy_link_url_aria')) + '"'
+                    + ' title="' + escapeHtml(WalaPlusI18n.t('dyn.health.copy_link_url_label')) + '"'
+                    + ' data-testid="input-copy-filtered-link-url">'
+                    + '<span class="copy-link-status" hidden role="status"'
+                    + ' aria-live="polite"'
+                    + ' data-testid="status-copy-filtered-link"></span>'
+                    + '</div>'
+                : '';
+
+            container.innerHTML =
+                '<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"'
+                + ' id="checks-filter-label">'
+                + escapeHtml(WalaPlusI18n.t('dyn.health.filter_label')) + '</div>'
+                + '<div class="flex flex-wrap gap-2" role="toolbar"'
+                + ' aria-labelledby="checks-filter-label"'
+                + ' data-testid="toolbar-filter-category">'
+                + catChips.join('')
+                + '</div>'
+                + '<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-3 mb-2"'
+                + ' id="checks-filter-status-label">'
+                + escapeHtml(WalaPlusI18n.t('dyn.health.filter_status_label')) + '</div>'
+                + '<div class="flex flex-wrap gap-2" role="toolbar"'
+                + ' aria-labelledby="checks-filter-status-label"'
+                + ' data-testid="toolbar-filter-status">'
+                + statusChips.join('')
+                + '</div>'
+                + copyLinkRow;
+
+            container.querySelectorAll('.filter-chip').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const filter = btn.getAttribute('data-filter');
+                    const value = btn.getAttribute('data-value') || 'all';
+                    if (filter === 'status') {
+                        if (value === selectedStatus) return;
+                        selectedStatus = value;
+                        persistStatusFilter(value);
+                    } else {
+                        if (value === selectedCategory) return;
+                        selectedCategory = value;
+                        persistFilter(value);
+                    }
+                    renderChecksWithFilter();
+                });
+            });
+
+            const copyBtn = container.querySelector('[data-testid="button-copy-filtered-link"]');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', () => copyFilteredLink(copyBtn));
+            }
+
+            // Select-all on click/focus so keyboard users can review the URL
+            // and then press Ctrl+C without having to drag-select first.
+            const urlInput = container.querySelector('[data-testid="input-copy-filtered-link-url"]');
+            if (urlInput) {
+                const selectAll = () => {
+                    try { urlInput.select(); } catch { /* noop */ }
+                };
+                urlInput.addEventListener('click', selectAll);
+                urlInput.addEventListener('focus', selectAll);
+            }
+        }
+
+        // Tracks the most recent confirmation timer so rapid double-clicks
+        // don't leave a stale "Link copied" message lingering after the
+        // status node has been re-rendered with new chip state.
+        let copyLinkResetTimer = null;
+
+        async function copyFilteredLink(btn) {
+            const status = document.querySelector('[data-testid="status-copy-filtered-link"]');
+            const url = window.location.href;
+            // `label` is passed as a fully-translated string (not a key) so
+            // the i18n guardrail can statically verify every translation
+            // lookup at the call sites below, instead of seeing a single
+            // dynamic concatenation inside this helper.
+            const showStatus = (label, tone) => {
+                if (!status) return;
+                status.textContent = label;
+                status.dataset.tone = tone;
+                status.hidden = false;
+                if (copyLinkResetTimer) clearTimeout(copyLinkResetTimer);
+                copyLinkResetTimer = setTimeout(() => {
+                    if (status) status.hidden = true;
+                }, 2500);
+            };
+            try {
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    await navigator.clipboard.writeText(url);
+                    showStatus(WalaPlusI18n.t('dyn.health.copy_link_copied'), 'success');
+                    return;
+                }
+            } catch (_) { /* fall through to legacy path */ }
+            // Legacy fallback for browsers (or insecure contexts) where the
+            // async Clipboard API isn't available — execCommand('copy') on
+            // a hidden textarea still works and keeps the affordance useful
+            // when navigator.clipboard is gated.
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = url;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'absolute';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (ok) {
+                    showStatus(WalaPlusI18n.t('dyn.health.copy_link_copied'), 'success');
+                    return;
+                }
+            } catch (_) { /* noop — fall through to error message */ }
+            showStatus(WalaPlusI18n.t('dyn.health.copy_link_failed'), 'error');
+        }
+
+        // Build a shareable URL for a single check, preserving the
+        // currently active ?category and ?status params so the recipient
+        // lands on the same filtered slice the sender was looking at.
+        function buildCheckLinkUrl(checkId) {
+            const url = new URL(window.location.href);
+            url.searchParams.set(CHECK_QUERY_PARAM, checkId);
+            return url.toString();
+        }
+
+        // Per-row copy buttons get their own confirmation timer so a copy
+        // on row A doesn't reset the "copied" flash on row B.
+        const rowCopyResetTimers = new WeakMap();
+
+        async function copyCheckLink(checkId, btn) {
+            if (!checkId || !btn) return;
+            const url = buildCheckLinkUrl(checkId);
+            // `label` is passed as a fully-translated string (not a key) so
+            // every translation lookup is statically verifiable by the i18n
+            // guardrail at the call sites below, instead of appearing as a
+            // single dynamic concatenation inside this helper.
+            const flash = (state, label) => {
+                btn.dataset.state = state;
+                // Reflect in the tooltip + aria-label so AT users hear the
+                // confirmation; the icon itself has no visible text.
+                btn.setAttribute('title', label);
+                btn.setAttribute('aria-label', label);
+                const prev = rowCopyResetTimers.get(btn);
+                if (prev) clearTimeout(prev);
+                rowCopyResetTimers.set(btn, setTimeout(() => {
+                    delete btn.dataset.state;
+                    btn.setAttribute('title', WalaPlusI18n.t('dyn.health.copy_check_link'));
+                    btn.setAttribute('aria-label', WalaPlusI18n.t('dyn.health.copy_check_link_aria', { id: checkId }));
+                }, 2500));
+            };
+            try {
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    await navigator.clipboard.writeText(url);
+                    flash('copied', WalaPlusI18n.t('dyn.health.copy_check_link_copied'));
+                    return;
+                }
+            } catch (_) { /* fall through */ }
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = url;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'absolute';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (ok) {
+                    flash('copied', WalaPlusI18n.t('dyn.health.copy_check_link_copied'));
+                    return;
+                }
+            } catch (_) { /* noop */ }
+            flash('error', WalaPlusI18n.t('dyn.health.copy_check_link_failed'));
+        }
+
+        // Tracks whether we've already applied a ?check=<id> deep-link in
+        // this page session — auto-refresh re-renders the list every 60s
+        // and we don't want to keep yanking the viewport back to the
+        // target row each time.
+        let deepLinkApplied = false;
+
+        function applyCheckDeepLink() {
+            if (deepLinkApplied) return;
+            let targetId = null;
+            try {
+                targetId = new URL(window.location.href).searchParams.get(CHECK_QUERY_PARAM);
+            } catch { /* noop */ }
+            if (!targetId) return;
+            const row = el('checks-list').querySelector(
+                '[data-check-id="' + (window.CSS && CSS.escape ? CSS.escape(targetId) : targetId.replace(/"/g, '\\"')) + '"]'
+            );
+            if (!row) return;
+            // We mark it "applied" even if the row is filtered out, so a
+            // category/status filter combo that hides the target check
+            // doesn't keep retrying on every refresh.
+            deepLinkApplied = true;
+            row.open = true;
+            row.classList.add('is-deep-link-target');
+            // rAF so layout has settled (Chart.js sizing, sparkline SVGs,
+            // etc.) before we measure the scroll position.
+            requestAnimationFrame(() => {
+                try {
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } catch {
+                    row.scrollIntoView();
+                }
+                // Fade the highlight out after a couple of seconds so it
+                // doesn't linger as a permanent visual artefact.
+                setTimeout(() => row.classList.remove('is-deep-link-target'), 2200);
+            });
+        }
+
+        function renderHistory(history) {
+            // history comes newest-first; reverse for left-to-right time order
+            const ordered = [...history].reverse();
+            const labels = ordered.map(r => {
+                const d = new Date(r.run_at);
+                return d.toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            });
+
+            const passData = ordered.map(r => r.pass_count || 0);
+            const warnData = ordered.map(r => r.warn_count || 0);
+            const failData = ordered.map(r => r.fail_count || 0);
+
+            el('history-meta').textContent = ordered.length === 1 ? '1 ' + WalaPlusI18n.t('dyn.health.label_run_singular') : ordered.length + ' ' + WalaPlusI18n.t('dyn.health.label_runs_plural');
+
+            const ctx = el('historyChart').getContext('2d');
+            if (historyChart) historyChart.destroy();
+            historyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: WalaPlusI18n.t('dyn.health.chart_pass'), data: passData, borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: WalaPlusI18n.t('dyn.health.chart_warn'), data: warnData, borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: WalaPlusI18n.t('dyn.health.chart_fail'), data: failData, borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.3, pointRadius: 2 },
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                        x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }
+                    },
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        async function loadPulse() {
+            hide('error-state');
+            try {
+                const res = await fetch('/api/health/pulse', { credentials: 'include' });
+                if (res.status === 401) {
+                    window.location.href = '/login?next=' + encodeURIComponent('/dashboard/health');
+                    return;
+                }
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+                }
+                const data = await res.json();
+
+                hide('loading-state');
+
+                if (!data.latest) {
+                    hide('main-content');
+                    hide('alert-banner');
+                    show('empty-state');
+                    return;
+                }
+
+                hide('empty-state');
+                show('main-content');
+
+                renderLatest(data.latest, data.perCheckHistory || {});
+                renderHistory(data.history || []);
+            } catch (err) {
+                hide('loading-state');
+                hide('main-content');
+                hide('alert-banner');
+                el('error-message').textContent = err.message || String(err);
+                show('error-state');
+            }
+        }
+
+        async function runNow() {
+            const btn = el('btn-run');
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = WalaPlusI18n.t('dyn.health.running');
+            btn.classList.add('pulse');
+            try {
+                const res = await fetch('/api/health/pulse/run', { method: 'POST', credentials: 'include' });
+                if (res.status === 429) {
+                    alert(WalaPlusI18n.t('dyn.health.rate_limit_hit'));
+                    return;
+                }
+                if (!res.ok) {
+                    const text = await res.text();
+                    alert(WalaPlusI18n.t('dyn.health.run_failed', { msg: text.slice(0, 200) }));
+                    return;
+                }
+                await loadPulse();
+            } catch (err) {
+                alert(WalaPlusI18n.t('dyn.health.run_failed', { msg: err.message || err }));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+                btn.classList.remove('pulse');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            el('btn-refresh').addEventListener('click', loadPulse);
+            el('btn-run').addEventListener('click', runNow);
+            loadPulse();
+            // light auto-refresh every 60s while the page is open
+            setInterval(loadPulse, 60000);
+        });
+    </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

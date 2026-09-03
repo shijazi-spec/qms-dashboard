@@ -1,0 +1,846 @@
+/**
+ * Discovers and runs every tests/*.test.ts and src/**\/*.test.ts file
+ * (excluding _helpers and fixtures) using the same `npx tsx <file>` pattern
+ * each test was designed for. Each test runs in its own subprocess so
+ * module-level side effects (DB pools, env mutation) stay isolated. Aggregates
+ * pass/fail and exits non-zero if any test file fails — designed to be invoked
+ * from `npm test` and from CI.
+ *
+ * After the tsx-based suites finish, this also invokes `npx vitest run` to
+ * execute the vitest-based suites under `tests/vitest/**` which need real
+ * module mocking (e.g. stubbing dynamic ESM imports of database modules).
+ *
+ * Concurrency
+ * -----------
+ * The tsx test files are dispatched through a worker pool (default 4
+ * concurrent subprocesses) so the fixed tsx + module-init cost (DB pool
+ * bootstrap, schema seeding) is paid in parallel rather than serially. Each
+ * subprocess still gets its own pg Pool / module graph, preserving the
+ * per-file isolation the existing tests rely on (no cookie/role bleed-through
+ * between suites). The vitest suite runs concurrently with the tsx workers
+ * and is bounded by its own internal `pool: "forks"` config.
+ *
+ * Output from each subprocess is buffered and printed as a single labelled
+ * block once the file finishes, so parallel runs do not produce interleaved
+ * unreadable logs.
+ *
+ * Override the worker count with TEST_CONCURRENCY (e.g. TEST_CONCURRENCY=1
+ * for fully serial debugging).
+ *
+ * Cross-browser Playwright smoke (streaming downloads): if the env var
+ * `RUN_STREAMING_DOWNLOAD_E2E=1` is set we additionally run the streaming
+ * download spec across Chromium/Firefox/WebKit. This needs the dev server
+ * running and the requested browsers installed (`npx playwright install`).
+ * The dedicated CI workflow `.github/workflows/streaming-download-smoke.yml`
+ * sets that env after standing up the prerequisites, so a regression in
+ * any browser engine fails CI for that workflow.
+ *
+ * Streaming-export latency HTTP integration test: if the env var
+ * `RUN_STREAMING_EXPORT_LATENCY_E2E=1` is set we additionally run
+ * `tests/streamingExportLatency.integration.ts` against a running dev
+ * server. It hits every export endpoint that goes through
+ * `stageStreamingExportFromHono` and asserts the `X-Stream-TTFB-Ms`
+ * header is present and within `EXPORT_TTFB_BUDGET_MS` — catching
+ * server-side buffering regressions the browser smoke test cannot see.
+ * The dedicated CI workflow `.github/workflows/streaming-download-smoke.yml`
+ * sets the env after standing up the dev server, so a regression in any
+ * single export endpoint fails CI for that workflow.
+ *
+ * Review-filter partial-index EXPLAIN test: if `RUN_REVIEW_FILTER_INDEX_E2E=1`
+ * is set we additionally run `tests/aiApprovalReviewFilterIndex.integration.ts`
+ * which seeds ≥100k synthetic event_logs rows and asserts that the AI
+ * approval queue's `reviewFilter` NOT EXISTS sub-query uses the
+ * `idx_event_logs_view_audit` partial index rather than seq-scanning a
+ * partition. The test validates `DATABASE_URL` itself and exits with a
+ * clear error if it's missing. The dedicated CI workflow
+ * `.github/workflows/review-filter-index.yml` boots a Postgres service
+ * container plus the dev server (which initialises the event_logs and
+ * ai_pending_actions schema and creates `idx_event_logs_view_audit`) and
+ * sets the env, so a future schema change that accidentally drops or
+ * renames the index — or rewrites the NOT EXISTS sub-query into a shape
+ * the planner can no longer satisfy with the index — fails CI.
+ *
+ * AI metrics secret-sweep DB integration test: if `RUN_AI_METRICS_SWEEP_E2E=1`
+ * is set we additionally run `tests/aiCallMetricsSweepBackfill.integration.ts`
+ * against a real Postgres so SQL shape, parameter encoding, and BIGSERIAL
+ * keyset pagination in `redactAiCallMetrics()` are exercised end-to-end.
+ * Test validates DATABASE_URL itself; CI wires it via
+ * `.github/workflows/ai-metrics-sweep.yml`.
+ *
+ * Prompt-regression alert cron DB integration test (Task #365): if the env
+ * var `RUN_PROMPT_REGRESSION_E2E=1` is set we additionally run
+ * `tests/promptRegressionAlertsCron.integration.ts` against a real
+ * Postgres. It seeds two prompt versions for the same agent (one with a
+ * high thumbs-up rate, one regressed below threshold), runs
+ * `runPromptRegressionCheck()` with default deps so the production
+ * SQL → cron → alert path is exercised end-to-end, and asserts an
+ * `ai_alerts` row with `alert_type='prompt_regression'` is created.
+ * Notification side-effect deps (Slack/email + open-alerts sweep +
+ * overrides loader) are stubbed so the test cannot page on-call or
+ * disturb pre-existing alerts on a shared DB. Cleanup runs in `finally`.
+ *
+ * RBAC HTTP integration tests: if the env var `RUN_RBAC_INTEGRATION_E2E=1`
+ * is set we additionally run `tests/rbacRouteLockdown.integration.ts` and
+ * `tests/rbacReportRoutes.integration.ts` against a running dev server.
+ * Both files validate `DATABASE_URL` and `SESSION_SECRET` themselves and
+ * exit with a clear error if either is missing. The dedicated CI workflow
+ * `.github/workflows/rbac-integration-tests.yml` boots the dev server with
+ * those env vars set, so a regression in the route-lockdown middleware
+ * fails CI in the same run as the unit tests.
+ *
+ * HTTP rate-limiter integration tests: if the env var
+ * `RUN_RATE_LIMITER_INTEGRATION_E2E=1` is set we additionally run
+ * `tests/testRateLimiterHttp.ts` and `tests/testRateLimiterPerUserHttp.ts`
+ * (via `scripts/run-rate-limiter-integration-tests.sh`) against a running
+ * dev server. Both files validate `ADMIN_API_KEY`, `SESSION_SECRET`, and
+ * `DATABASE_URL` themselves and exit non-zero if any is missing. The
+ * dedicated CI workflow `.github/workflows/rate-limiter-integration.yml`
+ * boots the dev server *without* `RATE_LIMIT_DISABLED=true` (so the
+ * limiter actually engages) and sets the env, and the main
+ * `.github/workflows/test.yml` also sets the flag so a regression in the
+ * IP-keyed or user-keyed buckets — including the per-user reset scenario
+ * Task #664 added — fails CI in the same run as the unit tests instead of
+ * only being catchable by manually running `npx tsx tests/testRateLimiter*Http.ts`
+ * with the secret flipped.
+ *
+ * Tool-health on-call notifier integration test: if the env var
+ * `RUN_TOOL_HEALTH_INTEGRATION_E2E=1` is set we additionally run
+ * `tests/toolHealthAlertNotifier.integration.ts` (via
+ * `scripts/run-tool-health-notifier-integration.sh`). The test posts to a
+ * real Slack channel and/or a real Resend inbox using the production
+ * Block Kit and plaintext renderers — NOT stubs — so broken Block Kit
+ * shapes, bad subject lines, plaintext truncation, and character-escaping
+ * bugs are caught before they page on-call at 3 AM. The file self-skips
+ * cleanly (exits 0) when none of the optional Slack/Resend credential
+ * pairs (SLACK_BOT_TOKEN+SLACK_TEST_CHANNEL or
+ * RESEND_API_KEY+RESEND_TEST_EMAIL) are configured, so wiring this flag
+ * on unconditionally in the standard test job is safe even on
+ * environments that don't have the secrets configured. The dedicated CI
+ * workflow `.github/workflows/tool-health-notifier-integration.yml`
+ * forwards the same secrets, and the main `.github/workflows/test.yml`
+ * also sets the flag so a renderer regression fails CI in the same run
+ * as the unit tests when credentials are present.
+ *
+ * AI approval-queue HTTP secret-leak integration test: if the env var
+ * `RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1` is set we additionally run
+ * `tests/aiApprovalRoutesRedaction.integration.ts` against a running dev
+ * server (Task #348). It seeds rows through the live `enqueuePendingAction`,
+ * signs a quality-manager session cookie with the same `SESSION_SECRET`
+ * the server uses, and exercises the full HTTP / middleware stack for
+ * GET /api/ai/approvals*, POST /api/ai/approvals/:code/approve (success
+ * path) and POST /api/ai/approvals/:code/approve (throw path), asserting
+ * that no plaintext secret leaks into any response body. The two synthetic
+ * canary tools required by the POST /approve assertions
+ * (`integration-test-redaction-canary__ok` and
+ * `integration-test-redaction-canary__throws`) are registered in the
+ * server at startup whenever NODE_ENV !== 'production'
+ * (src/utils/integrationTestFixtureTools.ts), so no extra runtime setup
+ * is needed beyond `npm run dev`. The dedicated CI workflow
+ * `.github/workflows/ai-approval-redaction-integration.yml` boots the
+ * dev server with those env vars set, and the main `.github/workflows/test.yml`
+ * also sets the flag so a redaction regression fails CI in the same run
+ * as the unit tests.
+ *
+ * Usage:    npm test
+ *           npx tsx tests/runIntegrationTests.ts
+ *           TEST_CONCURRENCY=1 npx tsx tests/runIntegrationTests.ts
+ */
+
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import { readdir } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import pLimit from "p-limit";
+
+// On POSIX, `new URL(".", import.meta.url).pathname` returns `/home/...`
+// which `path.resolve` accepts as-is. On Windows it returns `/D:/...` and
+// `path.resolve` then prepends the current drive, producing `D:\D:\...`
+// (ENOENT). `fileURLToPath` normalises both cases — see Node docs for
+// "URL string to path" conversion — so the runner works identically on
+// Linux/macOS CI and a Windows contributor's local checkout.
+const TESTS_DIR = path.resolve(fileURLToPath(new URL(".", import.meta.url)));
+const ROOT_DIR = path.resolve(TESTS_DIR, "..");
+
+// On Windows, npm-shipped binaries (npx, npm, vitest) are .cmd shims that
+// `child_process.spawn` cannot exec directly — it needs the actual file
+// extension. Without this, every subprocess we launch fails with
+// "spawn npx ENOENT" and the whole suite reports red on a Windows
+// contributor's machine even though Linux CI is fine. Resolve once at
+// module init so callers can use a single name across platforms.
+const IS_WINDOWS = process.platform === "win32";
+const NPX_CMD = IS_WINDOWS ? "npx.cmd" : "npx";
+
+/**
+ * Launch the local CLIs through NODE rather than npx.
+ *
+ * Node 20.19+ refuses to spawn a `.cmd` without `shell: true` (the
+ * CVE-<REDACTED_PHONE> mitigation), so `spawn("npx.cmd", ...)` dies with
+ * `spawn EINVAL` and the whole 246-file suite never starts on Windows —
+ * silently, since the crash looks like a harness error rather than a test
+ * result. Setting `shell: true` would "fix" it and introduce a worse problem:
+ * this repo lives under "D:\2_QMS Platform\", and an unquoted path with a space
+ * would be split into two arguments.
+ *
+ * Resolving the CLI entrypoints and running them with process.execPath avoids
+ * the shell entirely, so paths with spaces are passed as single argv entries.
+ * Falls back to npx when a package layout does not match.
+ */
+function resolveCli(<REDACTED_TOKEN>: string): string | null {
+  const p = path.join(process.cwd(), "node_modules", <REDACTED_TOKEN>);
+  return fs.existsSync(p) ? p : null;
+}
+const TSX_CLI = resolveCli("tsx/dist/cli.mjs");
+const VITEST_CLI = resolveCli("vitest/vitest.mjs");
+
+/** [command, leadingArgs] for running `tsx <file>` / `vitest <args>`. */
+function cliInvocation(kind: "tsx" | "vitest"): [string, string[]] {
+  const direct = kind === "tsx" ? TSX_CLI : VITEST_CLI;
+  if (direct) return [process.execPath, [direct]];
+  return [NPX_CMD, [kind]];
+}
+
+interface RunResult {
+  file: string;
+  ok: boolean;
+  code: number;
+  durationMs: number;
+}
+
+/**
+ * Recursively collect all *.test.ts files under a given directory.
+ * Skips __tests__ subdirectories — those are vitest-managed and discovered
+ * via `npx vitest run` rather than the tsx subprocess runner.
+ */
+async function collectTestFiles(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const results: string[] = [];
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory() && entry.name !== "__tests__") {
+      results.push(...(await collectTestFiles(full)));
+    } else if (entry.isFile() && entry.name.endsWith(".test.ts")) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+async function discoverTestFiles(): Promise<string[]> {
+  // tests/*.test.ts (top-level only, preserving existing behaviour)
+  const testsEntries = await readdir(TESTS_DIR, { withFileTypes: true });
+  const testsFiles = testsEntries
+    .filter((e) => e.isFile() && e.name.endsWith(".test.ts"))
+    .map((e) => path.join(TESTS_DIR, e.name));
+
+  // src/**/*.test.ts (recursive — picks up e.g. redactSensitiveFields.test.ts)
+  const srcDir = path.join(ROOT_DIR, "src");
+  const srcFiles = (await collectTestFiles(srcDir).catch((err: unknown) => {
+    console.error(
+      `Failed to discover src/**/*.test.ts: ${(err as Error).message}`,
+    );
+    process.exit(1);
+  })) as string[];
+
+  return [...testsFiles, ...srcFiles].sort();
+}
+
+/**
+ * Spawn one tsx subprocess. Captures stdout+stderr into a single buffer so
+ * parallel runs don't interleave. The buffered output is flushed as a single
+ * labelled block once the child exits.
+ */
+function runOne(file: string): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const rel = path.relative(process.cwd(), file);
+    const [tsxCmd, tsxArgs] = cliInvocation("tsx");
+    const child = spawn(tsxCmd, [...tsxArgs, file], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    });
+
+    const chunks: Buffer[] = [];
+    child.stdout?.on("data", (b: Buffer) => chunks.push(b));
+    child.stderr?.on("data", (b: Buffer) => chunks.push(b));
+
+    let finished = false;
+    const finish = (code: number) => {
+      // A child can emit both `error` and `exit` (e.g. spawn failure followed
+      // by the synthetic exit event). Guard against double-resolving.
+      if (finished) return;
+      finished = true;
+      const durationMs = Date.now() - started;
+      const output = Buffer.concat(chunks).toString("utf8");
+      // Print as one coherent block so parallel runs stay readable.
+      process.stdout.write(
+        `\n──── ${rel}  (${(durationMs / 1000).toFixed(1)}s, exit ${code}) ────\n` +
+          (output.endsWith("\n") || output.length === 0
+            ? output
+            : output + "\n"),
+      );
+      resolve({ file, ok: code === 0, code, durationMs });
+    };
+
+    child.on("exit", (code) => finish(code ?? -1));
+    child.on("error", (err) => {
+      chunks.push(
+        Buffer.from(`Failed to spawn ${rel}: ${(err as Error).message}\n`),
+      );
+      finish(-1);
+    });
+  });
+}
+
+function runVitest(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/vitest/** (vitest)";
+    const [vitestCmd, vitestArgs] = cliInvocation("vitest");
+    const child = spawn(vitestCmd, [...vitestArgs, "run", "--reporter=default"], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    });
+
+    const chunks: Buffer[] = [];
+    child.stdout?.on("data", (b: Buffer) => chunks.push(b));
+    child.stderr?.on("data", (b: Buffer) => chunks.push(b));
+
+    let finished = false;
+    const finish = (code: number) => {
+      if (finished) return;
+      finished = true;
+      const durationMs = Date.now() - started;
+      const output = Buffer.concat(chunks).toString("utf8");
+      process.stdout.write(
+        `\n──── ${label}  (${(durationMs / 1000).toFixed(1)}s, exit ${code}) ────\n` +
+          (output.endsWith("\n") || output.length === 0
+            ? output
+            : output + "\n"),
+      );
+      resolve({ file: label, ok: code === 0, code, durationMs });
+    };
+
+    child.on("exit", (code) => finish(code ?? -1));
+    child.on("error", (err) => {
+      chunks.push(
+        Buffer.from(`Failed to spawn vitest: ${(err as Error).message}\n`),
+      );
+      finish(-1);
+    });
+  });
+}
+
+function resolveConcurrency(fileCount: number): number {
+  const raw = process.env.TEST_CONCURRENCY;
+  if (raw && raw.trim() !== "") {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      return Math.min(parsed, Math.max(1, fileCount));
+    }
+  }
+  // Default: 4 workers, but never more than file count or available CPUs.
+  const cpus = Math.max(1, os.cpus().length);
+  return Math.max(1, Math.min(4, cpus, Math.max(1, fileCount)));
+}
+
+function runRbacIntegrationSuite(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label =
+      "tests/rbacRouteLockdown.integration.ts + tests/rbacReportRoutes.integration.ts";
+    const child = spawn("bash", ["scripts/run-rbac-integration-tests.sh"], {
+      stdio: "inherit",
+      env: process.env,
+    });
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn rbac integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runRateLimiterIntegrationSuite(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label =
+      "tests/testRateLimiterHttp.ts + tests/testRateLimiterPerUserHttp.ts";
+    const child = spawn(
+      "bash",
+      ["scripts/run-rate-limiter-integration-tests.sh"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn rate-limiter integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runToolHealthNotifierIntegration(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/toolHealthAlertNotifier.integration.ts";
+    const child = spawn(
+      "bash",
+      ["scripts/run-tool-health-notifier-integration.sh"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn tool-health notifier integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runApprovalRedactionIntegration(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/aiApprovalRoutesRedaction.integration.ts";
+    const child = spawn(
+      "bash",
+      ["scripts/run-ai-approval-redaction-integration.sh"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn AI approval redaction integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runAiMetricsSweep(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/aiCallMetricsSweepBackfill.integration.ts";
+    const child = spawn(
+      "npx",
+      ["tsx", "tests/aiCallMetricsSweepBackfill.integration.ts"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn ai-metrics-sweep integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runPromptRegressionCronIntegration(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/promptRegressionAlertsCron.integration.ts";
+    const child = spawn(
+      "npx",
+      ["tsx", "tests/promptRegressionAlertsCron.integration.ts"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn prompt-regression cron integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runReviewFilterIndex(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/aiApprovalReviewFilterIndex.integration.ts";
+    const child = spawn(
+      "npx",
+      ["tsx", "tests/aiApprovalReviewFilterIndex.integration.ts"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn review-filter index suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runStreamingExportLatency(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/streamingExportLatency.integration.ts";
+    const child = spawn(
+      "npx",
+      ["tsx", "tests/streamingExportLatency.integration.ts"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn streaming-export latency suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runStreamingDownloadSmoke(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/streamingDownload.spec.ts (chromium+firefox+webkit)";
+    const child = spawn(
+      "npx",
+      [
+        "playwright",
+        "test",
+        "tests/streamingDownload.spec.ts",
+        "--reporter=list",
+      ],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(`Failed to spawn playwright: ${(err as Error).message}`);
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+/**
+ * Per-route, real-browser, client-observed-budget smoke for every export
+ * endpoint. Complements `runStreamingExportLatency` (server-only TTFB
+ * header) by measuring what the user actually sees through the live
+ * dashboard streaming-download client. See
+ * `tests/streamingDownloadPerRoute.spec.ts` for the full rationale.
+ *
+ * Pinned to --project=chromium because the client-budget regression
+ * class this catches (per-route TLS/edge buffering, SW round-trip
+ * overhead, browser disk-write throughput against a real backend) is
+ * engine-agnostic; cross-engine coverage of the streaming pipeline
+ * itself is already handled by `runStreamingDownloadSmoke` against the
+ * intercepted fixture.
+ */
+function runStreamingDownloadPerRoute(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/streamingDownloadPerRoute.spec.ts (chromium)";
+    const child = spawn(
+      "npx",
+      [
+        "playwright",
+        "test",
+        "tests/streamingDownloadPerRoute.spec.ts",
+        "--project=chromium",
+        "--reporter=list",
+      ],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(`Failed to spawn playwright: ${(err as Error).message}`);
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+async function main(): Promise<void> {
+  const overallStart = Date.now();
+  const files = await discoverTestFiles();
+  if (files.length === 0) {
+    console.error("No *.test.ts files discovered under tests/ or src/");
+    process.exit(1);
+  }
+
+  const concurrency = resolveConcurrency(files.length);
+  console.log(
+    `\n▶ Running ${files.length} integration test file(s) + vitest suite ` +
+      `(concurrency=${concurrency})\n`,
+  );
+
+  const limit = pLimit(concurrency);
+
+  // Dispatch all tsx test files through the worker pool, plus the vitest
+  // suite, all in parallel. Vitest manages its own internal worker pool
+  // (`pool: "forks"`) so it composes cleanly with the tsx workers.
+  const tsxPromises = files.map((file) => limit(() => runOne(file)));
+  const vitestPromise = runVitest();
+
+  const tsxResults = await Promise.all(tsxPromises);
+  const vitestResult = await vitestPromise;
+
+  const results: RunResult[] = [...tsxResults, vitestResult];
+
+  if (process.env.RUN_STREAMING_DOWNLOAD_E2E === "1") {
+    console.log(
+      `\n──── tests/streamingDownload.spec.ts (playwright, all engines) ────`,
+    );
+    results.push(await runStreamingDownloadSmoke());
+  } else {
+    console.log(
+      `\n[skip] streamingDownload.spec.ts — set RUN_STREAMING_DOWNLOAD_E2E=1 with the dev server running and Playwright browsers installed to include it.`,
+    );
+  }
+
+  if (process.env.RUN_STREAMING_EXPORT_LATENCY_E2E === "1") {
+    console.log(`\n──── Streaming-export latency HTTP integration tests ────`);
+    results.push(await runStreamingExportLatency());
+  } else {
+    console.log(
+      `\n[skip] streaming-export latency HTTP integration tests — set RUN_STREAMING_EXPORT_LATENCY_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include them.`,
+    );
+  }
+
+  // Per-route, real-browser, client-observed-budget smoke. Gated on the
+  // same env flag as the server-side latency check above so the two
+  // layers (server X-Stream-TTFB-Ms header AND client-observed TTFB +
+  // total wall time through the live SW streaming-download client) are
+  // exercised in lock-step — a regression in either fails the same job.
+  if (process.env.RUN_STREAMING_EXPORT_LATENCY_E2E === "1") {
+    console.log(
+      `\n──── tests/streamingDownloadPerRoute.spec.ts (playwright, chromium) ────`,
+    );
+    results.push(await runStreamingDownloadPerRoute());
+  } else {
+    console.log(
+      `\n[skip] streaming-download per-route client-budget smoke — set RUN_STREAMING_EXPORT_LATENCY_E2E=1 (with ADMIN_API_KEY, DATABASE_URL, and the dev server running) to include the real-browser per-route client-budget smoke alongside the server-side check.`,
+    );
+  }
+
+  if (process.env.RUN_AI_METRICS_SWEEP_E2E === "1") {
+    console.log(
+      `\n──── ai_call_metrics secret-sweep DB integration test ────`,
+    );
+    results.push(await runAiMetricsSweep());
+  } else {
+    console.log(
+      `\n[skip] ai_call_metrics secret-sweep DB integration test — set RUN_AI_METRICS_SWEEP_E2E=1 with DATABASE_URL pointed at a real Postgres to verify redactAiCallMetrics() against live SQL.`,
+    );
+  }
+
+  if (process.env.RUN_PROMPT_REGRESSION_E2E === "1") {
+    console.log(
+      `\n──── Prompt-regression alert cron DB integration test (Task #365) ────`,
+    );
+    results.push(await runPromptRegressionCronIntegration());
+  } else {
+    console.log(
+      `\n[skip] prompt-regression alert cron DB integration test — set RUN_PROMPT_REGRESSION_E2E=1 with DATABASE_URL pointed at a real Postgres to seed two prompt versions and verify runPromptRegressionCheck() opens an ai_alerts row end-to-end.`,
+    );
+  }
+
+  if (process.env.RUN_REVIEW_FILTER_INDEX_E2E === "1") {
+    console.log(
+      `\n──── Review-filter partial-index EXPLAIN integration test ────`,
+    );
+    results.push(await runReviewFilterIndex());
+  } else {
+    console.log(
+      `\n[skip] review-filter partial-index EXPLAIN test — set RUN_REVIEW_FILTER_INDEX_E2E=1 with DATABASE_URL to seed ≥100k rows and verify idx_event_logs_view_audit is used.`,
+    );
+  }
+
+  if (process.env.RUN_RBAC_INTEGRATION_E2E === "1") {
+    console.log(
+      `\n──── RBAC HTTP integration tests (rbacRouteLockdown + rbacReportRoutes) ────`,
+    );
+    results.push(await runRbacIntegrationSuite());
+  } else {
+    console.log(
+      `\n[skip] RBAC HTTP integration tests — set RUN_RBAC_INTEGRATION_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include them.`,
+    );
+  }
+
+  if (process.env.RUN_TOOL_HEALTH_INTEGRATION_E2E === "1") {
+    console.log(
+      `\n──── Tool-health on-call notifier integration test (Slack/Resend Block Kit + plaintext renderers) ────`,
+    );
+    results.push(await runToolHealthNotifierIntegration());
+  } else {
+    console.log(
+      `\n[skip] Tool-health on-call notifier integration test — set RUN_TOOL_HEALTH_INTEGRATION_E2E=1 to include it (the underlying test self-skips cleanly when no Slack/Resend credentials are configured).`,
+    );
+  }
+
+  if (process.env.RUN_APPROVAL_REDACTION_INTEGRATION_E2E === "1") {
+    console.log(
+      `\n──── AI approval-queue HTTP secret-leak integration test (Task #348) ────`,
+    );
+    results.push(await runApprovalRedactionIntegration());
+  } else {
+    console.log(
+      `\n[skip] AI approval-queue HTTP secret-leak integration test — set RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include it.`,
+    );
+  }
+
+  if (process.env.RUN_RATE_LIMITER_INTEGRATION_E2E === "1") {
+    console.log(
+      `\n──── HTTP rate-limiter integration tests (testRateLimiterHttp + testRateLimiterPerUserHttp, Task #664) ────`,
+    );
+    results.push(await runRateLimiterIntegrationSuite());
+  } else {
+    console.log(
+      `\n[skip] HTTP rate-limiter integration tests — set RUN_RATE_LIMITER_INTEGRATION_E2E=1 with ADMIN_API_KEY, SESSION_SECRET, DATABASE_URL, and the dev server running WITHOUT RATE_LIMIT_DISABLED=true to include them.`,
+    );
+  }
+
+  const passed = results.filter((r) => r.ok).length;
+  const failed = results.length - passed;
+
+  // Sort summary by duration (slowest first) so future tuning is obvious.
+  const summary = [...results].sort((a, b) => b.durationMs - a.durationMs);
+
+  console.log("\n========== Integration test summary ==========");
+  for (const r of summary) {
+    const tag = r.ok ? "PASS" : `FAIL (exit ${r.code})`;
+    const rel = r.file.startsWith("tests/")
+      ? r.file
+      : path.relative(process.cwd(), r.file);
+    console.log(`  [${tag}] ${(r.durationMs / 1000).toFixed(1)}s  ${rel}`);
+  }
+  const wallClock = ((Date.now() - overallStart) / 1000).toFixed(1);
+  console.log(
+    `\n${passed}/${results.length} test files passed in ${wallClock}s wall clock`,
+  );
+
+  if (failed > 0) process.exit(1);
+}
+
+main().catch((err) => {
+  console.error("runIntegrationTests crashed:", err);
+  process.exit(1);
+});

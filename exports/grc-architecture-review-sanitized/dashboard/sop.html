@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Standard Operating Procedure - ExampleOrg</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html, body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        body { min-height: 100vh; overflow-x: hidden; }
+
+        .sop-content h2 {
+            font-size: 1.5rem; font-weight: 700; color: #1e3a8a;
+            margin-top: 2.5rem; margin-bottom: 1rem;
+            padding-bottom: 0.5rem; border-bottom: 2px solid #dbeafe;
+        }
+        .sop-content h3 {
+            font-size: 1.15rem; font-weight: 600; color: #1e40af;
+            margin-top: 1.75rem; margin-bottom: 0.75rem;
+        }
+        .sop-content h4 {
+            font-size: 1rem; font-weight: 600; color: #334155;
+            margin-top: 1.25rem; margin-bottom: 0.5rem;
+        }
+        .sop-content p { margin-bottom: 0.75rem; line-height: 1.7; color: #374151; }
+        .sop-content ul, .sop-content ol { margin-bottom: 0.75rem; padding-left: 1.5rem; }
+        .sop-content li { margin-bottom: 0.35rem; line-height: 1.6; color: #374151; }
+        .sop-content ul li { list-style-type: disc; }
+        .sop-content ol li { list-style-type: decimal; }
+        .sop-content strong { color: #1e293b; }
+        .sop-content code {
+            background: #f1f5f9; padding: 2px 6px; border-radius: 4px;
+            font-size: 0.875rem; color: #7c3aed; font-family: 'Fira Code', monospace;
+        }
+        .sop-content pre {
+            background: #1e293b; color: #e2e8f0; padding: 16px;
+            border-radius: 8px; overflow-x: auto; margin-bottom: 1rem;
+            font-size: 0.85rem; line-height: 1.5;
+        }
+        .sop-content pre code { background: none; color: inherit; padding: 0; }
+        .sop-content hr { margin: 2rem 0; border-color: #e2e8f0; }
+        .sop-content blockquote {
+            border-left: 4px solid #3b82f6; padding: 12px 16px;
+            background: #eff6ff; margin: 1rem 0; border-radius: 0 8px 8px 0;
+            color: #1e40af;
+        }
+
+        .sop-content table {
+            width: 100%; border-collapse: collapse; margin-bottom: 1.25rem;
+            font-size: 0.875rem; overflow: hidden; border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .sop-content thead { background: #f8fafc; }
+        .sop-content th {
+            padding: 10px 14px; text-align: left; font-weight: 600;
+            color: #1e293b; border-bottom: 2px solid #e2e8f0;
+            white-space: nowrap;
+        }
+        .sop-content td {
+            padding: 8px 14px; border-bottom: 1px solid #f1f5f9;
+            color: #475569; vertical-align: top;
+        }
+        .sop-content tbody tr:hover { background: #f8fafc; }
+        .sop-content a { color: #2563eb; text-decoration: underline; }
+        .sop-content a:hover { color: #1d4ed8; }
+
+        .toc-link {
+            display: block; padding: 6px 12px; color: #475569;
+            text-decoration: none; border-radius: 6px; font-size: 0.85rem;
+            transition: all 0.15s;
+        }
+        .toc-link:hover { background: #eff6ff; color: #1e40af; }
+        .toc-link.active { background: #dbeafe; color: #1e3a8a; font-weight: 600; }
+        .toc-sub { padding-left: 1rem; font-size: 0.8rem; }
+
+        @media (max-width: 1024px) {
+            .toc-sidebar { display: none; }
+        }
+        @media print {
+            .toc-sidebar, #ExampleOrg-nav, .no-print { display: none !important; }
+            .sop-content { max-width: 100% !important; }
+        }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/safe-render.js?v=1"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('sop');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex gap-8">
+            <aside class="toc-sidebar w-64 flex-shrink-0 sticky top-8 self-start max-h-[calc(100vh-6rem)] overflow-y-auto">
+                <div class="bg-white rounded-xl shadow-lg p-4">
+                    <div class="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <span class="font-semibold text-gray-800 text-sm">Table of Contents</span>
+                    </div>
+                    <nav id="toc-nav" data-testid="nav-toc"></nav>
+                </div>
+            </aside>
+
+            <div class="flex-1 min-w-0">
+                <div class="bg-white rounded-xl shadow-lg p-8 mb-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-6 border-b border-gray-200">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900" data-testid="text-sop-title" data-i18n="sop.title">Standard Operating Procedure</h1>
+                            <p class="text-sm text-gray-500 mt-1" data-testid="text-sop-version" id="sop-version-label"></p>
+                        </div>
+                        <div class="flex gap-2 no-print">
+                            <button data-on-click="window.print" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition" data-testid="button-print-sop">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                                Print
+                            </button>
+                            <a href="/api/sop/download" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition" data-testid="button-download-sop">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                Download
+                            </a>
+                        </div>
+                    </div>
+
+                    <div id="sop-loading" class="flex flex-col items-center justify-center py-20">
+                        <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600 mb-4"></div>
+                        <p class="text-gray-500 text-sm">Loading SOP document...</p>
+                    </div>
+
+                    <div id="sop-error" class="hidden flex flex-col items-center justify-center py-20">
+                        <svg class="w-12 h-12 text-red-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.<REDACTED_PHONE>-2.5L13.732 4c-.<REDACTED_PHONE>.732 0L4.082 16.5c-.<REDACTED_PHONE>.5z"/></svg>
+                        <p class="text-red-600 font-medium" data-testid="text-sop-error">Failed to load SOP document</p>
+                        <button data-on-click="loadSOP" class="mt-3 text-sm text-blue-600 hover:text-blue-800" data-testid="button-retry-sop">Try again</button>
+                    </div>
+
+                    <article id="sop-content" class="sop-content hidden" data-testid="content-sop"></article>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // HTML escape — delegate to the shared SafeRender helper so every page
+        // uses the same escape rules. Fails closed (empty string) if
+        // safe-render.js failed to load.
+        const esc = (str) => {
+            if (!window.SafeRender || typeof window.SafeRender.escape !== 'function') {
+                console.error('[sop] SafeRender.escape unavailable — refusing to render unescaped content');
+                return '';
+            }
+            return window.SafeRender.escape(str);
+        };
+
+        function parseMarkdown(md) {
+            md = md.replace(/\r\n/g, '\n');
+
+            var lines = md.split('\n');
+            var html = '';
+            var inTable = false;
+            var inList = false;
+            var listType = '';
+            var inCodeBlock = false;
+            var codeContent = '';
+
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+
+                if (line.match(/^```/)) {
+                    if (inCodeBlock) {
+                        html += '<pre><code>' + esc(codeContent.trim()) + '</code></pre>';
+                        codeContent = '';
+                        inCodeBlock = false;
+                    } else {
+                        if (inList) { html += '</' + listType + '>'; inList = false; }
+                        inCodeBlock = true;
+                    }
+                    continue;
+                }
+                if (inCodeBlock) { codeContent += line + '\n'; continue; }
+
+                if (line.match(/^\|.*\|/)) {
+                    if (line.match(/^\|\s*[-:]+/)) continue;
+                    var cells = line.split('|').filter(function(c, idx, arr) { return idx > 0 && idx < arr.length - 1; });
+                    if (!inTable) { html += '<table><thead><tr>'; cells.forEach(function(c) { html += '<th scope="col">' + inlineFormat(c.trim()) + '</th>'; }); html += '</tr></thead><tbody>'; inTable = true; }
+                    else { html += '<tr>'; cells.forEach(function(c) { html += '<td>' + inlineFormat(c.trim()) + '</td>'; }); html += '</tr>'; }
+                    continue;
+                } else if (inTable) { html += '</tbody></table>'; inTable = false; }
+
+                if (line.match(/^#{1,4}\s/)) {
+                    if (inList) { html += '</' + listType + '>'; inList = false; }
+                    var level = line.match(/^(#+)/)[1].length;
+                    var text = line.replace(/^#+\s*/, '');
+                    var id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                    if (level === 1) {
+                        html += '<h1 id="' + id + '" class="text-2xl font-bold text-gray-900 mb-2">' + inlineFormat(text) + '</h1>';
+                    } else {
+                        html += '<h' + level + ' id="' + id + '">' + inlineFormat(text) + '</h' + level + '>';
+                    }
+                    continue;
+                }
+
+                if (line.match(/^---+$/)) { html += '<hr>'; continue; }
+
+                if (line.match(/^\d+\.\s/)) {
+                    if (inList && listType !== 'ol') { html += '</ul>'; inList = false; }
+                    if (!inList) { html += '<ol>'; inList = true; listType = 'ol'; }
+                    html += '<li>' + inlineFormat(line.replace(/^\d+\.\s*/, '')) + '</li>';
+                    continue;
+                }
+                if (line.match(/^[-*]\s/)) {
+                    if (inList && listType !== 'ul') { html += '</ol>'; inList = false; }
+                    if (!inList) { html += '<ul>'; inList = true; listType = 'ul'; }
+                    html += '<li>' + inlineFormat(line.replace(/^[-*]\s*/, '')) + '</li>';
+                    continue;
+                }
+                if (line.match(/^\s{2,}[-*]\s/)) {
+                    html += '<li class="md-li-indent">' + inlineFormat(line.replace(/^\s+[-*]\s*/, '')) + '</li>';
+                    continue;
+                }
+
+                if (inList && line.trim() === '') { html += '</' + listType + '>'; inList = false; }
+
+                if (line.trim() === '') { html += ''; continue; }
+
+                if (inList) {
+                    html += '<li class="md-li-indent">' + inlineFormat(line.trim()) + '</li>';
+                } else {
+                    html += '<p>' + inlineFormat(line) + '</p>';
+                }
+            }
+            if (inList) html += '</' + listType + '>';
+            if (inTable) html += '</tbody></table>';
+            return html;
+        }
+
+        function inlineFormat(text) {
+            text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+            text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(m, t, u) {
+                if (u.match(/^https?:\/\//)) return '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(t) + '</a>';
+                return '<a href="' + esc(u) + '">' + esc(t) + '</a>';
+            });
+            return text;
+        }
+
+        function buildTOC(contentEl) {
+            var headings = contentEl.querySelectorAll('h2, h3');
+            var nav = document.getElementById('toc-nav');
+            var tocHtml = '';
+            headings.forEach(function(h) {
+                var level = h.tagName === 'H2' ? '' : ' toc-sub';
+                var id = h.id || h.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                h.id = id;
+                tocHtml += '<a href="#' + id + '" class="toc-link' + level + '" data-testid="toc-' + id + '">' + h.textContent + '</a>';
+            });
+            nav.innerHTML = tocHtml;
+
+            var tocLinks = nav.querySelectorAll('.toc-link');
+            var observer = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        tocLinks.forEach(function(l) { l.classList.remove('active'); });
+                        var link = nav.querySelector('a[href="#' + entry.target.id + '"]');
+                        if (link) link.classList.add('active');
+                    }
+                });
+            }, { rootMargin: '-80px 0px -80% 0px' });
+            headings.forEach(function(h) { observer.observe(h); });
+        }
+
+        function loadSOP() {
+            document.getElementById('sop-loading').classList.remove('hidden');
+            document.getElementById('sop-error').classList.add('hidden');
+            document.getElementById('sop-content').classList.add('hidden');
+
+            fetch('/api/sop')
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(data) {
+                    document.getElementById('sop-loading').classList.add('hidden');
+                    var content = document.getElementById('sop-content');
+                    content.innerHTML = parseMarkdown(data.content);
+                    content.classList.remove('hidden');
+                    document.getElementById('sop-version-label').textContent = 'Version ' + (data.version || '4.3') + ' · Last Updated: ' + (data.lastUpdated || 'April 14, 2026');
+                    buildTOC(content);
+                })
+                .catch(function(err) {
+                    document.getElementById('sop-loading').classList.add('hidden');
+                    document.getElementById('sop-error').classList.remove('hidden');
+                    console.error('Failed to load SOP:', err);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadSOP);
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

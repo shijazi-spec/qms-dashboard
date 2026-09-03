@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg - Fraud KPI Dashboard</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <script src="<REDACTED_URL>"></script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .traffic-green { background-color: #D1FAE5; color: #047857; }
+        .traffic-amber { background-color: #FEF3C7; color: #92400E; }
+        .traffic-red { background-color: #FEE2E2; color: #B91C1C; }
+        .traffic-gray { background-color: #F3F4F6; color: #6B7280; }
+        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('fraud-dashboard');
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Fraud KPI Dashboard</h1>
+                <p class="text-sm text-gray-500 mt-1">PRD-FRD-001 Feature 5 — Monthly metrics, traffic-light cells, trend charts</p>
+            </div>
+            <div class="flex gap-3 items-center">
+                <button data-on-click="loadDashboard" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">Refresh</button>
+                <button data-on-click="openThresholdEditor" class="px-4 py-2 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 font-medium">Edit Thresholds</button>
+                <button data-on-click="openManualEntry" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Edit This Month</button>
+            </div>
+        </div>
+
+        <!-- Current month summary card -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold text-gray-900">Current Month — <span id="currentMonthLabel">—</span></h2>
+                <button data-on-click="autoCalculateCurrent" class="text-sm text-blue-600 hover:underline">Re-calculate from incidents</button>
+            </div>
+            <div id="currentSummaryGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+        </div>
+
+        <!-- Trend chart -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold text-gray-900">12-Month Trend</h2>
+                <select id="trendMetric" data-on-change="loadTrend" class="border rounded-lg px-3 py-1.5 text-sm">
+                    <option value="confirmed_incidents">Confirmed Incidents</option>
+                    <option value="fraud_loss_sar">Fraud Loss (SAR)</option>
+                    <option value="chargeback_count">Chargeback Count</option>
+                    <option value="chargeback_amount_sar">Chargeback Amount (SAR)</option>
+                    <option value="chargeback_ratio_pct">Chargeback Ratio (%)</option>
+                    <option value="fraud_rate_pct">Fraud Rate (%)</option>
+                    <option value="false_positive_rate_pct">False Positive Rate (%)</option>
+                    <option value="avg_detection_to_contain_hrs">Avg Detection → Contain (hrs)</option>
+                    <option value="resolved_within_30d_pct">Resolved within 30d (%)</option>
+                    <option value="sama_reports_filed">SAMA Reports Filed</option>
+                </select>
+            </div>
+            <div class="relative" data-style="height:320px">
+                <canvas id="trendCanvas"></canvas>
+            </div>
+        </div>
+
+        <!-- Monthly KPI table -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-lg font-bold text-gray-900">Monthly KPI Table (Last 12 Months)</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Month</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Confirmed</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Loss (SAR)</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">CB Count</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">CB Ratio (%)</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Fraud Rate (%)</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Detect→Contain (hrs)</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Resolved 30d (%)</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">SAMA Filed</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kpiTableBody" class="divide-y divide-gray-200 text-sm"></tbody>
+                </table>
+            </div>
+            <div id="kpiEmpty" class="hidden p-12 text-center text-gray-400">No KPI snapshots in the selected window.</div>
+            <div id="kpiLoading" class="p-12 text-center text-gray-400">Loading…</div>
+        </div>
+    </main>
+
+    <!-- Threshold editor modal -->
+    <div id="thresholdModal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-lg font-bold text-gray-900">KPI Thresholds</h2>
+                <button data-on-click="closeThresholdEditor" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-600 mb-4">Direction: <em>lower_is_better</em> — value over alert is red. <em>higher_is_better</em> — value under alert is red.</p>
+                <div id="thresholdsListEditor"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual entry modal for current month -->
+    <div id="manualModal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-lg font-bold text-gray-900">Edit Current Month KPI</h2>
+                <button data-on-click="closeManualEntry" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <form data-on-submit="submitManualEntry" class="p-6 space-y-3">
+                <input type="hidden" id="manualMonth">
+                <p class="text-sm text-gray-600">These fields cannot be auto-calculated from incidents. Fill in monthly from HyperPay / CRM.</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Total Transactions</label>
+                        <input type="number" min="0" id="mfTxTotal" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Total Rejections</label>
+                        <input type="number" min="0" id="mfTxReject" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">False Positive Rate (%)</label>
+                        <input type="number" min="0" step="0.01" id="mfFpr" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Customer Complaints</label>
+                        <input type="number" min="0" id="mfComplaints" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                    <textarea id="mfNotes" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
+                </div>
+                <div id="mfError" class="hidden text-sm text-red-600"></div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" data-on-click="closeManualEntry" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let trendChart = null;
+        let cachedThresholds = [];
+
+        const METRIC_LABELS = {
+            confirmed_incidents: 'Confirmed Incidents',
+            fraud_loss_sar: 'Fraud Loss (SAR)',
+            chargeback_count: 'Chargeback Count',
+            chargeback_amount_sar: 'Chargeback Amount (SAR)',
+            chargeback_ratio_pct: 'Chargeback Ratio %',
+            fraud_rate_pct: 'Fraud Rate %',
+            false_positive_rate_pct: 'False Positive %',
+            avg_detection_to_contain_hrs: 'Avg Detection → Contain (hrs)',
+            resolved_within_30d_pct: 'Resolved within 30d %',
+            sama_reports_filed: 'SAMA Reports Filed',
+        };
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function fmtNum(n, digits) {
+            if (n == null || n === '') return '—';
+            const v = Number(n);
+            if (Number.isNaN(v)) return '—';
+            return v.toLocaleString('en-US', { maximumFractionDigits: digits ?? 2 });
+        }
+
+        async function loadDashboard() {
+            await Promise.all([loadCurrentSummary(), loadKpiTable(), loadTrend()]);
+        }
+
+        async function loadCurrentSummary() {
+            const grid = document.getElementById('currentSummaryGrid');
+            grid.innerHTML = '<div class="col-span-full text-gray-400 text-sm">Loading current month…</div>';
+            try {
+                const res = await fetch('/api/fraud/kpis/current/summary', { credentials: 'include' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                document.getElementById('currentMonthLabel').textContent = String(data.month).slice(0, 7);
+                cachedThresholds = data.thresholds || [];
+                const cells = (data.thresholds || []).map(t => {
+                    const value = data.kpi[t.metric_name];
+                    const color = data.colors[t.metric_name] || 'gray';
+                    return '<div class="rounded-lg border p-4 traffic-' + color + '">' +
+                        '<div class="text-xs uppercase tracking-wide opacity-75">' + escapeHtml(METRIC_LABELS[t.metric_name] || t.metric_name) + '</div>' +
+                        '<div class="text-2xl font-bold mt-1">' + fmtNum(value) + '</div>' +
+                        '<div class="text-xs mt-1 opacity-75">target ' + fmtNum(t.target_value) + ' / alert ' + fmtNum(t.alert_value) + '</div>' +
+                        '</div>';
+                });
+                grid.innerHTML = cells.join('');
+            } catch (err) {
+                grid.innerHTML = '<div class="col-span-full text-red-600 text-sm">Failed: ' + escapeHtml(err.message) + '</div>';
+            }
+        }
+
+        async function loadKpiTable() {
+            const tbody = document.getElementById('kpiTableBody');
+            const empty = document.getElementById('kpiEmpty');
+            const loading = document.getElementById('kpiLoading');
+            empty.classList.add('hidden');
+            loading.classList.remove('hidden');
+            tbody.innerHTML = '';
+            try {
+                const res = await fetch('/api/fraud/kpis', { credentials: 'include' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                const rows = Array.isArray(data.kpis) ? data.kpis : [];
+                if (rows.length === 0) {
+                    empty.classList.remove('hidden');
+                    return;
+                }
+                tbody.innerHTML = rows.map(k => {
+                    return '<tr class="hover:bg-gray-50">' +
+                        '<td class="px-3 py-2 font-medium">' + escapeHtml(String(k.month).slice(0, 7)) + '</td>' +
+                        '<td class="px-3 py-2 text-end">' + fmtNum(k.confirmed_incidents, 0) + '</td>' +
+                        '<td class="px-3 py-2 text-end">' + fmtNum(k.fraud_loss_sar) + '</td>' +
+                        '<td class="px-3 py-2 text-end">' + fmtNum(k.chargeback_count, 0) + '</td>' +
+                        '<td class="px-3 py-2 text-end">' + fmtNum(k.chargeback_ratio_pct, 4) + '</td>' +
+                        '<td class="px-3 py-2 text-end">' + fmtNum(k.fraud_rate_pct, 4) + '</td>' +
+                        '<td class="px-3 py-2 text-end">' + fmtNum(k.avg_detection_to_contain_hrs, 1) + '</td>' +
+                        '<td class="px-3 py-2 text-end">' + fmtNum(k.resolved_within_30d_pct, 1) + '</td>' +
+                        '<td class="px-3 py-2 text-end">' + fmtNum(k.sama_reports_filed, 0) + '</td>' +
+                        '</tr>';
+                }).join('');
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-red-600">Failed to load: ' + escapeHtml(err.message) + '</td></tr>';
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        async function loadTrend() {
+            const metric = document.getElementById('trendMetric').value;
+            try {
+                const res = await fetch('/api/fraud/kpis/trend/' + encodeURIComponent(metric), { credentials: 'include' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                const labels = (data.series || []).map(p => String(p.month).slice(0, 7));
+                const values = (data.series || []).map(p => p.value);
+                if (trendChart) trendChart.destroy();
+                trendChart = new Chart(document.getElementById('trendCanvas').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: METRIC_LABELS[metric] || metric,
+                            data: values,
+                            borderColor: '#DC2626',
+                            backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                            tension: 0.2,
+                            fill: true,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: true } },
+                        scales: { y: { beginAtZero: true } },
+                    },
+                });
+            } catch (err) {
+                // Silently fail - chart will be empty
+            }
+        }
+
+        async function autoCalculateCurrent() {
+            const monthLabel = document.getElementById('currentMonthLabel').textContent;
+            if (!monthLabel || monthLabel === '—') return;
+            try {
+                const res = await fetch('/api/fraud/kpis/' + monthLabel + '-01/auto-calculate', { method: 'POST', credentials: 'include' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                await loadDashboard();
+            } catch (err) {
+                alert('Auto-calc failed: ' + err.message);
+            }
+        }
+
+        async function openThresholdEditor() {
+            const list = document.getElementById('thresholdsListEditor');
+            list.innerHTML = 'Loading…';
+            try {
+                const res = await fetch('/api/fraud/kpis/thresholds', { credentials: 'include' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                const thresholds = data.thresholds || [];
+                list.innerHTML = thresholds.map(t => {
+                    return '<div class="border-t py-3">' +
+                        '<div class="font-medium text-sm mb-2">' + escapeHtml(METRIC_LABELS[t.metric_name] || t.metric_name) + ' <span class="text-xs text-gray-400">(' + escapeHtml(t.metric_name) + ')</span></div>' +
+                        '<div class="grid grid-cols-3 gap-2 items-end">' +
+                            '<label class="text-xs">Target<input id="th_t_' + t.metric_name + '" type="number" step="0.01" value="' + escapeHtml(t.target_value) + '" class="block w-full border rounded px-2 py-1"></label>' +
+                            '<label class="text-xs">Alert<input id="th_a_' + t.metric_name + '" type="number" step="0.01" value="' + escapeHtml(t.alert_value) + '" class="block w-full border rounded px-2 py-1"></label>' +
+                            '<label class="text-xs">Direction<select id="th_d_' + t.metric_name + '" class="block w-full border rounded px-2 py-1">' +
+                                '<option value="lower_is_better"' + (t.direction === 'lower_is_better' ? ' selected' : '') + '>lower_is_better</option>' +
+                                '<option value="higher_is_better"' + (t.direction === 'higher_is_better' ? ' selected' : '') + '>higher_is_better</option>' +
+                            '</select></label>' +
+                        '</div>' +
+                        '<button data-on-click="saveThreshold" data-args=\'["' + t.metric_name + '"]\' class="mt-2 text-xs text-blue-600 hover:underline">Save row</button>' +
+                        '</div>';
+                }).join('');
+            } catch (err) {
+                list.innerHTML = '<p class="text-red-600">Failed: ' + escapeHtml(err.message) + '</p>';
+            }
+            document.getElementById('thresholdModal').classList.add('active');
+        }
+
+        async function saveThreshold(metric) {
+            const target = document.getElementById('th_t_' + metric).value;
+            const alertV = document.getElementById('th_a_' + metric).value;
+            const dir = document.getElementById('th_d_' + metric).value;
+            try {
+                const res = await fetch('/api/fraud/kpis/thresholds/' + encodeURIComponent(metric), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ target_value: Number(target), alert_value: Number(alertV), direction: dir }),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                await loadCurrentSummary();
+            } catch (err) {
+                alert('Save failed: ' + err.message);
+            }
+        }
+
+        function closeThresholdEditor() {
+            document.getElementById('thresholdModal').classList.remove('active');
+        }
+
+        function openManualEntry() {
+            const today = new Date();
+            const month = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-01';
+            document.getElementById('manualMonth').value = month;
+            document.getElementById('manualModal').classList.add('active');
+            // Pre-fill from current KPI
+            fetch('/api/fraud/kpis/' + month, { credentials: 'include' })
+                .then(r => r.ok ? r.json() : { kpi: {} })
+                .then(data => {
+                    const k = data.kpi || {};
+                    document.getElementById('mfTxTotal').value = k.total_transactions ?? '';
+                    document.getElementById('mfTxReject').value = k.total_rejections ?? '';
+                    document.getElementById('mfFpr').value = k.false_positive_rate_pct ?? '';
+                    document.getElementById('mfComplaints').value = k.customer_complaints ?? '';
+                    document.getElementById('mfNotes').value = k.notes ?? '';
+                });
+        }
+
+        function closeManualEntry() {
+            document.getElementById('manualModal').classList.remove('active');
+        }
+
+        async function submitManualEntry(event) {
+            event.preventDefault();
+            const month = document.getElementById('manualMonth').value;
+            const payload = {
+                total_transactions: parseInt(document.getElementById('mfTxTotal').value, 10) || null,
+                total_rejections: parseInt(document.getElementById('mfTxReject').value, 10) || null,
+                false_positive_rate_pct: parseFloat(document.getElementById('mfFpr').value) || null,
+                customer_complaints: parseInt(document.getElementById('mfComplaints').value, 10) || null,
+                notes: document.getElementById('mfNotes').value.trim() || null,
+            };
+            const errBox = document.getElementById('mfError');
+            errBox.classList.add('hidden');
+            try {
+                const res = await fetch('/api/fraud/kpis/' + month, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                closeManualEntry();
+                await loadDashboard();
+            } catch (err) {
+                errBox.textContent = 'Save failed: ' + err.message;
+                errBox.classList.remove('hidden');
+            }
+        }
+
+        window.loadDashboard = loadDashboard;
+        window.loadTrend = loadTrend;
+        window.autoCalculateCurrent = autoCalculateCurrent;
+        window.openThresholdEditor = openThresholdEditor;
+        window.saveThreshold = saveThreshold;
+        window.closeThresholdEditor = closeThresholdEditor;
+        window.openManualEntry = openManualEntry;
+        window.closeManualEntry = closeManualEntry;
+        window.submitManualEntry = submitManualEntry;
+
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

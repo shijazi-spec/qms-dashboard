@@ -1,0 +1,173 @@
+/**
+ * KPI → the controlled process document (and clause) it is measured against.
+ *
+ * A KPI detail page that cannot name its process is unauditable: the reader has
+ * no way to check that the threshold being enforced is the one the SOP actually
+ * states. This is the single place that mapping lives.
+ *
+ * Two rules, both learned the hard way and both worth keeping:
+ *
+ * 1. NEVER cite a clause the document does not carry for that KPI. A plausible
+ *    reference an auditor cannot trace is worse than a blank field — it looks
+ *    like evidence and isn't. Codes with no mapping return null and the panel
+ *    renders nothing.
+ * 2. Where the clause detail already exists in code, DERIVE from it rather than
+ *    retyping it. The Sales entries read their SLA text straight out of
+ *    salesStageSlaSpec, which is what the stage-aging KPI actually enforces, so
+ *    the citation moves with the rule instead of rotting into a stale quote.
+ */
+import {
+  SALES_SOP_DOCUMENT,
+  SALES_STAGE_SLA_SPEC,
+  getStageSlaSpec,
+  describeSla,
+  type StageSlaSpec,
+} from "./salesStageSlaSpec";
+
+export interface KpiProcessReference {
+  document: string;
+  /** The section of the document that defines this KPI, when known. */
+  section?: string;
+  clauses: Array<{ stage: string; sla: string }>;
+}
+
+/**
+ * Customer Success Management Process — filed in Document Control 2026-08-18 as
+ * WP-BU-CS-SOP-003. Its §8 defines the 33 CS KPIs in three tiers, and §9 is the
+ * SLA table that CS-KPI-25 measures adherence against.
+ */
+export const CS_SOP_DOCUMENT = {
+  title: "Customer Success Management Process",
+  reference: "WP-BU-CS-SOP-003",
+  issued: "13.08.2026",
+  version: "1.1",
+} as const;
+
+/**
+ * SDR Governance Document — the controlled source for the SDR KPI framework,
+ * including the two meeting-conversion metrics. Its KPI table is not numbered
+ * as a clause, so entries cite the TABLE, never an invented clause number.
+ *
+ * v2.1 is the RELEASED version (published PDF, cover-page Document Code). A
+ * v2.2 .docx exists on the drive but was never released — no PDF, Arabic marked
+ * "(lesa)". Both metrics below were re-verified against the v2.1 PDF on
+ * 2026-08-19 and are identical in it: same formulas, same >=40% target, same
+ * 35-45% benchmark. Cite the released document, not the newest file.
+ */
+export const SDR_SOP_DOCUMENT = {
+  title: "Sales Development Representative Process",
+  // 04.12.2025, not 03 — confirmed by Sample User 2026-08-20 against the released PDF
+  // (WalaPlus_SDR_2.1_04.12.2025_EN.pdf), which is now the file attached to the
+  // controlled document. The earlier 03.12.2025 here was a transcription slip.
+  reference: "WalaPlus_SDR_2.1_04.12.2025",
+  version: "2.1",
+  issued: "04.12.2025",
+} as const;
+
+/**
+ * SDR KPI code → the table of the SDR SOP that defines it, plus the calculation
+ * the document states. Only codes the document actually covers are mapped.
+ *
+ * SDR-KPI-12 Booking Conversion Rate replaced ADHOC-SALES-04 "Meeting
+ * Conversion" (2026-08-19), which came from a BI-portal screenshot rather than
+ * governance: its 20% target appears in no controlled document, and the SOP
+ * files meeting conversion under SDR, not Sales.
+ *
+ * The formulas below are quoted from the released v2.1 PDF. Re-verify against
+ * the PDF, not a .docx on the drive, before changing either of them.
+ */
+const SDR_KPI_TABLE: Record<string, { metric: string; calc: string }> = {
+  "SDR-KPI-12": {
+    metric: "Booking Conversion Rate",
+    calc: "(# of Booked meetings / Total leads answered) x 100 — target ≥40%, benchmark 35–45%",
+  },
+  "SDR-KPI-05": {
+    metric: "Successful Meetings",
+    calc: "(# of Client attend meeting / # of Booked meetings) x 100",
+  },
+};
+
+function sdrReference(code: string): KpiProcessReference | null {
+  const row = SDR_KPI_TABLE[code];
+  if (!row) return null;
+  const d = SDR_SOP_DOCUMENT;
+  return {
+    document: `${d.title} (${d.reference} v${d.version}, ${d.issued})`,
+    section: "Individual KPIs table",
+    clauses: [{ stage: row.metric, sla: row.calc }],
+  };
+}
+
+/**
+ * CS KPI code → the section of WP-BU-CS-SOP-003 that DEFINES it.
+ *
+ * Deliberately a section, not a clause. §8's KPI tables carry no per-KPI clause
+ * reference, so naming one would be inventing it. The section is exact: these
+ * ranges are the order the KPIs appear in the document's own tables.
+ */
+function csSection(code: string): string | null {
+  const m = /^CS-KPI-(\d{2})$/.exec(code);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (n >= 1 && n <= 8) return "8.1 Individual KPIs";
+  if (n >= 9 && n <= 22) return "8.2 Process KPIs";
+  if (n >= 23 && n <= 33) return "8.3 Governance KPIs";
+  return null;
+}
+
+/**
+ * CS KPIs that additionally measure against the §9 SLA table rather than only
+ * being defined in §8. Only SLA / Milestone Adherence qualifies: §9 IS the list
+ * of timeframes it grades, which is why the KPI exists.
+ */
+const CS_SLA_TABLE_CODES = new Set(["CS-KPI-25"]);
+
+/**
+ * Sales KPI code → the SOP stages it grades. Only the three the spec actually
+ * covers. Win rate, document compliance, CRM accuracy, follow-up, first-contact
+ * and duplicates have no clause in the Sales SOP.
+ */
+const SALES_KPI_TO_STAGES: Record<string, string[] | "all"> = {
+  "SALES-KPI-01": "all",
+  "SALES-KPI-03": ["Proposal"],
+  "SALES-KPI-04": ["Agreement Sent"],
+};
+
+function salesReference(code: string): KpiProcessReference | null {
+  const want = SALES_KPI_TO_STAGES[code];
+  if (!want) return null;
+  const specs =
+    want === "all"
+      ? SALES_STAGE_SLA_SPEC
+      : want
+          .map((s) => getStageSlaSpec(s))
+          .filter((s): s is StageSlaSpec => s !== null);
+  if (specs.length === 0) return null;
+  const d = SALES_SOP_DOCUMENT;
+  return {
+    document: `${d.title} (${d.reference} v${d.version}, ${d.issued})`,
+    clauses: specs.map((s) => ({ stage: s.stage, sla: describeSla(s) })),
+  };
+}
+
+function csReference(code: string): KpiProcessReference | null {
+  const section = csSection(code);
+  if (!section) return null;
+  const d = CS_SOP_DOCUMENT;
+  const ref: KpiProcessReference = {
+    document: `${d.title} (${d.reference} v${d.version}, ${d.issued})`,
+    section,
+    clauses: [],
+  };
+  if (CS_SLA_TABLE_CODES.has(code)) {
+    ref.clauses.push({
+      stage: "Service Level Agreements",
+      sla: "Section 9 — the timeframes this KPI grades adherence against",
+    });
+  }
+  return ref;
+}
+
+export function getKpiProcessReference(code: string): KpiProcessReference | null {
+  return salesReference(code) ?? sdrReference(code) ?? csReference(code);
+}

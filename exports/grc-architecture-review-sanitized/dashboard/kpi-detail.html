@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>KPI Detail - ExampleOrg Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.add('wp-dark'); }
+            } catch (e) { /* light default is fine */ }
+        })();
+    </script>
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        /**
+         * Nav init is DEFERRED until we know whose KPI this is.
+         *
+         * WalaPlusNav.init() both highlights a section and records a visit into
+         * the sidebar's Recent list. Hard-coding 'kpis' therefore filed every
+         * department KPI (SDR Team / Sales Team) under the GRQ KPI Engine —
+         * the exact page they were deliberately removed from — and pushed a
+         * "KPIs" entry into Recent that leads somewhere the KPI isn't listed.
+         *
+         * Called exactly once, from loadDetail(), including on its error paths:
+         * a failed fetch must still leave the user with a sidebar.
+         */
+        let _navInitDone = false;
+        function _initNav(isDepartmentKpi) {
+            if (_navInitDone) return;
+            _navInitDone = true;
+            WalaPlusNav.init(isDepartmentKpi ? 'quality-reports' : 'kpis');
+        }
+    </script>
+
+    <div class="max-w-5xl mx-auto px-4 py-6">
+        <a id="kpiBackLink" href="/kpis" class="text-sm text-indigo-600 hover:underline">&larr; Back to KPIs</a>
+        <div id="kpiDetail" class="mt-3">
+            <div class="text-gray-500 text-sm">Loading…</div>
+        </div>
+    </div>
+
+    <script>
+        const _esc = (s) => String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        /**
+         * Point the back link at wherever the user actually came from.
+         *
+         * A KPI is reachable from /kpis, /kpi-catalog AND a Quality Reports BU
+         * page, so a hard-coded /kpis dumped BU-page visitors on a page that
+         * doesn't even list their KPI (department KPIs are excluded from the
+         * engine). The referrer keeps the query string, so ?bu=sales_b2b
+         * survives -- history.back() would too, but it breaks after an in-page
+         * save adds history entries, and it can't be middle-clicked.
+         *
+         * Same-origin only: an off-site referrer must never become a link
+         * target here, and cross-origin referrers arrive stripped anyway.
+         */
+        const _BACK_LABELS = [
+            [/^\/quality-reports/, 'Back to Quality Reports'],
+            [/^\/kpi-catalog/, 'Back to KPI Catalog'],
+            [/^\/kpis/, 'Back to KPIs'],
+        ];
+        let _isDeptKpi = false;
+        function _initBackLink() {
+            const a = document.getElementById('kpiBackLink');
+            if (!a) return;
+            // Fallback for a direct visit (no referrer): a department KPI belongs
+            // to Quality Reports, so /kpis would be a dead end — it doesn't list
+            // department KPIs at all.
+            if (_isDeptKpi) {
+                a.href = '/quality-reports';
+                a.textContent = '← Back to Quality Reports';
+            }
+            if (!document.referrer) return;
+            let ref;
+            try { ref = new URL(document.referrer); } catch (e) { return; }
+            if (ref.origin !== location.origin) return;
+            // Coming back from ourselves (a reload, or another /kpi/:id) would
+            // make the link a no-op -- keep the default in that case.
+            if (/^\/kpi\/\d+/.test(ref.pathname)) return;
+            const hit = _BACK_LABELS.find(([re]) => re.test(ref.pathname));
+            a.href = ref.pathname + ref.search + ref.hash;
+            a.textContent = '← ' + (hit ? hit[1] : 'Back');
+        }
+        // Run once on load so a referred visit gets the right link immediately,
+        // and again after the fetch resolves _isDeptKpi for direct visits.
+        document.addEventListener('DOMContentLoaded', _initBackLink);
+
+        function _kpiId() {
+            const m = location.pathname.match(/\/kpi\/(\d+)/);
+            return m ? parseInt(m[1], 10) : null;
+        }
+
+        const RAG = {
+            green: ['On Track', 'bg-emerald-100 text-emerald-700'],
+            amber: ['At Risk', 'bg-amber-100 text-amber-700'],
+            red: ['Off Track', 'bg-red-100 text-red-700']
+        };
+        const TREND = { improving: '↑', declining: '↓', stable: '→' };
+
+        /**
+         * Money in the BI portal's shorthand — SAR 16.4M / SAR 298K — so the
+         * same figure reads the same in both systems. Note the old default
+         * appended "%" to EVERY non-days unit, so a SAR value rendered as
+         * "16373892%": wrong unit as well as unreadable.
+         */
+        function _fmtVal(v, unit) {
+            if (v === null || v === undefined) return '—';
+            const u = String(unit || '').toUpperCase();
+            if (u === 'SAR') {
+                const n = Number(v);
+                if (!isFinite(n)) return '—';
+                const abs = Math.abs(n);
+                if (abs >= 1e6) return 'SAR ' + (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+                if (abs >= 1e3) return 'SAR ' + Math.round(n / 1e3) + 'K';
+                return 'SAR ' + Math.round(n);
+            }
+            return unit === 'days' ? `${v} days` : `${v}%`;
+        }
+
+        /** Thousands separators on counts and money, so 16373892 is readable. */
+        function _cell(v) {
+            if (typeof v === 'number' && isFinite(v)) return _esc(v.toLocaleString());
+            return _esc(v);
+        }
+
+        /**
+         * The calculator's own working for the recorded value: counts, the
+         * window it used, and what it EXCLUDED. Previously computed on every
+         * recalc and thrown away, which hid exclusions that suppress a KPI —
+         * e.g. won deals with no parseable Closing_Date falling out of the YTD
+         * revenue window look identical to deals that were never won.
+         */
+        function _calcWorking(latest) {
+            const d = latest && latest.calc_details;
+            if (!d || typeof d !== 'object' || !Object.keys(d).length) return '';
+            return `
+              <h2 class="font-semibold text-gray-900 mt-5 mb-2">How this was calculated</h2>
+              <div class="divide-y">${_kvRows(d)}</div>
+              <p class="text-xs text-gray-500 mt-2">Recorded by the last recalculation, for the period shown above.</p>`;
+        }
+
+        /** Turn a calculator's details object into readable "gap" rows. */
+        function _gaps(insight) {
+            if (!insight || insight.kind === 'none') {
+                return '<p class="text-sm text-gray-500">No live breakdown for this KPI type — see the formula and data source above.</p>';
+            }
+            if (insight.data_available === false) {
+                return `<p class="text-sm text-amber-700">No source data yet${insight.reason ? ` (${_esc(insight.reason)})` : ''}. This KPI stays blank until its data is entered.</p>`;
+            }
+            const d = insight.details || {};
+            const rows = _kvRows(d);
+            return `<div class="divide-y">${rows || '<p class="text-sm text-gray-500">No breakdown returned.</p>'}</div>`;
+        }
+
+        /**
+         * The SOP clauses this KPI grades against.
+         *
+         * Rendered only when the server supplies one — a KPI with no clause in
+         * the SOP shows nothing rather than a citation an auditor could not
+         * trace back to the document.
+         */
+        function _processRef(pr) {
+            if (!pr || !pr.document) return '';
+            const rows = (pr.clauses || []).map(c =>
+                `<div class="text-xs text-gray-600 ms-3">${_esc(c.stage)} — ${_esc(c.sla)}</div>`).join('');
+            // Section is present when the document defines the KPI in a table
+            // that carries no per-KPI clause number — naming a clause there
+            // would be inventing the citation.
+            const section = pr.section
+                ? `<div class="text-xs text-gray-600 ms-3">Section ${_esc(pr.section)}</div>`
+                : '';
+            return `<div><div class="text-gray-500 text-xs">Process reference</div>` +
+                   `<div class="text-gray-900">${_esc(pr.document)}</div>${section}${rows}</div>`;
+        }
+
+        function _kvRows(d) {
+            return Object.entries(d).map(([k, v]) => {
+                const label = k.replace(/_/g, ' ');
+                // nested objects (internal/external halves) → render as a sub-block
+                if (v && typeof v === 'object') {
+                    const sub = Object.entries(v).map(([kk, vv]) => {
+                        if (vv && typeof vv === 'object') {
+                            const inner = Object.entries(vv).map(([a, b]) => `${a.replace(/_/g, ' ')}: <strong>${_cell(b)}</strong>`).join(' · ');
+                            return `<div class="text-xs text-gray-600 ms-3">${kk.replace(/_/g, ' ')}: ${inner}</div>`;
+                        }
+                        return `<div class="text-xs text-gray-600 ms-3">${kk.replace(/_/g, ' ')}: <strong>${_cell(vv)}</strong></div>`;
+                    }).join('');
+                    return `<div class="py-1"><div class="text-sm font-medium text-gray-800 capitalize">${label}</div>${sub}</div>`;
+                }
+                return `<div class="flex justify-between py-1 text-sm"><span class="text-gray-600 capitalize">${label}</span><span class="font-medium text-gray-900">${_cell(v)}</span></div>`;
+            }).join('');
+        }
+
+        async function loadDetail() {
+            const id = _kpiId();
+            const box = document.getElementById('kpiDetail');
+            if (!id) { box.innerHTML = '<p class="text-red-600">Invalid KPI id.</p>'; _initNav(false); return; }
+            let data;
+            try {
+                const res = await fetch(`/api/kpis/${id}/detail`);
+                if (!res.ok) {
+                    box.innerHTML = res.status === 403
+                        ? '<p class="text-red-600">You don’t have permission to view this KPI.</p>'
+                        : '<p class="text-red-600">KPI not found.</p>';
+                    _initNav(false);
+                    return;
+                }
+                data = await res.json();
+            } catch (e) { box.innerHTML = '<p class="text-red-600">Failed to load.</p>'; _initNav(false); return; }
+
+            _isDeptKpi = data.is_department_kpi === true;
+            _initNav(_isDeptKpi);
+            _initBackLink();
+
+            const k = data.kpi || {};
+            const latest = data.latest;
+            const val = latest ? latest.actual_value : null;
+            const [ragLabel, ragCls] = RAG[latest && latest.status] || ['No data', 'bg-gray-100 text-gray-600'];
+            const trend = latest && latest.trend ? (TREND[latest.trend] || '') : '';
+            document.title = `${k.kpi_name || 'KPI'} — ExampleOrg`;
+
+            box.innerHTML = `
+              <div class="bg-white rounded-lg shadow p-5 mb-5">
+                <div class="flex flex-wrap items-start gap-4">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-xs text-gray-500">${_esc(k.kpi_code || '')} · ${_esc(k.owner_name || '')}</div>
+                    <h1 class="text-2xl font-bold text-gray-900">${k.is_north_star ? '⭐ ' : ''}${_esc(k.kpi_name || '')}</h1>
+                    <p class="text-sm text-gray-600 mt-1">${_esc(k.description || '')}</p>
+                  </div>
+                  <div class="text-end">
+                    <div class="text-3xl font-bold text-gray-900">${_fmtVal(val, k.unit)}</div>
+                    <span class="text-xs px-2 py-0.5 rounded ${ragCls}">${ragLabel}</span>
+                    ${trend ? `<span class="text-lg ms-1 text-gray-500">${trend}</span>` : ''}
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
+                  <div><div class="text-gray-500 text-xs">Target</div><div class="font-medium">${_fmtVal(k.target_value, k.unit)}</div></div>
+                  <div><div class="text-gray-500 text-xs">Weight</div><div class="font-medium">${k.weight != null ? Number(k.weight) + '%' : '—'}</div></div>
+                  <div><div class="text-gray-500 text-xs">Frequency</div><div class="font-medium capitalize">${_esc(k.frequency || '—')}</div></div>
+                  <div><div class="text-gray-500 text-xs">Source</div><div class="font-medium capitalize">${_esc(k.calc_mode || '—')}</div></div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div class="bg-white rounded-lg shadow p-5">
+                  <h2 class="font-semibold text-gray-900 mb-3">What's inside &amp; gaps</h2>
+                  ${_gaps(data.insight)}
+                  ${_calcWorking(latest)}
+                  ${(k.calc_mode === 'checklist') ? `<a href="/kpis" class="inline-block mt-3 text-xs text-indigo-600 hover:underline">Open the full Action Plan on the KPIs page →</a>` : ''}
+                </div>
+                <div class="bg-white rounded-lg shadow p-5">
+                  <h2 class="font-semibold text-gray-900 mb-3">Definition</h2>
+                  <div class="text-sm space-y-2">
+                    <div><div class="text-gray-500 text-xs">Formula</div><div class="text-gray-900">${_esc(k.formula || '—')}</div></div>
+                    <div><div class="text-gray-500 text-xs">Data source</div><div class="text-gray-900">${_esc(k.data_source || '—')}</div></div>
+                    ${_processRef(data.process_reference)}
+                    <div><div class="text-gray-500 text-xs">Category</div><div class="text-gray-900 capitalize">${_esc(k.category || '—')}</div></div>
+                  </div>
+                  <h2 class="font-semibold text-gray-900 mt-5 mb-2">History</h2>
+                  ${(data.history && data.history.length)
+                    ? `<div class="divide-y text-sm">${data.history.map(h => `
+                        <div class="flex justify-between py-1">
+                          <span class="text-gray-600">${_esc(String(h.period_end).slice(0,10))}</span>
+                          <span class="font-medium">${_fmtVal(h.actual_value, k.unit)}</span>
+                        </div>`).join('')}</div>`
+                    : '<p class="text-sm text-gray-500">No recorded values yet.</p>'}
+                </div>
+              </div>
+
+              <div class="mt-5 flex flex-wrap items-center gap-3">
+                ${k.locked
+                  ? `<span class="text-xs px-2 py-1 rounded bg-slate-800 text-white">🔒 Approved &amp; locked${k.approved_by ? ' by ' + _esc(k.approved_by) : ''}</span>`
+                  : (k.is_customized ? '<span class="text-xs text-gray-500">Customized — survives republish.</span>' : '')}
+                ${data.can_edit
+                  ? `<button data-on-click="toggleEdit" id="editBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">✎ Edit this KPI</button>`
+                  : (k.locked ? '<span class="text-xs text-gray-500">Locked — only the Head of GRQ can change this KPI.</span>' : '')}
+                ${data.can_lock
+                  ? (k.locked
+                      ? `<button data-on-click="setLock" data-args="[false]" class="px-4 py-2 border border-slate-400 text-slate-700 rounded hover:bg-slate-50 text-sm">🔓 Unlock</button>`
+                      : `<button data-on-click="setLock" data-args="[true]" class="px-4 py-2 bg-slate-800 text-white rounded hover:bg-slate-900 text-sm">🔒 Approve &amp; lock</button>`)
+                  : ''}
+                <span id="lockMsg" class="text-xs"></span>
+              </div>
+              <div id="editPanel" class="hidden bg-white rounded-lg shadow p-5 mt-4"></div>
+            `;
+            window._kpi = k; // keep the definition for the editor
+        }
+
+        const FREQ = ['monthly', 'quarterly', 'annual', 'daily', 'weekly', 'Per Certificate'];
+        const CALC = ['auto', 'checklist', 'manual'];
+
+        /** Derive RAG bands from the target (same convention as the seed). */
+        function _bands(target, dir) {
+            const t = Number(target) || 0;
+            return dir === 'lower_is_better'
+                ? { green: t, amber: Math.round(t * 1.5), red: Math.round(t * 2) }
+                : { green: t, amber: Math.round(t * 0.85), red: Math.round(t * 0.7) };
+        }
+
+        function toggleEdit() {
+            const panel = document.getElementById('editPanel');
+            if (!panel) return;
+            if (!panel.classList.contains('hidden')) { panel.classList.add('hidden'); return; }
+            const k = window._kpi || {};
+            const opt = (arr, cur) => arr.map(v => `<option value="${_esc(v)}"${v === cur ? ' selected' : ''}>${_esc(v)}</option>`).join('');
+            panel.innerHTML = `
+              <h2 class="font-semibold text-gray-900 mb-3">Edit KPI</h2>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <label class="sm:col-span-2">Name<input id="e_name" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.kpi_name || '')}"></label>
+                <label class="sm:col-span-2">Description<textarea id="e_desc" rows="2" class="w-full border rounded px-2 py-1 mt-1">${_esc(k.description || '')}</textarea></label>
+                <label class="sm:col-span-2">Formula<input id="e_formula" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.formula || '')}"></label>
+                <label>Target<input id="e_target" type="number" step="0.1" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.target_value)}"></label>
+                <label>Weight (%)<input id="e_weight" type="number" step="0.1" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.weight)}"></label>
+                <label>Direction<select id="e_dir" class="w-full border rounded px-2 py-1 mt-1">${opt(['higher_is_better', 'lower_is_better'], k.threshold_direction)}</select></label>
+                <label>Frequency<select id="e_freq" class="w-full border rounded px-2 py-1 mt-1">${opt(FREQ, k.frequency)}</select></label>
+                <label>Calc mode<select id="e_calc" class="w-full border rounded px-2 py-1 mt-1">${opt(CALC, k.calc_mode)}</select></label>
+                <label>Data source<input id="e_source" class="w-full border rounded px-2 py-1 mt-1" value="${_esc(k.data_source || '')}"></label>
+                <label class="flex items-center gap-2 mt-2"><input id="e_ns" type="checkbox" ${k.is_north_star ? 'checked' : ''}> North Star ⭐</label>
+                <label class="flex items-center gap-2 mt-2"><input id="e_adhoc" type="checkbox" ${k.is_adhoc ? 'checked' : ''}> Ad-hoc KPI</label>
+              </div>
+              <div class="flex items-center gap-3 mt-4">
+                <button data-on-click="saveEdit" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm">Save</button>
+                <button data-on-click="toggleEdit" class="px-4 py-2 border rounded text-sm">Cancel</button>
+                <span id="e_msg" class="text-xs"></span>
+              </div>
+              <p class="text-xs text-gray-400 mt-2">Changing the target recomputes the RAG bands automatically. Changing calc mode changes how the value is produced. Marking a KPI ad-hoc moves it into the separate "Ad-hoc KPIs" box on its Quality Reports business-unit page — it does not change how the value is calculated.</p>`;
+            panel.classList.remove('hidden');
+        }
+
+        async function saveEdit() {
+            const id = _kpiId();
+            const msg = document.getElementById('e_msg');
+            const dir = document.getElementById('e_dir').value;
+            const target = parseFloat(document.getElementById('e_target').value);
+            const b = _bands(target, dir);
+            const body = {
+                kpi_name: document.getElementById('e_name').value.trim(),
+                description: document.getElementById('e_desc').value.trim(),
+                formula: document.getElementById('e_formula').value.trim(),
+                target_value: isFinite(target) ? target : undefined,
+                weight: parseFloat(document.getElementById('e_weight').value) || 0,
+                threshold_direction: dir,
+                threshold_green: b.green, threshold_amber: b.amber, threshold_red: b.red,
+                frequency: document.getElementById('e_freq').value,
+                calc_mode: document.getElementById('e_calc').value,
+                data_source: document.getElementById('e_source').value.trim(),
+                is_north_star: document.getElementById('e_ns').checked,
+                is_adhoc: document.getElementById('e_adhoc').checked
+            };
+            try {
+                const res = await fetch(`/api/kpis/${id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) {
+                    msg.textContent = 'Saved — survives republish now.'; msg.className = 'text-xs text-emerald-700';
+                    setTimeout(loadDetail, 500);
+                } else {
+                    let reason = ''; try { reason = (await res.json()).error || ''; } catch {}
+                    if (res.status === 403) reason = 'You don’t have permission to edit KPIs.';
+                    msg.textContent = 'Failed to save' + (reason ? ' — ' + reason : ''); msg.className = 'text-xs text-red-600';
+                }
+            } catch (e) { msg.textContent = 'Network error.'; msg.className = 'text-xs text-red-600'; }
+        }
+
+        async function setLock(locked) {
+            const id = _kpiId();
+            const msg = document.getElementById('lockMsg');
+            if (locked && !confirm('Approve and LOCK this KPI? After this, only the Head of GRQ can change it.')) return;
+            try {
+                const res = await fetch(`/api/kpis/${id}/lock`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ locked })
+                });
+                if (res.ok) { if (msg) { msg.textContent = locked ? 'Approved & locked.' : 'Unlocked.'; msg.className = 'text-xs text-emerald-700'; } setTimeout(loadDetail, 400); }
+                else {
+                    let reason = ''; try { reason = (await res.json()).error || ''; } catch {}
+                    if (msg) { msg.textContent = 'Failed' + (reason ? ' — ' + reason : ''); msg.className = 'text-xs text-red-600'; }
+                }
+            } catch (e) { if (msg) { msg.textContent = 'Network error.'; msg.className = 'text-xs text-red-600'; } }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadDetail);
+    </script>
+    <script>
+        if (window.WalaPlusI18n) { window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); }); }
+    </script>
+</body>
+</html>

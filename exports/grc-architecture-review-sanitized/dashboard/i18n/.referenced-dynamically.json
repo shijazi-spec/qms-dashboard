@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Keys that appear in en.json / ar.json but are only looked up at runtime via",
+    "computed keys (e.g. `t('dyn.risks.status.' + row.status)`) — never via a",
+    "static `data-i18n` attribute or a string-literal `t('...')` call.",
+    "",
+    "Every entry is a DOT-PREFIX: any dictionary key whose dotted path STARTS",
+    "WITH the prefix (including the trailing dot) is excluded from the unused-key",
+    "check so it stays actionable without producing false positives.",
+    "",
+    "When you add a new dynamic lookup in dashboard/**/*.html or dashboard/js/**,",
+    "add its prefix here with a one-line comment explaining where it is used.",
+    "Remove an entry only after confirming no runtime code references that prefix."
+  ],
+  "prefixes": [
+    "dyn.",
+    "nav.items.",
+    "nav.groups.",
+    "executive.risk_categories.",
+    "executive.kpi_names.",
+    "executive.risk_levels.",
+    "executive.kpi_categories."
+  ]
+}

@@ -1,0 +1,577 @@
+/**
+ * ExampleOrg Unified Navigation Styles
+ * Enterprise dropdown navigation with responsive design
+ */
+
+.ExampleOrg-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown .dropdown-menu {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: all 0.15s ease;
+  top: 100%;
+  padding-top: 4px;
+  margin-top: 0;
+}
+
+.nav-dropdown .dropdown-menu::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 12px;
+}
+
+.nav-dropdown .dropdown-menu:not(.hidden) {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.nav-dropdown .dropdown-arrow {
+  transition: transform 0.2s ease;
+}
+
+.nav-dropdown .dropdown-arrow.rotate-180 {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu a:hover {
+  background-color: #f9fafb;
+}
+
+.mobile-arrow {
+  transition: transform 0.2s ease;
+}
+
+.mobile-arrow.rotate-180 {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 639px) {
+  .nav-dropdown .dropdown-menu {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+    border: none;
+    margin-top: 0.5rem;
+    padding-left: 1rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .nav-dropdown:hover .dropdown-menu {
+    display: block !important;
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+  
+  .nav-dropdown:hover .dropdown-arrow {
+    transform: rotate(180deg);
+  }
+}
+
+.mobile-nav-group .mobile-submenu {
+  border-left: 2px solid #e5e7eb;
+  margin-left: 0.5rem;
+}
+
+@media (min-width: 1024px) {
+  .ExampleOrg-nav .max-w-7xl {
+    max-width: 100%;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (max-width: 1280px) {
+  .nav-dropdown button span {
+    font-size: 0.8125rem;
+  }
+  
+  .nav-dropdown button {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
+@media (max-width: 1024px) {
+  .ExampleOrg-nav .flex.items-center.space-x-1 {
+    gap: 0.125rem;
+  }
+}
+
+/* ===== Accessible nav tooltips (role="tooltip" + aria-describedby) ===== */
+/*
+ * Tooltips are hidden by default and become visible on both pointer hover
+ * and keyboard focus, satisfying WCAG 2.1 SC 1.4.13 (Content on Hover or
+ * Focus) and the keyboard-accessible tooltip requirement.
+ */
+.wp-nav-tooltip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 200;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* Arrow pointing left toward the trigger */
+.wp-nav-tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: #1e293b;
+}
+
+/* Show tooltip on hover or keyboard focus of nav items and group toggles */
+.wp-rail-item:hover .wp-nav-tooltip,
+.wp-rail-item:focus .wp-nav-tooltip,
+.wp-group-toggle:hover .wp-nav-tooltip,
+.wp-group-toggle:focus .wp-nav-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* In expanded mode, the text label is already visible — suppress the
+   visual tooltip on hover only (keyboard focus still shows it for AT users
+   who benefit from the aria-describedby association). */
+body:not(.wp-rail-collapsed) .wp-rail-item:hover .wp-nav-tooltip,
+body:not(.wp-rail-collapsed) .wp-group-toggle:hover .wp-nav-tooltip {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* RTL: flip tooltip to the left side */
+html[dir="rtl"] .wp-nav-tooltip {
+  left: auto;
+  right: calc(100% + 10px);
+}
+
+html[dir="rtl"] .wp-nav-tooltip::before {
+  right: auto;
+  left: 100%;
+  border-right-color: transparent;
+  border-left-color: #1e293b;
+}
+
+/* ===== Active item polish (Task #822) =====
+ * The current page must be unmistakable: a strong inline-start accent bar
+ * on the row container (mirrored under RTL via the inset-inline-start
+ * logical property), bolder text, and a higher-contrast tint that meets
+ * WCAG AA in both themes. The accent lives on .wp-rail-row so it spans
+ * the whole row (link + sibling pin button), not just the link.
+ */
+.wp-rail-row.wp-rail-row-active {
+  position: relative;
+  background-color: #eef2ff; /* indigo-50, AA on slate-900 text */
+}
+.wp-rail-row.wp-rail-row-active::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 2px;
+  background-color: #3730a3; /* indigo-800 */
+}
+.wp-rail-item.wp-rail-item-active {
+  color: #3730a3;
+}
+
+/* Dark-mode treatment (the dashboard does not currently expose a dark
+   theme toggle, but the rail honours the OS preference for users who
+   force a dark color-scheme at the browser level). */
+@media (prefers-color-scheme: dark) {
+  .wp-rail-row.wp-rail-row-active {
+    background-color: rgba(99, 102, 241, 0.18);
+  }
+  .wp-rail-row.wp-rail-row-active::before { background-color: #c7d2fe; }
+  .wp-rail-item.wp-rail-item-active { color: #c7d2fe; }
+}
+
+/* ===== Visible focus ring on every interactive rail surface ===== */
+.wp-rail-item:focus-visible,
+.wp-group-toggle:focus-visible,
+.wp-pin-btn:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+/* ===== Pin button: hidden until the row is hovered/focused, always
+ *      visible once a leaf is pinned, and always reachable via keyboard
+ *      so the affordance survives even in the collapsed rail (where
+ *      hover is not a reliable trigger and labels are hidden). */
+.wp-pin-btn {
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background-color 0.12s ease;
+}
+.wp-rail-row:hover .wp-pin-btn,
+.wp-rail-row:focus-within .wp-pin-btn,
+.wp-pin-btn:focus-visible,
+.wp-pin-btn.wp-pinned {
+  opacity: 1;
+}
+.wp-pin-btn.wp-pinned {
+  color: #b45309; /* amber-700 */
+}
+
+/* In the collapsed rail the row centres its single icon and the pin slot
+ * floats over the inline-end edge so it stays operable (visible on hover/
+ * focus, persistently visible when pinned) without stealing horizontal
+ * room from the icon. The mobile breakpoint (which expands the rail
+ * back to full width) inherits the default inline layout. */
+body.wp-rail-collapsed .wp-rail .wp-rail-row { position: relative; }
+body.wp-rail-collapsed .wp-rail .wp-pin-slot {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  padding: 0;
+}
+body.wp-rail-collapsed .wp-rail .wp-pin-btn { padding: 2px; }
+body.wp-rail-collapsed .wp-rail .wp-pin-btn svg { width: 0.75rem; height: 0.75rem; }
+@media (max-width: 767px) {
+  body.wp-rail-collapsed .wp-rail .wp-pin-slot {
+    position: static;
+    padding-inline-end: 0.25rem;
+  }
+}
+
+/* ===== Search highlight ===== */
+.wp-nav-mark {
+  background-color: #fef3c7; /* amber-100 */
+  color: #78350f;            /* amber-900 */
+  padding: 0 1px;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+/* ===== "No results" empty state ===== */
+.wp-nav-empty.hidden { display: none; }
+
+
+/* ============================================================
+ * Dark mode (toggle in topbar — see WalaPlusNav.toggleTheme)
+ * Activated by adding `wp-dark` class to <html>. Pure CSS
+ * overrides — no Tailwind config change required. Targets the
+ * most common surfaces (body, cards, headings, borders, inputs,
+ * tables, modals). Page-specific overrides can extend this with
+ * additional `html.wp-dark` selectors as needed.
+ * ============================================================ */
+html.wp-dark { color-scheme: dark; }
+html.wp-dark body { background-color: #0f172a; color: #e5e7eb; }
+
+/* Top nav surface */
+html.wp-dark .wp-topbar,
+html.wp-dark header,
+html.wp-dark nav { background-color: #1e293b; color: #e5e7eb; border-color: #334155; }
+html.wp-dark .wp-topbar a,
+html.wp-dark .wp-topbar button { color: #e5e7eb; }
+html.wp-dark .wp-topbar .text-gray-500,
+html.wp-dark .wp-topbar .text-gray-600,
+html.wp-dark .wp-topbar .text-gray-700,
+html.wp-dark .wp-topbar .text-gray-800,
+html.wp-dark .wp-topbar .text-gray-900 { color: #e5e7eb; }
+html.wp-dark .wp-topbar .hover\:bg-gray-100:hover { background-color: rgba(255,255,255,0.08); }
+
+/* ===== Left rail overflow hardening ===== */
+/* Eliminate horizontal scroll on the sidebar. The aside + its inner nav
+   each clamp overflow-x; long item labels truncate with ellipsis instead
+   of forcing the rail wider than its column. */
+.wp-rail {
+    overflow-x: hidden;
+    max-width: 100%;
+    min-width: 0;
+}
+.wp-rail nav,
+.wp-rail .wp-rail-group,
+.wp-rail .wp-group-items {
+    overflow-x: hidden;
+    max-width: 100%;
+    min-width: 0;
+}
+.wp-rail .wp-rail-item,
+.wp-rail .wp-group-toggle {
+    overflow: hidden;
+    max-width: 100%;
+    min-width: 0;
+}
+/* Truncate long labels with ellipsis rather than letting them push the
+   row wider. flex-1 children need min-width:0 so flexbox actually allows
+   them to shrink past their content's intrinsic width. */
+.wp-rail .wp-rail-item .wp-label,
+.wp-rail .wp-group-toggle .wp-label,
+.wp-rail .wp-rail-row .wp-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* Left rail */
+html.wp-dark .wp-rail { background-color: #1e293b; border-color: #334155; }
+html.wp-dark .wp-rail-item { color: #cbd5e1; }
+html.wp-dark .wp-rail-item:hover,
+html.wp-dark .wp-rail-row:hover { background-color: rgba(255,255,255,0.05); }
+html.wp-dark .wp-rail-row.wp-rail-row-active { background-color: rgba(99,102,241,0.22); }
+html.wp-dark .wp-rail-item.wp-rail-item-active { color: #c7d2fe; }
+html.wp-dark .wp-group-label,
+html.wp-dark .wp-label { color: #94a3b8; }
+html.wp-dark .wp-search-wrap input { background-color: #0f172a; color: #e5e7eb; border-color: #334155; }
+
+/* Backgrounds — common Tailwind utility classes used as cards */
+html.wp-dark .bg-white { background-color: #1e293b !important; }
+html.wp-dark .bg-gray-50 { background-color: #0f172a !important; }
+html.wp-dark .bg-gray-100 { background-color: #1e293b !important; }
+html.wp-dark .bg-gray-200 { background-color: #334155 !important; }
+html.wp-dark .bg-blue-50 { background-color: rgba(59,130,246,0.12) !important; }
+html.wp-dark .bg-indigo-50 { background-color: rgba(99,102,241,0.12) !important; }
+html.wp-dark .bg-purple-50 { background-color: rgba(168,85,247,0.12) !important; }
+html.wp-dark .bg-green-50 { background-color: rgba(34,197,94,0.12) !important; }
+html.wp-dark .bg-red-50 { background-color: rgba(239,68,68,0.12) !important; }
+html.wp-dark .bg-amber-50,
+html.wp-dark .bg-yellow-50 { background-color: rgba(245,158,11,0.12) !important; }
+html.wp-dark .bg-emerald-50 { background-color: rgba(16,185,129,0.12) !important; }
+html.wp-dark .bg-teal-50 { background-color: rgba(20,184,166,0.12) !important; }
+html.wp-dark .bg-pink-50 { background-color: rgba(236,72,153,0.12) !important; }
+html.wp-dark .bg-orange-50 { background-color: rgba(249,115,22,0.12) !important; }
+html.wp-dark .bg-cyan-50 { background-color: rgba(34,211,238,0.12) !important; }
+
+/* Coloured pills (bg-{color}-100) — heavily used for status badges,
+ * KPI summary cells, severity chips. In light mode they're pale tints
+ * over white; in dark mode they need a darker tint so the brighter
+ * text colours from the rules further below stay legible inside them.
+ * 20% opacity blends with whatever surface they sit on (body or card)
+ * and produces a noticeably darker patch than the soft-alert 12%
+ * banner background. */
+html.wp-dark .bg-blue-100   { background-color: rgba(59,130,246,0.22)  !important; }
+html.wp-dark .bg-indigo-100 { background-color: rgba(99,102,241,0.22)  !important; }
+html.wp-dark .bg-purple-100 { background-color: rgba(168,85,247,0.22)  !important; }
+html.wp-dark .bg-green-100  { background-color: rgba(34,197,94,0.22)   !important; }
+html.wp-dark .bg-emerald-100{ background-color: rgba(16,185,129,0.22)  !important; }
+html.wp-dark .bg-red-100    { background-color: rgba(239,68,68,0.22)   !important; }
+html.wp-dark .bg-amber-100,
+html.wp-dark .bg-yellow-100 { background-color: rgba(245,158,11,0.22)  !important; }
+html.wp-dark .bg-pink-100   { background-color: rgba(236,72,153,0.22)  !important; }
+html.wp-dark .bg-teal-100   { background-color: rgba(20,184,166,0.22)  !important; }
+html.wp-dark .bg-cyan-100   { background-color: rgba(34,211,238,0.22)  !important; }
+html.wp-dark .bg-orange-100 { background-color: rgba(249,115,22,0.22)  !important; }
+
+/* Text colors — light shades over dark backgrounds.
+ * Prior tier (gray-500/600 → #cbd5e1) gave only ~4.5:1 contrast on the
+ * #1e293b card background — borderline AA, hard to read. Raised across
+ * the board so body text reads cleanly inside cards (#1e293b) AND on
+ * the body (#0f172a). */
+html.wp-dark .text-gray-900,
+html.wp-dark .text-gray-800,
+html.wp-dark .text-gray-700 { color: #f8fafc !important; }
+html.wp-dark .text-gray-600,
+html.wp-dark .text-gray-500 { color: #e2e8f0 !important; }
+html.wp-dark .text-gray-400 { color: #cbd5e1 !important; }
+html.wp-dark .text-gray-300 { color: #94a3b8 !important; }
+
+/* Semantic colour text on dark backgrounds.
+ * Tailwind's *-600/*-700/*-800 tints (used heavily for KPI numbers,
+ * status labels, badge text, dashboard accents) are tuned for light
+ * mode — they go nearly invisible on dark cards. Lift each common
+ * colour family to its *-400 tint so "Critical 1", "Warning 60",
+ * inflation totals, severity labels etc. stay legible in dark mode.
+ * Keep the original Tailwind class names in the markup; this stylesheet
+ * does the dark-mode remap centrally. */
+html.wp-dark .text-red-500,
+html.wp-dark .text-red-600,
+html.wp-dark .text-red-700,
+html.wp-dark .text-red-800,
+html.wp-dark .text-red-900 { color: #f87171 !important; }
+html.wp-dark .text-amber-500,
+html.wp-dark .text-amber-600,
+html.wp-dark .text-amber-700,
+html.wp-dark .text-amber-800,
+html.wp-dark .text-amber-900 { color: #fbbf24 !important; }
+html.wp-dark .text-yellow-500,
+html.wp-dark .text-yellow-600,
+html.wp-dark .text-yellow-700,
+html.wp-dark .text-yellow-800 { color: #facc15 !important; }
+html.wp-dark .text-green-500,
+html.wp-dark .text-green-600,
+html.wp-dark .text-green-700,
+html.wp-dark .text-green-800,
+html.wp-dark .text-emerald-500,
+html.wp-dark .text-emerald-600,
+html.wp-dark .text-emerald-700,
+html.wp-dark .text-emerald-800 { color: #4ade80 !important; }
+html.wp-dark .text-blue-500,
+html.wp-dark .text-blue-600,
+html.wp-dark .text-blue-700,
+html.wp-dark .text-blue-800,
+html.wp-dark .text-blue-900 { color: #60a5fa !important; }
+html.wp-dark .text-indigo-500,
+html.wp-dark .text-indigo-600,
+html.wp-dark .text-indigo-700,
+html.wp-dark .text-indigo-800 { color: #818cf8 !important; }
+html.wp-dark .text-purple-500,
+html.wp-dark .text-purple-600,
+html.wp-dark .text-purple-700,
+html.wp-dark .text-purple-800,
+html.wp-dark .text-purple-900 { color: #c084fc !important; }
+html.wp-dark .text-pink-500,
+html.wp-dark .text-pink-600,
+html.wp-dark .text-pink-700 { color: #f472b6 !important; }
+html.wp-dark .text-teal-500,
+html.wp-dark .text-teal-600,
+html.wp-dark .text-teal-700 { color: #2dd4bf !important; }
+html.wp-dark .text-cyan-500,
+html.wp-dark .text-cyan-600,
+html.wp-dark .text-cyan-700 { color: #22d3ee !important; }
+html.wp-dark .text-orange-500,
+html.wp-dark .text-orange-600,
+html.wp-dark .text-orange-700 { color: #fb923c !important; }
+
+/* Soft alert banners — text INSIDE a bg-{color}-50 panel.
+ * The semantic text rules above lift colour text into the *-400 tint,
+ * which is mid-saturation. When that text sits inside a banner whose
+ * background is a 12% tint of the SAME family, contrast collapses
+ * ("blue on blue"). Override to a near-white tint of the family so
+ * the banner reads as "tinted background, almost-white text". Higher
+ * specificity than the parent rules above; both use !important so the
+ * extra class selector wins. */
+html.wp-dark .bg-blue-50 .text-blue-700,
+html.wp-dark .bg-blue-50 .text-blue-800,
+html.wp-dark .bg-blue-50 .text-blue-900 { color: #dbeafe !important; }
+html.wp-dark .bg-indigo-50 .text-indigo-700,
+html.wp-dark .bg-indigo-50 .text-indigo-800,
+html.wp-dark .bg-indigo-50 .text-indigo-900 { color: #e0e7ff !important; }
+html.wp-dark .bg-purple-50 .text-purple-700,
+html.wp-dark .bg-purple-50 .text-purple-800,
+html.wp-dark .bg-purple-50 .text-purple-900 { color: #ede9fe !important; }
+html.wp-dark .bg-red-50 .text-red-700,
+html.wp-dark .bg-red-50 .text-red-800,
+html.wp-dark .bg-red-50 .text-red-900 { color: #fee2e2 !important; }
+html.wp-dark .bg-amber-50 .text-amber-700,
+html.wp-dark .bg-amber-50 .text-amber-800,
+html.wp-dark .bg-amber-50 .text-amber-900,
+html.wp-dark .bg-yellow-50 .text-yellow-700,
+html.wp-dark .bg-yellow-50 .text-yellow-800,
+html.wp-dark .bg-yellow-50 .text-yellow-900 { color: #fef3c7 !important; }
+html.wp-dark .bg-green-50 .text-green-700,
+html.wp-dark .bg-green-50 .text-green-800,
+html.wp-dark .bg-green-50 .text-green-900,
+html.wp-dark .bg-emerald-50 .text-emerald-700,
+html.wp-dark .bg-emerald-50 .text-emerald-800,
+html.wp-dark .bg-emerald-50 .text-emerald-900 { color: #d1fae5 !important; }
+html.wp-dark .bg-pink-50 .text-pink-700,
+html.wp-dark .bg-pink-50 .text-pink-800 { color: #fce7f3 !important; }
+html.wp-dark .bg-teal-50 .text-teal-700,
+html.wp-dark .bg-teal-50 .text-teal-800 { color: #ccfbf1 !important; }
+html.wp-dark .bg-cyan-50 .text-cyan-700,
+html.wp-dark .bg-cyan-50 .text-cyan-800 { color: #cffafe !important; }
+html.wp-dark .bg-orange-50 .text-orange-700,
+html.wp-dark .bg-orange-50 .text-orange-800 { color: #ffedd5 !important; }
+
+/* Same pattern for the slightly stronger banner pattern (bg-{color}-100)
+ * — these are often used as inline callouts or KPI strips. Brighten the
+ * darker-tone *-700/800/900 text so it pops on the 22%-tint background. */
+html.wp-dark .bg-blue-100 .text-blue-700,
+html.wp-dark .bg-blue-100 .text-blue-800,
+html.wp-dark .bg-blue-100 .text-blue-900 { color: #dbeafe !important; }
+html.wp-dark .bg-indigo-100 .text-indigo-700,
+html.wp-dark .bg-indigo-100 .text-indigo-800,
+html.wp-dark .bg-indigo-100 .text-indigo-900 { color: #e0e7ff !important; }
+html.wp-dark .bg-purple-100 .text-purple-700,
+html.wp-dark .bg-purple-100 .text-purple-800,
+html.wp-dark .bg-purple-100 .text-purple-900 { color: #ede9fe !important; }
+html.wp-dark .bg-red-100 .text-red-700,
+html.wp-dark .bg-red-100 .text-red-800,
+html.wp-dark .bg-red-100 .text-red-900 { color: #fee2e2 !important; }
+html.wp-dark .bg-amber-100 .text-amber-700,
+html.wp-dark .bg-amber-100 .text-amber-800,
+html.wp-dark .bg-amber-100 .text-amber-900,
+html.wp-dark .bg-yellow-100 .text-yellow-700,
+html.wp-dark .bg-yellow-100 .text-yellow-800 { color: #fef3c7 !important; }
+html.wp-dark .bg-green-100 .text-green-700,
+html.wp-dark .bg-green-100 .text-green-800,
+html.wp-dark .bg-green-100 .text-green-900,
+html.wp-dark .bg-emerald-100 .text-emerald-700,
+html.wp-dark .bg-emerald-100 .text-emerald-800 { color: #d1fae5 !important; }
+
+/* Borders */
+html.wp-dark .border,
+html.wp-dark .border-t,
+html.wp-dark .border-b,
+html.wp-dark .border-l,
+html.wp-dark .border-r,
+html.wp-dark .border-gray-100,
+html.wp-dark .border-gray-200,
+html.wp-dark .border-gray-300 { border-color: #334155 !important; }
+html.wp-dark .divide-gray-100 > * + *,
+html.wp-dark .divide-gray-200 > * + * { border-color: #334155 !important; }
+
+/* Hover backgrounds */
+html.wp-dark .hover\:bg-gray-50:hover,
+html.wp-dark .hover\:bg-gray-100:hover { background-color: rgba(255,255,255,0.05) !important; }
+
+/* Form inputs / textarea / select */
+html.wp-dark input[type="text"],
+html.wp-dark input[type="search"],
+html.wp-dark input[type="email"],
+html.wp-dark input[type="number"],
+html.wp-dark input[type="date"],
+html.wp-dark input[type="datetime-local"],
+html.wp-dark input[type="url"],
+html.wp-dark input[type="password"],
+html.wp-dark textarea,
+html.wp-dark select {
+  background-color: #0f172a;
+  color: #e5e7eb;
+  border-color: #334155;
+}
+html.wp-dark input::placeholder,
+html.wp-dark textarea::placeholder { color: #64748b; }
+
+/* Tables — header strip + row hover */
+html.wp-dark thead.bg-gray-50,
+html.wp-dark thead .bg-gray-50 { background-color: #0f172a !important; }
+html.wp-dark tbody.bg-white,
+html.wp-dark tbody .bg-white { background-color: #1e293b !important; }
+html.wp-dark tbody tr:hover { background-color: rgba(255,255,255,0.04) !important; }
+
+/* Modal / dropdown surfaces */
+html.wp-dark .shadow,
+html.wp-dark .shadow-sm,
+html.wp-dark .shadow-md,
+html.wp-dark .shadow-lg { box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+html.wp-dark .dropdown-menu { background-color: #1e293b; border-color: #334155; color: #e5e7eb; }
+
+/* Code / monospace blocks */
+html.wp-dark code,
+html.wp-dark pre,
+html.wp-dark .font-mono { color: #e5e7eb; }
+html.wp-dark code.bg-gray-100,
+html.wp-dark .bg-amber-100 code { background-color: #334155 !important; }

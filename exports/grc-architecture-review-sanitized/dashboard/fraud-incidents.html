@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg - Fraud Incidents</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .sev-p1 { background-color: #FEE2E2; color: #B91C1C; }
+        .sev-p2 { background-color: #FFEDD5; color: #C2410C; }
+        .sev-p3 { background-color: #FEF3C7; color: #92400E; }
+        .sev-p4 { background-color: #DBEAFE; color: #1E40AF; }
+        .status-open { background-color: #DBEAFE; color: #1E40AF; }
+        .status-investigating { background-color: #FEF3C7; color: #92400E; }
+        .status-contained { background-color: #FFEDD5; color: #C2410C; }
+        .status-resolved { background-color: #D1FAE5; color: #047857; }
+        .status-closed { background-color: #E5E7EB; color: #374151; }
+        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .wizard-step { display: none; }
+        .wizard-step.active { display: block; }
+        .step-pill { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.875rem; }
+        .step-pill.todo { background-color: #E5E7EB; color: #6B7280; }
+        .step-pill.active { background-color: #DC2626; color: white; }
+        .step-pill.done { background-color: #047857; color: white; }
+        .sla-warn { color: #C2410C; font-weight: 600; }
+        .sla-breach { color: #B91C1C; font-weight: 700; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('fraud-incidents');
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="fraud_incidents.title">Fraud Incident Register</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="fraud_incidents.subtitle">PRD-FRD-001 Feature 2 — Incident lifecycle, SLA tracking, SAMA reporting gate</p>
+            </div>
+            <div class="flex gap-3 items-center">
+                <button data-on-click="loadIncidents" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.<REDACTED_PHONE> 9m0 0H9m11 11v-5h-.581m0 0a8.<REDACTED_PHONE>-2m15.357 2H15"/></svg>
+                    Refresh
+                </button>
+                <button data-on-click="openIncidentWizard" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Report Incident
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-red-600">
+                <div class="text-sm text-gray-500">P1 (Critical)</div>
+                <div id="cardP1" class="text-2xl font-bold text-red-600">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-orange-500">
+                <div class="text-sm text-gray-500">P2 (High)</div>
+                <div id="cardP2" class="text-2xl font-bold text-orange-500">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-amber-500">
+                <div class="text-sm text-gray-500">Open</div>
+                <div id="cardOpen" class="text-2xl font-bold text-amber-500">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-purple-600">
+                <div class="text-sm text-gray-500">SAMA Pending</div>
+                <div id="cardSama" class="text-2xl font-bold text-purple-600">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-gray-500">
+                <div class="text-sm text-gray-500">Total (last 200)</div>
+                <div id="cardTotal" class="text-2xl font-bold text-gray-900">—</div>
+            </div>
+        </div>
+
+        <!-- Tabs: Open / Closed -->
+        <div class="flex border-b border-gray-200 mb-4">
+            <button id="tabOpen" data-on-click="setTab" data-args='["open"]' class="px-4 py-2 font-medium text-red-600 border-b-2 border-red-600">Open</button>
+            <button id="tabClosed" data-on-click="setTab" data-args='["closed"]' class="px-4 py-2 font-medium text-gray-500 hover:text-gray-700">Closed</button>
+            <button id="tabAll" data-on-click="setTab" data-args='["all"]' class="px-4 py-2 font-medium text-gray-500 hover:text-gray-700">All</button>
+        </div>
+
+        <!-- Collapsible Escalation Matrix reference (PRD §5.4 Feature 4) -->
+        <details class="bg-white rounded-lg shadow mb-4">
+            <summary class="cursor-pointer px-4 py-3 font-medium text-gray-800 flex items-center gap-2 hover:bg-gray-50 rounded-lg">
+                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 <REDACTED_PHONE> 2s-<REDACTED_PHONE>.895 3 2zm12-3c0 <REDACTED_PHONE> 2s-<REDACTED_PHONE>.895 3 2zM9 10l12-3"/></svg>
+                Escalation Matrix Reference (click to expand)
+            </summary>
+            <div class="px-4 pb-4">
+                <div id="escMatrixContainer" class="text-sm text-gray-500">Loading matrix…</div>
+            </div>
+        </details>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Severity</label>
+                <select id="filterSeverity" data-on-change="applyIncidentFilters" class="border rounded-lg px-3 py-1.5 text-sm">
+                    <option value="">All</option>
+                    <option value="P1">P1</option>
+                    <option value="P2">P2</option>
+                    <option value="P3">P3</option>
+                    <option value="P4">P4</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Type</label>
+                <select id="filterType" data-on-change="applyIncidentFilters" class="border rounded-lg px-3 py-1.5 text-sm">
+                    <option value="">All</option>
+                    <option value="account_takeover">Account Takeover</option>
+                    <option value="chargeback">Chargeback</option>
+                    <option value="card_testing">Card Testing</option>
+                    <option value="internal_fraud">Internal Fraud</option>
+                    <option value="aml_sar">AML / SAR</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <button data-on-click="clearIncidentFilters" class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Clear</button>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Code</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Date</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Severity</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Type</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Source</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Status</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Customers</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Amount (SAR)</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">SLA</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">SAMA</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="incidentsTableBody" class="divide-y divide-gray-200 text-sm"></tbody>
+                </table>
+            </div>
+            <div id="incidentsEmpty" class="hidden p-12 text-center text-gray-400">
+                <p>No incidents match the current filters.</p>
+            </div>
+            <div id="incidentsLoading" class="p-12 text-center text-gray-400">
+                <p>Loading…</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- 3-step wizard modal -->
+    <div id="wizardModal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-lg font-bold text-gray-900">Report Fraud Incident</h2>
+                <button data-on-click="closeWizard" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-center gap-4">
+                <div class="flex items-center gap-2">
+                    <span id="stepPill1" class="step-pill active">1</span>
+                    <span class="text-sm font-medium">Detection</span>
+                </div>
+                <div class="w-8 h-0.5 bg-gray-300"></div>
+                <div class="flex items-center gap-2">
+                    <span id="stepPill2" class="step-pill todo">2</span>
+                    <span class="text-sm font-medium">Impact</span>
+                </div>
+                <div class="w-8 h-0.5 bg-gray-300"></div>
+                <div class="flex items-center gap-2">
+                    <span id="stepPill3" class="step-pill todo">3</span>
+                    <span class="text-sm font-medium">Response</span>
+                </div>
+            </div>
+
+            <form id="wizardForm" data-on-submit="submitIncidentWizard" class="p-6 space-y-4">
+                <!-- Step 1: Detection -->
+                <div id="wizardStep1" class="wizard-step active space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Date Detected *</label>
+                            <input type="date" id="wzDateDetected" required class="w-full border rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Severity *</label>
+                            <select id="wzSeverity" required class="w-full border rounded-lg px-3 py-2">
+                                <option value="">Select…</option>
+                                <option value="P1">P1 — Critical (≥10 customers OR ≥50K SAR)</option>
+                                <option value="P2">P2 — High (3-9 customers OR 10K-50K SAR)</option>
+                                <option value="P3">P3 — Medium (1-2 customers, &lt;10K SAR)</option>
+                                <option value="P4">P4 — Low (no impact, suspicious only)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Incident Type *</label>
+                            <select id="wzType" required class="w-full border rounded-lg px-3 py-2">
+                                <option value="">Select…</option>
+                                <option value="account_takeover">Account Takeover</option>
+                                <option value="chargeback">Chargeback</option>
+                                <option value="card_testing">Card Testing</option>
+                                <option value="internal_fraud">Internal Fraud</option>
+                                <option value="aml_sar">AML / SAR (Suspicious Activity)</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Detection Source *</label>
+                            <select id="wzSource" required class="w-full border rounded-lg px-3 py-2">
+                                <option value="">Select…</option>
+                                <option value="hyperpay_alert">HyperPay Alert</option>
+                                <option value="customer_report">Customer Report</option>
+                                <option value="it_monitoring">IT Monitoring</option>
+                                <option value="bank_claim">Bank Claim</option>
+                                <option value="internal_discovery">Internal Discovery</option>
+                                <option value="regulatory_inquiry">Regulatory Inquiry</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Linked Fraud Rule (optional)</label>
+                        <input type="text" id="wzLinkedRule" class="w-full border rounded-lg px-3 py-2" placeholder="e.g. FR-013">
+                    </div>
+                </div>
+
+                <!-- Step 2: Impact -->
+                <div id="wizardStep2" class="wizard-step space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Affected Customers</label>
+                            <input type="number" min="0" id="wzCustomers" value="0" class="w-full border rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Amount (SAR)</label>
+                            <input type="number" min="0" step="0.01" id="wzAmount" value="0" class="w-full border rounded-lg px-3 py-2">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Notes / Initial Description</label>
+                        <textarea id="wzNotes" rows="3" class="w-full border rounded-lg px-3 py-2" placeholder="What was observed? Channel? Customer-facing impact?"></textarea>
+                    </div>
+                </div>
+
+                <!-- Step 3: Response -->
+                <div id="wizardStep3" class="wizard-step space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Initial Actions Taken</label>
+                        <textarea id="wzActions" rows="3" class="w-full border rounded-lg px-3 py-2" placeholder="e.g. Account frozen, customer notified, transactions reversed"></textarea>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="wzAccountFrozen" class="rounded border-gray-300">
+                        <label for="wzAccountFrozen" class="text-sm text-gray-700">Customer account frozen</label>
+                    </div>
+                    <div class="bg-blue-50 border-s-4 border-blue-500 p-3 rounded text-sm text-blue-900">
+                        <strong>Reminder:</strong> P1 incidents require SAMA reporting within 72 hours. The system will auto-mirror this incident to the Risk Register if severity is P1 or P2.
+                    </div>
+                </div>
+
+                <div id="wizardError" class="hidden text-sm text-red-600"></div>
+
+                <div class="flex justify-between pt-2 border-t border-gray-200">
+                    <div>
+                        <button type="button" id="wizardBack" data-on-click="wizardPrev" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 hidden">← Back</button>
+                    </div>
+                    <div class="flex gap-3">
+                        <button type="button" data-on-click="closeWizard" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                        <button type="button" id="wizardNext" data-on-click="wizardNextOrSubmit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Next →</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Close-incident modal (with sama_reported gate) -->
+    <div id="closeModal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-bold text-gray-900">Close Incident</h2>
+            </div>
+            <form data-on-submit="submitCloseForm" class="p-6 space-y-4">
+                <input type="hidden" id="closeIncidentId" value="">
+                <div id="closeSamaSection">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">SAMA Reported? *</label>
+                    <div class="flex gap-4">
+                        <label class="flex items-center gap-2"><input type="radio" name="closeSama" value="true"> Yes</label>
+                        <label class="flex items-center gap-2"><input type="radio" name="closeSama" value="false"> No</label>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Required for P1/P2 incidents per PRD §5.2 / AC-5.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Resolution Date</label>
+                    <input type="date" id="closeResolutionDate" class="w-full border rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Root Cause</label>
+                    <textarea id="closeRootCause" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
+                </div>
+                <div id="closeError" class="hidden text-sm text-red-600"></div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" data-on-click="closeCloseModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Close Incident</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Fraud Incidents page state and handlers
+        // PRD-FRD-001 Feature 2.
+        let allIncidents = [];
+        let currentTab = 'open';
+        let wizardStep = 1;
+
+        const SLA_HOURS = { P1: 4, P2: 24, P3: 72, P4: 168 };
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function fmtDate(s) {
+            if (!s) return '—';
+            try {
+                if (window.WalaPlusI18n && WalaPlusI18n.formatDate) {
+                    return WalaPlusI18n.formatDate(s, { year: 'numeric', month: '2-digit', day: '2-digit' });
+                }
+                return new Date(s).toLocaleDateString();
+            } catch { return String(s); }
+        }
+
+        function fmtNumber(n) {
+            const v = Number(n || 0);
+            return v.toLocaleString('en-US');
+        }
+
+        function slaText(inc) {
+            if (inc.contained_at || inc.status === 'resolved' || inc.status === 'closed') {
+                return '<span class="text-green-700">Met</span>';
+            }
+            const sla = SLA_HOURS[inc.severity] || 168;
+            const detected = new Date(inc.created_at || inc.date_detected).getTime();
+            const elapsedH = (Date.now() - detected) / 3600000;
+            const remainingH = sla - elapsedH;
+            if (remainingH < 0) {
+                return '<span class="sla-breach">Breached (' + Math.round(-remainingH) + 'h over)</span>';
+            }
+            if (remainingH < sla * 0.25) {
+                return '<span class="sla-warn">' + Math.round(remainingH) + 'h left</span>';
+            }
+            return '<span class="text-gray-700">' + Math.round(remainingH) + 'h left</span>';
+        }
+
+        function samaText(inc) {
+            if (inc.severity !== 'P1' && inc.severity !== 'P2') return '<span class="text-gray-400">N/A</span>';
+            if (inc.sama_reported === true) return '<span class="text-green-700">Reported</span>';
+            if (inc.sama_reported === false) return '<span class="text-gray-700">Not required</span>';
+            return '<span class="text-red-600 font-semibold">Pending</span>';
+        }
+
+        async function loadIncidents() {
+            const empty = document.getElementById('incidentsEmpty');
+            const loading = document.getElementById('incidentsLoading');
+            const tbody = document.getElementById('incidentsTableBody');
+            empty.classList.add('hidden');
+            loading.classList.remove('hidden');
+            tbody.innerHTML = '';
+            try {
+                const res = await fetch('/api/fraud/incidents?limit=200', { credentials: 'include' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                allIncidents = Array.isArray(data.incidents) ? data.incidents : [];
+                applyIncidentFilters();
+                renderIncidentSummary();
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="11" class="p-6 text-center text-red-600">Failed to load: ' + escapeHtml(err.message) + '</td></tr>';
+            } finally {
+                loading.classList.add('hidden');
+            }
+            loadEscalationMatrix();
+        }
+
+        async function loadEscalationMatrix() {
+            const container = document.getElementById('escMatrixContainer');
+            try {
+                const res = await fetch('/api/fraud/escalation', { credentials: 'include' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                const rows = Array.isArray(data.matrix) ? data.matrix : [];
+                if (rows.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500">No escalation matrix rows configured yet.</p>';
+                    return;
+                }
+                container.innerHTML = '<div class="overflow-x-auto"><table class="min-w-full text-xs">' +
+                    '<thead><tr class="bg-gray-50"><th scope="col" class="px-2 py-1 text-start">Trigger</th><th scope="col" class="px-2 py-1 text-start">Severity</th><th scope="col" class="px-2 py-1 text-start">Notify Immediately</th><th scope="col" class="px-2 py-1 text-start">Notify in 4h</th><th scope="col" class="px-2 py-1 text-start">External</th><th scope="col" class="px-2 py-1 text-start">SLA</th></tr></thead><tbody>' +
+                    rows.map(r => '<tr class="border-t"><td class="px-2 py-1 font-mono">' + escapeHtml(r.trigger_id) + '</td>' +
+                        '<td class="px-2 py-1">' + escapeHtml(r.severity || '—') + '</td>' +
+                        '<td class="px-2 py-1">' + (Array.isArray(r.notify_immediately) ? r.notify_immediately.map(escapeHtml).join('<br>') : '—') + '</td>' +
+                        '<td class="px-2 py-1">' + (Array.isArray(r.notify_within_4h) ? r.notify_within_4h.map(escapeHtml).join('<br>') : '—') + '</td>' +
+                        '<td class="px-2 py-1">' + escapeHtml(r.external_party || '—') + '</td>' +
+                        '<td class="px-2 py-1">' + escapeHtml(r.response_sla) + '</td></tr>').join('') +
+                    '</tbody></table></div>';
+            } catch (err) {
+                container.innerHTML = '<p class="text-red-600">Failed to load matrix: ' + escapeHtml(err.message) + '</p>';
+            }
+        }
+
+        function applyIncidentFilters() {
+            const sev = document.getElementById('filterSeverity').value;
+            const type = document.getElementById('filterType').value;
+            let list = allIncidents;
+            if (currentTab === 'open') list = list.filter(i => i.status !== 'resolved' && i.status !== 'closed');
+            else if (currentTab === 'closed') list = list.filter(i => i.status === 'resolved' || i.status === 'closed');
+            if (sev) list = list.filter(i => i.severity === sev);
+            if (type) list = list.filter(i => i.incident_type === type);
+            renderIncidentTable(list);
+        }
+
+        function clearIncidentFilters() {
+            document.getElementById('filterSeverity').value = '';
+            document.getElementById('filterType').value = '';
+            applyIncidentFilters();
+        }
+
+        function setTab(tab) {
+            currentTab = tab;
+            for (const id of ['tabOpen', 'tabClosed', 'tabAll']) {
+                const el = document.getElementById(id);
+                el.className = 'px-4 py-2 font-medium text-gray-500 hover:text-gray-700';
+            }
+            const active = { open: 'tabOpen', closed: 'tabClosed', all: 'tabAll' }[tab];
+            document.getElementById(active).className = 'px-4 py-2 font-medium text-red-600 border-b-2 border-red-600';
+            applyIncidentFilters();
+        }
+
+        function renderIncidentSummary() {
+            document.getElementById('cardP1').textContent = String(allIncidents.filter(i => i.severity === 'P1').length);
+            document.getElementById('cardP2').textContent = String(allIncidents.filter(i => i.severity === 'P2').length);
+            document.getElementById('cardOpen').textContent = String(allIncidents.filter(i => i.status !== 'resolved' && i.status !== 'closed').length);
+            document.getElementById('cardSama').textContent = String(allIncidents.filter(i => (i.severity === 'P1' || i.severity === 'P2') && i.status !== 'closed' && (i.sama_reported === null || i.sama_reported === undefined)).length);
+            document.getElementById('cardTotal').textContent = String(allIncidents.length);
+        }
+
+        function renderIncidentTable(list) {
+            const tbody = document.getElementById('incidentsTableBody');
+            const empty = document.getElementById('incidentsEmpty');
+            if (list.length === 0) {
+                tbody.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+            tbody.innerHTML = list.map(inc => {
+                const sevCls = 'sev-' + String(inc.severity).toLowerCase();
+                const stCls = 'status-' + String(inc.status).replace(/_/g, '-');
+                const idRef = inc.public_id || inc.incident_code;
+                const canClose = inc.status !== 'closed' && inc.status !== 'resolved';
+                return '<tr class="hover:bg-gray-50">' +
+                    '<td class="px-3 py-2 font-mono text-xs">' + escapeHtml(inc.incident_code) + '</td>' +
+                    '<td class="px-3 py-2 text-xs">' + fmtDate(inc.date_detected) + '</td>' +
+                    '<td class="px-3 py-2"><span class="' + sevCls + ' text-xs px-2 py-1 rounded font-bold">' + escapeHtml(inc.severity) + '</span></td>' +
+                    '<td class="px-3 py-2 text-xs">' + escapeHtml(inc.incident_type) + '</td>' +
+                    '<td class="px-3 py-2 text-xs">' + escapeHtml(inc.detection_source) + '</td>' +
+                    '<td class="px-3 py-2"><span class="' + stCls + ' text-xs px-2 py-1 rounded">' + escapeHtml(inc.status) + '</span></td>' +
+                    '<td class="px-3 py-2 text-end text-xs">' + fmtNumber(inc.affected_customers) + '</td>' +
+                    '<td class="px-3 py-2 text-end text-xs">' + fmtNumber(inc.amount_sar) + '</td>' +
+                    '<td class="px-3 py-2 text-xs">' + slaText(inc) + '</td>' +
+                    '<td class="px-3 py-2 text-xs">' + samaText(inc) + '</td>' +
+                    '<td class="px-3 py-2 text-end">' +
+                        (canClose ? '<button data-on-click="openCloseModal" data-args=\'["' + escapeHtml(idRef) + '","' + escapeHtml(inc.severity) + '"]\' class="text-red-600 hover:underline text-xs">Close</button>' : '<span class="text-gray-400 text-xs">—</span>') +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        // ── Wizard ──────────────────────────────────────────────────────────
+        function openIncidentWizard() {
+            wizardStep = 1;
+            document.getElementById('wizardForm').reset();
+            document.getElementById('wzDateDetected').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('wizardError').classList.add('hidden');
+            updateWizardStep();
+            document.getElementById('wizardModal').classList.add('active');
+        }
+
+        function closeWizard() {
+            document.getElementById('wizardModal').classList.remove('active');
+        }
+
+        function updateWizardStep() {
+            for (let i = 1; i <= 3; i++) {
+                const step = document.getElementById('wizardStep' + i);
+                const pill = document.getElementById('stepPill' + i);
+                if (i === wizardStep) {
+                    step.classList.add('active');
+                    pill.className = 'step-pill active';
+                } else {
+                    step.classList.remove('active');
+                    pill.className = i < wizardStep ? 'step-pill done' : 'step-pill todo';
+                }
+            }
+            document.getElementById('wizardBack').classList.toggle('hidden', wizardStep === 1);
+            document.getElementById('wizardNext').textContent = wizardStep === 3 ? 'Submit' : 'Next →';
+        }
+
+        function wizardPrev() {
+            if (wizardStep > 1) wizardStep--;
+            updateWizardStep();
+        }
+
+        function validateWizardStep() {
+            const errBox = document.getElementById('wizardError');
+            errBox.classList.add('hidden');
+            if (wizardStep === 1) {
+                const required = ['wzDateDetected', 'wzSeverity', 'wzType', 'wzSource'];
+                for (const id of required) {
+                    if (!document.getElementById(id).value) {
+                        errBox.textContent = 'Please fill all required fields.';
+                        errBox.classList.remove('hidden');
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function wizardNextOrSubmit() {
+            if (!validateWizardStep()) return;
+            if (wizardStep < 3) {
+                wizardStep++;
+                updateWizardStep();
+                return;
+            }
+            submitIncidentWizard({ preventDefault: () => {} });
+        }
+
+        async function submitIncidentWizard(event) {
+            event && event.preventDefault && event.preventDefault();
+            const errBox = document.getElementById('wizardError');
+            const payload = {
+                date_detected: document.getElementById('wzDateDetected').value,
+                severity: document.getElementById('wzSeverity').value,
+                incident_type: document.getElementById('wzType').value,
+                detection_source: document.getElementById('wzSource').value,
+                linked_rule_id: document.getElementById('wzLinkedRule').value.trim() || null,
+                affected_customers: parseInt(document.getElementById('wzCustomers').value || '0', 10),
+                amount_sar: parseFloat(document.getElementById('wzAmount').value || '0'),
+                actions_taken: document.getElementById('wzActions').value.trim() || null,
+                account_frozen: document.getElementById('wzAccountFrozen').checked,
+                notes: document.getElementById('wzNotes').value.trim() || null,
+            };
+            try {
+                const res = await fetch('/api/fraud/incidents', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    throw new Error(body.error || 'HTTP ' + res.status);
+                }
+                closeWizard();
+                await loadIncidents();
+            } catch (err) {
+                errBox.textContent = 'Save failed: ' + err.message;
+                errBox.classList.remove('hidden');
+            }
+        }
+
+        // ── Close modal ────────────────────────────────────────────────────
+        let closeTargetSeverity = null;
+
+        function openCloseModal(idRef, severity) {
+            document.getElementById('closeIncidentId').value = idRef;
+            closeTargetSeverity = severity;
+            document.getElementById('closeResolutionDate').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('closeRootCause').value = '';
+            for (const r of document.querySelectorAll('input[name="closeSama"]')) r.checked = false;
+            document.getElementById('closeError').classList.add('hidden');
+            document.getElementById('closeSamaSection').style.display = (severity === 'P1' || severity === 'P2') ? 'block' : 'none';
+            document.getElementById('closeModal').classList.add('active');
+        }
+
+        function closeCloseModal() {
+            document.getElementById('closeModal').classList.remove('active');
+        }
+
+        async function submitCloseForm(event) {
+            event.preventDefault();
+            const idRef = document.getElementById('closeIncidentId').value;
+            const samaRadio = document.querySelector('input[name="closeSama"]:checked');
+            const isCritical = closeTargetSeverity === 'P1' || closeTargetSeverity === 'P2';
+            const errBox = document.getElementById('closeError');
+            errBox.classList.add('hidden');
+            if (isCritical && !samaRadio) {
+                errBox.textContent = 'sama_reported value is required for P1/P2 incidents.';
+                errBox.classList.remove('hidden');
+                return;
+            }
+            const payload = {
+                resolution_date: document.getElementById('closeResolutionDate').value || null,
+                root_cause: document.getElementById('closeRootCause').value.trim() || null,
+            };
+            if (samaRadio) payload.sama_reported = samaRadio.value === 'true';
+            try {
+                const res = await fetch('/api/fraud/incidents/' + encodeURIComponent(idRef) + '/close', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    throw new Error(body.error || 'HTTP ' + res.status);
+                }
+                closeCloseModal();
+                await loadIncidents();
+            } catch (err) {
+                errBox.textContent = 'Close failed: ' + err.message;
+                errBox.classList.remove('hidden');
+            }
+        }
+
+        window.loadIncidents = loadIncidents;
+        window.applyIncidentFilters = applyIncidentFilters;
+        window.clearIncidentFilters = clearIncidentFilters;
+        window.setTab = setTab;
+        window.openIncidentWizard = openIncidentWizard;
+        window.closeWizard = closeWizard;
+        window.wizardPrev = wizardPrev;
+        window.wizardNextOrSubmit = wizardNextOrSubmit;
+        window.submitIncidentWizard = submitIncidentWizard;
+        window.openCloseModal = openCloseModal;
+        window.closeCloseModal = closeCloseModal;
+        window.submitCloseForm = submitCloseForm;
+
+        document.addEventListener('DOMContentLoaded', loadIncidents);
+    </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

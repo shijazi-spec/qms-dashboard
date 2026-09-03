@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg - Country Risk Assessment</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .rate-low { background-color: #D1FAE5; color: #047857; }
+        .rate-medium { background-color: #FEF3C7; color: #92400E; }
+        .rate-high { background-color: #FFEDD5; color: #C2410C; }
+        .rate-critical { background-color: #FEE2E2; color: #B91C1C; }
+        .fatf-no_action { color: #047857; }
+        .fatf-increased_monitoring { color: #C2410C; font-weight: 600; }
+        .fatf-high_risk_grey_list { color: #B91C1C; font-weight: 600; }
+        .fatf-black_list { color: #B91C1C; font-weight: 700; text-transform: uppercase; }
+        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('fraud-country-risk');
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Country Risk Assessment</h1>
+                <p class="text-sm text-gray-500 mt-1">PRD-FRD-001 Feature 3 — FATF status, ratings, BIN approvals, EDD requirements</p>
+            </div>
+            <div class="flex gap-3 items-center">
+                <button data-on-click="loadCountries" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.<REDACTED_PHONE> 9m0 0H9m11 11v-5h-.581m0 0a8.<REDACTED_PHONE>-2m15.357 2H15"/></svg>
+                    Refresh
+                </button>
+                <button data-on-click="openCountryModal" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Add Country
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm text-gray-500">Total Countries</div>
+                <div id="cardCountTotal" class="text-2xl font-bold text-gray-900">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-green-600">
+                <div class="text-sm text-gray-500">Low Risk</div>
+                <div id="cardCountLow" class="text-2xl font-bold text-green-600">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-amber-500">
+                <div class="text-sm text-gray-500">Medium / EDD</div>
+                <div id="cardCountMed" class="text-2xl font-bold text-amber-500">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-orange-500">
+                <div class="text-sm text-gray-500">High Risk</div>
+                <div id="cardCountHigh" class="text-2xl font-bold text-orange-500">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-red-600">
+                <div class="text-sm text-gray-500">FATF Black-list</div>
+                <div id="cardCountBlack" class="text-2xl font-bold text-red-600">—</div>
+            </div>
+        </div>
+
+        <!-- FATF black-list banner -->
+        <div id="blackListBanner" class="hidden mb-6 bg-red-50 border-s-4 border-red-600 rounded-lg p-4">
+            <div class="flex items-start gap-3">
+                <svg class="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 <REDACTED_PHONE>.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"/></svg>
+                <div class="flex-1">
+                    <h3 class="text-sm font-semibold text-red-900">FATF Black-list — All BINs PERMANENTLY BLOCKED</h3>
+                    <p class="text-sm text-red-800 mt-1" id="blackListText"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">FATF Status</label>
+                <select id="filterFatf" data-on-change="applyCountryFilters" class="border rounded-lg px-3 py-1.5 text-sm">
+                    <option value="">All</option>
+                    <option value="no_action">No Action</option>
+                    <option value="increased_monitoring">Increased Monitoring</option>
+                    <option value="high_risk_grey_list">Grey List (High Risk)</option>
+                    <option value="black_list">BLACK LIST</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Risk Rating</label>
+                <select id="filterRating" data-on-change="applyCountryFilters" class="border rounded-lg px-3 py-1.5 text-sm">
+                    <option value="">All</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">EDD</label>
+                <select id="filterEdd" data-on-change="applyCountryFilters" class="border rounded-lg px-3 py-1.5 text-sm">
+                    <option value="">All</option>
+                    <option value="true">Required</option>
+                    <option value="false">Not Required</option>
+                </select>
+            </div>
+            <button data-on-click="clearCountryFilters" class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Clear</button>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">ISO</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Country</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">FATF Status</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Rating</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">BIN</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-semibold text-gray-600">EDD</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Conditions</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="countriesTableBody" class="divide-y divide-gray-200 text-sm"></tbody>
+                </table>
+            </div>
+            <div id="countriesEmpty" class="hidden p-12 text-center text-gray-400">No countries match the current filters.</div>
+            <div id="countriesLoading" class="p-12 text-center text-gray-400">Loading…</div>
+        </div>
+    </main>
+
+    <!-- Add/Edit modal -->
+    <div id="countryModal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 id="countryModalTitle" class="text-lg font-bold text-gray-900">Add Country</h2>
+                <button data-on-click="closeCountryModal" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <form data-on-submit="submitCountryForm" class="p-6 space-y-4">
+                <input type="hidden" id="countryEditIso" value="">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ISO Code (2 letters) *</label>
+                        <input type="text" id="cfIso" required maxlength="2" class="w-full border rounded-lg px-3 py-2 uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Country Name *</label>
+                        <input type="text" id="cfName" required class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">FATF Status *</label>
+                        <select id="cfFatf" required data-on-change="onFatfChange" class="w-full border rounded-lg px-3 py-2">
+                            <option value="no_action">No Action</option>
+                            <option value="increased_monitoring">Increased Monitoring</option>
+                            <option value="high_risk_grey_list">Grey List (High Risk)</option>
+                            <option value="black_list">BLACK LIST</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Risk Rating *</label>
+                        <select id="cfRating" required class="w-full border rounded-lg px-3 py-2">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">BIN Status *</label>
+                        <select id="cfBin" required class="w-full border rounded-lg px-3 py-2">
+                            <option value="approved">Approved</option>
+                            <option value="approved_with_edd">Approved with EDD</option>
+                            <option value="not_approved">Not Approved</option>
+                            <option value="permanently_blocked">Permanently Blocked</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end gap-2">
+                        <input type="checkbox" id="cfEdd" class="rounded border-gray-300 mb-2">
+                        <label for="cfEdd" class="text-sm text-gray-700 mb-2">EDD required</label>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Expat Population</label>
+                    <input type="text" id="cfExpat" class="w-full border rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Special Conditions</label>
+                    <textarea id="cfConditions" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
+                </div>
+                <div id="cfBlackListLock" class="hidden bg-red-50 border-s-4 border-red-500 p-3 rounded text-sm text-red-900">
+                    <strong>FATF black-list:</strong> rating and BIN status will be auto-locked to <code>critical</code> / <code>permanently_blocked</code> on save (cannot be overridden).
+                </div>
+                <div id="cfError" class="hidden text-sm text-red-600"></div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" data-on-click="closeCountryModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let allCountries = [];
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        async function loadCountries() {
+            const empty = document.getElementById('countriesEmpty');
+            const loading = document.getElementById('countriesLoading');
+            const tbody = document.getElementById('countriesTableBody');
+            empty.classList.add('hidden');
+            loading.classList.remove('hidden');
+            tbody.innerHTML = '';
+            try {
+                const res = await fetch('/api/fraud/countries', { credentials: 'include' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                allCountries = Array.isArray(data.countries) ? data.countries : [];
+                applyCountryFilters();
+                renderCountrySummary();
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-red-600">Failed to load: ' + escapeHtml(err.message) + '</td></tr>';
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        function applyCountryFilters() {
+            const fatf = document.getElementById('filterFatf').value;
+            const rating = document.getElementById('filterRating').value;
+            const edd = document.getElementById('filterEdd').value;
+            let list = allCountries;
+            if (fatf) list = list.filter(c => c.fatf_status === fatf);
+            if (rating) list = list.filter(c => c.risk_rating === rating);
+            if (edd === 'true') list = list.filter(c => c.edd_required === true);
+            if (edd === 'false') list = list.filter(c => c.edd_required === false);
+            renderCountryTable(list);
+        }
+
+        function clearCountryFilters() {
+            document.getElementById('filterFatf').value = '';
+            document.getElementById('filterRating').value = '';
+            document.getElementById('filterEdd').value = '';
+            applyCountryFilters();
+        }
+
+        function renderCountrySummary() {
+            document.getElementById('cardCountTotal').textContent = String(allCountries.length);
+            document.getElementById('cardCountLow').textContent = String(allCountries.filter(c => c.risk_rating === 'low').length);
+            document.getElementById('cardCountMed').textContent = String(allCountries.filter(c => c.risk_rating === 'medium').length);
+            document.getElementById('cardCountHigh').textContent = String(allCountries.filter(c => c.risk_rating === 'high').length);
+            const blacks = allCountries.filter(c => c.fatf_status === 'black_list');
+            document.getElementById('cardCountBlack').textContent = String(blacks.length);
+            const banner = document.getElementById('blackListBanner');
+            const txt = document.getElementById('blackListText');
+            if (blacks.length === 0) {
+                banner.classList.add('hidden');
+            } else {
+                banner.classList.remove('hidden');
+                txt.textContent = blacks.map(b => b.country_name).join(', ');
+            }
+        }
+
+        function renderCountryTable(list) {
+            const tbody = document.getElementById('countriesTableBody');
+            const empty = document.getElementById('countriesEmpty');
+            if (list.length === 0) {
+                tbody.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+            tbody.innerHTML = list.map(c => {
+                const ref = c.public_id || c.iso_code;
+                return '<tr class="hover:bg-gray-50">' +
+                    '<td class="px-3 py-2 font-mono text-xs">' + escapeHtml(c.iso_code) + '</td>' +
+                    '<td class="px-3 py-2">' + escapeHtml(c.country_name) + '</td>' +
+                    '<td class="px-3 py-2 text-xs"><span class="fatf-' + c.fatf_status + '">' + escapeHtml(c.fatf_status.replace(/_/g, ' ')) + '</span></td>' +
+                    '<td class="px-3 py-2"><span class="rate-' + c.risk_rating + ' text-xs px-2 py-1 rounded font-medium">' + escapeHtml(c.risk_rating) + '</span></td>' +
+                    '<td class="px-3 py-2 text-xs">' + escapeHtml((c.bin_status || '').replace(/_/g, ' ')) + '</td>' +
+                    '<td class="px-3 py-2 text-center text-xs">' + (c.edd_required ? '<span class="text-orange-600 font-semibold">Yes</span>' : '<span class="text-gray-400">No</span>') + '</td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(c.special_conditions || '') + '</td>' +
+                    '<td class="px-3 py-2 text-end">' +
+                        '<button data-on-click="editCountry" data-args=\'["' + escapeHtml(ref) + '"]\' class="text-blue-600 hover:underline text-xs">Edit</button>' +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        function openCountryModal() {
+            document.getElementById('countryModalTitle').textContent = 'Add Country';
+            document.getElementById('countryEditIso').value = '';
+            document.getElementById('cfIso').value = '';
+            document.getElementById('cfIso').disabled = false;
+            document.getElementById('cfName').value = '';
+            document.getElementById('cfFatf').value = 'no_action';
+            document.getElementById('cfRating').value = 'low';
+            document.getElementById('cfBin').value = 'approved';
+            document.getElementById('cfEdd').checked = false;
+            document.getElementById('cfExpat').value = '';
+            document.getElementById('cfConditions').value = '';
+            document.getElementById('cfError').classList.add('hidden');
+            document.getElementById('cfBlackListLock').classList.add('hidden');
+            document.getElementById('countryModal').classList.add('active');
+        }
+
+        function editCountry(ref) {
+            const c = allCountries.find(x => String(x.public_id) === String(ref) || String(x.iso_code) === String(ref));
+            if (!c) { alert('Country not found'); return; }
+            document.getElementById('countryModalTitle').textContent = 'Edit ' + c.country_name;
+            document.getElementById('countryEditIso').value = c.iso_code;
+            document.getElementById('cfIso').value = c.iso_code;
+            document.getElementById('cfIso').disabled = true;
+            document.getElementById('cfName').value = c.country_name;
+            document.getElementById('cfFatf').value = c.fatf_status;
+            document.getElementById('cfRating').value = c.risk_rating;
+            document.getElementById('cfBin').value = c.bin_status;
+            document.getElementById('cfEdd').checked = !!c.edd_required;
+            document.getElementById('cfExpat').value = c.expat_population || '';
+            document.getElementById('cfConditions').value = c.special_conditions || '';
+            document.getElementById('cfError').classList.add('hidden');
+            onFatfChange();
+            document.getElementById('countryModal').classList.add('active');
+        }
+
+        function closeCountryModal() {
+            document.getElementById('countryModal').classList.remove('active');
+            document.getElementById('cfIso').disabled = false;
+        }
+
+        function onFatfChange() {
+            const v = document.getElementById('cfFatf').value;
+            const lock = document.getElementById('cfBlackListLock');
+            if (v === 'black_list') {
+                lock.classList.remove('hidden');
+                document.getElementById('cfRating').value = 'critical';
+                document.getElementById('cfBin').value = 'permanently_blocked';
+            } else {
+                lock.classList.add('hidden');
+            }
+        }
+
+        async function submitCountryForm(event) {
+            event.preventDefault();
+            const editIso = document.getElementById('countryEditIso').value;
+            const payload = {
+                iso_code: document.getElementById('cfIso').value.trim().toUpperCase(),
+                country_name: document.getElementById('cfName').value.trim(),
+                fatf_status: document.getElementById('cfFatf').value,
+                risk_rating: document.getElementById('cfRating').value,
+                bin_status: document.getElementById('cfBin').value,
+                edd_required: document.getElementById('cfEdd').checked,
+                expat_population: document.getElementById('cfExpat').value.trim() || null,
+                special_conditions: document.getElementById('cfConditions').value.trim() || null,
+            };
+            const errBox = document.getElementById('cfError');
+            errBox.classList.add('hidden');
+            try {
+                let res;
+                if (editIso) {
+                    res = await fetch('/api/fraud/countries/' + encodeURIComponent(editIso), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify(payload),
+                    });
+                } else {
+                    res = await fetch('/api/fraud/countries', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify(payload),
+                    });
+                }
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    throw new Error(body.error || 'HTTP ' + res.status);
+                }
+                closeCountryModal();
+                await loadCountries();
+            } catch (err) {
+                errBox.textContent = 'Save failed: ' + err.message;
+                errBox.classList.remove('hidden');
+            }
+        }
+
+        window.loadCountries = loadCountries;
+        window.applyCountryFilters = applyCountryFilters;
+        window.clearCountryFilters = clearCountryFilters;
+        window.openCountryModal = openCountryModal;
+        window.closeCountryModal = closeCountryModal;
+        window.editCountry = editCountry;
+        window.onFatfChange = onFatfChange;
+        window.submitCountryForm = submitCountryForm;
+
+        document.addEventListener('DOMContentLoaded', loadCountries);
+    </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

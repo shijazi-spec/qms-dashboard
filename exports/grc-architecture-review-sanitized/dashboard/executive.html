@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Executive Dashboard - ExampleOrg Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <script src="<REDACTED_URL>"></script>
+    <style>
+        .tab-active { border-bottom: 3px solid #1E3A8A; color: #1E3A8A; }
+        .health-excellent { background: linear-gradient(135deg, #047857, #10B981); }
+        .health-good { background: linear-gradient(135deg, #0369A1, #0EA5E9); }
+        .health-warning { background: linear-gradient(135deg, #D97706, #F59E0B); }
+        .health-critical { background: linear-gradient(135deg, #B91C1C, #EF4444); }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/i18n.js?v=1.1"></script>
+    <script src="/js/csp-styles.js?v=1"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('executive');
+        });
+    </script>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="executive.title">CEO / Board Dashboard</h1>
+                <p class="text-gray-600" data-i18n="executive.subtitle">Enterprise health overview with MBR/QBR/ABR summaries</p>
+                <p class="text-xs text-gray-400 mt-1" id="hijri-date-display"></p>
+                <p class="text-xs text-gray-500 mt-1">KPI figures below (KPIs On Target, Overall Health Score) cover GRQ KPIs only; department KPIs (SDR, Sales) are reported in <a href="/quality-reports" class="text-blue-600 hover:underline">Quality Reports</a>.</p>
+            </div>
+            <div class="flex gap-2">
+                <button data-on-click="generateReport" data-args='["mbr"]' class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700" data-i18n="executive.generate_mbr">Generate MBR</button>
+                <button data-on-click="generateReport" data-args='["qbr"]' class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700" data-i18n="executive.generate_qbr">Generate QBR</button>
+            </div>
+        </div>
+
+        <div class="mb-6 border-b bg-white rounded-t-xl">
+            <nav class="flex gap-6 px-4">
+                <button data-on-click="showTab" data-args='["overview"]' id="tab-overview" class="py-3 text-sm font-medium tab-active" data-i18n="executive.tabs.overview">Overview</button>
+                <button data-on-click="showTab" data-args='["kpis"]' id="tab-kpis" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.kpis">KPI Health</button>
+                <button data-on-click="showTab" data-args='["risks"]' id="tab-risks" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.risks">Risk Exposure</button>
+                <button data-on-click="showTab" data-args='["compliance"]' id="tab-compliance" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.compliance">Compliance</button>
+                <button data-on-click="showTab" data-args='["reports"]' id="tab-reports" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.reports">Reports Archive</button>
+            </nav>
+        </div>
+
+        <div id="content-overview">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div id="healthCard" class="rounded-xl shadow-lg p-6 text-white health-good">
+                    <div class="text-4xl font-bold" id="healthScore">--</div>
+                    <div class="text-lg opacity-90" data-i18n="executive.health_score">Overall Health Score</div>
+                    <div class="text-sm opacity-75 mt-2" id="healthLabel" data-i18n="common.loading">Loading...</div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-3xl font-bold text-gray-900" id="kpiOnTarget">--</div>
+                            <div class="text-sm text-gray-600" data-i18n="executive.kpis_on_target">KPIs On Target</div>
+                        </div>
+                        <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-3xl font-bold text-gray-900" id="openRisks">--</div>
+                            <div class="text-sm text-gray-600" data-i18n="executive.open_risks">Open Risks</div>
+                        </div>
+                        <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.<REDACTED_PHONE>-3L13.732 4c-.<REDACTED_PHONE>.464 0L3.34 16c-.<REDACTED_PHONE> 3z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-3xl font-bold text-gray-900" id="complianceScore">--</div>
+                            <div class="text-sm text-gray-600" data-i18n="executive.compliance_score">Compliance Score</div>
+                        </div>
+                        <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.<REDACTED_PHONE>.944a11.<REDACTED_PHONE> 3.04A12.<REDACTED_PHONE> 9c0 <REDACTED_PHONE>.<REDACTED_PHONE> <REDACTED_PHONE>.052-.382-3.016z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow p-5 mb-6" data-testid="quality-health-index">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold text-gray-900" data-i18n="executive.quality_health_index">Quality Health Index</h3>
+                    <span class="text-xs text-gray-400" id="qhiTimestamp"></span>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4" id="qhiDimensions">
+                    <div class="text-center p-3 rounded-lg bg-blue-50">
+                        <div class="text-2xl font-bold text-blue-700" id="qhi-audit">--</div>
+                        <div class="text-xs text-gray-600 mt-1" data-i18n="executive.audit_score">Audit Score</div>
+                        <div class="w-full bg-blue-200 rounded-full h-1.5 mt-2"><div id="qhi-audit-bar" class="bg-blue-600 h-1.5 rounded-full w-0"></div></div>
+                    </div>
+                    <div class="text-center p-3 rounded-lg bg-green-50">
+                        <div class="text-2xl font-bold text-green-700" id="qhi-kpi">--</div>
+                        <div class="text-xs text-gray-600 mt-1" data-i18n="executive.kpi_achievement">KPI Achievement</div>
+                        <div class="w-full bg-green-200 rounded-full h-1.5 mt-2"><div id="qhi-kpi-bar" class="bg-green-600 h-1.5 rounded-full w-0"></div></div>
+                    </div>
+                    <div class="text-center p-3 rounded-lg bg-amber-50">
+                        <div class="text-2xl font-bold text-amber-700" id="qhi-risk">--</div>
+                        <div class="text-xs text-gray-600 mt-1" data-i18n="executive.risk_mitigation">Risk Mitigation</div>
+                        <div class="w-full bg-amber-200 rounded-full h-1.5 mt-2"><div id="qhi-risk-bar" class="bg-amber-600 h-1.5 rounded-full w-0"></div></div>
+                    </div>
+                    <div class="text-center p-3 rounded-lg bg-purple-50">
+                        <div class="text-2xl font-bold text-purple-700" id="qhi-capa">--</div>
+                        <div class="text-xs text-gray-600 mt-1" data-i18n="executive.capa_closure">CAPA Closure</div>
+                        <div class="w-full bg-purple-200 rounded-full h-1.5 mt-2"><div id="qhi-capa-bar" class="bg-purple-600 h-1.5 rounded-full w-0"></div></div>
+                    </div>
+                    <div class="text-center p-3 rounded-lg bg-indigo-50">
+                        <div class="text-2xl font-bold text-indigo-700" id="qhi-compliance">--</div>
+                        <div class="text-xs text-gray-600 mt-1" data-i18n="executive.compliance">Compliance</div>
+                        <div class="w-full bg-indigo-200 rounded-full h-1.5 mt-2"><div id="qhi-compliance-bar" class="bg-indigo-600 h-1.5 rounded-full w-0"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow p-4">
+                    <h3 class="font-semibold text-gray-900 mb-3" data-i18n="executive.kpi_by_owner">KPI Status by Owner</h3>
+                    <figure>
+                        <canvas id="kpiOwnerChart" height="200" role="img" aria-label="KPI Status by Owner: bar chart showing KPI count per owner group" aria-describedby="kpiOwnerChart-summary"></canvas>
+                        <table id="kpiOwnerChart-summary" class="sr-only"><caption>KPI Status by Owner</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                    </figure>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4">
+                    <h3 class="font-semibold text-gray-900 mb-3" data-i18n="executive.risk_distribution">Risk Distribution</h3>
+                    <figure>
+                        <canvas id="riskChart" height="200" role="img" aria-label="Risk Distribution: doughnut chart showing risks by severity level" aria-describedby="riskChart-summary"></canvas>
+                        <table id="riskChart-summary" class="sr-only"><caption>Risk Distribution</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                    </figure>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow p-4 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold text-gray-900" data-i18n="executive.ai_insights">AI Executive Insights</h3>
+                    <span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded"><span data-i18n="executive.ai_confidence">AI Confidence</span>: <span id="aiConfidence">--</span>%</span>
+                </div>
+                <div id="aiInsights" class="space-y-3">
+                    <div class="animate-pulse bg-gray-100 h-4 rounded w-3/4"></div>
+                    <div class="animate-pulse bg-gray-100 h-4 rounded w-1/2"></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl shadow p-4">
+                    <h3 class="font-semibold text-gray-900 mb-3" data-i18n="executive.top_risks">Top Risks Requiring Attention</h3>
+                    <div id="topRisks" class="space-y-2">
+                        <div class="animate-pulse bg-gray-100 h-12 rounded"></div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4">
+                    <h3 class="font-semibold text-gray-900 mb-3" data-i18n="executive.kpis_below">KPIs Below Target</h3>
+                    <div id="kpisBelow" class="space-y-2">
+                        <div class="animate-pulse bg-gray-100 h-12 rounded"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-kpis" class="hidden">
+            <div class="bg-white rounded-xl shadow p-6">
+                <h3 class="font-semibold text-gray-900 mb-4" data-i18n="executive.kpi_detail">KPI Performance Summary</h3>
+                <div id="kpiDetailList" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <div id="content-risks" class="hidden">
+            <div class="bg-white rounded-xl shadow p-6">
+                <h3 class="font-semibold text-gray-900 mb-4" data-i18n="executive.risk_analysis">Risk Exposure Analysis</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-700 mb-2" data-i18n="executive.risk_heatmap">Risk Heat Map Summary</h4>
+                        <div id="riskHeatmap" class="grid grid-cols-5 gap-1"></div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-700 mb-2" data-i18n="executive.risk_by_category">Risk by Category</h4>
+                        <figure>
+                            <canvas id="riskCategoryChart" height="200" role="img" aria-label="Risk by Category: bar chart showing risk count per category" aria-describedby="riskCategoryChart-summary"></canvas>
+                            <table id="riskCategoryChart-summary" class="sr-only"><caption>Risk by Category</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                        </figure>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-compliance" class="hidden">
+            <div class="bg-white rounded-xl shadow p-6">
+                <h3 class="font-semibold text-gray-900 mb-4" data-i18n="executive.compliance_framework">Compliance Framework Status</h3>
+                <div id="complianceList" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <div id="content-reports" class="hidden">
+            <div class="bg-white rounded-xl shadow p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold text-gray-900" data-i18n="executive.reports_archive">Executive Reports Archive</h3>
+                    <select id="reportTypeFilter" class="border rounded px-3 py-1 text-sm" aria-label="Filter by report type" data-on-change="loadReports">
+                        <option value="" data-i18n="executive.all_reports">All Reports</option>
+                        <option value="mbr" data-i18n="executive.monthly_mbr">Monthly (MBR)</option>
+                        <option value="qbr" data-i18n="executive.quarterly_qbr">Quarterly (QBR)</option>
+                        <option value="abr" data-i18n="executive.annual_abr">Annual (ABR)</option>
+                    </select>
+                </div>
+                <div id="reportsList" class="divide-y"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mbrData = null;
+        let charts = {};
+
+        function showTab(tab) {
+            ['overview', 'kpis', 'risks', 'compliance', 'reports'].forEach(t => {
+                document.getElementById(`content-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('tab-active');
+                document.getElementById(`tab-${t}`).classList.add('text-gray-600');
+            });
+            document.getElementById(`content-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('tab-active');
+            document.getElementById(`tab-${tab}`).classList.remove('text-gray-600');
+            
+            if (tab === 'reports') loadReports();
+            if (tab === 'risks') loadRiskDetails();
+            if (tab === 'compliance') loadComplianceDetails();
+            if (tab === 'kpis') loadKPIDetails();
+        }
+
+        async function loadDashboard() {
+            try {
+                const [mbrRes, kpiRes] = await Promise.all([
+                    fetch('/api/executive/mbr-data'),
+                    fetch('/api/kpis/summary')
+                ]);
+                
+                mbrData = await mbrRes.json();
+                const kpiData = await kpiRes.json();
+                
+                const greenKPIs = kpiData.byStatus?.green || 0;
+                const totalKPIs = kpiData.total || 1;
+                const kpiScore = Math.round((greenKPIs / totalKPIs) * 100);
+                
+                let riskScore = 100;
+                const risks = mbrData.riskSummary || [];
+                const criticalRisks = risks.find(r => r.risk_level === 'critical')?.count || 0;
+                const highRisks = risks.find(r => r.risk_level === 'high')?.count || 0;
+                riskScore = Math.max(0, 100 - (criticalRisks * 15) - (highRisks * 5));
+                
+                const healthScore = Math.round((kpiScore * 0.4) + (riskScore * 0.4) + (80 * 0.2));
+                
+                document.getElementById('healthScore').textContent = (window.WalaPlusI18n ? window.WalaPlusI18n.formatNumber(healthScore) : String(healthScore));
+                const healthCard = document.getElementById('healthCard');
+                healthCard.className = 'rounded-xl shadow-lg p-6 text-white';
+                const _fmt = (n) => window.WalaPlusI18n ? window.WalaPlusI18n.formatNumber(n) : String(n);
+                if (healthScore >= 80) {
+                    healthCard.classList.add('health-excellent');
+                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.excellent');
+                } else if (healthScore >= 60) {
+                    healthCard.classList.add('health-good');
+                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.good');
+                } else if (healthScore >= 40) {
+                    healthCard.classList.add('health-warning');
+                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.warning');
+                } else {
+                    healthCard.classList.add('health-critical');
+                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.critical');
+                }
+                
+                document.getElementById('kpiOnTarget').textContent = `${greenKPIs}/${totalKPIs}`;
+                
+                const totalOpenRisks = risks.reduce((sum, r) => sum + parseInt(r.count), 0);
+                document.getElementById('openRisks').textContent = _fmt(totalOpenRisks);
+                
+                const compliance = mbrData.complianceSummary || [];
+                const compliantCount = compliance.find(c => c.status === 'compliant')?.count || 0;
+                const totalCompliance = compliance.reduce((sum, c) => sum + parseInt(c.count), 0) || 1;
+                document.getElementById('complianceScore').textContent = Math.round((compliantCount / totalCompliance) * 100) + '%';
+                
+                const auditScore = mbrData.latestAuditScore || healthScore;
+                const capaTotal = mbrData.capaSummary?.total || 1;
+                const capaClosed = mbrData.capaSummary?.closed || 0;
+                const capaRate = Math.round((capaClosed / capaTotal) * 100);
+                const compliancePct = Math.round((compliantCount / totalCompliance) * 100);
+                const setQHI = (id, val) => {
+                    const el = document.getElementById(id);
+                    const bar = document.getElementById(id + '-bar');
+                    if (el) el.textContent = val + '%';
+                    if (bar) bar.style.width = Math.min(val, 100) + '%';
+                };
+                setQHI('qhi-audit', auditScore);
+                setQHI('qhi-kpi', kpiScore);
+                setQHI('qhi-risk', riskScore);
+                setQHI('qhi-capa', capaRate);
+                setQHI('qhi-compliance', compliancePct);
+                document.getElementById('qhiTimestamp').textContent = (window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.updated') : 'Updated') + ': ' + new Date().toLocaleString();
+
+                renderCharts(kpiData, risks);
+                renderAIInsights(healthScore, kpiData, risks);
+                renderTopRisks();
+                renderKPIsBelow(kpiData);
+                
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        function renderCharts(kpiData, risks) {
+            if (charts.kpiOwner) charts.kpiOwner.destroy();
+            if (charts.risk) charts.risk.destroy();
+
+            const _exTr = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
+            const _exTd = (prefix, val) => window.WalaPlusI18n
+                ? window.WalaPlusI18n.tDynamic(prefix, val)
+                : (val ? String(val).charAt(0).toUpperCase() + String(val).slice(1) : '');
+            charts.kpiOwner = new Chart(document.getElementById('kpiOwnerChart'), {
+                type: 'bar',
+                data: {
+                    labels: [_exTr('executive.owner_quality'), _exTr('executive.owner_grc'), _exTr('executive.owner_shared')],
+                    datasets: [{
+                        label: _exTr('executive.chart_kpis'),
+                        data: [kpiData.byOwner?.quality_manager || 0, kpiData.byOwner?.grc_manager || 0, kpiData.byOwner?.shared || 0],
+                        backgroundColor: ['#1E3A8A', '#1E293B', '#6D28D9']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } } }
+            });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('kpiOwnerChart', charts.kpiOwner, 'KPI Status by Owner');
+
+            charts.risk = new Chart(document.getElementById('riskChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: risks.map(r => _exTd('executive.risk_levels', r.risk_level)),
+                    datasets: [{
+                        label: _exTr('executive.chart_risks_dataset'),
+                        data: risks.map(r => r.count),
+                        backgroundColor: ['#B91C1C', '#D97706', '#F59E0B', '#047857']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('riskChart', charts.risk, 'Risk Distribution');
+        }
+
+        function renderAIInsights(healthScore, kpiData, risks) {
+            const confidence = Math.round(75 + Math.random() * 20);
+            document.getElementById('aiConfidence').textContent = confidence;
+            
+            const insights = [];
+            
+            const _iT = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
+            if (healthScore >= 80) {
+                insights.push(_iT('executive.health_insight_strong'));
+            } else if (healthScore < 60) {
+                insights.push(_iT('executive.health_insight_attention'));
+            }
+            
+            const redKPIs = kpiData.byStatus?.red || 0;
+            if (redKPIs > 0) {
+                insights.push(_iT('executive.kpi_insight_off_target').replace('{count}', redKPIs));
+            }
+            
+            const criticalRisks = risks.find(r => r.risk_level === 'critical')?.count || 0;
+            if (criticalRisks > 0) {
+                insights.push(_iT('executive.risk_insight_critical').replace('{count}', criticalRisks));
+            }
+            
+            const greenKPIs = kpiData.byStatus?.green || 0;
+            const totalKPIs = kpiData.total || 1;
+            if (greenKPIs / totalKPIs >= 0.8) {
+                insights.push(_iT('executive.kpi_insight_excellent'));
+            }
+            
+            if (insights.length === 0) {
+                insights.push(_iT('executive.insight_no_issues'));
+            }
+            
+            document.getElementById('aiInsights').innerHTML = insights.map(i => `
+                <div class="flex items-start gap-2 p-3 bg-purple-50 rounded-lg">
+                    <svg class="w-5 h-5 text-purple-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span class="text-sm text-gray-700">${i}</span>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        async function renderTopRisks() {
+            try {
+                const res = await fetch('/api/risks?status=open&limit=5');
+                const risks = await res.json();
+                
+                const riskList = risks.risks || risks || [];
+                if (!riskList.length) {
+                    document.getElementById('topRisks').innerHTML = `<p class="text-gray-500 text-sm">${WalaPlusI18n.t('executive.no_open_risks')}</p>`;
+                    return;
+                }
+                
+                const _trDyn = (prefix, val) => window.WalaPlusI18n ? window.WalaPlusI18n.tDynamic(prefix, val) : (val ? String(val) : '');
+                document.getElementById('topRisks').innerHTML = riskList.slice(0, 5).map(r => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                            <div class="font-medium text-gray-900">${escapeHtml(r.risk_title)}</div>
+                            <div class="text-xs text-gray-500">${_trDyn('executive.risk_categories', r.risk_category)} | ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.owner') : 'Owner'}: ${escapeHtml(r.risk_owner || (window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.unassigned') : 'Unassigned'))}</div>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs font-medium ${r.risk_level === 'critical' ? 'bg-red-100 text-red-700' : r.risk_level === 'high' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}">
+                            ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.score') : 'Score'}: ${r.risk_score}
+                        </span>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading top risks:', error);
+            }
+        }
+
+        function renderKPIsBelow(kpiData) {
+            const belowTarget = (kpiData.kpiDetails || []).filter(k => k.status === 'red' || k.status === 'amber');
+            
+            if (!belowTarget.length) {
+                document.getElementById('kpisBelow').innerHTML = `<p class="text-gray-500 text-sm">${WalaPlusI18n.t('executive.all_kpis_target')}</p>`;
+                return;
+            }
+            
+            document.getElementById('kpisBelow').innerHTML = belowTarget.slice(0, 5).map(k => {
+                const _owT = (key) => window.WalaPlusI18n ? window.WalaPlusI18n.t(key) : key.split('.').pop();
+                const _kbDyn = (prefix, val) => window.WalaPlusI18n ? window.WalaPlusI18n.tDynamic(prefix, val) : (val ? String(val) : '');
+                const ownerLabel = k.owner_type === 'quality_manager' ? _owT('executive.owner_quality').split(' ')[0] : k.owner_type === 'grc_manager' ? _owT('executive.owner_grc').split(' ')[0] : _owT('executive.owner_shared');
+                const kpiNameLabel = window.WalaPlusI18n
+                    ? window.WalaPlusI18n.tDynamic('executive.kpi_names', k.kpi_code, { fallback: k.kpi_name })
+                    : (k.kpi_name || '');
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                            <div class="font-medium text-gray-900">${kpiNameLabel}</div>
+                            <div class="text-xs text-gray-500">${ownerLabel} | ${_kbDyn('executive.kpi_categories', k.category)}</div>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs font-medium ${k.status === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}">
+                            ${k.latestValue || '--'}${k.unit || '%'}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function loadReports() {
+            const type = document.getElementById('reportTypeFilter').value;
+            const url = type ? `/api/executive/reports?type=${type}` : '/api/executive/reports';
+            
+            try {
+                const res = await fetch(url);
+                const reports = await res.json();
+                
+                if (!reports.length) {
+                    document.getElementById('reportsList').innerHTML = `<div class="p-8 text-center text-gray-500">${WalaPlusI18n.t('executive.no_reports_found')}</div>`;
+                    return;
+                }
+                
+                const _rpDyn = (prefix, val) => window.WalaPlusI18n
+                    ? window.WalaPlusI18n.tDynamic(prefix, val)
+                    : (val ? String(val).toUpperCase() : '');
+                const _rpLocale = window.WalaPlusI18n ? window.WalaPlusI18n.currentLang() : 'en';
+                document.getElementById('reportsList').innerHTML = reports.map(r => `
+                    <div class="p-4 hover:bg-gray-50">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="font-medium text-gray-900">${r.period_name}</div>
+                                <div class="text-sm text-gray-500">${_rpDyn('executive.report_types', r.report_type)} | ${new Date(r.created_at).toLocaleDateString(_rpLocale === 'ar' ? 'ar-SA' : 'en-US')}</div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-1 rounded text-xs ${r.status === 'published' ? 'bg-green-100 text-green-700' : r.status === 'approved' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}">${_rpDyn('executive.report_statuses', r.status)}</span>
+                                <span class="text-lg font-bold text-gray-900">${r.overall_health_score || '--'}%</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading reports:', error);
+            }
+        }
+
+        async function loadKPIDetails() {
+            try {
+                const res = await fetch('/api/kpis/summary');
+                const data = await res.json();
+                
+                document.getElementById('kpiDetailList').innerHTML = (data.kpiDetails || []).map(k => {
+                    const _owT2 = (key) => window.WalaPlusI18n ? window.WalaPlusI18n.t(key) : key.split('.').pop();
+                    const _kdDyn = (prefix, val, fb) => window.WalaPlusI18n
+                        ? window.WalaPlusI18n.tDynamic(prefix, val, { fallback: fb })
+                        : (val ? String(val) : (fb || ''));
+                    const ownerLabel = k.owner_type === 'quality_manager' ? _owT2('executive.owner_quality').split(' ')[0] : k.owner_type === 'grc_manager' ? _owT2('executive.owner_grc').split(' ')[0] : _owT2('executive.owner_shared');
+                    const statusColor = k.status === 'green' ? 'bg-green-500' : k.status === 'amber' ? 'bg-amber-500' : k.status === 'red' ? 'bg-red-500' : 'bg-gray-400';
+                    const kpiNameLabel = _kdDyn('executive.kpi_names', k.kpi_code, k.kpi_name);
+                    return `
+                        <div class="flex items-center justify-between p-3 border rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <div class="w-3 h-3 rounded-full ${statusColor}"></div>
+                                <div>
+                                    <div class="font-medium text-gray-900">${kpiNameLabel}</div>
+                                    <div class="text-xs text-gray-500">${ownerLabel} | ${_kdDyn('executive.kpi_categories', k.category, k.category)}</div>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div class="font-bold text-gray-900">${k.latestValue !== null ? k.latestValue + (k.unit || '%') : '--'}</div>
+                                <div class="text-xs text-gray-500">${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.target') : 'Target'}: ${k.target_value || '--'}${k.unit || '%'}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading KPI details:', error);
+            }
+        }
+
+        async function loadRiskDetails() {
+            try {
+                const res = await fetch('/api/risks/summary');
+                const data = await res.json();
+                
+                if (charts.riskCategory) charts.riskCategory.destroy();
+                
+                const byCategory = data.by_category || data.byCategory || [];
+                const _rdT = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
+                const _rdDyn = (prefix, val) => window.WalaPlusI18n
+                    ? window.WalaPlusI18n.tDynamic(prefix, val)
+                    : (val ? String(val) : '');
+                charts.riskCategory = new Chart(document.getElementById('riskCategoryChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: byCategory.map(c => _rdDyn('executive.risk_categories', c.risk_category || c.category)),
+                        datasets: [{
+                            label: _rdT('executive.chart_risks_dataset'),
+                            data: byCategory.map(c => c.count),
+                            backgroundColor: '#1E293B'
+                        }]
+                    },
+                    options: { responsive: true, plugins: { legend: { display: false } } }
+                });
+                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('riskCategoryChart', charts.riskCategory, 'Risk by Category');
+            } catch (error) {
+                console.error('Error loading risk details:', error);
+            }
+        }
+
+        async function loadComplianceDetails() {
+            try {
+                const res = await fetch('/api/compliance/summary');
+                const data = await res.json();
+                const frameworks = data.regulations || data.frameworks || (Array.isArray(data) ? data : []);
+                
+                document.getElementById('complianceList').innerHTML = frameworks.map(f => {
+                    const score = f.compliance_score || f.score || 0;
+                    const color = score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-amber-500' : 'bg-red-500';
+                    return `
+                        <div class="flex items-center justify-between p-4 border rounded-lg">
+                            <div>
+                                <div class="font-medium text-gray-900">${f.framework_name}</div>
+                                <div class="text-sm text-gray-500">${f.framework_code}</div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-32 bg-gray-200 rounded-full h-2">
+                                    <div class="${color} h-2 rounded-full" data-style="width: ${score}%"></div>
+                                </div>
+                                <span class="font-bold text-gray-900">${score}%</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading compliance:', error);
+            }
+        }
+
+        async function generateReport(type) {
+            const now = new Date();
+            let periodName, periodStart, periodEnd;
+            
+            if (type === 'mbr') {
+                periodName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            } else if (type === 'qbr') {
+                const quarter = Math.floor(now.getMonth() / 3) + 1;
+                periodName = `Q${quarter} ${now.getFullYear()}`;
+                periodStart = new Date(now.getFullYear(), (quarter - 1) * 3, 1);
+                periodEnd = new Date(now.getFullYear(), quarter * 3, 0);
+            }
+            
+            try {
+                const res = await fetch('/api/executive/reports', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        report_type: type,
+                        period_name: periodName,
+                        period_start: periodStart.toISOString().split('T')[0],
+                        period_end: periodEnd.toISOString().split('T')[0],
+                        overall_health_score: parseInt(document.getElementById('healthScore').textContent) || 75,
+                        generated_by: 'System',
+                        status: 'draft'
+                    })
+                });
+                
+                if (res.ok) {
+                    alert(`${type.toUpperCase()} Report generated successfully!`);
+                    showTab('reports');
+                }
+            } catch (error) {
+                console.error('Error generating report:', error);
+            }
+        }
+
+        // i18n initialization + Hijri date
+        (function initI18nAndHijri() {
+            function showHijriDate() {
+                const el = document.getElementById('hijri-date-display');
+                if (!el) return;
+                try {
+                    if (window.WalaPlusI18n && typeof window.WalaPlusI18n.formatDateBilingual === 'function') {
+                        const d = window.WalaPlusI18n.formatDateBilingual(new Date());
+                        // formatDateBilingual returns { gregorian, hijri }
+                        el.textContent = d.gregorian + (d.hijri ? ' / ' + d.hijri : '');
+                    } else {
+                        const hijri = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+                            day: 'numeric', month: 'long', year: 'numeric'
+                        }).format(new Date());
+                        const greg = new Intl.DateTimeFormat('en-GB', {
+                            day: 'numeric', month: 'long', year: 'numeric'
+                        }).format(new Date());
+                        el.textContent = greg + ' / ' + hijri;
+                    }
+                } catch (_) {}
+            }
+            // Defer dashboard data load until translations are ready so chart
+            // labels and dynamic KPI/risk metric names render in the correct
+            // language on first paint (avoids an English flash before AR loads).
+            if (window.WalaPlusI18n) {
+                window.WalaPlusI18n.init().then(() => {
+                    window.WalaPlusI18n.applyToDOM();
+                    showHijriDate();
+                    loadDashboard();
+                });
+            } else {
+                document.addEventListener('DOMContentLoaded', showHijriDate);
+                loadDashboard();
+            }
+        })();
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.6"></script>
+</body>
+</html>

@@ -1,0 +1,2473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>PMP Project Portfolio - ExampleOrg Quality Specialist</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <script src="<REDACTED_URL>"></script>
+    <link rel="stylesheet" href="<REDACTED_URL>">
+    <style>
+        .gantt-bar { transition: all 0.3s ease; }
+        .gantt-bar:hover { transform: scaleY(1.1); }
+        .risk-matrix-cell { transition: all 0.2s ease; cursor: pointer; }
+        .risk-matrix-cell:hover { transform: scale(1.05); }
+        .tab-active { border-bottom: 3px solid #2563EB; color: #2563EB; font-weight: 600; }
+        .project-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('projects');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="projects.title">PMP Project Portfolio</h1>
+                <p class="text-gray-500" data-i18n="projects.subtitle">Project Management Professional Framework</p>
+            </div>
+            <div class="flex gap-3">
+                <button data-on-click="openCharterGenerator" class="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                    <i class="fas fa-magic me-2"></i>AI Charter Generator
+                </button>
+                <button data-on-click="openScopeWizard" class="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    <i class="fas fa-clipboard-list me-2"></i><span data-i18n="projects.define_full_scope">Define Full Scope</span>
+                </button>
+                <button data-on-click="openProjectModal" class="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <i class="fas fa-plus me-2"></i><span data-i18n="projects.quick_project">Quick Project</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow-sm p-4 border-s-4 border-blue-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="projects.total_projects">Total Projects</p>
+                        <p class="text-2xl font-bold text-gray-900" id="totalProjects">0</p>
+                    </div>
+                    <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-folder text-blue-600"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-4 border-s-4 border-green-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="projects.avg_spi">Avg SPI</p>
+                        <p class="text-2xl font-bold text-gray-900" id="avgSPI">1.00</p>
+                    </div>
+                    <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-clock text-green-600"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-4 border-s-4 border-emerald-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="projects.avg_cpi">Avg CPI</p>
+                        <p class="text-2xl font-bold text-gray-900" id="avgCPI">1.00</p>
+                    </div>
+                    <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-dollar-sign text-emerald-600"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-4 border-s-4 border-amber-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">At Risk</p>
+                        <p class="text-2xl font-bold text-amber-600" id="atRisk">0</p>
+                    </div>
+                    <div class="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-exclamation-triangle text-amber-600"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-4 border-s-4 border-red-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500" data-i18n="projects.high_risks">High Risks</p>
+                        <p class="text-2xl font-bold text-red-600" id="highRisks">0</p>
+                    </div>
+                    <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-radiation text-red-600"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm mb-6">
+            <div class="border-b border-gray-200">
+                <nav class="flex gap-4 px-6 overflow-x-auto" id="mainTabs">
+                    <button data-on-click="switchMainTab" data-args="[&quot;portfolio&quot;]" class="py-4 px-1 text-sm font-medium tab-active whitespace-nowrap" data-tab="portfolio">
+                        <i class="fas fa-th-large me-2"></i><span data-i18n="projects.tab_portfolio">Portfolio</span>
+                    </button>
+                    <button data-on-click="switchMainTab" data-args="[&quot;analytics&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="analytics">
+                        <i class="fas fa-chart-pie me-2"></i><span data-i18n="projects.tab_analytics">Analytics</span>
+                    </button>
+                    <button data-on-click="switchMainTab" data-args="[&quot;risks&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="risks">
+                        <i class="fas fa-shield-alt me-2"></i><span data-i18n="projects.tab_risks2">Risks</span>
+                    </button>
+                    <button data-on-click="switchMainTab" data-args="[&quot;milestones&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="milestones">
+                        <i class="fas fa-flag-checkered me-2"></i><span data-i18n="projects.tab_milestones">Milestones</span>
+                    </button>
+                    <button data-on-click="switchMainTab" data-args="[&quot;stakeholders&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="stakeholders">
+                        <i class="fas fa-user-tie me-2"></i><span data-i18n="projects.tab_stakeholders">Stakeholders</span>
+                    </button>
+                    <button data-on-click="switchMainTab" data-args="[&quot;procurement&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="procurement">
+                        <i class="fas fa-file-contract me-2"></i><span data-i18n="projects.tab_procurement">Procurement</span>
+                    </button>
+                    <button data-on-click="switchMainTab" data-args="[&quot;changes&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="changes">
+                        <i class="fas fa-exchange-alt me-2"></i><span data-i18n="projects.tab_change_control">Change Control</span>
+                    </button>
+                </nav>
+            </div>
+
+            <div id="portfolioTab" class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex gap-3">
+                        <select id="statusFilter" data-on-change="loadProjects" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                            <option value="" data-i18n="common.all_status">All Status</option>
+                            <option value="initiation" data-i18n="projects.opt_initiation">Initiation</option>
+                            <option value="planning" data-i18n="projects.opt_planning">Planning</option>
+                            <option value="execution" data-i18n="projects.opt_execution">Execution</option>
+                            <option value="monitoring" data-i18n="projects.opt_monitoring">Monitoring</option>
+                            <option value="closing" data-i18n="projects.opt_closing">Closing</option>
+                            <option value="completed" data-i18n="projects.opt_completed">Completed</option>
+                            <option value="on_hold">On Hold</option>
+                        </select>
+                        <select id="priorityFilter" data-on-change="loadProjects" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                            <option value="" data-i18n="projects.all_priorities">All Priorities</option>
+                            <option value="critical" data-i18n="common.critical">Critical</option>
+                            <option value="high" data-i18n="common.high">High</option>
+                            <option value="medium" data-i18n="common.medium">Medium</option>
+                            <option value="low" data-i18n="common.low">Low</option>
+                        </select>
+                        <select id="deptFilter" data-on-change="loadProjects" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                            <option value="" data-i18n="projects.all_departments">All Departments</option>
+                            <option value="Quality Assurance" data-i18n="projects.dept_qa">Quality Assurance</option>
+                            <option value="Operations" data-i18n="projects.dept_operations">Operations</option>
+                            <option value="Sales" data-i18n="projects.dept_sales">Sales</option>
+                            <option value="IT">IT</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2">
+                        <button data-on-click="setViewMode" data-args="[&quot;cards&quot;]" id="cardsViewBtn" class="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg">
+                            <i class="fas fa-th-large"></i>
+                        </button>
+                        <button data-on-click="setViewMode" data-args="[&quot;table&quot;]" id="tableViewBtn" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                            <i class="fas fa-table"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="projectsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                <div id="projectsTable" class="hidden overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_project">Project</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.priority">Priority</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_progress">Progress</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_spi">SPI</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_cpi">CPI</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.due_date">Due Date</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions_label">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="projectsTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="analyticsTab" class="p-6 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="projects.sec_by_status">Projects by Status</h3>
+                        <canvas id="statusChart" height="200"></canvas>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="projects.sec_by_priority">Projects by Priority</h3>
+                        <canvas id="priorityChart" height="200"></canvas>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="projects.sec_budget">Budget Overview</h3>
+                        <canvas id="budgetChart" height="200"></canvas>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="projects.milestone_metrics">Milestone Metrics</h3>
+                        <canvas id="milestoneChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="risksTab" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold" data-i18n="projects.sec_risk_register">Risk Register</h3>
+                    <button data-on-click="openRiskModal" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                        <i class="fas fa-plus me-2"></i><span data-i18n="projects.add_risk">Add Risk</span>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_risk">Risk</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.category">Category</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_score">Score</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.owner">Owner</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions_label">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="risksTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-semibold mb-3" data-i18n="projects.risk_matrix">Risk Matrix</h4>
+                            <div id="riskMatrix" class="grid grid-cols-6 gap-1"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="milestonesTab" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold" data-i18n="projects.sec_milestones">Project Milestones Timeline</h3>
+                    <button data-on-click="openMilestoneModal" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        <i class="fas fa-plus me-2"></i><span data-i18n="projects.add_milestone">Add Milestone</span>
+                    </button>
+                </div>
+                <div id="ganttContainer" class="bg-gray-50 rounded-lg p-4 overflow-x-auto">
+                    <div id="ganttChart" class="min-w-full"></div>
+                </div>
+                <div class="mt-4 overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_milestone">Milestone</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_project">Project</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_planned">Planned</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_actual">Actual</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_variance">Variance</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="milestonesTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="stakeholdersTab" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold" data-i18n="projects.sec_stakeholders">Stakeholder Register</h3>
+                    <button data-on-click="openStakeholderModal" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                        <i class="fas fa-plus me-2"></i>Add Stakeholder
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_influence">Influence</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_interest">Interest</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_engagement">Engagement</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions_label">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stakeholdersTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-semibold mb-3" data-i18n="projects.power_interest">Power/Interest Grid</h4>
+                            <div id="powerInterestGrid" class="grid grid-cols-2 gap-2">
+                                <div class="bg-red-100 p-3 rounded-lg text-center">
+                                    <p class="text-xs font-semibold text-red-700" data-i18n="projects.manage_closely">Manage Closely</p>
+                                    <p class="text-lg font-bold text-red-800" id="manageClosely">0</p>
+                                </div>
+                                <div class="bg-amber-100 p-3 rounded-lg text-center">
+                                    <p class="text-xs font-semibold text-amber-700" data-i18n="projects.keep_satisfied">Keep Satisfied</p>
+                                    <p class="text-lg font-bold text-amber-800" id="keepSatisfied">0</p>
+                                </div>
+                                <div class="bg-blue-100 p-3 rounded-lg text-center">
+                                    <p class="text-xs font-semibold text-blue-700" data-i18n="projects.keep_informed">Keep Informed</p>
+                                    <p class="text-lg font-bold text-blue-800" id="keepInformed">0</p>
+                                </div>
+                                <div class="bg-green-100 p-3 rounded-lg text-center">
+                                    <p class="text-xs font-semibold text-green-700" data-i18n="projects.monitor">Monitor</p>
+                                    <p class="text-lg font-bold text-green-800" id="monitorStakeholders">0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Procurement Management Tab -->
+            <div id="procurementTab" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold" data-i18n="projects.sec_procurement">Procurement Management</h3>
+                    <button data-on-click="openProcurementModal" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">
+                        <i class="fas fa-plus me-2"></i>Add Procurement
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-blue-50 rounded-lg p-4 text-center">
+                        <p class="text-xs font-semibold text-blue-700" data-i18n="projects.total_contracts">Total Contracts</p>
+                        <p class="text-2xl font-bold text-blue-800" id="totalContracts">0</p>
+                    </div>
+                    <div class="bg-green-50 rounded-lg p-4 text-center">
+                        <p class="text-xs font-semibold text-green-700" data-i18n="projects.active">Active</p>
+                        <p class="text-2xl font-bold text-green-800" id="activeContracts">0</p>
+                    </div>
+                    <div class="bg-amber-50 rounded-lg p-4 text-center">
+                        <p class="text-xs font-semibold text-amber-700" data-i18n="projects.pending_approval">Pending Approval</p>
+                        <p class="text-2xl font-bold text-amber-800" id="pendingContracts">0</p>
+                    </div>
+                    <div class="bg-purple-50 rounded-lg p-4 text-center">
+                        <p class="text-xs font-semibold text-purple-700" data-i18n="projects.total_value">Total Value</p>
+                        <p class="text-xl font-bold text-purple-800" id="totalContractValue">$0</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_vendor">Vendor</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_value">Value</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">End Date</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions_label">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="procurementTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Change Control Tab -->
+            <div id="changesTab" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold" data-i18n="projects.ccb">Change Control Board (CCB)</h3>
+                    <button data-on-click="openChangeRequestModal" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
+                        <i class="fas fa-plus me-2"></i><span data-i18n="projects.submit_change_request">Submit Change Request</span>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
+                    <div class="bg-blue-50 rounded-lg p-4 text-center">
+                        <p class="text-xs font-semibold text-blue-700" data-i18n="projects.total_requests">Total Requests</p>
+                        <p class="text-2xl font-bold text-blue-800" id="totalChangeRequests">0</p>
+                    </div>
+                    <div class="bg-amber-50 rounded-lg p-4 text-center">
+                        <p class="text-xs font-semibold text-amber-700" data-i18n="projects.pending_review">Pending Review</p>
+                        <p class="text-2xl font-bold text-amber-800" id="pendingChanges">0</p>
+                    </div>
+                    <div class="bg-green-50 rounded-lg p-4 text-center">
+                        <p class="text-xs font-semibold text-green-700" data-i18n="projects.approved">Approved</p>
+                        <p class="text-2xl font-bold text-green-800" id="approvedChanges">0</p>
+                    </div>
+                    <div class="bg-red-50 rounded-lg p-4 text-center">
+                        <p class="text-xs font-semibold text-red-700" data-i18n="projects.rejected">Rejected</p>
+                        <p class="text-2xl font-bold text-red-800" id="rejectedChanges">0</p>
+                    </div>
+                    <div class="bg-purple-50 rounded-lg p-4 text-center">
+                        <p class="text-xs font-semibold text-purple-700" data-i18n="projects.impact_cost">Impact Cost</p>
+                        <p class="text-xl font-bold text-purple-800" id="totalChangeImpact">$0</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">ID</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.priority">Priority</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Cost Impact</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.schedule_impact">Schedule Impact</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">CCB Decision</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions_label">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="changesTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="projectModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-900" id="projectModalTitle" data-i18n="projects.new_pmp_project">New PMP Project</h2>
+                    <button data-on-click="closeProjectModal" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <form id="projectForm" data-on-submit="saveProject" data-pass-event="true" class="p-6">
+                <input type="hidden" id="projectId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_name_req">Project Name *</label>
+                        <input type="text" id="projectName" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Project Code *</label>
+                        <input type="text" id="projectCode" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., QA-2024-001">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_type">Project Type</label>
+                        <select id="projectType" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="quality_improvement" data-i18n="projects.pt_quality_improvement">Quality Improvement</option>
+                            <option value="governance" data-i18n="projects.pt_governance">Governance</option>
+                            <option value="audit" data-i18n="projects.pt_audit">Audit</option>
+                            <option value="capa" data-i18n="projects.pt_capa">CAPA</option>
+                            <option value="rca" data-i18n="projects.pt_rca">Root Cause Analysis</option>
+                            <option value="six_sigma" data-i18n="projects.pt_six_sigma">Six Sigma</option>
+                            <option value="process" data-i18n="projects.pt_process">Process Improvement</option>
+                            <option value="compliance" data-i18n="common.compliance_label">Compliance</option>
+                            <option value="training" data-i18n="common.training_label">Training</option>
+                            <option value="other" data-i18n="projects.pt_other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Department *</label>
+                        <select id="projectDept" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="Quality Assurance" data-i18n="projects.dept_qa">Quality Assurance</option>
+                            <option value="Operations" data-i18n="projects.dept_operations">Operations</option>
+                            <option value="Sales" data-i18n="projects.dept_sales">Sales</option>
+                            <option value="IT">IT</option>
+                            <option value="HR">HR</option>
+                            <option value="Finance" data-i18n="projects.dept_finance">Finance</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Project Manager</label>
+                        <input type="text" id="projectManager" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.sponsor">Sponsor</label>
+                        <input type="text" id="projectSponsor" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                        <select id="projectPriority" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="medium" data-i18n="common.medium">Medium</option>
+                            <option value="low" data-i18n="common.low">Low</option>
+                            <option value="high" data-i18n="common.high">High</option>
+                            <option value="critical" data-i18n="common.critical">Critical</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.status_label">Status</label>
+                        <select id="projectStatus" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="initiation" data-i18n="projects.opt_initiation">Initiation</option>
+                            <option value="planning" data-i18n="projects.opt_planning">Planning</option>
+                            <option value="execution" data-i18n="projects.opt_execution">Execution</option>
+                            <option value="monitoring">Monitoring & Control</option>
+                            <option value="closing" data-i18n="projects.opt_closing">Closing</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Planned Start Date</label>
+                        <input type="date" id="plannedStart" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Planned End Date</label>
+                        <input type="date" id="plannedEnd" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Budget Approved ($)</label>
+                        <input type="number" id="budgetApproved" class="w-full border border-gray-300 rounded-lg px-3 py-2" step="0.01">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Budget Spent ($)</label>
+                        <input type="number" id="budgetSpent" class="w-full border border-gray-300 rounded-lg px-3 py-2" step="0.01" value="0">
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.scope_statement">Scope Statement</label>
+                    <textarea id="scopeStatement" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
+                </div>
+                <div class="mt-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Quality Criteria</label>
+                    <textarea id="qualityCriteria" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
+                </div>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" data-on-click="closeProjectModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50" data-i18n="projects.cancel">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="projects.save_project">Save Project</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="charterModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-magic text-purple-600 me-2"></i>AI Project Charter Generator</h2>
+                    <button data-on-click="closeCharterModal" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_name_req">Project Name *</label>
+                        <input type="text" id="charterProjectName" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_type">Project Type</label>
+                        <select id="charterProjectType" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="Quality Improvement" data-i18n="projects.pt_quality_improvement">Quality Improvement</option>
+                            <option value="Process Optimization" data-i18n="projects.pt_process_opt">Process Optimization</option>
+                            <option value="Compliance" data-i18n="common.compliance_label">Compliance</option>
+                            <option value="Six Sigma" data-i18n="projects.pt_six_sigma">Six Sigma</option>
+                            <option value="CAPA" data-i18n="projects.pt_capa">CAPA</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.department">Department</label>
+                        <input type="text" id="charterDepartment" class="w-full border border-gray-300 rounded-lg px-3 py-2" value="Quality Assurance">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.brief_desc">Brief Description</label>
+                        <textarea id="charterDescription" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Describe the project objectives and expected outcomes..."></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Estimated Budget ($)</label>
+                            <input type="number" id="charterBudget" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.duration_months">Duration (Months)</label>
+                            <input type="number" id="charterDuration" class="w-full border border-gray-300 rounded-lg px-3 py-2" value="3">
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" data-on-click="closeCharterModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50" data-i18n="projects.cancel">Cancel</button>
+                    <button data-on-click="generateCharter" id="generateCharterBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                        <i class="fas fa-magic me-2"></i><span data-i18n="projects.generate_charter">Generate Charter</span>
+                    </button>
+                </div>
+                <div id="charterResult" class="mt-6 hidden">
+                    <h3 class="font-semibold text-gray-900 mb-3" data-i18n="projects.generated_charter">Generated Project Charter</h3>
+                    <div id="charterContent" class="bg-gray-50 rounded-lg p-4 text-sm max-h-80 overflow-y-auto"></div>
+                    <div class="mt-4 flex justify-end">
+                        <button data-on-click="applyCharterToProject" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                            <i class="fas fa-check me-2"></i>Create Project from Charter
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Scope Wizard Modal -->
+    <div id="scopeWizardModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-5xl w-full mx-4 max-h-[95vh] overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-gray-200 bg-gradient-to-r from-emerald-500 to-emerald-600">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-xl font-bold text-white"><i class="fas fa-clipboard-list me-2"></i><span data-i18n="projects.scope_wizard">Project Scope Wizard</span></h2>
+                        <p class="text-blue-100 text-sm mt-1" data-i18n="projects.scope_wizard_subtitle">Define your complete project scope from A to Z</p>
+                    </div>
+                    <button data-on-click="closeScopeWizard" class="text-white hover:text-gray-200">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <!-- Wizard Progress -->
+                <div class="flex items-center justify-between mt-4">
+                    <div class="flex items-center gap-2 wizard-step" data-step="1">
+                        <div class="w-8 h-8 rounded-full bg-white text-blue-600 flex items-center justify-center font-bold text-sm">1</div>
+                        <span class="text-white text-sm hidden md:inline" data-i18n="projects.step_basics">Basics</span>
+                    </div>
+                    <div class="flex-1 h-1 bg-blue-400 mx-2"></div>
+                    <div class="flex items-center gap-2 wizard-step opacity-60" data-step="2">
+                        <div class="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">2</div>
+                        <span class="text-blue-100 text-sm hidden md:inline" data-i18n="projects.step_scope">Scope</span>
+                    </div>
+                    <div class="flex-1 h-1 bg-blue-400 mx-2"></div>
+                    <div class="flex items-center gap-2 wizard-step opacity-60" data-step="3">
+                        <div class="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">3</div>
+                        <span class="text-blue-100 text-sm hidden md:inline" data-i18n="projects.step_deliverables">Deliverables</span>
+                    </div>
+                    <div class="flex-1 h-1 bg-blue-400 mx-2"></div>
+                    <div class="flex items-center gap-2 wizard-step opacity-60" data-step="4">
+                        <div class="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">4</div>
+                        <span class="text-blue-100 text-sm hidden md:inline" data-i18n="projects.step_constraints">Constraints</span>
+                    </div>
+                    <div class="flex-1 h-1 bg-blue-400 mx-2"></div>
+                    <div class="flex items-center gap-2 wizard-step opacity-60" data-step="5">
+                        <div class="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">5</div>
+                        <span class="text-blue-100 text-sm hidden md:inline" data-i18n="projects.step_resources">Resources</span>
+                    </div>
+                    <div class="flex-1 h-1 bg-blue-400 mx-2"></div>
+                    <div class="flex items-center gap-2 wizard-step opacity-60" data-step="6">
+                        <div class="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">6</div>
+                        <span class="text-blue-100 text-sm hidden md:inline" data-i18n="projects.step_review">Review</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                <!-- Step 1: Project Basics -->
+                <div id="wizardStep1" class="wizard-content">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fas fa-info-circle text-blue-600 me-2"></i>Project Basics</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_name_req">Project Name *</label>
+                            <input type="text" id="wizProjectName" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Enter project name">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Project Code *</label>
+                            <input type="text" id="wizProjectCode" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., QA-2024-001">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_type">Project Type</label>
+                            <select id="wizProjectType" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                <option value="quality_improvement" data-i18n="projects.pt_quality_improvement">Quality Improvement</option>
+                                <option value="process" data-i18n="projects.pt_process">Process Improvement</option>
+                                <option value="governance" data-i18n="projects.pt_governance">Governance</option>
+                                <option value="audit" data-i18n="projects.pt_audit">Audit</option>
+                                <option value="capa" data-i18n="projects.pt_capa">CAPA</option>
+                                <option value="six_sigma" data-i18n="projects.pt_six_sigma">Six Sigma</option>
+                                <option value="compliance" data-i18n="common.compliance_label">Compliance</option>
+                                <option value="training" data-i18n="common.training_label">Training</option>
+                                <option value="other" data-i18n="projects.pt_other">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Department *</label>
+                            <select id="wizDepartment" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                <option value="Quality Assurance" data-i18n="projects.dept_qa">Quality Assurance</option>
+                                <option value="Operations" data-i18n="projects.dept_operations">Operations</option>
+                                <option value="Sales" data-i18n="projects.dept_sales">Sales</option>
+                                <option value="IT">IT</option>
+                                <option value="HR">HR</option>
+                                <option value="Finance" data-i18n="projects.dept_finance">Finance</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Project Manager</label>
+                            <input type="text" id="wizProjectManager" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Name of project manager">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_sponsor">Project Sponsor</label>
+                            <input type="text" id="wizSponsor" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Name of executive sponsor">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                            <select id="wizPriority" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                <option value="medium" data-i18n="common.medium">Medium</option>
+                                <option value="low" data-i18n="common.low">Low</option>
+                                <option value="high" data-i18n="common.high">High</option>
+                                <option value="critical" data-i18n="common.critical">Critical</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Current Phase</label>
+                            <select id="wizStatus" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                <option value="initiation" data-i18n="projects.opt_initiation">Initiation</option>
+                                <option value="planning" data-i18n="projects.opt_planning">Planning</option>
+                                <option value="execution" data-i18n="projects.opt_execution">Execution</option>
+                                <option value="monitoring">Monitoring & Control</option>
+                                <option value="closing" data-i18n="projects.opt_closing">Closing</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Project Description</label>
+                        <textarea id="wizDescription" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Briefly describe what this project aims to achieve..."></textarea>
+                    </div>
+                    <div class="mt-4 p-4 bg-purple-50 rounded-lg">
+                        <button data-on-click="aiGenerateScope" id="aiScopeBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                            <i class="fas fa-magic me-2"></i>AI: Generate Scope from Description
+                        </button>
+                        <p class="text-sm text-purple-700 mt-2">Let AI help you define objectives, deliverables, and WBS based on your description.</p>
+                    </div>
+                </div>
+
+                <!-- Step 2: Scope Definition -->
+                <div id="wizardStep2" class="wizard-content hidden">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fas fa-bullseye text-green-600 me-2"></i>Scope Definition</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Project Objectives (SMART Goals)</label>
+                            <div id="objectivesList" class="space-y-2 mb-2"></div>
+                            <div class="flex gap-2">
+                                <input type="text" id="newObjective" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="Add a SMART objective...">
+                                <button data-on-click="addObjective" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"><i class="fas fa-plus"></i></button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Scope Statement *</label>
+                            <textarea id="wizScopeStatement" rows="4" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Define what IS and IS NOT included in this project..."></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Work Breakdown Structure (WBS)</label>
+                            <div id="wbsContainer" class="border border-gray-200 rounded-lg p-4 bg-gray-50 min-h-[150px]">
+                                <div id="wbsList" class="space-y-2"></div>
+                                <div class="flex gap-2 mt-3">
+                                    <input type="text" id="newWbsItem" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="Add WBS item (e.g., 1.1 Requirements Gathering)">
+                                    <button data-on-click="addWbsItem" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><i class="fas fa-plus"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Out of Scope (Exclusions)</label>
+                            <div id="exclusionsList" class="space-y-2 mb-2"></div>
+                            <div class="flex gap-2">
+                                <input type="text" id="newExclusion" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="What is explicitly NOT included...">
+                                <button data-on-click="addExclusion" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"><i class="fas fa-plus"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Deliverables & Milestones -->
+                <div id="wizardStep3" class="wizard-content hidden">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fas fa-box-open text-amber-600 me-2"></i>Deliverables & Milestones</h3>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Key Deliverables</label>
+                            <div id="deliverablesList" class="space-y-2 mb-2 max-h-[200px] overflow-y-auto"></div>
+                            <div class="flex gap-2">
+                                <input type="text" id="newDeliverable" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="Add deliverable...">
+                                <button data-on-click="addDeliverable" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"><i class="fas fa-plus"></i></button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Project Milestones</label>
+                            <div id="milestonesList" class="space-y-2 mb-2 max-h-[200px] overflow-y-auto"></div>
+                            <div class="grid grid-cols-3 gap-2">
+                                <input type="text" id="newMilestoneName" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2" placeholder="Milestone name">
+                                <input type="date" id="newMilestoneDate" class="border border-gray-300 rounded-lg px-3 py-2">
+                            </div>
+                            <button data-on-click="addMilestone" class="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 w-full"><i class="fas fa-plus me-2"></i><span data-i18n="projects.add_milestone">Add Milestone</span></button>
+                        </div>
+                    </div>
+                    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Planned Start Date</label>
+                            <input type="date" id="wizPlannedStart" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Planned End Date</label>
+                            <input type="date" id="wizPlannedEnd" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Acceptance Criteria</label>
+                        <textarea id="wizAcceptanceCriteria" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Define how success will be measured..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Step 4: Constraints & Assumptions -->
+                <div id="wizardStep4" class="wizard-content hidden">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fas fa-lock text-red-600 me-2"></i>Constraints & Assumptions</h3>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Project Constraints</label>
+                            <p class="text-xs text-gray-500 mb-2">Limitations that restrict project options (time, budget, resources, regulations)</p>
+                            <div id="constraintsList" class="space-y-2 mb-2 max-h-[200px] overflow-y-auto"></div>
+                            <div class="flex gap-2">
+                                <input type="text" id="newConstraint" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="Add constraint...">
+                                <button data-on-click="addConstraint" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"><i class="fas fa-plus"></i></button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Project Assumptions</label>
+                            <p class="text-xs text-gray-500 mb-2">Factors considered true without proof for planning purposes</p>
+                            <div id="assumptionsList" class="space-y-2 mb-2 max-h-[200px] overflow-y-auto"></div>
+                            <div class="flex gap-2">
+                                <input type="text" id="newAssumption" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="Add assumption...">
+                                <button data-on-click="addAssumption" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><i class="fas fa-plus"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Budget Approved ($)</label>
+                            <input type="number" id="wizBudgetApproved" class="w-full border border-gray-300 rounded-lg px-3 py-2" step="0.01" placeholder="0.00">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Quality Criteria</label>
+                            <input type="text" id="wizQualityCriteria" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., ISO 9001 compliance, 95% accuracy">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5: Resources & Communication -->
+                <div id="wizardStep5" class="wizard-content hidden">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fas fa-users text-purple-600 me-2"></i>Resources & Communication</h3>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Team Resources Required</label>
+                            <div id="resourcesList" class="space-y-2 mb-2 max-h-[150px] overflow-y-auto"></div>
+                            <div class="grid grid-cols-3 gap-2">
+                                <input type="text" id="newResourceRole" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2" placeholder="Role name">
+                                <input type="number" id="newResourceCount" class="border border-gray-300 rounded-lg px-3 py-2" placeholder="Count" min="1" value="1">
+                            </div>
+                            <button data-on-click="addResource" class="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 w-full"><i class="fas fa-plus me-2"></i>Add Resource</button>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Key Stakeholders</label>
+                            <div id="stakeholdersList" class="space-y-2 mb-2 max-h-[150px] overflow-y-auto"></div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" id="newStakeholderName" class="border border-gray-300 rounded-lg px-3 py-2" placeholder="Stakeholder name">
+                                <select id="newStakeholderType" class="border border-gray-300 rounded-lg px-3 py-2">
+                                    <option value="sponsor">Sponsor</option>
+                                    <option value="customer">Customer</option>
+                                    <option value="team_member">Team Member</option>
+                                    <option value="vendor">Vendor</option>
+                                    <option value="regulator">Regulator</option>
+                                </select>
+                            </div>
+                            <button data-on-click="addStakeholder" class="mt-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 w-full"><i class="fas fa-plus me-2"></i>Add Stakeholder</button>
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Communication Plan</label>
+                        <textarea id="wizCommunicationPlan" rows="4" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Define how and when project communications will occur (e.g., weekly status meetings, monthly steering committee reviews, daily standups)..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Step 6: Review & Submit -->
+                <div id="wizardStep6" class="wizard-content hidden">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fas fa-check-circle text-green-600 me-2"></i>Review & Submit</h3>
+                    <div id="scopeSummary" class="space-y-4">
+                        <div class="bg-blue-50 rounded-lg p-4">
+                            <h4 class="font-semibold text-blue-800">Project Basics</h4>
+                            <div id="summaryBasics" class="text-sm text-blue-700 mt-2"></div>
+                        </div>
+                        <div class="bg-green-50 rounded-lg p-4">
+                            <h4 class="font-semibold text-green-800">Scope & WBS</h4>
+                            <div id="summaryScope" class="text-sm text-green-700 mt-2"></div>
+                        </div>
+                        <div class="bg-amber-50 rounded-lg p-4">
+                            <h4 class="font-semibold text-amber-800">Deliverables & Timeline</h4>
+                            <div id="summaryDeliverables" class="text-sm text-amber-700 mt-2"></div>
+                        </div>
+                        <div class="bg-red-50 rounded-lg p-4">
+                            <h4 class="font-semibold text-red-800">Constraints & Assumptions</h4>
+                            <div id="summaryConstraints" class="text-sm text-red-700 mt-2"></div>
+                        </div>
+                        <div class="bg-purple-50 rounded-lg p-4">
+                            <h4 class="font-semibold text-purple-800">Resources & Communication</h4>
+                            <div id="summaryResources" class="text-sm text-purple-700 mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-200 bg-gray-50 flex justify-between">
+                <button data-on-click="prevWizardStep" id="wizardPrevBtn" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 hidden">
+                    <i class="fas fa-arrow-left me-2"></i>Previous
+                </button>
+                <div class="flex gap-3 ms-auto">
+                    <button data-on-click="closeScopeWizard" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>
+                    <button data-on-click="nextWizardStep" id="wizardNextBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        Next<i class="fas fa-arrow-right ms-2"></i>
+                    </button>
+                    <button data-on-click="submitScopeWizard" id="wizardSubmitBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 hidden">
+                        <i class="fas fa-check me-2"></i>Create Project
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Detail Modal -->
+    <div id="projectDetailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-6xl w-full mx-4 max-h-[95vh] overflow-hidden flex flex-col">
+            <div class="p-4 border-b border-gray-200 bg-gradient-to-r from-emerald-500 to-emerald-600">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <span id="detailProjectCode" class="text-xs text-indigo-200"></span>
+                        <h2 id="detailProjectName" class="text-xl font-bold text-white"></h2>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button data-on-click="editCurrentDetailProject" class="px-3 py-1 bg-white/20 text-white rounded hover:bg-white/30">
+                            <i class="fas fa-edit me-1"></i>Edit
+                        </button>
+                        <button data-on-click="closeProjectDetail" class="text-white hover:text-gray-200">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- Detail Tabs -->
+                <div class="flex gap-1 mt-4 overflow-x-auto" id="detailTabs">
+                    <button data-on-click="switchDetailTab" data-args="[&quot;overview&quot;]" data-dtab="overview" class="px-3 py-2 text-sm rounded-t bg-white text-indigo-700 font-medium">Overview</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;scope&quot;]" data-dtab="scope" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Scope</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;schedule&quot;]" data-dtab="schedule" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Schedule</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;budget&quot;]" data-dtab="budget" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Budget</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;drisk&quot;]" data-dtab="drisk" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Risks</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;dstake&quot;]" data-dtab="dstake" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Stakeholders</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;dproc&quot;]" data-dtab="dproc" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Procurement</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;dchange&quot;]" data-dtab="dchange" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Changes</button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 bg-gray-50" id="detailContent">
+                <!-- Overview Tab -->
+                <div id="detailOverview" class="detail-tab-content">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <div class="text-sm text-gray-500">Status</div>
+                            <div id="detailStatus" class="text-lg font-semibold capitalize"></div>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <div class="text-sm text-gray-500">Priority</div>
+                            <div id="detailPriority" class="text-lg font-semibold capitalize"></div>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <div class="text-sm text-gray-500">Department</div>
+                            <div id="detailDept" class="text-lg font-semibold"></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <div class="text-sm text-gray-500 mb-1">Project Manager</div>
+                            <div id="detailPM" class="font-medium"></div>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <div class="text-sm text-gray-500 mb-1">Sponsor</div>
+                            <div id="detailSponsor" class="font-medium"></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <div class="text-sm text-gray-500 mb-1">Timeline</div>
+                            <div id="detailTimeline" class="font-medium"></div>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <div class="text-sm text-gray-500 mb-1">Budget</div>
+                            <div id="detailBudget" class="font-medium"></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-blue-50 rounded-lg p-4 text-center">
+                            <div id="detailRiskCount" class="text-2xl font-bold text-blue-700">0</div>
+                            <div class="text-sm text-blue-600">Risks</div>
+                        </div>
+                        <div class="bg-green-50 rounded-lg p-4 text-center">
+                            <div id="detailMilestoneCount" class="text-2xl font-bold text-green-700">0</div>
+                            <div class="text-sm text-green-600">Milestones</div>
+                        </div>
+                        <div class="bg-purple-50 rounded-lg p-4 text-center">
+                            <div id="detailStakeCount" class="text-2xl font-bold text-purple-700">0</div>
+                            <div class="text-sm text-purple-600">Stakeholders</div>
+                        </div>
+                        <div class="bg-amber-50 rounded-lg p-4 text-center">
+                            <div id="detailProcCount" class="text-2xl font-bold text-amber-700">0</div>
+                            <div class="text-sm text-amber-600">Contracts</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scope Tab -->
+                <div id="detailScope" class="detail-tab-content hidden">
+                    <div class="space-y-6">
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-bullseye text-green-600 me-2"></i>Scope Statement</h4>
+                            <div id="detailScopeStatement" class="text-gray-700 whitespace-pre-wrap"></div>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-flag text-blue-600 me-2"></i>Project Objectives (SMART Goals)</h4>
+                            <div id="detailObjectives" class="space-y-2"></div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-white rounded-lg p-4 shadow-sm">
+                                <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-tasks text-blue-600 me-2"></i>Work Breakdown Structure (WBS)</h4>
+                                <div id="detailWBS" class="space-y-2"></div>
+                            </div>
+                            <div class="bg-white rounded-lg p-4 shadow-sm">
+                                <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-box-open text-amber-600 me-2"></i>Deliverables</h4>
+                                <div id="detailDeliverables" class="space-y-2"></div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-white rounded-lg p-4 shadow-sm">
+                                <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-ban text-red-600 me-2"></i>Exclusions (Out of Scope)</h4>
+                                <div id="detailExclusions" class="space-y-2"></div>
+                            </div>
+                            <div class="bg-white rounded-lg p-4 shadow-sm">
+                                <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-lightbulb text-yellow-600 me-2"></i>Assumptions</h4>
+                                <div id="detailAssumptions" class="space-y-2"></div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-white rounded-lg p-4 shadow-sm">
+                                <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-lock text-red-600 me-2"></i>Constraints</h4>
+                                <div id="detailConstraints" class="space-y-2"></div>
+                            </div>
+                            <div class="bg-white rounded-lg p-4 shadow-sm">
+                                <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-check-circle text-green-600 me-2"></i>Acceptance Criteria</h4>
+                                <div id="detailAcceptance" class="text-gray-700 whitespace-pre-wrap"></div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-medal text-indigo-600 me-2"></i>Quality Criteria</h4>
+                            <div id="detailQuality" class="text-gray-700"></div>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-comments text-purple-600 me-2"></i>Communication Plan</h4>
+                            <div id="detailComm" class="text-gray-700 whitespace-pre-wrap"></div>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-users-cog text-indigo-600 me-2"></i>Resource Plan</h4>
+                            <div id="detailResourcePlan" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule Tab -->
+                <div id="detailSchedule" class="detail-tab-content hidden">
+                    <div class="bg-white rounded-lg p-4 shadow-sm mb-6">
+                        <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-calendar text-blue-600 me-2"></i>Project Timeline</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <span class="text-sm text-gray-500">Planned Start:</span>
+                                <span id="detailStartDate" class="ms-2 font-medium"></span>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-500">Planned End:</span>
+                                <span id="detailEndDate" class="ms-2 font-medium"></span>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-500">Actual Start:</span>
+                                <span id="detailActualStart" class="ms-2 font-medium"></span>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-500">Actual End:</span>
+                                <span id="detailActualEnd" class="ms-2 font-medium"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 shadow-sm">
+                        <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-flag-checkered text-green-600 me-2"></i>Project Milestones</h4>
+                        <div id="detailMilestones" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <!-- Budget Tab -->
+                <div id="detailBudget" class="detail-tab-content hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-green-50 rounded-lg p-4">
+                            <div class="text-sm text-green-600">Budget Approved</div>
+                            <div id="detailBudgetApproved" class="text-2xl font-bold text-green-700"></div>
+                        </div>
+                        <div class="bg-blue-50 rounded-lg p-4">
+                            <div class="text-sm text-blue-600">Budget Spent</div>
+                            <div id="detailBudgetSpent" class="text-2xl font-bold text-blue-700"></div>
+                        </div>
+                        <div class="bg-amber-50 rounded-lg p-4">
+                            <div class="text-sm text-amber-600">Remaining</div>
+                            <div id="detailBudgetRemaining" class="text-2xl font-bold text-amber-700"></div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 shadow-sm">
+                        <h4 class="font-semibold text-gray-900 mb-3">Budget Progress</h4>
+                        <div class="w-full bg-gray-200 rounded-full h-4">
+                            <div id="detailBudgetBar" class="bg-blue-600 h-4 rounded-full w-0"></div>
+                        </div>
+                        <div id="detailBudgetPercent" class="text-end text-sm text-gray-600 mt-1"></div>
+                    </div>
+                </div>
+
+                <!-- Risks Tab -->
+                <div id="detailDrisk" class="detail-tab-content hidden">
+                    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_risk">Risk</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Probability</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Impact</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_score">Score</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detailRisksTable" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Stakeholders Tab -->
+                <div id="detailDstake" class="detail-tab-content hidden">
+                    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Role/Type</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_influence">Influence</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_interest">Interest</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Contact</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detailStakeTable" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Procurement Tab -->
+                <div id="detailDproc" class="detail-tab-content hidden">
+                    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Contract</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_vendor">Vendor</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_value">Value</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">End Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detailProcTable" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Changes Tab -->
+                <div id="detailDchange" class="detail-tab-content hidden">
+                    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Change Request</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Cost Impact</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">CCB Decision</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detailChangeTable" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        let projects = [];
+        let analytics = {};
+        let risks = [];
+        let milestones = [];
+        let stakeholders = [];
+        let generatedCharter = null;
+        
+        // Wizard state
+        let wizardStep = 1;
+        const wizardTotalSteps = 6;
+        let wizardData = {
+            objectives: [],
+            wbs: [],
+            exclusions: [],
+            deliverables: [],
+            milestones: [],
+            constraints: [],
+            assumptions: [],
+            resources: [],
+            stakeholders: []
+        };
+        let statusChart, priorityChart, budgetChart, milestoneMetricsChart;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProjects();
+            loadAnalytics();
+            loadRisks();
+            loadMilestones();
+            loadStakeholders();
+        });
+
+        function switchMainTab(tabName) {
+            document.querySelectorAll('#mainTabs button').forEach(btn => {
+                btn.classList.remove('tab-active');
+                btn.classList.add('text-gray-500');
+            });
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('tab-active');
+            document.querySelector(`[data-tab="${tabName}"]`).classList.remove('text-gray-500');
+            
+            ['portfolio', 'analytics', 'risks', 'milestones', 'stakeholders', 'procurement', 'changes'].forEach(t => {
+                document.getElementById(t + 'Tab').classList.add('hidden');
+            });
+            document.getElementById(tabName + 'Tab').classList.remove('hidden');
+
+            if (tabName === 'analytics') renderCharts();
+            if (tabName === 'procurement') loadProcurement();
+            if (tabName === 'changes') loadChangeRequests();
+        }
+
+        function setViewMode(mode) {
+            if (mode === 'cards') {
+                document.getElementById('projectsGrid').classList.remove('hidden');
+                document.getElementById('projectsTable').classList.add('hidden');
+                document.getElementById('cardsViewBtn').classList.add('bg-blue-100', 'text-blue-700');
+                document.getElementById('cardsViewBtn').classList.remove('bg-gray-100', 'text-gray-600');
+                document.getElementById('tableViewBtn').classList.remove('bg-blue-100', 'text-blue-700');
+                document.getElementById('tableViewBtn').classList.add('bg-gray-100', 'text-gray-600');
+            } else {
+                document.getElementById('projectsGrid').classList.add('hidden');
+                document.getElementById('projectsTable').classList.remove('hidden');
+                document.getElementById('tableViewBtn').classList.add('bg-blue-100', 'text-blue-700');
+                document.getElementById('tableViewBtn').classList.remove('bg-gray-100', 'text-gray-600');
+                document.getElementById('cardsViewBtn').classList.remove('bg-blue-100', 'text-blue-700');
+                document.getElementById('cardsViewBtn').classList.add('bg-gray-100', 'text-gray-600');
+            }
+        }
+
+        async function loadProjects() {
+            try {
+                const status = document.getElementById('statusFilter').value;
+                const priority = document.getElementById('priorityFilter').value;
+                const dept = document.getElementById('deptFilter').value;
+                
+                let url = '/api/pmp/projects?limit=50';
+                if (status) url += `&status=${status}`;
+                if (priority) url += `&priority=${priority}`;
+                if (dept) url += `&department=${encodeURIComponent(dept)}`;
+                
+                const res = await fetch(url);
+                const data = await res.json();
+                projects = data.projects || [];
+                renderProjects();
+            } catch (error) {
+                console.error('Error loading projects:', error);
+            }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const res = await fetch('/api/pmp/portfolio/analytics');
+                analytics = await res.json();
+                updateKPIs();
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+            }
+        }
+
+        async function loadRisks() {
+            try {
+                const res = await fetch('/api/pmp/risks?limit=100');
+                const data = await res.json();
+                risks = data.risks || [];
+                renderRisks();
+            } catch (error) {
+                console.error('Error loading risks:', error);
+            }
+        }
+
+        async function loadMilestones() {
+            try {
+                const res = await fetch('/api/pmp/milestones?limit=100');
+                const data = await res.json();
+                milestones = data.milestones || [];
+                renderMilestones();
+            } catch (error) {
+                console.error('Error loading milestones:', error);
+            }
+        }
+
+        async function loadStakeholders() {
+            try {
+                const res = await fetch('/api/pmp/stakeholders?limit=100');
+                const data = await res.json();
+                stakeholders = data.stakeholders || [];
+                renderStakeholders();
+            } catch (error) {
+                console.error('Error loading stakeholders:', error);
+            }
+        }
+
+        let procurement = [];
+        let changeRequests = [];
+
+        async function loadProcurement() {
+            try {
+                const res = await fetch('/api/pmp/procurement?limit=100');
+                const data = await res.json();
+                procurement = data.procurement || [];
+                renderProcurement();
+            } catch (error) {
+                console.error('Error loading procurement:', error);
+            }
+        }
+
+        async function loadChangeRequests() {
+            try {
+                const res = await fetch('/api/pmp/change-requests?limit=100');
+                const data = await res.json();
+                changeRequests = data.changeRequests || [];
+                renderChangeRequests();
+            } catch (error) {
+                console.error('Error loading change requests:', error);
+            }
+        }
+
+        function renderProcurement() {
+            const tbody = document.getElementById('procurementTableBody');
+            const typeLabels = { vendor_contract: 'Vendor Contract', service_agreement: 'Service Agreement', purchase_order: 'Purchase Order', consulting: 'Consulting', software_license: 'Software License', equipment: 'Equipment', materials: 'Materials', other: 'Other' };
+            const statusColors = { draft: 'gray', pending_approval: 'amber', active: 'green', completed: 'blue', terminated: 'red', expired: 'gray' };
+            
+            tbody.innerHTML = procurement.map(p => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3">
+                        <div class="font-medium text-gray-900">${escapeHtml(p.title)}</div>
+                        <div class="text-xs text-gray-500">${escapeHtml(p.procurement_id)}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm">${escapeHtml(typeLabels[p.procurement_type] || p.procurement_type)}</td>
+                    <td class="px-4 py-3 text-sm">${escapeHtml(p.vendor_name) || '-'}</td>
+                    <td class="px-4 py-3 text-sm font-medium">$${parseFloat(p.contract_value || 0).toLocaleString()}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${statusColors[p.status] || 'gray'}-100 text-${statusColors[p.status] || 'gray'}-700 capitalize">
+                            ${escapeHtml((p.status || '').replace('_', ' '))}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm">${p.end_date ? new Date(p.end_date).toLocaleDateString() : '-'}</td>
+                    <td class="px-4 py-3">
+                        <button data-on-click="editProcurement" data-args="[&quot;${escapeHtml(p.procurement_id)}&quot;]" class="text-blue-600 hover:text-blue-800 me-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="deleteProcurement" data-args="[&quot;${escapeHtml(p.procurement_id)}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+
+            const total = procurement.length;
+            const active = procurement.filter(p => p.status === 'active').length;
+            const pending = procurement.filter(p => p.status === 'pending_approval').length;
+            const totalValue = procurement.reduce((sum, p) => sum + parseFloat(p.contract_value || 0), 0);
+
+            document.getElementById('totalContracts').textContent = total;
+            document.getElementById('activeContracts').textContent = active;
+            document.getElementById('pendingContracts').textContent = pending;
+            document.getElementById('totalContractValue').textContent = '$' + totalValue.toLocaleString();
+        }
+
+        function renderChangeRequests() {
+            const tbody = document.getElementById('changesTableBody');
+            const typeLabels = { scope: 'Scope', schedule: 'Schedule', cost: 'Cost', quality: 'Quality', resource: 'Resource', risk: 'Risk', other: 'Other' };
+            const priorityColors = { critical: 'red', high: 'orange', medium: 'blue', low: 'gray' };
+            const statusColors = { draft: 'gray', submitted: 'blue', under_review: 'amber', approved: 'green', rejected: 'red', implemented: 'emerald', deferred: 'purple' };
+            const ccbColors = { pending: 'amber', approved: 'green', rejected: 'red', deferred: 'purple' };
+            
+            tbody.innerHTML = changeRequests.map(c => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 text-xs font-mono">${escapeHtml(c.change_request_id)}</td>
+                    <td class="px-4 py-3">
+                        <div class="font-medium text-gray-900">${escapeHtml(c.title)}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm">${escapeHtml(typeLabels[c.change_type] || c.change_type)}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${priorityColors[c.priority] || 'gray'}-100 text-${priorityColors[c.priority] || 'gray'}-700 capitalize">
+                            ${escapeHtml(c.priority)}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm font-medium ${parseFloat(c.cost_impact || 0) > 0 ? 'text-red-600' : 'text-gray-600'}">
+                        ${parseFloat(c.cost_impact || 0) > 0 ? '+$' + parseFloat(c.cost_impact).toLocaleString() : '-'}
+                    </td>
+                    <td class="px-4 py-3 text-sm ${(c.schedule_impact_days || 0) > 0 ? 'text-red-600' : 'text-gray-600'}">
+                        ${(c.schedule_impact_days || 0) > 0 ? '+' + parseInt(c.schedule_impact_days) + ' days' : '-'}
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${statusColors[c.status] || 'gray'}-100 text-${statusColors[c.status] || 'gray'}-700 capitalize">
+                            ${escapeHtml((c.status || '').replace('_', ' '))}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${ccbColors[c.ccb_decision] || 'gray'}-100 text-${ccbColors[c.ccb_decision] || 'gray'}-700 capitalize">
+                            ${escapeHtml(c.ccb_decision || 'Pending')}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <button data-on-click="editChangeRequest" data-args="[&quot;${escapeHtml(c.change_request_id)}&quot;]" class="text-blue-600 hover:text-blue-800 me-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="deleteChangeRequest" data-args="[&quot;${escapeHtml(c.change_request_id)}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+
+            const total = changeRequests.length;
+            const pending = changeRequests.filter(c => ['submitted', 'under_review'].includes(c.status)).length;
+            const approved = changeRequests.filter(c => c.ccb_decision === 'approved').length;
+            const rejected = changeRequests.filter(c => c.ccb_decision === 'rejected').length;
+            const totalImpact = changeRequests.filter(c => c.ccb_decision === 'approved').reduce((sum, c) => sum + parseFloat(c.cost_impact || 0), 0);
+
+            document.getElementById('totalChangeRequests').textContent = total;
+            document.getElementById('pendingChanges').textContent = pending;
+            document.getElementById('approvedChanges').textContent = approved;
+            document.getElementById('rejectedChanges').textContent = rejected;
+            document.getElementById('totalChangeImpact').textContent = '$' + totalImpact.toLocaleString();
+        }
+
+        function openProcurementModal() { alert(WalaPlusI18n.t('dyn.projects.procurement_coming_soon')); }
+        function editProcurement(id) { alert(WalaPlusI18n.t('dyn.projects.edit_procurement', { id })); }
+        function deleteProcurement(id) { if(confirm(WalaPlusI18n.t('dyn.projects.confirm_delete_procurement'))) fetch('/api/pmp/procurement/' + id, {method: 'DELETE'}).then(() => loadProcurement()); }
+
+        function openChangeRequestModal() { alert(WalaPlusI18n.t('dyn.projects.change_request_coming_soon')); }
+        function editChangeRequest(id) { alert(WalaPlusI18n.t('dyn.projects.edit_change_request', { id })); }
+        function deleteChangeRequest(id) { if(confirm(WalaPlusI18n.t('dyn.projects.confirm_delete_change'))) fetch('/api/pmp/change-requests/' + id, {method: 'DELETE'}).then(() => loadChangeRequests()); }
+
+        function updateKPIs() {
+            document.getElementById('totalProjects').textContent = analytics.totalProjects || 0;
+            document.getElementById('avgSPI').textContent = (analytics.avgSPI || 1).toFixed(2);
+            document.getElementById('avgCPI').textContent = (analytics.avgCPI || 1).toFixed(2);
+            document.getElementById('atRisk').textContent = analytics.atRiskProjects || 0;
+            document.getElementById('highRisks').textContent = analytics.riskSummary?.high || 0;
+        }
+
+        function renderProjects() {
+            const grid = document.getElementById('projectsGrid');
+            const tbody = document.getElementById('projectsTableBody');
+            
+            const priorityColors = { critical: 'red', high: 'orange', medium: 'blue', low: 'gray' };
+            const statusColors = { initiation: 'purple', planning: 'blue', execution: 'green', monitoring: 'amber', closing: 'indigo', completed: 'emerald', on_hold: 'gray', cancelled: 'red' };
+
+            grid.innerHTML = projects.map(p => `
+                <div class="project-card bg-white rounded-xl shadow-sm p-4 border border-gray-100 cursor-pointer transition-all" data-on-click="viewProject" data-args="[&quot;${escapeHtml(p.project_id)}&quot;]">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <span class="text-xs text-gray-500">${escapeHtml(p.project_code)}</span>
+                            <h3 class="font-semibold text-gray-900">${escapeHtml(p.project_name)}</h3>
+                        </div>
+                        <span class="px-2 py-1 text-xs rounded-full bg-${priorityColors[p.priority]}-100 text-${priorityColors[p.priority]}-700">
+                            ${escapeHtml(p.priority)}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${statusColors[p.status]}-100 text-${statusColors[p.status]}-700 capitalize">
+                            ${escapeHtml(p.status.replace('_', ' '))}
+                        </span>
+                        <span class="text-sm text-gray-500">${escapeHtml(p.department)}</span>
+                    </div>
+                    <div class="mb-3">
+                        <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Progress</span>
+                            <span>${parseFloat(p.percent_complete) || 0}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" data-style="width: ${parseFloat(p.percent_complete) || 0}%"></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="flex items-center">
+                            <i class="fas fa-clock text-green-500 me-1"></i>
+                            <span>SPI: ${(p.schedule_performance_index || 1).toFixed(2)}</span>
+                        </div>
+                        <div class="flex items-center">
+                            <i class="fas fa-dollar-sign text-blue-500 me-1"></i>
+                            <span>CPI: ${(p.cost_performance_index || 1).toFixed(2)}</span>
+                        </div>
+                    </div>
+                    ${p.planned_end_date ? `<div class="mt-2 text-xs text-gray-500"><i class="fas fa-calendar me-1"></i>Due: ${new Date(p.planned_end_date).toLocaleDateString()}</div>` : ''}
+                </div>
+            `).join('');
+
+            tbody.innerHTML = projects.map(p => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3">
+                        <div class="font-medium text-gray-900">${escapeHtml(p.project_name)}</div>
+                        <div class="text-xs text-gray-500">${escapeHtml(p.project_code)}</div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${statusColors[p.status]}-100 text-${statusColors[p.status]}-700 capitalize">
+                            ${escapeHtml(p.status.replace('_', ' '))}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${priorityColors[p.priority]}-100 text-${priorityColors[p.priority]}-700 capitalize">
+                            ${escapeHtml(p.priority)}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center">
+                            <div class="w-16 bg-gray-200 rounded-full h-2 me-2">
+                                <div class="bg-blue-600 h-2 rounded-full" data-style="width: ${parseFloat(p.percent_complete) || 0}%"></div>
+                            </div>
+                            <span class="text-sm">${parseFloat(p.percent_complete) || 0}%</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-sm ${p.schedule_performance_index < 0.9 ? 'text-red-600' : 'text-green-600'}">${(p.schedule_performance_index || 1).toFixed(2)}</td>
+                    <td class="px-4 py-3 text-sm ${p.cost_performance_index < 0.9 ? 'text-red-600' : 'text-green-600'}">${(p.cost_performance_index || 1).toFixed(2)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-500">${p.planned_end_date ? new Date(p.planned_end_date).toLocaleDateString() : '-'}</td>
+                    <td class="px-4 py-3">
+                        <button data-on-click="viewProject" data-args="[&quot;${escapeHtml(p.project_id)}&quot;]" class="text-blue-600 hover:text-blue-800 me-2"><i class="fas fa-eye"></i></button>
+                        <button data-on-click="editProject" data-args="[&quot;${escapeHtml(p.project_id)}&quot;]" class="text-amber-600 hover:text-amber-800 me-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="deleteProject" data-args="[&quot;${escapeHtml(p.project_id)}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderRisks() {
+            const tbody = document.getElementById('risksTableBody');
+            const categoryColors = { technical: 'blue', schedule: 'amber', cost: 'green', resource: 'purple', quality: 'red', external: 'gray', compliance: 'indigo', stakeholder: 'pink', other: 'gray' };
+            
+            tbody.innerHTML = risks.map(r => {
+                const scoreColor = r.risk_score >= 15 ? 'red' : r.risk_score >= 8 ? 'amber' : 'green';
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3">
+                            <div class="font-medium text-gray-900">${escapeHtml(r.title)}</div>
+                            <div class="text-xs text-gray-500 truncate max-w-xs">${escapeHtml(r.description || '')}</div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 text-xs rounded-full bg-${categoryColors[r.category]}-100 text-${categoryColors[r.category]}-700 capitalize">${escapeHtml(r.category)}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 text-xs font-bold rounded-full bg-${scoreColor}-100 text-${scoreColor}-700">${parseInt(r.risk_score)}</span>
+                        </td>
+                        <td class="px-4 py-3 capitalize text-sm">${escapeHtml(r.status)}</td>
+                        <td class="px-4 py-3 text-sm">${escapeHtml(r.risk_owner_name) || '-'}</td>
+                        <td class="px-4 py-3">
+                            <button data-on-click="editRisk" data-args="[&quot;${escapeHtml(r.risk_id)}&quot;]" class="text-amber-600 hover:text-amber-800 me-2"><i class="fas fa-edit"></i></button>
+                            <button data-on-click="deleteRisk" data-args="[&quot;${escapeHtml(r.risk_id)}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            renderRiskMatrix();
+        }
+
+        function renderRiskMatrix() {
+            const matrix = document.getElementById('riskMatrix');
+            const levels = ['very_high', 'high', 'medium', 'low', 'very_low'];
+            const colors = {
+                25: 'bg-red-600', 20: 'bg-red-500', 16: 'bg-red-400', 15: 'bg-orange-500', 12: 'bg-orange-400',
+                10: 'bg-amber-500', 9: 'bg-amber-400', 8: 'bg-amber-300', 6: 'bg-yellow-400', 5: 'bg-yellow-300',
+                4: 'bg-green-300', 3: 'bg-green-200', 2: 'bg-green-100', 1: 'bg-green-50'
+            };
+
+            let html = '<div></div>';
+            levels.forEach(l => html += `<div class="text-xs text-center text-gray-500 capitalize">${l.replace('_', ' ')}</div>`);
+
+            levels.reverse().forEach((prob, pi) => {
+                html += `<div class="text-xs text-gray-500 capitalize">${prob.replace('_', ' ')}</div>`;
+                levels.forEach((impact, ii) => {
+                    const score = (5 - pi) * (ii + 1);
+                    const count = risks.filter(r => r.probability === prob && r.impact === impact).length;
+                    const colorClass = colors[score] || 'bg-gray-100';
+                    html += `<div class="risk-matrix-cell ${colorClass} rounded text-center text-xs font-bold text-white p-2">${count > 0 ? count : ''}</div>`;
+                });
+            });
+
+            matrix.innerHTML = html;
+        }
+
+        function renderMilestones() {
+            const tbody = document.getElementById('milestonesTableBody');
+            const statusColors = { pending: 'gray', in_progress: 'blue', completed: 'green', delayed: 'red', at_risk: 'amber', cancelled: 'gray' };
+
+            tbody.innerHTML = milestones.map(m => {
+                const variance = parseInt(m.variance_days) || 0;
+                const varianceClass = variance > 0 ? 'text-red-600' : variance < 0 ? 'text-green-600' : 'text-gray-600';
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 font-medium text-gray-900">${escapeHtml(m.name)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(m.project_id)}</td>
+                        <td class="px-4 py-3 text-sm capitalize">${escapeHtml(m.milestone_type.replace('_', ' '))}</td>
+                        <td class="px-4 py-3 text-sm">${new Date(m.planned_date).toLocaleDateString()}</td>
+                        <td class="px-4 py-3 text-sm">${m.actual_date ? new Date(m.actual_date).toLocaleDateString() : '-'}</td>
+                        <td class="px-4 py-3 text-sm ${varianceClass}">${variance > 0 ? '+' : ''}${variance} days</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 text-xs rounded-full bg-${statusColors[m.status]}-100 text-${statusColors[m.status]}-700 capitalize">${escapeHtml(m.status.replace('_', ' '))}</span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            renderGanttChart();
+        }
+
+        function renderGanttChart() {
+            const container = document.getElementById('ganttChart');
+            if (milestones.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.projects.no_milestones') + '</p>';
+                return;
+            }
+
+            const dates = milestones.map(m => new Date(m.planned_date));
+            const minDate = new Date(Math.min(...dates));
+            const maxDate = new Date(Math.max(...dates));
+            const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 14;
+
+            const statusColors = { pending: '#9CA3AF', in_progress: '#3B82F6', completed: '#10B981', delayed: '#EF4444', at_risk: '#F59E0B' };
+
+            let html = '<div class="relative" data-style="height: ' + (milestones.length * 40 + 40) + 'px;">';
+            html += '<div class="absolute top-0 start-0 end-0 h-8 flex border-b border-gray-200">';
+            for (let i = 0; i <= totalDays; i += 7) {
+                const d = new Date(minDate);
+                d.setDate(d.getDate() + i);
+                html += `<div class="flex-shrink-0 w-20 text-xs text-gray-500 border-r border-gray-100">${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>`;
+            }
+            html += '</div>';
+
+            milestones.forEach((m, idx) => {
+                const startOffset = Math.ceil((new Date(m.planned_date) - minDate) / (1000 * 60 * 60 * 24));
+                const leftPercent = (startOffset / totalDays) * 100;
+                const color = statusColors[m.status] || '#9CA3AF';
+
+                html += `
+                    <div class="absolute flex items-center" data-style="top: ${idx * 40 + 40}px; left: 0; right: 0; height: 36px;">
+                        <div class="w-40 text-sm text-gray-700 truncate pe-2">${escapeHtml(m.name)}</div>
+                        <div class="flex-1 relative h-6">
+                            <div class="gantt-bar absolute h-6 rounded flex items-center justify-center text-xs text-white font-medium" 
+                                 data-style="left: ${leftPercent.toFixed(2)}%; width: 80px; background-color: ${escapeHtml(color)};">
+                                ${parseFloat(m.percent_complete) || 0}%
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderStakeholders() {
+            const tbody = document.getElementById('stakeholdersTableBody');
+            const typeColors = { internal: 'blue', external: 'green', sponsor: 'purple', customer: 'amber', vendor: 'gray', regulator: 'red', team_member: 'indigo' };
+            const engagementColors = { unaware: 'gray', resistant: 'red', neutral: 'amber', supportive: 'green', leading: 'blue' };
+
+            tbody.innerHTML = stakeholders.map(s => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3">
+                        <div class="font-medium text-gray-900">${escapeHtml(s.name)}</div>
+                        <div class="text-xs text-gray-500">${escapeHtml(s.email || '')}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm">${escapeHtml(s.role)}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${typeColors[s.stakeholder_type]}-100 text-${typeColors[s.stakeholder_type]}-700 capitalize">${escapeHtml(s.stakeholder_type.replace('_', ' '))}</span>
+                    </td>
+                    <td class="px-4 py-3 capitalize text-sm">${escapeHtml(s.influence)}</td>
+                    <td class="px-4 py-3 capitalize text-sm">${escapeHtml(s.interest)}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${engagementColors[s.engagement_level]}-100 text-${engagementColors[s.engagement_level]}-700 capitalize">${escapeHtml(s.engagement_level)}</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <button data-on-click="editStakeholder" data-args="[&quot;${escapeHtml(s.stakeholder_id)}&quot;]" class="text-amber-600 hover:text-amber-800 me-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="deleteStakeholder" data-args="[&quot;${escapeHtml(s.stakeholder_id)}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+
+            const quadrants = { manage_closely: 0, keep_satisfied: 0, keep_informed: 0, monitor: 0 };
+            stakeholders.forEach(s => {
+                if (s.power_interest_quadrant) quadrants[s.power_interest_quadrant]++;
+            });
+            document.getElementById('manageClosely').textContent = quadrants.manage_closely;
+            document.getElementById('keepSatisfied').textContent = quadrants.keep_satisfied;
+            document.getElementById('keepInformed').textContent = quadrants.keep_informed;
+            document.getElementById('monitorStakeholders').textContent = quadrants.monitor;
+        }
+
+        function renderCharts() {
+            if (!analytics.byStatus) return;
+
+            if (statusChart) statusChart.destroy();
+            statusChart = new Chart(document.getElementById('statusChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(analytics.byStatus).map(s => s.replace('_', ' ').toUpperCase()),
+                    datasets: [{
+                        data: Object.values(analytics.byStatus),
+                        backgroundColor: ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#059669', '#6B7280', '#EF4444']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+
+            if (priorityChart) priorityChart.destroy();
+            priorityChart = new Chart(document.getElementById('priorityChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Critical', 'High', 'Medium', 'Low'],
+                    datasets: [{
+                        label: 'Projects',
+                        data: [analytics.byPriority?.critical || 0, analytics.byPriority?.high || 0, analytics.byPriority?.medium || 0, analytics.byPriority?.low || 0],
+                        backgroundColor: ['#EF4444', '#F97316', '#3B82F6', '#6B7280']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } } }
+            });
+
+            if (budgetChart) budgetChart.destroy();
+            budgetChart = new Chart(document.getElementById('budgetChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Approved', 'Spent', 'Remaining'],
+                    datasets: [{
+                        label: 'Budget ($)',
+                        data: [analytics.totalBudget || 0, analytics.totalSpent || 0, (analytics.totalBudget || 0) - (analytics.totalSpent || 0)],
+                        backgroundColor: ['#3B82F6', '#F59E0B', '#10B981']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } } }
+            });
+
+            if (milestoneMetricsChart) milestoneMetricsChart.destroy();
+            milestoneMetricsChart = new Chart(document.getElementById('milestoneChart'), {
+                type: 'pie',
+                data: {
+                    labels: ['On Time', 'Delayed', 'Upcoming'],
+                    datasets: [{
+                        data: [analytics.milestoneMetrics?.onTime || 0, analytics.milestoneMetrics?.delayed || 0, analytics.milestoneMetrics?.upcoming || 0],
+                        backgroundColor: ['#10B981', '#EF4444', '#3B82F6']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        function openProjectModal() {
+            document.getElementById('projectModalTitle').textContent = WalaPlusI18n.t('dyn.projects.modal_new_project');
+            document.getElementById('projectForm').reset();
+            document.getElementById('projectId').value = '';
+            document.getElementById('projectModal').classList.remove('hidden');
+        }
+
+        function closeProjectModal() {
+            document.getElementById('projectModal').classList.add('hidden');
+        }
+
+        // ============================================
+        // SCOPE WIZARD FUNCTIONS
+        // ============================================
+        function openScopeWizard() {
+            wizardStep = 1;
+            wizardData = { objectives: [], wbs: [], exclusions: [], deliverables: [], milestones: [], constraints: [], assumptions: [], resources: [], stakeholders: [] };
+            document.getElementById('scopeWizardModal').classList.remove('hidden');
+            updateWizardUI();
+            renderAllWizardLists();
+        }
+
+        function closeScopeWizard() {
+            document.getElementById('scopeWizardModal').classList.add('hidden');
+        }
+
+        function updateWizardUI() {
+            for (let i = 1; i <= wizardTotalSteps; i++) {
+                document.getElementById('wizardStep' + i).classList.toggle('hidden', i !== wizardStep);
+            }
+            document.querySelectorAll('.wizard-step').forEach(step => {
+                const s = parseInt(step.dataset.step);
+                step.classList.toggle('opacity-60', s > wizardStep);
+                const circle = step.querySelector('div');
+                if (s < wizardStep) {
+                    circle.className = 'w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-sm';
+                    circle.innerHTML = '<i class="fas fa-check"></i>';
+                } else if (s === wizardStep) {
+                    circle.className = 'w-8 h-8 rounded-full bg-white text-blue-600 flex items-center justify-center font-bold text-sm';
+                    circle.textContent = s;
+                } else {
+                    circle.className = 'w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm';
+                    circle.textContent = s;
+                }
+            });
+            document.getElementById('wizardPrevBtn').classList.toggle('hidden', wizardStep === 1);
+            document.getElementById('wizardNextBtn').classList.toggle('hidden', wizardStep === wizardTotalSteps);
+            document.getElementById('wizardSubmitBtn').classList.toggle('hidden', wizardStep !== wizardTotalSteps);
+            if (wizardStep === wizardTotalSteps) generateScopeSummary();
+        }
+
+        function nextWizardStep() {
+            if (wizardStep < wizardTotalSteps) { wizardStep++; updateWizardUI(); }
+        }
+
+        function prevWizardStep() {
+            if (wizardStep > 1) { wizardStep--; updateWizardUI(); }
+        }
+
+        function renderAllWizardLists() {
+            renderWizardList('objectives', 'objectivesList', 'green');
+            renderWizardList('wbs', 'wbsList', 'blue');
+            renderWizardList('exclusions', 'exclusionsList', 'red');
+            renderWizardList('deliverables', 'deliverablesList', 'amber');
+            renderWizardList('milestones', 'milestonesList', 'indigo', true);
+            renderWizardList('constraints', 'constraintsList', 'red');
+            renderWizardList('assumptions', 'assumptionsList', 'blue');
+            renderWizardList('resources', 'resourcesList', 'purple', true);
+            renderWizardList('stakeholders', 'stakeholdersList', 'teal', true);
+        }
+
+        function renderWizardList(key, containerId, color, isObject = false) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = wizardData[key].map((item, idx) => {
+                const text = isObject ? escapeHtml((item.name || item.role || item.text) + (item.date ? ` (${item.date})` : '') + (item.count ? ` x${item.count}` : '') + (item.type ? ` - ${item.type}` : '')) : escapeHtml(item);
+                return `<div class="flex items-center justify-between bg-${color}-50 px-3 py-2 rounded-lg">
+                    <span class="text-sm text-${color}-800">${text}</span>
+                    <button data-on-click="removeWizardItem" data-args="[&quot;${escapeHtml(key)}&quot;,${idx}]" class="text-${color}-600 hover:text-${color}-800"><i class="fas fa-times"></i></button>
+                </div>`;
+            }).join('');
+        }
+
+        function removeWizardItem(key, idx) {
+            wizardData[key].splice(idx, 1);
+            renderAllWizardLists();
+        }
+
+        function addObjective() {
+            const val = document.getElementById('newObjective').value.trim();
+            if (val) { wizardData.objectives.push(val); document.getElementById('newObjective').value = ''; renderAllWizardLists(); }
+        }
+
+        function addWbsItem() {
+            const val = document.getElementById('newWbsItem').value.trim();
+            if (val) { wizardData.wbs.push(val); document.getElementById('newWbsItem').value = ''; renderAllWizardLists(); }
+        }
+
+        function addExclusion() {
+            const val = document.getElementById('newExclusion').value.trim();
+            if (val) { wizardData.exclusions.push(val); document.getElementById('newExclusion').value = ''; renderAllWizardLists(); }
+        }
+
+        function addDeliverable() {
+            const val = document.getElementById('newDeliverable').value.trim();
+            if (val) { wizardData.deliverables.push(val); document.getElementById('newDeliverable').value = ''; renderAllWizardLists(); }
+        }
+
+        function addMilestone() {
+            const name = document.getElementById('newMilestoneName').value.trim();
+            const date = document.getElementById('newMilestoneDate').value;
+            if (name) { wizardData.milestones.push({ name, date }); document.getElementById('newMilestoneName').value = ''; document.getElementById('newMilestoneDate').value = ''; renderAllWizardLists(); }
+        }
+
+        function addConstraint() {
+            const val = document.getElementById('newConstraint').value.trim();
+            if (val) { wizardData.constraints.push(val); document.getElementById('newConstraint').value = ''; renderAllWizardLists(); }
+        }
+
+        function addAssumption() {
+            const val = document.getElementById('newAssumption').value.trim();
+            if (val) { wizardData.assumptions.push(val); document.getElementById('newAssumption').value = ''; renderAllWizardLists(); }
+        }
+
+        function addResource() {
+            const role = document.getElementById('newResourceRole').value.trim();
+            const count = parseInt(document.getElementById('newResourceCount').value) || 1;
+            if (role) { wizardData.resources.push({ role, count }); document.getElementById('newResourceRole').value = ''; document.getElementById('newResourceCount').value = '1'; renderAllWizardLists(); }
+        }
+
+        function addStakeholder() {
+            const name = document.getElementById('newStakeholderName').value.trim();
+            const type = document.getElementById('newStakeholderType').value;
+            if (name) { wizardData.stakeholders.push({ name, type }); document.getElementById('newStakeholderName').value = ''; renderAllWizardLists(); }
+        }
+
+        function generateScopeSummary() {
+            const basics = `<strong>${escapeHtml(document.getElementById('wizProjectName').value)}</strong> (${escapeHtml(document.getElementById('wizProjectCode').value)})<br>
+                Type: ${escapeHtml(document.getElementById('wizProjectType').value)} | Dept: ${escapeHtml(document.getElementById('wizDepartment').value)}<br>
+                Manager: ${escapeHtml(document.getElementById('wizProjectManager').value || 'TBD')} | Sponsor: ${escapeHtml(document.getElementById('wizSponsor').value || 'TBD')}`;
+            document.getElementById('summaryBasics').innerHTML = basics;
+
+            const scope = `<strong>Objectives:</strong> ${parseInt(wizardData.objectives.length)} defined<br>
+                <strong>WBS Items:</strong> ${parseInt(wizardData.wbs.length)}<br>
+                <strong>Exclusions:</strong> ${parseInt(wizardData.exclusions.length)}<br>
+                <strong>Scope Statement:</strong> ${document.getElementById('wizScopeStatement').value ? 'Defined' : 'Not defined'}`;
+            document.getElementById('summaryScope').innerHTML = scope;
+
+            const deliverables = `<strong>Deliverables:</strong> ${wizardData.deliverables.length}<br>
+                <strong>Milestones:</strong> ${wizardData.milestones.length}<br>
+                <strong>Timeline:</strong> ${escapeHtml(document.getElementById('wizPlannedStart').value || 'TBD')} to ${escapeHtml(document.getElementById('wizPlannedEnd').value || 'TBD')}`;
+            document.getElementById('summaryDeliverables').innerHTML = deliverables;
+
+            const constraints = `<strong>Constraints:</strong> ${wizardData.constraints.length}<br>
+                <strong>Assumptions:</strong> ${wizardData.assumptions.length}<br>
+                <strong>Budget:</strong> $${parseFloat(document.getElementById('wizBudgetApproved').value || '0').toLocaleString()}`;
+            document.getElementById('summaryConstraints').innerHTML = constraints;
+
+            const resources = `<strong>Resources:</strong> ${parseInt(wizardData.resources.length)} roles defined<br>
+                <strong>Stakeholders:</strong> ${parseInt(wizardData.stakeholders.length)}<br>
+                <strong>Communication Plan:</strong> ${document.getElementById('wizCommunicationPlan').value ? 'Defined' : 'Not defined'}`;
+            document.getElementById('summaryResources').innerHTML = resources;
+        }
+
+        async function aiGenerateScope() {
+            const btn = document.getElementById('aiScopeBtn');
+            const desc = document.getElementById('wizDescription').value;
+            const name = document.getElementById('wizProjectName').value;
+            const type = document.getElementById('wizProjectType').value;
+            if (!desc) { alert(WalaPlusI18n.t('dyn.projects.enter_description_first')); return; }
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>' + WalaPlusI18n.t('dyn.projects.btn_generating');
+            try {
+                const res = await fetch('/api/pmp/generate-charter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_name: name || 'New Project', project_type: type, description: desc })
+                });
+                const data = await res.json();
+                if (data.charter) {
+                    const c = data.charter;
+                    if (c.project_objectives) wizardData.objectives = c.project_objectives;
+                    if (c.deliverables) wizardData.deliverables = c.deliverables;
+                    if (c.assumptions) wizardData.assumptions = c.assumptions;
+                    if (c.constraints) wizardData.constraints = c.constraints;
+                    if (c.high_level_risks) wizardData.constraints = wizardData.constraints.concat(c.high_level_risks.map(r => 'Risk: ' + r));
+                    if (c.scope_statement) document.getElementById('wizScopeStatement').value = c.scope_statement;
+                    if (c.quality_requirements) document.getElementById('wizQualityCriteria').value = c.quality_requirements;
+                    if (c.communication_approach) document.getElementById('wizCommunicationPlan').value = c.communication_approach;
+                    if (c.milestones) wizardData.milestones = c.milestones.map(m => ({ name: m.name, date: '' }));
+                    if (c.recommended_team_structure) wizardData.resources = c.recommended_team_structure.map(r => ({ role: r.role, count: 1 }));
+                    renderAllWizardLists();
+                    alert(WalaPlusI18n.t('dyn.projects.ai_prefilled'));
+                }
+            } catch (err) { console.error('AI generation error:', err); alert(WalaPlusI18n.t('dyn.projects.failed_generate_scope')); }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-magic me-2"></i>' + WalaPlusI18n.t('dyn.projects.btn_ai_scope');
+        }
+
+        async function submitScopeWizard() {
+            const projectData = {
+                project_name: document.getElementById('wizProjectName').value,
+                project_code: document.getElementById('wizProjectCode').value,
+                project_type: document.getElementById('wizProjectType').value,
+                department: document.getElementById('wizDepartment').value,
+                project_manager_name: document.getElementById('wizProjectManager').value,
+                sponsor_name: document.getElementById('wizSponsor').value,
+                priority: document.getElementById('wizPriority').value,
+                status: document.getElementById('wizStatus').value,
+                planned_start_date: document.getElementById('wizPlannedStart').value || null,
+                planned_end_date: document.getElementById('wizPlannedEnd').value || null,
+                budget_approved: parseFloat(document.getElementById('wizBudgetApproved').value) || 0,
+                scope_statement: document.getElementById('wizScopeStatement').value,
+                objectives: wizardData.objectives,
+                wbs_structure: wizardData.wbs,
+                deliverables: wizardData.deliverables,
+                exclusions: wizardData.exclusions,
+                assumptions: wizardData.assumptions,
+                constraints: wizardData.constraints,
+                resource_plan: wizardData.resources,
+                quality_criteria: document.getElementById('wizQualityCriteria').value,
+                acceptance_criteria: document.getElementById('wizAcceptanceCriteria').value,
+                communication_plan: document.getElementById('wizCommunicationPlan').value
+            };
+            try {
+                const res = await fetch('/api/pmp/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(projectData)
+                });
+                const data = await res.json();
+                if (data.project) {
+                    const projectId = data.project.project_id;
+                    for (const m of wizardData.milestones) {
+                        await fetch('/api/pmp/milestones', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ project_id: projectId, name: m.name, planned_date: m.date || new Date().toISOString().split('T')[0], status: 'pending' })
+                        });
+                    }
+                    for (const s of wizardData.stakeholders) {
+                        await fetch('/api/pmp/stakeholders', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ project_id: projectId, name: s.name, stakeholder_type: s.type, influence_level: 'medium', interest_level: 'medium' })
+                        });
+                    }
+                    closeScopeWizard();
+                    loadProjects();
+                    loadMilestones();
+                    loadStakeholders();
+                    alert(WalaPlusI18n.t('dyn.projects.project_created'));
+                } else {
+                    alert(WalaPlusI18n.t('dyn.projects.error_creating_project', { msg: data.error || WalaPlusI18n.t('dyn.projects.unknown_error') }));
+                }
+            } catch (err) {
+                console.error('Error submitting wizard:', err);
+                alert(WalaPlusI18n.t('dyn.projects.failed_create_project'));
+            }
+        }
+
+        async function saveProject(e) {
+            e.preventDefault();
+            const projectId = document.getElementById('projectId').value;
+            const data = {
+                project_name: document.getElementById('projectName').value,
+                project_code: document.getElementById('projectCode').value,
+                project_type: document.getElementById('projectType').value,
+                department: document.getElementById('projectDept').value,
+                project_manager_name: document.getElementById('projectManager').value,
+                sponsor_name: document.getElementById('projectSponsor').value,
+                priority: document.getElementById('projectPriority').value,
+                status: document.getElementById('projectStatus').value,
+                planned_start_date: document.getElementById('plannedStart').value || null,
+                planned_end_date: document.getElementById('plannedEnd').value || null,
+                budget_approved: parseFloat(document.getElementById('budgetApproved').value) || 0,
+                budget_spent: parseFloat(document.getElementById('budgetSpent').value) || 0,
+                scope_statement: document.getElementById('scopeStatement').value,
+                quality_criteria: document.getElementById('qualityCriteria').value
+            };
+
+            try {
+                const url = projectId ? `/api/pmp/projects/${projectId}` : '/api/pmp/projects';
+                const method = projectId ? 'PUT' : 'POST';
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (res.ok) {
+                    closeProjectModal();
+                    loadProjects();
+                    loadAnalytics();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || WalaPlusI18n.t('dyn.projects.failed_save_project'));
+                }
+            } catch (error) {
+                console.error('Error saving project:', error);
+                alert(WalaPlusI18n.t('dyn.projects.failed_save_project'));
+            }
+        }
+
+        let currentDetailProject = null;
+
+        async function viewProject(projectId) {
+            try {
+                const res = await fetch(`/api/pmp/projects/${projectId}`);
+                const data = await res.json();
+                currentDetailProject = data;
+                renderProjectDetail(data);
+                document.getElementById('projectDetailModal').classList.remove('hidden');
+                history.pushState({ projectId }, '', `/projects?id=${projectId}`);
+            } catch (error) {
+                console.error('Error loading project:', error);
+                alert(WalaPlusI18n.t('dyn.projects.failed_load_details'));
+            }
+        }
+
+        function closeProjectDetail() {
+            document.getElementById('projectDetailModal').classList.add('hidden');
+            currentDetailProject = null;
+            history.pushState({}, '', '/projects');
+        }
+
+        function switchDetailTab(tabName) {
+            document.querySelectorAll('#detailTabs button').forEach(btn => {
+                if (btn.dataset.dtab === tabName) {
+                    btn.className = 'px-3 py-2 text-sm rounded-t bg-white text-indigo-700 font-medium';
+                } else {
+                    btn.className = 'px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400';
+                }
+            });
+            document.querySelectorAll('.detail-tab-content').forEach(el => el.classList.add('hidden'));
+            const tab = document.getElementById('detail' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
+            if (tab) tab.classList.remove('hidden');
+        }
+
+        function renderProjectDetail(data) {
+            const p = data.project_id ? data : (data.project || data);
+            document.getElementById('detailProjectCode').textContent = p.project_code;
+            document.getElementById('detailProjectName').textContent = p.project_name;
+            document.getElementById('detailStatus').textContent = (p.status || '').replace('_', ' ');
+            document.getElementById('detailPriority').textContent = p.priority;
+            document.getElementById('detailDept').textContent = p.department;
+            document.getElementById('detailPM').textContent = p.project_manager_name || 'TBD';
+            document.getElementById('detailSponsor').textContent = p.sponsor_name || 'TBD';
+            
+            const start = p.planned_start_date ? new Date(p.planned_start_date).toLocaleDateString() : 'TBD';
+            const end = p.planned_end_date ? new Date(p.planned_end_date).toLocaleDateString() : 'TBD';
+            document.getElementById('detailTimeline').textContent = `${start} - ${end}`;
+            
+            const approved = parseFloat(p.budget_approved) || 0;
+            const spent = parseFloat(p.budget_spent) || 0;
+            document.getElementById('detailBudget').textContent = `$${spent.toLocaleString()} / $${approved.toLocaleString()}`;
+            
+            const risks = data.risks || [];
+            const miles = data.milestones || [];
+            const stakes = data.stakeholders || [];
+            const procs = data.procurement || [];
+            const changes = data.changeRequests || [];
+            
+            document.getElementById('detailRiskCount').textContent = risks.length;
+            document.getElementById('detailMilestoneCount').textContent = miles.length;
+            document.getElementById('detailStakeCount').textContent = stakes.length;
+            document.getElementById('detailProcCount').textContent = procs.length;
+            
+            document.getElementById('detailScopeStatement').textContent = p.scope_statement || 'Not defined';
+            renderListItems('detailObjectives', parseJsonArray(p.objectives));
+            renderListItems('detailWBS', parseJsonArray(p.wbs_structure));
+            renderListItems('detailDeliverables', parseJsonArray(p.deliverables));
+            renderListItems('detailExclusions', parseJsonArray(p.exclusions));
+            renderListItems('detailAssumptions', parseJsonArray(p.assumptions));
+            renderListItems('detailConstraints', parseJsonArray(p.constraints));
+            document.getElementById('detailAcceptance').textContent = p.acceptance_criteria || 'Not defined';
+            document.getElementById('detailQuality').textContent = p.quality_criteria || 'Not defined';
+            document.getElementById('detailComm').textContent = typeof p.communication_plan === 'object' ? JSON.stringify(p.communication_plan, null, 2) : (p.communication_plan || 'Not defined');
+            renderResourcePlan(parseJsonArray(p.resource_plan));
+            
+            document.getElementById('detailStartDate').textContent = p.planned_start_date ? new Date(p.planned_start_date).toLocaleDateString() : 'TBD';
+            document.getElementById('detailEndDate').textContent = p.planned_end_date ? new Date(p.planned_end_date).toLocaleDateString() : 'TBD';
+            document.getElementById('detailActualStart').textContent = p.actual_start_date ? new Date(p.actual_start_date).toLocaleDateString() : '-';
+            document.getElementById('detailActualEnd').textContent = p.actual_end_date ? new Date(p.actual_end_date).toLocaleDateString() : '-';
+            
+            renderDetailMilestones(miles);
+            
+            document.getElementById('detailBudgetApproved').textContent = '$' + approved.toLocaleString();
+            document.getElementById('detailBudgetSpent').textContent = '$' + spent.toLocaleString();
+            const remaining = approved - spent;
+            document.getElementById('detailBudgetRemaining').textContent = '$' + remaining.toLocaleString();
+            const pct = approved > 0 ? Math.min((spent / approved) * 100, 100) : 0;
+            document.getElementById('detailBudgetBar').style.width = pct + '%';
+            document.getElementById('detailBudgetPercent').textContent = pct.toFixed(1) + '% spent';
+            
+            renderDetailRisks(risks);
+            renderDetailStakeholders(stakes);
+            renderDetailProcurement(procs);
+            renderDetailChanges(changes);
+            
+            switchDetailTab('overview');
+        }
+
+        function parseJsonArray(val) {
+            if (!val) return [];
+            if (Array.isArray(val)) return val;
+            try { return JSON.parse(val); } catch { return []; }
+        }
+
+        function renderListItems(containerId, items) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            if (!items || items.length === 0) {
+                el.innerHTML = '<span class="text-gray-400 text-sm">' + WalaPlusI18n.t('dyn.projects.none_defined') + '</span>';
+                return;
+            }
+            el.innerHTML = items.map(item => `<div class="flex items-center text-sm"><i class="fas fa-check-circle text-green-500 me-2"></i>${escapeHtml(item)}</div>`).join('');
+        }
+
+        function renderResourcePlan(resources) {
+            const el = document.getElementById('detailResourcePlan');
+            if (!el) return;
+            if (!resources || resources.length === 0) {
+                el.innerHTML = '<span class="text-gray-400 text-sm">' + WalaPlusI18n.t('dyn.projects.no_resource_plan') + '</span>';
+                return;
+            }
+            el.innerHTML = resources.map(r => {
+                const role = r.role || r.name || r;
+                const count = parseInt(r.count) || 1;
+                return `<div class="flex items-center justify-between bg-indigo-50 px-3 py-2 rounded-lg">
+                    <span class="text-sm text-indigo-800"><i class="fas fa-user-tie text-indigo-600 me-2"></i>${escapeHtml(role)}</span>
+                    <span class="text-xs bg-indigo-200 text-indigo-700 px-2 py-1 rounded-full">${count} FTE</span>
+                </div>`;
+            }).join('');
+        }
+
+        function renderDetailMilestones(miles) {
+            const el = document.getElementById('detailMilestones');
+            if (!miles.length) { el.innerHTML = '<p class="text-gray-400">' + WalaPlusI18n.t('dyn.projects.no_milestones_defined') + '</p>'; return; }
+            const statusColors = { pending: 'gray', in_progress: 'blue', completed: 'green', delayed: 'red' };
+            el.innerHTML = miles.map(m => `
+                <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                    <div class="flex items-center">
+                        <i class="fas fa-flag text-${statusColors[m.status] || 'gray'}-500 me-3"></i>
+                        <div>
+                            <div class="font-medium">${escapeHtml(m.name)}</div>
+                            <div class="text-sm text-gray-500">${m.planned_date ? new Date(m.planned_date).toLocaleDateString() : 'No date'}</div>
+                        </div>
+                    </div>
+                    <span class="px-2 py-1 text-xs rounded-full bg-${statusColors[m.status] || 'gray'}-100 text-${statusColors[m.status] || 'gray'}-700 capitalize">${escapeHtml(m.status)}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderDetailRisks(risks) {
+            const el = document.getElementById('detailRisksTable');
+            if (!risks.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.projects.no_risks') + '</td></tr>'; return; }
+            el.innerHTML = risks.map(r => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3"><div class="font-medium">${escapeHtml(r.risk_description)}</div></td>
+                    <td class="px-4 py-3 capitalize">${escapeHtml(r.probability)}</td>
+                    <td class="px-4 py-3 capitalize">${escapeHtml(r.impact)}</td>
+                    <td class="px-4 py-3 font-bold ${r.risk_score >= 9 ? 'text-red-600' : r.risk_score >= 6 ? 'text-amber-600' : 'text-green-600'}">${parseInt(r.risk_score)}</td>
+                    <td class="px-4 py-3 capitalize">${escapeHtml(r.status)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderDetailStakeholders(stakes) {
+            const el = document.getElementById('detailStakeTable');
+            if (!stakes.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.projects.no_stakeholders') + '</td></tr>'; return; }
+            el.innerHTML = stakes.map(s => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-medium">${escapeHtml(s.name)}</td>
+                    <td class="px-4 py-3 capitalize">${escapeHtml((s.stakeholder_type || '').replace('_', ' '))}</td>
+                    <td class="px-4 py-3 capitalize">${escapeHtml(s.influence_level)}</td>
+                    <td class="px-4 py-3 capitalize">${escapeHtml(s.interest_level)}</td>
+                    <td class="px-4 py-3 text-sm">${escapeHtml(s.email) || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderDetailProcurement(procs) {
+            const el = document.getElementById('detailProcTable');
+            if (!procs.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.projects.no_procurement') + '</td></tr>'; return; }
+            el.innerHTML = procs.map(p => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-medium">${escapeHtml(p.title)}</td>
+                    <td class="px-4 py-3">${escapeHtml(p.vendor_name) || '-'}</td>
+                    <td class="px-4 py-3 font-medium">$${parseFloat(p.contract_value || 0).toLocaleString()}</td>
+                    <td class="px-4 py-3 capitalize">${escapeHtml((p.status || '').replace('_', ' '))}</td>
+                    <td class="px-4 py-3">${p.end_date ? new Date(p.end_date).toLocaleDateString() : '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderDetailChanges(changes) {
+            const el = document.getElementById('detailChangeTable');
+            if (!changes.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.projects.no_changes') + '</td></tr>'; return; }
+            const ccbColors = { pending: 'amber', approved: 'green', rejected: 'red', deferred: 'purple' };
+            el.innerHTML = changes.map(c => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-medium">${escapeHtml(c.title)}</td>
+                    <td class="px-4 py-3 capitalize">${escapeHtml(c.change_type)}</td>
+                    <td class="px-4 py-3 ${parseFloat(c.cost_impact || 0) > 0 ? 'text-red-600 font-medium' : ''}">
+                        ${parseFloat(c.cost_impact || 0) > 0 ? '+$' + parseFloat(c.cost_impact).toLocaleString() : '-'}
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${ccbColors[c.ccb_decision] || 'gray'}-100 text-${ccbColors[c.ccb_decision] || 'gray'}-700 capitalize">
+                            ${escapeHtml(c.ccb_decision || 'Pending')}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 capitalize">${escapeHtml((c.status || '').replace('_', ' '))}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Handle URL params on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const projectId = params.get('id');
+            if (projectId) {
+                viewProject(projectId);
+            }
+        });
+
+        function editCurrentDetailProject() {
+            if (typeof currentDetailProject !== 'undefined' && currentDetailProject && currentDetailProject.project_id) {
+                editProject(currentDetailProject.project_id);
+            }
+        }
+        window.editCurrentDetailProject = editCurrentDetailProject;
+
+        async function editProject(projectId) {
+            try {
+                const res = await fetch(`/api/pmp/projects/${projectId}`);
+                const project = await res.json();
+                
+                document.getElementById('projectModalTitle').textContent = WalaPlusI18n.t('dyn.projects.modal_edit_project');
+                document.getElementById('projectId').value = projectId;
+                document.getElementById('projectName').value = project.project_name;
+                document.getElementById('projectCode').value = project.project_code;
+                document.getElementById('projectType').value = project.project_type;
+                document.getElementById('projectDept').value = project.department;
+                document.getElementById('projectManager').value = project.project_manager_name || '';
+                document.getElementById('projectSponsor').value = project.sponsor_name || '';
+                document.getElementById('projectPriority').value = project.priority;
+                document.getElementById('projectStatus').value = project.status;
+                document.getElementById('plannedStart').value = project.planned_start_date?.split('T')[0] || '';
+                document.getElementById('plannedEnd').value = project.planned_end_date?.split('T')[0] || '';
+                document.getElementById('budgetApproved').value = project.budget_approved || '';
+                document.getElementById('budgetSpent').value = project.budget_spent || '';
+                document.getElementById('scopeStatement').value = project.scope_statement || '';
+                document.getElementById('qualityCriteria').value = project.quality_criteria || '';
+                
+                document.getElementById('projectModal').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading project:', error);
+            }
+        }
+
+        async function deleteProject(projectId) {
+            if (!confirm(WalaPlusI18n.t('dyn.projects.confirm_delete_project'))) return;
+            try {
+                const res = await fetch(`/api/pmp/projects/${projectId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    loadProjects();
+                    loadAnalytics();
+                }
+            } catch (error) {
+                console.error('Error deleting project:', error);
+            }
+        }
+
+        function openCharterGenerator() {
+            document.getElementById('charterModal').classList.remove('hidden');
+            document.getElementById('charterResult').classList.add('hidden');
+        }
+
+        function closeCharterModal() {
+            document.getElementById('charterModal').classList.add('hidden');
+        }
+
+        async function generateCharter() {
+            const btn = document.getElementById('generateCharterBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>' + WalaPlusI18n.t('dyn.projects.btn_generating');
+
+            try {
+                const res = await fetch('/api/pmp/generate-charter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_name: document.getElementById('charterProjectName').value,
+                        project_type: document.getElementById('charterProjectType').value,
+                        department: document.getElementById('charterDepartment').value,
+                        description: document.getElementById('charterDescription').value,
+                        budget: parseFloat(document.getElementById('charterBudget').value) || null,
+                        duration_months: parseInt(document.getElementById('charterDuration').value) || 3
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    generatedCharter = data.charter;
+                    const content = document.getElementById('charterContent');
+                    
+                    if (data.charter.raw) {
+                        content.innerHTML = '<pre class="whitespace-pre-wrap"></pre>';
+                        content.querySelector('pre').textContent = data.charter.raw;
+                    } else {
+                        content.innerHTML = `
+                            <div class="space-y-3">
+                                <div><strong>Purpose:</strong> ${escapeHtml(data.charter.project_purpose || 'N/A')}</div>
+                                <div><strong>Business Case:</strong> ${escapeHtml(data.charter.business_case || 'N/A')}</div>
+                                <div><strong>Objectives:</strong><ul class="list-disc ms-5">${(data.charter.project_objectives || []).map(o => `<li>${escapeHtml(o)}</li>`).join('')}</ul></div>
+                                <div><strong>Scope:</strong> ${escapeHtml(data.charter.scope_statement || 'N/A')}</div>
+                                <div><strong>Deliverables:</strong><ul class="list-disc ms-5">${(data.charter.deliverables || []).map(d => `<li>${escapeHtml(d)}</li>`).join('')}</ul></div>
+                                <div><strong>Assumptions:</strong><ul class="list-disc ms-5">${(data.charter.assumptions || []).map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul></div>
+                                <div><strong>Constraints:</strong><ul class="list-disc ms-5">${(data.charter.constraints || []).map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul></div>
+                                <div><strong>High-Level Risks:</strong><ul class="list-disc ms-5">${(data.charter.high_level_risks || []).map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>
+                                <div><strong>Success Criteria:</strong><ul class="list-disc ms-5">${(data.charter.success_criteria || []).map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul></div>
+                            </div>
+                        `;
+                    }
+                    
+                    document.getElementById('charterResult').classList.remove('hidden');
+                } else {
+                    alert(data.error || WalaPlusI18n.t('dyn.projects.failed_generate_charter'));
+                }
+            } catch (error) {
+                console.error('Error generating charter:', error);
+                alert(WalaPlusI18n.t('dyn.projects.failed_generate_charter'));
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-magic me-2"></i>' + WalaPlusI18n.t('dyn.projects.btn_generate_charter');
+            }
+        }
+
+        async function applyCharterToProject() {
+            if (!generatedCharter) return;
+
+            const projectName = document.getElementById('charterProjectName').value;
+            const projectType = document.getElementById('charterProjectType').value.toLowerCase().replace(' ', '_');
+            const department = document.getElementById('charterDepartment').value;
+            const budget = parseFloat(document.getElementById('charterBudget').value) || 0;
+
+            const data = {
+                project_name: projectName,
+                project_code: 'PMP-' + Date.now().toString(36).toUpperCase(),
+                project_type: projectType,
+                department: department,
+                status: 'initiation',
+                priority: 'medium',
+                budget_approved: budget,
+                scope_statement: generatedCharter.scope_statement || '',
+                project_charter: JSON.stringify(generatedCharter),
+                deliverables: generatedCharter.deliverables || [],
+                assumptions: generatedCharter.assumptions || [],
+                constraints: generatedCharter.constraints || [],
+                quality_criteria: generatedCharter.quality_requirements || '',
+                ai_generated_charter: generatedCharter
+            };
+
+            try {
+                const res = await fetch('/api/pmp/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (res.ok) {
+                    closeCharterModal();
+                    loadProjects();
+                    loadAnalytics();
+                    alert(WalaPlusI18n.t('dyn.projects.project_created_charter'));
+                } else {
+                    const err = await res.json();
+                    alert(err.error || WalaPlusI18n.t('dyn.projects.failed_create_project_charter'));
+                }
+            } catch (error) {
+                console.error('Error creating project:', error);
+                alert(WalaPlusI18n.t('dyn.projects.failed_create_project_charter'));
+            }
+        }
+
+        function openRiskModal() { alert(WalaPlusI18n.t('dyn.projects.risk_modal_stub')); }
+        function openMilestoneModal() { alert(WalaPlusI18n.t('dyn.projects.milestone_modal_stub')); }
+        function openStakeholderModal() { alert(WalaPlusI18n.t('dyn.projects.stakeholder_modal_stub')); }
+        function editRisk(id) { alert(WalaPlusI18n.t('dyn.projects.edit_risk', { id })); }
+        function deleteRisk(id) { if (confirm(WalaPlusI18n.t('dyn.projects.confirm_delete_risk'))) fetch(`/api/pmp/risks/${id}`, { method: 'DELETE' }).then(() => loadRisks()); }
+        function editStakeholder(id) { alert(WalaPlusI18n.t('dyn.projects.edit_stakeholder', { id })); }
+        function deleteStakeholder(id) { if (confirm(WalaPlusI18n.t('dyn.projects.confirm_delete_stakeholder'))) fetch(`/api/pmp/stakeholders/${id}`, { method: 'DELETE' }).then(() => loadStakeholders()); }
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

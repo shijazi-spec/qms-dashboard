@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Lead Call History — ExampleOrg QMS</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!--
+      DMAIC Solution #2 — per-lead/per-phone call history view.
+      Feature-flagged on LEAD_HISTORY_VIEW (and LEAD_HISTORY_VIEW_USERS
+      for the per-user dogfood path). The /api/calls/lead-history endpoint
+      returns 404 when the flag is off, so this page renders an empty
+      state for users who can't reach the endpoint.
+    -->
+    <div class="max-w-6xl mx-auto px-6 py-8">
+        <header class="mb-6">
+            <h1 class="text-2xl font-bold text-gray-900">Lead Call History</h1>
+            <p class="text-sm text-gray-500 mt-1">
+                Every call for one Zoho Lead/Deal — or any phone number — in chronological order.
+            </p>
+        </header>
+
+        <section id="lookup-card" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <label class="block">
+                    <span class="text-xs text-gray-600 uppercase tracking-wide">Lookup by</span>
+                    <select id="lookup-type" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                        <option value="lead_id">Zoho Lead ID</option>
+                        <option value="deal_id">Zoho Deal ID</option>
+                        <option value="phone">Phone number</option>
+                    </select>
+                </label>
+                <label class="block sm:col-span-2">
+                    <span class="text-xs text-gray-600 uppercase tracking-wide">Value</span>
+                    <input id="lookup-value" type="text" placeholder="e.g. <REDACTED_PHONE> or <REDACTED_PHONE>"
+                           class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+                </label>
+                <label class="block">
+                    <span class="text-xs text-gray-600 uppercase tracking-wide">&nbsp;</span>
+                    <button id="load-btn" type="button"
+                            class="mt-1 w-full bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
+                        Load history
+                    </button>
+                </label>
+            </div>
+            <p id="lookup-error" class="hidden mt-3 text-sm text-red-600"></p>
+        </section>
+
+        <section id="summary-card" class="hidden grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Total calls</div>
+                <div id="sum-total" class="text-2xl font-bold text-gray-900 mt-1">—</div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Unique agents</div>
+                <div id="sum-agents" class="text-2xl font-bold text-gray-900 mt-1">—</div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Earliest</div>
+                <div id="sum-earliest" class="text-sm font-medium text-gray-900 mt-1">—</div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Latest</div>
+                <div id="sum-latest" class="text-sm font-medium text-gray-900 mt-1">—</div>
+            </div>
+        </section>
+
+        <section id="calls-card" class="hidden bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-6 py-3 border-b border-gray-100 flex items-center justify-between">
+                <h2 class="font-semibold text-gray-900">Calls — newest first</h2>
+                <span id="calls-count" class="text-xs text-gray-500"></span>
+            </div>
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-xs text-gray-600 uppercase tracking-wide">
+                    <tr>
+                        <th scope="col" class="px-4 py-2 text-start">Date</th>
+                        <th scope="col" class="px-4 py-2 text-start">Agent</th>
+                        <th scope="col" class="px-4 py-2 text-start">Direction</th>
+                        <th scope="col" class="px-4 py-2 text-end">Duration</th>
+                        <th scope="col" class="px-4 py-2 text-start">Status</th>
+                        <th scope="col" class="px-4 py-2 text-start">Linked via</th>
+                        <th scope="col" class="px-4 py-2 text-end">QA score</th>
+                    </tr>
+                </thead>
+                <tbody id="calls-body" class="divide-y divide-gray-100">
+                </tbody>
+            </table>
+        </section>
+
+        <section id="empty-card" class="hidden bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+            <p class="text-gray-500">No calls found for this identifier.</p>
+        </section>
+    </div>
+
+    <script>
+        (function () {
+            // No inline event handlers — wire up programmatically per CSP guard.
+            const btn = document.getElementById('load-btn');
+            const errBox = document.getElementById('lookup-error');
+            const summaryCard = document.getElementById('summary-card');
+            const callsCard = document.getElementById('calls-card');
+            const emptyCard = document.getElementById('empty-card');
+
+            function showError(msg) {
+                errBox.textContent = msg;
+                errBox.classList.remove('hidden');
+                summaryCard.classList.add('hidden');
+                callsCard.classList.add('hidden');
+                emptyCard.classList.add('hidden');
+            }
+
+            function fmtDate(d) {
+                if (!d) return '—';
+                try { return new Date(d).toLocaleString(); } catch { return String(d); }
+            }
+            function fmtDur(sec) {
+                if (sec == null) return '—';
+                const s = Math.max(0, Math.round(sec));
+                const m = Math.floor(s / 60);
+                const r = s - m * 60;
+                return `${m}m ${r}s`;
+            }
+            function escapeHtml(v) {
+                return String(v == null ? '' : v)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
+
+            async function load() {
+                errBox.classList.add('hidden');
+                const type = document.getElementById('lookup-type').value;
+                const value = document.getElementById('lookup-value').value.trim();
+                if (!value) { showError('Enter a value to look up.'); return; }
+
+                btn.disabled = true;
+                btn.textContent = 'Loading…';
+                try {
+                    const url = `/api/calls/lead-history?${encodeURIComponent(type)}=${encodeURIComponent(value)}`;
+                    const r = await fetch(url, { credentials: 'include' });
+                    if (r.status === 404) {
+                        showError('Lead history view is not enabled. Ask your admin to set LEAD_HISTORY_VIEW=true (or LEAD_HISTORY_VIEW_USERS=your_email for a per-user enable).');
+                        return;
+                    }
+                    if (!r.ok) {
+                        const body = await r.json().catch(() => ({}));
+                        showError(body.error || `HTTP ${r.status}`);
+                        return;
+                    }
+                    const data = await r.json();
+
+                    // Summary
+                    document.getElementById('sum-total').textContent = data.call_count;
+                    document.getElementById('sum-agents').textContent = data.unique_agents;
+                    document.getElementById('sum-earliest').textContent = fmtDate(data.date_range && data.date_range.earliest);
+                    document.getElementById('sum-latest').textContent = fmtDate(data.date_range && data.date_range.latest);
+                    summaryCard.classList.remove('hidden');
+
+                    // Calls table
+                    if (!data.calls || data.calls.length === 0) {
+                        callsCard.classList.add('hidden');
+                        emptyCard.classList.remove('hidden');
+                        return;
+                    }
+                    emptyCard.classList.add('hidden');
+                    document.getElementById('calls-count').textContent = `${data.calls.length} record(s)`;
+                    document.getElementById('calls-body').innerHTML = data.calls.map((c) => `
+                        <tr>
+                            <td class="px-4 py-2 text-gray-700">${escapeHtml(fmtDate(c.call_date))}</td>
+                            <td class="px-4 py-2 text-gray-700">${escapeHtml(c.agent_name || c.agent_email || '—')}</td>
+                            <td class="px-4 py-2 text-gray-700">${escapeHtml(c.direction || '—')}</td>
+                            <td class="px-4 py-2 text-end text-gray-700">${escapeHtml(fmtDur(c.duration_seconds))}</td>
+                            <td class="px-4 py-2 text-gray-700">${escapeHtml(c.status || '—')}</td>
+                            <td class="px-4 py-2 text-gray-500">${escapeHtml(c.linked_via || '—')}</td>
+                            <td class="px-4 py-2 text-end font-medium ${c.overall_score == null ? 'text-gray-400' : c.overall_score >= 80 ? 'text-green-700' : c.overall_score >= 60 ? 'text-amber-700' : 'text-red-700'}">${c.overall_score == null ? '—' : escapeHtml(c.overall_score)}</td>
+                        </tr>
+                    `).join('');
+                    callsCard.classList.remove('hidden');
+                } catch (e) {
+                    showError(e && e.message ? e.message : 'Request failed.');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Load history';
+                }
+            }
+
+            btn.addEventListener('click', load);
+            document.getElementById('lookup-value').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') load();
+            });
+        })();
+    </script>
+    <script>
+        // Apply Arabic/English translations — required by scripts/check-i18n.cjs.
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

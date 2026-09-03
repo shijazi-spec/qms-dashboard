@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg — Manual Audit Intake</title>
+  <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+  <link href="<REDACTED_URL>" rel="stylesheet">
+  <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+  <style>
+    html, body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+    .sev-critical { background:#FECACA; color:#991B1B; }
+    .sev-major    { background:#FED7AA; color:#9A3412; }
+    .sev-minor    { background:#FEF08A; color:#854D0E; }
+    .sev-observation, .sev-info { background:#E5E7EB; color:#374151; }
+    .status-pending  { background:#E5E7EB; color:#374151; }
+    .status-accepted { background:#BBF7D0; color:#166534; }
+    .status-rejected { background:#FECACA; color:#991B1B; }
+    .status-edited   { background:#DBEAFE; color:#1E40AF; }
+    .status-promoted { background:#C7D2FE; color:#3730A3; }
+    .confidence-bar  { height:4px; background:#E5E7EB; border-radius:2px; overflow:hidden; }
+    .confidence-fill { height:100%; background:linear-gradient(90deg,#EF4444,#F59E0B 50%,#10B981); }
+  </style>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50">
+  <div id="ExampleOrg-nav"></div>
+  <script src="/js/a11y.js" defer></script>
+  <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      WalaPlusNav.init('audits');
+    });
+  </script>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="mb-6 flex items-start justify-between flex-wrap gap-3">
+      <div>
+        <div class="text-xs text-gray-400 mb-1">
+          <a href="/audits" class="hover:underline" data-i18n="nav.items.audits">Internal Audits</a>
+          <span class="mx-1">/</span>
+          <span class="text-gray-600" data-i18n="intake.breadcrumb_manual">Manual Intake</span>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900" data-i18n="intake.title">Manual Audit Intake Workspace</h1>
+        <p class="text-sm text-gray-500 mt-1 max-w-3xl">
+          <span data-i18n="intake.subtitle">Central single-point intake for off-platform audit reports (ISO 19011 §6.6). Uploads go to GPT-4o for structured extraction; every finding is reviewed by the Quality Manager before it enters the audit register.</span>
+          <span data-i18n="intake.ref">Ref</span>: <a href="/policies" class="text-purple-700 hover:underline">WP-SOP-041</a>.
+        </p>
+      </div>
+      <button id="newIntakeBtn" data-on-click="removeClass" data-args="[&quot;uploadDrawer&quot;,&quot;hidden&quot;]"
+              class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 font-medium" data-i18n="intake.new_intake">
+        + New Intake
+      </button>
+    </div>
+
+    <!-- ============================== UPLOAD DRAWER ========================== -->
+    <div id="uploadDrawer" class="hidden bg-white border border-indigo-200 rounded-lg shadow-sm p-5 mb-6">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="font-semibold text-gray-900" data-i18n="intake.sec_upload">Upload Off-Platform Audit Report</h2>
+        <button data-on-click="addClass" data-args="[&quot;uploadDrawer&quot;,&quot;hidden&quot;]"
+                class="text-gray-400 hover:text-gray-600">&times;</button>
+      </div>
+      <form id="uploadForm" data-on-submit="submitIntake" data-pass-event="true" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        <div>
+          <label class="block text-gray-700 font-medium" data-i18n="intake.f_audit_title">Audit Title *</label>
+          <input name="title" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium" data-i18n="intake.f_source_dept">Source Department *</label>
+          <input name="source_department" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
+                 placeholder="HR, Finance, IT, Operations..." data-i18n-placeholder="intake.f_source_dept_ph">
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium" data-i18n="intake.f_audit_date">Audit Date</label>
+          <input name="audit_date" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium" data-i18n="intake.f_auditor">Auditor (External / Department)</label>
+          <input name="auditor" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
+                 placeholder="e.g. Internal HR audit team" data-i18n-placeholder="intake.f_auditor_ph">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-gray-700 font-medium" data-i18n="intake.f_report_file">Report File *</label>
+          <input name="file" type="file" required accept=".pdf,.txt,.md,.doc,.docx" class="mt-1 w-full">
+          <p class="text-xs text-gray-500 mt-1" data-i18n="intake.f_file_help">
+            PDF, Word, TXT or Markdown (&lt;10 MB).
+            PDF/DOCX native text extraction requires pdf-parse/mammoth;
+            until those are installed you can paste the raw text at extraction time.
+          </p>
+        </div>
+        <div class="md:col-span-2 flex justify-end gap-2 pt-2">
+          <button type="button" data-on-click="addClass" data-args="[&quot;uploadDrawer&quot;,&quot;hidden&quot;]"
+                  class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg" data-i18n="common.cancel">Cancel</button>
+          <button type="submit"
+                  class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 font-medium" data-i18n="intake.upload_btn">
+            Upload
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ============================== INTAKES LIST =========================== -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+      <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+        <h2 class="font-semibold text-gray-900" data-i18n="intake.sec_intakes">Intakes</h2>
+        <button data-on-click="loadIntakes" class="text-sm text-indigo-700 hover:text-indigo-900" data-i18n="common.refresh">Refresh</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th scope="col" class="px-4 py-2 text-start text-xs font-semibold text-gray-600 uppercase" data-i18n="intake.col_code">Code</th>
+              <th scope="col" class="px-4 py-2 text-start text-xs font-semibold text-gray-600 uppercase" data-i18n="common.title">Title</th>
+              <th scope="col" class="px-4 py-2 text-start text-xs font-semibold text-gray-600 uppercase" data-i18n="common.department">Department</th>
+              <th scope="col" class="px-4 py-2 text-center text-xs font-semibold text-gray-600 uppercase" data-i18n="common.status">Status</th>
+              <th scope="col" class="px-4 py-2 text-center text-xs font-semibold text-gray-600 uppercase" data-i18n="intake.col_findings">Findings</th>
+              <th scope="col" class="px-4 py-2 text-center text-xs font-semibold text-gray-600 uppercase" data-i18n="intake.col_uploaded">Uploaded</th>
+              <th scope="col" class="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody id="intakesTbody" class="bg-white divide-y divide-gray-100">
+            <tr><td colspan="7" class="text-center text-gray-400 py-8" data-i18n="intake.loading_intakes">Loading intakes...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================== DETAIL WORKSPACE ======================= -->
+    <div id="detailPane" class="hidden bg-white rounded-lg shadow-sm border border-gray-200">
+      <div class="p-4 border-b border-gray-200 flex justify-between items-start flex-wrap gap-3">
+        <div>
+          <div class="text-xs text-gray-500" id="detailBreadcrumb">—</div>
+          <h2 class="font-semibold text-gray-900 mt-1" id="detailTitle">—</h2>
+          <p class="text-xs text-gray-500 mt-1" id="detailMeta">—</p>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <a id="detailFileLink" href="#" target="_blank" class="hidden text-sm text-indigo-700 hover:text-indigo-900 underline self-center" data-i18n="intake.open_source_file">Open source file</a>
+          <button id="detailExtractBtn" data-on-click="runExtraction"
+                  class="px-3 py-1.5 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 hidden" data-i18n="intake.run_extraction">
+            Run AI Extraction
+          </button>
+          <button id="detailFinalizeBtn" data-on-click="finalizeIntake"
+                  class="px-3 py-1.5 text-sm bg-green-700 text-white rounded-lg hover:bg-green-800 hidden" data-i18n="intake.promote_findings">
+            Promote Accepted to Findings
+          </button>
+          <button data-on-click="closeDetail" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+      </div>
+
+      <!-- Optional text-paste fallback when PDF/DOCX parsing is not available -->
+      <div id="pasteFallback" class="hidden p-4 bg-amber-50 border-b border-amber-200">
+        <p class="text-sm text-amber-800 mb-2" data-i18n="intake.paste_warning">
+          Binary file type detected. Paste the report text below and click Run AI Extraction. (Native PDF parsing will be added in a future release.)
+        </p>
+        <textarea id="pasteText" rows="8"
+                  class="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm font-mono"
+                  placeholder="Paste the extracted report text here..." data-i18n-placeholder="intake.paste_placeholder"></textarea>
+      </div>
+
+      <div id="findingsList" class="divide-y divide-gray-100">
+        <div class="text-center text-gray-400 py-12" data-i18n="intake.select_to_review">Select an intake to begin review.</div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const escHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+
+    let currentIntake = null;
+
+    async function loadIntakes() {
+      const tbody = document.getElementById('intakesTbody');
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + WalaPlusI18n.t('dyn.intake.loading') + '</td></tr>';
+      try {
+        const res = await fetch('/api/manual-audit-intake', { credentials: 'same-origin' });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        const rows = data.rows || data.intakes || [];
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + WalaPlusI18n.t('dyn.intake.no_intakes') + '</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(r => `
+          <tr class="hover:bg-gray-50 cursor-pointer" data-on-click="openDetail" data-args="[${r.id}]">
+            <td class="px-4 py-2 font-mono text-xs">${escHtml(r.intake_code)}</td>
+            <td class="px-4 py-2">${escHtml(r.title)}</td>
+            <td class="px-4 py-2">${escHtml(r.department || '—')}</td>
+            <td class="px-4 py-2 text-center">
+              <span class="px-2 py-0.5 rounded text-xs font-medium status-${escHtml(r.status || 'pending')}">
+                ${escHtml((r.status || 'pending').toUpperCase())}
+              </span>
+            </td>
+            <td class="px-4 py-2 text-center">${r.findings_count ?? '—'}</td>
+            <td class="px-4 py-2 text-center text-xs text-gray-500">${r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
+            <td class="px-4 py-2 text-end">
+              <button data-on-click="event.stopPropagation,openDetail" data-args="[[],[${r.id}]]"
+                      class="text-indigo-700 hover:text-indigo-900 text-sm">${_t('intake.review_arrow','Review →')}</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-red-500 py-8">' + WalaPlusI18n.t('dyn.intake.failed_load') + '</td></tr>';
+      }
+    }
+
+    async function submitIntake(ev) {
+      ev.preventDefault();
+      const form = ev.target;
+      const fd = new FormData(form);
+      try {
+        const res = await fetch('/api/manual-audit-intake', {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: fd,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(WalaPlusI18n.t('dyn.intake.upload_failed', { msg: err.error || res.statusText }));
+          return;
+        }
+        const data = await res.json();
+        form.reset();
+        document.getElementById('uploadDrawer').classList.add('hidden');
+        await loadIntakes();
+        if (data.intake?.id) openDetail(data.intake.id);
+      } catch (err) {
+        alert(WalaPlusI18n.t('dyn.intake.upload_error', { msg: err.message }));
+      }
+    }
+
+    async function openDetail(id) {
+      document.getElementById('detailPane').classList.remove('hidden');
+      document.getElementById('findingsList').innerHTML =
+        '<div class="text-center text-gray-400 py-12">' + WalaPlusI18n.t('dyn.intake.loading_intake') + '</div>';
+      try {
+        const res = await fetch('/api/manual-audit-intake/' + id, { credentials: 'same-origin' });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        currentIntake = data.intake;
+        renderDetail(data.intake, data.findings || []);
+      } catch (err) {
+        document.getElementById('findingsList').innerHTML =
+          '<div class="text-center text-red-500 py-12">' + WalaPlusI18n.t('dyn.intake.failed_load_intake', { msg: escHtml(err.message) }) + '</div>';
+      }
+    }
+
+    function closeDetail() {
+      document.getElementById('detailPane').classList.add('hidden');
+      currentIntake = null;
+    }
+
+    function renderDetail(intake, findings) {
+      document.getElementById('detailBreadcrumb').textContent =
+        intake.intake_code + ' · ' + (intake.department || 'unspecified dept') +
+        ' · ' + (intake.status || 'pending');
+      document.getElementById('detailTitle').textContent = intake.title;
+      document.getElementById('detailMeta').textContent =
+        'Uploaded by ' + (intake.uploaded_by_email || '—') +
+        ' on ' + (intake.created_at ? new Date(intake.created_at).toLocaleString() : '—') +
+        (intake.audit_date ? ' · Audit date: ' + new Date(intake.audit_date).toLocaleDateString() : '');
+
+      const fileLink = document.getElementById('detailFileLink');
+      if (intake.file_path) {
+        fileLink.href = '/api/manual-audit-intake/' + intake.id + '/file';
+        fileLink.classList.remove('hidden');
+      } else {
+        fileLink.classList.add('hidden');
+      }
+
+      const extractBtn  = document.getElementById('detailExtractBtn');
+      const finalizeBtn = document.getElementById('detailFinalizeBtn');
+      extractBtn.classList.toggle('hidden', intake.status === 'extracting' || intake.status === 'accepted');
+      finalizeBtn.classList.toggle('hidden',
+        !findings.some(f => f.status === 'accepted' || f.status === 'edited')
+        || intake.status === 'accepted');
+
+      // Show paste fallback when file appears binary (mime != text/*)
+      const paste = document.getElementById('pasteFallback');
+      const isText = intake.file_mime && (intake.file_mime.startsWith('text/') || intake.file_mime.includes('markdown'));
+      paste.classList.toggle('hidden', findings.length > 0 || isText);
+
+      const list = document.getElementById('findingsList');
+      if (findings.length === 0) {
+        list.innerHTML =
+          '<div class="text-center text-gray-400 py-12">' +
+            'No findings yet. Click <strong>Run AI Extraction</strong> to ask GPT-4o ' +
+            'to propose findings from the uploaded report.' +
+          '</div>';
+        return;
+      }
+      list.innerHTML = findings.map(f => renderFinding(f)).join('');
+    }
+
+    function renderFinding(f) {
+      const conf = Math.round((f.confidence_score || 0) * 100);
+      const sevClass = 'sev-' + (f.severity || 'observation').toLowerCase();
+      const statusClass = 'status-' + (f.status || 'pending');
+      return `
+        <div class="p-4 ${f.status === 'rejected' ? 'opacity-60' : ''}">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2 py-0.5 rounded text-xs font-semibold ${sevClass}">${escHtml((f.severity || 'observation').toUpperCase())}</span>
+                <span class="px-2 py-0.5 rounded text-xs font-medium ${statusClass}">${escHtml((f.status || 'pending').toUpperCase())}</span>
+                <span class="text-xs text-gray-500">confidence ${conf}%</span>
+              </div>
+              <h3 class="mt-2 font-semibold text-gray-900" contenteditable="true" data-field="title" data-id="${f.id}">${escHtml(f.title)}</h3>
+              <p class="mt-1 text-sm text-gray-700 whitespace-pre-wrap" contenteditable="true" data-field="description" data-id="${f.id}">${escHtml(f.description || '')}</p>
+              ${f.source_quote ? `
+                <div class="mt-2 p-2 bg-gray-50 border-s-4 border-gray-300 text-xs text-gray-600 italic">
+                  <div class="font-semibold text-gray-500 mb-1">Source quote (click-to-source):</div>
+                  ${escHtml(f.source_quote)}
+                </div>
+              ` : ''}
+              <div class="confidence-bar mt-2"><div class="confidence-fill" data-style="width:${conf}%"></div></div>
+            </div>
+            <div class="flex flex-col gap-2">
+              ${f.status === 'pending' || f.status === 'edited' ? `
+                <button data-on-click="reviewFinding" data-args="[${f.id},&quot;accept&quot;]"
+                        class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">Accept</button>
+                <button data-on-click="saveFindingEdits" data-args="[${f.id}]"
+                        class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Save Edits</button>
+                <button data-on-click="rejectFinding" data-args="[${f.id}]"
+                        class="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Reject</button>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function runExtraction() {
+      if (!currentIntake) return;
+      const pasteTextEl = document.getElementById('pasteText');
+      const fallback = document.getElementById('pasteFallback');
+      const body = {};
+      if (!fallback.classList.contains('hidden') && pasteTextEl.value.trim().length > 0) {
+        body.text = pasteTextEl.value;
+      }
+      const btn = document.getElementById('detailExtractBtn');
+      const prev = btn.textContent;
+      btn.disabled = true; btn.textContent = WalaPlusI18n.t('dyn.intake.extracting');
+      try {
+        const res = await fetch('/api/manual-audit-intake/' + currentIntake.id + '/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(WalaPlusI18n.t('dyn.intake.extraction_failed', { msg: err.error || res.statusText }));
+          return;
+        }
+        await openDetail(currentIntake.id);
+        await loadIntakes();
+      } finally {
+        btn.disabled = false; btn.textContent = prev;
+      }
+    }
+
+    async function reviewFinding(id, action, extra = {}) {
+      const res = await fetch('/api/manual-audit-intake/findings/' + id + '/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ action, ...extra }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(WalaPlusI18n.t('dyn.intake.review_failed', { msg: err.error || res.statusText }));
+        return;
+      }
+      openDetail(currentIntake.id);
+    }
+
+    async function rejectFinding(id) {
+      const reason = prompt(WalaPlusI18n.t('dyn.intake.prompt_rejection_reason'));
+      if (reason === null) return;
+      if (!reason || reason.trim().length < 5) {
+        alert(WalaPlusI18n.t('dyn.intake.reason_too_short'));
+        return;
+      }
+      reviewFinding(id, 'reject', { reject_reason: reason.trim() });
+    }
+
+    async function saveFindingEdits(id) {
+      const titleEl = document.querySelector(`[data-field="title"][data-id="${id}"]`);
+      const descEl  = document.querySelector(`[data-field="description"][data-id="${id}"]`);
+      const patch = {
+        title:       titleEl ? titleEl.textContent.trim() : undefined,
+        description: descEl  ? descEl.textContent.trim()  : undefined,
+      };
+      reviewFinding(id, 'edit', { patch });
+    }
+
+    async function finalizeIntake() {
+      if (!currentIntake) return;
+      if (!confirm(WalaPlusI18n.t('dyn.intake.confirm_finalize'))) return;
+      const res = await fetch('/api/manual-audit-intake/' + currentIntake.id + '/finalize', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(WalaPlusI18n.t('dyn.intake.finalize_failed', { msg: err.error || res.statusText }));
+        return;
+      }
+      const data = await res.json();
+      alert(WalaPlusI18n.t('dyn.intake.findings_promoted', { count: data.promoted_count || 0, code: data.audit?.audit_code || '(unknown)' }));
+      await loadIntakes();
+      closeDetail();
+    }
+
+    document.addEventListener('DOMContentLoaded', loadIntakes);
+  </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

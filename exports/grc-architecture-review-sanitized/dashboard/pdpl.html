@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>PDPL Compliance Dashboard - ExampleOrg</title>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <link href="/css/navigation.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tab-active { border-bottom: 2px solid #4F46E5; color: #4F46E5; }
+        .status-badge { padding: 2px 8px; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .status-received { background: #FEF3C7; color: #92400E; }
+        .status-in_progress { background: #DBEAFE; color: #1E40AF; }
+        .status-pending_approval { background: #E0E7FF; color: #3730A3; }
+        .status-completed { background: #D1FAE5; color: #065F46; }
+        .status-rejected { background: #FEE2E2; color: #991B1B; }
+        .status-detected { background: #FEF3C7; color: #92400E; }
+        .status-contained { background: #DBEAFE; color: #1E40AF; }
+        .status-investigating { background: #E0E7FF; color: #3730A3; }
+        .status-resolved { background: #D1FAE5; color: #065F46; }
+        .status-closed { background: #E5E7EB; color: #374151; }
+        .severity-low { background: #D1FAE5; color: #065F46; }
+        .severity-medium { background: #FEF3C7; color: #92400E; }
+        .severity-high { background: #FED7AA; color: #9A3412; }
+        .severity-critical { background: #FEE2E2; color: #991B1B; }
+        .category-personal { background: #DBEAFE; color: #1E40AF; }
+        .category-sensitive { background: #FEE2E2; color: #991B1B; }
+        .category-business { background: #D1FAE5; color: #065F46; }
+        .category-public { background: #E5E7EB; color: #374151; }
+    </style>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/navigation.js?v=5.7"></script>
+    <script>WalaPlusNav.init('pdpl');</script>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="pdpl.title">PDPL Compliance Dashboard</h1>
+                <p class="text-gray-500" data-i18n="pdpl.subtitle">Personal Data Protection Law - Privacy by Design</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <button data-on-click="navigateTo" data-args="[&quot;/api/pdpl/export&quot;]" class="px-4 py-2 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 font-medium flex items-center gap-2 text-sm" data-testid="button-export-csv">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Export CSV
+                </button>
+                <div id="complianceScore" class="text-center">
+                    <div class="text-3xl font-bold text-indigo-600">--</div>
+                    <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_score">Compliance Score</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_inventory">Data Inventory</div>
+                <div id="inventoryCount" class="text-2xl font-bold text-blue-600">--</div>
+                <div class="text-xs text-gray-400">Fields tracked</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_dsar">DSAR Requests</div>
+                <div id="dsarPending" class="text-2xl font-bold text-amber-600">--</div>
+                <div class="text-xs text-gray-400">Pending</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_retention">Retention Policies</div>
+                <div id="retentionCount" class="text-2xl font-bold text-green-600">--</div>
+                <div class="text-xs text-gray-400">Active</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_incidents">Open Incidents</div>
+                <div id="incidentsOpen" class="text-2xl font-bold text-red-600">--</div>
+                <div class="text-xs text-gray-400">Unresolved</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_guardrails">AI Guardrails</div>
+                <div id="guardrailsActive" class="text-2xl font-bold text-purple-600">--</div>
+                <div class="text-xs text-gray-400">Active</div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow">
+            <div class="border-b">
+                <nav class="flex gap-8 px-6" aria-label="Tabs">
+                    <button data-on-click="switchTab" data-args="[&quot;inventory&quot;]" id="tab-inventory" class="py-4 px-1 tab-active font-medium text-sm">Data Inventory</button>
+                    <button data-on-click="switchTab" data-args="[&quot;dsar&quot;]" id="tab-dsar" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">DSAR Requests</button>
+                    <button data-on-click="switchTab" data-args="[&quot;retention&quot;]" id="tab-retention" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">Retention Policies</button>
+                    <button data-on-click="switchTab" data-args="[&quot;incidents&quot;]" id="tab-incidents" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">Incidents</button>
+                    <button data-on-click="switchTab" data-args="[&quot;guardrails&quot;]" id="tab-guardrails" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">AI Guardrails</button>
+                </nav>
+            </div>
+
+            <div id="panel-inventory" class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold" data-i18n="pdpl.sec_inventory">Personal Data Inventory</h3>
+                    <button data-on-click="openAddInventoryModal" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Add Field</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Field</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Category</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Module</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Table</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Purpose</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Retention</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Encrypted</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Masked</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTable" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="panel-dsar" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold" data-i18n="pdpl.sec_dsar">Data Subject Access Requests</h3>
+                    <button data-on-click="openAddDSARModal" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">New Request</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Request ID</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Subject</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Received</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Due Date</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Assigned To</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dsarTable" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="panel-retention" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold" data-i18n="pdpl.sec_retention">Data Retention Policies</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Policy Name</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Category</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Module</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Table</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Retention</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Action</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Last Run</th>
+                            </tr>
+                        </thead>
+                        <tbody id="retentionTable" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="panel-incidents" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold" data-i18n="pdpl.sec_incidents">Data Incidents</h3>
+                    <button data-on-click="openAddIncidentModal" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Report Incident</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Incident ID</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Title</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Severity</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Detected</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Records Affected</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Notification</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="incidentsTable" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="panel-guardrails" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold" data-i18n="pdpl.sec_guardrails">AI PII Guardrails</h3>
+                    <button data-on-click="openAddGuardrailModal" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">Add Guardrail</button>
+                </div>
+                <div class="mb-6 p-4 bg-purple-50 rounded-lg">
+                    <h4 class="font-medium text-purple-800 mb-2">Test PII Masking</h4>
+                    <textarea id="testPiiInput" rows="3" class="w-full border rounded-lg p-2 text-sm" placeholder="Enter text with PII to test masking (e.g., email: user@example.invalid, phone: <REDACTED_PHONE>"></textarea>
+                    <button data-on-click="testPiiMasking" class="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">Test Masking</button>
+                    <div id="maskedOutput" class="mt-2 p-3 bg-white rounded border hidden">
+                        <div class="text-sm font-medium text-gray-700">Masked Output:</div>
+                        <div id="maskedText" class="text-sm text-gray-600 mt-1"></div>
+                        <div id="maskedCount" class="text-xs text-purple-600 mt-1"></div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Field Name</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Pattern (Regex)</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Replacement</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Module</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="guardrailsTable" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="addDSARModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 class="text-lg font-semibold mb-4">New DSAR Request</h3>
+            <form id="dsarForm">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Request Type</label>
+                        <select id="dsarType" class="mt-1 w-full border rounded-lg px-3 py-2" required>
+                            <option value="access">Access (Right to Access)</option>
+                            <option value="correction">Correction (Right to Rectification)</option>
+                            <option value="deletion">Deletion (Right to Erasure)</option>
+                            <option value="restriction">Restriction (Right to Restrict Processing)</option>
+                            <option value="portability">Portability (Right to Data Portability)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Subject Name</label>
+                        <input type="text" id="dsarSubjectName" class="mt-1 w-full border rounded-lg px-3 py-2" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Subject Email</label>
+                        <input type="email" id="dsarSubjectEmail" class="mt-1 w-full border rounded-lg px-3 py-2" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Description</label>
+                        <textarea id="dsarDescription" rows="3" class="mt-1 w-full border rounded-lg px-3 py-2"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Assign To</label>
+                        <input type="text" id="dsarAssignee" class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="Email of assignee">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 mt-6">
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addDSARModal&quot;]" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="addIncidentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 class="text-lg font-semibold mb-4">Report Data Incident</h3>
+            <form id="incidentForm">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Incident Title</label>
+                        <input type="text" id="incidentTitle" class="mt-1 w-full border rounded-lg px-3 py-2" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Description</label>
+                        <textarea id="incidentDescription" rows="3" class="mt-1 w-full border rounded-lg px-3 py-2" required></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Severity</label>
+                        <select id="incidentSeverity" class="mt-1 w-full border rounded-lg px-3 py-2" required>
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Records Affected (Estimate)</label>
+                        <input type="number" id="incidentRecords" class="mt-1 w-full border rounded-lg px-3 py-2" min="0">
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="incidentNotify" class="me-2">
+                        <label class="text-sm text-gray-700">Notification to authorities required</label>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 mt-6">
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addIncidentModal&quot;]" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Report Incident</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/pdpl';
+        let currentTab = 'inventory';
+
+        async function loadComplianceStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('complianceScore').innerHTML = `
+                        <div class="text-3xl font-bold ${data.complianceScore >= 80 ? 'text-green-600' : data.complianceScore >= 60 ? 'text-amber-600' : 'text-red-600'}">${data.complianceScore}%</div>
+                        <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_score">Compliance Score</div>
+                    `;
+                    document.getElementById('inventoryCount').textContent = data.dataInventory.total;
+                    document.getElementById('dsarPending').textContent = data.dsar.pending;
+                    document.getElementById('retentionCount').textContent = data.retention.activePolicies;
+                    document.getElementById('incidentsOpen').textContent = data.incidents.open;
+                    document.getElementById('guardrailsActive').textContent = data.aiGuardrails.active;
+                }
+            } catch (error) {
+                console.error('Error loading compliance status:', error);
+            }
+        }
+
+        async function loadInventory() {
+            try {
+                const response = await fetch(`${API_BASE}/inventory`);
+                const data = await response.json();
+                if (data.success) {
+                    const tbody = document.getElementById('inventoryTable');
+                    tbody.innerHTML = data.inventory.map(item => `
+                        <tr>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900">${item.field_name}</td>
+                            <td class="px-4 py-3"><span class="status-badge category-${item.data_category}">${item.data_category}</span></td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${item.module}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${item.table_name}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">${item.purpose}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${item.retention_days} days</td>
+                            <td class="px-4 py-3 text-sm">${item.is_encrypted ? '<span class="text-green-600">Yes</span>' : '<span class="text-red-600">No</span>'}</td>
+                            <td class="px-4 py-3 text-sm">${item.is_masked ? '<span class="text-green-600">Yes</span>' : '<span class="text-gray-400">No</span>'}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading inventory:', error);
+            }
+        }
+
+        async function loadDSARRequests() {
+            try {
+                const response = await fetch(`${API_BASE}/dsar`);
+                const data = await response.json();
+                if (data.success) {
+                    const tbody = document.getElementById('dsarTable');
+                    tbody.innerHTML = data.requests.length ? data.requests.map(req => `
+                        <tr>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900">${req.request_id}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600 capitalize">${req.request_type}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${req.subject_name}<br><span class="text-xs text-gray-400">${req.subject_email}</span></td>
+                            <td class="px-4 py-3"><span class="status-badge status-${req.status}">${req.status.replace('_', ' ')}</span></td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${new Date(req.received_date).toLocaleDateString()}</td>
+                            <td class="px-4 py-3 text-sm ${new Date(req.due_date) < new Date() && req.status !== 'completed' ? 'text-red-600 font-medium' : 'text-gray-600'}">${new Date(req.due_date).toLocaleDateString()}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${req.assigned_to || '-'}</td>
+                            <td class="px-4 py-3 text-sm">
+                                <select data-on-change="updateDSARStatus" data-args="[${req.id},&quot;@this.value&quot;]" class="text-xs border rounded px-2 py-1">
+                                    <option value="received" ${req.status === 'received' ? 'selected' : ''}>Received</option>
+                                    <option value="in_progress" ${req.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                                    <option value="pending_approval" ${req.status === 'pending_approval' ? 'selected' : ''}>Pending Approval</option>
+                                    <option value="completed" ${req.status === 'completed' ? 'selected' : ''}>Completed</option>
+                                    <option value="rejected" ${req.status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                                </select>
+                            </td>
+                        </tr>
+                    `).join('') : '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No DSAR requests</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error loading DSAR requests:', error);
+            }
+        }
+
+        async function loadRetentionPolicies() {
+            try {
+                const response = await fetch(`${API_BASE}/retention`);
+                const data = await response.json();
+                if (data.success) {
+                    const tbody = document.getElementById('retentionTable');
+                    tbody.innerHTML = data.policies.map(policy => `
+                        <tr>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900">${policy.policy_name}</td>
+                            <td class="px-4 py-3"><span class="status-badge category-${policy.data_category}">${policy.data_category}</span></td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${policy.module}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${policy.table_name}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${policy.retention_days} days</td>
+                            <td class="px-4 py-3 text-sm text-gray-600 capitalize">${policy.action_on_expiry}</td>
+                            <td class="px-4 py-3 text-sm">${policy.is_active ? '<span class="text-green-600">Active</span>' : '<span class="text-gray-400">Inactive</span>'}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${policy.last_run ? new Date(policy.last_run).toLocaleDateString() : 'Never'}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading retention policies:', error);
+            }
+        }
+
+        async function loadIncidents() {
+            try {
+                const response = await fetch(`${API_BASE}/incidents`);
+                const data = await response.json();
+                if (data.success) {
+                    const tbody = document.getElementById('incidentsTable');
+                    tbody.innerHTML = data.incidents.length ? data.incidents.map(inc => `
+                        <tr>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(inc.incident_id)}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(inc.title)}</td>
+                            <td class="px-4 py-3"><span class="status-badge severity-${escapeHtml(inc.severity)}">${escapeHtml(inc.severity)}</span></td>
+                            <td class="px-4 py-3"><span class="status-badge status-${escapeHtml(inc.status)}">${escapeHtml(inc.status)}</span></td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${new Date(inc.detected_date).toLocaleDateString()}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(inc.records_affected != null ? String(inc.records_affected) : '-')}</td>
+                            <td class="px-4 py-3 text-sm">${inc.notification_required ? (inc.notification_sent ? '<span class="text-green-600">Sent</span>' : '<span class="text-amber-600">Required</span>') : '<span class="text-gray-400">Not Required</span>'}</td>
+                            <td class="px-4 py-3 text-sm">
+                                <select data-on-change="updateIncidentStatus" data-args="[${inc.id},&quot;@this.value&quot;]" class="text-xs border rounded px-2 py-1">
+                                    <option value="detected" ${inc.status === 'detected' ? 'selected' : ''}>Detected</option>
+                                    <option value="contained" ${inc.status === 'contained' ? 'selected' : ''}>Contained</option>
+                                    <option value="investigating" ${inc.status === 'investigating' ? 'selected' : ''}>Investigating</option>
+                                    <option value="resolved" ${inc.status === 'resolved' ? 'selected' : ''}>Resolved</option>
+                                    <option value="closed" ${inc.status === 'closed' ? 'selected' : ''}>Closed</option>
+                                </select>
+                            </td>
+                        </tr>
+                    `).join('') : '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No incidents reported</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error loading incidents:', error);
+            }
+        }
+
+        async function loadGuardrails() {
+            try {
+                const response = await fetch(`${API_BASE}/guardrails`);
+                const data = await response.json();
+                if (data.success) {
+                    const tbody = document.getElementById('guardrailsTable');
+                    tbody.innerHTML = data.guardrails.map(g => `
+                        <tr>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(g.field_name)}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600 font-mono text-xs">${escapeHtml(g.mask_pattern)}</td>
+                            <td class="px-4 py-3 text-sm text-purple-600 font-medium">${escapeHtml(g.replacement)}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(g.module || 'All')}</td>
+                            <td class="px-4 py-3 text-sm">${g.is_active ? '<span class="text-green-600">Active</span>' : '<span class="text-gray-400">Inactive</span>'}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading guardrails:', error);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.remove('tab-active', 'text-gray-500'));
+            document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.add('hidden'));
+            
+            document.getElementById(`tab-${tab}`).classList.add('tab-active');
+            document.getElementById(`tab-${tab}`).classList.remove('text-gray-500');
+            document.getElementById(`panel-${tab}`).classList.remove('hidden');
+            
+            currentTab = tab;
+            loadTabData(tab);
+        }
+
+        function loadTabData(tab) {
+            switch(tab) {
+                case 'inventory': loadInventory(); break;
+                case 'dsar': loadDSARRequests(); break;
+                case 'retention': loadRetentionPolicies(); break;
+                case 'incidents': loadIncidents(); break;
+                case 'guardrails': loadGuardrails(); break;
+            }
+        }
+
+        function openAddDSARModal() {
+            document.getElementById('addDSARModal').classList.remove('hidden');
+        }
+
+        function openAddIncidentModal() {
+            document.getElementById('addIncidentModal').classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        async function updateDSARStatus(id, status) {
+            try {
+                await fetch(`${API_BASE}/dsar/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+                loadDSARRequests();
+                loadComplianceStatus();
+            } catch (error) {
+                console.error('Error updating DSAR status:', error);
+            }
+        }
+
+        async function updateIncidentStatus(id, status) {
+            try {
+                await fetch(`${API_BASE}/incidents/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+                loadIncidents();
+                loadComplianceStatus();
+            } catch (error) {
+                console.error('Error updating incident status:', error);
+            }
+        }
+
+        async function testPiiMasking() {
+            const text = document.getElementById('testPiiInput').value;
+            if (!text) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/mask`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('maskedOutput').classList.remove('hidden');
+                    document.getElementById('maskedText').textContent = data.masked;
+                    document.getElementById('maskedCount').textContent = `${data.maskedCount} PII item(s) masked`;
+                }
+            } catch (error) {
+                console.error('Error testing PII masking:', error);
+            }
+        }
+
+        document.getElementById('dsarForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const response = await fetch(`${API_BASE}/dsar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        request_type: document.getElementById('dsarType').value,
+                        subject_name: document.getElementById('dsarSubjectName').value,
+                        subject_email: document.getElementById('dsarSubjectEmail').value,
+                        request_description: document.getElementById('dsarDescription').value,
+                        assigned_to: document.getElementById('dsarAssignee').value || null
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    closeModal('addDSARModal');
+                    e.target.reset();
+                    loadDSARRequests();
+                    loadComplianceStatus();
+                }
+            } catch (error) {
+                console.error('Error creating DSAR request:', error);
+            }
+        });
+
+        document.getElementById('incidentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const response = await fetch(`${API_BASE}/incidents`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: document.getElementById('incidentTitle').value,
+                        description: document.getElementById('incidentDescription').value,
+                        severity: document.getElementById('incidentSeverity').value,
+                        records_affected: parseInt(document.getElementById('incidentRecords').value) || null,
+                        notification_required: document.getElementById('incidentNotify').checked
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    closeModal('addIncidentModal');
+                    e.target.reset();
+                    loadIncidents();
+                    loadComplianceStatus();
+                }
+            } catch (error) {
+                console.error('Error creating incident:', error);
+            }
+        });
+
+        loadComplianceStatus();
+        loadInventory();
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

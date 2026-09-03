@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>ExampleOrg - Audit Readiness</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="ExampleOrg-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="<REDACTED_URL>" rel="stylesheet">
+    <style>
+        html, body { font-family: 'Inter', sans-serif; }
+        .modal { display: none; position: fixed; z-index: 50; inset: 0; background-color: rgba(0,0,0,0.5); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .drawer { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 700px; background: white; box-shadow: -8px 0 24px rgba(0,0,0,0.15); z-index: 40; transform: translateX(100%); transition: transform 0.25s ease; overflow-y: auto; }
+        .drawer.active { transform: translateX(0); }
+        .outcome-conformant   { background: #D1FAE5; color: #047857; }
+        .outcome-minor_nc     { background: #FEF3C7; color: #92400E; }
+        .outcome-major_nc     { background: #FEE2E2; color: #B91C1C; }
+        .outcome-observation  { background: #DBEAFE; color: #1E40AF; }
+        .outcome-ofi          { background: #EDE9FE; color: #5B21B6; }
+        .outcome-not_applicable { background: #E5E7EB; color: #4B5563; }
+        .pill { padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+        .item-card { transition: background 0.15s; }
+        .item-card:hover { background: #F9FAFB; }
+        .priority-critical { background: #B91C1C; color: white; }
+        .priority-high     { background: #DC2626; color: white; }
+        .priority-medium   { background: #F59E0B; color: white; }
+        .priority-low      { background: #10B981; color: white; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="ExampleOrg-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () { WalaPlusNav.init('audit-readiness'); });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center gap-3 mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="audit_readiness.title">Audit Readiness</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="audit_readiness.subtitle">Run a real audit against any framework. Each clause becomes a checklist item; outcomes flow into findings, per-clause assessments, and corrective actions.</p>
+            </div>
+            <button data-on-click="openNewRunModal" class="px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 font-medium flex items-center gap-2" data-testid="button-new-run">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span data-i18n="audit_readiness.new_run">New Audit Run</span>
+            </button>
+        </div>
+
+        <!-- Per-framework readiness tiles -->
+        <section class="bg-white rounded-lg shadow mb-6">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-base font-semibold text-gray-900" data-i18n="audit_readiness.tiles_title">Framework Readiness</h2>
+                <p class="text-xs text-gray-500" data-i18n="audit_readiness.tiles_subtitle">Latest finalised audit run per framework — % conformant, NC counts, open CARs.</p>
+            </div>
+            <div id="readinessTiles" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading…</div>
+            </div>
+        </section>
+
+        <!-- Audit Runs table -->
+        <section class="bg-white rounded-lg shadow">
+            <div class="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
+                <h2 class="text-base font-semibold text-gray-900" data-i18n="audit_readiness.runs_title">Audit Runs</h2>
+                <div class="flex items-center gap-2">
+                    <select id="runsFrameworkFilter" data-on-change="loadRuns" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
+                        <option value="" data-i18n="audit_readiness.all_frameworks">All Frameworks</option>
+                    </select>
+                    <select id="runsStatusFilter" data-on-change="loadRuns" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
+                        <option value="">All Statuses</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Code</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Title</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Framework</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Lead Auditor</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Progress</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Findings</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="runsBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">Loading audit runs…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- New Audit Run modal -->
+    <div id="newRunModal" class="modal" role="dialog" aria-modal="true">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="audit_readiness.new_run_title">Start a New Audit Run</h3>
+                <button data-on-click="closeModal" data-args="[&quot;newRunModal&quot;]" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="newRunForm" data-on-submit="submitNewRun" data-pass-event="true" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audit_readiness.f_framework">Framework *</label>
+                    <select name="regulation_id" id="newRunFramework" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">— Select a framework —</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audit_readiness.f_title">Audit Title</label>
+                    <input type="text" name="title" placeholder="e.g. Q2 2026 ISO 27001 Internal Audit" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audit_readiness.f_lead">Lead Auditor *</label>
+                    <input type="text" name="lead_auditor" required placeholder="Your name" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audit_readiness.f_scope">Scope summary</label>
+                    <textarea name="scope_summary" rows="2" placeholder="What's in / out of scope?" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Planned start</label>
+                        <input type="date" name="planned_start_date" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Planned end</label>
+                        <input type="date" name="planned_end_date" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t">
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;newRunModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="common.cancel">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800" data-i18n="audit_readiness.start">Start Audit</button>
+                </div>
+                <p id="newRunMsg" class="text-sm"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Walk-the-checklist drawer -->
+    <div id="runDrawer" class="drawer" role="dialog" aria-modal="true">
+        <div class="p-4 border-b border-gray-200 sticky top-0 bg-white z-10 flex justify-between items-start gap-3">
+            <div class="min-w-0">
+                <div class="text-xs text-gray-500" id="drawerCode">—</div>
+                <div class="text-base font-semibold text-gray-900 truncate" id="drawerTitle">—</div>
+                <div class="text-xs text-gray-500 mt-1"><span id="drawerProgress">0/0</span> · <span id="drawerStatus">—</span></div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button id="finalizeBtn" data-on-click="finalizeRun" class="text-xs px-3 py-1.5 rounded bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50" data-i18n="audit_readiness.finalize">Finalize</button>
+                <a id="reportLink" href="#" target="_blank" class="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50 hidden">PDF</a>
+                <button data-on-click="closeDrawer" class="text-gray-400 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+        <div id="drawerItems" class="divide-y divide-gray-200">
+            <div class="p-6 text-center text-gray-400 text-sm">Loading checklist…</div>
+        </div>
+    </div>
+
+    <script>
+        function _ct(k, fb) { return (window.WalaPlusI18n && window.WalaPlusI18n.t) ? (window.WalaPlusI18n.t(k) || fb) : fb; }
+        function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        let regulations = [];
+        let runs = [];
+        let activeRun = null;
+        let activeItems = [];
+        let saveTimers = {};
+
+        async function loadRegulations() {
+            const r = await fetch('/api/compliance/regulations');
+            const data = await r.json();
+            regulations = data.regulations || [];
+            const selectors = ['runsFrameworkFilter', 'newRunFramework'];
+            selectors.forEach(function (id) {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const cur = sel.value;
+                const placeholder = sel.options[0] ? sel.options[0].outerHTML : '';
+                sel.innerHTML = placeholder;
+                regulations.forEach(function (r) {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = r.regulation_code + ' — ' + r.name;
+                    sel.appendChild(opt);
+                });
+                sel.value = cur;
+            });
+        }
+
+        async function loadRuns() {
+            const fw = document.getElementById('runsFrameworkFilter').value;
+            const st = document.getElementById('runsStatusFilter').value;
+            const params = [];
+            if (fw) params.push('regulation_id=' + fw);
+            if (st) params.push('status=' + st);
+            const url = '/api/compliance/audit-runs' + (params.length ? '?' + params.join('&') : '');
+            const r = await fetch(url);
+            const data = await r.json();
+            runs = data.runs || [];
+            renderRuns();
+            renderTiles();
+        }
+
+        function renderRuns() {
+            const tbody = document.getElementById('runsBody');
+            if (!runs.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No audit runs yet. Click "New Audit Run" to start one.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = runs.map(function (r) {
+                const total = Number(r.checklist_count) || 0;
+                const done = Number(r.completed_count) || 0;
+                const pct = total ? Math.round(done / total * 100) : 0;
+                const findings = Number(r.findings_count) || 0;
+                const critical = Number(r.critical_findings) || 0;
+                return '<tr class="hover:bg-gray-50">'
+                    + '<td class="px-3 py-2 text-xs font-mono text-blue-700">' + escAttr(r.audit_code || r.id) + '</td>'
+                    + '<td class="px-3 py-2 text-sm text-gray-900 max-w-xs truncate">' + escAttr(r.title) + '</td>'
+                    + '<td class="px-3 py-2 text-xs">' + escAttr(r.regulation_code || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs">' + escAttr(r.lead_auditor || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-center"><div class="text-xs">' + done + ' / ' + total + ' (' + pct + '%)</div>'
+                        + '<div class="h-1 w-24 mx-auto bg-gray-200 rounded mt-1"><div class="h-1 bg-emerald-500 rounded" data-style="width:' + pct + '%"></div></div>'
+                    + '</td>'
+                    + '<td class="px-3 py-2 text-center text-xs">' + findings + (critical ? ' (' + critical + ' critical)' : '') + '</td>'
+                    + '<td class="px-3 py-2 text-center"><span class="pill ' + (r.status === 'completed' ? 'outcome-conformant' : 'outcome-observation') + '">' + (r.status || '—').replace(/_/g, ' ') + '</span></td>'
+                    + '<td class="px-3 py-2 text-center"><button data-on-click="openRunDrawer" data-args="[&quot;' + escAttr(r.id) + '&quot;]" class="text-xs text-emerald-700 hover:text-emerald-900 font-medium">Open</button>'
+                    + (r.status === 'completed'
+                        ? ' · <a href="/api/compliance/audit-runs/' + escAttr(r.id) + '/report.pdf" target="_blank" rel="noopener" class="text-xs text-blue-700 hover:underline">PDF</a>'
+                        : '')
+                    + '</td>'
+                + '</tr>';
+            }).join('');
+        }
+
+        function renderTiles() {
+            const grid = document.getElementById('readinessTiles');
+            if (!regulations.length) {
+                grid.innerHTML = '<div class="text-sm text-gray-400 col-span-full text-center py-6">No frameworks loaded.</div>';
+                return;
+            }
+            const latestByReg = {};
+            runs.forEach(function (r) {
+                if (r.status !== 'completed') return;
+                const k = r.regulation_id;
+                if (!latestByReg[k] || new Date(r.created_at) > new Date(latestByReg[k].created_at)) {
+                    latestByReg[k] = r;
+                }
+            });
+            grid.innerHTML = regulations.map(function (reg) {
+                const r = latestByReg[reg.id];
+                if (!r) {
+                    return '<div class="border border-gray-200 rounded-lg p-4">'
+                        + '<div class="text-sm font-semibold text-gray-900">' + escAttr(reg.regulation_code) + '</div>'
+                        + '<div class="text-xs text-gray-500 truncate">' + escAttr(reg.name) + '</div>'
+                        + '<div class="text-xs text-gray-400 mt-3" data-i18n="audit_readiness.no_run_yet">No audit run yet.</div>'
+                        + '<button data-on-click="quickStartRun" data-args="[' + reg.id + ']" class="mt-3 text-xs px-3 py-1.5 rounded border border-emerald-700 text-emerald-700 hover:bg-emerald-50" data-i18n="audit_readiness.start_first">Start first audit</button>'
+                        + '</div>';
+                }
+                const total = Number(r.checklist_count) || 0;
+                const findings = Number(r.findings_count) || 0;
+                const critical = Number(r.critical_findings) || 0;
+                const conformPct = total ? Math.round(((total - findings) / total) * 100) : 0;
+                return '<div class="border border-gray-200 rounded-lg p-4">'
+                    + '<div class="flex justify-between items-start gap-2">'
+                        + '<div class="min-w-0">'
+                            + '<div class="text-sm font-semibold text-gray-900">' + escAttr(reg.regulation_code) + '</div>'
+                            + '<div class="text-xs text-gray-500 truncate">' + escAttr(reg.name) + '</div>'
+                        + '</div>'
+                        + '<span class="pill outcome-conformant">' + conformPct + '%</span>'
+                    + '</div>'
+                    + '<div class="grid grid-cols-3 gap-2 mt-3 text-center">'
+                        + '<div><div class="text-base font-bold text-gray-900">' + total + '</div><div class="text-[10px] text-gray-500 uppercase">Clauses</div></div>'
+                        + '<div><div class="text-base font-bold text-amber-700">' + findings + '</div><div class="text-[10px] text-gray-500 uppercase">Findings</div></div>'
+                        + '<div><div class="text-base font-bold text-red-700">' + critical + '</div><div class="text-[10px] text-gray-500 uppercase">Critical</div></div>'
+                    + '</div>'
+                    + '<div class="text-xs text-gray-400 mt-3 truncate">Last: ' + escAttr(r.audit_code || r.id) + '</div>'
+                + '</div>';
+            }).join('');
+        }
+
+        function openNewRunModal() {
+            document.getElementById('newRunForm').reset();
+            document.getElementById('newRunMsg').textContent = '';
+            document.getElementById('newRunModal').classList.add('active');
+        }
+
+        async function quickStartRun(regulationId) {
+            document.getElementById('newRunFramework').value = String(regulationId);
+            openNewRunModal();
+        }
+
+        async function submitNewRun(ev) {
+            ev.preventDefault();
+            const form = ev.target;
+            const fd = new FormData(form);
+            const body = {
+                regulation_id: Number(fd.get('regulation_id')),
+                title: fd.get('title') || '',
+                lead_auditor: fd.get('lead_auditor') || '',
+                scope_summary: fd.get('scope_summary') || '',
+                planned_start_date: fd.get('planned_start_date') || null,
+                planned_end_date: fd.get('planned_end_date') || null
+            };
+            const msg = document.getElementById('newRunMsg');
+            msg.className = 'text-sm text-gray-600';
+            msg.textContent = 'Creating…';
+            const r = await fetch('/api/compliance/regulations/' + body.regulation_id + '/audit-runs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(body)
+            });
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok) {
+                msg.className = 'text-sm text-red-600';
+                msg.textContent = 'Failed: ' + (data.error || ('HTTP ' + r.status));
+                return;
+            }
+            msg.className = 'text-sm text-green-700';
+            msg.textContent = 'Created with ' + data.checklist_items + ' clauses. Opening…';
+            closeModal('newRunModal');
+            await loadRuns();
+            openRunDrawer(data.audit_id);
+        }
+
+        async function openRunDrawer(auditId) {
+            document.getElementById('runDrawer').classList.add('active');
+            document.getElementById('drawerItems').innerHTML = '<div class="p-6 text-center text-gray-400 text-sm">Loading…</div>';
+            const r = await fetch('/api/compliance/audit-runs/' + encodeURIComponent(auditId));
+            const data = await r.json();
+            activeRun = data.run;
+            activeItems = data.items || [];
+            renderDrawer();
+        }
+        function closeDrawer() {
+            document.getElementById('runDrawer').classList.remove('active');
+            activeRun = null;
+            activeItems = [];
+            loadRuns();
+        }
+
+        function renderDrawer() {
+            if (!activeRun) return;
+            document.getElementById('drawerCode').textContent = activeRun.audit_code || activeRun.id;
+            document.getElementById('drawerTitle').textContent = activeRun.title;
+            document.getElementById('drawerStatus').textContent = activeRun.status;
+            const done = activeItems.filter(function (i) { return i.status === 'completed'; }).length;
+            document.getElementById('drawerProgress').textContent = done + '/' + activeItems.length;
+            const finalize = document.getElementById('finalizeBtn');
+            finalize.disabled = activeRun.status === 'completed';
+            const link = document.getElementById('reportLink');
+            if (activeRun.status === 'completed') {
+                link.href = '/api/compliance/audit-runs/' + encodeURIComponent(activeRun.id) + '/report.pdf';
+                link.classList.remove('hidden');
+            } else {
+                link.classList.add('hidden');
+            }
+
+            const items = document.getElementById('drawerItems');
+            if (!activeItems.length) {
+                items.innerHTML = '<div class="p-6 text-center text-gray-400 text-sm">No checklist items.</div>';
+                return;
+            }
+            items.innerHTML = activeItems.map(function (it, i) {
+                const outcomes = [
+                    { v: 'conformant', l: 'Conformant' },
+                    { v: 'minor_nc', l: 'Minor NC' },
+                    { v: 'major_nc', l: 'Major NC' },
+                    { v: 'observation', l: 'Observation' },
+                    { v: 'ofi', l: 'OFI' },
+                    { v: 'not_applicable', l: 'N/A' }
+                ];
+                return '<div class="p-4 item-card">'
+                    + '<div class="flex items-start justify-between gap-2 mb-2">'
+                        + '<div class="min-w-0">'
+                            + '<div class="text-xs font-mono text-blue-700">' + escAttr(it.obligation_code || '—') + '</div>'
+                            + '<div class="text-sm font-medium text-gray-900">' + escAttr(it.obligation_title || it.question) + '</div>'
+                            + (it.section_domain ? '<div class="text-xs text-gray-500 mt-1">' + escAttr(it.section_domain) + '</div>' : '')
+                        + '</div>'
+                        + (it.priority ? '<span class="pill priority-' + it.priority + '">' + escAttr(it.priority) + '</span>' : '')
+                    + '</div>'
+                    + (it.expected_evidence ? '<div class="text-xs text-gray-600 bg-gray-50 rounded p-2 mb-2"><strong>Expected evidence:</strong> ' + escAttr(it.expected_evidence) + '</div>' : '')
+                    + '<div class="grid grid-cols-3 gap-1 mb-2">'
+                    + outcomes.map(function (o) {
+                        const sel = it.outcome === o.v;
+                        return '<button data-on-click="setOutcome" data-args="[' + i + ',&quot;' + o.v + '&quot;]" class="text-xs py-1.5 rounded border ' + (sel ? 'outcome-' + o.v + ' border-transparent font-semibold' : 'border-gray-200 hover:bg-gray-50') + '">' + o.l + '</button>';
+                    }).join('')
+                    + '</div>'
+                    + '<textarea rows="2" placeholder="Evidence notes (which doc, what section, what you saw)…" class="w-full text-xs border border-gray-200 rounded px-2 py-1 mb-2" data-on-input="onItemFieldInput" data-args="[' + i + ',&quot;evidence_notes&quot;]">' + escAttr(it.evidence_notes || '') + '</textarea>'
+                    + '<textarea rows="2" placeholder="Auditor notes / NC description (if any)…" class="w-full text-xs border border-gray-200 rounded px-2 py-1" data-on-input="onItemFieldInput" data-args="[' + i + ',&quot;auditor_notes&quot;]">' + escAttr(it.auditor_notes || '') + '</textarea>'
+                + '</div>';
+            }).join('');
+        }
+
+        function onItemFieldInput(idx, field, ev) {
+            if (!activeItems[idx]) return;
+            activeItems[idx][field] = ev.target.value;
+            scheduleSave(idx);
+        }
+        function setOutcome(idx, outcome) {
+            if (!activeItems[idx]) return;
+            activeItems[idx].outcome = outcome;
+            activeItems[idx].status = 'completed';
+            saveItem(idx);
+            renderDrawer();
+        }
+        function scheduleSave(idx) {
+            if (saveTimers[idx]) clearTimeout(saveTimers[idx]);
+            saveTimers[idx] = setTimeout(function () { saveItem(idx); }, 800);
+        }
+        async function saveItem(idx) {
+            if (!activeItems[idx] || !activeRun) return;
+            const it = activeItems[idx];
+            try {
+                await fetch('/api/compliance/audit-runs/' + encodeURIComponent(activeRun.id) + '/items/' + it.id, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        outcome: it.outcome,
+                        evidence_notes: it.evidence_notes,
+                        auditor_notes: it.auditor_notes,
+                        evidence_document_ids: it.evidence_document_ids || []
+                    })
+                });
+            } catch (e) { /* ignore */ }
+        }
+        async function finalizeRun() {
+            if (!activeRun) return;
+            if (!confirm('Finalise the run? This writes findings and assessments and cannot be undone.')) return;
+            const r = await fetch('/api/compliance/audit-runs/' + encodeURIComponent(activeRun.id) + '/finalize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: '{}'
+            });
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok) {
+                alert('Failed: ' + (data.error || ('HTTP ' + r.status)));
+                return;
+            }
+            alert('Run finalised: ' + data.findings_created + ' findings · ' + data.assessments_written + ' assessments.');
+            await loadRuns();
+            openRunDrawer(activeRun.id);
+        }
+
+        document.addEventListener('DOMContentLoaded', async function () {
+            await loadRegulations();
+            await loadRuns();
+        });
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) { window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); }); }
+    </script>
+</body>
+</html>
