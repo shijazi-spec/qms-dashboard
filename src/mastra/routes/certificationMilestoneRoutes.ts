@@ -1,6 +1,12 @@
 import { sharedPool as pool } from "../../utils/sharedPool";
 import { PLAN_VERSION, SOURCE_DOC } from "../../utils/seeds/certificationMilestonePlan";
 import { logger as safeLogger } from "../../utils/logger";
+import {
+  orderChain,
+  milestoneState,
+  frameworkReadiness,
+  type RoadmapRow,
+} from "../../utils/certificationRoadmap";
 
 export interface MilestoneRow {
   milestone_key: string;
@@ -13,6 +19,9 @@ export interface MilestoneRow {
   owner: string;
   notes: string;
   regulation_code: string | null;
+  depends_on_key: string | null;
+  unlocks_codes: string[];
+  gates_keys: string[];
 }
 
 /** Pure bucketing so the shape is stable even when a section is empty. */
@@ -53,14 +62,27 @@ export const certificationMilestoneRoutes = [
           `SELECT cm.milestone_key, cm.milestone_type, cm.certification,
                   cm.milestone_name, TO_CHAR(cm.planned_date, 'YYYY-MM-DD')   AS planned_date,
                   TO_CHAR(cm.delivered_date, 'YYYY-MM-DD') AS delivered_date,
-                  cm.status, cm.owner, cm.notes, reg.regulation_code
+                  cm.status, cm.owner, cm.notes, reg.regulation_code,
+                  cm.depends_on_key,
+                  COALESCE(cm.unlocks_codes, '{}') AS unlocks_codes,
+                  COALESCE(cm.gates_keys, '{}') AS gates_keys
              FROM certification_milestones cm
              LEFT JOIN regulations reg ON reg.id = cm.regulation_id
             WHERE cm.milestone_key IS NOT NULL
             ORDER BY cm.planned_date NULLS LAST, cm.milestone_key`,
         );
+
+        const all = r.rows as unknown as RoadmapRow[];
+        const today = new Date().toISOString().slice(0, 10);
+        const chain = orderChain(all.filter((x) => x.milestone_type === "plan")).map(
+          (m) => ({ ...m, state: milestoneState(m, all, today) }),
+        );
+        const readiness = frameworkReadiness(all);
+
         return c.json({
           ...groupMilestonesByType(r.rows as MilestoneRow[]),
+          chain,
+          readiness,
           plan_version: PLAN_VERSION,
           source_doc: SOURCE_DOC,
         });
