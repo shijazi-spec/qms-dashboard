@@ -4078,6 +4078,155 @@ export const duplicateRadarRoutes = [
   },
 
   {
+    // SEND THE MONTHLY REPORT NOW (Sarah 2026-09-03). The cron only fires on
+    // day 1, 07:00-09:00 KSA; miss that two-hour window — instance asleep,
+    // mid-deploy, or the flag switched on later in the month, which is exactly
+    // what happened to August — and the month is silently lost with no way to
+    // recover it. This is that recovery path, and the way to re-send on demand.
+    //
+    // Same guarantees as the scheduled job, deliberately:
+    //   • ADMIN-gated.
+    //   • Recipients come from ENV only (monthlyMissingDocsRecipients) — never
+    //     from the request, so this cannot be used to mail an arbitrary address.
+    //     Only the COUNT is echoed back.
+    //   • Claims the period in scheduled_report_sends, so a double-click or a
+    //     later cron tick cannot send the same month twice. `force: true`
+    //     deliberately re-sends and says so in the response.
+    //   • Honours MISSING_DOCS_REPORT_ENABLED — an operator who has not turned
+    //     the report on does not get a surprise mail-out from a button.
+    // POST /api/duplicates/missing-docs-report/send   { force?: boolean }
+    path: "/api/duplicates/missing-docs-report/send",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const sessionUser = await requireAdminOrKey(c);
+        if (!sessionUser) return unauthorizedResponse(c);
+
+        const body = await c.req.json().catch(() => ({}));
+        const force = body?.force === true;
+
+        const {
+          buildMonthlyMissingDocsEmail,
+          monthlyMissingDocsRecipients,
+          isMonthlyMissingDocsEnabled,
+          periodKey,
+          periodLabel,
+        } = await import("../../utils/missingDocsMonthlyReport");
+
+        if (!isMonthlyMissingDocsEnabled()) {
+          return c.json(
+            {
+              error:
+                "The monthly report is switched off. Set MISSING_DOCS_REPORT_ENABLED=true and republish before sending.",
+            },
+            409,
+          );
+        }
+        const recipients = monthlyMissingDocsRecipients();
+        if (!recipients.length) {
+          return c.json(
+            { error: "No valid recipients configured — nothing was sent." },
+            409,
+          );
+        }
+
+        const { pool, getDealComplianceReportRows } = await import(
+          "../../utils/duplicateRadarDatabase"
+        );
+        const { countNeverChecked } = await import(
+          "../../utils/dealDocComplianceSweep"
+        );
+
+        // The month that just ended — identical to the scheduled job, so a
+        // manual send and an automatic one can never cover different periods.
+        const nowKsa = new Date(Date.now() + 3 * 3600_000);
+        const covered = new Date(
+          Date.UTC(nowKsa.getUTCFullYear(), nowKsa.getUTCMonth() - 1, 1),
+        );
+        const period = periodKey(covered);
+
+        // Claim first, exactly as the cron does. No claim = already sent.
+        const claim = await pool.query(
+          `INSERT INTO scheduled_report_sends (report_key, period, recipient_count, detail)
+           VALUES ('missing_docs_monthly', $1, $2, $3::jsonb)
+           ON CONFLICT (report_key, period) DO NOTHING
+           RETURNING period`,
+          [
+            period,
+            recipients.length,
+            JSON.stringify({
+              claimed_at: new Date().toISOString(),
+              manual: true,
+              by: sessionUser?.email || sessionUser?.id || "admin",
+            }),
+          ],
+        );
+        if (!claim.rows.length && !force) {
+          return c.json(
+            {
+              already_sent: true,
+              period: periodLabel(covered),
+              message: `The ${periodLabel(covered)} report has already been sent. Re-send it deliberately with force.`,
+            },
+            409,
+          );
+        }
+
+        const rows = await getDealComplianceReportRows("all");
+        const neverChecked = await countNeverChecked();
+        const mail = buildMonthlyMissingDocsEmail(rows, {
+          periodLabel: periodLabel(covered),
+          inScope: rows.length + neverChecked,
+          dashboardUrl: process.env.MISSING_DOCS_REPORT_LINK,
+        });
+
+        const { sendResendEmail } = await import("../../utils/resendMail");
+        const sent = await sendResendEmail({
+          to: recipients,
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+        });
+        logger.info(
+          `[MissingDocsReport] manual send for ${period} by ${sessionUser?.email || "admin"}: ` +
+            `${sent.success ? "sent" : "FAILED"} to ${recipients.length} recipient(s)` +
+            (sent.error ? ` — ${sent.error}` : ""),
+        );
+        // sendResendEmail resolves with {success, error} — it does NOT throw or
+        // return a boolean. A failed send must RELEASE the period claim, or the
+        // month would be permanently marked as delivered and neither this
+        // button nor the cron would ever send it.
+        if (!sent.success) {
+          if (claim.rows.length) {
+            await pool
+              .query(
+                `DELETE FROM scheduled_report_sends WHERE report_key = 'missing_docs_monthly' AND period = $1`,
+                [period],
+              )
+              .catch(() => {});
+          }
+          return c.json(
+            { error: `Email provider rejected the send: ${sent.error || "unknown error"}` },
+            502,
+          );
+        }
+        return c.json({
+          success: true,
+          period: periodLabel(covered),
+          recipient_count: recipients.length,
+          checked: rows.length,
+          in_scope: rows.length + neverChecked,
+          subject: mail.subject,
+          resent: !claim.rows.length,
+        });
+      } catch (e: any) {
+        logger.error("missing-docs-report/send failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     // Document-compliance report for the Head of Sales: missing-document rate,
     // which owner it sits with, and one sheet per stage (Proposal / Agreement
     // Signed / Paid). Reads the STORED checks kept current by the background

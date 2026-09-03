@@ -9477,6 +9477,61 @@
             return sel && sel.value ? sel.value : '';
         }
 
+        // Email the monthly missing-documents report on demand (Sarah
+        // 2026-09-03). The cron only fires on day 1, 07:00-09:00 KSA, so a
+        // missed window loses the month outright — August was lost exactly that
+        // way. Sending mail is irreversible, so this ALWAYS previews first and
+        // states the period, the numbers and the recipient COUNT (never the
+        // addresses — they are server-side only) before asking to confirm.
+        async function sendMissingDocsReportNow() {
+            var btn = document.getElementById('dcSendReportBtn');
+            var restore = btn ? btn.innerHTML : '';
+            try {
+                if (btn) { btn.disabled = true; btn.innerHTML = 'Checking…'; }
+                var pv = await fetch('/api/duplicates/missing-docs-report/preview',
+                    { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+                if (!pv || pv.error) { rrToast('Could not build the report: ' + ((pv && pv.error) || 'unknown error')); return; }
+                if (!pv.enabled) {
+                    rrToast('The monthly report is switched off. Set MISSING_DOCS_REPORT_ENABLED=true in Replit and republish first.');
+                    return;
+                }
+                if (!pv.recipient_count) { rrToast('No recipients configured — nothing to send.'); return; }
+                var head = String(pv.text || '').split('\n').slice(0, 6).join('\n');
+                var ok = window.confirm(
+                    'Send the ' + pv.period + ' missing-documents report?\n\n'
+                    + 'To: ' + pv.recipient_count + ' recipient(s) (configured server-side)\n'
+                    + 'Subject: ' + (pv.subject || '—') + '\n\n'
+                    + head + '\n\nThis sends real email and cannot be undone.'
+                );
+                if (!ok) return;
+                if (btn) btn.innerHTML = 'Sending…';
+                var res = await fetch('/api/duplicates/missing-docs-report/send', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                var out = await res.json().catch(function () { return {}; });
+                if (res.status === 409 && out.already_sent) {
+                    // Already claimed for this period — offer a deliberate re-send.
+                    if (!window.confirm(out.message + '\n\nSend it again anyway?')) return;
+                    if (btn) btn.innerHTML = 'Sending…';
+                    res = await fetch('/api/duplicates/missing-docs-report/send', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ force: true })
+                    });
+                    out = await res.json().catch(function () { return {}; });
+                }
+                if (!res.ok || out.error) { rrToast('Not sent: ' + (out.error || ('HTTP ' + res.status))); return; }
+                rrToast('✓ ' + out.period + ' report sent to ' + out.recipient_count + ' recipient(s)'
+                    + (out.resent ? ' (re-sent)' : ''));
+            } catch (e) {
+                rrToast('Send failed: ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = restore; }
+            }
+        }
+
         window.exportDealComplianceReport = function () {
             // The Layout dropdown beside the button wins, so the workbook always
             // matches the table on screen (Sarah 2026-09-03). It falls back to

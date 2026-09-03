@@ -1016,6 +1016,7 @@
                     <option value="" selected>All layouts</option>
                 </select>
                 <button data-on-click="exportDealComplianceReport" id="dcReportBtn" title="Excel report for the Head of Sales — missing-document rate, a per-owner breakdown, and one sheet per stage (Proposal, Agreement Signed, Paid), scoped to the Layout dropdown beside this button, so the workbook always matches the table on screen. Built from the automatic daily checks, so it downloads instantly." class="rr-btn rr-btn-primary">📄 Report for Head of Sales</button>
+                <button data-on-click="sendMissingDocsReportNow" id="dcSendReportBtn" title="Email the monthly missing-documents report to the configured recipients now. The scheduled job only fires on day 1 of the month, so use this to recover a missed month or to re-send. Shows exactly what will go out, and to how many people, before anything is sent." class="rr-btn rr-btn-ghost">✉️ Send report now</button>
                 <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" title="Optional. Documents are verified automatically in the background every day — use this only to re-check the deals on screen right now. It makes live Zoho calls and takes a while." class="rr-btn rr-btn-ghost">📎 Re-check these now</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deal-compliance" title="Open a corrective-action record (CAPA) on a non-compliant deal. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
@@ -2554,7 +2555,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=177"></script>
+    <script src="/js/duplicates-app.js?v=178"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
