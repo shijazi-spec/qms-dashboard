@@ -428,9 +428,9 @@ export const mastra = new Mastra({
     return;
   }
   const g = globalThis as any;
-  if (g.__walaplus_cacheWarmer) {
-    clearTimeout(g.__walaplus_cacheWarmer.startTimer);
-    clearInterval(g.__walaplus_cacheWarmer.refreshTimer);
+  if (g.__ExampleOrg_cacheWarmer) {
+    clearTimeout(g.__ExampleOrg_cacheWarmer.startTimer);
+    clearInterval(g.__ExampleOrg_cacheWarmer.refreshTimer);
   }
   const port = process.env.PORT || "5000";
               const adminKey = process.env.ADMIN_API_KEY;
@@ -495,7 +495,7 @@ export const mastra = new Mastra({
     warm();
   }, 30 * 1000);
   const refreshTimer = setInterval(warm, 13 * 60 * 1000);
-  g.__walaplus_cacheWarmer = { startTimer, refreshTimer };
+  g.__ExampleOrg_cacheWarmer = { startTimer, refreshTimer };
 })();
 
 /*  Scheduled-job in-process fallback
@@ -532,9 +532,9 @@ export const mastra = new Mastra({
     return;
   }
   const g = globalThis as any;
-  if (g.__walaplus_scheduledJobFallback) {
-    clearTimeout(g.__walaplus_scheduledJobFallback.startTimer);
-    clearInterval(g.__walaplus_scheduledJobFallback.refreshTimer);
+  if (g.__ExampleOrg_scheduledJobFallback) {
+    clearTimeout(g.__ExampleOrg_scheduledJobFallback.startTimer);
+    clearInterval(g.__ExampleOrg_scheduledJobFallback.refreshTimer);
   }
   if (!process.env.DATABASE_URL) {
     safeLogger.info(
@@ -672,7 +672,7 @@ export const mastra = new Mastra({
   }, 60 * 1000);
   // Re-check every 45 minutes (between the suggested 30–60 min cadence).
   const refreshTimer = setInterval(safeTick, 45 * 60 * 1000);
-  g.__walaplus_scheduledJobFallback = { startTimer, refreshTimer };
+  g.__ExampleOrg_scheduledJobFallback = { startTimer, refreshTimer };
 })();
 
 /*  On-boot redaction sweep

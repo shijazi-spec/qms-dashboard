@@ -9,7 +9,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -34,7 +34,7 @@
   <script src="/js/navigation.js"></script>
   <script src="/js/csp-styles.js?v=1"></script>
   <script src="/js/safe-actions.js?v=2"></script>
-  <script>try { WalaPlusNav.init('kpi-catalog'); } catch (e) {}</script>
+  <script>try { ExampleOrgNav.init('kpi-catalog'); } catch (e) {}</script>
 
   <div class="max-w-6xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-1">
@@ -109,8 +109,8 @@
     load();
   </script>
   <script>
-    if (window.WalaPlusI18n) {
-      window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+    if (window.ExampleOrgI18n) {
+      window.ExampleOrgI18n.init().then(() => window.ExampleOrgI18n.applyToDOM());
     }
   </script>
 </body>

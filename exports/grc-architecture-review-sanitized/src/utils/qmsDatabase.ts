@@ -906,7 +906,7 @@ export async function saveQualityMetrics(metrics: {
   );
 }
 
-export async function getQmsDashboardData(): Promise<{
+export async function getExampleOrgData(): Promise<{
   evaluations: { total: number; avgScore: number; passRate: number };
   capa: { open: number; inProgress: number; closed: number; overdue: number };
   nonconformances: { open: number; critical: number; closed: number };

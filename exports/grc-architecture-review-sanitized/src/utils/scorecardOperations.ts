@@ -129,7 +129,7 @@ function buildDimensionsPayload(canonical: CopcCanonical) {
     sections,
     dimensions,
     meta: {
-      schema: "walaplus_copc_v2",
+      schema: "ExampleOrg_copc_v2",
       version: s.version,
       version_date: s.version_date,
       based_on: s.based_on,

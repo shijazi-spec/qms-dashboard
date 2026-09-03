@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -39,7 +39,7 @@
     <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            WalaPlusNav.init('document-mapping');
+            ExampleOrgNav.init('document-mapping');
         });
     </script>
 
@@ -421,7 +421,7 @@
                             + '</button>'
                         + '</div>';
                 }).join('');
-                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(grid);
+                if (window.ExampleOrgI18n && window.ExampleOrgI18n.applyToDOM) window.ExampleOrgI18n.applyToDOM(grid);
             } catch (e) {
                 grid.innerHTML = '<div class="text-sm text-red-600 col-span-full text-center py-6">Network error loading coverage.</div>';
             }
@@ -463,7 +463,7 @@
                         + '</td>'
                         + '</tr>';
                 }).join('');
-                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(body);
+                if (window.ExampleOrgI18n && window.ExampleOrgI18n.applyToDOM) window.ExampleOrgI18n.applyToDOM(body);
             } catch (e) {
                 body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-red-600">Network error.</td></tr>';
             }
@@ -528,9 +528,9 @@
                 if (pageSel) {
                     pageSel.innerHTML = '<option value="" data-i18n="docmap.all_frameworks">All Frameworks</option>' + opts;
                     if (MASTER.scope) pageSel.value = MASTER.scope;
-                    if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(pageSel);
+                    if (window.ExampleOrgI18n && window.ExampleOrgI18n.applyToDOM) window.ExampleOrgI18n.applyToDOM(pageSel);
                 }
-                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(sel);
+                if (window.ExampleOrgI18n && window.ExampleOrgI18n.applyToDOM) window.ExampleOrgI18n.applyToDOM(sel);
             } catch (e) {
                 console.error('Error loading frameworks', e);
             }
@@ -695,7 +695,7 @@
                     + consoleClauses.map(function (o) {
                         return '<option value="' + o.id + '">' + escAttr((o.obligation_code || '') + ' — ' + (o.title || '')) + '</option>';
                     }).join('');
-                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(sel);
+                if (window.ExampleOrgI18n && window.ExampleOrgI18n.applyToDOM) window.ExampleOrgI18n.applyToDOM(sel);
             } catch (e) {
                 sel.innerHTML = '<option value="">Failed to load clauses</option>';
             }
@@ -727,7 +727,7 @@
                     // existed but none was actually relevant to this clause.
                     // Literal i18n keys (not a variable) so scripts/check-i18n.cjs
                     // can verify them statically.
-                    var i18n = window.WalaPlusI18n;
+                    var i18n = window.ExampleOrgI18n;
                     var msg;
                     if (data.empty_reason === 'no_documents_with_content') {
                         msg = (i18n ? i18n.t('docmap.suggest_none_content') : null)
@@ -810,7 +810,7 @@
                     var aspects = f.missing_aspects;
                     if (typeof aspects === 'string') { try { aspects = JSON.parse(aspects); } catch (e) { aspects = aspects ? [aspects] : []; } }
                     if (!Array.isArray(aspects)) aspects = [];
-                    var addLabel = (window.WalaPlusI18n ? window.WalaPlusI18n.t('docmap.to_add') : null) || 'To add to the document';
+                    var addLabel = (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('docmap.to_add') : null) || 'To add to the document';
                     var aspectsHtml = aspects.length
                         ? '<div class="mt-1 text-[11px] text-gray-700"><span class="font-semibold text-indigo-700">' + addLabel + ':</span><ul class="list-disc ms-4">'
                             + aspects.map(function (a) { return '<li>' + String(a).replace(/</g, '&lt;') + '</li>'; }).join('') + '</ul></div>'
@@ -835,7 +835,7 @@
         // to the document (uses the latest, more-actionable judge prompt).
         async function rejudgeFindings() {
             var btn = document.getElementById('rejudgeFindingsBtn');
-            var rt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            var rt = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             var prev = btn ? btn.textContent : '';
             try {
                 var est = await fetch('/api/compliance/non-compliance-findings/rejudge', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estimate: true }) });
@@ -883,7 +883,7 @@
         async function loadGaps() {
             var host = document.getElementById('gapsList');
             if (!host) return;
-            var tg = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            var tg = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             try {
                 var res = await fetch('/api/compliance/document-mapping/gaps');
                 var data = await res.json();
@@ -947,7 +947,7 @@
         // count → explicit cost-aware confirmation → run → refresh. Only
         // scans documents not yet linked to this framework (server-side).
         async function mapFramework(regulationId, regCode) {
-            var tf = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            var tf = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             var btn = document.querySelector('[data-testid="button-mapfw-' + regCode + '"]');
             try {
                 // 1) Pre-flight estimate (no tokens spent).
@@ -994,7 +994,7 @@
         }
 
         // ──────────────── AI gap remediation recommendations ────────────────
-        function recT(k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; }
+        function recT(k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; }
         function closeRecModal() { var m = document.getElementById('recModal'); if (m) m.classList.remove('active'); }
         function recPriorityChip(p) {
             var cls = p === 'high' ? 'bg-red-100 text-red-700' : (p === 'low' ? 'bg-gray-100 text-gray-600' : 'bg-amber-100 text-amber-700');
@@ -1206,7 +1206,7 @@
             var btn = document.getElementById('linkAllBtn');
             var label = document.getElementById('linkAllLabel');
             var prev = label ? label.textContent : '';
-            var lt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            var lt = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             if (!confirm(lt('docmap.link_all_confirm', 'Link every document to every clause of every certificate with AI? This runs the full pass (it can take several minutes) and you review the results afterwards.'))) return;
             if (btn) btn.disabled = true;
             try {
@@ -1334,7 +1334,7 @@
         // document into the mapping engine and runs the clause auto-mapper,
         // then refreshes every panel so new coverage + auto-mapped links show.
         async function runMapping() {
-            const t = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            const t = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             const btn = document.getElementById('runMappingBtn');
             const label = document.getElementById('runMappingLabel');
             const prev = label ? label.textContent : '';
@@ -1381,7 +1381,7 @@
                     tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">No auto-mapped links awaiting review.</td></tr>';
                     return;
                 }
-                var tt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+                var tt = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
                 tbody.innerHTML = items.map(function (it) {
                     var methodCell = (it.link_method === 'llm_semantic')
                         ? '<span class="bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded text-[11px] font-medium" title="' + escAttr(tt('docmap.method_ai_title', 'Matched by AI semantic judgement')) + '">' + escAttr(tt('docmap.method_ai', 'AI match')) + '</span>'
@@ -1405,7 +1405,7 @@
         }
         // AI verdict badge for an auto-mapped link.
         function verdictCell(status, rationale) {
-            var rt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            var rt = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             if (!status) return '<span class="text-[11px] text-gray-300">' + escAttr(rt('docmap.verdict_none', 'not reviewed')) + '</span>';
             var map = {
                 satisfied:    ['bg-green-100 text-green-700', rt('docmap.verdict_satisfied', 'Satisfied')],
@@ -1421,7 +1421,7 @@
             var btn = document.getElementById('autoReviewBtn');
             var label = document.getElementById('autoReviewLabel');
             var prev = label ? label.textContent : '';
-            var rt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            var rt = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             try {
                 var est = await fetch('/api/compliance/auto-mapped/ai-review?estimate=true', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                 var ed = await est.json().catch(function () { return {}; });
@@ -1447,7 +1447,7 @@
             }
         }
         async function bulkReview(action, confirmKey, fallbackMsg) {
-            var rt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            var rt = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             if (!confirm(rt(confirmKey, fallbackMsg))) return;
             try {
                 var r = await fetch('/api/compliance/auto-mapped/bulk-action?action=' + encodeURIComponent(action), { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }) });
@@ -1480,8 +1480,8 @@
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

@@ -9,7 +9,7 @@ REM ---------------------------------------------------------------------------
 setlocal
 cd /d "%~dp0"
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0WalaPlusDocCollector.ps1" -Mode Manual
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0ExampleOrgDocCollector.ps1" -Mode Manual
 
 echo.
 if errorlevel 1 (

@@ -48,7 +48,7 @@
 | 4.3 | Apr 14, 2026 | Engineering | **CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich`, additive penalty scoring via `assessDataQuality()`, junk detection (gibberish names, garbage names, suspicious emails), duplicate cluster cross-reference via `lookupRecordsByZohoIds()`. Frontend: health summary bar, 4-tier quality badges, cluster badges linking to Duplicate Radar, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, `zoho_sync_state` and `duplicate_record_tasks` tables. PDPL section corrected to reflect CRM data persistence. SOP accuracy audit: corrected 23 discrepancies. |
 
 ### Document Control Procedure
-1. This SOP is maintained in the project repository at `docs/WalaPlus_Platform_SOP.md`
+1. This SOP is maintained in the project repository at `docs/ExampleOrg_Platform_SOP.md`
 2. All changes require review by the Quality Management Representative or Admin
 3. Superseded versions are retained in version control (git history)
 4. Users are notified of updates via platform announcements
@@ -1239,7 +1239,7 @@ Default (global) endpoints work for most other regions:
 - **OIDC callback:** `/api/callback` handles token exchange, nonce verification (v3.6), user profile sync, and session creation
 - **OIDC nonce verification (v3.6):** The authorization flow generates a cryptographic nonce stored inside the `oauth_data` HttpOnly cookie (as part of a base64url-encoded JSON payload alongside state and PKCE verifier). On callback, the `id_token` nonce claim is parsed from the JWT payload and verified against the stored nonce to prevent replay attacks. Mismatches redirect to `/login?error=nonce_mismatch`.
 - **Session signing:** HMAC-SHA256 signed stateless tokens (`signSession()` / `verifySession()` in `authRoutes.ts`)
-- **Session cookie:** `walaplus_session` — HttpOnly, Secure, SameSite=Lax, 7-day expiry (`SESSION_MAX_AGE = 604800`)
+- **Session cookie:** `ExampleOrg_session` — HttpOnly, Secure, SameSite=Lax, 7-day expiry (`SESSION_MAX_AGE = 604800`)
 - **Logout:** POST-only `/api/logout` — clears session cookie, prevents CSRF-based logout
 - **Admin API Key:** Alternative auth via `X-Admin-Key` header or `admin_key` cookie for system-level/automated access. Admin key login (via `/api/admin/auth`) sets an HttpOnly `admin_key` cookie (8-hour expiry, SameSite=Lax). Both page-level middleware and API-level middleware accept the `admin_key` cookie for authentication, allowing admin key users full dashboard and API access.
 - **Admin key login flow:** Login page (`/login`) offers admin key entry → POST `/api/admin/auth` validates key → sets `admin_key` cookie → redirects to `/` (dashboard)
@@ -1399,7 +1399,7 @@ The CRM Owner Data Quality widget on `/` (and any other surface that calls `GET 
 | BD | 1 | 0 | 1 | Business Development |
 | Eitmad | 1 | 0 | 1 | Eitmad-specific desk |
 | WPE | 1 | 0 | 1 | WPE desk |
-| **Unassigned** | 0 | 7 | 7 | **Gap — see WALAPLUS_GAPS_AND_DATA_NEEDS.md §7.A** |
+| **Unassigned** | 0 | 7 | 7 | **Gap — see ExampleOrg_GAPS_AND_DATA_NEEDS.md §7.A** |
 | **Total** | **64** | **53** | **117** | |
 
 **Data steward responsibilities:** the CRM Admin team owns the seed roster. When an owner joins, leaves, or changes department, they:
@@ -2049,7 +2049,7 @@ ExampleOrg supports Arabic (RTL) in addition to English. The i18n system is a li
 Language is resolved in the following priority order (highest to lowest):
 
 1. **Server preference** — `ui_language` column on `platform_users` (persisted by the `/api/user/language-preference` POST endpoint).
-2. **localStorage** — key `walaplus_lang`, set automatically on every language switch.
+2. **localStorage** — key `ExampleOrg_lang`, set automatically on every language switch.
 3. **`<html lang>`** attribute — allows server-side pre-rendering.
 4. **Browser navigator.language** — auto-detected if nothing else is set.
 5. **Default** — falls back to `en`.
@@ -2061,7 +2061,7 @@ The server preference is fetched on every page load (`GET /api/user/language-pre
 1. Add your key to `dashboard/i18n/en.json` (English source of truth).
 2. Add the matching Arabic key to `dashboard/i18n/ar.json`.
 3. Add `data-i18n="your.key"` attribute to the HTML element you want translated.
-4. Call `WalaPlusI18n.applyToDOM()` after your content is rendered (or rely on the automatic call inside `init()`).
+4. Call `ExampleOrgI18n.applyToDOM()` after your content is rendered (or rely on the automatic call inside `init()`).
 
 **Key naming conventions:**
 - `nav.*` — navigation rail / topstrip
@@ -2082,10 +2082,10 @@ The server preference is fetched on every page load (`GET /api/user/language-pre
 
 ```javascript
 // In any JS file loaded after i18n.js:
-const label = WalaPlusI18n.t('nav.groups.quality');  // → "Quality" (en) or "الجودة" (ar)
+const label = ExampleOrgI18n.t('nav.groups.quality');  // → "Quality" (en) or "الجودة" (ar)
 
 // With variable interpolation:
-const msg = WalaPlusI18n.t('common.items_found', { count: 42 });
+const msg = ExampleOrgI18n.t('common.items_found', { count: 42 });
 // JSON: "common.items_found": "Found {count} items"
 ```
 
@@ -2113,7 +2113,7 @@ The Noto Sans Arabic font is loaded on demand (Google Fonts CDN) only when Arabi
 The Executive Dashboard displays both Gregorian and Hijri (Islamic) calendar dates:
 
 ```javascript
-const result = WalaPlusI18n.formatDateBilingual(new Date());
+const result = ExampleOrgI18n.formatDateBilingual(new Date());
 // result.gregorian → "24 April 2026"    (en) or "٢٤ أبريل ٢٠٢٦"  (ar)
 // result.hijri     → "٢٦ شوال ١٤٤٧"   (Islamic calendar via Intl API)
 ```
@@ -2122,7 +2122,7 @@ The date appears in the `#hijri-date-display` element beneath the page title.
 
 ### 26.7 Language Toggle
 
-Users can switch languages from the **user menu** (top-right avatar dropdown). The toggle renders two buttons — *English* and *العربية* — which call `WalaPlusI18n.setLang('en')` or `setLang('ar')`. This persists the preference to both localStorage and the server, then reloads the page to re-apply all translated content.
+Users can switch languages from the **user menu** (top-right avatar dropdown). The toggle renders two buttons — *English* and *العربية* — which call `ExampleOrgI18n.setLang('en')` or `setLang('ar')`. This persists the preference to both localStorage and the server, then reloads the page to re-apply all translated content.
 
 ### 26.8 Adding i18n to a New Page
 
@@ -2130,11 +2130,11 @@ Users can switch languages from the **user menu** (top-right avatar dropdown). T
 2. Add `data-i18n` attributes to all static text elements.
 3. At the end of your page script, call:
    ```javascript
-   if (window.WalaPlusI18n) {
-     window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+   if (window.ExampleOrgI18n) {
+     window.ExampleOrgI18n.init().then(() => window.ExampleOrgI18n.applyToDOM());
    }
    ```
-   *(If the page has navigation, the nav's `init()` already calls `WalaPlusI18n.init()` and `applyToDOM()` — no duplication occurs because `_loaded` is guarded.)*
+   *(If the page has navigation, the nav's `init()` already calls `ExampleOrgI18n.init()` and `applyToDOM()` — no duplication occurs because `_loaded` is guarded.)*
 4. Add all new keys to both `en.json` and `ar.json`.
 
 ### 26.9 Testing
@@ -2149,7 +2149,7 @@ Tests cover:
 - Default English rendering
 - Arabic translation of key UI strings
 - `html[dir="rtl"]` and `body.wp-rtl` class in Arabic mode
-- `WalaPlusI18n` module availability
+- `ExampleOrgI18n` module availability
 - `/api/user/language-preference` GET/POST endpoint
 - Input placeholder translation
 - `data-i18n` attribute count on login page

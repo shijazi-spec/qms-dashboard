@@ -117,9 +117,9 @@ describe("buildEvaluationPatch — date stamping", () => {
 
 describe("buildEvaluationPatch — env override on field names", () => {
   test("uses custom field names from env", () => {
-    process.env.ZOHO_FIELD_QA_SCORE = "WalaPlus_QA_Score";
+    process.env.ZOHO_FIELD_QA_SCORE = "ExampleOrg_QA_Score";
     const r = buildEvaluationPatch({ overall_score: 90 });
-    expect(r.patch.WalaPlus_QA_Score).toBe(90);
+    expect(r.patch.ExampleOrg_QA_Score).toBe(90);
     expect(r.patch.QA_Score).toBeUndefined();
   });
 });

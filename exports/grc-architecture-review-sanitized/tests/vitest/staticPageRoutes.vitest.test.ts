@@ -130,7 +130,7 @@ function signSession(payload: Record<string, unknown>): string {
 }
 
 /**
- * Build a `walaplus_session` cookie string for the given role.
+ * Build a `ExampleOrg_session` cookie string for the given role.
  *
  * The email encodes the role (`<role>@<REDACTED_HOST>`) so the hermetic
  * `isAdminAuthorizedLive` mock above can resolve the caller's *platform_users*
@@ -144,7 +144,7 @@ function sessionCookie(role: string): string {
     name: "Test User",
     role,
   });
-  return `walaplus_session=${encodeURIComponent(token)}`;
+  return `ExampleOrg_session=${encodeURIComponent(token)}`;
 }
 
 /**

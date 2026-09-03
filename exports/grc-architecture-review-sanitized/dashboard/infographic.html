@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -379,18 +379,18 @@
       }
     });
 
-    // Mount nav (defensive — WalaPlusNav may not exist on every install)
+    // Mount nav (defensive — ExampleOrgNav may not exist on every install)
     try {
-      if (window.WalaPlusNav && typeof window.WalaPlusNav.render === 'function') {
-        document.getElementById('nav-mount').innerHTML = window.WalaPlusNav.render('infographic');
+      if (window.ExampleOrgNav && typeof window.ExampleOrgNav.render === 'function') {
+        document.getElementById('nav-mount').innerHTML = window.ExampleOrgNav.render('infographic');
       }
     } catch (e) { console.warn('Nav mount failed:', e); }
 
     loadSections();
   </script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

@@ -9,7 +9,7 @@ import {
   type HygieneIssue,
   type ZohoAttachmentMeta,
 } from "./zohoCRM";
-import { walaPlusAttachmentAuditRules } from "./governanceRules";
+import { ExampleOrgAttachmentAuditRules } from "./governanceRules";
 import { saveAuditResult, getGovernanceDocumentByModule } from "./database";
 
 /**
@@ -150,7 +150,7 @@ async function runAttachmentAudit(
   alreadyFlaggedRecordIds: Set<string>,
   logger?: any,
 ): Promise<{ issueCount: number; critical: number; high: number; medium: number; low: number; recordsScanned: number; newRecordsWithIssues: number }> {
-  const cfg = walaPlusAttachmentAuditRules;
+  const cfg = ExampleOrgAttachmentAuditRules;
   const stageField = cfg.stageField;
 
   // Filter to records in audited stages (case-insensitive match against keys).
@@ -626,11 +626,11 @@ export async function runDirectAudit(
           }
 
           // ─── Attachment audit (additive — Deals only, specific stages) ───
-          // Runs ONLY for Deals in the stages defined in walaPlusAttachmentAuditRules.
+          // Runs ONLY for Deals in the stages defined in ExampleOrgAttachmentAuditRules.
           // Fetches the Attachments related list per record (parallel, bounded).
           // Adds new issue types: missing_required_document, wrong_document_type,
           // empty_attachment_file, dangerous_attachment_extension.
-          if (moduleName === walaPlusAttachmentAuditRules.module) {
+          if (moduleName === ExampleOrgAttachmentAuditRules.module) {
             try {
               const attachmentResult = await runAttachmentAudit(
                 allRecords,

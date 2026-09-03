@@ -20,11 +20,11 @@
     var CONFIRM_CANCEL_MESSAGE = "Cancel this download? You'll lose progress.";
 
     function tr(key, defaultText, vars) {
-        var i18n = global.WalaPlusI18n;
+        var i18n = global.ExampleOrgI18n;
         if (i18n && typeof i18n.t === 'function') {
             var translated = i18n.t(key, vars);
             var lastSegment = key.split('.').pop();
-            // WalaPlusI18n.t falls back to the last key segment when the
+            // ExampleOrgI18n.t falls back to the last key segment when the
             // string is missing — treat that as "not translated" and use the
             // English default below so we never render a bare key fragment.
             if (translated && translated !== lastSegment) {
@@ -289,10 +289,10 @@
 
     // Resolve the current UI language ('en' | 'ar') so the SW's fallback
     // pages (e.g. "download link expired") render in the user's language.
-    // Falls back to <html lang>/navigator/'en' when WalaPlusI18n isn't ready.
+    // Falls back to <html lang>/navigator/'en' when ExampleOrgI18n isn't ready.
     function currentUiLang() {
         try {
-            var i18n = global.WalaPlusI18n;
+            var i18n = global.ExampleOrgI18n;
             if (i18n && typeof i18n.currentLang === 'function') {
                 var lang = String(i18n.currentLang() || '').toLowerCase().split('-')[0];
                 if (lang === 'en' || lang === 'ar') return lang;
@@ -2536,13 +2536,13 @@
 
     // Defer the fallback notice until the i18n bundle is ready so the text
     // renders in the active locale (e.g. Arabic) on first paint.  We use
-    // WalaPlusI18n.onReady() when the module is present; when it isn't (page
-    // loaded without i18n.js) we listen for the custom 'walaPlusI18nReady'
+    // ExampleOrgI18n.onReady() when the module is present; when it isn't (page
+    // loaded without i18n.js) we listen for the custom 'ExampleOrgI18nReady'
     // event and add a 2-second timeout so the notice still appears in English
     // if i18n never loads.  Size hints run immediately on DOMContentLoaded
     // because they reuse whatever locale is active at that moment.
     function scheduleStreamingFallbackNotice() {
-        var i18n = global.WalaPlusI18n;
+        var i18n = global.ExampleOrgI18n;
         if (i18n && typeof i18n.onReady === 'function') {
             // Module already on the page — use its ready queue / immediate call.
             i18n.onReady(function () { attachStreamingFallbackNotice(); });
@@ -2557,7 +2557,7 @@
             attachStreamingFallbackNotice();
         }
         if (typeof document !== 'undefined') {
-            document.addEventListener('walaPlusI18nReady', doAttach, { once: true });
+            document.addEventListener('ExampleOrgI18nReady', doAttach, { once: true });
         }
         // Safety net: render in whatever locale is available after 2 s.
         setTimeout(doAttach, 2000);
@@ -2678,14 +2678,14 @@
         }
 
         // Build and display an accessible, styled confirm-cancel modal using the
-        // project's WalaPlusA11y modal API when it is loaded on the page.
+        // project's ExampleOrgA11y modal API when it is loaded on the page.
         // Returns a Promise<boolean> (true = proceed with cancel, false = keep going).
         // Falls back to window.confirm synchronously when the a11y module is absent
         // (e.g. in unit-test environments), returning a plain boolean so existing
         // synchronous call-sites continue to work unchanged.
         function buildDefaultConfirmCancelModal(message) {
-            var a11y = (typeof global !== 'undefined' && global.WalaPlusA11y) ||
-                       (typeof window !== 'undefined' && window.WalaPlusA11y);
+            var a11y = (typeof global !== 'undefined' && global.ExampleOrgA11y) ||
+                       (typeof window !== 'undefined' && window.ExampleOrgA11y);
             if (a11y && typeof a11y.openModal === 'function') {
                 return new Promise(function (resolve) {
                     var doc = (typeof document !== 'undefined') ? document : null;
@@ -2750,7 +2750,7 @@
                     modal.appendChild(panel);
                     doc.body.appendChild(modal);
 
-                    // When WalaPlusA11y closes the modal via Escape key the hidden
+                    // When ExampleOrgA11y closes the modal via Escape key the hidden
                     // class is added back — treat that as "Keep downloading".
                     var observer = new MutationObserver(function () {
                         if (modal.classList.contains('hidden')) {
@@ -2772,7 +2772,7 @@
         }
 
         // Build and display an accessible, styled confirm modal for large
-        // exports using the project's WalaPlusA11y modal API. Renders the
+        // exports using the project's ExampleOrgA11y modal API. Renders the
         // estimated size and row count as a clearly formatted metric line and
         // includes a "Tighten filters first" hint so users on slow connections
         // can back out before consuming bandwidth or triggering a disk write.
@@ -2780,8 +2780,8 @@
         // Falls back to window.confirm synchronously when the a11y module is
         // absent (e.g. unit-test environments) so existing call-sites still work.
         function buildDefaultConfirmLargeExportModal(message, estimate) {
-            var a11y = (typeof global !== 'undefined' && global.WalaPlusA11y) ||
-                       (typeof window !== 'undefined' && window.WalaPlusA11y);
+            var a11y = (typeof global !== 'undefined' && global.ExampleOrgA11y) ||
+                       (typeof window !== 'undefined' && window.ExampleOrgA11y);
             var doc = (typeof document !== 'undefined') ? document : null;
             if (a11y && typeof a11y.openModal === 'function' && doc) {
                 return new Promise(function (resolve) {

@@ -7,10 +7,10 @@
 # OIDC-flow auth cookies that are allowed to omit `Secure` only on plain-HTTP
 # local development (gated by `isSecureDomain()`):
 #
-#   * walaplus_session   — HttpOnly, SameSite=Lax, Path=/, and `Secure` either
+#   * ExampleOrg_session   — HttpOnly, SameSite=Lax, Path=/, and `Secure` either
 #                          unconditional or via the `${secure ? "; Secure" : ""}`
 #                          ternary derived from isSecureDomain().
-#   * oauth_data         — same invariants as walaplus_session (short-lived
+#   * oauth_data         — same invariants as ExampleOrg_session (short-lived
 #                          PKCE/state envelope, 600s max-age).
 #
 # The cookie-by-cookie policy lives in `docs/Security_Operations_SOP.md`
@@ -21,7 +21,7 @@
 #   The admin_key cookie was silently missing SameSite=Strict for a period of
 #   time, caught only by manual review. The admin guardrail prevents that
 #   recurrence on admin_key. This sibling guardrail extends the same static
-#   protection to walaplus_session + oauth_data so a future edit cannot
+#   protection to ExampleOrg_session + oauth_data so a future edit cannot
 #   silently drop HttpOnly, SameSite, Path, or the `Secure` ternary on either
 #   cookie without failing CI.
 #
@@ -61,7 +61,7 @@ fi
 # the literal cookie name and any documented `${VAR}` interpolation that
 # resolves to it. Update the alternation if the source ever renames the
 # constant (and update docs/Security_Operations_SOP.md § 5.7 to match).
-COOKIES=("walaplus_session" "oauth_data")
+COOKIES=("ExampleOrg_session" "oauth_data")
 # Patterns anchor on the opening backtick of the cookie's template literal so
 # we match only actual Set-Cookie payload strings (not, e.g., a regex that
 # parses an inbound `oauth_data=...` cookie). This means our scan no longer
@@ -69,8 +69,8 @@ COOKIES=("walaplus_session" "oauth_data")
 # important because some routes pass Set-Cookie via the `[header, value]`
 # response-init array form, where the header name and the cookie body are on
 # different lines.
-PATTERN_walaplus_session='`(walaplus_session|\$\{SESSION_COOKIE_NAME\})='
-REQUIRED_walaplus_session=("HttpOnly" "Secure" "SameSite=Lax" "Path=/")
+PATTERN_ExampleOrg_session='`(ExampleOrg_session|\$\{SESSION_COOKIE_NAME\})='
+REQUIRED_ExampleOrg_session=("HttpOnly" "Secure" "SameSite=Lax" "Path=/")
 PATTERN_oauth_data='`oauth_data='
 REQUIRED_oauth_data=("HttpOnly" "Secure" "SameSite=Lax" "Path=/")
 
@@ -139,16 +139,16 @@ scan_cookie() {
   fi
 }
 
-scan_cookie "walaplus_session" "$PATTERN_walaplus_session" "${REQUIRED_walaplus_session[@]}"
+scan_cookie "ExampleOrg_session" "$PATTERN_ExampleOrg_session" "${REQUIRED_ExampleOrg_session[@]}"
 scan_cookie "oauth_data" "$PATTERN_oauth_data" "${REQUIRED_oauth_data[@]}"
 
 if [ "$failed" -ne 0 ]; then
   echo "Auth cookie security guardrail FAILED — every Set-Cookie header that emits" >&2
-  echo "walaplus_session or oauth_data must carry HttpOnly, SameSite=Lax, Path=/, and" >&2
+  echo "ExampleOrg_session or oauth_data must carry HttpOnly, SameSite=Lax, Path=/, and" >&2
   echo "Secure (either unconditional or via the documented \`\${secure ? \"; Secure\" : \"\"}\`" >&2
   echo "ternary derived from isSecureDomain()). See docs/Security_Operations_SOP.md § 5.7." >&2
   exit 1
 fi
 
-echo "✓ auth cookie guardrail PASS — all ${total_checked} Set-Cookie header(s) for walaplus_session + oauth_data carry HttpOnly, Secure, SameSite=Lax, Path=/."
+echo "✓ auth cookie guardrail PASS — all ${total_checked} Set-Cookie header(s) for ExampleOrg_session + oauth_data carry HttpOnly, Secure, SameSite=Lax, Path=/."
 exit 0

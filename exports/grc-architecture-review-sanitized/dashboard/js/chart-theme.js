@@ -119,7 +119,7 @@
     return cfg;
   }
 
-  global.WalaPlusChartTheme = {
+  global.ExampleOrgChartTheme = {
     PALETTE: PALETTE,
     colors: colors,
     colorFor: colorFor,

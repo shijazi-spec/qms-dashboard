@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -44,10 +44,10 @@
     <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            if (window.WalaPlusNav) WalaPlusNav.init('autonomous-resolution');
+            if (window.ExampleOrgNav) ExampleOrgNav.init('autonomous-resolution');
         });
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(() => window.ExampleOrgI18n.applyToDOM());
         }
     </script>
 

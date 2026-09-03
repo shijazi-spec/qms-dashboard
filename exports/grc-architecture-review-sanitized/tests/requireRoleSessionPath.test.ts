@@ -109,7 +109,7 @@ const {
   getPlatformUser,
 } = await import("../src/utils/rbacMiddleware");
 
-const SESSION_COOKIE_NAME = "walaplus_session";
+const SESSION_COOKIE_NAME = "ExampleOrg_session";
 
 // ---------------------------------------------------------------------------
 // Tiny test harness (mirrors the style in adminAuthHelpers.test.ts so the

@@ -108,7 +108,7 @@ function makeQualityManagerCookie(): string {
     role: 'quality_manager',
     exp: Date.now() + 3600_000,
   });
-  return `walaplus_session=${encodeURIComponent(token)}`;
+  return `ExampleOrg_session=${encodeURIComponent(token)}`;
 }
 
 async function setupTestUser(): Promise<void> {

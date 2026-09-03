@@ -67,7 +67,7 @@
  *
  * How the test session cookies are minted:
  *   The script reproduces the exact wire format of authRoutes.ts —
- *   `walaplus_session=<base64url(payload)>.<HMAC-SHA256(payload, SESSION_SECRET)>`
+ *   `ExampleOrg_session=<base64url(payload)>.<HMAC-SHA256(payload, SESSION_SECRET)>`
  *   with payload = { userId, email, name, picture, role, exp }. SESSION_SECRET
  *   is read from the environment (the dev server uses the same value, so the
  *   middleware's getSessionFromCookie() accepts the cookies as valid). The
@@ -121,7 +121,7 @@ const N_AUTH_RESET = AUTH_LIMIT + 5;
 const WINDOW_MS = 60_000;
 const WINDOW_HEADROOM_MS = 10_000;
 
-const SESSION_COOKIE_NAME = 'walaplus_session';
+const SESSION_COOKIE_NAME = 'ExampleOrg_session';
 const SESSION_MAX_AGE_S = 7 * 24 * 60 * 60;
 
 type ReqOutcome = {

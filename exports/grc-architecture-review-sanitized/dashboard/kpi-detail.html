@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.add('wp-dark'); }
             } catch (e) { /* light default is fine */ }
         })();
@@ -27,7 +27,7 @@
         /**
          * Nav init is DEFERRED until we know whose KPI this is.
          *
-         * WalaPlusNav.init() both highlights a section and records a visit into
+         * ExampleOrgNav.init() both highlights a section and records a visit into
          * the sidebar's Recent list. Hard-coding 'kpis' therefore filed every
          * department KPI (SDR Team / Sales Team) under the GRQ KPI Engine —
          * the exact page they were deliberately removed from — and pushed a
@@ -40,7 +40,7 @@
         function _initNav(isDepartmentKpi) {
             if (_navInitDone) return;
             _navInitDone = true;
-            WalaPlusNav.init(isDepartmentKpi ? 'quality-reports' : 'kpis');
+            ExampleOrgNav.init(isDepartmentKpi ? 'quality-reports' : 'kpis');
         }
     </script>
 
@@ -397,7 +397,7 @@
         document.addEventListener('DOMContentLoaded', loadDetail);
     </script>
     <script>
-        if (window.WalaPlusI18n) { window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); }); }
+        if (window.ExampleOrgI18n) { window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); }); }
     </script>
 </body>
 </html>

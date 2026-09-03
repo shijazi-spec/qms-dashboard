@@ -1,9 +1,9 @@
 {
   "ruleset_version": "2.1.0",
   "source_artifacts": [
-    "WalaPlus_SDR_2.1_04.12.2025_EN.pdf",
+    "ExampleOrg_SDR_2.1_04.12.2025_EN.pdf",
     "SDR Call Script_AR [Updated].pdf",
-    "WalaPlus_SDR_Stages Reasons_2.1_04.12.2025.xlsx",
+    "ExampleOrg_SDR_Stages Reasons_2.1_04.12.2025.xlsx",
     "Five9_SDR_QA_Scorecard_COPC_Template.xlsx"
   ],
   "notes": "Placeholder phrases — replace with exact script lines and COPC rows when Quality exports from governance PDFs/XLSX.",
@@ -46,7 +46,7 @@
       "code": "sdr_gov_call_purpose",
       "severity": "warning",
       "message": "Transcript lacks clear call-purpose framing (reason for call / value to lead).",
-      "suggestion": "Cross-check SDR stages matrix (reason for call, next step) in WalaPlus_SDR_Stages Reasons workbook.",
+      "suggestion": "Cross-check SDR stages matrix (reason for call, next step) in ExampleOrg_SDR_Stages Reasons workbook.",
       "match": {
         "type": "contains_any",
         "min_transcript_chars": 250,

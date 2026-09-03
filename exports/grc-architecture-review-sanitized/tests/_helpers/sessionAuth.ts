@@ -12,7 +12,7 @@
  * This helper reproduces the canonical working pattern from
  * tests/qmsEnhancedRoutes.test.ts + tests/requireRoleSessionPath.test.ts:
  *
- *   1. Signs a `walaplus_session` cookie with SESSION_SECRET — the same
+ *   1. Signs a `ExampleOrg_session` cookie with SESSION_SECRET — the same
  *      secret `authRoutes.signSession()/verifySession()` read — so that
  *      `getSessionUser()` accepts the caller.
  *   2. Registers an *active* `platform_users` row for the cookie's email and
@@ -34,7 +34,7 @@ import crypto from "crypto";
 import pg from "pg";
 import type { QueryResult, QueryResultRow } from "pg";
 
-export const SESSION_COOKIE_NAME = "walaplus_session";
+export const SESSION_COOKIE_NAME = "ExampleOrg_session";
 
 /**
  * Secret used to sign test session cookies. Reuse an externally-provided
@@ -110,9 +110,9 @@ export function emailForRole(role: string): string {
 }
 
 /**
- * Build a signed `walaplus_session` cookie string for `role` AND register an
+ * Build a signed `ExampleOrg_session` cookie string for `role` AND register an
  * active platform_users row so requireRole()'s live lookup succeeds. Returns
- * the full `walaplus_session=<token>` value for use as a `Cookie` header.
+ * the full `ExampleOrg_session=<token>` value for use as a `Cookie` header.
  */
 export function makeCookieForRole(
   role: string,

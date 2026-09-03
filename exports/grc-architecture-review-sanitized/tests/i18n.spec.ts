@@ -11,7 +11,7 @@
  *   7. GRC page metric labels translated in Arabic
  *   8. AI Consultant widget chrome translated in Arabic
  *   9. Executive page health labels and section headings translated
- *  10. WalaPlusI18n.onReady() fires callbacks after load
+ *  10. ExampleOrgI18n.onReady() fires callbacks after load
  *
  * Run:
  *   npx playwright test tests/i18n.spec.ts --reporter=line
@@ -38,8 +38,8 @@ async function setLanguage(page: Page, lang: 'en' | 'ar') {
   // init script on every navigation.
   await page.addInitScript((l: string) => {
     try {
-      if (!localStorage.getItem('walaplus_lang')) {
-        localStorage.setItem('walaplus_lang', l);
+      if (!localStorage.getItem('ExampleOrg_lang')) {
+        localStorage.setItem('ExampleOrg_lang', l);
       }
     } catch (_) { /* noop */ }
   }, lang);
@@ -47,7 +47,7 @@ async function setLanguage(page: Page, lang: 'en' | 'ar') {
 
 async function clearLanguage(page: Page) {
   await page.addInitScript(() => {
-    localStorage.removeItem('walaplus_lang');
+    localStorage.removeItem('ExampleOrg_lang');
   });
 }
 
@@ -188,7 +188,7 @@ test.describe('Login page — localStorage Arabic preference persists without au
     // Pre-set Arabic in localStorage before any page load
     await page.goto(`${BASE_URL}/login`);
     await page.evaluate(() => {
-      try { localStorage.setItem('walaplus_lang', 'ar'); } catch (_) {}
+      try { localStorage.setItem('ExampleOrg_lang', 'ar'); } catch (_) {}
     });
 
     // Reload so i18n.js picks it up fresh
@@ -204,7 +204,7 @@ test.describe('Login page — localStorage Arabic preference persists without au
 
     // localStorage should still be Arabic (server unauthenticated → null → no override)
     const storedLang = await page.evaluate(() => {
-      try { return localStorage.getItem('walaplus_lang'); } catch (_) { return null; }
+      try { return localStorage.getItem('ExampleOrg_lang'); } catch (_) { return null; }
     });
     expect(storedLang).toBe('ar');
 
@@ -243,9 +243,9 @@ test.describe('Language preference — offline retry & reconciliation', () => {
     await page.addInitScript(() => {
       // Seed an offline-failed write: user picked "ar", localStorage holds it,
       // but the server still has "en" because the persist never completed.
-      localStorage.setItem('walaplus_lang', 'ar');
+      localStorage.setItem('ExampleOrg_lang', 'ar');
       localStorage.setItem(
-        'walaplus_lang_pending',
+        'ExampleOrg_lang_pending',
         JSON.stringify({ lang: 'ar', timestamp: Date.now() })
       );
 
@@ -288,12 +288,12 @@ test.describe('Language preference — offline retry & reconciliation', () => {
 
     // localStorage must still be 'ar' (the user's last choice), not the
     // server's stale 'en'.
-    const stored = await page.evaluate(() => localStorage.getItem('walaplus_lang'));
+    const stored = await page.evaluate(() => localStorage.getItem('ExampleOrg_lang'));
     expect(stored).toBe('ar');
 
     // The pending marker should be cleared after the background retry succeeds.
     await page.waitForFunction(
-      () => localStorage.getItem('walaplus_lang_pending') === null,
+      () => localStorage.getItem('ExampleOrg_lang_pending') === null,
       { timeout: 5000 }
     );
 
@@ -342,30 +342,30 @@ test.describe('Language preference — offline retry & reconciliation', () => {
     await page.goto(`${BASE_URL}/login`);
     await page.waitForLoadState('domcontentloaded');
 
-    // Wait for WalaPlusI18n to be available (dashboard/js/i18n.js is loaded
+    // Wait for ExampleOrgI18n to be available (dashboard/js/i18n.js is loaded
     // by the login page).
-    await page.waitForFunction(() => typeof (window as any).WalaPlusI18n !== 'undefined', { timeout: 5000 });
+    await page.waitForFunction(() => typeof (window as any).ExampleOrgI18n !== 'undefined', { timeout: 5000 });
 
     // Reset state from any prior init so we observe a clean failed-persist.
     await page.evaluate(() => {
-      try { localStorage.removeItem('walaplus_lang_pending'); } catch (_) {}
+      try { localStorage.removeItem('ExampleOrg_lang_pending'); } catch (_) {}
     });
 
     // Drive the real public API. setLang() calls _persistLang() → _postLang()
     // and then schedules a (now stubbed) reload via Promise.race with a 5s
     // timeout. We give it ample time to settle and then assert state.
-    await page.evaluate(() => (window as any).WalaPlusI18n.setLang('ar'));
+    await page.evaluate(() => (window as any).ExampleOrgI18n.setLang('ar'));
 
     // Wait until either the pending marker shows up (set synchronously by
     // _persistLang before the network call) or the timeout fires.
     await page.waitForFunction(
-      () => localStorage.getItem('walaplus_lang_pending') !== null,
+      () => localStorage.getItem('ExampleOrg_lang_pending') !== null,
       { timeout: 5000 }
     );
 
     const after = await page.evaluate(() => ({
-      lang: localStorage.getItem('walaplus_lang'),
-      pending: localStorage.getItem('walaplus_lang_pending'),
+      lang: localStorage.getItem('ExampleOrg_lang'),
+      pending: localStorage.getItem('ExampleOrg_lang_pending'),
       failingPostCount: (window as any).__failingPostCount,
     }));
 
@@ -437,53 +437,53 @@ test.describe('i18n module availability', () => {
     );
   });
 
-  test('WalaPlusI18n is available on pages that load i18n.js', async ({ page }) => {
+  test('ExampleOrgI18n is available on pages that load i18n.js', async ({ page }) => {
     await page.goto(`${BASE_URL}/login`);
     await page.waitForLoadState('networkidle');
 
-    const hasI18n = await page.evaluate(() => typeof window.WalaPlusI18n !== 'undefined');
+    const hasI18n = await page.evaluate(() => typeof window.ExampleOrgI18n !== 'undefined');
     expect(hasI18n).toBe(true);
   });
 
-  test('WalaPlusI18n.t() returns translated string', async ({ page }) => {
+  test('ExampleOrgI18n.t() returns translated string', async ({ page }) => {
     await setLanguage(page, 'ar');
     await page.goto(`${BASE_URL}/login`);
     await page.waitForLoadState('networkidle');
 
     // Wait for strings to load
     await page.waitForFunction(() =>
-      window.WalaPlusI18n && window.WalaPlusI18n.t('login.welcome') !== 'welcome',
+      window.ExampleOrgI18n && window.ExampleOrgI18n.t('login.welcome') !== 'welcome',
       { timeout: 5000 }
     );
 
-    const result = await page.evaluate(() => window.WalaPlusI18n.t('login.welcome'));
+    const result = await page.evaluate(() => window.ExampleOrgI18n.t('login.welcome'));
     expect(result).toBe('أهلاً بعودتك');
   });
 
-  test('WalaPlusI18n.isRTL() returns true for Arabic', async ({ page }) => {
+  test('ExampleOrgI18n.isRTL() returns true for Arabic', async ({ page }) => {
     await setLanguage(page, 'ar');
     await page.goto(`${BASE_URL}/login`);
     await page.waitForLoadState('networkidle');
 
     await page.waitForFunction(() =>
-      window.WalaPlusI18n && window.WalaPlusI18n.currentLang() === 'ar',
+      window.ExampleOrgI18n && window.ExampleOrgI18n.currentLang() === 'ar',
       { timeout: 5000 }
     );
 
-    const isRtl = await page.evaluate(() => window.WalaPlusI18n.isRTL());
+    const isRtl = await page.evaluate(() => window.ExampleOrgI18n.isRTL());
     expect(isRtl).toBe(true);
   });
 
-  test('WalaPlusI18n.onReady() fires callback after strings load', async ({ page }) => {
+  test('ExampleOrgI18n.onReady() fires callback after strings load', async ({ page }) => {
     await page.goto(`${BASE_URL}/login`);
     await page.waitForLoadState('networkidle');
 
     // Register callback after page load and verify it fires
     const fired = await page.evaluate((): Promise<boolean> => {
       return new Promise((resolve) => {
-        if (!window.WalaPlusI18n) { resolve(false); return; }
+        if (!window.ExampleOrgI18n) { resolve(false); return; }
         // If already loaded, onReady fires synchronously
-        window.WalaPlusI18n.onReady(() => resolve(true));
+        window.ExampleOrgI18n.onReady(() => resolve(true));
         // Fallback timeout
         setTimeout(() => resolve(false), 3000);
       });
@@ -839,7 +839,7 @@ test.describe('AI Consultant widget — i18n chrome', () => {
       return w !== null;
     }, { timeout: 5000 });
 
-    // Wait for translation to be applied (walaPlusI18nReady event)
+    // Wait for translation to be applied (ExampleOrgI18nReady event)
     await page.waitForFunction(() => {
       const h4 = document.querySelector('#ai-widget-welcome h4');
       return h4 && h4.textContent && h4.textContent.trim() !== 'ExampleOrg QMS Consultant';
@@ -1030,18 +1030,18 @@ test.describe('Numeral format toggle — user menu', () => {
     await page.waitForLoadState('networkidle');
 
     await page.waitForFunction(() =>
-      window.WalaPlusI18n && window.WalaPlusI18n.formatNumber !== undefined,
+      window.ExampleOrgI18n && window.ExampleOrgI18n.formatNumber !== undefined,
       { timeout: 5000 }
     );
 
     // Enable Western numerals
-    await page.evaluate(() => window.WalaPlusI18n.setUseEasternNumerals(false));
-    const resultWestern = await page.evaluate(() => window.WalaPlusI18n.formatNumber(1234));
+    await page.evaluate(() => window.ExampleOrgI18n.setUseEasternNumerals(false));
+    const resultWestern = await page.evaluate(() => window.ExampleOrgI18n.formatNumber(1234));
     expect(resultWestern).toBe('1,234');
 
     // Enable Eastern numerals
-    await page.evaluate(() => window.WalaPlusI18n.setUseEasternNumerals(true));
-    const resultEastern = await page.evaluate(() => window.WalaPlusI18n.formatNumber(1234));
+    await page.evaluate(() => window.ExampleOrgI18n.setUseEasternNumerals(true));
+    const resultEastern = await page.evaluate(() => window.ExampleOrgI18n.formatNumber(1234));
     expect(resultEastern).not.toBe('1,234');
     expect(resultEastern.length > 0).toBe(true);
   });

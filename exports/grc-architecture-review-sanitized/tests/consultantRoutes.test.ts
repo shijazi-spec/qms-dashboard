@@ -52,7 +52,7 @@ function makeSessionCookieHeader(): string {
     role: TEST_AUTH_ROLE,
     exp: Date.now() + 3_600_000,
   });
-  return `walaplus_session=${encodeURIComponent(token)}`;
+  return `ExampleOrg_session=${encodeURIComponent(token)}`;
 }
 
 const suite = new TestSuite("consultantRoutes");

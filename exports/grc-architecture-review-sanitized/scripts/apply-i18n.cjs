@@ -19,8 +19,8 @@ const ROOT = path.join(__dirname, '..', 'dashboard');
 
 const I18N_SCRIPT = '    <script src="/js/i18n.js?v=1.0"></script>\n';
 const INIT_BLOCK = `    <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 `;
@@ -1163,7 +1163,7 @@ function ensureI18nScript(html) {
 }
 
 function ensureInitBlock(html) {
-  if (html.indexOf('WalaPlusI18n.init()') !== -1) return { html: html, changed: false };
+  if (html.indexOf('ExampleOrgI18n.init()') !== -1) return { html: html, changed: false };
   const idx = html.lastIndexOf('</body>');
   if (idx < 0) return { html: html, changed: false };
   const updated = html.slice(0, idx) + INIT_BLOCK + html.slice(idx);

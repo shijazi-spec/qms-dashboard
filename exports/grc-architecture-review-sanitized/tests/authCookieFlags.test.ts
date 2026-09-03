@@ -1,10 +1,10 @@
 /**
- * Auth cookie security-flag guardrail (walaplus_session + oauth_data)
+ * Auth cookie security-flag guardrail (ExampleOrg_session + oauth_data)
  *
  * Sibling to `tests/adminCookieFlags.test.ts`. The admin wrapper enforces the
  * strict admin_key policy (HttpOnly + Secure + SameSite=Strict, all
  * unconditional). This wrapper enforces the documented policy for the two
- * OIDC-flow auth cookies — walaplus_session and oauth_data — that are
+ * OIDC-flow auth cookies — ExampleOrg_session and oauth_data — that are
  * allowed to omit the literal `Secure` token only via the documented
  * `${secure ? "; Secure" : ""}` ternary derived from `isSecureDomain()`.
  *
@@ -65,7 +65,7 @@ if (result.error) {
   }
   assert(
     result.status === 0,
-    "every walaplus_session and oauth_data Set-Cookie header in src/mastra/routes/ carries HttpOnly, Secure, SameSite=Lax, Path=/",
+    "every ExampleOrg_session and oauth_data Set-Cookie header in src/mastra/routes/ carries HttpOnly, Secure, SameSite=Lax, Path=/",
   );
 }
 

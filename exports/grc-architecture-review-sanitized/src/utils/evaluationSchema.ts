@@ -362,7 +362,7 @@ export const SIX_SIGMA_CRITERIA: EvaluationCriteria[] = [
   }
 ];
 
-export const WALAPLUS_COMMERCIAL_CRITERIA: EvaluationCriteria[] = [
+export const ExampleOrg_COMMERCIAL_CRITERIA: EvaluationCriteria[] = [
   {
     id: 'wp-data-completeness',
     name: 'CRM Data Completeness',
@@ -495,14 +495,14 @@ export const DEFAULT_EVALUATION_FRAMEWORK: EvaluationFramework = {
       name: 'People & Performance',
       description: 'Team performance and compliance',
       weight: 20,
-      criteria: [...ISO_9001_CRITERIA.filter(c => c.dimension === 'people'), ...COPC_CRITERIA.filter(c => c.dimension === 'people'), ...WALAPLUS_COMMERCIAL_CRITERIA.filter(c => c.dimension === 'people')]
+      criteria: [...ISO_9001_CRITERIA.filter(c => c.dimension === 'people'), ...COPC_CRITERIA.filter(c => c.dimension === 'people'), ...ExampleOrg_COMMERCIAL_CRITERIA.filter(c => c.dimension === 'people')]
     },
     {
       id: 'governance',
       name: 'Governance & Compliance',
       description: 'Documentation and regulatory compliance',
       weight: 15,
-      criteria: [...ISO_9001_CRITERIA.filter(c => c.dimension === 'governance'), ...SIX_SIGMA_CRITERIA.filter(c => c.dimension === 'governance'), ...WALAPLUS_COMMERCIAL_CRITERIA.filter(c => c.dimension === 'governance')]
+      criteria: [...ISO_9001_CRITERIA.filter(c => c.dimension === 'governance'), ...SIX_SIGMA_CRITERIA.filter(c => c.dimension === 'governance'), ...ExampleOrg_COMMERCIAL_CRITERIA.filter(c => c.dimension === 'governance')]
     },
     {
       id: 'quality',
@@ -665,7 +665,7 @@ export function getAllCriteria(): EvaluationCriteria[] {
     ...ISO_9001_CRITERIA,
     ...COPC_CRITERIA,
     ...SIX_SIGMA_CRITERIA,
-    ...WALAPLUS_COMMERCIAL_CRITERIA
+    ...ExampleOrg_COMMERCIAL_CRITERIA
   ];
 }
 

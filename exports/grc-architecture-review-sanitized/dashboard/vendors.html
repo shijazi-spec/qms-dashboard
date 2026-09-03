@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -47,7 +47,7 @@
     <script src="/js/streaming-download.js?v=2.2.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            WalaPlusNav.init('vendors');
+            ExampleOrgNav.init('vendors');
         });
     </script>
 
@@ -433,10 +433,10 @@
             }
         }
 
-        const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
-        const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
-        function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
-        document.addEventListener('walaPlusLanguageChange', function () {
+        const _fd = (d, opts) => window.ExampleOrgI18n ? ExampleOrgI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
+        const _fn = (n) => window.ExampleOrgI18n ? ExampleOrgI18n.formatNumber(n) : String(n);
+        function _runWhenI18nReady(fn) { if (window.ExampleOrgI18n && typeof ExampleOrgI18n.onReady === 'function') ExampleOrgI18n.onReady(fn); else fn(); }
+        document.addEventListener('ExampleOrgLanguageChange', function () {
             try {
                 if (typeof loadSummary === 'function') loadSummary();
                 if (typeof loadVendors === 'function') loadVendors();
@@ -446,7 +446,7 @@
         function renderCriticalityChart(data) {
             const container = document.getElementById('byCriticalityChart');
             if (data.length === 0) {
-                container.innerHTML = '<div class="text-gray-400 text-center py-4">' + WalaPlusI18n.t('dyn.vendors.no_active_vendors') + '</div>';
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">' + ExampleOrgI18n.t('dyn.vendors.no_active_vendors') + '</div>';
                 return;
             }
             const total = data.reduce((sum, item) => sum + parseInt(item.count), 0);
@@ -468,7 +468,7 @@
         function renderExpiringContracts(contracts) {
             const container = document.getElementById('expiringContracts');
             if (contracts.length === 0) {
-                container.innerHTML = '<div class="text-green-600 text-center py-4">' + WalaPlusI18n.t('dyn.vendors.no_expiring_contracts') + '</div>';
+                container.innerHTML = '<div class="text-green-600 text-center py-4">' + ExampleOrgI18n.t('dyn.vendors.no_expiring_contracts') + '</div>';
                 return;
             }
             container.innerHTML = contracts.map(c => `
@@ -488,7 +488,7 @@
         function renderOverdueAssessments(vendors) {
             const container = document.getElementById('overdueAssessments');
             if (vendors.length === 0) {
-                container.innerHTML = '<div class="text-green-600 text-center py-4">' + WalaPlusI18n.t('dyn.vendors.no_overdue_assessments') + '</div>';
+                container.innerHTML = '<div class="text-green-600 text-center py-4">' + ExampleOrgI18n.t('dyn.vendors.no_overdue_assessments') + '</div>';
                 return;
             }
             container.innerHTML = vendors.map(v => `
@@ -498,7 +498,7 @@
                         <div class="text-xs text-gray-500">${v.vendor_code}</div>
                     </div>
                     <div class="text-end">
-                        <div class="text-sm text-red-600 font-medium">${WalaPlusI18n.t('dyn.vendors.due_label', { date: _fd(v.next_assessment_date) })}</div>
+                        <div class="text-sm text-red-600 font-medium">${ExampleOrgI18n.t('dyn.vendors.due_label', { date: _fd(v.next_assessment_date) })}</div>
                         <span class="text-xs px-2 py-0.5 rounded-full criticality-${v.criticality}">${formatCriticality(v.criticality)}</span>
                     </div>
                 </div>
@@ -522,7 +522,7 @@
                 renderVendorsTable(data.vendors || []);
             } catch (error) {
                 console.error('Error loading vendors:', error);
-                document.getElementById('vendorsTableBody').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">' + WalaPlusI18n.t('dyn.vendors.error_loading') + '</td></tr>';
+                document.getElementById('vendorsTableBody').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">' + ExampleOrgI18n.t('dyn.vendors.error_loading') + '</td></tr>';
             }
         }
 
@@ -530,32 +530,32 @@
             let t;
             if (group === 'criticality') {
                 switch (key) {
-                    case 'critical': t = WalaPlusI18n.t('dyn.vendors.criticality.critical'); break;
-                    case 'high':     t = WalaPlusI18n.t('dyn.vendors.criticality.high'); break;
-                    case 'medium':   t = WalaPlusI18n.t('dyn.vendors.criticality.medium'); break;
-                    case 'low':      t = WalaPlusI18n.t('dyn.vendors.criticality.low'); break;
+                    case 'critical': t = ExampleOrgI18n.t('dyn.vendors.criticality.critical'); break;
+                    case 'high':     t = ExampleOrgI18n.t('dyn.vendors.criticality.high'); break;
+                    case 'medium':   t = ExampleOrgI18n.t('dyn.vendors.criticality.medium'); break;
+                    case 'low':      t = ExampleOrgI18n.t('dyn.vendors.criticality.low'); break;
                 }
             } else if (group === 'status') {
                 switch (key) {
-                    case 'active':       t = WalaPlusI18n.t('dyn.vendors.status.active'); break;
-                    case 'under_review': t = WalaPlusI18n.t('dyn.vendors.status.under_review'); break;
-                    case 'suspended':    t = WalaPlusI18n.t('dyn.vendors.status.suspended'); break;
-                    case 'terminated':   t = WalaPlusI18n.t('dyn.vendors.status.terminated'); break;
-                    case 'onboarding':   t = WalaPlusI18n.t('dyn.vendors.status.onboarding'); break;
+                    case 'active':       t = ExampleOrgI18n.t('dyn.vendors.status.active'); break;
+                    case 'under_review': t = ExampleOrgI18n.t('dyn.vendors.status.under_review'); break;
+                    case 'suspended':    t = ExampleOrgI18n.t('dyn.vendors.status.suspended'); break;
+                    case 'terminated':   t = ExampleOrgI18n.t('dyn.vendors.status.terminated'); break;
+                    case 'onboarding':   t = ExampleOrgI18n.t('dyn.vendors.status.onboarding'); break;
                 }
             } else if (group === 'category') {
                 switch (key) {
-                    case 'it_services':           t = WalaPlusI18n.t('dyn.vendors.category.it_services'); break;
-                    case 'cloud':                 t = WalaPlusI18n.t('<REDACTED_HOST>'); break;
-                    case 'software':              t = WalaPlusI18n.t('dyn.vendors.category.software'); break;
-                    case 'hardware':              t = WalaPlusI18n.t('dyn.vendors.category.hardware'); break;
-                    case 'consulting':            t = WalaPlusI18n.t('dyn.vendors.category.consulting'); break;
-                    case 'staffing':              t = WalaPlusI18n.t('dyn.vendors.category.staffing'); break;
-                    case 'logistics':             t = WalaPlusI18n.t('dyn.vendors.category.logistics'); break;
-                    case 'marketing':             t = WalaPlusI18n.t('dyn.vendors.category.marketing'); break;
-                    case 'professional_services': t = WalaPlusI18n.t('dyn.vendors.category.professional_services'); break;
-                    case 'utilities':             t = WalaPlusI18n.t('dyn.vendors.category.utilities'); break;
-                    case 'other':                 t = WalaPlusI18n.t('dyn.vendors.category.other'); break;
+                    case 'it_services':           t = ExampleOrgI18n.t('dyn.vendors.category.it_services'); break;
+                    case 'cloud':                 t = ExampleOrgI18n.t('<REDACTED_HOST>'); break;
+                    case 'software':              t = ExampleOrgI18n.t('dyn.vendors.category.software'); break;
+                    case 'hardware':              t = ExampleOrgI18n.t('dyn.vendors.category.hardware'); break;
+                    case 'consulting':            t = ExampleOrgI18n.t('dyn.vendors.category.consulting'); break;
+                    case 'staffing':              t = ExampleOrgI18n.t('dyn.vendors.category.staffing'); break;
+                    case 'logistics':             t = ExampleOrgI18n.t('dyn.vendors.category.logistics'); break;
+                    case 'marketing':             t = ExampleOrgI18n.t('dyn.vendors.category.marketing'); break;
+                    case 'professional_services': t = ExampleOrgI18n.t('dyn.vendors.category.professional_services'); break;
+                    case 'utilities':             t = ExampleOrgI18n.t('dyn.vendors.category.utilities'); break;
+                    case 'other':                 t = ExampleOrgI18n.t('dyn.vendors.category.other'); break;
                 }
             }
             if (t && t !== key) return t;
@@ -565,7 +565,7 @@
         function renderVendorsTable(vendors) {
             const tbody = document.getElementById('vendorsTableBody');
             if (vendors.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.vendors.no_vendors_found') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">' + ExampleOrgI18n.t('dyn.vendors.no_vendors_found') + '</td></tr>';
                 return;
             }
             
@@ -600,41 +600,41 @@
         }
         function formatVendorCategory(cat) {
             const map = {
-                'technology':            (WalaPlusI18n.t('vendors.cat_technology') || 'Technology'),
-                'consulting':            (WalaPlusI18n.t('vendors.cat_consulting') || 'Consulting'),
-                'manufacturing':         (WalaPlusI18n.t('vendors.cat_manufacturing') || 'Manufacturing'),
-                'logistics':             (WalaPlusI18n.t('vendors.cat_logistics') || 'Logistics'),
-                'financial':             (WalaPlusI18n.t('vendors.cat_financial') || 'Financial'),
-                'professional_services': (WalaPlusI18n.t('vendors.cat_professional') || 'Professional Services'),
-                'other':                 (WalaPlusI18n.t('vendors.cat_other') || 'Other')
+                'technology':            (ExampleOrgI18n.t('vendors.cat_technology') || 'Technology'),
+                'consulting':            (ExampleOrgI18n.t('vendors.cat_consulting') || 'Consulting'),
+                'manufacturing':         (ExampleOrgI18n.t('vendors.cat_manufacturing') || 'Manufacturing'),
+                'logistics':             (ExampleOrgI18n.t('vendors.cat_logistics') || 'Logistics'),
+                'financial':             (ExampleOrgI18n.t('vendors.cat_financial') || 'Financial'),
+                'professional_services': (ExampleOrgI18n.t('vendors.cat_professional') || 'Professional Services'),
+                'other':                 (ExampleOrgI18n.t('vendors.cat_other') || 'Other')
             };
             return map[cat] || _prettify(cat);
         }
         function formatCriticality(level) {
             const map = {
-                'critical': (WalaPlusI18n.t('common.critical') || 'Critical'),
-                'high':     (WalaPlusI18n.t('common.high') || 'High'),
-                'medium':   (WalaPlusI18n.t('common.medium') || 'Medium'),
-                'low':      (WalaPlusI18n.t('common.low') || 'Low')
+                'critical': (ExampleOrgI18n.t('common.critical') || 'Critical'),
+                'high':     (ExampleOrgI18n.t('common.high') || 'High'),
+                'medium':   (ExampleOrgI18n.t('common.medium') || 'Medium'),
+                'low':      (ExampleOrgI18n.t('common.low') || 'Low')
             };
             return map[level] || _prettify(level);
         }
         function formatVendorStatus(status) {
             const map = {
-                'active':           (WalaPlusI18n.t('vendors.s_active') || 'Active'),
-                'pending':          (WalaPlusI18n.t('vendors.s_pending') || 'Pending'),
-                'pending_approval': (WalaPlusI18n.t('vendors.s_pending_approval') || 'Pending Approval'),
-                'probation':        (WalaPlusI18n.t('vendors.s_probation') || 'Probation'),
-                'suspended':        (WalaPlusI18n.t('vendors.s_suspended') || 'Suspended'),
-                'inactive':         (WalaPlusI18n.t('common.inactive') || 'Inactive'),
-                'under_review':     (WalaPlusI18n.t('vendors.s_under_review') || 'Under Review'),
-                'approved':         (WalaPlusI18n.t('common.approved') || 'Approved'),
-                'rejected':         (WalaPlusI18n.t('common.rejected') || 'Rejected'),
-                'draft':            (WalaPlusI18n.t('vendors.s_draft') || 'Draft'),
-                'completed':        (WalaPlusI18n.t('common.completed') || 'Completed'),
-                'in_progress':      (WalaPlusI18n.t('common.in_progress') || 'In Progress'),
-                'closed':           (WalaPlusI18n.t('common.closed') || 'Closed'),
-                'open':             (WalaPlusI18n.t('common.open') || 'Open')
+                'active':           (ExampleOrgI18n.t('vendors.s_active') || 'Active'),
+                'pending':          (ExampleOrgI18n.t('vendors.s_pending') || 'Pending'),
+                'pending_approval': (ExampleOrgI18n.t('vendors.s_pending_approval') || 'Pending Approval'),
+                'probation':        (ExampleOrgI18n.t('vendors.s_probation') || 'Probation'),
+                'suspended':        (ExampleOrgI18n.t('vendors.s_suspended') || 'Suspended'),
+                'inactive':         (ExampleOrgI18n.t('common.inactive') || 'Inactive'),
+                'under_review':     (ExampleOrgI18n.t('vendors.s_under_review') || 'Under Review'),
+                'approved':         (ExampleOrgI18n.t('common.approved') || 'Approved'),
+                'rejected':         (ExampleOrgI18n.t('common.rejected') || 'Rejected'),
+                'draft':            (ExampleOrgI18n.t('vendors.s_draft') || 'Draft'),
+                'completed':        (ExampleOrgI18n.t('common.completed') || 'Completed'),
+                'in_progress':      (ExampleOrgI18n.t('common.in_progress') || 'In Progress'),
+                'closed':           (ExampleOrgI18n.t('common.closed') || 'Closed'),
+                'open':             (ExampleOrgI18n.t('common.open') || 'Open')
             };
             return map[status] || _prettify(status);
         }
@@ -660,7 +660,7 @@
         function renderRemediationsTable(remediations) {
             const tbody = document.getElementById('remediationsTableBody');
             if (remediations.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.vendors.no_remediations') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">' + ExampleOrgI18n.t('dyn.vendors.no_remediations') + '</td></tr>';
                 return;
             }
             
@@ -699,15 +699,15 @@
             const data = await response.json();
             
             const select = document.getElementById('assessmentVendorSelect');
-            select.innerHTML = '<option value="">' + WalaPlusI18n.t('dyn.vendors.select_vendor_placeholder') + '</option>';
+            select.innerHTML = '<option value="">' + ExampleOrgI18n.t('dyn.vendors.select_vendor_placeholder') + '</option>';
             (data.vendors || []).forEach(v => {
                 const option = document.createElement('option');
                 option.value = v.id;
                 option.textContent = `${v.vendor_code} - ${v.name}`;
                 select.appendChild(option);
             });
-            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) {
-                window.WalaPlusI18n.applyToDOM(select);
+            if (window.ExampleOrgI18n && window.ExampleOrgI18n.applyToDOM) {
+                window.ExampleOrgI18n.applyToDOM(select);
             }
             
             document.getElementById('assessmentModal').classList.add('active');
@@ -718,7 +718,7 @@
         }
 
         function viewVendor(id) {
-            alert(WalaPlusI18n.t('dyn.vendors.view_coming_soon', { id: id }));
+            alert(ExampleOrgI18n.t('dyn.vendors.view_coming_soon', { id: id }));
         }
 
         document.getElementById('vendorForm').addEventListener('submit', async (e) => {
@@ -739,10 +739,10 @@
                     loadVendors();
                 } else {
                     const error = await response.json();
-                    alert(error.error || WalaPlusI18n.t('dyn.vendors.register_failed'));
+                    alert(error.error || ExampleOrgI18n.t('dyn.vendors.register_failed'));
                 }
             } catch (error) {
-                alert(WalaPlusI18n.t('dyn.vendors.register_error'));
+                alert(ExampleOrgI18n.t('dyn.vendors.register_error'));
             }
         });
 
@@ -769,10 +769,10 @@
                     loadVendors();
                 } else {
                     const error = await response.json();
-                    alert(error.error || WalaPlusI18n.t('dyn.vendors.assessment_failed'));
+                    alert(error.error || ExampleOrgI18n.t('dyn.vendors.assessment_failed'));
                 }
             } catch (error) {
-                alert(WalaPlusI18n.t('dyn.vendors.assessment_error'));
+                alert(ExampleOrgI18n.t('dyn.vendors.assessment_error'));
             }
         });
 
@@ -790,8 +790,8 @@
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

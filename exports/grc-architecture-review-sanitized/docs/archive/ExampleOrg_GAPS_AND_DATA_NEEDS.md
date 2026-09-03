@@ -146,7 +146,7 @@ The CRM Owner Data Quality widget on `/` finally renders real Department + Activ
 
 **Action required (CRM Admin, ≤5 working days):** assign a Department in Zoho for each, OR mark them as system/test accounts and exclude them from the seed re-import. The 193 records under `عبدالمجيد الشبيلي` are the most material.
 
-**Refresh procedure:** when owners join/leave/move teams → re-export `CRM_Users_Complete_*.xlsx` from Zoho → drop into the importer → bump snapshot date in `docs/WalaPlus_Platform_SOP.md §11.1` and §25 changelog.
+**Refresh procedure:** when owners join/leave/move teams → re-export `CRM_Users_Complete_*.xlsx` from Zoho → drop into the importer → bump snapshot date in `docs/ExampleOrg_Platform_SOP.md §11.1` and §25 changelog.
 
 **Two operational asks discovered during the v4.5.1 smoke test (CRM Admin):**
 

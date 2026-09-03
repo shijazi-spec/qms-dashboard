@@ -563,16 +563,16 @@ export const adminApiRoutes = [
             return c.json({ error: "Insufficient permissions" }, 403);
           const { saveGovernanceDocument, saveScorecard, logAdminActivity } =
             await import("../../utils/database");
-          const { walaPlusSalesGovernanceRules, qualityScorecardConfig } =
+          const { ExampleOrgSalesGovernanceRules, qualityScorecardConfig } =
             await import("../../utils/governanceRules");
           await saveGovernanceDocument({
-            name: walaPlusSalesGovernanceRules.document.name,
+            name: ExampleOrgSalesGovernanceRules.document.name,
             document_type: "sales",
-            version: walaPlusSalesGovernanceRules.document.version,
+            version: ExampleOrgSalesGovernanceRules.document.version,
             file_path:
-              "attached_assets/WalaPlus_Sales_1.1_01.12.2025_EN_1764681400933.pdf",
-            content_text: JSON.stringify(walaPlusSalesGovernanceRules, null, 2),
-            rules_json: walaPlusSalesGovernanceRules,
+              "attached_assets/ExampleOrg_Sales_1.1_01.12.2025_EN_1764681400933.pdf",
+            content_text: JSON.stringify(ExampleOrgSalesGovernanceRules, null, 2),
+            rules_json: ExampleOrgSalesGovernanceRules,
             is_active: true,
           });
           await saveScorecard({
@@ -586,7 +586,7 @@ export const adminApiRoutes = [
             action_description: "Reset governance data to default values",
             target_type: "system",
             metadata: {
-              document: walaPlusSalesGovernanceRules.document.name,
+              document: ExampleOrgSalesGovernanceRules.document.name,
               scorecard: qualityScorecardConfig.name,
             },
           });

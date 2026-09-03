@@ -112,8 +112,8 @@ async function setUpDom(opts: SetUpOpts = {}): Promise<{
 
   // Stubs the inline scripts depend on but which ship from separate
   // <script src> bundles we are deliberately not loading.
-  (window as any).WalaPlusNav = { init: () => undefined };
-  (window as any).WalaPlusI18n = {
+  (window as any).ExampleOrgNav = { init: () => undefined };
+  (window as any).ExampleOrgI18n = {
     init: () => Promise.resolve(),
     applyToDOM: () => undefined,
     // Lightweight passthrough — every assertion in this file targets

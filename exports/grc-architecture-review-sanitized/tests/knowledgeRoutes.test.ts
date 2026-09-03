@@ -22,7 +22,7 @@ import { buildHandler, makeContext } from "./_helpers/fakeContext";
 import { makeCookieForRole } from "./_helpers/sessionAuth";
 
 const suite = new TestSuite("knowledgeRoutes");
-// Signed walaplus_session cookie for an active admin platform user. The
+// Signed ExampleOrg_session cookie for an active admin platform user. The
 // checklist routes call requireRole() (live getPlatformUser() lookup) BEFORE
 // validating the :id param, so reaching the id->400 branch requires a valid
 // authenticated session. The shared helper also registers an active

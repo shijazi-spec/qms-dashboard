@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -302,7 +302,7 @@
         <script src="/js/navigation.js?v=5.7"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
-                WalaPlusNav.init('dashboard');
+                ExampleOrgNav.init('dashboard');
             });
         </script>
 
@@ -1463,7 +1463,7 @@
                         },
                     },
                 });
-                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('qualityTrendChart', qualityTrendChart, 'Data Quality Trend');
+                if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('qualityTrendChart', qualityTrendChart, 'Data Quality Trend');
             } catch (err) {
                 console.warn('[QualityTrend] Load failed:', err);
             }
@@ -1869,7 +1869,7 @@
 
                 // Prefix BOM so Excel opens UTF-8 (Arabic owner names) correctly.
                 const csv = '\uFEFF' + lines.join('\r\n') + '\r\n';
-                const filename = `WalaPlus_Audit_Report_${new Date().toISOString().split('T')[0]}.csv`;
+                const filename = `ExampleOrg_Audit_Report_${new Date().toISOString().split('T')[0]}.csv`;
                 downloadFile(csv, filename, 'text/csv;charset=utf-8;');
             } catch (error) {
                 console.error('Error generating CSV:', error);
@@ -2769,7 +2769,7 @@
         // ---- Records by Layout (full CRM pies) ----
         let leadsLayoutPieChart = null;
         let dealsLayoutPieChart = null;
-        const LAYOUT_PALETTE = (window.WalaPlusChartTheme && window.WalaPlusChartTheme.PALETTE) || ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16'];
+        const LAYOUT_PALETTE = (window.ExampleOrgChartTheme && window.ExampleOrgChartTheme.PALETTE) || ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16'];
 
         function renderLayoutPie(canvasId, legendId, totalElId, breakdown, total) {
             const ctx = document.getElementById(canvasId);
@@ -2795,7 +2795,7 @@
                 }).join('');
             }
 
-            const theme = window.WalaPlusChartTheme;
+            const theme = window.ExampleOrgChartTheme;
             const config = theme
                 ? theme.doughnutConfig({ labels, data, colors, legend: false, cutout: '60%' })
                 : {
@@ -2838,10 +2838,10 @@
 
                 leadsLayoutPieChart = renderLayoutPie('leadsLayoutPie', 'leadsLayoutLegend', 'leadsLayoutTotal',
                     data.leads?.breakdown || [], data.leads?.total || 0);
-                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('leadsLayoutPie', leadsLayoutPieChart, 'Lead Records by Layout');
+                if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('leadsLayoutPie', leadsLayoutPieChart, 'Lead Records by Layout');
                 dealsLayoutPieChart = renderLayoutPie('dealsLayoutPie', 'dealsLayoutLegend', 'dealsLayoutTotal',
                     data.deals?.breakdown || [], data.deals?.total || 0);
-                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('dealsLayoutPie', dealsLayoutPieChart, 'Deal Records by Layout');
+                if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('dealsLayoutPie', dealsLayoutPieChart, 'Deal Records by Layout');
 
                 if (subtitle) {
                     const when = data.cachedAtMs ? new Date(data.cachedAtMs).toLocaleTimeString() : '';
@@ -2891,7 +2891,7 @@
                 }
                 if (emptyEl) emptyEl.style.display = 'none';
 
-                const palette = (window.WalaPlusChartTheme && window.WalaPlusChartTheme.PALETTE) || ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6','#6366f1','#eab308'];
+                const palette = (window.ExampleOrgChartTheme && window.ExampleOrgChartTheme.PALETTE) || ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6','#6366f1','#eab308'];
                 const colorFor = (i) => palette[i % palette.length];
 
                 cardsEl.innerHTML = entries.map(([name, count], i) => {
@@ -2911,15 +2911,15 @@
                 const _layoutLabels = entries.map(e => e[0]);
                 const _layoutData = entries.map(e => e[1]);
                 const _layoutColors = entries.map((_, i) => colorFor(i));
-                issuesLayoutChart = new Chart(ctx, window.WalaPlusChartTheme
-                    ? window.WalaPlusChartTheme.doughnutConfig({ labels: _layoutLabels, data: _layoutData, colors: _layoutColors })
+                issuesLayoutChart = new Chart(ctx, window.ExampleOrgChartTheme
+                    ? window.ExampleOrgChartTheme.doughnutConfig({ labels: _layoutLabels, data: _layoutData, colors: _layoutColors })
                     : {
                         type: 'doughnut',
                         data: { labels: _layoutLabels, datasets: [{ data: _layoutData, backgroundColor: _layoutColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
                         options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
                 );
-                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('issuesChartLayout', issuesLayoutChart, 'Issues by Layout');
+                if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('issuesChartLayout', issuesLayoutChart, 'Issues by Layout');
             } catch (err) {
                 console.error('Error rendering Issues by Layout:', err);
             }
@@ -2963,15 +2963,15 @@
                 const categories = allModules;
                 const values = allModules.map(m => normalized[m] || 0);
                 const _moduleColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
-                issuesChart = new Chart(ctx, window.WalaPlusChartTheme
-                    ? window.WalaPlusChartTheme.doughnutConfig({ labels: categories, data: values, colors: _moduleColors })
+                issuesChart = new Chart(ctx, window.ExampleOrgChartTheme
+                    ? window.ExampleOrgChartTheme.doughnutConfig({ labels: categories, data: values, colors: _moduleColors })
                     : {
                         type: 'doughnut',
                         data: { labels: categories, datasets: [{ data: values, backgroundColor: _moduleColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
                         options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
                 );
-                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('issuesChart', issuesChart, 'Issues by Category');
+                if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('issuesChart', issuesChart, 'Issues by Category');
             } catch (err) {
                 console.error('Error rendering issues chart:', err);
             }
@@ -2991,15 +2991,15 @@
                 const allModules = ['Deals', 'Contacts', 'Leads', 'Accounts'];
                 const values = allModules.map(m => normalized[m] || 0);
                 const _modTotColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
-                issuesTotalChart = new Chart(ctx, window.WalaPlusChartTheme
-                    ? window.WalaPlusChartTheme.doughnutConfig({ labels: allModules, data: values, colors: _modTotColors })
+                issuesTotalChart = new Chart(ctx, window.ExampleOrgChartTheme
+                    ? window.ExampleOrgChartTheme.doughnutConfig({ labels: allModules, data: values, colors: _modTotColors })
                     : {
                         type: 'doughnut',
                         data: { labels: allModules, datasets: [{ data: values, backgroundColor: _modTotColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
                         options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
                 );
-                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('issuesChartTotal', issuesTotalChart, 'Records with Issues by Module');
+                if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('issuesChartTotal', issuesTotalChart, 'Records with Issues by Module');
             } catch (err) {
                 console.error('Error rendering total issues chart:', err);
             }
@@ -3098,7 +3098,7 @@
                         }
                     }
                 });
-                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('trendChart', trendChart, 'Score Trend');
+                if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('trendChart', trendChart, 'Score Trend');
             } catch (err) {
                 console.error('Error rendering trend chart:', err);
             }
@@ -3581,8 +3581,8 @@
 
     <script src="/js/ai-consultant-widget.js?v=4.5.5"></script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

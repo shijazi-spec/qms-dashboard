@@ -176,7 +176,7 @@ The QMS platform uses a **dual-layer authentication** approach:
 2. Redirected to Replit's OIDC authorization server (discovery URL: `<REDACTED_URL>`)
 3. OIDC callback at `/api/callback` handles token exchange
 4. User profile synced via `upsertOidcUser()` into `platform_users` table
-5. HMAC-SHA256 signed session cookie (`walaplus_session`) issued with 7-day expiry
+5. HMAC-SHA256 signed session cookie (`ExampleOrg_session`) issued with 7-day expiry
 6. POST-only `/api/logout` clears session cookie (CSRF-safe)
 
 **Session Token Security:**
@@ -283,7 +283,7 @@ Sessions are managed using **cryptographically signed, stateless tokens** stored
 | **Token Format** | `base64url(payload).hmac_sha256_signature` |
 | **Signing Algorithm** | HMAC-SHA256 |
 | **Signing Key** | `SESSION_SECRET` (Replit encrypted secret) |
-| **Cookie Name** | `walaplus_session` |
+| **Cookie Name** | `ExampleOrg_session` |
 | **Max Age** | 7 days (604,800 seconds) |
 | **HttpOnly** | Yes (prevents JavaScript access) |
 | **Secure** | Yes (HTTPS only, conditional on non-localhost) |

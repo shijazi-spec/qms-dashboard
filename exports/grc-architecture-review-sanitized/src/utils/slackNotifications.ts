@@ -138,7 +138,7 @@ export async function sendAuditCompletedNotification(
     {
       type: 'context',
       elements: [
-        { type: 'mrkdwn', text: ':robot_face: _WalaPlus ExampleOrg | Automated Quality Audit_' }
+        { type: 'mrkdwn', text: ':robot_face: _ExampleOrg ExampleOrg | Automated Quality Audit_' }
       ]
     }
   ];
@@ -225,7 +225,7 @@ export async function sendNonconformanceNotification(
   blocks.push({
     type: 'context',
     elements: [
-      { type: 'mrkdwn', text: `:robot_face: _WalaPlus ExampleOrg | NC IDs: ${ncDetails.ncIds.slice(0, 10).join(', ')}${ncDetails.ncIds.length > 10 ? '...' : ''}_` }
+      { type: 'mrkdwn', text: `:robot_face: _ExampleOrg ExampleOrg | NC IDs: ${ncDetails.ncIds.slice(0, 10).join(', ')}${ncDetails.ncIds.length > 10 ? '...' : ''}_` }
     ]
   });
 
@@ -281,7 +281,7 @@ export async function sendCAPARequiredNotification(
     {
       type: 'context',
       elements: [
-        { type: 'mrkdwn', text: ':robot_face: _WalaPlus ExampleOrg | Automated CAPA Trigger_' }
+        { type: 'mrkdwn', text: ':robot_face: _ExampleOrg ExampleOrg | Automated CAPA Trigger_' }
       ]
     }
   ];

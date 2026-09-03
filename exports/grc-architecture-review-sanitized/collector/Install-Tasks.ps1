@@ -36,7 +36,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$script = Join-Path $PSScriptRoot 'WalaPlusDocCollector.ps1'
+$script = Join-Path $PSScriptRoot 'ExampleOrgDocCollector.ps1'
 
 if (-not (Test-Path -LiteralPath $script)) {
     throw "Collector script not found next to this installer: $script"

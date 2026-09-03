@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -75,7 +75,7 @@
     <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            WalaPlusNav.init('compliance');
+            ExampleOrgNav.init('compliance');
         });
     </script>
 
@@ -598,11 +598,11 @@
             return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
         function _ct(k, fb) {
-            return (window.WalaPlusI18n && window.WalaPlusI18n.t) ? (window.WalaPlusI18n.t(k) || fb) : fb;
+            return (window.ExampleOrgI18n && window.ExampleOrgI18n.t) ? (window.ExampleOrgI18n.t(k) || fb) : fb;
         }
         function _td(prefix, value) {
             if (!value) return '';
-            return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic) ? (window.WalaPlusI18n.tDynamic(prefix, value) || value) : value;
+            return (window.ExampleOrgI18n && window.ExampleOrgI18n.tDynamic) ? (window.ExampleOrgI18n.tDynamic(prefix, value) || value) : value;
         }
 
         // ─── Certification Milestone Plan (GRQ-PLAN-2026-01). Only 'plan'
@@ -1127,7 +1127,7 @@
                         + '</div>'
                     + '</div>';
             }).join('');
-            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(grid);
+            if (window.ExampleOrgI18n && window.ExampleOrgI18n.applyToDOM) window.ExampleOrgI18n.applyToDOM(grid);
         }
 
         async function openFramework(regulationId) {
@@ -1209,7 +1209,7 @@
                     + '<div class="h-1.5 w-full bg-white/70 rounded-full overflow-hidden"><div class="h-full ' + c.bar + '" data-style="width:' + pct + '%"></div></div>'
                     + '</button>';
             }).join('');
-            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(container);
+            if (window.ExampleOrgI18n && window.ExampleOrgI18n.applyToDOM) window.ExampleOrgI18n.applyToDOM(container);
         }
 
         function renderByDomain(rows) {
@@ -1266,7 +1266,7 @@
                     + _ct('compliance.flt_reset', 'Reset')
                     + '</button>'
                     + '</td></tr>';
-                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(tbody);
+                if (window.ExampleOrgI18n && window.ExampleOrgI18n.applyToDOM) window.ExampleOrgI18n.applyToDOM(tbody);
                 return;
             }
             tbody.innerHTML = rows.map(function (r) {
@@ -1290,7 +1290,7 @@
                     + '</td>'
                 + '</tr>';
             }).join('');
-            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(tbody);
+            if (window.ExampleOrgI18n && window.ExampleOrgI18n.applyToDOM) window.ExampleOrgI18n.applyToDOM(tbody);
         }
 
         // ──────────────────────── Modals & writes ──────────────────────
@@ -1629,7 +1629,7 @@
             await Promise.all([loadSummary(), loadMilestones(), loadAllData(), loadDeadlines()]);
         }
 
-        document.addEventListener('walaPlusLanguageChange', function () {
+        document.addEventListener('ExampleOrgLanguageChange', function () {
             try { loadAll(); } catch (_) {}
         });
 
@@ -1693,8 +1693,8 @@
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

@@ -5864,8 +5864,8 @@ export const duplicateRadarRoutes = [
             );
           return c.json({
             success: true,
-            walaplusProductTokens: norm(
-              process.env.RADAR_WALAPLUS_PRODUCT_TOKENS || "",
+            ExampleOrgProductTokens: norm(
+              process.env.RADAR_ExampleOrg_PRODUCT_TOKENS || "",
               "ExampleOrg,walaoffer,walabravo",
             ),
             walaoneProductTokens: norm(
@@ -7646,7 +7646,7 @@ export const duplicateRadarRoutes = [
           // Locale for the packet body. Defaults to English; clamp anything
           // unrecognised so a typo can't break the build (XLSX still ships
           // in English rather than 500ing). Frontend passes "ar" when the
-          // dashboard is in Arabic mode (WalaPlusI18n.currentLang()).
+          // dashboard is in Arabic mode (ExampleOrgI18n.currentLang()).
           const langParam = (url.searchParams.get("lang") || "en").toLowerCase();
           const lang: "en" | "ar" = langParam === "ar" ? "ar" : "en";
 
@@ -13713,7 +13713,7 @@ export const duplicateRadarRoutes = [
             domains,
             rows,
             total,
-            walaplus_count,
+            ExampleOrg_count,
             doam_count,
             qualifying_deals,
             missing_company_domain,
@@ -13745,7 +13745,7 @@ export const duplicateRadarRoutes = [
           return c.json({
             success: true,
             total,
-            walaplus_count,
+            ExampleOrg_count,
             doam_count,
             qualifying_deals,
             missing_company_domain,

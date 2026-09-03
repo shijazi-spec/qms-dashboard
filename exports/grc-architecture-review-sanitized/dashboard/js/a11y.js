@@ -378,7 +378,7 @@
     });
   }
 
-  window.WalaPlusA11y = {
+  window.ExampleOrgA11y = {
     init: init,
     openModal: openModal,
     closeModal: closeModal,

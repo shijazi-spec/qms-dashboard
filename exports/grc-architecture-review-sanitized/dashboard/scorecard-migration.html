@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -167,11 +167,11 @@
             }
 
             function getAdminKey() {
-                return sessionStorage.getItem('walaplus_admin_api_key') || '';
+                return sessionStorage.getItem('ExampleOrg_admin_api_key') || '';
             }
             function setAdminKey(k) {
-                if (k) sessionStorage.setItem('walaplus_admin_api_key', k);
-                else sessionStorage.removeItem('walaplus_admin_api_key');
+                if (k) sessionStorage.setItem('ExampleOrg_admin_api_key', k);
+                else sessionStorage.removeItem('ExampleOrg_admin_api_key');
             }
 
             async function call(method, url, label) {
@@ -376,8 +376,8 @@
     </script>
     <script>
         // Apply Arabic/English translations — required by scripts/check-i18n.cjs.
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

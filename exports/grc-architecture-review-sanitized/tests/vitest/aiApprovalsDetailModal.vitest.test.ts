@@ -196,7 +196,7 @@ function setupDom(opts: {
   // is loaded by <script src="/js/navigation.js">, but JSDOM in
   // 'outside-only' mode does not fetch external scripts — declaring this
   // stub keeps the inline DOMContentLoaded handler from blowing up.
-  win.WalaPlusNav = { init: () => {} };
+  win.ExampleOrgNav = { init: () => {} };
 
   // Run all <script> blocks that have NO `src` attribute (the inline ones).
   // Run them in document order so the modal IIFE (which depends on the
@@ -304,7 +304,7 @@ describe('AI Approvals — detail modal (Task #297)', () => {
     const list = modal.querySelector<HTMLOListElement>('[data-testid="list-prior-viewers"]')!;
     expect(list, 'viewer list should render as an ordered list').toBeTruthy();
     expect(list.tagName.toLowerCase()).toBe('ol');
-    // Task #543: the modal copy now routes through WalaPlusI18n so the
+    // Task #543: the modal copy now routes through ExampleOrgI18n so the
     // panel translates into Arabic. The vitest JSDOM rig does not load
     // /dashboard/i18n/*.json (external scripts are skipped), which means
     // `_t` falls through to the raw key — that's the stable contract we
@@ -315,7 +315,7 @@ describe('AI Approvals — detail modal (Task #297)', () => {
 
     // Close-button aria-label is set imperatively in openDetailModal() so that
     // a mid-session language change re-localises the dialog. Same JSDOM/i18n
-    // caveat — `_t` returns the raw key when WalaPlusI18n isn't loaded, which
+    // caveat — `_t` returns the raw key when ExampleOrgI18n isn't loaded, which
     // is the stable contract this assertion locks down (and proves the
     // dispatch case for `close_action_detail_dialog` is wired).
     const closeBtn = modal.querySelector(
@@ -439,7 +439,7 @@ describe('AI Approvals — detail modal (Task #297)', () => {
     });
     const win: any = dom.window;
     const doc: Document = win.document;
-    win.WalaPlusNav = { init: () => {} };
+    win.ExampleOrgNav = { init: () => {} };
     win.requestAnimationFrame = ((cb: FrameRequestCallback) => { cb(0); return 0; }) as any;
     win.setInterval = ((..._args: any[]) => 0) as any;
 
@@ -552,7 +552,7 @@ describe('AI Approvals — detail modal (Task #297)', () => {
 
     win.setInterval = ((..._args: any[]) => 0) as any;
     win.requestAnimationFrame = ((cb: FrameRequestCallback) => { cb(0); return 0; }) as any;
-    win.WalaPlusNav = { init: () => {} };
+    win.ExampleOrgNav = { init: () => {} };
 
     const inlineScripts = Array.from(doc.querySelectorAll('script'))
       .filter(s => !s.getAttribute('src'))

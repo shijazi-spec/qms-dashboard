@@ -125,7 +125,7 @@ test.describe('Health Pulse — copy link to this check (Task #766)', () => {
       origin: BASE_URL,
     });
     // Same i18n-race guard as healthPulseCopyFilteredLink.spec.ts: hold
-    // the mocked pulse fetch until WalaPlusI18n has loaded its strings,
+    // the mocked pulse fetch until ExampleOrgI18n has loaded its strings,
     // otherwise the row template renders raw key fallbacks for the
     // copy-link aria-label and the assertions fail with confusing
     // "dyn.health.copy_check_link_aria" mismatches.
@@ -133,8 +133,8 @@ test.describe('Health Pulse — copy link to this check (Task #766)', () => {
       try {
         await page.waitForFunction(
           () =>
-            typeof (window as any).WalaPlusI18n !== 'undefined' &&
-            (window as any).WalaPlusI18n.t('dyn.health.copy_check_link') ===
+            typeof (window as any).ExampleOrgI18n !== 'undefined' &&
+            (window as any).ExampleOrgI18n.t('dyn.health.copy_check_link') ===
               'Copy link to this check',
           undefined,
           { timeout: 5_000 }

@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -76,7 +76,7 @@
         <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            if (window.WalaPlusNav) WalaPlusNav.init('ai-approvals');
+            if (window.ExampleOrgNav) ExampleOrgNav.init('ai-approvals');
         });
     </script>
 
@@ -327,70 +327,70 @@
     // case below AND the matching entry under `dyn.ai_approvals` in
     // dashboard/i18n/en.json + dashboard/i18n/ar.json.
     const _t = (k, v) => {
-        if (!window.WalaPlusI18n) return k;
+        if (!window.ExampleOrgI18n) return k;
         switch (k) {
             case 'dyn.ai_approvals.no_approvals':
-                return WalaPlusI18n.t('dyn.ai_approvals.no_approvals', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.no_approvals', v);
             case 'dyn.ai_approvals.prompt_rejection_reason':
-                return WalaPlusI18n.t('dyn.ai_approvals.prompt_rejection_reason', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.prompt_rejection_reason', v);
             case 'dyn.ai_approvals.reason_required':
-                return WalaPlusI18n.t('dyn.ai_approvals.reason_required', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.reason_required', v);
             case 'dyn.ai_approvals.loading':
-                return WalaPlusI18n.t('dyn.ai_approvals.loading', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.loading', v);
             case 'dyn.ai_approvals.action_not_found_title':
-                return WalaPlusI18n.t('dyn.ai_approvals.action_not_found_title', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.action_not_found_title', v);
             case 'dyn.ai_approvals.action_not_found_body':
-                return WalaPlusI18n.t('dyn.ai_approvals.action_not_found_body', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.action_not_found_body', v);
             case 'dyn.ai_approvals.failed_load':
-                return WalaPlusI18n.t('dyn.ai_approvals.failed_load', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.failed_load', v);
             case 'dyn.ai_approvals.processing':
-                return WalaPlusI18n.t('dyn.ai_approvals.processing', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.processing', v);
             case 'dyn.ai_approvals.details':
-                return WalaPlusI18n.t('dyn.ai_approvals.details', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.details', v);
             case 'dyn.ai_approvals.action_detail_title':
-                return WalaPlusI18n.t('dyn.ai_approvals.action_detail_title', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.action_detail_title', v);
             case 'dyn.ai_approvals.loading_action_details':
-                return WalaPlusI18n.t('dyn.ai_approvals.loading_action_details', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.loading_action_details', v);
             case 'dyn.ai_approvals.close_action_detail_dialog':
-                return WalaPlusI18n.t('dyn.ai_approvals.close_action_detail_dialog', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.close_action_detail_dialog', v);
             case 'dyn.ai_approvals.viewed_by':
-                return WalaPlusI18n.t('dyn.ai_approvals.viewed_by', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.viewed_by', v);
             case 'dyn.ai_approvals.viewers_explainer':
-                return WalaPlusI18n.t('dyn.ai_approvals.viewers_explainer', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.viewers_explainer', v);
             case 'dyn.ai_approvals.no_prior_viewers':
-                return WalaPlusI18n.t('dyn.ai_approvals.no_prior_viewers', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.no_prior_viewers', v);
             case 'dyn.ai_approvals.prior_reviewers_aria':
-                return WalaPlusI18n.t('dyn.ai_approvals.prior_reviewers_aria', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.prior_reviewers_aria', v);
             case 'dyn.ai_approvals.last_viewed_label':
-                return WalaPlusI18n.t('dyn.ai_approvals.last_viewed_label', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.last_viewed_label', v);
             case 'dyn.ai_approvals.unknown_reviewer':
-                return WalaPlusI18n.t('dyn.ai_approvals.unknown_reviewer', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.unknown_reviewer', v);
             case 'dyn.ai_approvals.malformed_response':
-                return WalaPlusI18n.t('dyn.ai_approvals.malformed_response', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.malformed_response', v);
             case 'dyn.ai_approvals.view_zero':
-                return WalaPlusI18n.t('dyn.ai_approvals.view_zero', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.view_zero', v);
             case 'dyn.ai_approvals.view_one':
-                return WalaPlusI18n.t('dyn.ai_approvals.view_one', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.view_one', v);
             case 'dyn.ai_approvals.view_two':
-                return WalaPlusI18n.t('dyn.ai_approvals.view_two', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.view_two', v);
             case 'dyn.ai_approvals.view_few':
-                return WalaPlusI18n.t('dyn.ai_approvals.view_few', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.view_few', v);
             case 'dyn.ai_approvals.view_many':
-                return WalaPlusI18n.t('dyn.ai_approvals.view_many', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.view_many', v);
             case 'dyn.ai_approvals.view_other':
-                return WalaPlusI18n.t('dyn.ai_approvals.view_other', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.view_other', v);
             case 'dyn.ai_approvals.reviewer_zero':
-                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_zero', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.reviewer_zero', v);
             case 'dyn.ai_approvals.reviewer_one':
-                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_one', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.reviewer_one', v);
             case 'dyn.ai_approvals.reviewer_two':
-                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_two', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.reviewer_two', v);
             case 'dyn.ai_approvals.reviewer_few':
-                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_few', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.reviewer_few', v);
             case 'dyn.ai_approvals.reviewer_many':
-                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_many', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.reviewer_many', v);
             case 'dyn.ai_approvals.reviewer_other':
-                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_other', v);
+                return ExampleOrgI18n.t('dyn.ai_approvals.reviewer_other', v);
             default:
                 return k;
         }
@@ -401,12 +401,12 @@
     // numerals, then dispatches to the matching literal _t key. The switch
     // here keeps every key visible to the i18n guardrail (Task #295).
     const _plural = (base, n) => {
-        const lang = (window.WalaPlusI18n && window.WalaPlusI18n.currentLang)
-            ? window.WalaPlusI18n.currentLang() : 'en';
+        const lang = (window.ExampleOrgI18n && window.ExampleOrgI18n.currentLang)
+            ? window.ExampleOrgI18n.currentLang() : 'en';
         let cat = 'other';
         try { cat = new Intl.PluralRules(lang).select(n); } catch (_) {}
-        const formatted = (window.WalaPlusI18n && window.WalaPlusI18n.formatNumber)
-            ? window.WalaPlusI18n.formatNumber(n) : String(n);
+        const formatted = (window.ExampleOrgI18n && window.ExampleOrgI18n.formatNumber)
+            ? window.ExampleOrgI18n.formatNumber(n) : String(n);
         const v = { n: formatted };
         if (base === 'view') {
             switch (cat) {
@@ -505,18 +505,18 @@
         // `applyToDOM` for the initial render; this helper only handles
         // the post-count re-render.
         var fallback = opt.getAttribute('data-base-label') || opt.textContent;
-        if (!opt || !window.WalaPlusI18n) return fallback;
+        if (!opt || !window.ExampleOrgI18n) return fallback;
         // The translator helper returns the key itself when no translation
         // exists; treat that as "no translation" and use the fallback.
         var key, translated;
         switch (opt.value) {
             case 'unreviewed_by_me':
                 key = 'ai_approvals.review_unreviewed_by_me';
-                translated = WalaPlusI18n.t('ai_approvals.review_unreviewed_by_me');
+                translated = ExampleOrgI18n.t('ai_approvals.review_unreviewed_by_me');
                 break;
             case 'no_reviewers':
                 key = 'ai_approvals.review_no_reviewers';
-                translated = WalaPlusI18n.t('ai_approvals.review_no_reviewers');
+                translated = ExampleOrgI18n.t('ai_approvals.review_no_reviewers');
                 break;
             default:
                 return fallback;
@@ -525,8 +525,8 @@
         return fallback;
     }
     function _formatNumber(n) {
-        if (window.WalaPlusI18n && typeof WalaPlusI18n.formatNumber === 'function') {
-            try { return WalaPlusI18n.formatNumber(n); } catch (_) { /* fall through */ }
+        if (window.ExampleOrgI18n && typeof ExampleOrgI18n.formatNumber === 'function') {
+            try { return ExampleOrgI18n.formatNumber(n); } catch (_) { /* fall through */ }
         }
         return String(n);
     }
@@ -684,7 +684,7 @@
     // race where the count fetch resolves BEFORE applyToDOM() runs and the
     // sibling "Any" option still owns its data-i18n key. We also re-translate
     // the base label from the i18n key when this fires.
-    document.addEventListener('walaPlusI18nReady', function () {
+    document.addEventListener('ExampleOrgI18nReady', function () {
         _applyReviewLabels();
         _applyRiskLabels();
         _applyStatusLabels();
@@ -718,8 +718,8 @@
 
     function _td(prefix, value) {
         if (!value) return '';
-        return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic)
-            ? (window.WalaPlusI18n.tDynamic(prefix, value) || escapeHtml(value))
+        return (window.ExampleOrgI18n && window.ExampleOrgI18n.tDynamic)
+            ? (window.ExampleOrgI18n.tDynamic(prefix, value) || escapeHtml(value))
             : escapeHtml(value);
     }
 
@@ -1633,8 +1633,8 @@
 })();
 </script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

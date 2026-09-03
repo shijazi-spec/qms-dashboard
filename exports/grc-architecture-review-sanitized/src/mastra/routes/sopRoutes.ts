@@ -7,7 +7,7 @@ import { logger } from "../../utils/logger";
 // Defense-in-depth gate for SOP routes. The middleware's PUBLIC_PATHS list
 // (see src/mastra/middleware/index.ts) no longer allowlists `/sop` or
 // `/api/sop*` because the SOP document is classified "Internal Use Only"
-// (see docs/WalaPlus_Platform_SOP.md document control). We still enforce a
+// (see docs/ExampleOrg_Platform_SOP.md document control). We still enforce a
 // session-or-admin-key check here so a future stale entry in PUBLIC_PATHS
 // (the same class of bug audited in task #447) cannot silently re-expose the
 // SOP to the public internet.
@@ -18,9 +18,9 @@ function isAuthorizedForSop(c: any): boolean {
 
 function resolveSopFile(): string | null {
   const candidates = [
-    join(process.cwd(), "docs", "WalaPlus_Platform_SOP.md"),
-    join(process.cwd(), "..", "docs", "WalaPlus_Platform_SOP.md"),
-    "/home/runner/workspace/docs/WalaPlus_Platform_SOP.md",
+    join(process.cwd(), "docs", "ExampleOrg_Platform_SOP.md"),
+    join(process.cwd(), "..", "docs", "ExampleOrg_Platform_SOP.md"),
+    "/home/runner/workspace/docs/ExampleOrg_Platform_SOP.md",
   ];
   for (const p of candidates) if (existsSync(p)) return p;
   return null;
@@ -94,7 +94,7 @@ export const sopRoutes = [
           c.header("Content-Type", "text/markdown; charset=utf-8");
           c.header(
             "Content-Disposition",
-            `attachment; filename="WalaPlus_Platform_SOP.md"`,
+            `attachment; filename="ExampleOrg_Platform_SOP.md"`,
           );
           return c.body(content);
         } catch (error) {

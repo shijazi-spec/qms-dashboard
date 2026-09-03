@@ -136,7 +136,7 @@ if (response.get("should_create") == false)
 ```bash
 curl -X POST https://<your-deployment>.<REDACTED_HOST>/api/duplicates/preflight/check \
   -H "Content-Type: application/json" \
-  -H "x-admin-key: $WALAPLUS_ADMIN_KEY" \
+  -H "x-admin-key: $ExampleOrg_ADMIN_KEY" \
   -d '{
     "domain": "<REDACTED_HOST>",
     "email": "user@example.invalid",
@@ -160,7 +160,7 @@ async function shouldCreateLead(input: {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-admin-key": process.env.WALAPLUS_ADMIN_KEY!,
+        "x-admin-key": process.env.ExampleOrg_ADMIN_KEY!,
       },
       body: JSON.stringify({ ...input, ref: crypto.randomUUID() }),
     }

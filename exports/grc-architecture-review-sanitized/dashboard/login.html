@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -124,8 +124,8 @@
         // i18n guardrail can statically verify it.
         function _loginT(key, fallback) {
             try {
-                if (window.WalaPlusI18n && typeof window.WalaPlusI18n.t === 'function') {
-                    var I18N = window.WalaPlusI18n;
+                if (window.ExampleOrgI18n && typeof window.ExampleOrgI18n.t === 'function') {
+                    var I18N = window.ExampleOrgI18n;
                     var v;
                     switch (key) {
                         case 'login.errors.auth_denied':       v = I18N.t('login.errors.auth_denied'); break;
@@ -146,8 +146,8 @@
         function showLoginError(msgEl, key, fallback) {
             // Show fallback immediately; re-translate after i18n loads
             msgEl.textContent = _loginT(key, fallback);
-            if (window.WalaPlusI18n && typeof window.WalaPlusI18n.onReady === 'function') {
-                window.WalaPlusI18n.onReady(function() {
+            if (window.ExampleOrgI18n && typeof window.ExampleOrgI18n.onReady === 'function') {
+                window.ExampleOrgI18n.onReady(function() {
                     if (msgEl.isConnected) msgEl.textContent = _loginT(key, fallback);
                 });
             }
@@ -191,8 +191,8 @@
 
         // Initialize i18n on login page (no nav, standalone)
         window.addEventListener('DOMContentLoaded', () => {
-            if (window.WalaPlusI18n) {
-                window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+            if (window.ExampleOrgI18n) {
+                window.ExampleOrgI18n.init().then(() => window.ExampleOrgI18n.applyToDOM());
             }
         });
     </script>

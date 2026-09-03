@@ -12,7 +12,7 @@
  *      resolve today — no rebuild step required to ship a token upgrade.
  *
  * Dark mode is driven by a `.dark` class on <html> (set by
- * WalaPlusNav.applyTheme in dashboard/js/navigation.js). During the
+ * ExampleOrgNav.applyTheme in dashboard/js/navigation.js). During the
  * transition from the legacy `.wp-dark` class to the new standard `.dark`,
  * both classes are added by applyTheme and both selectors are listed
  * below so old CSS in navigation.css / individual page inline styles

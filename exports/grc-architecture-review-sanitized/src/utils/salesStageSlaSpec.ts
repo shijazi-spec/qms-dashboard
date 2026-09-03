@@ -7,7 +7,7 @@
  * auditor can trace every flag back to the document.
  *
  * Source: Sales Management Process v1.<REDACTED_PHONE>, Document Code
- * WalaPlus_Sales_1.1_01.12.2025 — the "Stage Duration (Timeframe)" table:
+ * ExampleOrg_Sales_1.1_01.12.2025 — the "Stage Duration (Timeframe)" table:
  *
  *   Not Attend Meeting   ≤ 5 Business Days   §7.2.8
  *   Meeting              ≤ 10 Business Days  §7.3
@@ -267,8 +267,8 @@ export function gradeStageAging(
  * process it grades against instead of showing an empty "Data source".
  *
  * Now a controlled document: registered in Document Control on 2026-08-19 under
- * the register key `WalaPlus_Sales`. The document's own Document Code is
- * version-stamped by convention (WalaPlus_Sales_1.1_01.12.2025), so the code
+ * the register key `ExampleOrg_Sales`. The document's own Document Code is
+ * version-stamped by convention (ExampleOrg_Sales_1.1_01.12.2025), so the code
  * changes with every release while this register key stays stable.
  *
  * The old value `WP-SOP Sales v1.1` was a code the document never carried — its
@@ -276,7 +276,7 @@ export function gradeStageAging(
  */
 export const SALES_SOP_DOCUMENT = {
   title: "Sales Management Process",
-  reference: "WalaPlus_Sales_1.1_01.12.2025",
+  reference: "ExampleOrg_Sales_1.1_01.12.2025",
   version: "1.1",
   issued: "01.12.2025",
 } as const;

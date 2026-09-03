@@ -26,7 +26,7 @@ import {
 } from "../_helpers/fixtures";
 
 vi.mock("../../src/utils/qmsDatabase", () => ({
-  getQmsDashboardData: vi.fn(),
+  getExampleOrgData: vi.fn(),
   getDealEvaluations: vi.fn(),
   getEvaluationStatistics: vi.fn(),
   getCapaRecords: vi.fn(),
@@ -75,7 +75,7 @@ const ERROR_CASES: ErrorCase[] = [
     name: "GET /api/qms/dashboard",
     path: "/api/qms/dashboard",
     method: "GET",
-    dbFn: "getQmsDashboardData",
+    dbFn: "getExampleOrgData",
     errorBody: { error: "Failed to fetch ExampleOrg" },
   },
   {
@@ -174,8 +174,8 @@ describe("error-path coverage — every db-backed QMS route returns deterministi
 });
 
 describe("GET /api/qms/dashboard — real data path", () => {
-  test("200 returns the exact payload from getQmsDashboardData", async () => {
-    const fixture: Awaited<ReturnType<typeof qmsDb.getQmsDashboardData>> = {
+  test("200 returns the exact payload from getExampleOrgData", async () => {
+    const fixture: Awaited<ReturnType<typeof qmsDb.getExampleOrgData>> = {
       evaluations: { total: 42, avgScore: 78.5, passRate: 88 },
       capa: { open: 3, inProgress: 2, closed: 7, overdue: 1 },
       nonconformances: { open: 4, critical: 1, closed: 9 },
@@ -183,18 +183,18 @@ describe("GET /api/qms/dashboard — real data path", () => {
       recentEvaluations: [makeDealEvaluation({ id: 1 })],
       recentCapas: [makeCapa({ id: 9, capa_number: "C-9" })],
     };
-    vi.mocked(qmsDb.getQmsDashboardData).mockResolvedValueOnce(fixture);
+    vi.mocked(qmsDb.getExampleOrgData).mockResolvedValueOnce(fixture);
 
     const handler = await buildHandler(qmsApiRoutes, "/api/qms/dashboard", "GET");
     const res = await handler(makeContext({ method: "GET", headers: AUTH_HEADERS }));
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(fixture);
-    expect(qmsDb.getQmsDashboardData).toHaveBeenCalledTimes(1);
+    expect(qmsDb.getExampleOrgData).toHaveBeenCalledTimes(1);
   });
 
-  test("500 with deterministic body when getQmsDashboardData throws", async () => {
-    vi.mocked(qmsDb.getQmsDashboardData).mockRejectedValueOnce(new Error("db down"));
+  test("500 with deterministic body when getExampleOrgData throws", async () => {
+    vi.mocked(qmsDb.getExampleOrgData).mockRejectedValueOnce(new Error("db down"));
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const handler = await buildHandler(qmsApiRoutes, "/api/qms/dashboard", "GET");

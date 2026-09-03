@@ -29,7 +29,7 @@ describe("KPIs that the SOP actually covers", () => {
     // a code the document never carried; its cover page has a real Document
     // Code block, which is version-stamped.
     expect(r.document).toContain("v1.1");
-    expect(r.document).toContain("WalaPlus_Sales_1.1_01.12.2025");
+    expect(r.document).toContain("ExampleOrg_Sales_1.1_01.12.2025");
     expect(r.document).not.toContain("WP-SOP");
     // It grades EVERY stage, so it must cite every clause — a partial list
     // would understate what the KPI enforces.
@@ -84,7 +84,7 @@ describe("KPIs the SOP does NOT cover", () => {
   });
 });
 
-describe("SDR — WalaPlus_SDR v2.1 (the released version)", () => {
+describe("SDR — ExampleOrg_SDR v2.1 (the released version)", () => {
   it("cites the document and the table, with the SOP's own calculation", () => {
     const r = getKpiProcessReference("SDR-KPI-12")!;
     // v2.1 is the released PDF; the v2.2 .docx on the drive was never
@@ -93,7 +93,7 @@ describe("SDR — WalaPlus_SDR v2.1 (the released version)", () => {
     // Issued 04.12.2025 — confirmed by Sample User 2026-08-20 against the released
     // PDF now attached to the controlled document. The 03.12.2025 this used to
     // assert was a transcription slip carried in both the code and the record.
-    expect(r.document).toContain("WalaPlus_SDR_2.1_04.12.2025");
+    expect(r.document).toContain("ExampleOrg_SDR_2.1_04.12.2025");
     expect(r.document).toContain("04.12.2025");
     // "v2.2", not bare "2.2" — the issue date 04.12.2025 still contains "2.2"
     // (in "12.2025"), so a bare match would pass on the date alone.

@@ -86,7 +86,7 @@ function signE2ESession(): string {
 
 const E2E_SESSION_TOKEN = signE2ESession();
 const E2E_SESSION_COOKIE = E2E_SESSION_TOKEN
-  ? `walaplus_session=${encodeURIComponent(E2E_SESSION_TOKEN)}`
+  ? `ExampleOrg_session=${encodeURIComponent(E2E_SESSION_TOKEN)}`
   : '';
 
 const ALERTS_PATH = '/api/admin/redaction-sweep/alerts';
@@ -234,7 +234,7 @@ test.describe('Post-restore sweep alerts panel — /logs (Task #657)', () => {
 
   // Pin auth on every browser request:
   //   - X-Admin-Key for /api/admin/* routes (redaction-sweep alerts panel)
-  //   - walaplus_session cookie for application routes like GET /api/logs
+  //   - ExampleOrg_session cookie for application routes like GET /api/logs
   //     which now require a real session rather than an admin key.
   test.use({
     extraHTTPHeaders: {

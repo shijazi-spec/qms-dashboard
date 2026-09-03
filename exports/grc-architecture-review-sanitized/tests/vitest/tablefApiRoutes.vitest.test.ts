@@ -29,7 +29,7 @@ import { tablefApiRoutes } from "../../src/mastra/routes/tablefApiRoutes";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
 
 // Replicate the private signSession() in authRoutes.ts so we can mint a
-// cryptographically valid `walaplus_session` cookie without exporting it.
+// cryptographically valid `ExampleOrg_session` cookie without exporting it.
 function signSession(payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = crypto
@@ -40,7 +40,7 @@ function signSession(payload: Record<string, unknown>): string {
 }
 
 const ADMIN_SESSION_COOKIE =
-  "walaplus_session=" +
+  "ExampleOrg_session=" +
   encodeURIComponent(
     signSession({ userId: 1, email: "user@example.invalid", name: "Test", role: "admin" }),
   );

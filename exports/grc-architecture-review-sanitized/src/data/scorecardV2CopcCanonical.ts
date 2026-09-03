@@ -6,7 +6,7 @@
 
 export const CANONICAL_COPC_V2 = {
   "scorecard": {
-    "id": "walaplus_copc_v2",
+    "id": "ExampleOrg_copc_v2",
     "name": "ExampleOrg SDR QA Scorecard — COPC-aligned",
     "version": "2.0.0",
     "version_date": "2026-05-24",

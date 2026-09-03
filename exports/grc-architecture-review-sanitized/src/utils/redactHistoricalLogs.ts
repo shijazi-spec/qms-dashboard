@@ -1882,7 +1882,7 @@ export async function dispatchPostRestoreSweepAlert(
  */
 export async function onBootRedactionSweep(): Promise<void> {
   const g = globalThis as any;
-  if (g.__walaplus_bootSweepDone) {
+  if (g.__ExampleOrg_bootSweepDone) {
     safeLogger.info(
       "[Redaction] Boot sweep already ran this process — skipping duplicate call",
     );
@@ -1914,7 +1914,7 @@ export async function onBootRedactionSweep(): Promise<void> {
             `Missing: ${readiness.missing.join(", ")}. ` +
             `Sweep will retry on the next boot.`,
         );
-        // Do NOT mark __walaplus_bootSweepDone — the next boot should try
+        // Do NOT mark __ExampleOrg_bootSweepDone — the next boot should try
         // again. Likewise, do NOT write last-sweep.json or emit an audit
         // entry: there is no sweep result to record yet.
         return;
@@ -1933,7 +1933,7 @@ export async function onBootRedactionSweep(): Promise<void> {
     // Mark as done only after the sweep data is in hand so that a transient
     // DB connection failure on the first attempt does not permanently
     // suppress future retries within the same process.
-    g.__walaplus_bootSweepDone = true;
+    g.__ExampleOrg_bootSweepDone = true;
 
     try {
       await logEvent({

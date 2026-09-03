@@ -59,7 +59,7 @@ view of the library.
 ### 3. Dry run first
 
 ```powershell
-.\WalaPlusDocCollector.ps1 -Mode Manual -DryRun
+.\ExampleOrgDocCollector.ps1 -Mode Manual -DryRun
 ```
 
 This scans and prints exactly what would be sent, without contacting the
@@ -69,7 +69,7 @@ before sending anything real.
 ### 4. First real push
 
 ```powershell
-.\WalaPlusDocCollector.ps1 -Mode Manual
+.\ExampleOrgDocCollector.ps1 -Mode Manual
 ```
 
 Then open `/documentation-tracker`. The banner should change from *"No collector

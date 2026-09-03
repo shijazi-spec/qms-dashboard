@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -42,8 +42,8 @@
     <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            WalaPlusNav.init('fraud-rules');
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+            ExampleOrgNav.init('fraud-rules');
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         });
     </script>
 
@@ -274,8 +274,8 @@
         function fmtDate(s) {
             if (!s) return '—';
             try {
-                if (window.WalaPlusI18n && WalaPlusI18n.formatDate) {
-                    return WalaPlusI18n.formatDate(s, { year: 'numeric', month: '2-digit', day: '2-digit' });
+                if (window.ExampleOrgI18n && ExampleOrgI18n.formatDate) {
+                    return ExampleOrgI18n.formatDate(s, { year: 'numeric', month: '2-digit', day: '2-digit' });
                 }
                 return new Date(s).toLocaleDateString();
             } catch { return String(s); }
@@ -505,8 +505,8 @@
         document.addEventListener('DOMContentLoaded', loadFraudRules);
     </script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

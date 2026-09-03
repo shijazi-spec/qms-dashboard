@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -91,14 +91,14 @@
     <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            WalaPlusNav.init('quality-reports');
+            ExampleOrgNav.init('quality-reports');
             // The page loads /js/i18n.js, so it must also run the init →
             // applyToDOM handshake. Without it every `data-i18n` attribute on
             // the page is silently ignored at runtime and Arabic users get
             // untranslated text. Same one-liner every other dashboard page
             // uses (see a11y.html / admin.html / accept-invite.html).
-            if (window.WalaPlusI18n) {
-                window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+            if (window.ExampleOrgI18n) {
+                window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
             }
         });
     </script>

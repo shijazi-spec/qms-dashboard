@@ -19,7 +19,7 @@
  *   some of the tables).
  *
  * What this does:
- *   1. Signs a `walaplus_session` cookie (HMAC-SHA256 over a base64url
+ *   1. Signs a `ExampleOrg_session` cookie (HMAC-SHA256 over a base64url
  *      payload, keyed by SESSION_SECRET) for a synthetic admin email and
  *      seeds an active `platform_users` row for that email. Security
  *      hardening (Task #855/#831) scoped X-Admin-Key to /api/admin/* and
@@ -69,10 +69,10 @@ export async function warmupAiOpsTables(
   const token = signWarmupSession();
   if (!token) {
     throw new Error(
-      'warmupAiOpsTables: SESSION_SECRET is not set — cannot sign a walaplus_session cookie for AI Ops warmup',
+      'warmupAiOpsTables: SESSION_SECRET is not set — cannot sign a ExampleOrg_session cookie for AI Ops warmup',
     );
   }
-  const sessionCookie = `walaplus_session=${encodeURIComponent(token)}`;
+  const sessionCookie = `ExampleOrg_session=${encodeURIComponent(token)}`;
 
   // Seed an active platform_users row for the warmup session email so the live
   // getPlatformUser() lookup in requireRole() passes for /api/ai-ops/* routes.

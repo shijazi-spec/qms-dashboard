@@ -1,7 +1,7 @@
-export const walaPlusSalesGovernanceRules = {
+export const ExampleOrgSalesGovernanceRules = {
   document: {
     name: "ExampleOrg Sales Management Process",
-    code: "WalaPlus_Sales_1.1_01.12.2025",
+    code: "ExampleOrg_Sales_1.1_01.12.2025",
     version: "1.1",
     effectiveDate: "2025-12-01",
     preparedBy: "Sample User / Quality Manager",
@@ -157,10 +157,10 @@ export const walaPlusSalesGovernanceRules = {
   }
 };
 
-export const walaPlusSDRGovernanceRules = {
+export const ExampleOrgSDRGovernanceRules = {
   document: {
     name: "ExampleOrg SDR Management Process",
-    code: "WalaPlus_SDR_2.1_04.12.2025",
+    code: "ExampleOrg_SDR_2.1_04.12.2025",
     version: "2.1",
     effectiveDate: "2025-12-04",
     preparedBy: "Sample User / Quality Manager",
@@ -504,7 +504,7 @@ export interface AttachmentStageRule {
   description: string;
 }
 
-export const walaPlusAttachmentAuditRules = {
+export const ExampleOrgAttachmentAuditRules = {
   module: 'Deals' as const,
   stageField: 'Stage',
   // Keys MUST match Zoho Stage values exactly (case-insensitive comparison handled by code).

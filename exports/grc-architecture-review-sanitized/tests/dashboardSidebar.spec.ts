@@ -38,14 +38,14 @@ const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
 const PIN_KEY = 'ExampleOrg-nav-pinned:user:admin';
 const RECENT_KEY = 'ExampleOrg-nav-recent:user:admin';
 
-// Seed `walaplus_lang` BEFORE any script runs so i18n.js picks it up
+// Seed `ExampleOrg_lang` BEFORE any script runs so i18n.js picks it up
 // during init and the rail renders in the requested direction. Also
 // clears any leftover pin/recent state from previous runs so each spec
 // starts from a clean rail.
 async function bootstrap(page: Page, lang: 'en' | 'ar') {
   await page.addInitScript((l: string) => {
     try {
-      localStorage.setItem('walaplus_lang', l);
+      localStorage.setItem('ExampleOrg_lang', l);
       localStorage.removeItem('ExampleOrg-nav-pinned');
       localStorage.removeItem('ExampleOrg-nav-recent');
       localStorage.removeItem('ExampleOrg-nav-pinned:user:admin');
@@ -124,12 +124,12 @@ test.describe('Dashboard sidebar — pin / recent / search / keyboard', () => {
     // which starts collapsed when the current page is in another
     // group (Support → /feedback). Rather than orchestrate hover +
     // accordion open just to click an attached-but-hidden button, we
-    // call the same public method (`WalaPlusNav.togglePin`) that the
+    // call the same public method (`ExampleOrgNav.togglePin`) that the
     // button's `data-on-click` attribute invokes. This keeps the test
     // about the storage + render contract — which is exactly what
     // Task #822 is meant to guarantee — without coupling it to the
     // CSS hover affordance, which has its own visual story.
-    await page.evaluate(() => (window as any).WalaPlusNav.togglePin('audits'));
+    await page.evaluate(() => (window as any).ExampleOrgNav.togglePin('audits'));
 
     // Pinned group now exists, contains the pinned item, and the
     // per-user localStorage key was written.
@@ -142,7 +142,7 @@ test.describe('Dashboard sidebar — pin / recent / search / keyboard', () => {
 
     // Unpin via the same public API (the in-group and Pinned-group
     // pin buttons both wire up to togglePin under the hood).
-    await page.evaluate(() => (window as any).WalaPlusNav.togglePin('audits'));
+    await page.evaluate(() => (window as any).ExampleOrgNav.togglePin('audits'));
 
     await expect(page.locator('[data-testid="button-group-pinned"]')).toHaveCount(0);
     const after = await page.evaluate((k) => localStorage.getItem(k), PIN_KEY);
@@ -165,7 +165,7 @@ test.describe('Dashboard sidebar — pin / recent / search / keyboard', () => {
 
     await page.evaluate(() => {
       const ids = ['kpis', 'team', 'projects', 'roi', 'reviews', 'vendors'];
-      ids.forEach((id) => (window as any).WalaPlusNav.recordVisit(id));
+      ids.forEach((id) => (window as any).ExampleOrgNav.recordVisit(id));
     });
 
     const recent = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '[]'), RECENT_KEY);
@@ -176,7 +176,7 @@ test.describe('Dashboard sidebar — pin / recent / search / keyboard', () => {
 
     // Re-render so the Recent group materialises with the seeded ids.
     await page.evaluate(() => {
-      const N = (window as any).WalaPlusNav;
+      const N = (window as any).ExampleOrgNav;
       N.render();
       N.bindEvents();
     });
@@ -482,7 +482,7 @@ test.describe('Dashboard sidebar — pin / recent / search / keyboard', () => {
     // the same reasoning as the LTR pin/unpin test (the in-row pin
     // button is gated by hover CSS + a collapsed accordion, neither
     // of which is what this assertion is about).
-    await page.evaluate(() => (window as any).WalaPlusNav.togglePin('audits'));
+    await page.evaluate(() => (window as any).ExampleOrgNav.togglePin('audits'));
     await expect(page.locator('[data-testid="button-group-pinned"]')).toBeVisible();
     const stored = await page.evaluate((k) => localStorage.getItem(k), PIN_KEY);
     expect(JSON.parse(stored as string)).toEqual(['audits']);

@@ -121,8 +121,8 @@ function setupDom(payload: SweepPayload): SetupResult {
   // Stub globals that the inline scripts reference but that come from
   // external <script src> tags JSDOM in 'outside-only' mode does not
   // load.
-  win.WalaPlusNav = { init: () => {} };
-  win.WalaPlusI18n = {
+  win.ExampleOrgNav = { init: () => {} };
+  win.ExampleOrgI18n = {
     init: () => Promise.resolve(),
     applyToDOM: () => {},
     t: (k: string) => k,

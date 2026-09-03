@@ -216,7 +216,7 @@ v4.5 deployment was clean except for one regression worth recording for posterit
 
 | # | Decision | Rationale |
 |---|---|---|
-| D-1 | Retire the iframe-based "two-tab `/audits`" design (v1.0 of WALAPLUS_INTERNAL_AUDITS_FEATURE.md) | Iframe was an explicit P0 placeholder; v4.5 was the planned native-rebuild milestone |
+| D-1 | Retire the iframe-based "two-tab `/audits`" design (v1.0 of ExampleOrg_INTERNAL_AUDITS_FEATURE.md) | Iframe was an explicit P0 placeholder; v4.5 was the planned native-rebuild milestone |
 | D-2 | New role `head_of_operations_quality` (not "Quality Director") | Matches the org chart name; ISO 19011 §5.2 vests sign-off authority in this role specifically |
 | D-3 | Trigger HITL via `ai_pending_actions` (reusing existing queue) instead of a new approval table | Reuses the proven `/ai-approvals` UI, audit log, and reviewer workflow |
 | D-4 | `/intake` is its own dashboard, not a tab inside `/audits` | Keeps the intake workspace usable in parallel with reviewing the dashboard; intake is a multi-step workflow that needs full screen real estate |
@@ -272,7 +272,7 @@ The "CRM Owner Data Quality" widget on `/` (and any page calling `GET /api/agent
 
 ### 10.4 Known gap
 
-7 owners (193 records under one of them) have no team in the CRM. They are listed in `WALAPLUS_GAPS_AND_DATA_NEEDS.md §7.A` for CRM Admin to triage within 5 working days.
+7 owners (193 records under one of them) have no team in the CRM. They are listed in `ExampleOrg_GAPS_AND_DATA_NEEDS.md §7.A` for CRM Admin to triage within 5 working days.
 
 ### 10.5 Code delta
 

@@ -22,8 +22,8 @@
 (function () {
   'use strict';
 
-  if (window.__walaplusTableSortInit) return;
-  window.__walaplusTableSortInit = true;
+  if (window.__ExampleOrgTableSortInit) return;
+  window.__ExampleOrgTableSortInit = true;
 
   var SORT_INDICATOR_CLASS = 'wp-sort-indicator';
   var SORTABLE_TH_CLASS = 'wp-sortable-th';

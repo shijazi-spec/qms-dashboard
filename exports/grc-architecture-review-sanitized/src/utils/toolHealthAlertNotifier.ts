@@ -327,7 +327,7 @@ function buildSlackBlocks(
       {
         type: "mrkdwn",
         text:
-          `:robot_face: _WalaPlus tool-health monitor | dedupe key: ` +
+          `:robot_face: _ExampleOrg tool-health monitor | dedupe key: ` +
           `\`${n.related_record_id}\`${n.alert_id != null ? ` | alert #${n.alert_id}` : ""}_`,
       },
     ],
@@ -871,7 +871,7 @@ function buildConfigChangeBlocks(
     elements: [
       {
         type: "mrkdwn",
-        text: ":robot_face: _WalaPlus tool-health monitor | threshold tuning_",
+        text: ":robot_face: _ExampleOrg tool-health monitor | threshold tuning_",
       },
     ],
   });
@@ -1275,7 +1275,7 @@ function buildOverrideExpiredSlackBlocks(
       {
         type: "mrkdwn",
         text:
-          `:robot_face: _WalaPlus tool-health override reaper` +
+          `:robot_face: _ExampleOrg tool-health override reaper` +
           (n.audit_id != null ? ` | audit row #${n.audit_id}` : "") +
           `_`,
       },
@@ -1505,7 +1505,7 @@ function buildOverrideExpiringSoonSlackBlocks(
       {
         type: "mrkdwn",
         text:
-          `:robot_face: _WalaPlus tool-health monitor | override expiry pre-warning` +
+          `:robot_face: _ExampleOrg tool-health monitor | override expiry pre-warning` +
           ` | expires \`${expiresAtIso}\`_`,
       },
     ],
@@ -1805,7 +1805,7 @@ function buildRecoverySlackBlocks(
     elements: [
       {
         type: "mrkdwn",
-        text: `:robot_face: _WalaPlus tool-health monitor | recovery | alert #${n.alert_id}_`,
+        text: `:robot_face: _ExampleOrg tool-health monitor | recovery | alert #${n.alert_id}_`,
       },
     ],
   });

@@ -8,7 +8,7 @@ Production assumptions for this scan: only production-reachable code is in scope
 
 ## Assets
 
-- **User accounts and sessions** — signed `walaplus_session` cookies, user identities, roles, approval state, and any alternate privileged access material such as `ADMIN_API_KEY`. Compromise allows impersonation and potentially broad administrative access.
+- **User accounts and sessions** — signed `ExampleOrg_session` cookies, user identities, roles, approval state, and any alternate privileged access material such as `ADMIN_API_KEY`. Compromise allows impersonation and potentially broad administrative access.
 - **Governance, audit, and compliance data** — policies, findings, CAPAs, risk records, management reviews, PDPL artifacts, and evidence documents. These are business-sensitive and often compliance-relevant.
 - **Operational and CRM data** — Zoho-derived records, call intelligence, dashboards, KPI data, and exports. Exposure could reveal internal business performance and personal data.
 - **AI-assisted actions and alerts** — consultant conversations, AI alerts, approval workflows, and any agent-triggered write operations. Misuse could alter regulated records or leak sensitive context.
@@ -18,7 +18,7 @@ Production assumptions for this scan: only production-reachable code is in scope
 ## Trust Boundaries
 
 - **Browser to application API** — all dashboard and client traffic crosses from an untrusted browser into `/api/*`. Every request must be authenticated and authorized server-side; client gating is not trusted.
-- **Session cookies and admin-key headers to server authorization** — the server derives identity and privilege from the signed `walaplus_session` cookie and, for selected server-to-server/admin routes, the `X-Admin-Key` header. Any mistake here directly affects access control.
+- **Session cookies and admin-key headers to server authorization** — the server derives identity and privilege from the signed `ExampleOrg_session` cookie and, for selected server-to-server/admin routes, the `X-Admin-Key` header. Any mistake here directly affects access control.
 - **Application to PostgreSQL** — application code has broad database access. Injection or over-broad queries at this boundary can expose large portions of enterprise data.
 - **Application to external services** — server-side calls to Zoho, Slack, Resend, OpenAI/OpenRouter, Google Calendar, and webhook endpoints carry secrets and can expose data if abused.
 - **Public vs authenticated vs privileged surfaces** — login, invitation acceptance, some webhooks, and selected health/smoke routes are public; most APIs are authenticated; admin and RBAC functions are privileged and must not be reachable via weaker trust paths.

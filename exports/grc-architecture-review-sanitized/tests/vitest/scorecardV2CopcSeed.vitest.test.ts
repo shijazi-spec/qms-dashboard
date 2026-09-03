@@ -29,7 +29,7 @@ describe("scorecard_v2_copc.json — structural integrity", () => {
   test("has the expected top-level shape", () => {
     const c = loadCanonical();
     expect(c.scorecard).toBeDefined();
-    expect(c.scorecard.id).toBe("walaplus_copc_v2");
+    expect(c.scorecard.id).toBe("ExampleOrg_copc_v2");
     expect(c.scorecard.name).toBeTruthy();
     expect(c.scorecard.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(Array.isArray(c.scorecard.sections)).toBe(true);

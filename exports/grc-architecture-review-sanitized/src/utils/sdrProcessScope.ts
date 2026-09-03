@@ -18,9 +18,9 @@ export const SDR_FIVE9_API_INTEGRATION_STATUS = "deferred" as const;
 
 /** Filenames only (organizational paths vary per workstation / Drive). */
 export const SDR_GOVERNANCE_ARTIFACT_NAMES = [
-  "WalaPlus_SDR_2.1_04.12.2025_EN.pdf",
+  "ExampleOrg_SDR_2.1_04.12.2025_EN.pdf",
   "SDR Call Script_AR [Updated].pdf",
-  "WalaPlus_SDR_Stages Reasons_2.1_04.12.2025.xlsx",
+  "ExampleOrg_SDR_Stages Reasons_2.1_04.12.2025.xlsx",
   "Five9_SDR_QA_Scorecard_COPC_Template.xlsx",
 ] as const;
 

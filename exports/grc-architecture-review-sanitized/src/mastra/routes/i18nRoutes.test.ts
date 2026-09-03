@@ -35,7 +35,7 @@ import { Pool, type QueryResult, type QueryResultRow } from "pg";
 const TEST_SESSION_SECRET = "test-session-secret-i18n-route-secret-leak-2026";
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 
-const SESSION_COOKIE_NAME = "walaplus_session";
+const SESSION_COOKIE_NAME = "ExampleOrg_session";
 function signSession(payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = crypto

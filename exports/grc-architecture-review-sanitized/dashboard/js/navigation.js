@@ -1,31 +1,31 @@
 /**
  * ExampleOrg Unified Navigation Component
  * Enterprise-grade grouped dropdown navigation for scalability
- * v4.6: Arabic/RTL support via WalaPlusI18n
+ * v4.6: Arabic/RTL support via ExampleOrgI18n
  */
 
 // Capture this script's CSP nonce while document.currentScript is still set,
 // so dynamically created <style>/<script> tags can be authorized under the
 // strict style-src/script-src 'nonce-...' policy.
-const WALAPLUS_NAV_NONCE = (document.currentScript && document.currentScript.nonce) || '';
+const ExampleOrg_NAV_NONCE = (document.currentScript && document.currentScript.nonce) || '';
 // Expose the page nonce so dynamically loaded helpers (e.g. the AI consultant
 // widget) can authorize their own injected <style>/<script> under the strict
 // nonce-based CSP, since document.currentScript.nonce is unreliable for async
 // dynamically-inserted scripts.
-try { window.WALAPLUS_NAV_NONCE = WALAPLUS_NAV_NONCE; } catch (e) {}
+try { window.ExampleOrg_NAV_NONCE = ExampleOrg_NAV_NONCE; } catch (e) {}
 
 // Helper: load i18n module before navigation renders.
 // Falls back gracefully if i18n.js is not yet loaded.
 (function loadI18nIfNeeded() {
-  if (window.WalaPlusI18n) return;
+  if (window.ExampleOrgI18n) return;
   var script = document.createElement('script');
   script.src = '/js/i18n.js?v=1.0';
   script.async = false;
-  if (WALAPLUS_NAV_NONCE) script.setAttribute('nonce', WALAPLUS_NAV_NONCE);
+  if (ExampleOrg_NAV_NONCE) script.setAttribute('nonce', ExampleOrg_NAV_NONCE);
   document.head.appendChild(script);
 })();
 
-const WalaPlusNav = {
+const ExampleOrgNav = {
   currentPage: '',
 
   // Short-circuit translation helper — falls back to a Title Case rendering
@@ -35,8 +35,8 @@ const WalaPlusNav = {
   // fragment for missing keys, so we detect that case and prettify it.
   _t(key) {
     var last = key.split('.').pop();
-    if (window.WalaPlusI18n && window.WalaPlusI18n.t) {
-      var val = window.WalaPlusI18n.t(key);
+    if (window.ExampleOrgI18n && window.ExampleOrgI18n.t) {
+      var val = window.ExampleOrgI18n.t(key);
       if (val === last && key.indexOf('.') !== -1) return this._titleCase(last);
       return val;
     }
@@ -477,10 +477,10 @@ const WalaPlusNav = {
   },
 
   // ─── Theme (light / dark) ──────────────────────────────────────────────
-  // Stored as 'walaplus_theme' = 'light' | 'dark'. Applied to <html> via the
+  // Stored as 'ExampleOrg_theme' = 'light' | 'dark'. Applied to <html> via the
   // `wp-dark` class so CSS overrides in navigation.css can target it. We
   // apply BEFORE render() to avoid a light-to-dark flash on every nav repaint.
-  _themeKey: 'walaplus_theme',
+  _themeKey: 'ExampleOrg_theme',
   loadTheme() {
     try {
       const v = localStorage.getItem(this._themeKey);
@@ -554,17 +554,17 @@ const WalaPlusNav = {
       // Floating Adam chat launcher on every page (bottom-right bubble).
       this._ensureAssistantWidgetLoaded();
     };
-    if (window.WalaPlusI18n) {
-      window.WalaPlusI18n.init().then(doInit);
+    if (window.ExampleOrgI18n) {
+      window.ExampleOrgI18n.init().then(doInit);
     } else {
       // i18n script may still be loading — wait for it
       var maxWait = 30;
       var waited = 0;
       var check = setInterval(() => {
         waited++;
-        if (window.WalaPlusI18n) {
+        if (window.ExampleOrgI18n) {
           clearInterval(check);
-          window.WalaPlusI18n.init().then(doInit);
+          window.ExampleOrgI18n.init().then(doInit);
         } else if (waited >= maxWait) {
           clearInterval(check);
           doInit();
@@ -598,7 +598,7 @@ const WalaPlusNav = {
           if (!list) return;
           const items = data.notifications || [];
           if (items.length === 0) {
-            list.innerHTML = `<p class="text-center text-sm text-gray-400 py-4">${window.WalaPlusI18n ? window.WalaPlusI18n.t('notifications.no_notifications') : 'No new notifications'}</p>`;
+            list.innerHTML = `<p class="text-center text-sm text-gray-400 py-4">${window.ExampleOrgI18n ? window.ExampleOrgI18n.t('notifications.no_notifications') : 'No new notifications'}</p>`;
             return;
           }
           list.innerHTML = items.map(n => {
@@ -608,7 +608,7 @@ const WalaPlusNav = {
             const safeModule = Object.prototype.hasOwnProperty.call(KNOWN_MODULES, n.module) ? n.module : 'System';
             const iconColor = KNOWN_MODULES[safeModule] || 'text-gray-500';
             const safeId = Number.isFinite(Number(n.id)) && Number(n.id) >= 0 ? Number(n.id) : 0;
-            return `<button type="button" class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 w-full text-left" data-on-click="WalaPlusNav.markRead" data-args="[${safeId}]" aria-label="Mark notification as read: ${this.escapeHtml(n.subject||'Notification')}">
+            return `<button type="button" class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 w-full text-left" data-on-click="ExampleOrgNav.markRead" data-args="[${safeId}]" aria-label="Mark notification as read: ${this.escapeHtml(n.subject||'Notification')}">
               <span class="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0" aria-hidden="true"></span>
               <span class="flex-1 min-w-0">
                 <span class="block text-sm font-medium text-gray-900 truncate">${this.escapeHtml(n.subject||'Notification')}</span>
@@ -629,7 +629,7 @@ const WalaPlusNav = {
   },
 
   timeAgo(date) {
-    // Reuse the WalaPlusNav._t method shorthand declared above so the i18n
+    // Reuse the ExampleOrgNav._t method shorthand declared above so the i18n
     // guardrail (Task #411) can statically verify each key lookup instead of
     // having to track a second inline wrapper alias.
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -656,7 +656,7 @@ const WalaPlusNav = {
   },
 
   _ensureTableSortLoaded() {
-    if (window.__walaplusTableSortInit) return;
+    if (window.__ExampleOrgTableSortInit) return;
     if (document.querySelector('script[data-ExampleOrg-table-sort]')) return;
     var s = document.createElement('script');
     s.src = '/js/table-sort.js?v=1';
@@ -688,7 +688,7 @@ const WalaPlusNav = {
     s.setAttribute('data-ExampleOrg-consultant-widget', '1');
     // Propagate the page nonce so the widget's injected <style> is authorized
     // under the strict nonce-based CSP (otherwise it renders unstyled).
-    if (WALAPLUS_NAV_NONCE) s.setAttribute('nonce', WALAPLUS_NAV_NONCE);
+    if (ExampleOrg_NAV_NONCE) s.setAttribute('nonce', ExampleOrg_NAV_NONCE);
     document.head.appendChild(s);
   },
 
@@ -719,7 +719,7 @@ const WalaPlusNav = {
     s.setAttribute('data-ExampleOrg-consultant-widget', '1');
     // Propagate the page nonce so the widget's injected <style> is authorized
     // under the strict nonce-based CSP (otherwise it renders unstyled).
-    if (WALAPLUS_NAV_NONCE) s.setAttribute('nonce', WALAPLUS_NAV_NONCE);
+    if (ExampleOrg_NAV_NONCE) s.setAttribute('nonce', ExampleOrg_NAV_NONCE);
     s.onload = function () { openWhenReady(20); };
     s.onerror = function () { window.location.href = '/consultant'; };
     document.head.appendChild(s);
@@ -768,7 +768,7 @@ const WalaPlusNav = {
   },
 
   setLang(lang) {
-    if (!(window.WalaPlusI18n && typeof window.WalaPlusI18n.setLang === 'function')) return;
+    if (!(window.ExampleOrgI18n && typeof window.ExampleOrgI18n.setLang === 'function')) return;
     // Disable both language buttons and replace the clicked button's label
     // with a spinner so operators get immediate feedback while the server
     // persists the new preference (and the page reloads).
@@ -791,12 +791,12 @@ const WalaPlusNav = {
         clicked.appendChild(spinner);
       }
     };
-    window.WalaPlusI18n.setLang(lang, setBusy);
+    window.ExampleOrgI18n.setLang(lang, setBusy);
   },
 
   setNumerals(useEastern, btnEl) {
-    if (window.WalaPlusI18n && typeof window.WalaPlusI18n.setUseEasternNumerals === 'function') {
-      window.WalaPlusI18n.setUseEasternNumerals(!!useEastern);
+    if (window.ExampleOrgI18n && typeof window.ExampleOrgI18n.setUseEasternNumerals === 'function') {
+      window.ExampleOrgI18n.setUseEasternNumerals(!!useEastern);
     }
     if (btnEl && btnEl.parentElement) {
       btnEl.parentElement.querySelectorAll('button').forEach(b =>
@@ -855,9 +855,9 @@ const WalaPlusNav = {
 
           // Static skeleton only — no user data interpolated here.
           // The arrow callback inherits `this` from loadUserInfo, so we
-          // call WalaPlusNav._t directly at every key site below — no
+          // call ExampleOrgNav._t directly at every key site below — no
           // local wrapper alias is needed (Task #411).
-          const isAr = window.WalaPlusI18n && window.WalaPlusI18n.currentLang && window.WalaPlusI18n.currentLang() === 'ar';
+          const isAr = window.ExampleOrgI18n && window.ExampleOrgI18n.currentLang && window.ExampleOrgI18n.currentLang() === 'ar';
           // Language toggle is exposed in the user dropdown so operators
           // can switch between English and العربية at runtime. The i18n
           // module persists the choice (localStorage + server preference)
@@ -878,10 +878,10 @@ const WalaPlusNav = {
                 ${SHOW_LANG_TOGGLE ? `<div class="px-4 py-2 border-b border-gray-100">
                   <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.language">${this._t('nav.language')}</p>
                   <div class="flex gap-2">
-                    <button data-on-click="WalaPlusNav.setLang" data-args='["en"]'
+                    <button data-on-click="ExampleOrgNav.setLang" data-args='["en"]'
                       class="flex-1 text-xs px-2 py-1 rounded border transition ${isAr ? 'border-gray-200 text-gray-600 hover:bg-gray-50' : 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'}"
                       data-testid="button-lang-en">English</button>
-                    <button data-on-click="WalaPlusNav.setLang" data-args='["ar"]'
+                    <button data-on-click="ExampleOrgNav.setLang" data-args='["ar"]'
                       class="flex-1 text-xs px-2 py-1 rounded border transition ${isAr ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}"
                       data-testid="button-lang-ar">العربية</button>
                   </div>
@@ -889,15 +889,15 @@ const WalaPlusNav = {
                 ${isAr ? `<div class="px-4 py-2 border-b border-gray-100">
                   <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.numerals">الأرقام</p>
                   <div class="flex gap-2">
-                    <button data-on-click="WalaPlusNav.setNumerals" data-args='[true]'
+                    <button data-on-click="ExampleOrgNav.setNumerals" data-args='[true]'
                       class="flex-1 text-xs px-2 py-1 rounded border transition border-indigo-500 bg-indigo-50 text-indigo-700 font-medium"
                       data-testid="button-numerals-eastern">١٢٣</button>
-                    <button data-on-click="WalaPlusNav.setNumerals" data-args='[false]'
+                    <button data-on-click="ExampleOrgNav.setNumerals" data-args='[false]'
                       class="flex-1 text-xs px-2 py-1 rounded border transition border-gray-200 text-gray-600 hover:bg-gray-50"
                       data-testid="button-numerals-western">123</button>
                   </div>
                 </div>` : ''}
-                <button data-on-click="WalaPlusNav.signOut" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
+                <button data-on-click="ExampleOrgNav.signOut" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                   <span data-i18n="common.sign_out">${this._t('common.sign_out')}</span>
                 </button>
@@ -954,7 +954,7 @@ const WalaPlusNav = {
     if (!document.getElementById('ExampleOrg-nav-layout-style')) {
       const style = document.createElement('style');
       style.id = 'ExampleOrg-nav-layout-style';
-      if (WALAPLUS_NAV_NONCE) style.setAttribute('nonce', WALAPLUS_NAV_NONCE);
+      if (ExampleOrg_NAV_NONCE) style.setAttribute('nonce', ExampleOrg_NAV_NONCE);
       style.textContent = `
         body { padding-top: 48px; padding-left: 256px; transition: padding-left .2s ease, padding-right .2s ease; }
         body.wp-rail-collapsed { padding-left: 64px; }
@@ -1094,7 +1094,7 @@ const WalaPlusNav = {
     const activeGroup = this.navigationGroups.find(g => this.isInGroup(g.id));
     this._defaultOpenGroupId = activeGroup ? activeGroup.id : (this.navigationGroups[0] && this.navigationGroups[0].id);
 
-    const isRTL = window.WalaPlusI18n && window.WalaPlusI18n.isRTL && window.WalaPlusI18n.isRTL();
+    const isRTL = window.ExampleOrgI18n && window.ExampleOrgI18n.isRTL && window.ExampleOrgI18n.isRTL();
     navContainer.innerHTML = `
       <div class="wp-topstrip bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-3">
         <div class="flex items-center space-x-2">
@@ -1111,14 +1111,14 @@ const WalaPlusNav = {
         </div>
         <div class="flex items-center space-x-2">
           <span id="lastUpdated" class="wp-tagline text-xs text-gray-600"></span>
-          <button data-on-click="WalaPlusNav.openAssistant" class="relative p-1.5 rounded-lg hover:bg-gray-100 transition leading-none wp-topstrip-icon-btn" aria-label="Open GRQ Assistant" title="GRQ Assistant" data-testid="button-grq-assistant">
+          <button data-on-click="ExampleOrgNav.openAssistant" class="relative p-1.5 rounded-lg hover:bg-gray-100 transition leading-none wp-topstrip-icon-btn" aria-label="Open GRQ Assistant" title="GRQ Assistant" data-testid="button-grq-assistant">
             <span aria-hidden="true" class="wp-topstrip-emoji">🤖</span>
           </button>
-          <button data-on-click="WalaPlusNav.refreshDashboard" class="wp-desktop-only wp-topbar-refresh-btn text-gray-700 border border-gray-300 hover:bg-gray-100 px-2.5 py-1 rounded-lg transition items-center gap-1.5 text-xs font-medium" aria-label="Refresh dashboard" data-testid="button-refresh">
+          <button data-on-click="ExampleOrgNav.refreshDashboard" class="wp-desktop-only wp-topbar-refresh-btn text-gray-700 border border-gray-300 hover:bg-gray-100 px-2.5 py-1 rounded-lg transition items-center gap-1.5 text-xs font-medium" aria-label="Refresh dashboard" data-testid="button-refresh">
             <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.<REDACTED_PHONE> 9m0 0H9m11 11v-5h-.581m0 0a8.<REDACTED_PHONE>-2m15.357 2H15"/></svg>
             <span data-i18n="nav.refresh">${this._t('nav.refresh')}</span>
           </button>
-          <button id="wp-theme-toggle" data-on-click="WalaPlusNav.toggleTheme" class="wp-theme-toggle relative p-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="Toggle dark mode" title="Toggle dark mode" data-testid="button-theme-toggle">
+          <button id="wp-theme-toggle" data-on-click="ExampleOrgNav.toggleTheme" class="wp-theme-toggle relative p-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="Toggle dark mode" title="Toggle dark mode" data-testid="button-theme-toggle">
             <svg class="wp-theme-icon-light w-5 h-5 text-gray-500" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 <REDACTED_PHONE>.<REDACTED_PHONE> 21a9.<REDACTED_PHONE>.646z"/></svg>
             <svg class="wp-theme-icon-dark w-5 h-5 text-yellow-300 hidden" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 <REDACTED_PHONE> 0z"/></svg>
           </button>
@@ -1276,7 +1276,7 @@ const WalaPlusNav = {
     // hover/focus styling so the link and button still feel like one row.
     const pinBtn = opts.showPin ? `
       <button type="button" class="wp-pin-btn flex-shrink-0 p-1 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50 ${pinned ? 'wp-pinned' : ''}"
-        data-on-click="WalaPlusNav.togglePin" data-args='["${this.escapeHtml(item.id)}"]'
+        data-on-click="ExampleOrgNav.togglePin" data-args='["${this.escapeHtml(item.id)}"]'
         aria-label="${this.escapeHtml(pinAria)} ${this.escapeHtml(label)}"
         aria-pressed="${pinned ? 'true' : 'false'}"
         data-testid="button-pin-${this.escapeHtml(item.id)}${suffix}">
@@ -1595,13 +1595,13 @@ const WalaPlusNav = {
   }
 };
 
-window.WalaPlusNav = WalaPlusNav;
-// Register the WalaPlusNav namespace with SafeActions so that
-// data-on-click="WalaPlusNav.signOut" (and every other dotted handler the nav
+window.ExampleOrgNav = ExampleOrgNav;
+// Register the ExampleOrgNav namespace with SafeActions so that
+// data-on-click="ExampleOrgNav.signOut" (and every other dotted handler the nav
 // renders — setLang, setNumerals, refreshDashboard, markRead, togglePin, …)
 // can be resolved by the strict allowlist resolver. Without this, the registry
 // only contains functions auto-scanned from window, and namespace objects are
 // silently dropped, leaving the buttons inert.
 if (window.SafeActions && typeof window.SafeActions.register === 'function') {
-  window.SafeActions.register('WalaPlusNav', WalaPlusNav);
+  window.SafeActions.register('ExampleOrgNav', ExampleOrgNav);
 }

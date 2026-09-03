@@ -3,15 +3,15 @@
  * Lightweight client-side internationalization with Arabic/RTL support.
  *
  * Usage:
- *   WalaPlusI18n.init().then(() => { ... })
- *   WalaPlusI18n.t('nav.brand')
- *   WalaPlusI18n.t('executive.health_labels.excellent')
- *   WalaPlusI18n.setLang('ar')  // persists + reloads
+ *   ExampleOrgI18n.init().then(() => { ... })
+ *   ExampleOrgI18n.t('nav.brand')
+ *   ExampleOrgI18n.t('executive.health_labels.excellent')
+ *   ExampleOrgI18n.setLang('ar')  // persists + reloads
  *
  * Adding a new page:
  *   1. Add your keys to dashboard/i18n/en.json and dashboard/i18n/ar.json
  *   2. Add data-i18n="your.key" attributes to your HTML elements
- *   3. Call WalaPlusI18n.applyToDOM() after the module is initialized
+ *   3. Call ExampleOrgI18n.applyToDOM() after the module is initialized
  */
 
 /**
@@ -54,13 +54,13 @@
 (function (global) {
   'use strict';
 
-  var STORAGE_KEY = 'walaplus_lang';
-  var NUMERALS_KEY = 'walaplus_eastern_numerals';
+  var STORAGE_KEY = 'ExampleOrg_lang';
+  var NUMERALS_KEY = 'ExampleOrg_eastern_numerals';
   // Tracks a language change that has been written to localStorage but has
   // not yet been confirmed-persisted on the server (offline, 5xx, etc.).
   // Shape: { lang: 'en'|'ar', timestamp: <ms epoch> }. Cleared once the
   // server returns a 2xx for the matching lang.
-  var PENDING_KEY = 'walaplus_lang_pending';
+  var PENDING_KEY = 'ExampleOrg_lang_pending';
   var DEFAULT_LANG = 'en';
   var SUPPORTED = ['en', 'ar'];
   var PREF_ENDPOINT = '/api/user/language-preference';
@@ -306,7 +306,7 @@
     }
     var previous = _lang;
     // Load the new dictionary and swap in-memory locale state BEFORE we
-    // emit `walaPlusLanguageChange`, so any subscriber that re-renders
+    // emit `ExampleOrgLanguageChange`, so any subscriber that re-renders
     // (KPI list, charts on risks/vendors/compliance) reads the new
     // strings via the translator instead of the previous bundle. The
     // page reload still follows so persisted DOM and server preference
@@ -320,7 +320,7 @@
       _applyHtmlDir(_lang);
       try { applyToDOM(); } catch (_) {}
       try {
-        document.dispatchEvent(new CustomEvent('walaPlusLanguageChange', {
+        document.dispatchEvent(new CustomEvent('ExampleOrgLanguageChange', {
           detail: { lang: lang, previous: previous }
         }));
       } catch (_) {}
@@ -506,7 +506,7 @@
   function setUseEasternNumerals(enabled) {
     _useEasternNumerals = !!enabled;
     try { localStorage.setItem(NUMERALS_KEY, String(_useEasternNumerals)); } catch (_) {}
-    document.dispatchEvent(new CustomEvent('walaPlusNumeralChange', { detail: { eastern: _useEasternNumerals } }));
+    document.dispatchEvent(new CustomEvent('ExampleOrgNumeralChange', { detail: { eastern: _useEasternNumerals } }));
   }
 
   /**
@@ -517,14 +517,14 @@
   }
 
   /**
-   * Fire all onReady callbacks and dispatch 'walaPlusI18nReady' event.
+   * Fire all onReady callbacks and dispatch 'ExampleOrgI18nReady' event.
    * Called internally after strings are loaded.
    */
   function _fireReady() {
     _readyCallbacks.forEach(function (cb) { try { cb(); } catch (_) {} });
     _readyCallbacks = [];
     try {
-      document.dispatchEvent(new CustomEvent('walaPlusI18nReady'));
+      document.dispatchEvent(new CustomEvent('ExampleOrgI18nReady'));
     } catch (_) {}
   }
 
@@ -537,7 +537,7 @@
     if (_loaded) { try { cb(); } catch (_) {} } else { _readyCallbacks.push(cb); }
   }
 
-  global.WalaPlusI18n = {
+  global.ExampleOrgI18n = {
     init: init,
     t: t,
     tDynamic: tDynamic,

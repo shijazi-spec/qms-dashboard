@@ -159,17 +159,17 @@ test.describe('Health Pulse — copy filtered link (Task #747)', () => {
     // Stub the single XHR the page makes during initial render so the
     // assertions don't depend on real health-pulse fixtures being seeded.
     //
-    // IMPORTANT: hold the mock until WalaPlusI18n has finished loading its
+    // IMPORTANT: hold the mock until ExampleOrgI18n has finished loading its
     // strings. The real pulse fetch races the i18n JSON fetch in
     // production; a route-mocked pulse resolves instantly, which would
-    // cause renderFilterChips() to run before WalaPlusI18n.init() and
+    // cause renderFilterChips() to run before ExampleOrgI18n.init() and
     // every chip / button label would render with raw key fallbacks.
     await page.route(`**${PULSE_PATH}`, async (route) => {
       try {
         await page.waitForFunction(
           () =>
-            typeof (window as any).WalaPlusI18n !== 'undefined' &&
-            (window as any).WalaPlusI18n.t('dyn.health.copy_link') ===
+            typeof (window as any).ExampleOrgI18n !== 'undefined' &&
+            (window as any).ExampleOrgI18n.t('dyn.health.copy_link') ===
               'Copy filtered link',
           undefined,
           { timeout: 5_000 }

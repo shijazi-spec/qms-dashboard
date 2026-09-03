@@ -31,7 +31,7 @@ import { SALES_QUALITY_PROMPT_VERSION } from "../src/mastra/agents/salesQualityA
 
 const suite = new TestSuite("aiOpsPromptVersions");
 const ADMIN_KEY = "integration-test-prompt-versions-2026";
-// Signed walaplus_session cookie for an active admin platform user (requireRole()
+// Signed ExampleOrg_session cookie for an active admin platform user (requireRole()
 // now always performs a live getPlatformUser() lookup — the shared helper also
 // registers an active platform_users row for this session's email).
 const ADMIN_COOKIE = makeCookieForRole("admin");

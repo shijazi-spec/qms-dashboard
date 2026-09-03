@@ -1,5 +1,5 @@
 // Auto-generated from CRM_Users_Complete_134 (2026-04-19). Do not edit by hand;
-// re-run the roster import if owners change. See docs/WalaPlus_Platform_SOP.md §11 (Owner Roster).
+// re-run the roster import if owners change. See docs/ExampleOrg_Platform_SOP.md §11 (Owner Roster).
 export interface SeedUser {
   name: string;
   team: string;

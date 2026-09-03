@@ -1,7 +1,7 @@
 /**
  * Ambient type declarations for browser-side globals that Playwright tests
  * reach through `page.evaluate(() => window.X)`. Without these the test
- * compiler would either flag every reference to `window.WalaPlusI18n` as
+ * compiler would either flag every reference to `window.ExampleOrgI18n` as
  * TS2339 (or force every test author to cast through `(window as any)`),
  * which both hides typos and creates false positives in `npm run check:tests`.
  *
@@ -21,11 +21,11 @@ declare global {
      * any test exercising those pages can rely on it being present after
      * the load completes. We declare it as non-optional (rather than `?`)
      * because callers in tests always gate their access through
-     * `waitForFunction(() => window.WalaPlusI18n)` or DOMContentLoaded —
+     * `waitForFunction(() => window.ExampleOrgI18n)` or DOMContentLoaded —
      * marking it optional would force ?. on every test line for a property
      * the test has already proven exists, which is more noise than safety.
      */
-    WalaPlusI18n: {
+    ExampleOrgI18n: {
       t(key: string): string;
       tDynamic(prefix: string, value: string): string | undefined;
       isRTL(): boolean;

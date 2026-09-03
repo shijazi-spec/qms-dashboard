@@ -38,7 +38,7 @@ export const activeClientDomainsTool = createTool({
   outputSchema: z.object({
     success: z.boolean(),
     total: z.number(),
-    walaplus_count: z.number().optional(),
+    ExampleOrg_count: z.number().optional(),
     doam_count: z.number().optional(),
     returned: z.number(),
     truncated: z.boolean(),
@@ -56,7 +56,7 @@ export const activeClientDomainsTool = createTool({
       const { listActiveClientDomains } = await import(
         "../../utils/duplicateRadarPreflight"
       );
-      const { rows, total, walaplus_count, doam_count, built_at_iso } =
+      const { rows, total, ExampleOrg_count, doam_count, built_at_iso } =
         await listActiveClientDomains({ fresh: context?.fresh === true });
       const limit =
         typeof context?.limit === "number" && context.limit > 0
@@ -66,21 +66,21 @@ export const activeClientDomainsTool = createTool({
       const truncated = rows.length > returned.length;
       logger?.info("🔄 [activeClientDomainsTool] active client domains", {
         total,
-        walaplus_count,
+        ExampleOrg_count,
         doam_count,
         returned: returned.length,
       });
       return {
         success: true,
         total,
-        walaplus_count,
+        ExampleOrg_count,
         doam_count,
         returned: returned.length,
         truncated,
         builtAtIso: built_at_iso,
         rows: returned,
         note: truncated
-          ? `Showing the first ${returned.length} of ${total} (ExampleOrg ${walaplus_count} + DOAM ${doam_count}). For the full list, use the Preflight tab "⬇ Active-client domains" button or GET /api/duplicates/preflight/active-client-domains?format=csv.`
+          ? `Showing the first ${returned.length} of ${total} (ExampleOrg ${ExampleOrg_count} + DOAM ${doam_count}). For the full list, use the Preflight tab "⬇ Active-client domains" button or GET /api/duplicates/preflight/active-client-domains?format=csv.`
           : undefined,
       };
     } catch (e: any) {

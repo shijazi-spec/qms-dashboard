@@ -8,7 +8,7 @@
  *   1. Page wiring         — every `dashboard/*.html` page (excluding the
  *                            allowlist below) must:
  *                              a. Load `/js/i18n.js` (any query string).
- *                              b. Call `WalaPlusI18n.init().then(...)` with
+ *                              b. Call `ExampleOrgI18n.init().then(...)` with
  *                                 `applyToDOM(...)` somewhere inside the
  *                                 .then() chain so the DOM is actually
  *                                 translated.
@@ -50,7 +50,7 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const EN_PATH = path.join(DASHBOARD_DIR, 'i18n', 'en.json');
 const AR_PATH = path.join(DASHBOARD_DIR, 'i18n', 'ar.json');
 
-// Baseline file capturing the dynamic `WalaPlusI18n.t(variable)` call sites
+// Baseline file capturing the dynamic `ExampleOrgI18n.t(variable)` call sites
 // that already existed when Task #295 introduced this gate. New dynamic call
 // sites that are NOT listed in this baseline are flagged as a hard error so
 // they can't slip in unnoticed amongst the long-standing wrappers (which
@@ -89,8 +89,8 @@ const I18N_ATTR_RE = /data-i18n(?:-[a-z]+)?=(?:"([^"]+)"|'([^']+)')/g;
 const I18N_SCRIPT_RE = /<script[^>]+src=["'][^"']*\/js\/i18n\.js(?:\?[^"']*)?["'][^>]*>/i;
 // Locator for the start of the i18n bootstrap chain. The body of `.then(...)`
 // is then extracted with a balanced-paren scan so nested calls like
-// `() => window.WalaPlusI18n.applyToDOM()` are captured correctly.
-const INIT_THEN_RE = /WalaPlusI18n\s*\.\s*init\s*\([^)]*\)\s*\.\s*then\s*\(/g;
+// `() => window.ExampleOrgI18n.applyToDOM()` are captured correctly.
+const INIT_THEN_RE = /ExampleOrgI18n\s*\.\s*init\s*\([^)]*\)\s*\.\s*then\s*\(/g;
 
 /**
  * Starting at `openIdx` (which must point at an opening `(`), return the body
@@ -218,7 +218,7 @@ function checkPageWiring(pages, publicPages) {
       continue;
     }
 
-    // Find every `WalaPlusI18n.init(...).then(` occurrence and balanced-extract
+    // Find every `ExampleOrgI18n.init(...).then(` occurrence and balanced-extract
     // the body of `.then(...)`. The page passes if at least one of those bodies
     // contains `applyToDOM(...)`.
     INIT_THEN_RE.lastIndex = 0;
@@ -236,7 +236,7 @@ function checkPageWiring(pages, publicPages) {
   }
 
   if (missingScript.length === 0 && missingInitApply.length === 0) {
-    console.log(`✓ Page wiring (${auditedCount} page(s)) — every page loads /js/i18n.js and calls WalaPlusI18n.init().then(applyToDOM)`);
+    console.log(`✓ Page wiring (${auditedCount} page(s)) — every page loads /js/i18n.js and calls ExampleOrgI18n.init().then(applyToDOM)`);
     return true;
   }
 
@@ -260,7 +260,7 @@ function checkPageWiring(pages, publicPages) {
         ...missingInitApply.map(({ dirLabel, page }) => `${dirLabel}/${page}`),
         '',
         'Fix: include this snippet in the page bootstrap script:',
-        '    window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());',
+        '    window.ExampleOrgI18n.init().then(() => window.ExampleOrgI18n.applyToDOM());',
         'Without it, every `data-i18n="..."` attribute on the page is ignored at runtime.',
       ],
     );
@@ -509,10 +509,10 @@ function checkSwDictionaryParity(en, ar) {
 }
 
 /* ---------------------------------------------------------------------------
- * Check 5 — WalaPlusI18n.t() key coverage in JS files and inline scripts
+ * Check 5 — ExampleOrgI18n.t() key coverage in JS files and inline scripts
  * (Task #150, expanded in Task #296)
  *
- * Static string-literal calls like `WalaPlusI18n.t('ns.key')` are extracted
+ * Static string-literal calls like `ExampleOrgI18n.t('ns.key')` are extracted
  * from:
  *   - `dashboard/js/**\/*.js`  (recursive — subdirectories included)
  *   - inline <script> blocks in every `dashboard/*.html` page
@@ -565,7 +565,7 @@ function extractInlineScripts(html) {
 }
 
 /**
- * Scan `source` for every `(window.)WalaPlusI18n.t(...)` call and classify:
+ * Scan `source` for every `(window.)ExampleOrgI18n.t(...)` call and classify:
  *   - static  : first argument is a single- or double-quoted string literal
  *               (any content, no unescaped matching quote inside) — the key
  *               is extracted verbatim and validated against the JSON trees.
@@ -578,21 +578,21 @@ function extractTCalls(source, sourceName) {
   const staticKeys = [];
   const dynamicSnippets = new Set();
   // Wrapper aliases are local helpers that forward their first argument to
-  // `WalaPlusI18n.t(...)` (or are produced by `WalaPlusI18n.t.bind(...)`).
+  // `ExampleOrgI18n.t(...)` (or are produced by `ExampleOrgI18n.t.bind(...)`).
   // Once we discover a wrapper name, every `WRAPPER('literal')` call site is
-  // treated as if it were a direct `WalaPlusI18n.t('literal')` call so the
+  // treated as if it were a direct `ExampleOrgI18n.t('literal')` call so the
   // guardrail can statically verify the key. Pre-Task #752, those call sites
-  // were invisible because the script only looked for `WalaPlusI18n.t(`.
+  // were invisible because the script only looked for `ExampleOrgI18n.t(`.
   const wrapperNames = new Set();
 
   // 1. Detect `.t.bind(...)` aliases first — they are unambiguous forwarders.
-  const BIND_RE = /(?:const|let|var)\s+(\w+)\s*=\s*[^;]*?(?:window\.)?WalaPlusI18n\.t\.bind\s*\(/g;
+  const BIND_RE = /(?:const|let|var)\s+(\w+)\s*=\s*[^;]*?(?:window\.)?ExampleOrgI18n\.t\.bind\s*\(/g;
   let bm;
   while ((bm = BIND_RE.exec(source)) !== null) {
     wrapperNames.add(bm[1]);
   }
 
-  const T_CALL_RE = /(?:window\.)?WalaPlusI18n\.t\s*\(\s*/g;
+  const T_CALL_RE = /(?:window\.)?ExampleOrgI18n\.t\s*\(\s*/g;
   let m;
   while ((m = T_CALL_RE.exec(source)) !== null) {
     const rest = source.slice(m.index + m[0].length);
@@ -613,7 +613,7 @@ function extractTCalls(source, sourceName) {
     }
 
     // Before flagging as dynamic, check whether this call is the body of a
-    // local wrapper that simply forwards its parameter to WalaPlusI18n.t.
+    // local wrapper that simply forwards its parameter to ExampleOrgI18n.t.
     // If so, capture the wrapper name and skip — actual key verification
     // happens via the wrapper-call rescan below.
     const identMatch = /^([a-zA-Z_$][\w$]*)\s*[,)]/.exec(rest);
@@ -632,7 +632,7 @@ function extractTCalls(source, sourceName) {
   }
 
   // 2. Rescan for calls to any discovered wrapper alias and validate their
-  //    first-argument key the same way as direct WalaPlusI18n.t() calls.
+  //    first-argument key the same way as direct ExampleOrgI18n.t() calls.
   for (const wrapperName of wrapperNames) {
     const escaped = wrapperName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Match `WRAPPER(`, `this.WRAPPER(`, or `obj.WRAPPER(` — but skip the
@@ -680,7 +680,7 @@ function extractTCalls(source, sourceName) {
 }
 
 /**
- * Given a `WalaPlusI18n.t(<paramName>, ...)` call at `callIdx`, look back up
+ * Given a `ExampleOrgI18n.t(<paramName>, ...)` call at `callIdx`, look back up
  * to ~600 characters in `source` for the enclosing function/arrow/method
  * declaration whose parameter list contains `paramName`. Returns the
  * declared name (so the call site can be classified as a wrapper forwarder)
@@ -816,12 +816,12 @@ function checkJsKeyCoverage(pages, publicPages, en, ar) {
 
   if (passed) {
     console.log(
-      `✓ JS t() key coverage (${seen.size} unique static key reference(s)) — every WalaPlusI18n.t() key resolves in en.json and ar.json`,
+      `✓ JS t() key coverage (${seen.size} unique static key reference(s)) — every ExampleOrgI18n.t() key resolves in en.json and ar.json`,
     );
   } else {
     if (missingEn.length) {
       fail(
-        `JS t() key coverage: ${missingEn.length} WalaPlusI18n.t() call(s) reference keys missing from dashboard/i18n/en.json`,
+        `JS t() key coverage: ${missingEn.length} ExampleOrgI18n.t() call(s) reference keys missing from dashboard/i18n/en.json`,
         [
           ...missingEn.slice(0, 50).map(({ source, key }) => `${source} :: "${key}"`),
           ...(missingEn.length > 50 ? [`... and ${missingEn.length - 50} more`] : []),
@@ -832,7 +832,7 @@ function checkJsKeyCoverage(pages, publicPages, en, ar) {
     }
     if (missingAr.length) {
       fail(
-        `JS t() key coverage: ${missingAr.length} WalaPlusI18n.t() call(s) reference keys missing from dashboard/i18n/ar.json`,
+        `JS t() key coverage: ${missingAr.length} ExampleOrgI18n.t() call(s) reference keys missing from dashboard/i18n/ar.json`,
         [
           ...missingAr.slice(0, 50).map(({ source, key }) => `${source} :: "${key}"`),
           ...(missingAr.length > 50 ? [`... and ${missingAr.length - 50} more`] : []),
@@ -868,7 +868,7 @@ function checkJsKeyCoverage(pages, publicPages, en, ar) {
 
   if (dynamicResult.known.length) {
     console.warn(
-      `\n⚠  JS t() dynamic keys (baselined) — ${dynamicResult.known.length} long-standing WalaPlusI18n.t() call(s) use non-literal keys and cannot be statically verified:`,
+      `\n⚠  JS t() dynamic keys (baselined) — ${dynamicResult.known.length} long-standing ExampleOrgI18n.t() call(s) use non-literal keys and cannot be statically verified:`,
     );
     for (const { snippet, source } of dynamicResult.known) {
       console.warn(`    ${source}  →  ${snippet}`);
@@ -878,13 +878,13 @@ function checkJsKeyCoverage(pages, publicPages, en, ar) {
 
   if (dynamicResult.added.length) {
     fail(
-      `JS t() dynamic keys: ${dynamicResult.added.length} NEW WalaPlusI18n.t(variable) call site(s) not in scripts/i18n-dynamic-baseline.json`,
+      `JS t() dynamic keys: ${dynamicResult.added.length} NEW ExampleOrgI18n.t(variable) call site(s) not in scripts/i18n-dynamic-baseline.json`,
       [
         ...dynamicResult.added.map(({ source, snippet }) => `${source}  →  ${snippet}`),
         '',
         'These dynamic keys cannot be statically verified, so they cannot be checked',
         'against en.json / ar.json. Prefer rewriting them as a static',
-        '    WalaPlusI18n.t("ns.exact_key")',
+        '    ExampleOrgI18n.t("ns.exact_key")',
         'call so the guardrail can confirm the key resolves in both translation files.',
         '',
         'If the dynamic call is genuinely required (e.g. it bridges existing data-i18n',
@@ -974,7 +974,7 @@ function writeDynamicBaseline(uniqueCurrent) {
   });
   const payload = {
     _comment:
-      'Pre-existing dynamic WalaPlusI18n.t(variable) call sites tracked by Task #295. ' +
+      'Pre-existing dynamic ExampleOrgI18n.t(variable) call sites tracked by Task #295. ' +
       'Adding a new call site here is an explicit attestation that the dynamic key cannot ' +
       'be made static. Regenerate with: node scripts/check-i18n.cjs --update-baseline',
     entries: sorted,
@@ -1151,7 +1151,7 @@ function writeUnusedBaseline(unusedKeys) {
     _comment:
       'Pre-existing orphan i18n keys tracked by Task #345 — keys present in ' +
       'dashboard/i18n/{en,ar}.json that are NOT referenced by any data-i18n ' +
-      'attribute or static WalaPlusI18n.t("...") call. Adding a key here is an ' +
+      'attribute or static ExampleOrgI18n.t("...") call. Adding a key here is an ' +
       'explicit attestation that the orphan is intentional (e.g. staged for an ' +
       'in-flight feature). Prefer deleting the orphan from en.json + ar.json, or ' +
       'registering a new dynamic-lookup prefix in ' +
@@ -1246,7 +1246,7 @@ function checkUnusedKeys(pages, publicPages, en) {
       ...(added.length > 50 ? [`... and ${added.length - 50} more`] : []),
       '',
       'These keys exist in en.json / ar.json but are NOT referenced by any',
-      'data-i18n attribute or static WalaPlusI18n.t("...") call.',
+      'data-i18n attribute or static ExampleOrgI18n.t("...") call.',
       '',
       'Fix one of:',
       '  1. Delete the unused key(s) from dashboard/i18n/en.json AND',

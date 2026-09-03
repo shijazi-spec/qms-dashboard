@@ -9,7 +9,7 @@
  * Current intent (post-fix): verify that export routes correctly REJECT
  * admin-key-only callers with 401.  The X-Admin-Key is scoped exclusively to
  * /api/admin/* server-to-server paths.  A caller supplying only the
- * X-Admin-Key header (no OIDC-issued walaplus_session cookie) must receive
+ * X-Admin-Key header (no OIDC-issued ExampleOrg_session cookie) must receive
  * 401 from the global middleware before the handler executes.
  *
  * Full content-validation smoke tests (status 200, correct CSV headers, OOXML

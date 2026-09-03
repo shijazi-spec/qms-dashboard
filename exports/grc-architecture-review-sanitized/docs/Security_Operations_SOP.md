@@ -797,10 +797,10 @@ guardrail script in the same change.
 | Cookie | Set by | Purpose | HttpOnly | Secure | SameSite | Path | Max-Age | Notes |
 |--------|--------|---------|----------|--------|----------|------|---------|-------|
 | `admin_key` | `src/mastra/routes/adminApiRoutes.ts` (`/api/admin/auth`, `/api/admin/auth/logout`) and `src/mastra/routes/authRoutes.ts` (`/api/auth/logout`, `/api/logout` clear it) | Carries the admin API key for the admin-key auth path. High-privilege bearer credential. | **always** | **always** (unconditional, even on local HTTP) | **Strict** (unconditional) | `/` | 28800 (set) / 0 (clear) | All three flags are unconditional and must never be made conditional on `isSecureDomain()`. Enforced by `scripts/check-admin-cookie-flags.sh` (`tests/adminCookieFlags.test.ts`). |
-| `walaplus_session` | `src/mastra/routes/authRoutes.ts` (`/api/callback` set; `/api/auth/logout` + `/api/logout` clear) | Signed OIDC session token (HMAC-SHA256, 7-day expiry). | **always** | conditional via `${secure ? "; Secure" : ""}` where `secure = isSecureDomain()` | **Lax** (top-level OIDC redirect must carry the cookie back) | `/` | `SESSION_MAX_AGE` (set) / 0 (clear) | `Secure` is omitted only on plain-HTTP local dev so the cookie still round-trips; production is always HTTPS so `isSecureDomain()` returns true and `Secure` is emitted. SameSite is `Lax` — not `Strict` — because the OIDC provider redirects the user agent back to `/api/callback` cross-site, and `Strict` would strip the cookie on that navigation. |
-| `oauth_data` | `src/mastra/routes/authRoutes.ts` (`/api/login` set; `/api/callback` clear) | Short-lived (600 s) PKCE/state/nonce envelope tying a `/api/login` request to its `/api/callback`. Cleared on success. | **always** | conditional via `${secure ? "; Secure" : ""}` | **Lax** (same OIDC top-level-redirect reason as `walaplus_session`) | `/` | 600 (set) / 0 (clear) | `Secure` is conditional for the same plain-HTTP-dev reason as `walaplus_session`. |
+| `ExampleOrg_session` | `src/mastra/routes/authRoutes.ts` (`/api/callback` set; `/api/auth/logout` + `/api/logout` clear) | Signed OIDC session token (HMAC-SHA256, 7-day expiry). | **always** | conditional via `${secure ? "; Secure" : ""}` where `secure = isSecureDomain()` | **Lax** (top-level OIDC redirect must carry the cookie back) | `/` | `SESSION_MAX_AGE` (set) / 0 (clear) | `Secure` is omitted only on plain-HTTP local dev so the cookie still round-trips; production is always HTTPS so `isSecureDomain()` returns true and `Secure` is emitted. SameSite is `Lax` — not `Strict` — because the OIDC provider redirects the user agent back to `/api/callback` cross-site, and `Strict` would strip the cookie on that navigation. |
+| `oauth_data` | `src/mastra/routes/authRoutes.ts` (`/api/login` set; `/api/callback` clear) | Short-lived (600 s) PKCE/state/nonce envelope tying a `/api/login` request to its `/api/callback`. Cleared on success. | **always** | conditional via `${secure ? "; Secure" : ""}` | **Lax** (same OIDC top-level-redirect reason as `ExampleOrg_session`) | `/` | 600 (set) / 0 (clear) | `Secure` is conditional for the same plain-HTTP-dev reason as `ExampleOrg_session`. |
 
-**Why the conditional `Secure` is acceptable on `walaplus_session` /
+**Why the conditional `Secure` is acceptable on `ExampleOrg_session` /
 `oauth_data` but not on `admin_key`:** the admin key is a long-lived bearer
 credential that grants full admin access; we accept the inconvenience of
 local-dev breakage to guarantee it is never transmitted in cleartext, even
@@ -814,7 +814,7 @@ without weakening production security.
   `Set-Cookie` line in `src/mastra/routes/` carries `HttpOnly`, `Secure`,
   and `SameSite=Strict` unconditionally. Wrapped by
   `tests/adminCookieFlags.test.ts`.
-- `scripts/check-auth-cookie-flags.sh` — asserts every `walaplus_session`
+- `scripts/check-auth-cookie-flags.sh` — asserts every `ExampleOrg_session`
   and `oauth_data` `Set-Cookie` line in `src/mastra/routes/` carries
   `HttpOnly`, `SameSite=Lax`, `Path=/`, and the literal token `Secure`
   (matching either an unconditional emission or the documented

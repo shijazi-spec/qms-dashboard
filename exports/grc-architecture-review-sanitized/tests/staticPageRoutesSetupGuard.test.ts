@@ -79,7 +79,7 @@ const { staticPageRoutes } =
 const { TestSuite } = await import("./_helpers/runner");
 const { buildHandler, makeContext } = await import("./_helpers/fakeContext");
 
-const SESSION_COOKIE_NAME = "walaplus_session";
+const SESSION_COOKIE_NAME = "ExampleOrg_session";
 
 function signSession(payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");

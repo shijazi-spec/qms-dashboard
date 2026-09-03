@@ -7,7 +7,7 @@ import { logger } from "../../utils/logger";
 // separately (Task #746).
 import { upsertOidcUser as upsertOidcUserImpl } from "../../utils/userAccessDatabase";
 
-const SESSION_COOKIE_NAME = "walaplus_session";
+const SESSION_COOKIE_NAME = "ExampleOrg_session";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60;
 
 let oidcConfig: client.Configuration | null = null;

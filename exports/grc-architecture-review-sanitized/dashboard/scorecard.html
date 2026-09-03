@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -159,9 +159,9 @@
         // Wrapper kept because the call sites below pass an English fallback
         // string as the second argument. The i18n guardrail treats this as a
         // static wrapper alias (its body forwards the key parameter to
-        // WalaPlusI18n.t), so every literal call site is validated against
+        // ExampleOrgI18n.t), so every literal call site is validated against
         // en.json and ar.json.
-        const _t = (k, v) => (window.WalaPlusI18n && WalaPlusI18n.t) ? (WalaPlusI18n.t(k) || v || k) : (v || k);
+        const _t = (k, v) => (window.ExampleOrgI18n && ExampleOrgI18n.t) ? (ExampleOrgI18n.t(k) || v || k) : (v || k);
         const API_BASE = '/api/scorecard';
         let scorecardData = null;
 
@@ -204,7 +204,7 @@
             renderStatusSummary(data.kpis);
             renderKPICards(data.kpis);
 
-            document.getElementById('lastUpdated').textContent = WalaPlusI18n.t('dyn.scorecard.last_updated_prefix') + new Date(data.generated_at).toLocaleString();
+            document.getElementById('lastUpdated').textContent = ExampleOrgI18n.t('dyn.scorecard.last_updated_prefix') + new Date(data.generated_at).toLocaleString();
             
             lucide.createIcons();
         }
@@ -323,7 +323,7 @@
 
         function openNavigationMap(index) {
             const kpi = scorecardData.kpis[index];
-            document.getElementById('modalKpiName').textContent = WalaPlusI18n.t('dyn.scorecard.navigation_map_prefix') + kpi.kpi_name;
+            document.getElementById('modalKpiName').textContent = ExampleOrgI18n.t('dyn.scorecard.navigation_map_prefix') + kpi.kpi_name;
             
             const statusColors = {
                 green: 'border-green-500',
@@ -406,12 +406,12 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert(WalaPlusI18n.t('dyn.scorecard.snapshot_saved'));
+                    alert(ExampleOrgI18n.t('dyn.scorecard.snapshot_saved'));
                 } else {
                     throw new Error(result.error);
                 }
             } catch (error) {
-                alert(WalaPlusI18n.t('dyn.scorecard.error_saving_snapshot', { msg: error.message }));
+                alert(ExampleOrgI18n.t('dyn.scorecard.error_saving_snapshot', { msg: error.message }));
             }
         }
 
@@ -432,8 +432,8 @@
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

@@ -90,7 +90,7 @@ await suite.test("POST /api/auth/logout — 200 clears session AND admin_key coo
   suite.expectEqual(res.status, 200, "status");
   suite.expectEqual(res.body?.success, true, "body.success");
   const cookie = res.headers["Set-Cookie"] ?? "";
-  suite.expect(cookie.includes("walaplus_session="), "Set-Cookie clears session");
+  suite.expect(cookie.includes("ExampleOrg_session="), "Set-Cookie clears session");
   suite.expect(cookie.includes("admin_key="), "Set-Cookie clears admin_key");
   suite.expect(cookie.includes("Max-Age=0"), "Set-Cookie has Max-Age=0");
   // The admin_key clear cookie must always carry HttpOnly + Secure +

@@ -53,8 +53,8 @@ const SESSION_TOKEN = dashboardSignSession({
   role: "admin",
   exp: Date.now() + 3_600_000,
 });
-// Cookie header value: walaplus_session=<url-encoded-token>
-const ADMIN_HEADERS = { Cookie: `walaplus_session=${encodeURIComponent(SESSION_TOKEN)}` };
+// Cookie header value: ExampleOrg_session=<url-encoded-token>
+const ADMIN_HEADERS = { Cookie: `ExampleOrg_session=${encodeURIComponent(SESSION_TOKEN)}` };
 
 // The dashboardGate inside these routes calls requireRole() which does a DB
 // lookup in platform_users. Seed a test user so the gate allows the request.

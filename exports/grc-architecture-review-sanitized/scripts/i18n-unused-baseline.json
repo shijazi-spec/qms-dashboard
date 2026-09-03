@@ -1,5 +1,5 @@
 {
-  "_comment": "Pre-existing orphan i18n keys tracked by Task #345 — keys present in dashboard/i18n/{en,ar}.json that are NOT referenced by any data-i18n attribute or static WalaPlusI18n.t(\"...\") call. Adding a key here is an explicit attestation that the orphan is intentional (e.g. staged for an in-flight feature). Prefer deleting the orphan from en.json + ar.json, or registering a new dynamic-lookup prefix in dashboard/i18n/.referenced-dynamically.json. Regenerate this file with: node scripts/check-i18n.cjs --update-unused-baseline",
+  "_comment": "Pre-existing orphan i18n keys tracked by Task #345 — keys present in dashboard/i18n/{en,ar}.json that are NOT referenced by any data-i18n attribute or static ExampleOrgI18n.t(\"...\") call. Adding a key here is an explicit attestation that the orphan is intentional (e.g. staged for an in-flight feature). Prefer deleting the orphan from en.json + ar.json, or registering a new dynamic-lookup prefix in dashboard/i18n/.referenced-dynamically.json. Regenerate this file with: node scripts/check-i18n.cjs --update-unused-baseline",
   "keys": [
     "ai_ops.agent",
     "ai_ops.alert_volume_trend",

@@ -1,7 +1,7 @@
 /* Duplicate Radar app script — extracted from duplicates.html (perf: cacheable, smaller HTML). Classic (non-module) script: top-level function declarations stay global so safe-actions data-on-click dispatch keeps working. */
-        const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
-        const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
-        function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
+        const _fd = (d, opts) => window.ExampleOrgI18n ? ExampleOrgI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
+        const _fn = (n) => window.ExampleOrgI18n ? ExampleOrgI18n.formatNumber(n) : String(n);
+        function _runWhenI18nReady(fn) { if (window.ExampleOrgI18n && typeof ExampleOrgI18n.onReady === 'function') ExampleOrgI18n.onReady(fn); else fn(); }
         let summary = {};
         let sourceChart = null;
         let confidenceChart = null;
@@ -165,7 +165,7 @@
         }
 
         // Register page-level refresh hook so the global Refresh button in
-        // the top header (navigation.js → WalaPlusNav.refreshDashboard) runs
+        // the top header (navigation.js → ExampleOrgNav.refreshDashboard) runs
         // our smart refresh — summary + active tab — instead of a full page
         // reload.
         window.refreshDashboard = refreshData;
@@ -410,7 +410,7 @@
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
-                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-handled', {
                         method: 'POST', credentials: 'same-origin',
@@ -435,7 +435,7 @@
                     headers: { 'Content-Type': 'application/json' }
                 });
                 if (res.status === 401 || res.status === 403) {
-                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-unhandle', {
                         method: 'POST', credentials: 'same-origin',
@@ -786,7 +786,7 @@
                 try {
                     let res = await fetch(urlFor(id), { method: 'POST', credentials: 'same-origin', headers: hdrs(), body });
                     if ((res.status === 401 || res.status === 403) && !adminKey) {
-                        adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                        adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                         if (!adminKey) break;
                         res = await fetch(urlFor(id), { method: 'POST', credentials: 'same-origin', headers: hdrs(), body });
                     }
@@ -819,7 +819,7 @@
         }
 
         async function runBulkCloseLeads(opts) {
-            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+            const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
             if (!adminKey) return;
             const ids = Array.from(crossModuleSelected);
             if (ids.length === 0) return;
@@ -1253,7 +1253,7 @@
                     },
                 },
             });
-            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('creationTrendChart', creationTrendChart, 'Duplicate Creation Trend');
+            if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('creationTrendChart', creationTrendChart, 'Duplicate Creation Trend');
         }
 
         // ── Inline SVG sparkline + delta for True Duplicates trend (additive) ──
@@ -1286,12 +1286,12 @@
             const last = valid[valid.length - 1];
             const prev = valid[valid.length - 2];
             const diff = last - prev;
-            if (diff === 0) return `<span class="text-[10px] text-gray-400" title="${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_change_tip'))}">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_change'))}</span>`;
+            if (diff === 0) return `<span class="text-[10px] text-gray-400" title="${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.no_change_tip'))}">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.no_change'))}</span>`;
             const improving = diff < 0;
             const arrow = improving ? '▼' : '▲';
             const cls = improving ? 'text-green-600' : 'text-red-500';
             const sign = improving ? '' : '+';
-            return `<span class="text-[10px] font-semibold ${cls}" title="${escapeHtml(WalaPlusI18n.t('dyn.duplicates.vs_prev_scan'))}">${arrow} ${sign}${_fn(diff)}</span>`;
+            return `<span class="text-[10px] font-semibold ${cls}" title="${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.vs_prev_scan'))}">${arrow} ${sign}${_fn(diff)}</span>`;
         }
         async function loadClustersTrendSparkline() {
             try {
@@ -1320,8 +1320,8 @@
             document.getElementById('pipelineInflation').textContent = formatCurrencyCompact(data.estimatedPipelineInflation || 0);
             loadInflationBreakdown(); // open vs closed split under the card
 
-            document.getElementById('leadRate').textContent = WalaPlusI18n.t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateLeadRate || data.kpis?.duplicateLeadRate || 0) });
-            document.getElementById('dealRate').textContent = WalaPlusI18n.t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateDealRate || data.kpis?.duplicateDealRate || 0) });
+            document.getElementById('leadRate').textContent = ExampleOrgI18n.t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateLeadRate || data.kpis?.duplicateLeadRate || 0) });
+            document.getElementById('dealRate').textContent = ExampleOrgI18n.t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateDealRate || data.kpis?.duplicateDealRate || 0) });
 
             // kpiLeadRate / kpiDealRate tiles were dropped — the headline
             // cards above already show the same number against the 2% target.
@@ -1397,7 +1397,7 @@
             if (data.lastScanInfo) {
                 const scanDate = new Date(data.lastScanInfo.completed_at);
                 document.getElementById('lastScanDate').textContent = _fd(scanDate, { day: 'numeric', month: 'short', year: 'numeric' });
-                document.getElementById('lastScanDetails').textContent = WalaPlusI18n.t('dyn.duplicates.scan_summary', { records: _fn(data.lastScanInfo.total_records_scanned || 0), dur: _fn(Math.round((data.lastScanInfo.detection_duration_ms || 0) / 1000)), dup: _fn(data.lastScanInfo.total_duplicates_detected || 0) });
+                document.getElementById('lastScanDetails').textContent = ExampleOrgI18n.t('dyn.duplicates.scan_summary', { records: _fn(data.lastScanInfo.total_records_scanned || 0), dur: _fn(Math.round((data.lastScanInfo.detection_duration_ms || 0) / 1000)), dup: _fn(data.lastScanInfo.total_duplicates_detected || 0) });
             } else if (data.lastScanDate) {
                 document.getElementById('lastScanDate').textContent = _fd(new Date(data.lastScanDate), { day: 'numeric', month: 'short', year: 'numeric' });
             }
@@ -1405,17 +1405,17 @@
             // D4: Top signals
             const topSignalsEl = document.getElementById('topSignals');
             const signals = data.topSignals || {};
-            const signalLabels = { exact_email: WalaPlusI18n.t('dyn.duplicates.signals.exact_email'), domain_match: WalaPlusI18n.t('dyn.duplicates.signals.domain_match'), phone_match: WalaPlusI18n.t('dyn.duplicates.signals.phone_match'), company_exact: WalaPlusI18n.t('dyn.duplicates.signals.company_exact'), company_fuzzy: WalaPlusI18n.t('dyn.duplicates.signals.company_fuzzy') };
+            const signalLabels = { exact_email: ExampleOrgI18n.t('dyn.duplicates.signals.exact_email'), domain_match: ExampleOrgI18n.t('dyn.duplicates.signals.domain_match'), phone_match: ExampleOrgI18n.t('dyn.duplicates.signals.phone_match'), company_exact: ExampleOrgI18n.t('dyn.duplicates.signals.company_exact'), company_fuzzy: ExampleOrgI18n.t('dyn.duplicates.signals.company_fuzzy') };
             const signalColors = { exact_email: 'bg-blue-100 text-blue-800', domain_match: 'bg-green-100 text-green-800', phone_match: 'bg-purple-100 text-purple-800', company_exact: 'bg-amber-100 text-amber-800', company_fuzzy: 'bg-orange-100 text-orange-800' };
             const sortedSignals = Object.entries(signals).sort((a, b) => b[1] - a[1]);
-            topSignalsEl.innerHTML = sortedSignals.length === 0 ? `<p class="text-sm text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_signal_data'))}</p>` :
+            topSignalsEl.innerHTML = sortedSignals.length === 0 ? `<p class="text-sm text-gray-400">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.no_signal_data'))}</p>` :
                 sortedSignals.map(([key, count]) => `<div class="flex justify-between items-center cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-1 rounded" data-on-click="openClustersBySignalModal" data-args="${escAttr(JSON.stringify([key, signalLabels[key] || key]))}" data-testid="row-signal-${key}" title="Click to see all clusters with this signal"><span class="px-2 py-1 rounded text-xs font-medium ${signalColors[key] || 'bg-gray-100 text-gray-700'}">${escapeHtml(signalLabels[key] || key)}</span><span class="text-sm font-bold text-gray-700">${_fn(count)} →</span></div>`).join('');
 
             // D4: Top clusters by inflation
             const topClustersEl = document.getElementById('topClustersInflation');
             const topC = data.topClustersByInflation || [];
-            topClustersEl.innerHTML = topC.length === 0 ? `<p class="text-sm text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_pipeline_inflation'))}</p>` :
-                topC.map(c => `<div class="flex justify-between items-center p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100" data-on-click="showClusterDetails" data-args="[${c.id}]"><div><span class="font-medium text-sm">${escapeHtml(c.company_name || c.domain)}</span><span class="text-xs text-gray-400 ms-2">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))}</span></div><span class="text-sm font-bold text-purple-600">${formatCurrency(c.estimated_pipeline_value)}</span></div>`).join('');
+            topClustersEl.innerHTML = topC.length === 0 ? `<p class="text-sm text-gray-400">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.no_pipeline_inflation'))}</p>` :
+                topC.map(c => `<div class="flex justify-between items-center p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100" data-on-click="showClusterDetails" data-args="[${c.id}]"><div><span class="font-medium text-sm">${escapeHtml(c.company_name || c.domain)}</span><span class="text-xs text-gray-400 ms-2">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))}</span></div><span class="text-sm font-bold text-purple-600">${formatCurrency(c.estimated_pipeline_value)}</span></div>`).join('');
 
             updateCharts(data);
         }
@@ -1425,19 +1425,19 @@
             if (sourceChart) sourceChart.destroy();
             sourceChart = new Chart(document.getElementById('sourceChart'), {
                 type: 'bar',
-                data: { labels: sourceData.map(s => s.source || WalaPlusI18n.t('dyn.duplicates.unknown')), datasets: [{ label: WalaPlusI18n.t('dyn.duplicates.duplicates_chart_label'), data: sourceData.map(s => parseInt(s.total) || 0), backgroundColor: ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4'] }] },
+                data: { labels: sourceData.map(s => s.source || ExampleOrgI18n.t('dyn.duplicates.unknown')), datasets: [{ label: ExampleOrgI18n.t('dyn.duplicates.duplicates_chart_label'), data: sourceData.map(s => parseInt(s.total) || 0), backgroundColor: ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4'] }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
             });
 
-            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('sourceChart', sourceChart, 'Duplicates by Source');
+            if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('sourceChart', sourceChart, 'Duplicates by Source');
 
             if (confidenceChart) confidenceChart.destroy();
             confidenceChart = new Chart(document.getElementById('confidenceChart'), {
                 type: 'doughnut',
-                data: { labels: [WalaPlusI18n.t('dyn.duplicates.conf_strong'), WalaPlusI18n.t('dyn.duplicates.conf_moderate'), WalaPlusI18n.t('dyn.duplicates.conf_weak')], datasets: [{ data: [data.highConfidence||0, data.mediumConfidence||0, data.lowConfidence||0], backgroundColor: ['#EF4444','#F59E0B','#22C55E'] }] },
+                data: { labels: [ExampleOrgI18n.t('dyn.duplicates.conf_strong'), ExampleOrgI18n.t('dyn.duplicates.conf_moderate'), ExampleOrgI18n.t('dyn.duplicates.conf_weak')], datasets: [{ data: [data.highConfidence||0, data.mediumConfidence||0, data.lowConfidence||0], backgroundColor: ['#EF4444','#F59E0B','#22C55E'] }] },
                 options: { responsive: true, maintainAspectRatio: false }
             });
-            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('confidenceChart', confidenceChart, 'Similarity Score Distribution');
+            if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('confidenceChart', confidenceChart, 'Similarity Score Distribution');
         }
 
         // C4: Paginated cluster loading
@@ -1513,7 +1513,7 @@
                     renderClusters(data.clusters || []);
                     renderPagination('clustersPagination', page, data.pages || 1, loadClusters, data.total, 'clusters');
                     const hint = document.getElementById('layoutFilterHint');
-                    if (hint) hint.textContent = layout ? WalaPlusI18n.t('dyn.duplicates.filtered_in_layout', { n: _fn(data.total ?? 0), layout: layout }) : '';
+                    if (hint) hint.textContent = layout ? ExampleOrgI18n.t('dyn.duplicates.filtered_in_layout', { n: _fn(data.total ?? 0), layout: layout }) : '';
                     window._loadedTabs.add('clusters');
                     return;
                 } catch (e) {
@@ -1636,15 +1636,15 @@
                         <span class="confidence-${['high','medium','low'].includes(c.confidence_level)?c.confidence_level:'low'} px-2 py-1 rounded text-xs font-medium">${c.confidence_score}%</span>
                     </div>
                     <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.leads'))}</span> <span class="font-medium text-amber-600">${_fn(c.total_leads)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.deals'))}</span> <span class="font-medium text-red-600">${_fn(c.total_deals)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.contacts'))}</span> <span class="font-medium text-teal-600">${_fn(c.total_contacts||0)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.accounts'))}</span> <span class="font-medium text-indigo-600">${_fn(c.total_accounts||0)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.status_kw'))}</span> <span class="font-medium capitalize">${escapeHtml(c.status)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.leads'))}</span> <span class="font-medium text-amber-600">${_fn(c.total_leads)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.deals'))}</span> <span class="font-medium text-red-600">${_fn(c.total_deals)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.contacts'))}</span> <span class="font-medium text-teal-600">${_fn(c.total_contacts||0)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.accounts'))}</span> <span class="font-medium text-indigo-600">${_fn(c.total_accounts||0)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.status_kw'))}</span> <span class="font-medium capitalize">${escapeHtml(c.status)}</span></div>
                         <div title="Pipeline inflation — sum of deal values for non-primary (duplicate) deals in this cluster. Not the cluster's total pipeline value."><span class="text-gray-500">Inflation:</span> <span class="font-medium">${formatCurrency(c.estimated_pipeline_value||0)}</span></div>
                     </div>
                 </div>
-            `).join('') || `<div class="col-span-3 text-center py-8 text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_clusters_found'))}</div>`;
+            `).join('') || `<div class="col-span-3 text-center py-8 text-gray-400">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.no_clusters_found'))}</div>`;
         }
 
         // Pagination renderer (rewritten 2026-05-30).
@@ -1714,7 +1714,7 @@
                 const prevBtn = document.createElement('button');
                 prevBtn.type = 'button';
                 prevBtn.className = btnClass;
-                prevBtn.textContent = WalaPlusI18n.t('dyn.common.prev_short');
+                prevBtn.textContent = ExampleOrgI18n.t('dyn.common.prev_short');
                 const prevPage = currentPage - 1;
                 prevBtn.addEventListener('click', () => {
                     try { callback(prevPage); }
@@ -1731,7 +1731,7 @@
             status.className = 'rr-pager-info';
             const parts = [];
             if (showButtons) {
-                parts.push(WalaPlusI18n.t('dyn.common.page_x_of_y', {
+                parts.push(ExampleOrgI18n.t('dyn.common.page_x_of_y', {
                     current: _fn(currentPage + 1),
                     total: _fn(totalPages),
                 }));
@@ -1753,7 +1753,7 @@
                 const nextBtn = document.createElement('button');
                 nextBtn.type = 'button';
                 nextBtn.className = btnClass;
-                nextBtn.textContent = WalaPlusI18n.t('dyn.common.next_short');
+                nextBtn.textContent = ExampleOrgI18n.t('dyn.common.next_short');
                 const nextPage = currentPage + 1;
                 nextBtn.addEventListener('click', () => {
                     try { callback(nextPage); }
@@ -2718,7 +2718,7 @@
         // Identity column: ★ primary, bold name, secondary line, tiny ↗ Zoho link.
         function _dupIdentityCell(r, moduleZoho, secondaryText, nameIsDup) {
             const star = r.is_primary
-                ? `<span class="text-yellow-500 me-1" title="${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))} — system-chosen master record for this cluster">★</span>`
+                ? `<span class="text-yellow-500 me-1" title="${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.primary'))} — system-chosen master record for this cluster">★</span>`
                 : '';
             const idStr = String(r.zoho_record_id || '');
             const isSynthetic = !idStr || idStr.startsWith('test_') || idStr.startsWith('LEAD_') || idStr.startsWith('DEAL_') || idStr.startsWith('CONTACT_') || idStr.startsWith('ACCOUNT_');
@@ -2759,7 +2759,7 @@
             // these 2 cells not just one"). "ExampleOrg Products" is a field NAME,
             // not a verdict — it holds a product name that can perfectly well be
             // WalaOne, so it is classified by CONTENT alongside "Products".
-            const wpp = raw['WalaPlus_Products'] != null ? raw['WalaPlus_Products'] : raw['ExampleOrg Products'];
+            const wpp = raw['ExampleOrg_Products'] != null ? raw['ExampleOrg_Products'] : raw['ExampleOrg Products'];
             const wppVals = collect(wpp).map(norm).filter(v => v && v !== '-');
             const vals = collect(raw.Products).concat(collect(raw.Product))
                 .map(norm).filter(Boolean).concat(wppVals);
@@ -2768,11 +2768,11 @@
             // and WalaBravo all count as ExampleOrg. WalaOne is the only WalaOne
             // signal. Tokens come from env via /api/duplicates/config so a new
             // ExampleOrg sub-product needs NO code change (env
-            // RADAR_WALAPLUS_PRODUCT_TOKENS / RADAR_WALAONE_PRODUCT_TOKENS); the
+            // RADAR_ExampleOrg_PRODUCT_TOKENS / RADAR_WALAONE_PRODUCT_TOKENS); the
             // built-in lists below are the fallback if the config hasn't loaded.
             const _cfg = window._radarProductConfig || {};
-            const WP_TOKENS = (_cfg.walaplusProductTokens && _cfg.walaplusProductTokens.length)
-                ? _cfg.walaplusProductTokens : ['ExampleOrg', 'walaoffer', 'walabravo'];
+            const WP_TOKENS = (_cfg.ExampleOrgProductTokens && _cfg.ExampleOrgProductTokens.length)
+                ? _cfg.ExampleOrgProductTokens : ['ExampleOrg', 'walaoffer', 'walabravo'];
             const WO_TOKENS = (_cfg.walaoneProductTokens && _cfg.walaoneProductTokens.length)
                 ? _cfg.walaoneProductTokens : ['walaone'];
             const hasWO = vals.some(v => WO_TOKENS.some(t => v.includes(t)));
@@ -2983,7 +2983,7 @@
                 // star + tiny Zoho-link icon. Single identity column instead
                 // of four separate ones (Zoho ID / Domain / Name / Company).
                 const star = r.is_primary
-                    ? `<span class="text-yellow-500 me-1" title="${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))} — system-chosen master record for this cluster">★</span>`
+                    ? `<span class="text-yellow-500 me-1" title="${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.primary'))} — system-chosen master record for this cluster">★</span>`
                     : '';
                 const zohoIconLink = r.zoho_record_id && !String(r.zoho_record_id).startsWith('test_') && !String(r.zoho_record_id).startsWith('LEAD_')
                     ? `<a href="<REDACTED_URL>" target="_blank" class="text-blue-500 hover:text-blue-700 ms-1 text-xs" title="Open in Zoho CRM (id ${escapeHtml(String(r.zoho_record_id))})" data-testid="link-zoho-${r.zoho_record_id}">↗</a>`
@@ -3482,7 +3482,7 @@
                         <button data-on-click="openOwnerOffboard" data-args='${escAttr(JSON.stringify([o.owner_name || '']))}' title="Offboard: review this owner's OPEN-pipeline deals grouped by stage, then bulk-close (Closed Lost / Old Data) or move them in Zoho." class="ms-2 px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800 hover:bg-red-200 align-middle">⚑ Offboard</button>
                     </td>
                 </tr>`;
-            }).join('') || rrEmptyRow(9, { glyph: '—', title: escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_owner_data')) });
+            }).join('') || rrEmptyRow(9, { glyph: '—', title: escapeHtml(ExampleOrgI18n.t('dyn.duplicates.no_owner_data')) });
             // Re-apply any active filter and refresh select-all/count chrome.
             filterOwnersTable();
             syncOwnersSelectionState();
@@ -4025,7 +4025,7 @@
                     <td class="px-6 py-3 text-sm">${l.detection_duration_ms ? _fn((l.detection_duration_ms / 1000).toFixed(1)) + 's' : '-'}</td>
                     <td class="px-6 py-3 text-sm"><span class="px-2 py-1 rounded text-xs ${statusClass}">${escapeHtml(safeStatus)}</span></td>
                 </tr>`;
-            }).join('') || rrEmptyRow(7, { glyph: '📄', title: escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_scan_logs')) });
+            }).join('') || rrEmptyRow(7, { glyph: '📄', title: escapeHtml(ExampleOrgI18n.t('dyn.duplicates.no_scan_logs')) });
         }
 
         // Agent Activity Log — every AI Duplicate Resolution action from
@@ -4170,7 +4170,7 @@
         // D2: Enhanced cluster modal with side-by-side comparison + AI recommendations
         async function showClusterDetails(id) {
             document.getElementById('clusterModal').classList.remove('hidden');
-            document.getElementById('modalContent').innerHTML = `<div class="text-center py-8 text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.loading_dots'))}</div>`;
+            document.getElementById('modalContent').innerHTML = `<div class="text-center py-8 text-gray-400">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.loading_dots'))}</div>`;
 
             // Wrap the whole render in a try/catch so any downstream exception
             // (missing field on the API response, translation lookup miss, etc.)
@@ -4222,7 +4222,7 @@
                 ? ' · <span class="text-amber-600" title="Synthetic domain — built from phone or company-name match, not a real web domain">synthetic cluster</span>'
                 : '';
             document.getElementById('modalDomain').innerHTML =
-                `${escapeHtml(WalaPlusI18n.t('dyn.duplicates.domain_kw'))} ${escapeHtml(cluster.domain || '')} | ${escapeHtml(WalaPlusI18n.t('dyn.duplicates.score_kw'))} ${_fn(cluster.confidence_score || 0)}% | ${escapeHtml(WalaPlusI18n.t('dyn.duplicates.status_kw'))} ${escapeHtml(cluster.status || '')}` + syntheticNote;
+                `${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.domain_kw'))} ${escapeHtml(cluster.domain || '')} | ${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.score_kw'))} ${_fn(cluster.confidence_score || 0)}% | ${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.status_kw'))} ${escapeHtml(cluster.status || '')}` + syntheticNote;
 
             const recMap = {};
             (recommendations || []).forEach(r => { recMap[r.record_id] = r; });
@@ -4330,22 +4330,22 @@
                 .join('');
 
             let html = `<div class="mb-4 flex flex-wrap gap-2 items-center">
-                <span class="confidence-${['high','medium','low'].includes(cluster.confidence_level)?cluster.confidence_level:'low'} px-3 py-1 rounded-full text-sm font-medium">${WalaPlusI18n.t('dyn.duplicates.badge_match', { score: _fn(cluster.confidence_score) })}</span>
-                <span class="px-3 py-1 rounded-full text-sm bg-gray-100">${WalaPlusI18n.t('dyn.duplicates.badge_records', { n: _fn(records.length) })}</span>
+                <span class="confidence-${['high','medium','low'].includes(cluster.confidence_level)?cluster.confidence_level:'low'} px-3 py-1 rounded-full text-sm font-medium">${ExampleOrgI18n.t('dyn.duplicates.badge_match', { score: _fn(cluster.confidence_score) })}</span>
+                <span class="px-3 py-1 rounded-full text-sm bg-gray-100">${ExampleOrgI18n.t('dyn.duplicates.badge_records', { n: _fn(records.length) })}</span>
                 ${_typeChips}
-                <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">${WalaPlusI18n.t('dyn.duplicates.badge_inflation', { value: formatCurrency(cluster.estimated_pipeline_value||0) })}</span>
-                ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">${WalaPlusI18n.t('dyn.duplicates.badge_primary', { type: escapeHtml(primary_type) })}</span>` : ''}
+                <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">${ExampleOrgI18n.t('dyn.duplicates.badge_inflation', { value: formatCurrency(cluster.estimated_pipeline_value||0) })}</span>
+                ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">${ExampleOrgI18n.t('dyn.duplicates.badge_primary', { type: escapeHtml(primary_type) })}</span>` : ''}
                 ${is_cross_module ? `<span data-testid="badge-cross-module" class="px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-800 font-medium">Cross-module cluster (${(record_types||[]).map(t => escapeHtml(t)).join(' + ')})</span>` : ''}
             </div>`;
 
             if (is_cross_module) {
                 html += `<div data-testid="banner-cross-module" class="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900">
-                    <strong>${WalaPlusI18n.t('dyn.duplicates.cross_module_heads_up')}:</strong> ${WalaPlusI18n.t('dyn.duplicates.cross_module_no_cross_merge')}
-                    <strong>MERGE</strong>. ${WalaPlusI18n.t('dyn.duplicates.cross_module_cross_children')}
-                    <strong>LINK</strong> ${WalaPlusI18n.t('dyn.duplicates.cross_module_set_the')}
+                    <strong>${ExampleOrgI18n.t('dyn.duplicates.cross_module_heads_up')}:</strong> ${ExampleOrgI18n.t('dyn.duplicates.cross_module_no_cross_merge')}
+                    <strong>MERGE</strong>. ${ExampleOrgI18n.t('dyn.duplicates.cross_module_cross_children')}
+                    <strong>LINK</strong> ${ExampleOrgI18n.t('dyn.duplicates.cross_module_set_the')}
                     <code class="bg-amber-100 px-1 rounded">Account_Name</code> /
-                    <code class="bg-amber-100 px-1 rounded">Contact_Name</code> ${WalaPlusI18n.t('dyn.duplicates.cross_module_field_in_zoho')}
-                    ${WalaPlusI18n.t('dyn.duplicates.cross_module_lead_superseded')} <strong>CLOSED</strong> ${WalaPlusI18n.t('dyn.duplicates.cross_module_or_converted')}
+                    <code class="bg-amber-100 px-1 rounded">Contact_Name</code> ${ExampleOrgI18n.t('dyn.duplicates.cross_module_field_in_zoho')}
+                    ${ExampleOrgI18n.t('dyn.duplicates.cross_module_lead_superseded')} <strong>CLOSED</strong> ${ExampleOrgI18n.t('dyn.duplicates.cross_module_or_converted')}
                 </div>`;
             }
 
@@ -4378,37 +4378,37 @@
 
             // Side-by-side comparison table
             html += `<div id="clusterComparison" class="overflow-x-auto mb-6"><table class="min-w-full text-sm border"><thead class="bg-gray-50"><tr>
-                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500">${WalaPlusI18n.t('dyn.duplicates.col_field')}</th>`;
+                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500">${ExampleOrgI18n.t('dyn.duplicates.col_field')}</th>`;
             records.forEach((r, i) => {
-                html += `<th scope="col" data-rc-type="${escAttr(r.record_type || '')}" class="px-3 py-2 text-start text-xs font-medium text-gray-500 border-l">${r.is_primary ? '★ ' : ''}${WalaPlusI18n.t('dyn.duplicates.record_n_header', { n: _fn(i+1) })} (${escapeHtml(r.record_type)})</th>`;
+                html += `<th scope="col" data-rc-type="${escAttr(r.record_type || '')}" class="px-3 py-2 text-start text-xs font-medium text-gray-500 border-l">${r.is_primary ? '★ ' : ''}${ExampleOrgI18n.t('dyn.duplicates.record_n_header', { n: _fn(i+1) })} (${escapeHtml(r.record_type)})</th>`;
             });
             html += '</tr></thead><tbody>';
 
             const fields = [
-                { key: 'record_name', label: WalaPlusI18n.t('dyn.duplicates.field_name') },
-                { key: 'zoho_record_id', label: WalaPlusI18n.t('dyn.duplicates.field_zoho_id'), render: (v, r) => zohoLink(v, r.record_type === 'lead' ? 'Leads' : r.record_type === 'deal' ? 'Deals' : r.record_type === 'contact' ? 'Contacts' : 'Accounts') },
-                { key: 'company_name', label: WalaPlusI18n.t('dyn.duplicates.field_company') },
-                { key: 'email', label: WalaPlusI18n.t('dyn.duplicates.field_email') },
-                { key: 'phone', label: WalaPlusI18n.t('dyn.duplicates.field_phone') },
-                { key: 'mobile', label: WalaPlusI18n.t('dyn.duplicates.field_mobile') },
-                { key: 'owner_name', label: WalaPlusI18n.t('dyn.duplicates.field_owner') },
-                { key: 'status', label: WalaPlusI18n.t('dyn.duplicates.field_status') },
-                { key: 'stage', label: WalaPlusI18n.t('dyn.duplicates.field_stage') },
-                { key: 'deal_value', label: WalaPlusI18n.t('dyn.duplicates.field_value'), render: v => v ? formatCurrency(v) : '-' },
-                { key: 'source', label: WalaPlusI18n.t('dyn.duplicates.field_source') },
-                { key: 'layout_name', label: WalaPlusI18n.t('dyn.duplicates.field_layout') },
-                { key: 'zoho_module', label: WalaPlusI18n.t('dyn.duplicates.field_module') },
-                { key: 'pipeline', label: WalaPlusI18n.t('dyn.duplicates.field_pipeline') },
-                { key: 'contact_name', label: WalaPlusI18n.t('dyn.duplicates.field_contact') },
-                { key: 'account_name', label: WalaPlusI18n.t('dyn.duplicates.field_account') },
-                { key: 'cr_number', label: WalaPlusI18n.t('dyn.duplicates.field_cr_number') },
-                { key: 'vat_number', label: WalaPlusI18n.t('dyn.duplicates.field_vat_number') },
-                { key: 'website', label: WalaPlusI18n.t('dyn.duplicates.field_website') },
-                { key: 'country', label: WalaPlusI18n.t('dyn.duplicates.field_country') },
-                { key: 'industry', label: WalaPlusI18n.t('dyn.duplicates.field_industry') },
-                { key: 'title', label: WalaPlusI18n.t('dyn.duplicates.field_title') },
-                { key: 'created_date', label: WalaPlusI18n.t('dyn.duplicates.field_created'), render: v => formatDate(v) },
-                { key: 'modified_date', label: WalaPlusI18n.t('dyn.duplicates.field_modified'), render: v => formatDate(v) },
+                { key: 'record_name', label: ExampleOrgI18n.t('dyn.duplicates.field_name') },
+                { key: 'zoho_record_id', label: ExampleOrgI18n.t('dyn.duplicates.field_zoho_id'), render: (v, r) => zohoLink(v, r.record_type === 'lead' ? 'Leads' : r.record_type === 'deal' ? 'Deals' : r.record_type === 'contact' ? 'Contacts' : 'Accounts') },
+                { key: 'company_name', label: ExampleOrgI18n.t('dyn.duplicates.field_company') },
+                { key: 'email', label: ExampleOrgI18n.t('dyn.duplicates.field_email') },
+                { key: 'phone', label: ExampleOrgI18n.t('dyn.duplicates.field_phone') },
+                { key: 'mobile', label: ExampleOrgI18n.t('dyn.duplicates.field_mobile') },
+                { key: 'owner_name', label: ExampleOrgI18n.t('dyn.duplicates.field_owner') },
+                { key: 'status', label: ExampleOrgI18n.t('dyn.duplicates.field_status') },
+                { key: 'stage', label: ExampleOrgI18n.t('dyn.duplicates.field_stage') },
+                { key: 'deal_value', label: ExampleOrgI18n.t('dyn.duplicates.field_value'), render: v => v ? formatCurrency(v) : '-' },
+                { key: 'source', label: ExampleOrgI18n.t('dyn.duplicates.field_source') },
+                { key: 'layout_name', label: ExampleOrgI18n.t('dyn.duplicates.field_layout') },
+                { key: 'zoho_module', label: ExampleOrgI18n.t('dyn.duplicates.field_module') },
+                { key: 'pipeline', label: ExampleOrgI18n.t('dyn.duplicates.field_pipeline') },
+                { key: 'contact_name', label: ExampleOrgI18n.t('dyn.duplicates.field_contact') },
+                { key: 'account_name', label: ExampleOrgI18n.t('dyn.duplicates.field_account') },
+                { key: 'cr_number', label: ExampleOrgI18n.t('dyn.duplicates.field_cr_number') },
+                { key: 'vat_number', label: ExampleOrgI18n.t('dyn.duplicates.field_vat_number') },
+                { key: 'website', label: ExampleOrgI18n.t('dyn.duplicates.field_website') },
+                { key: 'country', label: ExampleOrgI18n.t('dyn.duplicates.field_country') },
+                { key: 'industry', label: ExampleOrgI18n.t('dyn.duplicates.field_industry') },
+                { key: 'title', label: ExampleOrgI18n.t('dyn.duplicates.field_title') },
+                { key: 'created_date', label: ExampleOrgI18n.t('dyn.duplicates.field_created'), render: v => formatDate(v) },
+                { key: 'modified_date', label: ExampleOrgI18n.t('dyn.duplicates.field_modified'), render: v => formatDate(v) },
             ];
 
             fields.forEach(f => {
@@ -4421,7 +4421,7 @@
             });
 
             // AI recommendation row
-            html += `<tr class="border-t bg-blue-50"><td class="px-3 py-2 font-medium text-blue-700">${WalaPlusI18n.t('dyn.duplicates.ai_recommendation')}</td>`;
+            html += `<tr class="border-t bg-blue-50"><td class="px-3 py-2 font-medium text-blue-700">${ExampleOrgI18n.t('dyn.duplicates.ai_recommendation')}</td>`;
             records.forEach(r => {
                 const rec = recMap[r.id];
                 if (rec) {
@@ -4441,10 +4441,10 @@
             if (cluster.status === 'active') {
                 html += `<div class="border-t pt-4">
                     <div class="flex flex-wrap gap-3 mb-2">
-                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;ignore&quot;]" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">${WalaPlusI18n.t('dyn.duplicates.ignore_label')}</button>
+                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;ignore&quot;]" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">${ExampleOrgI18n.t('dyn.duplicates.ignore_label')}</button>
                     </div>
                     <p data-testid="text-post-merge-hint" class="text-xs text-gray-500 italic">
-                        ${WalaPlusI18n.t('dyn.duplicates.post_merge_hint')}
+                        ${ExampleOrgI18n.t('dyn.duplicates.post_merge_hint')}
                     </p>
                 </div>`;
             } else if (cluster.verification_state) {
@@ -4729,7 +4729,7 @@
                 `\n\nThis cannot be undone automatically (you'd have to re-scan or merge them back manually).`;
             if (!confirm(summary)) return;
 
-            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+            const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
             if (!adminKey) return;
 
             try {
@@ -5134,7 +5134,7 @@
                         method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify({ limit: 15 })
                     });
                     if (res.status === 401 || res.status === 403) {
-                        adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                        adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                         if (!adminKey) { render('Cancelled.', 'text-gray-500'); break; }
                         continue; // retry this pass with the key
                     }
@@ -6090,7 +6090,7 @@
                     j = body && body.job;
                 } catch (_) { /* transient network hiccup — keep polling */ }
                 if (!j) {
-                    panelEl.textContent = WalaPlusI18n.t('dyn.duplicates.mj_title') + ': ' + 'no job found.';
+                    panelEl.textContent = ExampleOrgI18n.t('dyn.duplicates.mj_title') + ': ' + 'no job found.';
                     return;
                 }
                 const total = j.total || 0;
@@ -6099,17 +6099,17 @@
                 const remaining = Math.max(0, total - tagged);
                 let line;
                 if (j.status === 'running' && j.stale) {
-                    line = '⚠ ' + WalaPlusI18n.t('dyn.duplicates.mj_stalled');
+                    line = '⚠ ' + ExampleOrgI18n.t('dyn.duplicates.mj_stalled');
                 } else if (j.status === 'running') {
-                    line = '⏳ ' + WalaPlusI18n.t('dyn.duplicates.mj_running') + ' — ' + tagged + ' / ' + total + ' · reparented ' + reparented + ' · ' + remaining + ' remaining…';
+                    line = '⏳ ' + ExampleOrgI18n.t('dyn.duplicates.mj_running') + ' — ' + tagged + ' / ' + total + ' · reparented ' + reparented + ' · ' + remaining + ' remaining…';
                 } else if (j.status === 'done') {
-                    line = '✓ ' + WalaPlusI18n.t('dyn.duplicates.mj_done') + ' — ' + tagged + ' / ' + total;
+                    line = '✓ ' + ExampleOrgI18n.t('dyn.duplicates.mj_done') + ' — ' + tagged + ' / ' + total;
                 } else if (j.status === 'partial') {
-                    line = '⚠ ' + WalaPlusI18n.t('dyn.duplicates.mj_partial') + ' — ' + (j.errors || 0) + ' error(s)';
+                    line = '⚠ ' + ExampleOrgI18n.t('dyn.duplicates.mj_partial') + ' — ' + (j.errors || 0) + ' error(s)';
                 } else {
-                    line = '✗ ' + WalaPlusI18n.t('dyn.duplicates.mj_failed');
+                    line = '✗ ' + ExampleOrgI18n.t('dyn.duplicates.mj_failed');
                 }
-                panelEl.innerHTML = '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.mj_title')) + '</div><div class="font-semibold">' + line + '</div>';
+                panelEl.innerHTML = '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.mj_title')) + '</div><div class="font-semibold">' + line + '</div>';
                 if (j.status !== 'running' || j.stale) return;
                 await new Promise(function (resolve) { setTimeout(resolve, 3000); });
             }
@@ -6468,7 +6468,7 @@
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (r2.status === 401 || r2.status === 403) {
-                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     r2 = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
                         method: 'POST', credentials: 'same-origin',
@@ -6507,7 +6507,7 @@
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
-                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } return; }
                     res = await fetch('/api/duplicates/verify-resolve-applied', {
                         method: 'POST', credentials: 'same-origin',
@@ -6544,7 +6544,7 @@
                     body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
-                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
                         method: 'POST', credentials: 'same-origin',
@@ -6582,7 +6582,7 @@
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
-                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
                         method: 'POST', credentials: 'same-origin',
@@ -6653,7 +6653,7 @@
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
-                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/bulk-resolve', {
                         method: 'POST', credentials: 'same-origin',
@@ -6684,7 +6684,7 @@
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
-                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/bulk-resolve', {
                         method: 'POST', credentials: 'same-origin',
@@ -6706,7 +6706,7 @@
         }
 
         async function resolveClusterAction(clusterId, action) {
-            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+            const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
             if (!adminKey) return;
             const res = await fetch(`/api/duplicates/clusters/${clusterId}/resolve`, {
                 method: 'POST',
@@ -6715,11 +6715,11 @@
             });
             const data = await res.json();
             if (data.success) {
-                rrToast(action === 'resolve' ? WalaPlusI18n.t('dyn.duplicates.cluster_resolved') : WalaPlusI18n.t('dyn.duplicates.cluster_ignored'));
+                rrToast(action === 'resolve' ? ExampleOrgI18n.t('dyn.duplicates.cluster_resolved') : ExampleOrgI18n.t('dyn.duplicates.cluster_ignored'));
                 closeModal();
                 refreshData();
             } else {
-                rrToast(data.error || WalaPlusI18n.t('dyn.duplicates.failed_action'));
+                rrToast(data.error || ExampleOrgI18n.t('dyn.duplicates.failed_action'));
             }
         }
 
@@ -6730,23 +6730,23 @@
         function openListModal(title, subtitle) {
             document.getElementById('listModalTitle').textContent = title;
             document.getElementById('listModalSubtitle').textContent = subtitle || '';
-            document.getElementById('listModalBody').innerHTML = `<div class="text-center text-gray-400 py-8">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.loading_dots'))}</div>`;
+            document.getElementById('listModalBody').innerHTML = `<div class="text-center text-gray-400 py-8">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.loading_dots'))}</div>`;
             document.getElementById('listModal').classList.remove('hidden');
         }
         function closeListModal() { document.getElementById('listModal').classList.add('hidden'); }
 
         function renderClusterListRows(clusters, opts = {}) {
             if (!clusters || clusters.length === 0) {
-                return `<p class="text-sm text-gray-400 text-center py-6">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_clusters_found_dot'))}</p>`;
+                return `<p class="text-sm text-gray-400 text-center py-6">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.no_clusters_found_dot'))}</p>`;
             }
             const showInflation = opts.showInflation !== false;
             const rows = clusters.map((c, i) => {
                 const name = c.company_name || c.company_name_arabic || c.domain || 'Unknown';
                 const moduleParts = [];
-                if (c.total_accounts) moduleParts.push(WalaPlusI18n.t('dyn.duplicates.acc_short', { n: _fn(c.total_accounts) }));
-                if (c.total_contacts) moduleParts.push(WalaPlusI18n.t('dyn.duplicates.con_short', { n: _fn(c.total_contacts) }));
-                if (c.total_deals) moduleParts.push(WalaPlusI18n.t('dyn.duplicates.deal_short', { n: _fn(c.total_deals) }));
-                if (c.total_leads) moduleParts.push(WalaPlusI18n.t('dyn.duplicates.lead_short', { n: _fn(c.total_leads) }));
+                if (c.total_accounts) moduleParts.push(ExampleOrgI18n.t('dyn.duplicates.acc_short', { n: _fn(c.total_accounts) }));
+                if (c.total_contacts) moduleParts.push(ExampleOrgI18n.t('dyn.duplicates.con_short', { n: _fn(c.total_contacts) }));
+                if (c.total_deals) moduleParts.push(ExampleOrgI18n.t('dyn.duplicates.deal_short', { n: _fn(c.total_deals) }));
+                if (c.total_leads) moduleParts.push(ExampleOrgI18n.t('dyn.duplicates.lead_short', { n: _fn(c.total_leads) }));
                 const breakdown = moduleParts.join(' · ');
                 const conf = c.confidence_score != null ? `${c.confidence_score}%` : '—';
                 const status = c.status || 'active';
@@ -6756,7 +6756,7 @@
                 return `<tr class="border-t hover:bg-gray-50 cursor-pointer" data-on-click="closeListModal,showClusterDetails" data-args="[[],[${c.id}]]" data-testid="row-list-cluster-${c.id}">
                     <td class="px-3 py-2 text-xs text-gray-400 text-end">${i + 1}</td>
                     <td class="px-3 py-2 text-sm font-medium text-gray-800">${escapeHtml(name)}<div class="text-xs text-gray-400">${escapeHtml(c.domain || '')}</div></td>
-                    <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))}${breakdown ? ` <span class="text-gray-400">(${escapeHtml(breakdown)})</span>` : ''}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))}${breakdown ? ` <span class="text-gray-400">(${escapeHtml(breakdown)})</span>` : ''}</td>
                     <td class="px-3 py-2 text-xs text-center"><span class="px-2 py-0.5 rounded ${statusClr}">${escapeHtml(status)}</span></td>
                     <td class="px-3 py-2 text-xs text-center font-semibold text-gray-700">${conf}</td>
                     ${showInflation ? `<td class="px-3 py-2 text-sm font-bold text-purple-600 text-end whitespace-nowrap">${formatCurrency(c.estimated_pipeline_value || 0)}</td>` : ''}
@@ -6764,57 +6764,57 @@
             }).join('');
             return `<div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr>
                 <th scope="col" class="px-3 py-2 text-end">#</th>
-                <th scope="col" class="px-3 py-2 text-start">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_cluster'))}</th>
-                <th scope="col" class="px-3 py-2 text-start">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_records'))}</th>
-                <th scope="col" class="px-3 py-2 text-center">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_status'))}</th>
-                <th scope="col" class="px-3 py-2 text-center">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_score'))}</th>
-                ${showInflation ? `<th scope="col" class="px-3 py-2 text-end">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_inflation'))}</th>` : ''}
+                <th scope="col" class="px-3 py-2 text-start">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.table_header_cluster'))}</th>
+                <th scope="col" class="px-3 py-2 text-start">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.table_header_records'))}</th>
+                <th scope="col" class="px-3 py-2 text-center">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.table_header_status'))}</th>
+                <th scope="col" class="px-3 py-2 text-center">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.table_header_score'))}</th>
+                ${showInflation ? `<th scope="col" class="px-3 py-2 text-end">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.table_header_inflation'))}</th>` : ''}
             </tr></thead><tbody>${rows}</tbody></table></div>`;
         }
 
         async function openInflationListModal() {
-            openListModal(WalaPlusI18n.t('dyn.duplicates.modal_inflation_title'), WalaPlusI18n.t('dyn.duplicates.modal_inflation_subtitle'));
+            openListModal(ExampleOrgI18n.t('dyn.duplicates.modal_inflation_title'), ExampleOrgI18n.t('dyn.duplicates.modal_inflation_subtitle'));
             try {
                 const res = await fetch('/api/duplicates/clusters-by-inflation?limit=500');
                 const data = await res.json();
                 const clusters = data.clusters || [];
                 const totalInflation = clusters.reduce((s, c) => s + parseFloat(c.estimated_pipeline_value || 0), 0);
-                document.getElementById('listModalSubtitle').textContent = WalaPlusI18n.t('dyn.duplicates.inflation_summary', { n: _fn(clusters.length), val: formatCurrency(totalInflation) });
+                document.getElementById('listModalSubtitle').textContent = ExampleOrgI18n.t('dyn.duplicates.inflation_summary', { n: _fn(clusters.length), val: formatCurrency(totalInflation) });
                 document.getElementById('listModalBody').innerHTML = renderClusterListRows(clusters, { showInflation: true });
             } catch (e) {
-                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
+                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
             }
         }
 
         async function openClustersBySignalModal(signal, label) {
-            openListModal(WalaPlusI18n.t('dyn.duplicates.modal_signal_title', { label: label }), WalaPlusI18n.t('dyn.duplicates.modal_signal_subtitle', { key: signal }));
+            openListModal(ExampleOrgI18n.t('dyn.duplicates.modal_signal_title', { label: label }), ExampleOrgI18n.t('dyn.duplicates.modal_signal_subtitle', { key: signal }));
             try {
                 const res = await fetch(`/api/duplicates/clusters-by-signal/${encodeURIComponent(signal)}?limit=500`);
                 const data = await res.json();
                 const clusters = data.clusters || [];
-                document.getElementById('listModalSubtitle').textContent = WalaPlusI18n.t('dyn.duplicates.signal_match_count', { n: _fn(clusters.length), label: label });
+                document.getElementById('listModalSubtitle').textContent = ExampleOrgI18n.t('dyn.duplicates.signal_match_count', { n: _fn(clusters.length), label: label });
                 document.getElementById('listModalBody').innerHTML = renderClusterListRows(clusters, { showInflation: true });
             } catch (e) {
-                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
+                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
             }
         }
 
         async function openSignalsListModal() {
             // Aggregate of every signal type with click-through to per-signal cluster lists.
-            openListModal(WalaPlusI18n.t('dyn.duplicates.modal_signals_title'), WalaPlusI18n.t('dyn.duplicates.modal_signals_subtitle'));
+            openListModal(ExampleOrgI18n.t('dyn.duplicates.modal_signals_title'), ExampleOrgI18n.t('dyn.duplicates.modal_signals_subtitle'));
             try {
                 const res = await fetch('/api/duplicates/summary');
                 const data = await res.json();
                 const signals = data.topSignals || {};
-                const labels = { exact_email: WalaPlusI18n.t('dyn.duplicates.signals.exact_email'), domain_match: WalaPlusI18n.t('dyn.duplicates.signals.domain_match'), phone_match: WalaPlusI18n.t('dyn.duplicates.signals.phone_match'), company_exact: WalaPlusI18n.t('dyn.duplicates.signals.company_exact'), company_fuzzy: WalaPlusI18n.t('dyn.duplicates.signals.company_fuzzy') };
+                const labels = { exact_email: ExampleOrgI18n.t('dyn.duplicates.signals.exact_email'), domain_match: ExampleOrgI18n.t('dyn.duplicates.signals.domain_match'), phone_match: ExampleOrgI18n.t('dyn.duplicates.signals.phone_match'), company_exact: ExampleOrgI18n.t('dyn.duplicates.signals.company_exact'), company_fuzzy: ExampleOrgI18n.t('dyn.duplicates.signals.company_fuzzy') };
                 const colors = { exact_email: 'bg-blue-100 text-blue-800', domain_match: 'bg-green-100 text-green-800', phone_match: 'bg-purple-100 text-purple-800', company_exact: 'bg-amber-100 text-amber-800', company_fuzzy: 'bg-orange-100 text-orange-800' };
                 const sorted = Object.entries(signals).sort((a, b) => b[1] - a[1]);
                 if (sorted.length === 0) {
-                    document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-gray-400 text-center py-6">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_signal_data_dot'))}</p>`;
+                    document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-gray-400 text-center py-6">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.no_signal_data_dot'))}</p>`;
                     return;
                 }
                 const total = sorted.reduce((s, [, n]) => s + n, 0);
-                document.getElementById('listModalSubtitle').textContent = WalaPlusI18n.t('dyn.duplicates.signal_summary', { n: _fn(sorted.length), total: _fn(total) });
+                document.getElementById('listModalSubtitle').textContent = ExampleOrgI18n.t('dyn.duplicates.signal_summary', { n: _fn(sorted.length), total: _fn(total) });
                 const rows = sorted.map(([key, count]) => {
                     const lbl = labels[key] || key;
                     const clr = colors[key] || 'bg-gray-100 text-gray-700';
@@ -6824,18 +6824,18 @@
                         <td class="px-3 py-2 text-xs text-gray-500"><code class="bg-gray-100 px-1 rounded">${escapeHtml(key)}</code></td>
                         <td class="px-3 py-2 text-sm text-end font-bold text-gray-700">${_fn(count)}</td>
                         <td class="px-3 py-2 text-xs text-end text-gray-500">${_fn(pct)}%</td>
-                        <td class="px-3 py-2 text-xs text-end text-blue-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.view_clusters'))}</td>
+                        <td class="px-3 py-2 text-xs text-end text-blue-600 font-medium">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.view_clusters'))}</td>
                     </tr>`;
                 }).join('');
                 document.getElementById('listModalBody').innerHTML = `<div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr>
-                    <th scope="col" class="px-3 py-2 text-start">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_signal'))}</th>
-                    <th scope="col" class="px-3 py-2 text-start">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_key'))}</th>
-                    <th scope="col" class="px-3 py-2 text-end">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_hits'))}</th>
-                    <th scope="col" class="px-3 py-2 text-end">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_share'))}</th>
+                    <th scope="col" class="px-3 py-2 text-start">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.table_header_signal'))}</th>
+                    <th scope="col" class="px-3 py-2 text-start">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.table_header_key'))}</th>
+                    <th scope="col" class="px-3 py-2 text-end">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.table_header_hits'))}</th>
+                    <th scope="col" class="px-3 py-2 text-end">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.table_header_share'))}</th>
                     <th scope="col" class="px-3 py-2 text-end"></th>
                 </tr></thead><tbody>${rows}</tbody></table></div>`;
             } catch (e) {
-                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
+                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
             }
         }
         // close on backdrop click
@@ -6876,12 +6876,12 @@
 
         // D1: Scan with progress bar
         async function scanZohoCRM() {
-            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key_scan'));
+            const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key_scan'));
             if (!adminKey) return;
 
             const btn = document.getElementById('scanZohoBtn');
             btn.disabled = true;
-            btn.textContent = WalaPlusI18n.t('dyn.duplicates.scanning');
+            btn.textContent = ExampleOrgI18n.t('dyn.duplicates.scanning');
 
             try {
                 const res = await fetch('/api/duplicates/scan-zoho', {
@@ -6900,22 +6900,22 @@
                 document.getElementById('scanProgressBar').classList.remove('hidden');
                 startScanPolling();
             } catch (e) {
-                rrToast(WalaPlusI18n.t('dyn.duplicates.error_starting_scan'));
+                rrToast(ExampleOrgI18n.t('dyn.duplicates.error_starting_scan'));
                 btn.disabled = false;
-                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 <REDACTED_PHONE> 4s8-1.79 8-4V7M4 7c0 <REDACTED_PHONE> 4s8-1.79 8-4M4 7c0-<REDACTED_PHONE>-4s8 1.79 8 4m0 5c0 <REDACTED_PHONE> 4s-8-1.79-8-4"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.scan_zoho_btn'));
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 <REDACTED_PHONE> 4s8-1.79 8-4V7M4 7c0 <REDACTED_PHONE> 4s8-1.79 8-4M4 7c0-<REDACTED_PHONE>-4s8 1.79 8 4m0 5c0 <REDACTED_PHONE> 4s-8-1.79-8-4"/></svg> ' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.scan_zoho_btn'));
             }
         }
 
         async function rebuildClusters() {
-            const confirmed = confirm(WalaPlusI18n.t('dyn.duplicates.rebuild_confirm_full'));
+            const confirmed = confirm(ExampleOrgI18n.t('dyn.duplicates.rebuild_confirm_full'));
             if (!confirmed) return;
 
-            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key_rebuild'));
+            const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key_rebuild'));
             if (!adminKey) return;
 
             const btn = document.getElementById('rebuildBtn');
             btn.disabled = true;
-            btn.textContent = WalaPlusI18n.t('dyn.duplicates.rebuild_starting');
+            btn.textContent = ExampleOrgI18n.t('dyn.duplicates.rebuild_starting');
 
             try {
                 const res = await fetch('/api/duplicates/rebuild', {
@@ -6924,19 +6924,19 @@
                 });
                 const data = await res.json();
                 if (!data.success) {
-                    rrToast(data.error || WalaPlusI18n.t('dyn.duplicates.failed_rebuild'));
+                    rrToast(data.error || ExampleOrgI18n.t('dyn.duplicates.failed_rebuild'));
                     btn.disabled = false;
-                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 <REDACTED_PHONE> 21H7.862a2 <REDACTED_PHONE>.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.rebuild_clusters_btn'));
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 <REDACTED_PHONE> 21H7.862a2 <REDACTED_PHONE>.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> ' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.rebuild_clusters_btn'));
                     return;
                 }
 
                 document.getElementById('scanProgressBar').classList.remove('hidden');
-                document.getElementById('scanProgressText').textContent = WalaPlusI18n.t('dyn.duplicates.tables_wiped');
+                document.getElementById('scanProgressText').textContent = ExampleOrgI18n.t('dyn.duplicates.tables_wiped');
                 startScanPolling();
             } catch (e) {
-                rrToast(WalaPlusI18n.t('dyn.duplicates.error_rebuild'));
+                rrToast(ExampleOrgI18n.t('dyn.duplicates.error_rebuild'));
                 btn.disabled = false;
-                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 <REDACTED_PHONE> 21H7.862a2 <REDACTED_PHONE>.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.rebuild_clusters_btn'));
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 <REDACTED_PHONE> 21H7.862a2 <REDACTED_PHONE>.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> ' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.rebuild_clusters_btn'));
             }
         }
 
@@ -7039,7 +7039,7 @@
                 const btn = document.getElementById('scanZohoBtn');
                 if (btn) {
                     btn.disabled = false;
-                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 <REDACTED_PHONE> 4s8-1.79 8-4V7M4 7c0 <REDACTED_PHONE> 4s8-1.79 8-4M4 7c0-<REDACTED_PHONE>-4s8 1.79 8 4m0 5c0 <REDACTED_PHONE> 4s-8-1.79-8-4"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.scan_zoho_btn'));
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 <REDACTED_PHONE> 4s8-1.79 8-4V7M4 7c0 <REDACTED_PHONE> 4s8-1.79 8-4M4 7c0-<REDACTED_PHONE>-4s8 1.79 8 4m0 5c0 <REDACTED_PHONE> 4s-8-1.79-8-4"/></svg> ' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.scan_zoho_btn'));
                 }
                 if (status === 'completed') refreshData();
             };
@@ -7334,7 +7334,7 @@
         function downloadOwnerPacket(anchor, event) {
             const owner = anchor && anchor.dataset ? (anchor.dataset.owner || 'owner') : 'owner';
             const safe = owner.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'owner';
-            const lang = (window.WalaPlusI18n && WalaPlusI18n.currentLang && WalaPlusI18n.currentLang()) || 'en';
+            const lang = (window.ExampleOrgI18n && ExampleOrgI18n.currentLang && ExampleOrgI18n.currentLang()) || 'en';
             const href = anchor.href + (anchor.href.includes('?') ? '&' : '?') + 'lang=' + encodeURIComponent(lang);
             return streamingDownloadFromEvent(event, href, { filename: `duplicate-radar-packet-${safe}.xlsx` });
         }
@@ -7354,7 +7354,7 @@
             };
 
             const hasValue = Object.values(params).some(v => v && v.trim());
-            if (!hasValue) { rrToast(WalaPlusI18n.t('dyn.duplicates.search_no_criteria')); return; }
+            if (!hasValue) { rrToast(ExampleOrgI18n.t('dyn.duplicates.search_no_criteria')); return; }
 
             const res = await fetch('/api/duplicates/search', {
                 method: 'POST',
@@ -7366,8 +7366,8 @@
             if (data.records?.length > 0) {
                 document.getElementById('searchResults').classList.remove('hidden');
                 document.getElementById('noSearchResults').classList.add('hidden');
-                document.getElementById('searchResultsCount').textContent = WalaPlusI18n.t('dyn.duplicates.search_results_count', { n: _fn(data.records.length) });
-                document.getElementById('searchClusterInfo').textContent = WalaPlusI18n.t('dyn.duplicates.search_clusters_count', { n: _fn(data.clusters?.length || 0) });
+                document.getElementById('searchResultsCount').textContent = ExampleOrgI18n.t('dyn.duplicates.search_results_count', { n: _fn(data.records.length) });
+                document.getElementById('searchClusterInfo').textContent = ExampleOrgI18n.t('dyn.duplicates.search_clusters_count', { n: _fn(data.clusters?.length || 0) });
 
                 // ── Cluster cards ───────────────────────────────────────
                 // Each card now carries:
@@ -7411,7 +7411,7 @@
                         +   (c.company_name && c.company_name !== c.domain ? '<div class="text-[11px] text-gray-500 mt-0.5">' + escapeHtml(c.company_name) + '</div>' : '')
                         +   '<div class="mt-2 flex flex-wrap items-center gap-1">' + _moduleChips(c) + '</div>'
                         +   '<div class="mt-2 flex items-center justify-between text-xs text-gray-500">'
-                        +     '<span>' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) })) + '</span>'
+                        +     '<span>' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) })) + '</span>'
                         +     '<span class="text-blue-600 font-medium">Open →</span>'
                         +   '</div>'
                         + '</div>'
@@ -8509,7 +8509,7 @@
         function erReasonBadge(reason) {
             const m = { orphaned: 'rr-amber', empty: 'rr-neutral', test: 'rr-warn', junk: 'rr-amber' };
             const cls = m[reason] || 'rr-neutral';
-            const lbl = WalaPlusI18n.t('duplicates.er_badge_' + (m[reason] ? reason : 'empty'));
+            const lbl = ExampleOrgI18n.t('duplicates.er_badge_' + (m[reason] ? reason : 'empty'));
             return '<span class="rr-badge ' + cls + (cls === 'rr-neutral' ? '' : ' rr-dot') + '">' + lbl + '</span>';
         }
         function erZohoUrl(kind, id) {
@@ -8543,7 +8543,7 @@
             // Deals have extra Stage + Created columns (7); accounts/contacts have 5.
             const COLS = kind === 'deals' ? 7 : 5;
             if (!rows.length) {
-                body.innerHTML = rrEmptyRow(COLS, { glyph: '✓', title: escapeHtml(WalaPlusI18n.t('duplicates.er_none')) });
+                body.innerHTML = rrEmptyRow(COLS, { glyph: '✓', title: escapeHtml(ExampleOrgI18n.t('duplicates.er_none')) });
                 // Clear any stale pager left from a previous (non-empty) render —
                 // otherwise "Showing 1–50 of 215 · Page 1/5" lingers under "None found".
                 const _t = body.closest('table');
@@ -8570,14 +8570,14 @@
                         // Label by reason: genuine test data → "test — ready" (red);
                         // a merely-empty record → "empty — ready" (neutral).
                         var _isTest = r.reason === 'test';
-                        var _lbl = WalaPlusI18n.t(_isTest ? 'duplicates.er_test_ready' : 'duplicates.er_empty_ready');
+                        var _lbl = ExampleOrgI18n.t(_isTest ? 'duplicates.er_test_ready' : 'duplicates.er_empty_ready');
                         action = '<span class="rr-badge ' + (_isTest ? 'rr-warn rr-dot' : 'rr-good rr-dot') + '">' + escapeHtml(_lbl) + '</span>';
                     } else {
                         // "Check documents" — live-verify this one record (no account/
                         // contact/docs) before it becomes delete-eligible. Same gate for
                         // Accounts and Deals.
                         var _kargs = escapeHtml(JSON.stringify([kind, String(r.zohoId)]));
-                        action = '<span id="eratt-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erCheckDocuments" data-args=\'' + _kargs + '\' class="rr-btn rr-btn-ghost">📎 ' + escapeHtml(WalaPlusI18n.t('duplicates.er_check_att')) + '</button></span>';
+                        action = '<span id="eratt-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erCheckDocuments" data-args=\'' + _kargs + '\' class="rr-btn rr-btn-ghost">📎 ' + escapeHtml(ExampleOrgI18n.t('duplicates.er_check_att')) + '</button></span>';
                     }
                 } else {
                     action = '';
@@ -8585,7 +8585,7 @@
                 // Per-row Dismiss — "this isn't empty, keep it" (false positive,
                 // e.g. a deal that actually has data). Removes it from the list
                 // durably without any Zoho write.
-                const dismissBtn = '<button data-on-click="erDismiss" data-args=\'' + escapeHtml(JSON.stringify([kind, String(r.zohoId)])) + '\' class="rr-btn rr-btn-ghost" title="Not empty — keep this record and remove it from the cleanup list">✕ ' + escapeHtml(WalaPlusI18n.t('duplicates.er_dismiss')) + '</button>';
+                const dismissBtn = '<button data-on-click="erDismiss" data-args=\'' + escapeHtml(JSON.stringify([kind, String(r.zohoId)])) + '\' class="rr-btn rr-btn-ghost" title="Not empty — keep this record and remove it from the cleanup list">✕ ' + escapeHtml(ExampleOrgI18n.t('duplicates.er_dismiss')) + '</button>';
                 // Stage column — Deals only. Protected stages (Agreement Signed /
                 // Paid) are highlighted so the operator sees at a glance a deal that
                 // should NEVER be tagged.
@@ -8685,11 +8685,11 @@
                     if (row) row.deleteEligible = true;
                     const cbx = document.getElementById('er-cb-' + kind + '-' + r.id);
                     if (cbx) cbx.disabled = false;
-                    if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">' + escapeHtml(WalaPlusI18n.t('duplicates.er_empty_ready')) + '</span>';
+                    if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">' + escapeHtml(ExampleOrgI18n.t('duplicates.er_empty_ready')) + '</span>';
                     ready++;
                 } else {
                     if (row) row.deleteEligible = false;
-                    if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">' + escapeHtml((r.reason || 'has data') + ' — ' + WalaPlusI18n.t('duplicates.er_keep')) + '</span>';
+                    if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">' + escapeHtml((r.reason || 'has data') + ' — ' + ExampleOrgI18n.t('duplicates.er_keep')) + '</span>';
                     kept++;
                 }
             });
@@ -8888,7 +8888,7 @@
             }
             const row = (window['_er_' + kind] || []).find(function (r) { return String(r.zohoId) === String(id); });
             if (data.empty) {
-                if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">' + escapeHtml(WalaPlusI18n.t('duplicates.er_empty_ready')) + '</span>';
+                if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">' + escapeHtml(ExampleOrgI18n.t('duplicates.er_empty_ready')) + '</span>';
                 const cb = document.getElementById('er-cb-' + kind + '-' + id);
                 if (cb) cb.disabled = false;
                 if (row) row.deleteEligible = true; // persists across page re-render
@@ -8896,11 +8896,11 @@
                 // Not empty — explain why and keep it (never let it become eligible).
                 var reasonMap = {
                     tagged: 'already tagged', protected_stage: 'active stage',
-                    deals: WalaPlusI18n.t('duplicates.er_deals'), contacts: WalaPlusI18n.t('duplicates.er_contacts'),
+                    deals: ExampleOrgI18n.t('duplicates.er_deals'), contacts: ExampleOrgI18n.t('duplicates.er_contacts'),
                     documents: '📎 docs', email: 'email', account: 'account', contact_info: 'has contact info'
                 };
                 var why = reasonMap[data.reason] || (data.reason || 'has data');
-                if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">' + escapeHtml(why + ' — ' + WalaPlusI18n.t('duplicates.er_keep')) + '</span>';
+                if (cell) cell.innerHTML = '<span class="text-xs text-gray-600">' + escapeHtml(why + ' — ' + ExampleOrgI18n.t('duplicates.er_keep')) + '</span>';
                 if (row) row.deleteEligible = false;
             }
         }
@@ -8918,7 +8918,7 @@
                 html += '<button data-on-click="erDoLinkDeal" data-args=\'' + escapeHtml(JSON.stringify([String(id), String(sug.accountId)])) + '\' class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">Link to ' + escapeHtml(sug.accountName || sug.accountId) + ' (' + (sug.confidence || 0) + '%)</button> ';
             }
             html += '<input id="erlinkacc-' + escapeHtml(String(id)) + '" placeholder="Account Zoho ID" class="px-2 py-1 text-xs border border-gray-300 rounded w-36">'
-                + '<button data-on-click="erDoLinkDealManual" data-args=\'' + escapeHtml(JSON.stringify([String(id)])) + '\' class="ml-1 px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">' + escapeHtml(WalaPlusI18n.t('duplicates.er_link')) + '</button>';
+                + '<button data-on-click="erDoLinkDealManual" data-args=\'' + escapeHtml(JSON.stringify([String(id)])) + '\' class="ml-1 px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">' + escapeHtml(ExampleOrgI18n.t('duplicates.er_link')) + '</button>';
             if (cell) cell.innerHTML = html;
         }
         function erDoLinkDealManual(id) {
@@ -8948,7 +8948,7 @@
                 if (adminKey) headers['x-admin-key'] = adminKey;
                 const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify(body) });
                 if (res.status === 401 || res.status === 403) {
-                    adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return null;
                     window._erAdminKey = adminKey;
                     continue;
@@ -9126,10 +9126,10 @@
                 const kind = kindMap[r.module] || 'accounts';
                 const link = '<a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.zohoId) + '</a>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 const statusChip = r.status === 'deleted'
-                    ? '<span class="rr-badge rr-good rr-dot">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_deleted')) + '</span>'
+                    ? '<span class="rr-badge rr-good rr-dot">' + escapeHtml(ExampleOrgI18n.t('duplicates.er_status_deleted')) + '</span>'
                     : r.status === 'dismissed'
                     ? '<span class="rr-badge rr-neutral" title="Delete tag was removed in Zoho — will NOT be deleted by admin">Dismissed</span>'
-                    : '<span class="rr-badge rr-amber rr-dot">' + escapeHtml(WalaPlusI18n.t('duplicates.er_status_pending')) + '</span>';
+                    : '<span class="rr-badge rr-amber rr-dot">' + escapeHtml(ExampleOrgI18n.t('duplicates.er_status_pending')) + '</span>';
                 const taggedAt = r.createdAt ? new Date(r.createdAt).toLocaleString() : '—';
                 // Pending rows get a manual Dismiss (local disposition — no Zoho write).
                 const statusCell = r.status === 'pending_delete'
@@ -10541,7 +10541,7 @@
                     body: JSON.stringify({ target_cluster_id: targetId, source_cluster_ids: sourceIds, notes: 'Same-domain cluster merge via Cluster Merge tab.' }),
                 });
                 if (res.status === 401 || res.status === 403) {
-                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/clusters/merge-into', {
                         method: 'POST', credentials: 'same-origin',
@@ -15250,8 +15250,8 @@
         // the dropdown or a chip click changes the value.
         function _syncSegmentChipFromDropdown() {
             const seg = document.getElementById('filterSegment')?.value || 'all';
-            const map = { all: 'segmentChipAll', marketplace: 'segmentChipMarketplace', ExampleOrg: 'segmentChipWalaplus', corporate: 'segmentChipWalaplus', walaone: 'segmentChipWalaone' };
-            ['segmentChipAll', 'segmentChipMarketplace', 'segmentChipWalaplus', 'segmentChipWalaone'].forEach(id => {
+            const map = { all: 'segmentChipAll', marketplace: 'segmentChipMarketplace', ExampleOrg: 'segmentChipExampleOrg', corporate: 'segmentChipExampleOrg', walaone: 'segmentChipWalaone' };
+            ['segmentChipAll', 'segmentChipMarketplace', 'segmentChipExampleOrg', 'segmentChipWalaone'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 if (id === map[seg]) {
@@ -15430,13 +15430,13 @@
             showTab('clusters');
             renderClusters(clusters);
             const pagEl = document.getElementById('clustersPagination');
-            if (pagEl) pagEl.innerHTML = `<span class="text-sm text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.showing_filtered', { shown: _fn(clusters.length), total: _fn(total) }))}</span>`;
+            if (pagEl) pagEl.innerHTML = `<span class="text-sm text-gray-500">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.showing_filtered', { shown: _fn(clusters.length), total: _fn(total) }))}</span>`;
         }
 
         function updateFilteredSummaryBadge(data) {
             const badge = document.getElementById('activeFilterCount');
             if (badge && data.totalClusters !== undefined) {
-                badge.textContent = WalaPlusI18n.t('dyn.duplicates.filter_count_with_clusters', { count: _fn(countActiveFilters()), total: _fn(data.totalClusters) });
+                badge.textContent = ExampleOrgI18n.t('dyn.duplicates.filter_count_with_clusters', { count: _fn(countActiveFilters()), total: _fn(data.totalClusters) });
                 badge.classList.remove('hidden');
             }
         }
@@ -15487,12 +15487,12 @@
             const now = Date.now();
             const diffMs = now - then;
             const mins = Math.floor(diffMs / 60000);
-            if (mins < 1) return WalaPlusI18n.t('dyn.duplicates.just_now');
-            if (mins < 60) return WalaPlusI18n.t('dyn.duplicates.mins_ago', { n: _fn(mins) });
+            if (mins < 1) return ExampleOrgI18n.t('dyn.duplicates.just_now');
+            if (mins < 60) return ExampleOrgI18n.t('dyn.duplicates.mins_ago', { n: _fn(mins) });
             const hours = Math.floor(mins / 60);
-            if (hours < 24) return WalaPlusI18n.t('dyn.duplicates.hours_ago', { n: _fn(hours) });
+            if (hours < 24) return ExampleOrgI18n.t('dyn.duplicates.hours_ago', { n: _fn(hours) });
             const days = Math.floor(hours / 24);
-            return WalaPlusI18n.t('dyn.duplicates.days_ago', { n: _fn(days) });
+            return ExampleOrgI18n.t('dyn.duplicates.days_ago', { n: _fn(days) });
         }
 
         async function loadSyncStatus() {
@@ -15507,7 +15507,7 @@
                 const statusColors = { completed: 'bg-green-100 text-green-700', syncing: 'bg-blue-100 text-blue-700 animate-pulse', failed: 'bg-red-100 text-red-700', idle: 'bg-gray-100 text-gray-600' };
                 chipsEl.innerHTML = states.map(s => {
                     const color = statusColors[s.sync_status] || statusColors.idle;
-                    return `<span class="px-2 py-1 rounded-full text-xs font-medium ${color}">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.sync_chip', { module: s.module, n: _fn(s.total_synced), status: s.sync_status }))}</span>`;
+                    return `<span class="px-2 py-1 rounded-full text-xs font-medium ${color}">${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.sync_chip', { module: s.module, n: _fn(s.total_synced), status: s.sync_status }))}</span>`;
                 }).join('');
 
                 const latestSync = states.filter(s => s.last_sync_at).sort((a, b) => new Date(b.last_sync_at) - new Date(a.last_sync_at))[0];
@@ -15515,7 +15515,7 @@
                     const ts = latestSync.last_sync_at;
                     const ageHours = (Date.now() - new Date(ts).getTime()) / 3600000;
                     const lastRunEl = document.getElementById('syncLastRun');
-                    lastRunEl.textContent = WalaPlusI18n.t('dyn.duplicates.last_synced', { ago: formatRelativeTime(ts), when: _fd(new Date(ts), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) });
+                    lastRunEl.textContent = ExampleOrgI18n.t('dyn.duplicates.last_synced', { ago: formatRelativeTime(ts), when: _fd(new Date(ts), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) });
                     const dot = document.getElementById('syncStatusDot');
                     const warn = document.getElementById('syncStaleWarning');
                     if (ageHours > 8) {
@@ -15616,7 +15616,7 @@
             const btn = document.getElementById('syncNowBtn');
             const originalHTML = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.<REDACTED_PHONE> 9m0 0H9m11 11v-5h-.581m0 0a8.<REDACTED_PHONE>-2m15.357 2H15"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.syncing'));
+            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.<REDACTED_PHONE> 9m0 0H9m11 11v-5h-.581m0 0a8.<REDACTED_PHONE>-2m15.357 2H15"/></svg> ' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.syncing'));
             try {
                 const doSync = (force) => fetch('/api/duplicates/scan-zoho', {
                     method: 'POST',
@@ -15644,7 +15644,7 @@
                 }
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
-                    rrToast(err.error || WalaPlusI18n.t('dyn.duplicates.sync_failed'));
+                    rrToast(err.error || ExampleOrgI18n.t('dyn.duplicates.sync_failed'));
                     btn.disabled = false;
                     btn.innerHTML = originalHTML;
                     return;
@@ -15666,7 +15666,7 @@
                 }, 2000);
                 setTimeout(() => { btn.disabled = false; btn.innerHTML = originalHTML; clearInterval(restoreBtn); }, 600000);
             } catch (e) {
-                rrToast(WalaPlusI18n.t('dyn.duplicates.sync_failed_msg', { msg: e.message || e }));
+                rrToast(ExampleOrgI18n.t('dyn.duplicates.sync_failed_msg', { msg: e.message || e }));
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
             }
@@ -15681,7 +15681,7 @@
                     const scanBtn = document.getElementById('scanZohoBtn');
                     if (scanBtn) {
                         scanBtn.disabled = true;
-                        scanBtn.textContent = WalaPlusI18n.t('dyn.duplicates.scanning');
+                        scanBtn.textContent = ExampleOrgI18n.t('dyn.duplicates.scanning');
                     }
                     startScanPolling();
                 }

@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -85,7 +85,7 @@
         <script src="/js/navigation.js?v=5.7"></script>
         <script>
             document.addEventListener("DOMContentLoaded", function () {
-                WalaPlusNav.init("grc");
+                ExampleOrgNav.init("grc");
             });
         </script>
 
@@ -281,9 +281,9 @@
                             if (titleEl) titleEl.textContent = d.next_audit.title;
                             if (dateEl) dateEl.textContent  = d.next_audit.planned_start
                                 ? new Date(d.next_audit.planned_start).toLocaleDateString()
-                                : (window.WalaPlusI18n ? window.WalaPlusI18n.t('grc.date_tbd') : 'Date TBD');
+                                : (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('grc.date_tbd') : 'Date TBD');
                         } else {
-                            if (titleEl) titleEl.textContent = window.WalaPlusI18n ? window.WalaPlusI18n.t('grc.none_scheduled') : 'None scheduled';
+                            if (titleEl) titleEl.textContent = window.ExampleOrgI18n ? window.ExampleOrgI18n.t('grc.none_scheduled') : 'None scheduled';
                             if (dateEl) dateEl.textContent  = '—';
                         }
                         if (activeEl) activeEl.textContent = d.certs_active ?? 0;
@@ -642,7 +642,7 @@
 
         <script>
             let moduleChart = null;
-            const _gt = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
+            const _gt = (k) => window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : k.split('.').pop();
             const _grcStatusLabel = (s) => {
                 switch (s) {
                     case 'completed': return _gt('grc.status_completed');
@@ -653,8 +653,8 @@
                 }
                 return s;
             };
-            const _gtd = (prefix, val) => window.WalaPlusI18n
-                ? window.WalaPlusI18n.tDynamic(prefix, val)
+            const _gtd = (prefix, val) => window.ExampleOrgI18n
+                ? window.ExampleOrgI18n.tDynamic(prefix, val)
                 : (val ? String(val) : '');
 
             // Safely set textContent on an element by id. If the element is
@@ -929,7 +929,7 @@
                     </div>
                     <div class="text-end">
                         <span class="text-xs px-2 py-1 rounded-full ${e.status === "completed" ? "bg-green-100 text-green-700" : e.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}">${_grcStatusLabel(e.status)}</span>
-                        <div class="text-xs text-gray-400 mt-1">${new Date(e.created_at).toLocaleString((window.WalaPlusI18n && window.WalaPlusI18n.currentLang && window.WalaPlusI18n.currentLang() === 'ar') ? 'ar-SA' : 'en-US')}</div>
+                        <div class="text-xs text-gray-400 mt-1">${new Date(e.created_at).toLocaleString((window.ExampleOrgI18n && window.ExampleOrgI18n.currentLang && window.ExampleOrgI18n.currentLang() === 'ar') ? 'ar-SA' : 'en-US')}</div>
                     </div>
                 </div>
             `,
@@ -1033,9 +1033,9 @@
             // Defer the data load until translations are ready so chart labels
             // and dynamic module/control-type names render in the correct
             // language on first paint (avoids an English flash before AR loads).
-            if (window.WalaPlusI18n) {
-                window.WalaPlusI18n.init().then(() => {
-                    window.WalaPlusI18n.applyToDOM();
+            if (window.ExampleOrgI18n) {
+                window.ExampleOrgI18n.init().then(() => {
+                    window.ExampleOrgI18n.applyToDOM();
                     refreshAll();
                 });
             } else {

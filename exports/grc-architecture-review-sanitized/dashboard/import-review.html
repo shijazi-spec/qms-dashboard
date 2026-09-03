@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -44,7 +44,7 @@
     <script src="/js/safe-actions.js?v=2"></script>
     <script src="/js/navigation.js?v=5.7"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function () { WalaPlusNav.init('compliance'); });
+        document.addEventListener('DOMContentLoaded', function () { ExampleOrgNav.init('compliance'); });
     </script>
 
     <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -116,7 +116,7 @@
     </main>
 
     <script>
-        function _ct(k, fb) { return (window.WalaPlusI18n && window.WalaPlusI18n.t) ? (window.WalaPlusI18n.t(k) || fb) : fb; }
+        function _ct(k, fb) { return (window.ExampleOrgI18n && window.ExampleOrgI18n.t) ? (window.ExampleOrgI18n.t(k) || fb) : fb; }
         function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
         let importId = null;
@@ -306,7 +306,7 @@
         });
     </script>
     <script>
-        if (window.WalaPlusI18n) { window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); }); }
+        if (window.ExampleOrgI18n) { window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); }); }
     </script>
 </body>
 </html>

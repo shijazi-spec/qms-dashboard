@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -38,7 +38,7 @@
     <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            WalaPlusNav.init('executive');
+            ExampleOrgNav.init('executive');
         });
     </script>
 
@@ -283,22 +283,22 @@
                 
                 const healthScore = Math.round((kpiScore * 0.4) + (riskScore * 0.4) + (80 * 0.2));
                 
-                document.getElementById('healthScore').textContent = (window.WalaPlusI18n ? window.WalaPlusI18n.formatNumber(healthScore) : String(healthScore));
+                document.getElementById('healthScore').textContent = (window.ExampleOrgI18n ? window.ExampleOrgI18n.formatNumber(healthScore) : String(healthScore));
                 const healthCard = document.getElementById('healthCard');
                 healthCard.className = 'rounded-xl shadow-lg p-6 text-white';
-                const _fmt = (n) => window.WalaPlusI18n ? window.WalaPlusI18n.formatNumber(n) : String(n);
+                const _fmt = (n) => window.ExampleOrgI18n ? window.ExampleOrgI18n.formatNumber(n) : String(n);
                 if (healthScore >= 80) {
                     healthCard.classList.add('health-excellent');
-                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.excellent');
+                    document.getElementById('healthLabel').textContent = ExampleOrgI18n.t('executive.health_labels.excellent');
                 } else if (healthScore >= 60) {
                     healthCard.classList.add('health-good');
-                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.good');
+                    document.getElementById('healthLabel').textContent = ExampleOrgI18n.t('executive.health_labels.good');
                 } else if (healthScore >= 40) {
                     healthCard.classList.add('health-warning');
-                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.warning');
+                    document.getElementById('healthLabel').textContent = ExampleOrgI18n.t('executive.health_labels.warning');
                 } else {
                     healthCard.classList.add('health-critical');
-                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.critical');
+                    document.getElementById('healthLabel').textContent = ExampleOrgI18n.t('executive.health_labels.critical');
                 }
                 
                 document.getElementById('kpiOnTarget').textContent = `${greenKPIs}/${totalKPIs}`;
@@ -327,7 +327,7 @@
                 setQHI('qhi-risk', riskScore);
                 setQHI('qhi-capa', capaRate);
                 setQHI('qhi-compliance', compliancePct);
-                document.getElementById('qhiTimestamp').textContent = (window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.updated') : 'Updated') + ': ' + new Date().toLocaleString();
+                document.getElementById('qhiTimestamp').textContent = (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('executive.updated') : 'Updated') + ': ' + new Date().toLocaleString();
 
                 renderCharts(kpiData, risks);
                 renderAIInsights(healthScore, kpiData, risks);
@@ -343,9 +343,9 @@
             if (charts.kpiOwner) charts.kpiOwner.destroy();
             if (charts.risk) charts.risk.destroy();
 
-            const _exTr = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
-            const _exTd = (prefix, val) => window.WalaPlusI18n
-                ? window.WalaPlusI18n.tDynamic(prefix, val)
+            const _exTr = (k) => window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : k.split('.').pop();
+            const _exTd = (prefix, val) => window.ExampleOrgI18n
+                ? window.ExampleOrgI18n.tDynamic(prefix, val)
                 : (val ? String(val).charAt(0).toUpperCase() + String(val).slice(1) : '');
             charts.kpiOwner = new Chart(document.getElementById('kpiOwnerChart'), {
                 type: 'bar',
@@ -359,7 +359,7 @@
                 },
                 options: { responsive: true, plugins: { legend: { display: false } } }
             });
-            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('kpiOwnerChart', charts.kpiOwner, 'KPI Status by Owner');
+            if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('kpiOwnerChart', charts.kpiOwner, 'KPI Status by Owner');
 
             charts.risk = new Chart(document.getElementById('riskChart'), {
                 type: 'doughnut',
@@ -373,7 +373,7 @@
                 },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
             });
-            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('riskChart', charts.risk, 'Risk Distribution');
+            if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('riskChart', charts.risk, 'Risk Distribution');
         }
 
         function renderAIInsights(healthScore, kpiData, risks) {
@@ -382,7 +382,7 @@
             
             const insights = [];
             
-            const _iT = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
+            const _iT = (k) => window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : k.split('.').pop();
             if (healthScore >= 80) {
                 insights.push(_iT('executive.health_insight_strong'));
             } else if (healthScore < 60) {
@@ -435,19 +435,19 @@
                 
                 const riskList = risks.risks || risks || [];
                 if (!riskList.length) {
-                    document.getElementById('topRisks').innerHTML = `<p class="text-gray-500 text-sm">${WalaPlusI18n.t('executive.no_open_risks')}</p>`;
+                    document.getElementById('topRisks').innerHTML = `<p class="text-gray-500 text-sm">${ExampleOrgI18n.t('executive.no_open_risks')}</p>`;
                     return;
                 }
                 
-                const _trDyn = (prefix, val) => window.WalaPlusI18n ? window.WalaPlusI18n.tDynamic(prefix, val) : (val ? String(val) : '');
+                const _trDyn = (prefix, val) => window.ExampleOrgI18n ? window.ExampleOrgI18n.tDynamic(prefix, val) : (val ? String(val) : '');
                 document.getElementById('topRisks').innerHTML = riskList.slice(0, 5).map(r => `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
                             <div class="font-medium text-gray-900">${escapeHtml(r.risk_title)}</div>
-                            <div class="text-xs text-gray-500">${_trDyn('executive.risk_categories', r.risk_category)} | ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.owner') : 'Owner'}: ${escapeHtml(r.risk_owner || (window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.unassigned') : 'Unassigned'))}</div>
+                            <div class="text-xs text-gray-500">${_trDyn('executive.risk_categories', r.risk_category)} | ${window.ExampleOrgI18n ? window.ExampleOrgI18n.t('executive.owner') : 'Owner'}: ${escapeHtml(r.risk_owner || (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('executive.unassigned') : 'Unassigned'))}</div>
                         </div>
                         <span class="px-2 py-1 rounded text-xs font-medium ${r.risk_level === 'critical' ? 'bg-red-100 text-red-700' : r.risk_level === 'high' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}">
-                            ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.score') : 'Score'}: ${r.risk_score}
+                            ${window.ExampleOrgI18n ? window.ExampleOrgI18n.t('executive.score') : 'Score'}: ${r.risk_score}
                         </span>
                     </div>
                 `).join('');
@@ -460,16 +460,16 @@
             const belowTarget = (kpiData.kpiDetails || []).filter(k => k.status === 'red' || k.status === 'amber');
             
             if (!belowTarget.length) {
-                document.getElementById('kpisBelow').innerHTML = `<p class="text-gray-500 text-sm">${WalaPlusI18n.t('executive.all_kpis_target')}</p>`;
+                document.getElementById('kpisBelow').innerHTML = `<p class="text-gray-500 text-sm">${ExampleOrgI18n.t('executive.all_kpis_target')}</p>`;
                 return;
             }
             
             document.getElementById('kpisBelow').innerHTML = belowTarget.slice(0, 5).map(k => {
-                const _owT = (key) => window.WalaPlusI18n ? window.WalaPlusI18n.t(key) : key.split('.').pop();
-                const _kbDyn = (prefix, val) => window.WalaPlusI18n ? window.WalaPlusI18n.tDynamic(prefix, val) : (val ? String(val) : '');
+                const _owT = (key) => window.ExampleOrgI18n ? window.ExampleOrgI18n.t(key) : key.split('.').pop();
+                const _kbDyn = (prefix, val) => window.ExampleOrgI18n ? window.ExampleOrgI18n.tDynamic(prefix, val) : (val ? String(val) : '');
                 const ownerLabel = k.owner_type === 'quality_manager' ? _owT('executive.owner_quality').split(' ')[0] : k.owner_type === 'grc_manager' ? _owT('executive.owner_grc').split(' ')[0] : _owT('executive.owner_shared');
-                const kpiNameLabel = window.WalaPlusI18n
-                    ? window.WalaPlusI18n.tDynamic('executive.kpi_names', k.kpi_code, { fallback: k.kpi_name })
+                const kpiNameLabel = window.ExampleOrgI18n
+                    ? window.ExampleOrgI18n.tDynamic('executive.kpi_names', k.kpi_code, { fallback: k.kpi_name })
                     : (k.kpi_name || '');
                 return `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -494,14 +494,14 @@
                 const reports = await res.json();
                 
                 if (!reports.length) {
-                    document.getElementById('reportsList').innerHTML = `<div class="p-8 text-center text-gray-500">${WalaPlusI18n.t('executive.no_reports_found')}</div>`;
+                    document.getElementById('reportsList').innerHTML = `<div class="p-8 text-center text-gray-500">${ExampleOrgI18n.t('executive.no_reports_found')}</div>`;
                     return;
                 }
                 
-                const _rpDyn = (prefix, val) => window.WalaPlusI18n
-                    ? window.WalaPlusI18n.tDynamic(prefix, val)
+                const _rpDyn = (prefix, val) => window.ExampleOrgI18n
+                    ? window.ExampleOrgI18n.tDynamic(prefix, val)
                     : (val ? String(val).toUpperCase() : '');
-                const _rpLocale = window.WalaPlusI18n ? window.WalaPlusI18n.currentLang() : 'en';
+                const _rpLocale = window.ExampleOrgI18n ? window.ExampleOrgI18n.currentLang() : 'en';
                 document.getElementById('reportsList').innerHTML = reports.map(r => `
                     <div class="p-4 hover:bg-gray-50">
                         <div class="flex justify-between items-start">
@@ -527,9 +527,9 @@
                 const data = await res.json();
                 
                 document.getElementById('kpiDetailList').innerHTML = (data.kpiDetails || []).map(k => {
-                    const _owT2 = (key) => window.WalaPlusI18n ? window.WalaPlusI18n.t(key) : key.split('.').pop();
-                    const _kdDyn = (prefix, val, fb) => window.WalaPlusI18n
-                        ? window.WalaPlusI18n.tDynamic(prefix, val, { fallback: fb })
+                    const _owT2 = (key) => window.ExampleOrgI18n ? window.ExampleOrgI18n.t(key) : key.split('.').pop();
+                    const _kdDyn = (prefix, val, fb) => window.ExampleOrgI18n
+                        ? window.ExampleOrgI18n.tDynamic(prefix, val, { fallback: fb })
                         : (val ? String(val) : (fb || ''));
                     const ownerLabel = k.owner_type === 'quality_manager' ? _owT2('executive.owner_quality').split(' ')[0] : k.owner_type === 'grc_manager' ? _owT2('executive.owner_grc').split(' ')[0] : _owT2('executive.owner_shared');
                     const statusColor = k.status === 'green' ? 'bg-green-500' : k.status === 'amber' ? 'bg-amber-500' : k.status === 'red' ? 'bg-red-500' : 'bg-gray-400';
@@ -545,7 +545,7 @@
                             </div>
                             <div class="text-end">
                                 <div class="font-bold text-gray-900">${k.latestValue !== null ? k.latestValue + (k.unit || '%') : '--'}</div>
-                                <div class="text-xs text-gray-500">${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.target') : 'Target'}: ${k.target_value || '--'}${k.unit || '%'}</div>
+                                <div class="text-xs text-gray-500">${window.ExampleOrgI18n ? window.ExampleOrgI18n.t('executive.target') : 'Target'}: ${k.target_value || '--'}${k.unit || '%'}</div>
                             </div>
                         </div>
                     `;
@@ -563,9 +563,9 @@
                 if (charts.riskCategory) charts.riskCategory.destroy();
                 
                 const byCategory = data.by_category || data.byCategory || [];
-                const _rdT = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
-                const _rdDyn = (prefix, val) => window.WalaPlusI18n
-                    ? window.WalaPlusI18n.tDynamic(prefix, val)
+                const _rdT = (k) => window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : k.split('.').pop();
+                const _rdDyn = (prefix, val) => window.ExampleOrgI18n
+                    ? window.ExampleOrgI18n.tDynamic(prefix, val)
                     : (val ? String(val) : '');
                 charts.riskCategory = new Chart(document.getElementById('riskCategoryChart'), {
                     type: 'bar',
@@ -579,7 +579,7 @@
                     },
                     options: { responsive: true, plugins: { legend: { display: false } } }
                 });
-                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('riskCategoryChart', charts.riskCategory, 'Risk by Category');
+                if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('riskCategoryChart', charts.riskCategory, 'Risk by Category');
             } catch (error) {
                 console.error('Error loading risk details:', error);
             }
@@ -659,8 +659,8 @@
                 const el = document.getElementById('hijri-date-display');
                 if (!el) return;
                 try {
-                    if (window.WalaPlusI18n && typeof window.WalaPlusI18n.formatDateBilingual === 'function') {
-                        const d = window.WalaPlusI18n.formatDateBilingual(new Date());
+                    if (window.ExampleOrgI18n && typeof window.ExampleOrgI18n.formatDateBilingual === 'function') {
+                        const d = window.ExampleOrgI18n.formatDateBilingual(new Date());
                         // formatDateBilingual returns { gregorian, hijri }
                         el.textContent = d.gregorian + (d.hijri ? ' / ' + d.hijri : '');
                     } else {
@@ -677,9 +677,9 @@
             // Defer dashboard data load until translations are ready so chart
             // labels and dynamic KPI/risk metric names render in the correct
             // language on first paint (avoids an English flash before AR loads).
-            if (window.WalaPlusI18n) {
-                window.WalaPlusI18n.init().then(() => {
-                    window.WalaPlusI18n.applyToDOM();
+            if (window.ExampleOrgI18n) {
+                window.ExampleOrgI18n.init().then(() => {
+                    window.ExampleOrgI18n.applyToDOM();
                     showHijriDate();
                     loadDashboard();
                 });

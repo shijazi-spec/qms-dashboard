@@ -1,8 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   // Dark mode is driven by a `.dark` class on the <html> element (not the
-  // OS media query). WalaPlusNav.applyTheme in dashboard/js/navigation.js
-  // adds/removes it based on localStorage("walaplus_theme"). Kept as a
+  // OS media query). ExampleOrgNav.applyTheme in dashboard/js/navigation.js
+  // adds/removes it based on localStorage("ExampleOrg_theme"). Kept as a
   // class so the operator can override the OS preference.
   darkMode: ["class"],
   content: [

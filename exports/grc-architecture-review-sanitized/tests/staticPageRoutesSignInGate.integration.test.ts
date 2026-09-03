@@ -38,7 +38,7 @@
  * HMAC-verified against `SESSION_SECRET`) and the `X-Admin-Key` header
  * (compared against `ADMIN_API_KEY`). Neither calls the database, so we
  * do not need to stand up `pg.Pool`. We mint a real signed
- * `walaplus_session` cookie using the same HMAC scheme as
+ * `ExampleOrg_session` cookie using the same HMAC scheme as
  * `signSession()` in `authRoutes.ts` so that `getSessionFromCookie` will
  * accept it as authentic.
  *
@@ -67,10 +67,10 @@ import { Hono, type Handler, type MiddlewareHandler } from "hono";
 import { globalMiddleware } from "../src/mastra/middleware/index";
 import { staticPageRoutes } from "../src/mastra/routes/staticPageRoutes";
 
-const SESSION_COOKIE_NAME = "walaplus_session";
+const SESSION_COOKIE_NAME = "ExampleOrg_session";
 
 // Mirror src/mastra/routes/authRoutes.ts → signSession() so we can mint a
-// cryptographically valid `walaplus_session` cookie without exporting it
+// cryptographically valid `ExampleOrg_session` cookie without exporting it
 // from the production module (which would widen its API surface).
 function signSession(payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");

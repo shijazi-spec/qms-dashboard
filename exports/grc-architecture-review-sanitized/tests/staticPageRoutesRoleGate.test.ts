@@ -79,10 +79,10 @@ const { buildHandler, makeContext } = await import("./_helpers/fakeContext");
 
 type UserRoleLike = string;
 
-const SESSION_COOKIE_NAME = "walaplus_session";
+const SESSION_COOKIE_NAME = "ExampleOrg_session";
 
 // Mirror src/mastra/routes/authRoutes.ts → signSession() so we can mint a
-// cryptographically valid `walaplus_session` cookie without exporting it
+// cryptographically valid `ExampleOrg_session` cookie without exporting it
 // from the production module (which would widen its API surface).
 function signSession(payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");

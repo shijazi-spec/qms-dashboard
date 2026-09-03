@@ -40,7 +40,7 @@ process.env.DATABASE_URL =
 import crypto from "crypto";
 import { gateApiRoute } from "../src/utils/rbacMiddleware";
 
-const SESSION_COOKIE_NAME = "walaplus_session";
+const SESSION_COOKIE_NAME = "ExampleOrg_session";
 
 let passed = 0;
 let failed = 0;

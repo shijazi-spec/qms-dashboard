@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -182,7 +182,7 @@
         <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            if (window.WalaPlusNav) WalaPlusNav.init('health');
+            if (window.ExampleOrgNav) ExampleOrgNav.init('health');
         });
     </script>
 
@@ -291,10 +291,10 @@
 
     <script>
         const STATUS_COLOR = {
-            healthy:  { card: 'linear-gradient(135deg, #047857, #10B981)', get label() { return WalaPlusI18n.t('dyn.health.status_healthy'); } },
-            degraded: { card: 'linear-gradient(135deg, #D97706, #F59E0B)', get label() { return WalaPlusI18n.t('dyn.health.status_degraded'); } },
-            critical: { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', get label() { return WalaPlusI18n.t('dyn.health.status_critical'); } },
-            down:     { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', get label() { return WalaPlusI18n.t('dyn.health.status_down'); } },
+            healthy:  { card: 'linear-gradient(135deg, #047857, #10B981)', get label() { return ExampleOrgI18n.t('dyn.health.status_healthy'); } },
+            degraded: { card: 'linear-gradient(135deg, #D97706, #F59E0B)', get label() { return ExampleOrgI18n.t('dyn.health.status_degraded'); } },
+            critical: { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', get label() { return ExampleOrgI18n.t('dyn.health.status_critical'); } },
+            down:     { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', get label() { return ExampleOrgI18n.t('dyn.health.status_down'); } },
         };
 
         // Same palette as the .dot-* classes — kept in sync so the inline
@@ -307,16 +307,16 @@
         };
 
         const CATEGORY_LABELS = {
-            get infrastructure() { return WalaPlusI18n.t('dyn.health.cat_infrastructure'); },
-            get audits() { return WalaPlusI18n.t('dyn.health.cat_audits'); },
-            get data() { return WalaPlusI18n.t('dyn.health.cat_data'); },
-            get integrations() { return WalaPlusI18n.t('dyn.health.cat_integrations'); },
-            get scheduler() { return WalaPlusI18n.t('dyn.health.cat_scheduler'); },
-            get endpoints() { return WalaPlusI18n.t('dyn.health.cat_endpoints'); },
-            get ai() { return WalaPlusI18n.t('dyn.health.cat_ai'); },
-            get duplicates() { return WalaPlusI18n.t('dyn.health.cat_duplicates'); },
-            get kpis() { return WalaPlusI18n.t('dyn.health.cat_kpis'); },
-            get other() { return WalaPlusI18n.t('dyn.health.cat_other'); },
+            get infrastructure() { return ExampleOrgI18n.t('dyn.health.cat_infrastructure'); },
+            get audits() { return ExampleOrgI18n.t('dyn.health.cat_audits'); },
+            get data() { return ExampleOrgI18n.t('dyn.health.cat_data'); },
+            get integrations() { return ExampleOrgI18n.t('dyn.health.cat_integrations'); },
+            get scheduler() { return ExampleOrgI18n.t('dyn.health.cat_scheduler'); },
+            get endpoints() { return ExampleOrgI18n.t('dyn.health.cat_endpoints'); },
+            get ai() { return ExampleOrgI18n.t('dyn.health.cat_ai'); },
+            get duplicates() { return ExampleOrgI18n.t('dyn.health.cat_duplicates'); },
+            get kpis() { return ExampleOrgI18n.t('dyn.health.cat_kpis'); },
+            get other() { return ExampleOrgI18n.t('dyn.health.cat_other'); },
         };
 
         // Window + threshold for the per-row "flapping" indicator. We
@@ -460,10 +460,10 @@
          */
         function renderCheckSparkline(checkId, history) {
             if (!Array.isArray(history) || history.length === 0) {
-                return '<div class="sparkline-empty" data-testid="sparkline-empty-' + escapeHtml(checkId) + '">' + WalaPlusI18n.t('dyn.health.sparkline_no_history') + '</div>';
+                return '<div class="sparkline-empty" data-testid="sparkline-empty-' + escapeHtml(checkId) + '">' + ExampleOrgI18n.t('dyn.health.sparkline_no_history') + '</div>';
             }
             if (history.length < 2) {
-                return '<div class="sparkline-empty" data-testid="sparkline-single-' + escapeHtml(checkId) + '">' + WalaPlusI18n.t('dyn.health.sparkline_one_run') + '</div>';
+                return '<div class="sparkline-empty" data-testid="sparkline-single-' + escapeHtml(checkId) + '">' + ExampleOrgI18n.t('dyn.health.sparkline_one_run') + '</div>';
             }
             const barWidth = 6;
             const barGap = 2;
@@ -479,8 +479,8 @@
                     + '<title>' + escapeHtml(tip) + '</title>'
                     + '</rect>';
             }).join('');
-            const labelText = WalaPlusI18n.t('dyn.health.sparkline_label', { count: total });
-            const ariaLabel = WalaPlusI18n.t('dyn.health.sparkline_aria', { count: total, id: checkId });
+            const labelText = ExampleOrgI18n.t('dyn.health.sparkline_label', { count: total });
+            const ariaLabel = ExampleOrgI18n.t('dyn.health.sparkline_aria', { count: total, id: checkId });
             return '<div class="sparkline-row" data-testid="sparkline-row-' + escapeHtml(checkId) + '">'
                 + '<span class="sparkline-label">' + escapeHtml(labelText) + '</span>'
                 + '<svg class="sparkline-svg" viewBox="0 0 ' + width + ' ' + barHeight + '" '
@@ -518,7 +518,7 @@
                     + '<title>' + escapeHtml(tip) + '</title>'
                     + '</rect>';
             }).join('');
-            const ariaLabel = WalaPlusI18n.t('dyn.health.sparkline_mini_aria', { count: total, id: checkId });
+            const ariaLabel = ExampleOrgI18n.t('dyn.health.sparkline_mini_aria', { count: total, id: checkId });
             return '<svg class="sparkline-mini" viewBox="0 0 ' + width + ' ' + barHeight + '" '
                 + 'width="' + width + '" height="' + barHeight + '" '
                 + 'role="img" aria-label="' + escapeHtml(ariaLabel) + '" '
@@ -553,8 +553,8 @@
 
             const titleParams = { fail: failing.length, warn: warning.length };
             titleEl.textContent = hasFail
-                ? WalaPlusI18n.t('dyn.health.alert_failing_title', titleParams)
-                : WalaPlusI18n.t('dyn.health.alert_warning_title', titleParams);
+                ? ExampleOrgI18n.t('dyn.health.alert_failing_title', titleParams)
+                : ExampleOrgI18n.t('dyn.health.alert_warning_title', titleParams);
 
             const items = [...failing, ...warning].map(c => {
                 const badgeClass = 'badge badge-' + c.status;
@@ -578,12 +578,12 @@
             const meta = STATUS_COLOR[status] || STATUS_COLOR.healthy;
             el('overall-card').style.background = meta.card;
             el('overall-status').textContent = meta.label;
-            el('overall-time').textContent = WalaPlusI18n.t('dyn.health.last_run_prefix') + fmtRelative(latest.run_at) + ' · ' + latest.duration_ms + 'ms';
+            el('overall-time').textContent = ExampleOrgI18n.t('dyn.health.last_run_prefix') + fmtRelative(latest.run_at) + ' · ' + latest.duration_ms + 'ms';
 
             el('count-pass').textContent = latest.pass_count ?? 0;
             el('count-warn').textContent = latest.warn_count ?? 0;
             el('count-fail').textContent = latest.fail_count ?? 0;
-            el('count-skipped').textContent = (latest.skipped_count ?? 0) + ' ' + WalaPlusI18n.t('dyn.health.label_skipped');
+            el('count-skipped').textContent = (latest.skipped_count ?? 0) + ' ' + ExampleOrgI18n.t('dyn.health.label_skipped');
 
             // Alert banner ignores the active filter so failing/warning checks
             // are never hidden when an admin is focused on one category.
@@ -594,11 +594,11 @@
 
         function statusFilterLabel(status) {
             switch (status) {
-                case 'all': return WalaPlusI18n.t('dyn.health.filter_status_all');
-                case 'fail': return WalaPlusI18n.t('dyn.health.filter_status_fail');
-                case 'warn': return WalaPlusI18n.t('dyn.health.filter_status_warn');
-                case 'pass': return WalaPlusI18n.t('dyn.health.filter_status_pass');
-                case 'skipped': return WalaPlusI18n.t('dyn.health.filter_status_skipped');
+                case 'all': return ExampleOrgI18n.t('dyn.health.filter_status_all');
+                case 'fail': return ExampleOrgI18n.t('dyn.health.filter_status_fail');
+                case 'warn': return ExampleOrgI18n.t('dyn.health.filter_status_warn');
+                case 'pass': return ExampleOrgI18n.t('dyn.health.filter_status_pass');
+                case 'skipped': return ExampleOrgI18n.t('dyn.health.filter_status_skipped');
                 default: return status;
             }
         }
@@ -668,7 +668,7 @@
                     const checkHistory = lastPerCheckHistory[c.id];
                     const sparkline = renderCheckSparkline(c.id, checkHistory);
                     const miniSparkline = renderMiniSparkline(c.id, checkHistory);
-                    const rowCopyAria = WalaPlusI18n.t('dyn.health.copy_check_link_aria', { id: c.id });
+                    const rowCopyAria = ExampleOrgI18n.t('dyn.health.copy_check_link_aria', { id: c.id });
                     // Flapping badge: amber pill rendered next to the
                     // check label when recent history shows churn beyond
                     // FLAP_THRESHOLD. Uses the same per-check history
@@ -677,13 +677,13 @@
                     const flapCount = computeFlapCount(checkHistory, FLAP_WINDOW);
                     const flapBadge = flapCount >= FLAP_THRESHOLD
                         ? '<span class="badge-flapping" role="status"'
-                            + ' title="' + escapeHtml(WalaPlusI18n.t('dyn.health.flapping_tooltip', { flips: flapCount, window: FLAP_WINDOW })) + '"'
-                            + ' aria-label="' + escapeHtml(WalaPlusI18n.t('dyn.health.flapping_aria', { flips: flapCount, window: FLAP_WINDOW })) + '"'
+                            + ' title="' + escapeHtml(ExampleOrgI18n.t('dyn.health.flapping_tooltip', { flips: flapCount, window: FLAP_WINDOW })) + '"'
+                            + ' aria-label="' + escapeHtml(ExampleOrgI18n.t('dyn.health.flapping_aria', { flips: flapCount, window: FLAP_WINDOW })) + '"'
                             + ' data-testid="badge-flapping-' + escapeHtml(c.id) + '">'
                             + '<svg viewBox="0 0 12 12" fill="none" xmlns="<REDACTED_URL>" aria-hidden="true">'
                             + '<path d="M2 4 L5 7 L8 3 L10 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>'
                             + '</svg>'
-                            + '<span>' + escapeHtml(WalaPlusI18n.t('dyn.health.flapping_badge')) + '</span>'
+                            + '<span>' + escapeHtml(ExampleOrgI18n.t('dyn.health.flapping_badge')) + '</span>'
                             + '</span>'
                         : '';
                     return `
@@ -703,7 +703,7 @@
                                 <button type="button" class="row-copy-link-btn"
                                     data-check-copy="${escapeHtml(c.id)}"
                                     aria-label="${escapeHtml(rowCopyAria)}"
-                                    title="${escapeHtml(WalaPlusI18n.t('dyn.health.copy_check_link'))}"
+                                    title="${escapeHtml(ExampleOrgI18n.t('dyn.health.copy_check_link'))}"
                                     data-testid="button-copy-check-link-${escapeHtml(c.id)}">
                                     <svg viewBox="0 0 16 16" fill="none" xmlns="<REDACTED_URL>" aria-hidden="true">
                                         <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
@@ -738,9 +738,9 @@
                 // reset, so operators don't mistake this for a broken pulse.
                 const statusLabel = statusFilterLabel(selectedStatus);
                 const categoryName = selectedCategory === 'all'
-                    ? WalaPlusI18n.t('dyn.health.filter_all')
+                    ? ExampleOrgI18n.t('dyn.health.filter_all')
                     : categoryLabel(selectedCategory);
-                const msg = WalaPlusI18n.t('dyn.health.no_matching_checks', {
+                const msg = ExampleOrgI18n.t('dyn.health.no_matching_checks', {
                     status: statusLabel,
                     category: categoryName,
                 });
@@ -748,11 +748,11 @@
                     + '<div>' + escapeHtml(msg) + '</div>'
                     + '<button type="button" class="mt-3 text-sm font-medium text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"'
                     + ' data-testid="button-clear-filters">'
-                    + escapeHtml(WalaPlusI18n.t('dyn.health.clear_filters'))
+                    + escapeHtml(ExampleOrgI18n.t('dyn.health.clear_filters'))
                     + '</button>'
                     + '</div>';
             } else {
-                placeholder = '<div class="px-6 py-8 text-center text-gray-500 text-sm" data-testid="text-no-matching-checks">' + WalaPlusI18n.t('dyn.health.no_checks') + '</div>';
+                placeholder = '<div class="px-6 py-8 text-center text-gray-500 text-sm" data-testid="text-no-matching-checks">' + ExampleOrgI18n.t('dyn.health.no_checks') + '</div>';
             }
             el('checks-list').innerHTML = html || placeholder;
             if (!html && filtersActive && allChecks.length > 0) {
@@ -805,9 +805,9 @@
             catChips.push(
                 '<button type="button" class="filter-chip" data-filter="category" data-value="all"'
                 + ' aria-pressed="' + allActive + '"'
-                + ' aria-label="' + escapeHtml(WalaPlusI18n.t('dyn.health.filter_all_aria')) + '"'
+                + ' aria-label="' + escapeHtml(ExampleOrgI18n.t('dyn.health.filter_all_aria')) + '"'
                 + ' data-testid="chip-filter-all">'
-                + '<span>' + escapeHtml(WalaPlusI18n.t('dyn.health.filter_all')) + '</span>'
+                + '<span>' + escapeHtml(ExampleOrgI18n.t('dyn.health.filter_all')) + '</span>'
                 + '<span class="filter-chip-count">' + categoryTotal + '</span>'
                 + '</button>'
             );
@@ -817,7 +817,7 @@
                 catChips.push(
                     '<button type="button" class="filter-chip" data-filter="category" data-value="' + escapeHtml(cat) + '"'
                     + ' aria-pressed="' + active + '"'
-                    + ' aria-label="' + escapeHtml(WalaPlusI18n.t('dyn.health.filter_aria', { category: label })) + '"'
+                    + ' aria-label="' + escapeHtml(ExampleOrgI18n.t('dyn.health.filter_aria', { category: label })) + '"'
                     + ' data-testid="chip-filter-' + escapeHtml(cat) + '">'
                     + '<span>' + escapeHtml(label) + '</span>'
                     + '<span class="filter-chip-count">' + (categoryCounts[cat] || 0) + '</span>'
@@ -831,8 +831,8 @@
                 const active = selectedStatus === status;
                 const label = statusFilterLabel(status);
                 const ariaLabel = status === 'all'
-                    ? WalaPlusI18n.t('dyn.health.filter_status_all_aria')
-                    : WalaPlusI18n.t('dyn.health.filter_status_aria', { status: label });
+                    ? ExampleOrgI18n.t('dyn.health.filter_status_all_aria')
+                    : ExampleOrgI18n.t('dyn.health.filter_status_aria', { status: label });
                 statusChips.push(
                     '<button type="button" class="filter-chip" data-filter="status" data-value="' + escapeHtml(status) + '"'
                     + ' aria-pressed="' + active + '"'
@@ -856,7 +856,7 @@
                 ? '<div class="copy-link-row" data-testid="row-copy-filtered-link">'
                     + '<button type="button" class="copy-link-btn"'
                     + ' data-testid="button-copy-filtered-link"'
-                    + ' aria-label="' + escapeHtml(WalaPlusI18n.t('dyn.health.copy_link_aria')) + '">'
+                    + ' aria-label="' + escapeHtml(ExampleOrgI18n.t('dyn.health.copy_link_aria')) + '">'
                     + '<svg class="copy-link-icon" viewBox="0 0 16 16" fill="none"'
                     + ' xmlns="<REDACTED_URL>" aria-hidden="true">'
                     + '<rect x="4.5" y="4.5" width="8" height="8" rx="1.5"'
@@ -866,12 +866,12 @@
                     + ' stroke-linecap="round"/>'
                     + '</svg>'
                     + '<span data-testid="text-copy-filtered-link">'
-                    + escapeHtml(WalaPlusI18n.t('dyn.health.copy_link')) + '</span>'
+                    + escapeHtml(ExampleOrgI18n.t('dyn.health.copy_link')) + '</span>'
                     + '</button>'
                     + '<input type="text" readonly class="copy-link-url"'
                     + ' value="' + escapeHtml(currentUrl) + '"'
-                    + ' aria-label="' + escapeHtml(WalaPlusI18n.t('dyn.health.copy_link_url_aria')) + '"'
-                    + ' title="' + escapeHtml(WalaPlusI18n.t('dyn.health.copy_link_url_label')) + '"'
+                    + ' aria-label="' + escapeHtml(ExampleOrgI18n.t('dyn.health.copy_link_url_aria')) + '"'
+                    + ' title="' + escapeHtml(ExampleOrgI18n.t('dyn.health.copy_link_url_label')) + '"'
                     + ' data-testid="input-copy-filtered-link-url">'
                     + '<span class="copy-link-status" hidden role="status"'
                     + ' aria-live="polite"'
@@ -882,7 +882,7 @@
             container.innerHTML =
                 '<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"'
                 + ' id="checks-filter-label">'
-                + escapeHtml(WalaPlusI18n.t('dyn.health.filter_label')) + '</div>'
+                + escapeHtml(ExampleOrgI18n.t('dyn.health.filter_label')) + '</div>'
                 + '<div class="flex flex-wrap gap-2" role="toolbar"'
                 + ' aria-labelledby="checks-filter-label"'
                 + ' data-testid="toolbar-filter-category">'
@@ -890,7 +890,7 @@
                 + '</div>'
                 + '<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-3 mb-2"'
                 + ' id="checks-filter-status-label">'
-                + escapeHtml(WalaPlusI18n.t('dyn.health.filter_status_label')) + '</div>'
+                + escapeHtml(ExampleOrgI18n.t('dyn.health.filter_status_label')) + '</div>'
                 + '<div class="flex flex-wrap gap-2" role="toolbar"'
                 + ' aria-labelledby="checks-filter-status-label"'
                 + ' data-testid="toolbar-filter-status">'
@@ -957,7 +957,7 @@
             try {
                 if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
                     await navigator.clipboard.writeText(url);
-                    showStatus(WalaPlusI18n.t('dyn.health.copy_link_copied'), 'success');
+                    showStatus(ExampleOrgI18n.t('dyn.health.copy_link_copied'), 'success');
                     return;
                 }
             } catch (_) { /* fall through to legacy path */ }
@@ -976,11 +976,11 @@
                 const ok = document.execCommand('copy');
                 document.body.removeChild(ta);
                 if (ok) {
-                    showStatus(WalaPlusI18n.t('dyn.health.copy_link_copied'), 'success');
+                    showStatus(ExampleOrgI18n.t('dyn.health.copy_link_copied'), 'success');
                     return;
                 }
             } catch (_) { /* noop — fall through to error message */ }
-            showStatus(WalaPlusI18n.t('dyn.health.copy_link_failed'), 'error');
+            showStatus(ExampleOrgI18n.t('dyn.health.copy_link_failed'), 'error');
         }
 
         // Build a shareable URL for a single check, preserving the
@@ -1013,14 +1013,14 @@
                 if (prev) clearTimeout(prev);
                 rowCopyResetTimers.set(btn, setTimeout(() => {
                     delete btn.dataset.state;
-                    btn.setAttribute('title', WalaPlusI18n.t('dyn.health.copy_check_link'));
-                    btn.setAttribute('aria-label', WalaPlusI18n.t('dyn.health.copy_check_link_aria', { id: checkId }));
+                    btn.setAttribute('title', ExampleOrgI18n.t('dyn.health.copy_check_link'));
+                    btn.setAttribute('aria-label', ExampleOrgI18n.t('dyn.health.copy_check_link_aria', { id: checkId }));
                 }, 2500));
             };
             try {
                 if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
                     await navigator.clipboard.writeText(url);
-                    flash('copied', WalaPlusI18n.t('dyn.health.copy_check_link_copied'));
+                    flash('copied', ExampleOrgI18n.t('dyn.health.copy_check_link_copied'));
                     return;
                 }
             } catch (_) { /* fall through */ }
@@ -1035,11 +1035,11 @@
                 const ok = document.execCommand('copy');
                 document.body.removeChild(ta);
                 if (ok) {
-                    flash('copied', WalaPlusI18n.t('dyn.health.copy_check_link_copied'));
+                    flash('copied', ExampleOrgI18n.t('dyn.health.copy_check_link_copied'));
                     return;
                 }
             } catch (_) { /* noop */ }
-            flash('error', WalaPlusI18n.t('dyn.health.copy_check_link_failed'));
+            flash('error', ExampleOrgI18n.t('dyn.health.copy_check_link_failed'));
         }
 
         // Tracks whether we've already applied a ?check=<id> deep-link in
@@ -1091,7 +1091,7 @@
             const warnData = ordered.map(r => r.warn_count || 0);
             const failData = ordered.map(r => r.fail_count || 0);
 
-            el('history-meta').textContent = ordered.length === 1 ? '1 ' + WalaPlusI18n.t('dyn.health.label_run_singular') : ordered.length + ' ' + WalaPlusI18n.t('dyn.health.label_runs_plural');
+            el('history-meta').textContent = ordered.length === 1 ? '1 ' + ExampleOrgI18n.t('dyn.health.label_run_singular') : ordered.length + ' ' + ExampleOrgI18n.t('dyn.health.label_runs_plural');
 
             const ctx = el('historyChart').getContext('2d');
             if (historyChart) historyChart.destroy();
@@ -1100,9 +1100,9 @@
                 data: {
                     labels,
                     datasets: [
-                        { label: WalaPlusI18n.t('dyn.health.chart_pass'), data: passData, borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
-                        { label: WalaPlusI18n.t('dyn.health.chart_warn'), data: warnData, borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
-                        { label: WalaPlusI18n.t('dyn.health.chart_fail'), data: failData, borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: ExampleOrgI18n.t('dyn.health.chart_pass'), data: passData, borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: ExampleOrgI18n.t('dyn.health.chart_warn'), data: warnData, borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: ExampleOrgI18n.t('dyn.health.chart_fail'), data: failData, borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.3, pointRadius: 2 },
                     ]
                 },
                 options: {
@@ -1159,22 +1159,22 @@
             const btn = el('btn-run');
             const original = btn.textContent;
             btn.disabled = true;
-            btn.textContent = WalaPlusI18n.t('dyn.health.running');
+            btn.textContent = ExampleOrgI18n.t('dyn.health.running');
             btn.classList.add('pulse');
             try {
                 const res = await fetch('/api/health/pulse/run', { method: 'POST', credentials: 'include' });
                 if (res.status === 429) {
-                    alert(WalaPlusI18n.t('dyn.health.rate_limit_hit'));
+                    alert(ExampleOrgI18n.t('dyn.health.rate_limit_hit'));
                     return;
                 }
                 if (!res.ok) {
                     const text = await res.text();
-                    alert(WalaPlusI18n.t('dyn.health.run_failed', { msg: text.slice(0, 200) }));
+                    alert(ExampleOrgI18n.t('dyn.health.run_failed', { msg: text.slice(0, 200) }));
                     return;
                 }
                 await loadPulse();
             } catch (err) {
-                alert(WalaPlusI18n.t('dyn.health.run_failed', { msg: err.message || err }));
+                alert(ExampleOrgI18n.t('dyn.health.run_failed', { msg: err.message || err }));
             } finally {
                 btn.disabled = false;
                 btn.textContent = original;
@@ -1191,8 +1191,8 @@
         });
     </script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

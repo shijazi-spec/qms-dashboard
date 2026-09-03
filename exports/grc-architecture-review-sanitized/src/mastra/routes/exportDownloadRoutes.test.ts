@@ -11,7 +11,7 @@
  * ON CONFLICT DO UPDATE. This test:
  *
  *   1. Patches `pg.Pool.prototype.query` BEFORE importing the route module.
- *   2. Sets `SESSION_SECRET` and forges a signed walaplus_session cookie
+ *   2. Sets `SESSION_SECRET` and forges a signed ExampleOrg_session cookie
  *      with a non-zero userId so the session branch (not the admin-key
  *      short-circuit, which returns success without writing) is exercised.
  *   3. Drives the POST handler with deny-list keys (password_hash,
@@ -74,7 +74,7 @@ const { buildHandler, makeContext } = await import(
   "../../../tests/_helpers/fakeContext"
 );
 
-const SESSION_COOKIE_NAME = "walaplus_session";
+const SESSION_COOKIE_NAME = "ExampleOrg_session";
 function signSession(payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = crypto

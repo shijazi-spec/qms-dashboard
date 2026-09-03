@@ -17,6 +17,7 @@ This inventory contains architecture-review source only. Binary assets, runtime 
 CHANGELOG.md
 CONTRIBUTING.md
 README.md
+SANITIZATION_NOTICE.md
 collector/ExampleOrgDocCollector.ps1
 collector/Install-Tasks.ps1
 collector/Push-Now.cmd

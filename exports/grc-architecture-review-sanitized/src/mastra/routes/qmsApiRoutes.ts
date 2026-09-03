@@ -10,9 +10,9 @@ export const qmsApiRoutes = [
         try {
           if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
-          const { getQmsDashboardData } =
+          const { getExampleOrgData } =
             await import("../../utils/qmsDatabase");
-          const data = await getQmsDashboardData();
+          const data = await getExampleOrgData();
           return c.json(data);
         } catch (error) {
           logger.error("Error fetching ExampleOrg:", error);

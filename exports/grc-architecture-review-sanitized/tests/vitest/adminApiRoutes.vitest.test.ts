@@ -26,7 +26,7 @@ import {
 } from "../_helpers/fixtures";
 
 vi.mock("../../src/utils/governanceRules", () => ({
-  walaPlusSalesGovernanceRules: {
+  ExampleOrgSalesGovernanceRules: {
     document: { name: "ExampleOrg Sales Rules", version: "v1.1" },
   },
   qualityScorecardConfig: {

@@ -55,7 +55,7 @@ Coverage tiers:
 
 ```
 Scenario: Unauthenticated user is redirected to login
-  Given I have no walaplus_session cookie
+  Given I have no ExampleOrg_session cookie
   When I visit /risks
   Then I am redirected to /login
 
@@ -117,7 +117,7 @@ Test ID namespaces: `T-IA-*` (dashboard), `T-PROG-*` (programme), `T-INTK-*` (in
 1. Look up owner by Zoho User ID (from CRM record `Owner`).
 2. Match Zoho user's `full_name` against the seed (case-insensitive, whitespace-collapsed).
 3. Seed wins on `team`, `status`, `modules`. Zoho fills in any owner not yet on the seed (new hire path).
-4. Owners with seed `team = ""` are surfaced as `Unassigned` — flagged in `WALAPLUS_GAPS_AND_DATA_NEEDS.md §7.A`.
+4. Owners with seed `team = ""` are surfaced as `Unassigned` — flagged in `ExampleOrg_GAPS_AND_DATA_NEEDS.md §7.A`.
 
 **Roster snapshot (2026-04-18)**: 117 owners; 11 departments; 64 Active / 53 Inactive; 7 Unassigned (gap).
 
@@ -801,7 +801,7 @@ Two test layers run as part of every release:
 
 ### Layer 1 — API/route smoke matrix (~2 min)
 Script: `scripts/run-platform-tests.sh`
-Output: `WALAPLUS_TEST_REPORT.md`
+Output: `ExampleOrg_TEST_REPORT.md`
 
 What it covers: every dashboard route returns the expected status, every key API returns the expected shape, all 6 infographic sections render, Slack/Email validation paths reject bad input.
 

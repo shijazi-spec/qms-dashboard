@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -302,7 +302,7 @@
     <script src="/js/streaming-download.js?v=2.2.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            WalaPlusNav.init('duplicates');
+            ExampleOrgNav.init('duplicates');
         });
     </script>
 
@@ -491,7 +491,7 @@
             <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden text-sm">
                 <button type="button" data-on-click="setSegment" data-args="[&quot;all&quot;]" data-testid="segment-chip-all" id="segmentChipAll" class="segment-chip px-3 py-1 bg-blue-600 text-white font-medium" title="No filter — show every cluster regardless of layout. Default.">All</button>
                 <button type="button" data-on-click="setSegment" data-args="[&quot;marketplace&quot;]" data-testid="segment-chip-marketplace" id="segmentChipMarketplace" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="Only records on the Marketplace / Partner Accounts layouts (merchant / vendor B2B2C records).">Marketplace</button>
-                <button type="button" data-on-click="setSegment" data-args="[&quot;ExampleOrg&quot;]" data-testid="segment-chip-ExampleOrg" id="segmentChipWalaplus" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="ExampleOrg — corporate / direct B2B records that are NOT Marketplace and NOT WalaOne (records with no layout default here so legacy data isn't lost).">ExampleOrg</button>
+                <button type="button" data-on-click="setSegment" data-args="[&quot;ExampleOrg&quot;]" data-testid="segment-chip-ExampleOrg" id="segmentChipExampleOrg" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="ExampleOrg — corporate / direct B2B records that are NOT Marketplace and NOT WalaOne (records with no layout default here so legacy data isn't lost).">ExampleOrg</button>
                 <button type="button" data-on-click="setSegment" data-args="[&quot;walaone&quot;]" data-testid="segment-chip-walaone" id="segmentChipWalaone" class="segment-chip px-3 py-1 bg-white text-gray-700 hover:bg-gray-50 border-s border-gray-300" title="WalaOne — records on the WalaOne product layout only.">WalaOne</button>
             </div>
             <span class="text-[10px] font-normal text-gray-400 ms-1" title="Each tab remembers its segment selection — switching tabs restores that tab's segment.">· per tab</span>
@@ -2543,8 +2543,8 @@
     <script src="/js/duplicates-app.js?v=175"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

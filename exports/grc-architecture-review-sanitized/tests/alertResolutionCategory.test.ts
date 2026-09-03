@@ -33,7 +33,7 @@ const suite = new TestSuite("alertResolutionCategory");
 console.log("\n=== alertResolutionCategory unit tests ===\n");
 
 // Load the dashboard helper into a stand-in `window` so its IIFE can
-// attach `WalaPlusAlertResolution`. We use indirect eval so the script
+// attach `ExampleOrgAlertResolution`. We use indirect eval so the script
 // runs in the global scope of this test process and the IIFE can find
 // our injected `window` reference via globalThis.
 const SRC = readFileSync(
@@ -44,7 +44,7 @@ const fakeWindow: any = {};
 (globalThis as any).window = fakeWindow;
 // eslint-disable-next-line no-eval
 (0, eval)(SRC);
-const R = fakeWindow.WalaPlusAlertResolution;
+const R = fakeWindow.ExampleOrgAlertResolution;
 
 function alert(
   status: string,

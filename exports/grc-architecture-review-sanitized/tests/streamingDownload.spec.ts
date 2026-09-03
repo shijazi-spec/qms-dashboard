@@ -331,7 +331,7 @@ test.describe('streamingDownload — cross-browser smoke', () => {
   // ── Arabic fallback-advisory smoke ──────────────────────────────────────
   // The Vitest jsdom suite (tests/vitest/streamingDownload.vitest.test.ts)
   // already proves that buildFallbackNotice() pulls the Arabic strings out
-  // of dashboard/i18n/ar.json once WalaPlusI18n is ready. jsdom cannot
+  // of dashboard/i18n/ar.json once ExampleOrgI18n is ready. jsdom cannot
   // catch a number of *real-browser* regressions, though:
   //
   //   1. The Noto Sans Arabic font fails to load (CSP, network, font-face
@@ -340,7 +340,7 @@ test.describe('streamingDownload — cross-browser smoke', () => {
   //      override) hides or clips the dismiss button.
   //   3. A new dashboard CSP rule blocks the inline SVG icons inside the
   //      notice.
-  //   4. The `walaPlusI18nReady` event fires before the strings are loaded
+  //   4. The `ExampleOrgI18nReady` event fires before the strings are loaded
   //      in a way that only the real event-loop ordering exposes.
   //
   // Driving a real browser to the gated `/vendors` dashboard with the
@@ -433,7 +433,7 @@ test.describe('streamingDownload — cross-browser smoke', () => {
 
     // Force three things BEFORE any dashboard script runs:
     //
-    //   1. localStorage.walaplus_lang = 'ar'  →  WalaPlusI18n._detectLang()
+    //   1. localStorage.ExampleOrg_lang = 'ar'  →  ExampleOrgI18n._detectLang()
     //      returns 'ar' on first init, so the page boots in Arabic and
     //      buildFallbackNotice() resolves the `downloads.fallback_notice_*`
     //      keys against ar.json.
@@ -462,7 +462,7 @@ test.describe('streamingDownload — cross-browser smoke', () => {
     // capability flags are already in their forced state.
     await context.addInitScript(() => {
       try {
-        window.localStorage.setItem('walaplus_lang', 'ar');
+        window.localStorage.setItem('ExampleOrg_lang', 'ar');
       } catch (_) {
         /* storage may be blocked in some engines; the assertion will
            surface a clear failure if so */
@@ -487,7 +487,7 @@ test.describe('streamingDownload — cross-browser smoke', () => {
       timeout: 30_000,
     });
 
-    // The notice is attached after WalaPlusI18n.onReady() resolves (or
+    // The notice is attached after ExampleOrgI18n.onReady() resolves (or
     // after a 2 s safety-net timeout in scheduleStreamingFallbackNotice).
     // 15 s is well past either path on any reasonable machine.
     const notice = page.locator('[data-testid="notice-streaming-fallback"]');

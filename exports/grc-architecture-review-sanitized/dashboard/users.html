@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -57,7 +57,7 @@
         <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            WalaPlusNav.init('admin');
+            ExampleOrgNav.init('admin');
         });
     </script>
 
@@ -561,7 +561,7 @@
                 const container = document.getElementById('pending-list');
                 
                 if (!data.users || data.users.length === 0) {
-                    container.innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.users.no_pending_requests') + '</p>';
+                    container.innerHTML = '<p class="text-gray-500 text-center py-8">' + ExampleOrgI18n.t('dyn.users.no_pending_requests') + '</p>';
                     return;
                 }
 
@@ -598,7 +598,7 @@
                 const container = document.getElementById('active-list');
                 
                 if (!data.users || data.users.length === 0) {
-                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_active_users') + '</td></tr>';
+                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + ExampleOrgI18n.t('dyn.users.no_active_users') + '</td></tr>';
                     return;
                 }
 
@@ -628,7 +628,7 @@
                 const container = document.getElementById('all-list');
                 
                 if (!data.users || data.users.length === 0) {
-                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_users_found') + '</td></tr>';
+                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + ExampleOrgI18n.t('dyn.users.no_users_found') + '</td></tr>';
                     return;
                 }
 
@@ -659,7 +659,7 @@
                 const container = document.getElementById('invitations-list');
                 
                 if (!data.invitations || data.invitations.length === 0) {
-                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_invitations') + '</td></tr>';
+                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + ExampleOrgI18n.t('dyn.users.no_invitations') + '</td></tr>';
                     return;
                 }
 
@@ -690,7 +690,7 @@
                 const container = document.getElementById('roles-grid');
                 
                 if (!data.roles) {
-                    container.innerHTML = '<p class="text-gray-500">' + WalaPlusI18n.t('dyn.users.could_not_load_roles') + '</p>';
+                    container.innerHTML = '<p class="text-gray-500">' + ExampleOrgI18n.t('dyn.users.could_not_load_roles') + '</p>';
                     return;
                 }
 
@@ -737,7 +737,7 @@
                 const container = document.getElementById('audit-list');
                 
                 if (!data.logs || data.logs.length === 0) {
-                    container.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_audit_logs') + '</td></tr>';
+                    container.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-500">' + ExampleOrgI18n.t('dyn.users.no_audit_logs') + '</td></tr>';
                     return;
                 }
 
@@ -771,13 +771,13 @@
             const copyBtn = document.getElementById('invite-fallback-copy-btn');
             linkInput.value = inviteLink || '';
             if (emailError) {
-                reasonEl.textContent = WalaPlusI18n.t('dyn.users.reason_prefix') + emailError;
+                reasonEl.textContent = ExampleOrgI18n.t('dyn.users.reason_prefix') + emailError;
                 reasonEl.classList.remove('hidden');
             } else {
                 reasonEl.textContent = '';
                 reasonEl.classList.add('hidden');
             }
-            copyBtn.textContent = WalaPlusI18n.t('dyn.users.copy_link_btn');
+            copyBtn.textContent = ExampleOrgI18n.t('dyn.users.copy_link_btn');
             modal.classList.add('active');
         }
 
@@ -791,8 +791,8 @@
             const copyBtn = document.getElementById('invite-fallback-copy-btn');
             const value = linkInput.value;
             const showCopied = () => {
-                const original = WalaPlusI18n.t('dyn.users.copy_link_btn');
-                copyBtn.textContent = WalaPlusI18n.t('dyn.users.copy_link_done');
+                const original = ExampleOrgI18n.t('dyn.users.copy_link_btn');
+                copyBtn.textContent = ExampleOrgI18n.t('dyn.users.copy_link_done');
                 setTimeout(() => { copyBtn.textContent = original; }, 1500);
             };
             const fallbackSelect = () => {
@@ -837,23 +837,23 @@
                     loadStats();
                     
                     if (result.email_sent) {
-                        alert(WalaPlusI18n.t('dyn.users.invite_sent', { email: data.email }));
+                        alert(ExampleOrgI18n.t('dyn.users.invite_sent', { email: data.email }));
                     } else {
                         showInviteFallbackModal(result.invite_link, result.email_error);
                     }
                 } else {
-                    alert(WalaPlusI18n.t('dyn.users.error_prefix', { msg: result.error || WalaPlusI18n.t('dyn.users.failed_send_invite') }));
+                    alert(ExampleOrgI18n.t('dyn.users.error_prefix', { msg: result.error || ExampleOrgI18n.t('dyn.users.failed_send_invite') }));
                 }
             } catch (error) {
-                alert(WalaPlusI18n.t('dyn.users.error_send_invite'));
+                alert(ExampleOrgI18n.t('dyn.users.error_send_invite'));
             }
         }
 
         async function approveUser(userId) {
             const ok = await showConfirmModal({
-                title: WalaPlusI18n.t('dyn.users.approve_access_title'),
-                body: WalaPlusI18n.t('dyn.users.confirm_approve_access'),
-                confirmLabel: WalaPlusI18n.t('dyn.users.approve_btn'),
+                title: ExampleOrgI18n.t('dyn.users.approve_access_title'),
+                body: ExampleOrgI18n.t('dyn.users.confirm_approve_access'),
+                confirmLabel: ExampleOrgI18n.t('dyn.users.approve_btn'),
                 confirmVariant: 'success',
             });
             if (!ok) return;
@@ -864,24 +864,24 @@
                     body: JSON.stringify({ approved_by: 'user@example.invalid' })
                 });
                 if (res.ok) {
-                    alert(WalaPlusI18n.t('dyn.users.user_approved'));
+                    alert(ExampleOrgI18n.t('dyn.users.user_approved'));
                     loadPendingUsers();
                     loadStats();
                 } else {
-                    alert(WalaPlusI18n.t('dyn.users.failed_approve'));
+                    alert(ExampleOrgI18n.t('dyn.users.failed_approve'));
                 }
             } catch (error) {
-                alert(WalaPlusI18n.t('dyn.users.error_approve'));
+                alert(ExampleOrgI18n.t('dyn.users.error_approve'));
             }
         }
 
         async function denyUser(userId) {
             const reason = await showPromptModal({
-                title: WalaPlusI18n.t('dyn.users.deny_access_title'),
-                body: WalaPlusI18n.t('dyn.users.prompt_denial_reason'),
-                label: WalaPlusI18n.t('dyn.users.denial_reason_label'),
-                placeholder: WalaPlusI18n.t('dyn.users.denial_reason_placeholder'),
-                submitLabel: WalaPlusI18n.t('dyn.users.deny_btn'),
+                title: ExampleOrgI18n.t('dyn.users.deny_access_title'),
+                body: ExampleOrgI18n.t('dyn.users.prompt_denial_reason'),
+                label: ExampleOrgI18n.t('dyn.users.denial_reason_label'),
+                placeholder: ExampleOrgI18n.t('dyn.users.denial_reason_placeholder'),
+                submitLabel: ExampleOrgI18n.t('dyn.users.deny_btn'),
                 submitVariant: 'danger',
             });
             if (reason === null) return;
@@ -892,22 +892,22 @@
                     body: JSON.stringify({ denied_by: 'user@example.invalid', reason })
                 });
                 if (res.ok) {
-                    alert(WalaPlusI18n.t('dyn.users.user_denied'));
+                    alert(ExampleOrgI18n.t('dyn.users.user_denied'));
                     loadPendingUsers();
                     loadStats();
                 } else {
-                    alert(WalaPlusI18n.t('dyn.users.failed_deny'));
+                    alert(ExampleOrgI18n.t('dyn.users.failed_deny'));
                 }
             } catch (error) {
-                alert(WalaPlusI18n.t('dyn.users.error_deny'));
+                alert(ExampleOrgI18n.t('dyn.users.error_deny'));
             }
         }
 
         async function disableUser(userId) {
             const ok = await showConfirmModal({
-                title: WalaPlusI18n.t('dyn.users.disable_user_title'),
-                body: WalaPlusI18n.t('dyn.users.confirm_disable_user'),
-                confirmLabel: WalaPlusI18n.t('dyn.users.disable_btn'),
+                title: ExampleOrgI18n.t('dyn.users.disable_user_title'),
+                body: ExampleOrgI18n.t('dyn.users.confirm_disable_user'),
+                confirmLabel: ExampleOrgI18n.t('dyn.users.disable_btn'),
                 confirmVariant: 'danger',
             });
             if (!ok) return;
@@ -918,13 +918,13 @@
                     body: JSON.stringify({ disabled_by: 'user@example.invalid' })
                 });
                 if (res.ok) {
-                    alert(WalaPlusI18n.t('dyn.users.user_disabled'));
+                    alert(ExampleOrgI18n.t('dyn.users.user_disabled'));
                     loadActiveUsers();
                     loadAllUsers();
                     loadStats();
                 }
             } catch (error) {
-                alert(WalaPlusI18n.t('dyn.users.error_disable'));
+                alert(ExampleOrgI18n.t('dyn.users.error_disable'));
             }
         }
 
@@ -936,12 +936,12 @@
                     body: JSON.stringify({ enabled_by: 'user@example.invalid' })
                 });
                 if (res.ok) {
-                    alert(WalaPlusI18n.t('dyn.users.user_enabled'));
+                    alert(ExampleOrgI18n.t('dyn.users.user_enabled'));
                     loadAllUsers();
                     loadStats();
                 }
             } catch (error) {
-                alert(WalaPlusI18n.t('dyn.users.error_enable'));
+                alert(ExampleOrgI18n.t('dyn.users.error_enable'));
             }
         }
 
@@ -952,14 +952,14 @@
         async function viewUserDetail(userId) {
             document.getElementById('user-detail-modal').classList.add('active');
             const content = document.getElementById('user-detail-content');
-            content.innerHTML = WalaPlusI18n.t('dyn.users.loading');
+            content.innerHTML = ExampleOrgI18n.t('dyn.users.loading');
 
             try {
                 const res = await fetch(`/api/users/${userId}`, { headers });
                 const data = await res.json();
                 
                 if (!data.user) {
-                    content.innerHTML = '<p class="text-red-500">' + WalaPlusI18n.t('dyn.users.user_not_found') + '</p>';
+                    content.innerHTML = '<p class="text-red-500">' + ExampleOrgI18n.t('dyn.users.user_not_found') + '</p>';
                     return;
                 }
 
@@ -1049,7 +1049,7 @@
                     </div>
                 `;
             } catch (error) {
-                content.innerHTML = '<p class="text-red-500">' + WalaPlusI18n.t('dyn.users.error_loading_user') + '</p>';
+                content.innerHTML = '<p class="text-red-500">' + ExampleOrgI18n.t('dyn.users.error_loading_user') + '</p>';
             }
         }
 
@@ -1232,8 +1232,8 @@
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

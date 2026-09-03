@@ -27,7 +27,7 @@ import { makeCookieForRole } from "./_helpers/sessionAuth";
 
 const suite = new TestSuite("aiOpsRoutes");
 const ADMIN_KEY = "integration-test-ai-ops-2026";
-// Signed walaplus_session cookie for an active admin platform user. requireRole()
+// Signed ExampleOrg_session cookie for an active admin platform user. requireRole()
 // now always does a live getPlatformUser() lookup, so the shared helper also
 // registers an active platform_users row for this session's email.
 const ADMIN_COOKIE = makeCookieForRole("admin");

@@ -19,7 +19,7 @@
  *
  * Anything else (open / acknowledged / dismissed) returns null.
  *
- * The categoriser is exposed on window.WalaPlusAlertResolution so both
+ * The categoriser is exposed on window.ExampleOrgAlertResolution so both
  * dashboard pages can share the exact same prefix logic. Keep this file in
  * lock-step with src/mastra/workflows/{toolHealthAlertsCron,promptRegressionAlertsCron}.ts
  * — those crons own the canonical resolution_note prefixes that this helper
@@ -85,7 +85,7 @@
     return category === 'recovered' || category === 'went_silent';
   }
 
-  root.WalaPlusAlertResolution = {
+  root.ExampleOrgAlertResolution = {
     categorize: categorize,
     isAutoResolved: isAutoResolved,
     getBadgeSpec: getBadgeSpec,

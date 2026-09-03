@@ -86,7 +86,7 @@ function makeAdminCookie(): string {
     role: TEST_USER.role,
     exp: Date.now() + 3600_000,
   });
-  return `walaplus_session=${encodeURIComponent(token)}`;
+  return `ExampleOrg_session=${encodeURIComponent(token)}`;
 }
 
 async function setupAdminUser(): Promise<void> {

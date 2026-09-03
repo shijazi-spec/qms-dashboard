@@ -1,5 +1,5 @@
 import { saveGovernanceDocument, saveScorecard } from '../src/utils/database';
-import { walaPlusSalesGovernanceRules, qualityScorecardConfig } from '../src/utils/governanceRules';
+import { ExampleOrgSalesGovernanceRules, qualityScorecardConfig } from '../src/utils/governanceRules';
 
 async function seedData() {
   console.log('🚀 Seeding governance data...\n');
@@ -7,12 +7,12 @@ async function seedData() {
   try {
     console.log('📄 Saving ExampleOrg Sales Governance Document...');
     const govDoc = await saveGovernanceDocument({
-      name: walaPlusSalesGovernanceRules.document.name,
+      name: ExampleOrgSalesGovernanceRules.document.name,
       document_type: 'sales',
-      version: walaPlusSalesGovernanceRules.document.version,
-      file_path: 'attached_assets/WalaPlus_Sales_1.1_01.12.2025_EN_1764681400933.pdf',
-      content_text: JSON.stringify(walaPlusSalesGovernanceRules, null, 2),
-      rules_json: walaPlusSalesGovernanceRules,
+      version: ExampleOrgSalesGovernanceRules.document.version,
+      file_path: 'attached_assets/ExampleOrg_Sales_1.1_01.12.2025_EN_1764681400933.pdf',
+      content_text: JSON.stringify(ExampleOrgSalesGovernanceRules, null, 2),
+      rules_json: ExampleOrgSalesGovernanceRules,
       is_active: true
     });
     console.log(`✅ Governance document saved with ID: ${govDoc.id}\n`);

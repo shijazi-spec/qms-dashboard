@@ -405,7 +405,7 @@ function cookieFor(user: {
     role: user.role,
     exp: Date.now() + 3600_000,
   });
-  return `walaplus_session=${encodeURIComponent(token)}`;
+  return `ExampleOrg_session=${encodeURIComponent(token)}`;
 }
 
 const REVIEWER_A = {

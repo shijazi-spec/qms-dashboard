@@ -203,7 +203,7 @@ function buildBlocks(
     elements: [
       {
         type: "mrkdwn",
-        text: ":robot_face: _WalaPlus AI metrics retention | dashboard override saved_",
+        text: ":robot_face: _ExampleOrg AI metrics retention | dashboard override saved_",
       },
     ],
   });
@@ -530,7 +530,7 @@ function buildPruneNowBlocks(
       {
         type: "mrkdwn",
         text:
-          ":robot_face: _WalaPlus AI metrics retention | manual prune executed_",
+          ":robot_face: _ExampleOrg AI metrics retention | manual prune executed_",
       },
     ],
   });

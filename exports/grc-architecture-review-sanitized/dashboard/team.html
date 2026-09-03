@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -69,7 +69,7 @@
         <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            WalaPlusNav.init('team');
+            ExampleOrgNav.init('team');
         });
     </script>
 
@@ -659,7 +659,7 @@
                     count.textContent = columns[col].length;
                     
                     if (columns[col].length === 0) {
-                        container.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">' + WalaPlusI18n.t('dyn.team.no_items') + '</div>';
+                        container.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">' + ExampleOrgI18n.t('dyn.team.no_items') + '</div>';
                     } else {
                         container.innerHTML = columns[col].map(p => `
                             <div class="bg-white rounded-lg shadow-sm border p-3 cursor-pointer hover:shadow-md transition">
@@ -693,7 +693,7 @@
                 
                 const tbody = document.getElementById('coursesTable');
                 if (!courses.length) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">' + WalaPlusI18n.t('dyn.team.no_courses') + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">' + ExampleOrgI18n.t('dyn.team.no_courses') + '</td></tr>';
                 } else {
                     tbody.innerHTML = courses.map(c => `
                         <tr class="hover:bg-gray-50">
@@ -754,16 +754,16 @@
                     loadCourses();
                 } else {
                     const error = await res.json();
-                    alert(error.error || WalaPlusI18n.t('dyn.team.failed_create_course'));
+                    alert(error.error || ExampleOrgI18n.t('dyn.team.failed_create_course'));
                 }
             } catch (error) {
                 console.error('Error creating course:', error);
-                alert(WalaPlusI18n.t('dyn.team.failed_create_course'));
+                alert(ExampleOrgI18n.t('dyn.team.failed_create_course'));
             }
         }
 
         async function deleteCourse(courseId) {
-            if (!confirm(WalaPlusI18n.t('dyn.team.confirm_delete_course'))) return;
+            if (!confirm(ExampleOrgI18n.t('dyn.team.confirm_delete_course'))) return;
 
             try {
                 const res = await fetch(`/api/team/courses/${courseId}`, { method: 'DELETE' });
@@ -817,7 +817,7 @@
                     plugins: { legend: { position: 'bottom' } }
                 }
             });
-            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('departmentChart', departmentChart, 'Team by Department');
+            if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('departmentChart', departmentChart, 'Team by Department');
         }
 
         function renderProjectStatusChart(status) {
@@ -840,7 +840,7 @@
                     plugins: { legend: { position: 'bottom' } }
                 }
             });
-            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('projectStatusChart', projectStatusChart, 'Project Status');
+            if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('projectStatusChart', projectStatusChart, 'Project Status');
         }
 
         function renderStatusChart(status) {
@@ -863,7 +863,7 @@
                     plugins: { legend: { position: 'bottom' } }
                 }
             });
-            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('statusChart', statusChart, 'Team Status');
+            if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('statusChart', statusChart, 'Team Status');
         }
 
         function renderPerformanceDeptChart(departments) {
@@ -888,13 +888,13 @@
                     plugins: { legend: { display: false } }
                 }
             });
-            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('performanceDeptChart', performanceDeptChart, 'Performance by Department');
+            if (window.ExampleOrgA11y) window.ExampleOrgA11y.makeChartAccessible('performanceDeptChart', performanceDeptChart, 'Performance by Department');
         }
 
         function renderTopPerformers(performers) {
             const container = document.getElementById('topPerformers');
             if (!performers.length) {
-                container.innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.team.no_perf_data') + '</p>';
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">' + ExampleOrgI18n.t('dyn.team.no_perf_data') + '</p>';
                 return;
             }
 
@@ -934,7 +934,7 @@
 
                 const tbody = document.getElementById('membersTable');
                 if (!allMembers.length) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">' + WalaPlusI18n.t('dyn.team.no_members') + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">' + ExampleOrgI18n.t('dyn.team.no_members') + '</td></tr>';
                 } else {
                     tbody.innerHTML = allMembers.map(m => `
                         <tr class="hover:bg-gray-50">
@@ -981,7 +981,7 @@
                     `).join('');
                 }
 
-                document.getElementById('membersPagination').textContent = WalaPlusI18n.t('dyn.team.showing_members', { count: allMembers.length, total: data.total });
+                document.getElementById('membersPagination').textContent = ExampleOrgI18n.t('dyn.team.showing_members', { count: allMembers.length, total: data.total });
                 populateProjectMemberSelect();
             } catch (error) {
                 console.error('Error loading members:', error);
@@ -1007,7 +1007,7 @@
 
                 const tbody = document.getElementById('projectsTable');
                 if (!projects.length) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">' + WalaPlusI18n.t('dyn.team.no_proj_assignments') + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">' + ExampleOrgI18n.t('dyn.team.no_proj_assignments') + '</td></tr>';
                 } else {
                     tbody.innerHTML = projects.map(p => `
                         <tr class="hover:bg-gray-50">
@@ -1050,7 +1050,7 @@
 
                 const container = document.getElementById('trainingMatrix');
                 if (!members.length) {
-                    container.innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.team.no_training_data') + '</p>';
+                    container.innerHTML = '<p class="text-gray-500 text-center py-8">' + ExampleOrgI18n.t('dyn.team.no_training_data') + '</p>';
                     return;
                 }
 
@@ -1134,11 +1134,11 @@
                     loadAnalytics();
                 } else {
                     const error = await res.json();
-                    alert(error.error || WalaPlusI18n.t('dyn.team.failed_create_member'));
+                    alert(error.error || ExampleOrgI18n.t('dyn.team.failed_create_member'));
                 }
             } catch (error) {
                 console.error('Error creating member:', error);
-                alert(WalaPlusI18n.t('dyn.team.failed_create_member'));
+                alert(ExampleOrgI18n.t('dyn.team.failed_create_member'));
             }
         }
 
@@ -1165,16 +1165,16 @@
                     loadAnalytics();
                 } else {
                     const error = await res.json();
-                    alert(error.error || WalaPlusI18n.t('dyn.team.failed_create_assignment'));
+                    alert(error.error || ExampleOrgI18n.t('dyn.team.failed_create_assignment'));
                 }
             } catch (error) {
                 console.error('Error creating project:', error);
-                alert(WalaPlusI18n.t('dyn.team.failed_create_assignment'));
+                alert(ExampleOrgI18n.t('dyn.team.failed_create_assignment'));
             }
         }
 
         async function deleteMember(memberId) {
-            if (!confirm(WalaPlusI18n.t('dyn.team.confirm_delete_member'))) return;
+            if (!confirm(ExampleOrgI18n.t('dyn.team.confirm_delete_member'))) return;
 
             try {
                 const res = await fetch(`/api/team/members/${memberId}`, { method: 'DELETE' });
@@ -1188,7 +1188,7 @@
         }
 
         async function deleteProject(assignmentId) {
-            if (!confirm(WalaPlusI18n.t('dyn.team.confirm_delete_assignment'))) return;
+            if (!confirm(ExampleOrgI18n.t('dyn.team.confirm_delete_assignment'))) return;
 
             try {
                 const res = await fetch(`/api/team/projects/${assignmentId}`, { method: 'DELETE' });
@@ -1216,8 +1216,8 @@
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

@@ -25,7 +25,7 @@ import { buildHandler, makeContext } from "./_helpers/fakeContext";
 const suite = new TestSuite("qmsEnhancedRoutes");
 const ADMIN_KEY = "integration-test-qms-enh-2026";
 const TEST_SESSION_SECRET = "test-session-secret-qms-403-2026";
-const SESSION_COOKIE_NAME = "walaplus_session";
+const SESSION_COOKIE_NAME = "ExampleOrg_session";
 
 console.log("\n=== qmsEnhancedRoutes integration tests ===\n");
 

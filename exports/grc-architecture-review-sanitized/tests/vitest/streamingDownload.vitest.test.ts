@@ -2212,11 +2212,11 @@ describe('streamingDownload (browser helper)', () => {
       await expect(downloadPromise).rejects.toBeDefined();
     });
 
-    describe('styled modal confirmCancel (WalaPlusA11y present)', () => {
-      // Minimal WalaPlusA11y shim that mirrors what a11y.js does in the browser:
+    describe('styled modal confirmCancel (ExampleOrgA11y present)', () => {
+      // Minimal ExampleOrgA11y shim that mirrors what a11y.js does in the browser:
       // openModal removes 'hidden', closeModal adds 'hidden' back.
       function installA11yShim(win: any) {
-        win.WalaPlusA11y = {
+        win.ExampleOrgA11y = {
           openModal(el: HTMLElement) {
             el.classList.remove('hidden');
             el.classList.add('active');
@@ -2230,7 +2230,7 @@ describe('streamingDownload (browser helper)', () => {
         };
       }
 
-      it('renders the styled modal instead of window.confirm when WalaPlusA11y is present', async () => {
+      it('renders the styled modal instead of window.confirm when ExampleOrgA11y is present', async () => {
         env = setupBrowserEnv({ enableShowSaveFilePicker: false });
         const b = makeAbortableBody();
         installAbortableFetch(env.win, b, {
@@ -2354,7 +2354,7 @@ describe('streamingDownload (browser helper)', () => {
         await expect(downloadPromise).rejects.toBeDefined();
       });
 
-      it('keeps the download running when Escape closes the modal (WalaPlusA11y closes it)', async () => {
+      it('keeps the download running when Escape closes the modal (ExampleOrgA11y closes it)', async () => {
         env = setupBrowserEnv({ enableShowSaveFilePicker: false });
         const b = makeAbortableBody();
         installAbortableFetch(env.win, b, {
@@ -2382,8 +2382,8 @@ describe('streamingDownload (browser helper)', () => {
         await new Promise((r) => setTimeout(r, 10));
 
         const modal = env.win.document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
-        // Simulate Escape: WalaPlusA11y would call closeModal() which adds 'hidden'.
-        env.win.WalaPlusA11y.closeModal(modal);
+        // Simulate Escape: ExampleOrgA11y would call closeModal() which adds 'hidden'.
+        env.win.ExampleOrgA11y.closeModal(modal);
         await new Promise((r) => setTimeout(r, 20));
 
         // Download must still be active.
@@ -2439,7 +2439,7 @@ describe('streamingDownload (browser helper)', () => {
         await expect(downloadPromise).rejects.toBeDefined();
       });
 
-      it('renders the cancel-confirm modal and progress-card "Waiting…" label in Arabic when WalaPlusI18n is loaded', async () => {
+      it('renders the cancel-confirm modal and progress-card "Waiting…" label in Arabic when ExampleOrgI18n is loaded', async () => {
         env = setupBrowserEnv({ enableShowSaveFilePicker: false });
 
         const ar = JSON.parse(
@@ -2511,7 +2511,7 @@ describe('streamingDownload (browser helper)', () => {
     function get(obj: any, path: string) {
       return path.split('.').reduce((acc: any, k: string) => (acc == null ? acc : acc[k]), obj);
     }
-    win.WalaPlusI18n = {
+    win.ExampleOrgI18n = {
       t: (key: string, vars?: Record<string, any>) => {
         const v = get(dictionary, key);
         if (v == null) return key.split('.').pop();
@@ -2526,7 +2526,7 @@ describe('streamingDownload (browser helper)', () => {
     };
   }
 
-  it('renders Arabic translations for the progress card and toast when WalaPlusI18n is loaded', async () => {
+  it('renders Arabic translations for the progress card and toast when ExampleOrgI18n is loaded', async () => {
     env = setupBrowserEnv({ enableShowSaveFilePicker: false });
 
     const ar = JSON.parse(
@@ -2559,7 +2559,7 @@ describe('streamingDownload (browser helper)', () => {
     expect(dismiss?.getAttribute('aria-label')).toBe('إغلاق الإشعار');
   });
 
-  it('renders the streaming-fallback advisory in Arabic when WalaPlusI18n is loaded', async () => {
+  it('renders the streaming-fallback advisory in Arabic when ExampleOrgI18n is loaded', async () => {
     env = setupBrowserEnv({ enableShowSaveFilePicker: false });
 
     const ar = JSON.parse(
@@ -2593,7 +2593,7 @@ describe('streamingDownload (browser helper)', () => {
     expect(dismissBtn?.getAttribute('aria-label')).toBe(ar.downloads.fallback_notice_dismiss);
   });
 
-  it('falls back to English defaults when WalaPlusI18n is not loaded', async () => {
+  it('falls back to English defaults when ExampleOrgI18n is not loaded', async () => {
     env = setupBrowserEnv({ enableShowSaveFilePicker: false });
 
     const payload = new Uint8Array([1, 2, 3]);
@@ -3539,19 +3539,19 @@ describe('streamingDownload (browser helper)', () => {
 
     // ── Race-condition guard ─────────────────────────────────────────────
     // scheduleStreamingFallbackNotice() (the auto-bootstrap path) must
-    // wait for WalaPlusI18n to finish loading before calling
+    // wait for ExampleOrgI18n to finish loading before calling
     // buildFallbackNotice(); otherwise the user briefly sees the English
     // defaults even though their app language is Arabic. The script
     // achieves this two ways:
-    //   1) WalaPlusI18n.onReady(cb)        — preferred when the module is present.
-    //   2) document 'walaPlusI18nReady' event — fallback when the script
+    //   1) ExampleOrgI18n.onReady(cb)        — preferred when the module is present.
+    //   2) document 'ExampleOrgI18nReady' event — fallback when the script
     //      loads before i18n.js parses.
     // This test exercises path (2) end-to-end: load the script with no
-    // WalaPlusI18n, advance one tick so scheduleStreamingFallbackNotice
+    // ExampleOrgI18n, advance one tick so scheduleStreamingFallbackNotice
     // registers its listener, prove no notice has rendered, then install
-    // the Arabic shim and dispatch walaPlusI18nReady — only then should
+    // the Arabic shim and dispatch ExampleOrgI18nReady — only then should
     // the Arabic advisory appear.
-    it('defers the fallback notice until WalaPlusI18n is ready (race-condition guard)', async () => {
+    it('defers the fallback notice until ExampleOrgI18n is ready (race-condition guard)', async () => {
       const dom = new JSDOM(
         '<!DOCTYPE html><html><body><main><button data-on-click="streamDownload" ' +
           'data-estimate-url="/api/vendors/export">Export</button></main></body></html>',
@@ -3574,12 +3574,12 @@ describe('streamingDownload (browser helper)', () => {
       }
 
       try {
-        // Crucially: WalaPlusI18n is NOT defined yet when the script runs.
+        // Crucially: ExampleOrgI18n is NOT defined yet when the script runs.
         win.eval(SCRIPT_SOURCE);
 
         // Let the script's setTimeout(0) tick fire so
         // scheduleStreamingFallbackNotice runs and (with no
-        // WalaPlusI18n in scope) registers the walaPlusI18nReady listener.
+        // ExampleOrgI18n in scope) registers the ExampleOrgI18nReady listener.
         await new Promise((r) => setTimeout(r, 0));
 
         // The listener has been registered but never fired — so the
@@ -3589,13 +3589,13 @@ describe('streamingDownload (browser helper)', () => {
         // prevent.
         expect(
           win.document.getElementById('streaming-download-fallback-notice'),
-          'notice rendered before WalaPlusI18n was ready'
+          'notice rendered before ExampleOrgI18n was ready'
         ).toBeNull();
 
         // Now install the Arabic shim and dispatch the ready event the
         // i18n module would dispatch once translations have loaded.
         installI18nShim(win, ar);
-        win.document.dispatchEvent(new win.Event('walaPlusI18nReady'));
+        win.document.dispatchEvent(new win.Event('ExampleOrgI18nReady'));
 
         // The deferred attach should have fired synchronously inside the
         // event handler, so the notice is present and Arabic.
@@ -3618,12 +3618,12 @@ describe('streamingDownload (browser helper)', () => {
       }
     });
 
-    // The other deferral path: WalaPlusI18n is already on the page when
+    // The other deferral path: ExampleOrgI18n is already on the page when
     // the script evaluates. In that case scheduleStreamingFallbackNotice
-    // calls WalaPlusI18n.onReady(cb) directly. We give the shim an
+    // calls ExampleOrgI18n.onReady(cb) directly. We give the shim an
     // onReady that holds its callback so the test can prove the script
     // really does wait for it — no early English flash.
-    it('uses WalaPlusI18n.onReady() and waits for it to fire before attaching', async () => {
+    it('uses ExampleOrgI18n.onReady() and waits for it to fire before attaching', async () => {
       const dom = new JSDOM(
         '<!DOCTYPE html><html><body><main><button data-on-click="streamDownload" ' +
           'data-estimate-url="/api/risks/export">Export</button></main></body></html>',
@@ -3644,7 +3644,7 @@ describe('streamingDownload (browser helper)', () => {
         win.showSaveFilePicker = undefined;
       }
 
-      // Stand up a deferred WalaPlusI18n shim where onReady holds the
+      // Stand up a deferred ExampleOrgI18n shim where onReady holds the
       // callback until release() is called.
       let release: (() => void) | null = null;
       const pending = new Promise<void>((r) => {
@@ -3653,7 +3653,7 @@ describe('streamingDownload (browser helper)', () => {
       function get(obj: any, path: string) {
         return path.split('.').reduce((acc: any, k: string) => (acc == null ? acc : acc[k]), obj);
       }
-      win.WalaPlusI18n = {
+      win.ExampleOrgI18n = {
         t: (key: string) => {
           const v = get(ar, key);
           return v == null ? key.split('.').pop() : String(v);
@@ -3666,12 +3666,12 @@ describe('streamingDownload (browser helper)', () => {
       try {
         win.eval(SCRIPT_SOURCE);
         // setTimeout(0) tick: scheduleStreamingFallbackNotice runs and
-        // registers via WalaPlusI18n.onReady — but the shim hasn't
+        // registers via ExampleOrgI18n.onReady — but the shim hasn't
         // fired the callback yet.
         await new Promise((r) => setTimeout(r, 0));
         expect(
           win.document.getElementById('streaming-download-fallback-notice'),
-          'notice attached before WalaPlusI18n.onReady fired its callback'
+          'notice attached before ExampleOrgI18n.onReady fired its callback'
         ).toBeNull();
 
         // Release the onReady callback. It runs on the microtask queue,

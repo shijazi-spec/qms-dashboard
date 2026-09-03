@@ -9,7 +9,7 @@
  * The guardrail blocks six classes of regression:
  *
  *   1. A new `dashboard/*.html` page that forgets to load `/js/i18n.js` or
- *      forgets to call `WalaPlusI18n.init().then(applyToDOM)`. Without that
+ *      forgets to call `ExampleOrgI18n.init().then(applyToDOM)`. Without that
  *      wiring, every `data-i18n` attribute on the page is silently ignored
  *      at runtime and the Arabic experience falls back to English.
  *
@@ -25,7 +25,7 @@
  *      diverges from its mirror under `downloads.sw_expired_*` in the JSON
  *      files.
  *
- *   5. (Task #150) A static `WalaPlusI18n.t('ns.key')` call in
+ *   5. (Task #150) A static `ExampleOrgI18n.t('ns.key')` call in
  *      `dashboard/js/*.js` or an inline <script> block whose key is missing
  *      from `en.json` or `ar.json`. Dynamic `t(variable)` calls split into
  *      two buckets (Task #295):
@@ -37,7 +37,7 @@
  *          to either rewrite it as a static `t('ns.key')` call or run
  *          `node scripts/check-i18n.cjs --update-baseline` to attest it.
  *
- *   6. (Task #295) A new dynamic `WalaPlusI18n.t(variable)` call site
+ *   6. (Task #295) A new dynamic `ExampleOrgI18n.t(variable)` call site
  *      added to a dashboard JS file or inline <script> block without
  *      updating `scripts/i18n-dynamic-baseline.json`.
  *
@@ -96,7 +96,7 @@ if (result.error) {
   }
   assert(
     result.status === 0,
-    "every dashboard/*.html page wires i18n, every data-i18n key resolves in en.json + ar.json, the two trees are identical, the SW dictionary is in sync, every static WalaPlusI18n.t() key resolves in both JSON files, no new dynamic t(variable) call sites have been added without updating the baseline, and no NEW orphan keys have been added to en.json / ar.json (Task #345)",
+    "every dashboard/*.html page wires i18n, every data-i18n key resolves in en.json + ar.json, the two trees are identical, the SW dictionary is in sync, every static ExampleOrgI18n.t() key resolves in both JSON files, no new dynamic t(variable) call sites have been added without updating the baseline, and no NEW orphan keys have been added to en.json / ar.json (Task #345)",
   );
 
   // Either:
@@ -105,7 +105,7 @@ if (result.error) {
   //       reviewers don't lose visibility; OR
   //   (b) Task #752 has driven the baselined set to zero (baseline file
   //       deleted or `{ "entries": [] }`), in which case there is nothing to
-  //       warn about and 100 % of `WalaPlusI18n.t()` calls are statically
+  //       warn about and 100 % of `ExampleOrgI18n.t()` calls are statically
   //       verified.
   // (`console.warn` lands on stderr; check both streams to be safe.)
   const dynamicBaselinePath = path.resolve(REPO_ROOT, "scripts", "i18n-dynamic-baseline.json");
@@ -123,12 +123,12 @@ if (result.error) {
   if (baselinedCount > 0) {
     assert(
       /JS t\(\) dynamic keys \(baselined\) — \d+ long-standing/.test(stdout + stderr),
-      "baselined dynamic WalaPlusI18n.t(variable) call sites are still surfaced as ⚠ warnings",
+      "baselined dynamic ExampleOrgI18n.t(variable) call sites are still surfaced as ⚠ warnings",
     );
   } else {
     assert(
       !/JS t\(\) dynamic keys \(baselined\) — \d+ long-standing/.test(stdout + stderr),
-      "no baselined dynamic call sites remain (Task #752) — every WalaPlusI18n.t() call is statically verified",
+      "no baselined dynamic call sites remain (Task #752) — every ExampleOrgI18n.t() call is statically verified",
     );
   }
 
@@ -150,7 +150,7 @@ if (result.error) {
  * and the (initially empty) baseline file all exist, and we inject a fake
  * dashboard page containing a brand-new dynamic call. The script must:
  *   - exit non-zero
- *   - print the "NEW WalaPlusI18n.t(variable) call site(s)" diagnostic
+ *   - print the "NEW ExampleOrgI18n.t(variable) call site(s)" diagnostic
  *   - mention the offending source file
  *   - point the operator at the --update-baseline escape hatch
  * ------------------------------------------------------------------------ */
@@ -237,12 +237,12 @@ try {
 </head><body>
   <span data-i18n="ns.static_key">Static</span>
   <script>
-    window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+    window.ExampleOrgI18n.init().then(() => window.ExampleOrgI18n.applyToDOM());
     var k = 'ns.static_key';
     // Static so Check 5 has at least one passing literal:
-    window.WalaPlusI18n.t('ns.static_key');
+    window.ExampleOrgI18n.t('ns.static_key');
     // Brand-new dynamic call — should fail under Task #295.
-    window.WalaPlusI18n.t(k);
+    window.ExampleOrgI18n.t(k);
   </script>
 </body></html>
 `;
@@ -266,7 +266,7 @@ try {
     "guardrail exits non-zero when a NEW dynamic t(variable) call site is introduced",
   );
   assert(
-    /NEW WalaPlusI18n\.t\(variable\) call site\(s\) not in scripts\/i18n-dynamic-baseline\.json/.test(
+    /NEW ExampleOrgI18n\.t\(variable\) call site\(s\) not in scripts\/i18n-dynamic-baseline\.json/.test(
       combined,
     ),
     "diagnostic explicitly labels the new dynamic call site(s) as NEW",
@@ -397,7 +397,7 @@ try {
 </head><body>
   <span data-i18n="ns.used_key">Used</span>
   <script>
-    window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+    window.ExampleOrgI18n.init().then(() => window.ExampleOrgI18n.applyToDOM());
   </script>
 </body></html>
 `;
@@ -586,7 +586,7 @@ try {
   <script src="/js/i18n.js?v=1"></script>
 </head><body>
   <span data-i18n="ns.static_key">Static</span>
-  <script>window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());</script>
+  <script>window.ExampleOrgI18n.init().then(() => window.ExampleOrgI18n.applyToDOM());</script>
 </body></html>
 `;
   fs.writeFileSync(path.join(tmpDashboard, "ok.html"), dashboardPage);

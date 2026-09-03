@@ -40,7 +40,7 @@ attached_assets/*
 # src/mastra/routes/adminApiRoutes.ts and scripts/seedGovernanceData.ts.
 # When that provenance reference moves to a proper location (e.g.
 # docs/governance/), delete this exception.
-!attached_assets/WalaPlus_Sales_1.1_01.12.2025_EN_1764681400933.pdf
+!attached_assets/ExampleOrg_Sales_1.1_01.12.2025_EN_1764681400933.pdf
 
 # Screenshots / generated images — operational artifacts, not code
 generated_images/

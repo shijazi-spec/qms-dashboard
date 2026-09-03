@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -45,7 +45,7 @@
         <script src="/js/navigation.js?v=5.7"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      WalaPlusNav.init('audits');
+      ExampleOrgNav.init('audits');
     });
   </script>
 
@@ -188,14 +188,14 @@
 
     async function loadIntakes() {
       const tbody = document.getElementById('intakesTbody');
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + WalaPlusI18n.t('dyn.intake.loading') + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + ExampleOrgI18n.t('dyn.intake.loading') + '</td></tr>';
       try {
         const res = await fetch('/api/manual-audit-intake', { credentials: 'same-origin' });
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
         const rows = data.rows || data.intakes || [];
         if (rows.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + WalaPlusI18n.t('dyn.intake.no_intakes') + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + ExampleOrgI18n.t('dyn.intake.no_intakes') + '</td></tr>';
           return;
         }
         tbody.innerHTML = rows.map(r => `
@@ -218,7 +218,7 @@
         `).join('');
       } catch (err) {
         console.error(err);
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-red-500 py-8">' + WalaPlusI18n.t('dyn.intake.failed_load') + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-red-500 py-8">' + ExampleOrgI18n.t('dyn.intake.failed_load') + '</td></tr>';
       }
     }
 
@@ -234,7 +234,7 @@
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          alert(WalaPlusI18n.t('dyn.intake.upload_failed', { msg: err.error || res.statusText }));
+          alert(ExampleOrgI18n.t('dyn.intake.upload_failed', { msg: err.error || res.statusText }));
           return;
         }
         const data = await res.json();
@@ -243,14 +243,14 @@
         await loadIntakes();
         if (data.intake?.id) openDetail(data.intake.id);
       } catch (err) {
-        alert(WalaPlusI18n.t('dyn.intake.upload_error', { msg: err.message }));
+        alert(ExampleOrgI18n.t('dyn.intake.upload_error', { msg: err.message }));
       }
     }
 
     async function openDetail(id) {
       document.getElementById('detailPane').classList.remove('hidden');
       document.getElementById('findingsList').innerHTML =
-        '<div class="text-center text-gray-400 py-12">' + WalaPlusI18n.t('dyn.intake.loading_intake') + '</div>';
+        '<div class="text-center text-gray-400 py-12">' + ExampleOrgI18n.t('dyn.intake.loading_intake') + '</div>';
       try {
         const res = await fetch('/api/manual-audit-intake/' + id, { credentials: 'same-origin' });
         if (!res.ok) throw new Error(await res.text());
@@ -259,7 +259,7 @@
         renderDetail(data.intake, data.findings || []);
       } catch (err) {
         document.getElementById('findingsList').innerHTML =
-          '<div class="text-center text-red-500 py-12">' + WalaPlusI18n.t('dyn.intake.failed_load_intake', { msg: escHtml(err.message) }) + '</div>';
+          '<div class="text-center text-red-500 py-12">' + ExampleOrgI18n.t('dyn.intake.failed_load_intake', { msg: escHtml(err.message) }) + '</div>';
       }
     }
 
@@ -358,7 +358,7 @@
       }
       const btn = document.getElementById('detailExtractBtn');
       const prev = btn.textContent;
-      btn.disabled = true; btn.textContent = WalaPlusI18n.t('dyn.intake.extracting');
+      btn.disabled = true; btn.textContent = ExampleOrgI18n.t('dyn.intake.extracting');
       try {
         const res = await fetch('/api/manual-audit-intake/' + currentIntake.id + '/extract', {
           method: 'POST',
@@ -368,7 +368,7 @@
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          alert(WalaPlusI18n.t('dyn.intake.extraction_failed', { msg: err.error || res.statusText }));
+          alert(ExampleOrgI18n.t('dyn.intake.extraction_failed', { msg: err.error || res.statusText }));
           return;
         }
         await openDetail(currentIntake.id);
@@ -387,17 +387,17 @@
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(WalaPlusI18n.t('dyn.intake.review_failed', { msg: err.error || res.statusText }));
+        alert(ExampleOrgI18n.t('dyn.intake.review_failed', { msg: err.error || res.statusText }));
         return;
       }
       openDetail(currentIntake.id);
     }
 
     async function rejectFinding(id) {
-      const reason = prompt(WalaPlusI18n.t('dyn.intake.prompt_rejection_reason'));
+      const reason = prompt(ExampleOrgI18n.t('dyn.intake.prompt_rejection_reason'));
       if (reason === null) return;
       if (!reason || reason.trim().length < 5) {
-        alert(WalaPlusI18n.t('dyn.intake.reason_too_short'));
+        alert(ExampleOrgI18n.t('dyn.intake.reason_too_short'));
         return;
       }
       reviewFinding(id, 'reject', { reject_reason: reason.trim() });
@@ -415,18 +415,18 @@
 
     async function finalizeIntake() {
       if (!currentIntake) return;
-      if (!confirm(WalaPlusI18n.t('dyn.intake.confirm_finalize'))) return;
+      if (!confirm(ExampleOrgI18n.t('dyn.intake.confirm_finalize'))) return;
       const res = await fetch('/api/manual-audit-intake/' + currentIntake.id + '/finalize', {
         method: 'POST',
         credentials: 'same-origin',
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(WalaPlusI18n.t('dyn.intake.finalize_failed', { msg: err.error || res.statusText }));
+        alert(ExampleOrgI18n.t('dyn.intake.finalize_failed', { msg: err.error || res.statusText }));
         return;
       }
       const data = await res.json();
-      alert(WalaPlusI18n.t('dyn.intake.findings_promoted', { count: data.promoted_count || 0, code: data.audit?.audit_code || '(unknown)' }));
+      alert(ExampleOrgI18n.t('dyn.intake.findings_promoted', { count: data.promoted_count || 0, code: data.audit?.audit_code || '(unknown)' }));
       await loadIntakes();
       closeDetail();
     }
@@ -434,8 +434,8 @@
     document.addEventListener('DOMContentLoaded', loadIntakes);
   </script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

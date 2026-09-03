@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -105,7 +105,7 @@
         <script src="/js/navigation.js?v=5.7"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
-                WalaPlusNav.init('qms');
+                ExampleOrgNav.init('qms');
             });
         </script>
 
@@ -774,8 +774,8 @@
 
             function _td(prefix, value) {
                 if (!value) return '';
-                return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic)
-                    ? (window.WalaPlusI18n.tDynamic(prefix, value) || value)
+                return (window.ExampleOrgI18n && window.ExampleOrgI18n.tDynamic)
+                    ? (window.ExampleOrgI18n.tDynamic(prefix, value) || value)
                     : value;
             }
             // HTML escape — delegate to the shared SafeRender helper so every
@@ -1143,18 +1143,18 @@
                         hideCapaModal();
                         form.reset();
                         loadCapa();
-                        alert(WalaPlusI18n.t('dyn.qms.capa_created'));
+                        alert(ExampleOrgI18n.t('dyn.qms.capa_created'));
                     } else {
                         const err = await res.json();
-                        alert(WalaPlusI18n.t('dyn.qms.error_prefix', { msg: err.error || WalaPlusI18n.t('dyn.qms.failed_create_capa') }));
+                        alert(ExampleOrgI18n.t('dyn.qms.error_prefix', { msg: err.error || ExampleOrgI18n.t('dyn.qms.failed_create_capa') }));
                     }
                 } catch (error) {
-                    alert(WalaPlusI18n.t('dyn.qms.error_creating_capa'));
+                    alert(ExampleOrgI18n.t('dyn.qms.error_creating_capa'));
                 }
             }
 
             async function triggerEvaluation() {
-                alert(WalaPlusI18n.t('dyn.qms.deal_evaluation_info'));
+                alert(ExampleOrgI18n.t('dyn.qms.deal_evaluation_info'));
             }
 
             async function loadTriggers() {
@@ -1223,7 +1223,7 @@
                             </div>
                         `).join('');
                     } else {
-                        triggersContainer.innerHTML = '<p class="text-gray-500 text-center py-4">' + WalaPlusI18n.t('dyn.qms.no_pending_triggers') + '</p>';
+                        triggersContainer.innerHTML = '<p class="text-gray-500 text-center py-4">' + ExampleOrgI18n.t('dyn.qms.no_pending_triggers') + '</p>';
                     }
 
                     const notificationsContainer = document.getElementById('notifications-list');
@@ -1241,11 +1241,11 @@
                             </div>
                         `).join('');
                     } else {
-                        notificationsContainer.innerHTML = '<p class="text-gray-500 text-center py-4">' + WalaPlusI18n.t('dyn.qms.no_unread_notifications') + '</p>';
+                        notificationsContainer.innerHTML = '<p class="text-gray-500 text-center py-4">' + ExampleOrgI18n.t('dyn.qms.no_unread_notifications') + '</p>';
                     }
                 } catch (error) {
                     console.error('Error loading triggers:', error);
-                    document.getElementById('triggers-list').innerHTML = '<p class="text-red-500 text-center py-4">' + WalaPlusI18n.t('dyn.qms.error_loading_triggers') + '</p>';
+                    document.getElementById('triggers-list').innerHTML = '<p class="text-red-500 text-center py-4">' + ExampleOrgI18n.t('dyn.qms.error_loading_triggers') + '</p>';
                 }
             }
 
@@ -1275,10 +1275,10 @@
                     if (res.ok) {
                         loadTriggers();
                     } else {
-                        alert(WalaPlusI18n.t('dyn.qms.failed_acknowledge_trigger'));
+                        alert(ExampleOrgI18n.t('dyn.qms.failed_acknowledge_trigger'));
                     }
                 } catch (error) {
-                    alert(WalaPlusI18n.t('dyn.qms.error_acknowledging_trigger'));
+                    alert(ExampleOrgI18n.t('dyn.qms.error_acknowledging_trigger'));
                 }
             }
 
@@ -1288,10 +1288,10 @@
             // the trigger-auto-escalate cron will resurface it. This prevents
             // dismiss-and-forget on real problems. (Ref: WP-SOP-009)
             async function dismissTrigger(triggerId) {
-                const reason = prompt(WalaPlusI18n.t('dyn.qms.prompt_dismiss_reason'));
+                const reason = prompt(ExampleOrgI18n.t('dyn.qms.prompt_dismiss_reason'));
                 if (reason === null) return;
                 if (!reason || reason.trim().length < 10) {
-                    alert(WalaPlusI18n.t('dyn.qms.dismiss_reason_required'));
+                    alert(ExampleOrgI18n.t('dyn.qms.dismiss_reason_required'));
                     return;
                 }
                 try {
@@ -1304,10 +1304,10 @@
                         loadTriggers();
                     } else {
                         const err = await res.json().catch(() => ({}));
-                        alert(WalaPlusI18n.t('dyn.qms.failed_dismiss_trigger', { msg: err.error || res.statusText }));
+                        alert(ExampleOrgI18n.t('dyn.qms.failed_dismiss_trigger', { msg: err.error || res.statusText }));
                     }
                 } catch (error) {
-                    alert(WalaPlusI18n.t('dyn.qms.error_dismissing_trigger'));
+                    alert(ExampleOrgI18n.t('dyn.qms.error_dismissing_trigger'));
                 }
             }
 
@@ -1316,7 +1316,7 @@
             // in-place, so the audit trail stays consistent with AI-write
             // tool approvals. (Ref: WP-SOP-040, WP-CTL-007)
             async function proposeTriggerHITL(triggerId) {
-                const notes = prompt(WalaPlusI18n.t('dyn.qms.prompt_hitl_notes'));
+                const notes = prompt(ExampleOrgI18n.t('dyn.qms.prompt_hitl_notes'));
                 if (notes === null) return;
                 try {
                     const res = await fetch(`/api/triggers/${triggerId}/action`, {
@@ -1330,22 +1330,22 @@
                     });
                     if (res.ok) {
                         const data = await res.json();
-                        alert(WalaPlusI18n.t('dyn.qms.hitl_proposed', { ticket: data.hitl_action_code || '(unknown)' }));
+                        alert(ExampleOrgI18n.t('dyn.qms.hitl_proposed', { ticket: data.hitl_action_code || '(unknown)' }));
                         loadTriggers();
                     } else {
                         const err = await res.json().catch(() => ({}));
-                        alert(WalaPlusI18n.t('dyn.qms.failed_propose', { msg: err.error || res.statusText }));
+                        alert(ExampleOrgI18n.t('dyn.qms.failed_propose', { msg: err.error || res.statusText }));
                     }
                 } catch (error) {
-                    alert(WalaPlusI18n.t('dyn.qms.error_proposing_hitl'));
+                    alert(ExampleOrgI18n.t('dyn.qms.error_proposing_hitl'));
                 }
             }
 
             async function decideTrigger(triggerId, decision) {
-                const notes = prompt(WalaPlusI18n.t('dyn.qms.prompt_decision_notes', { decision }));
-                const decidedBy = prompt(WalaPlusI18n.t('dyn.qms.prompt_enter_name'));
+                const notes = prompt(ExampleOrgI18n.t('dyn.qms.prompt_decision_notes', { decision }));
+                const decidedBy = prompt(ExampleOrgI18n.t('dyn.qms.prompt_enter_name'));
                 if (!decidedBy) {
-                    alert(WalaPlusI18n.t('dyn.qms.decision_requires_name'));
+                    alert(ExampleOrgI18n.t('dyn.qms.decision_requires_name'));
                     return;
                 }
                 try {
@@ -1356,12 +1356,12 @@
                     });
                     if (res.ok) {
                         loadTriggers();
-                        alert(WalaPlusI18n.t('dyn.qms.trigger_decision_success', { decision }));
+                        alert(ExampleOrgI18n.t('dyn.qms.trigger_decision_success', { decision }));
                     } else {
-                        alert(WalaPlusI18n.t('dyn.qms.failed_process_decision'));
+                        alert(ExampleOrgI18n.t('dyn.qms.failed_process_decision'));
                     }
                 } catch (error) {
-                    alert(WalaPlusI18n.t('dyn.qms.error_processing_decision'));
+                    alert(ExampleOrgI18n.t('dyn.qms.error_processing_decision'));
                 }
             }
 
@@ -1421,31 +1421,31 @@
                     if (res.ok) {
                         closeNcModal();
                         loadDashboard();
-                        alert(WalaPlusI18n.t('dyn.qms.nc_created'));
+                        alert(ExampleOrgI18n.t('dyn.qms.nc_created'));
                     } else {
                         const err = await res.json();
-                        alert(WalaPlusI18n.t('dyn.qms.error_prefix', { msg: err.error || WalaPlusI18n.t('dyn.qms.failed_create_nc') }));
+                        alert(ExampleOrgI18n.t('dyn.qms.error_prefix', { msg: err.error || ExampleOrgI18n.t('dyn.qms.failed_create_nc') }));
                     }
                 } catch (error) {
                     console.error('Error creating NC:', error);
-                    alert(WalaPlusI18n.t('dyn.qms.error_creating_nc'));
+                    alert(ExampleOrgI18n.t('dyn.qms.error_creating_nc'));
                 }
             }
 
             async function showCapaDetail(id) {
                 document.getElementById('detailModal').classList.remove('hidden');
-                document.getElementById('detailModalTitle').textContent = WalaPlusI18n.t('dyn.qms.capa_details_title');
-                document.getElementById('detailModalContent').innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.qms.loading') + '</p>';
+                document.getElementById('detailModalTitle').textContent = ExampleOrgI18n.t('dyn.qms.capa_details_title');
+                document.getElementById('detailModalContent').innerHTML = '<p class="text-gray-500 text-center py-8">' + ExampleOrgI18n.t('dyn.qms.loading') + '</p>';
                 try {
                     const [capa, history, evidence] = await Promise.all([
                         apiCall(`/api/qms/capa`).then(d => (d.records||[]).find(r => r.id === id)),
                         fetch(`/api/qms/capa/${id}/history`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : {history:[]}),
                         fetch(`/api/evidence/capa/${id}`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : {evidence:[]})
                     ]);
-                    if (!capa) { document.getElementById('detailModalContent').innerHTML = '<p class="text-red-500">' + WalaPlusI18n.t('dyn.qms.record_not_found') + '</p>'; return; }
+                    if (!capa) { document.getElementById('detailModalContent').innerHTML = '<p class="text-red-500">' + ExampleOrgI18n.t('dyn.qms.record_not_found') + '</p>'; return; }
                     renderCapaDetail(capa, history.history||[], evidence.evidence||[]);
                 } catch(e) {
-                    document.getElementById('detailModalContent').innerHTML = '<p class="text-red-500">' + WalaPlusI18n.t('dyn.qms.error_loading_details') + '</p>';
+                    document.getElementById('detailModalContent').innerHTML = '<p class="text-red-500">' + ExampleOrgI18n.t('dyn.qms.error_loading_details') + '</p>';
                 }
             }
 
@@ -1526,18 +1526,18 @@
 
             async function showNcDetail(id) {
                 document.getElementById('detailModal').classList.remove('hidden');
-                document.getElementById('detailModalTitle').textContent = WalaPlusI18n.t('dyn.qms.nc_details_title');
-                document.getElementById('detailModalContent').innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.qms.loading') + '</p>';
+                document.getElementById('detailModalTitle').textContent = ExampleOrgI18n.t('dyn.qms.nc_details_title');
+                document.getElementById('detailModalContent').innerHTML = '<p class="text-gray-500 text-center py-8">' + ExampleOrgI18n.t('dyn.qms.loading') + '</p>';
                 try {
                     const [nc, history, evidence] = await Promise.all([
                         apiCall(`/api/qms/nc`).then(d => (d.records||[]).find(r => r.id === id)),
                         fetch(`/api/qms/nc/${id}/history`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : {history:[]}),
                         fetch(`/api/evidence/nc/${id}`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : {evidence:[]})
                     ]);
-                    if (!nc) { document.getElementById('detailModalContent').innerHTML = '<p class="text-red-500">' + WalaPlusI18n.t('dyn.qms.record_not_found') + '</p>'; return; }
+                    if (!nc) { document.getElementById('detailModalContent').innerHTML = '<p class="text-red-500">' + ExampleOrgI18n.t('dyn.qms.record_not_found') + '</p>'; return; }
                     renderNcDetail(nc, history.history||[], evidence.evidence||[]);
                 } catch(e) {
-                    document.getElementById('detailModalContent').innerHTML = '<p class="text-red-500">' + WalaPlusI18n.t('dyn.qms.error_loading_details') + '</p>';
+                    document.getElementById('detailModalContent').innerHTML = '<p class="text-red-500">' + ExampleOrgI18n.t('dyn.qms.error_loading_details') + '</p>';
                 }
             }
 
@@ -1601,49 +1601,49 @@
 
             async function approveCapaClosure(id) {
                 const approver = document.getElementById('capaApprover').value;
-                if (!approver) { alert(WalaPlusI18n.t('dyn.qms.enter_name_email')); return; }
+                if (!approver) { alert(ExampleOrgI18n.t('dyn.qms.enter_name_email')); return; }
                 try {
                     const res = await fetch(`/api/qms/capa/${id}/approve-closure`, {
                         method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
                         body: JSON.stringify({approved_by: approver})
                     });
-                    if (res.ok) { alert(WalaPlusI18n.t('dyn.qms.closure_approved')); showCapaDetail(id); loadCapa(); }
-                    else { const e = await res.json(); alert(WalaPlusI18n.t('dyn.qms.error_prefix', { msg: e.error || WalaPlusI18n.t('dyn.qms.failed') })); }
-                } catch(e) { alert(WalaPlusI18n.t('dyn.qms.error_approve_closure')); }
+                    if (res.ok) { alert(ExampleOrgI18n.t('dyn.qms.closure_approved')); showCapaDetail(id); loadCapa(); }
+                    else { const e = await res.json(); alert(ExampleOrgI18n.t('dyn.qms.error_prefix', { msg: e.error || ExampleOrgI18n.t('dyn.qms.failed') })); }
+                } catch(e) { alert(ExampleOrgI18n.t('dyn.qms.error_approve_closure')); }
             }
 
             async function approveNcClosure(id) {
                 const approver = document.getElementById('ncApprover').value;
-                if (!approver) { alert(WalaPlusI18n.t('dyn.qms.enter_name_email')); return; }
+                if (!approver) { alert(ExampleOrgI18n.t('dyn.qms.enter_name_email')); return; }
                 try {
                     const res = await fetch(`/api/qms/nc/${id}/approve-closure`, {
                         method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
                         body: JSON.stringify({approved_by: approver})
                     });
-                    if (res.ok) { alert(WalaPlusI18n.t('dyn.qms.closure_approved')); showNcDetail(id); loadNc(); }
-                    else { const e = await res.json(); alert(WalaPlusI18n.t('dyn.qms.error_prefix', { msg: e.error || WalaPlusI18n.t('dyn.qms.failed') })); }
-                } catch(e) { alert(WalaPlusI18n.t('dyn.qms.error_approve_closure')); }
+                    if (res.ok) { alert(ExampleOrgI18n.t('dyn.qms.closure_approved')); showNcDetail(id); loadNc(); }
+                    else { const e = await res.json(); alert(ExampleOrgI18n.t('dyn.qms.error_prefix', { msg: e.error || ExampleOrgI18n.t('dyn.qms.failed') })); }
+                } catch(e) { alert(ExampleOrgI18n.t('dyn.qms.error_approve_closure')); }
             }
 
             async function recordCapaEffectiveness(id) {
                 const result = document.getElementById('capaEffResult').value;
                 const evidence = document.getElementById('capaEffEvidence').value;
                 const reviewer = document.getElementById('capaEffReviewer').value;
-                if (!reviewer) { alert(WalaPlusI18n.t('dyn.qms.enter_reviewer')); return; }
+                if (!reviewer) { alert(ExampleOrgI18n.t('dyn.qms.enter_reviewer')); return; }
                 try {
                     const res = await fetch(`/api/qms/capa/${id}/effectiveness`, {
                         method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
                         body: JSON.stringify({result, evidence, reviewed_by: reviewer})
                     });
-                    if (res.ok) { alert(WalaPlusI18n.t('dyn.qms.effectiveness_recorded')); showCapaDetail(id); loadCapa(); }
-                    else { const e = await res.json(); alert(WalaPlusI18n.t('dyn.qms.error_prefix', { msg: e.error || WalaPlusI18n.t('dyn.qms.failed') })); }
-                } catch(e) { alert(WalaPlusI18n.t('dyn.qms.error_recording_effectiveness')); }
+                    if (res.ok) { alert(ExampleOrgI18n.t('dyn.qms.effectiveness_recorded')); showCapaDetail(id); loadCapa(); }
+                    else { const e = await res.json(); alert(ExampleOrgI18n.t('dyn.qms.error_prefix', { msg: e.error || ExampleOrgI18n.t('dyn.qms.failed') })); }
+                } catch(e) { alert(ExampleOrgI18n.t('dyn.qms.error_recording_effectiveness')); }
             }
 
             async function addEvidence(entityType, entityId) {
                 const filename = document.getElementById('evidenceFilename').value;
                 const uploader = document.getElementById('evidenceUploader').value;
-                if (!filename || !uploader) { alert(WalaPlusI18n.t('dyn.qms.enter_filename_name')); return; }
+                if (!filename || !uploader) { alert(ExampleOrgI18n.t('dyn.qms.enter_filename_name')); return; }
                 try {
                     const res = await fetch('/api/evidence', {
                         method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
@@ -1652,12 +1652,12 @@
                     if (res.ok) {
                         if (entityType === 'capa') showCapaDetail(entityId);
                         else showNcDetail(entityId);
-                    } else { alert(WalaPlusI18n.t('dyn.qms.failed_add_evidence')); }
-                } catch(e) { alert(WalaPlusI18n.t('dyn.qms.error_adding_evidence')); }
+                    } else { alert(ExampleOrgI18n.t('dyn.qms.failed_add_evidence')); }
+                } catch(e) { alert(ExampleOrgI18n.t('dyn.qms.error_adding_evidence')); }
             }
 
             async function deleteEvidence(id) {
-                if (!confirm(WalaPlusI18n.t('dyn.qms.confirm_remove_evidence'))) return;
+                if (!confirm(ExampleOrgI18n.t('dyn.qms.confirm_remove_evidence'))) return;
                 try {
                     await fetch(`/api/evidence/${id}`, {method:'DELETE', credentials:'same-origin'});
                     closeDetailModal();
@@ -1692,14 +1692,14 @@
             async function exportCSV(type) {
                 try {
                     const res = await fetch(buildQmsExportUrl(type), {credentials:'same-origin'});
-                    if (!res.ok) { alert(WalaPlusI18n.t('dyn.qms.export_failed')); return; }
+                    if (!res.ok) { alert(ExampleOrgI18n.t('dyn.qms.export_failed')); return; }
                     const blob = await res.blob();
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url; a.download = `${type}_export_${new Date().toISOString().slice(0,10)}.csv`;
                     document.body.appendChild(a); a.click(); a.remove();
                     URL.revokeObjectURL(url);
-                } catch(e) { alert(WalaPlusI18n.t('dyn.qms.export_error')); }
+                } catch(e) { alert(ExampleOrgI18n.t('dyn.qms.export_error')); }
             }
 
             function toggleAllCheckboxes(type, masterCheckbox) {
@@ -1724,19 +1724,19 @@
                 const ids = Array.from(checked).map(cb => parseInt(cb.value));
                 const statusSelect = document.getElementById(`${type}-bulk-status`);
                 const newStatus = statusSelect.value;
-                if (!newStatus) { alert(WalaPlusI18n.t('dyn.qms.select_status')); return; }
-                if (!confirm(WalaPlusI18n.t('dyn.qms.confirm_bulk_update', { count: ids.length, type: type.toUpperCase(), status: newStatus }))) return;
+                if (!newStatus) { alert(ExampleOrgI18n.t('dyn.qms.select_status')); return; }
+                if (!confirm(ExampleOrgI18n.t('dyn.qms.confirm_bulk_update', { count: ids.length, type: type.toUpperCase(), status: newStatus }))) return;
                 try {
                     const res = await fetch(`/api/qms/${type}/bulk-update`, {
                         method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
                         body: JSON.stringify({ids, updates:{status: newStatus}})
                     });
                     if (res.ok) {
-                        alert(WalaPlusI18n.t('dyn.qms.records_updated', { count: ids.length }));
+                        alert(ExampleOrgI18n.t('dyn.qms.records_updated', { count: ids.length }));
                         if (type === 'capa') loadCapa(); else loadNc();
                         document.getElementById(`${type}-bulk-toolbar`).classList.add('hidden');
-                    } else { const e = await res.json(); alert(WalaPlusI18n.t('dyn.qms.error_prefix', { msg: e.error || WalaPlusI18n.t('dyn.qms.failed') })); }
-                } catch(e) { alert(WalaPlusI18n.t('dyn.qms.bulk_update_error')); }
+                    } else { const e = await res.json(); alert(ExampleOrgI18n.t('dyn.qms.error_prefix', { msg: e.error || ExampleOrgI18n.t('dyn.qms.failed') })); }
+                } catch(e) { alert(ExampleOrgI18n.t('dyn.qms.bulk_update_error')); }
             }
 
             checkAuth().then(ok => {
@@ -1831,8 +1831,8 @@
             </div>
         </div>
         <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

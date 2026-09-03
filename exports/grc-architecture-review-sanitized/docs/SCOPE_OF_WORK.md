@@ -2117,7 +2117,7 @@ The ExampleOrg platform is built on standard, open-source technologies (Node.js,
 
 1. Export the database from Replit PostgreSQL:
    ```bash
-   pg_dump $DATABASE_URL --no-owner --no-acl > walaplus_backup.sql
+   pg_dump $DATABASE_URL --no-owner --no-acl > ExampleOrg_backup.sql
    ```
 2. Create the target database:
    ```bash
@@ -2125,7 +2125,7 @@ The ExampleOrg platform is built on standard, open-source technologies (Node.js,
    ```
 3. Import the data:
    ```bash
-   psql -d ExampleOrg < walaplus_backup.sql
+   psql -d ExampleOrg < ExampleOrg_backup.sql
    ```
 4. Verify table counts and data integrity
 

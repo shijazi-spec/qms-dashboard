@@ -2,10 +2,10 @@
     if (document.getElementById('ai-consultant-widget')) return;
     if (window.location.pathname.includes('consultant.html')) return;
 
-    // i18n helper — resolves from WalaPlusI18n if available, else falls back to English literal
+    // i18n helper — resolves from ExampleOrgI18n if available, else falls back to English literal
     function _t(key, fallback) {
-        if (window.WalaPlusI18n && typeof window.WalaPlusI18n.t === 'function') {
-            var val = window.WalaPlusI18n.t(key);
+        if (window.ExampleOrgI18n && typeof window.ExampleOrgI18n.t === 'function') {
+            var val = window.ExampleOrgI18n.t(key);
             // t() returns last key segment when key is missing; treat as untranslated
             if (val && val !== key.split('.').pop()) return val;
         }
@@ -126,7 +126,7 @@
     function _resolveWidgetNonce() {
         var n = (document.currentScript && document.currentScript.nonce) || '';
         if (n) return n;
-        if (window.WALAPLUS_NAV_NONCE) return window.WALAPLUS_NAV_NONCE;
+        if (window.ExampleOrg_NAV_NONCE) return window.ExampleOrg_NAV_NONCE;
         var el = document.querySelector('script[nonce], style[nonce]');
         return (el && (el.nonce || el.getAttribute('nonce'))) || '';
     }
@@ -357,7 +357,7 @@
     }
 
     window._closeAIWidget = function() { setWidgetOpen(false); };
-    // Opened by the global header 🤖 Adam button (WalaPlusNav.openAssistant).
+    // Opened by the global header 🤖 Adam button (ExampleOrgNav.openAssistant).
     window._openAIWidget = function() {
         setWidgetOpen(true);
         widgetLoadThreadHistory();
@@ -448,7 +448,7 @@
         widgetSendMessage(text);
     };
 
-    // Re-apply translations after WalaPlusI18n has fully loaded (async)
+    // Re-apply translations after ExampleOrgI18n has fully loaded (async)
     function applyWidgetTranslations() {
         var header = widget.querySelector('#ai-widget-header h3');
         if (header) {
@@ -516,10 +516,10 @@
     }
 
     // If i18n loads after the widget, re-apply translations once it's ready
-    if (window.WalaPlusI18n && typeof window.WalaPlusI18n.onReady === 'function') {
-        window.WalaPlusI18n.onReady(applyWidgetTranslations);
+    if (window.ExampleOrgI18n && typeof window.ExampleOrgI18n.onReady === 'function') {
+        window.ExampleOrgI18n.onReady(applyWidgetTranslations);
     } else {
-        document.addEventListener('walaPlusI18nReady', applyWidgetTranslations);
+        document.addEventListener('ExampleOrgI18nReady', applyWidgetTranslations);
     }
 
     // CSP-safe close handler invoked via data-on-click="aiWidgetClose"
@@ -676,8 +676,8 @@
         widgetCloseDownModal();
     };
 
-    var W_FB_QUEUE_KEY = 'walaplus_feedback_queue';
-    var W_RATING_CACHE_KEY = 'walaplus_msg_ratings';
+    var W_FB_QUEUE_KEY = 'ExampleOrg_feedback_queue';
+    var W_RATING_CACHE_KEY = 'ExampleOrg_msg_ratings';
 
     function wRatingCacheGet(messageId) {
         try { var m = JSON.parse(localStorage.getItem(W_RATING_CACHE_KEY) || '{}'); return m[messageId] || null; } catch(e) { return null; }

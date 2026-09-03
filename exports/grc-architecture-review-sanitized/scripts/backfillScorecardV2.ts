@@ -123,7 +123,7 @@ async function run(): Promise<void> {
     const active = activeRes.rows[0];
     const isCopc =
       !!active.dimensions?.sections ||
-      !!active.dimensions?.meta?.schema?.startsWith?.("walaplus_copc");
+      !!active.dimensions?.meta?.schema?.startsWith?.("ExampleOrg_copc");
     if (!isCopc) {
       console.error(
         `[backfill] active scorecard "${active.name}" is not COPC v2. Aborting.`,

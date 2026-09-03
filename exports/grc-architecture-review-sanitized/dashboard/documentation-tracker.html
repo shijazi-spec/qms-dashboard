@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -88,7 +88,7 @@
     <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            WalaPlusNav.init('documentation-tracker');
+            ExampleOrgNav.init('documentation-tracker');
         });
     </script>
 
@@ -263,7 +263,7 @@
         };
 
         function dtrackT(k, fb) {
-            return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb;
+            return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb;
         }
 
         function dtrackEsc(s) {
@@ -627,14 +627,14 @@
 
         document.addEventListener('DOMContentLoaded', async function () {
             // WAIT for translations before rendering anything.
-            // The WalaPlusI18n translate helper returns the LAST DOT-SEGMENT of a key when the
+            // The ExampleOrgI18n translate helper returns the LAST DOT-SEGMENT of a key when the
             // catalogue has not loaded (i18n.js), not null — so the `|| fallback`
             // in dtrackT never fires and the UI renders raw key fragments like
             // "k_tracked" and "s_linked". init() is cached, so awaiting it here
             // is cheap and idempotent alongside the footer bootstrap.
             try {
-                if (window.WalaPlusI18n && window.WalaPlusI18n.init) {
-                    await window.WalaPlusI18n.init();
+                if (window.ExampleOrgI18n && window.ExampleOrgI18n.init) {
+                    await window.ExampleOrgI18n.init();
                 }
             } catch (e) { /* fall through to the English fallbacks */ }
 
@@ -675,8 +675,8 @@
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

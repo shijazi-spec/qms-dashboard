@@ -68,7 +68,7 @@ await suite.test("GET /sop — redirects to /login when unauthenticated (defense
 await suite.test("GET /api/sop — 200 with content/version/lastUpdated when SOP file exists, else 404", async () => {
   const handler = await buildHandler(sopRoutes, "/api/sop", "GET");
   const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
-  const present = existsSync(join(process.cwd(), "docs", "WalaPlus_Platform_SOP.md"));
+  const present = existsSync(join(process.cwd(), "docs", "ExampleOrg_Platform_SOP.md"));
   if (present) {
     suite.expectEqual(res.status, 200, "status");
     suite.expect(typeof res.body?.content === "string" && res.body.content.length > 0, "body.content non-empty");
@@ -83,12 +83,12 @@ await suite.test("GET /api/sop — 200 with content/version/lastUpdated when SOP
 await suite.test("GET /api/sop/download — sets attachment headers when SOP file exists", async () => {
   const handler = await buildHandler(sopRoutes, "/api/sop/download", "GET");
   const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
-  const present = existsSync(join(process.cwd(), "docs", "WalaPlus_Platform_SOP.md"));
+  const present = existsSync(join(process.cwd(), "docs", "ExampleOrg_Platform_SOP.md"));
   if (present) {
     suite.expectEqual(res.status, 200, "status");
     suite.expectEqual(res.headers["Content-Type"], "text/markdown; charset=utf-8", "Content-Type header");
     suite.expect(
-      (res.headers["Content-Disposition"] ?? "").includes("WalaPlus_Platform_SOP.md"),
+      (res.headers["Content-Disposition"] ?? "").includes("ExampleOrg_Platform_SOP.md"),
       "Content-Disposition mentions filename",
     );
   } else {

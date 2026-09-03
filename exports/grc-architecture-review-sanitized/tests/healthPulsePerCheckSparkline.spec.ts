@@ -131,14 +131,14 @@ test.describe('Health Pulse — per-check expanded sparkline (Task #760)', () =>
   test.beforeEach(async ({ page }) => {
     if (shouldSkip()) return;
     // Same i18n-race guard as healthPulseCopyCheckLink.spec.ts: hold the
-    // mocked pulse fetch until WalaPlusI18n has loaded its strings,
+    // mocked pulse fetch until ExampleOrgI18n has loaded its strings,
     // otherwise sparkline labels render raw key fallbacks.
     await page.route(`**${PULSE_PATH}`, async (route) => {
       try {
         await page.waitForFunction(
           () =>
-            typeof (window as any).WalaPlusI18n !== 'undefined' &&
-            (window as any).WalaPlusI18n.t('dyn.health.sparkline_label', { count: 5 }) ===
+            typeof (window as any).ExampleOrgI18n !== 'undefined' &&
+            (window as any).ExampleOrgI18n.t('dyn.health.sparkline_label', { count: 5 }) ===
               'Last 5 runs',
           undefined,
           { timeout: 5_000 }

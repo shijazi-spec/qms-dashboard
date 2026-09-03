@@ -9,7 +9,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -31,7 +31,7 @@
 <body class="bg-gray-50 min-h-screen">
   <div id="ExampleOrg-nav"></div>
   <script src="/js/navigation.js"></script>
-  <script>try { WalaPlusNav.init('leadership-kpis'); } catch (e) {}</script>
+  <script>try { ExampleOrgNav.init('leadership-kpis'); } catch (e) {}</script>
 
   <div class="max-w-6xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-2">
@@ -150,8 +150,8 @@
     load();
   </script>
   <script>
-    if (window.WalaPlusI18n) {
-      window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+    if (window.ExampleOrgI18n) {
+      window.ExampleOrgI18n.init().then(() => window.ExampleOrgI18n.applyToDOM());
     }
   </script>
 </body>

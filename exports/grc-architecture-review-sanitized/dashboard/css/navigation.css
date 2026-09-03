@@ -278,7 +278,7 @@ body.wp-rail-collapsed .wp-rail .wp-pin-btn svg { width: 0.75rem; height: 0.75re
 
 
 /* ============================================================
- * Dark mode (toggle in topbar — see WalaPlusNav.toggleTheme)
+ * Dark mode (toggle in topbar — see ExampleOrgNav.toggleTheme)
  * Activated by adding `wp-dark` class to <html>. Pure CSS
  * overrides — no Tailwind config change required. Targets the
  * most common surfaces (body, cards, headings, borders, inputs,

@@ -58,7 +58,7 @@ function makeSessionCookie(email: string, role: string): string {
     role,
     exp: Date.now() + 3600_000,
   });
-  return `walaplus_session=${encodeURIComponent(token)}`;
+  return `ExampleOrg_session=${encodeURIComponent(token)}`;
 }
 
 const TEST_USERS = [

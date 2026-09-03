@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -74,7 +74,7 @@
         <script src="/js/navigation.js?v=5.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            WalaPlusNav.init('tablef');
+            ExampleOrgNav.init('tablef');
         });
     </script>
 
@@ -835,7 +835,7 @@
         function loadDepartmentView() {
             const deptId = document.getElementById('deptSelect').value;
             if (!deptId) {
-                document.getElementById('deptSummaryCards').innerHTML = '<p class="text-gray-500">' + WalaPlusI18n.t('dyn.tablef.select_dept') + '</p>';
+                document.getElementById('deptSummaryCards').innerHTML = '<p class="text-gray-500">' + ExampleOrgI18n.t('dyn.tablef.select_dept') + '</p>';
                 document.getElementById('deptKpiTable').innerHTML = '';
                 return;
             }
@@ -1034,7 +1034,7 @@
         }
 
         function showAddKpiModal() {
-            document.getElementById('kpiModalTitle').textContent = WalaPlusI18n.t('dyn.tablef.add_kpi_title');
+            document.getElementById('kpiModalTitle').textContent = ExampleOrgI18n.t('dyn.tablef.add_kpi_title');
             document.getElementById('kpiFormId').value = '';
             document.getElementById('kpiForm').reset();
             document.getElementById('kpiModal').classList.remove('hidden');
@@ -1044,7 +1044,7 @@
             const kpi = kpis.find(k => k.kpi_id === kpiId);
             if (!kpi) return;
             
-            document.getElementById('kpiModalTitle').textContent = WalaPlusI18n.t('dyn.tablef.edit_kpi_title');
+            document.getElementById('kpiModalTitle').textContent = ExampleOrgI18n.t('dyn.tablef.edit_kpi_title');
             document.getElementById('kpiFormId').value = kpi.kpi_id;
             document.getElementById('kpiFormDept').value = kpi.department_id;
             document.getElementById('kpiFormCat').value = kpi.category;
@@ -1091,7 +1091,7 @@
             const kpi = kpis.find(k => k.kpi_id === kpiId);
             if (!kpi) return;
             
-            document.getElementById('perfModalTitle').textContent = WalaPlusI18n.t('dyn.tablef.update_perf_title');
+            document.getElementById('perfModalTitle').textContent = ExampleOrgI18n.t('dyn.tablef.update_perf_title');
             document.getElementById('perfModalSubtitle').textContent = kpi.name;
             document.getElementById('perfFormKpiId').value = kpi.kpi_id;
             document.getElementById('perfFormTarget').value = kpi.target_monthly || '';
@@ -1163,15 +1163,15 @@
             const btn = event && event.target ? event.target : null;
             const original = btn ? btn.textContent : '';
             try {
-                if (btn) { btn.disabled = true; btn.textContent = WalaPlusI18n.t('dyn.tablef.refreshing'); }
+                if (btn) { btn.disabled = true; btn.textContent = ExampleOrgI18n.t('dyn.tablef.refreshing'); }
                 await loadData();
                 if (typeof loadInsights === 'function') loadInsights();
-                if (btn) btn.textContent = WalaPlusI18n.t('dyn.tablef.insights_updated');
-                setTimeout(() => { if (btn) { btn.textContent = original || WalaPlusI18n.t('dyn.tablef.generate_ai_insights'); btn.disabled = false; } }, 1500);
+                if (btn) btn.textContent = ExampleOrgI18n.t('dyn.tablef.insights_updated');
+                setTimeout(() => { if (btn) { btn.textContent = original || ExampleOrgI18n.t('dyn.tablef.generate_ai_insights'); btn.disabled = false; } }, 1500);
             } catch (e) {
                 console.error('generateAiInsights error', e);
-                if (btn) { btn.textContent = original || WalaPlusI18n.t('dyn.tablef.generate_ai_insights'); btn.disabled = false; }
-                alert(WalaPlusI18n.t('dyn.tablef.failed_refresh_insights'));
+                if (btn) { btn.textContent = original || ExampleOrgI18n.t('dyn.tablef.generate_ai_insights'); btn.disabled = false; }
+                alert(ExampleOrgI18n.t('dyn.tablef.failed_refresh_insights'));
             }
         }
 
@@ -1179,8 +1179,8 @@
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        if (window.ExampleOrgI18n) {
+            window.ExampleOrgI18n.init().then(function () { window.ExampleOrgI18n.applyToDOM(); });
         }
     </script>
 </body>

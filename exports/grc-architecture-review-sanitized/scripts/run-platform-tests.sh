@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ExampleOrg Platform Test Runner
-# Runs every documented test case from WALAPLUS_FEATURE_BOOK.md and writes a
-# Markdown report to WALAPLUS_TEST_REPORT.md.
+# Runs every documented test case from ExampleOrg_FEATURE_BOOK.md and writes a
+# Markdown report to ExampleOrg_TEST_REPORT.md.
 
 set -u
 BASE="${BASE:-<REDACTED_URL>"
 KEY="X-Admin-Key: ${ADMIN_API_KEY:-ExampleOrg-QMS-Admin-2026}"
-REPORT="WALAPLUS_TEST_REPORT.md"
+REPORT="ExampleOrg_TEST_REPORT.md"
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 PASS=0; FAIL=0; SKIP=0

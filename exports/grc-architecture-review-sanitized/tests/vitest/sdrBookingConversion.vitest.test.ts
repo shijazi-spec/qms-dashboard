@@ -1,7 +1,7 @@
 /**
  * SDR-KPI-12 Booking Conversion Rate — the governed meeting-conversion KPI.
  *
- * Source: SDR Governance Document (WalaPlus_SDR v2.2, 08.12.2025), Individual
+ * Source: SDR Governance Document (ExampleOrg_SDR v2.2, 08.12.2025), Individual
  * KPIs table — "(# of Booked meetings / Total leads answered) x 100", target
  * >=40%. It replaced ADHOC-SALES-04, whose 20% target came from a BI-portal
  * screenshot and appears in no controlled document.

@@ -10,7 +10,7 @@
     <script id="ExampleOrg-theme-fouc-init">
         (function () {
             try {
-                var v = localStorage.getItem('walaplus_theme');
+                var v = localStorage.getItem('ExampleOrg_theme');
                 if (v === 'dark') {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.add('wp-dark');
@@ -172,7 +172,7 @@
     <script src="/js/alert-resolution.js?v=1"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            WalaPlusNav.init('consultant');
+            ExampleOrgNav.init('consultant');
         });
     </script>
 
@@ -525,7 +525,7 @@
 
         function timeAgo(dateStr) {
             if (!dateStr) return '';
-            var _cT = window.WalaPlusI18n ? function(k) { return window.WalaPlusI18n.t(k); } : function(k) { return k.split('.').pop(); };
+            var _cT = window.ExampleOrgI18n ? function(k) { return window.ExampleOrgI18n.t(k); } : function(k) { return k.split('.').pop(); };
             var diff = Date.now() - new Date(dateStr).getTime();
             var mins = Math.floor(diff / 60000);
             if (mins < 1) return _cT('nav.time.just_now');
@@ -734,8 +734,8 @@
             closeFeedbackModal();
         };
 
-        var FEEDBACK_QUEUE_KEY = 'walaplus_feedback_queue';
-        var RATING_CACHE_KEY = 'walaplus_msg_ratings';
+        var FEEDBACK_QUEUE_KEY = 'ExampleOrg_feedback_queue';
+        var RATING_CACHE_KEY = 'ExampleOrg_msg_ratings';
 
         function ratingCacheGet(messageId) {
             try { var m = JSON.parse(localStorage.getItem(RATING_CACHE_KEY) || '{}'); return m[messageId] || null; } catch(e) { return null; }
@@ -1320,7 +1320,7 @@
             var scanFill = document.getElementById('scanProgressFill');
             var scanLabel = document.getElementById('scanProgressLabel');
             var scanPct = document.getElementById('scanProgressPct');
-            var _sT = window.WalaPlusI18n ? function(k) { return window.WalaPlusI18n.t(k); } : function(k) { return k.split('.').pop(); };
+            var _sT = window.ExampleOrgI18n ? function(k) { return window.ExampleOrgI18n.t(k); } : function(k) { return k.split('.').pop(); };
             scanArea.classList.remove('hidden');
             scanFill.style.width = '5%';
             scanLabel.textContent = _sT('consultant.scan_initiating');
@@ -1344,7 +1344,7 @@
                 clearInterval(progressTimer);
                 scanFill.style.width = '100%';
                 scanPct.textContent = '100%';
-                scanLabel.textContent = window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.scan_complete') : 'Scan complete!';
+                scanLabel.textContent = window.ExampleOrgI18n ? window.ExampleOrgI18n.t('consultant.scan_complete') : 'Scan complete!';
 
                 // 2026-06-08 — read body before throwing so the real server
                 // error surfaces in the bubble instead of "Scan returned 500"
@@ -1418,10 +1418,10 @@
                                 '<div class="text-xs font-medium text-gray-700 truncate">' + escapeHtml(alert.title || 'Alert') + '</div>' +
                                 '<div class="text-[10px] text-gray-400 mt-0.5">' + escapeHtml(timeAgo(alert.created_at)) + ' · ' + escapeHtml(severity) + '</div>' +
                                 '<div class="flex gap-1 mt-1">' +
-                                    '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, 'acknowledge'])) + '" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_acknowledge') : 'Acknowledge') + '">ACK</button>' +
-                                    '<button class="alert-action-btn bg-green-50 text-green-700 border-green-200 hover:bg-green-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, 'resolve'])) + '" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_resolve') : 'Resolve') + '">✓</button>' +
-                                    '<button class="alert-action-btn bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, 'dismiss'])) + '" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_dismiss') : 'Dismiss') + '">✕</button>' +
-                                    '<button class="alert-action-btn bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100" data-on-click="askAboutAlert" data-args="' + escAttr(JSON.stringify([escapeHtml(alert.title || '')])) + '" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_ask_ai') : 'Ask AI') + '">?</button>' +
+                                    '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, 'acknowledge'])) + '" title="' + (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('consultant.alert_acknowledge') : 'Acknowledge') + '">ACK</button>' +
+                                    '<button class="alert-action-btn bg-green-50 text-green-700 border-green-200 hover:bg-green-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, 'resolve'])) + '" title="' + (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('consultant.alert_resolve') : 'Resolve') + '">✓</button>' +
+                                    '<button class="alert-action-btn bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, 'dismiss'])) + '" title="' + (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('consultant.alert_dismiss') : 'Dismiss') + '">✕</button>' +
+                                    '<button class="alert-action-btn bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100" data-on-click="askAboutAlert" data-args="' + escAttr(JSON.stringify([escapeHtml(alert.title || '')])) + '" title="' + (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('consultant.alert_ask_ai') : 'Ask AI') + '">?</button>' +
                                 '</div>' +
                             '</div>' +
                         '</div>';
@@ -1441,7 +1441,7 @@
                 // submits a no-note resolve (server treats it as none).
                 var bodyPayload = { acknowledgedBy: 'user' };
                 if (action === 'resolve') {
-                    var i18n = window.WalaPlusI18n;
+                    var i18n = window.ExampleOrgI18n;
                     var promptMsg = i18n
                         ? i18n.t('consultant.resolve_note_prompt')
                         : 'Optional: add a resolution note (why/how this alert was closed). Leave blank to skip.';
@@ -1476,8 +1476,8 @@
                     alertBadge.classList.add('hidden');
                     alertBadge.classList.remove('flex');
                 }
-                if (window.WalaPlusNav && window.WalaPlusNav._lastAlertCount !== undefined) {
-                    window.WalaPlusNav._lastAlertCount = count;
+                if (window.ExampleOrgNav && window.ExampleOrgNav._lastAlertCount !== undefined) {
+                    window.ExampleOrgNav._lastAlertCount = count;
                 }
             } catch (e) {}
         }
@@ -1645,12 +1645,12 @@
         // wrapper preserves the historical isAutoResolved() entry point
         // for any code that only needs the auto/manual binary view.
         function isAutoResolved(a) {
-            var R = window.WalaPlusAlertResolution;
+            var R = window.ExampleOrgAlertResolution;
             if (!R) return false;
             return R.isAutoResolved(a);
         }
         function categorizeResolution(a) {
-            var R = window.WalaPlusAlertResolution;
+            var R = window.ExampleOrgAlertResolution;
             return R ? R.categorize(a) : null;
         }
         // Short, locale-aware "YYYY-MM-DD HH:MM UTC" so the inline
@@ -1696,10 +1696,10 @@
                     return;
                 }
 
-                var i18n = window.WalaPlusI18n;
+                var i18n = window.ExampleOrgI18n;
                 var autoLabel = i18n ? i18n.t('consultant.alert_badge_auto_resolved') : 'Auto-resolved';
                 var manualLabel = i18n ? i18n.t('consultant.alert_badge_manual_resolved') : 'Manually resolved';
-                var R = window.WalaPlusAlertResolution || null;
+                var R = window.ExampleOrgAlertResolution || null;
 
                 content.innerHTML = alerts.map(function(a) {
                     var icon = severityIcons[a.severity] || severityIcons.info;
@@ -1793,7 +1793,7 @@
         };
 
         function exportChat() {
-            if (!chatMessages.length) { alert(window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.no_messages_export') : 'No messages to export.'); return; }
+            if (!chatMessages.length) { alert(window.ExampleOrgI18n ? window.ExampleOrgI18n.t('consultant.no_messages_export') : 'No messages to export.'); return; }
             var md = '# Adam - Chat Export\n';
             md += '**Date:** ' + new Date().toLocaleString() + '\n';
             md += '**Thread:** ' + (threadId || 'N/A') + '\n\n---\n\n';
@@ -1847,7 +1847,7 @@
             var scanEl = document.getElementById('welcomeLastScan');
             if (scanEl) {
                 var lastScanTime = localStorage.getItem('lastScanTime');
-                scanEl.textContent = lastScanTime ? timeAgo(lastScanTime) : (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.never') : 'Never');
+                scanEl.textContent = lastScanTime ? timeAgo(lastScanTime) : (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('consultant.never') : 'Never');
             }
         }
 
@@ -1872,7 +1872,7 @@
             }
         }
         async function clearAdamMemory() {
-            var msg = (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.memory_clear_confirm') : '') ||
+            var msg = (window.ExampleOrgI18n ? window.ExampleOrgI18n.t('consultant.memory_clear_confirm') : '') ||
                 'Clear everything Adam remembers about you? This cannot be undone.';
             if (!confirm(msg)) return;
             var el = document.getElementById('adamMemoryContent');
@@ -2562,8 +2562,8 @@
     })();
 
     // i18n init for consultant page
-    if (window.WalaPlusI18n) {
-        window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+    if (window.ExampleOrgI18n) {
+        window.ExampleOrgI18n.init().then(() => window.ExampleOrgI18n.applyToDOM());
     }
     </script>
 </body>

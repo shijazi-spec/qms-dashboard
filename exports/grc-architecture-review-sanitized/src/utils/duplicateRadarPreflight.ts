@@ -3147,7 +3147,7 @@ export async function listActiveClientDomains(opts?: {
   domains: string[];
   rows: Array<{ domain: string; product: "ExampleOrg" | "DOAM" }>;
   total: number;
-  walaplus_count: number;
+  ExampleOrg_count: number;
   doam_count: number;
   qualifying_deals: number;
   missing_company_domain: number;
@@ -3296,14 +3296,14 @@ export async function listActiveClientDomains(opts?: {
         | "ExampleOrg"
         | "DOAM",
     }));
-  const walaplusCount = rows.filter((r) => r.product === "ExampleOrg").length;
+  const ExampleOrgCount = rows.filter((r) => r.product === "ExampleOrg").length;
   const doamCount = rows.filter((r) => r.product === "DOAM").length;
 
   return {
     domains: rows.map((r) => r.domain),
     rows,
     total: rows.length,
-    walaplus_count: walaplusCount,
+    ExampleOrg_count: ExampleOrgCount,
     doam_count: doamCount,
     qualifying_deals: qualifying,
     missing_company_domain: missingCompanyDomain,

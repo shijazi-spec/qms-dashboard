@@ -113,8 +113,8 @@ async function setUpDom(opts: SetUpDomOptions): Promise<{
   // (e.g. nav.js, ai-consultant-widget.js). Without these stubs the
   // bootstrap callback throws, polluting test output even though the
   // throws are caught.
-  (window as any).WalaPlusNav = { init: () => undefined };
-  (window as any).WalaPlusI18n = { init: () => Promise.resolve(), applyToDOM: () => undefined };
+  (window as any).ExampleOrgNav = { init: () => undefined };
+  (window as any).ExampleOrgI18n = { init: () => Promise.resolve(), applyToDOM: () => undefined };
   // `function name(){…}` declarations at top level become non-writable
   // bindings in some engines, but in JSDOM/Node V8 they're plain
   // assignable globals — installing a `var name = …` shim before eval

@@ -282,7 +282,7 @@ function buildSlackBlocks(
       {
         type: "mrkdwn",
         text:
-          `:robot_face: _WalaPlus security reviewer notifier | tool: ${n.tool_label}_`,
+          `:robot_face: _ExampleOrg security reviewer notifier | tool: ${n.tool_label}_`,
       },
     ],
   });
