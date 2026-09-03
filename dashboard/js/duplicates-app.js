@@ -8242,7 +8242,14 @@
             if (typeof clearDcChartFilter === 'function') clearDcChartFilter(); // rows rebuilt → drop any active chart filter
             body.innerHTML = rrSkeletonRows(7);
             var stages = _dcSelectedStages();
-            var url = '/api/duplicates/deal-compliance' + (stages.length ? ('?stages=' + encodeURIComponent(stages.join(','))) : '');
+            // Layout scope applies to the TABLE as well as the export, so the
+            // two can never disagree (Sarah 2026-09-03).
+            var _dcParams = new URLSearchParams();
+            if (stages.length) _dcParams.set('stages', stages.join(','));
+            var _dcLayout = _dcSelectedLayoutSegment();
+            if (_dcLayout) _dcParams.set('segment', _dcLayout);
+            var _dcQs = _dcParams.toString();
+            var url = '/api/duplicates/deal-compliance' + (_dcQs ? ('?' + _dcQs) : '');
             // Segment chip (Marketplace / WalaPlus / WalaOne) — filter deals by Layout.
             var _dcSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
             if (_dcSeg && _dcSeg !== 'all') url += (url.indexOf('?') >= 0 ? '&' : '?') + 'segment=' + encodeURIComponent(_dcSeg);
@@ -8261,6 +8268,11 @@
             window._loadedTabs.add('deal-compliance');
             var deals = (data && data.deals) || [];
             window._dcDeals = deals;
+            // Rebuild the Layout dropdown from the layouts actually returned.
+            // Skipped while a layout is selected: the response is already
+            // narrowed to it, so rebuilding from it would leave that one option
+            // and strand the operator with no way back to "All layouts".
+            if (!_dcSelectedLayoutSegment()) _dcFillLayoutOptions();
             var bs = (data && data.by_stage) || {};
             var setCard = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
             setCard('dcCardScanned', data.scanned != null ? data.scanned : '—');
@@ -9411,38 +9423,75 @@
         // can only ever offer values that exist. Hardcoding "Standard" as an
         // option — and as the default — produced an empty workbook, because no
         // deal in the mirror carries that pipeline string (2026-09-03).
-        function _dcFillPipelineOptions() {
-            var sel = document.getElementById('dcReportPipeline');
+        // LAYOUT dropdown for the Deal Compliance tab (Sarah 2026-09-03:
+        // "it shall be a drop-down list by these layout, and the update and
+        // exported file shall be done as per the selected layout").
+        //
+        // Options are built from the layouts actually present in the loaded
+        // deals — WalaPlus / Marketplace / WalaOne — never a hard-coded list,
+        // so a new Zoho layout appears on its own. The value is a SEGMENT key
+        // ('walaplus' | 'marketplace' | 'walaone'), because that is what both
+        // /api/duplicates/deal-compliance and the .xlsx export accept; the
+        // label shown is the human layout name.
+        function _dcLayoutSegment(name) {
+            var n = String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!n) return '';
+            if (n.indexOf('walaone') >= 0) return 'walaone';
+            if (n.indexOf('marketplace') >= 0 || n.indexOf('partner') >= 0) return 'marketplace';
+            if (n.indexOf('walaplus') >= 0 || n.indexOf('corporate') >= 0) return 'walaplus';
+            return '';
+        }
+        function _dcFillLayoutOptions() {
+            var sel = document.getElementById('dcReportLayout');
             if (!sel) return;
+            // segment key -> display label + how many deals carry it, so the
+            // operator can see the split before choosing.
             var seen = {};
             (window._dcDeals || []).forEach(function (d) {
-                var p = (d.pipeline || '').trim();
-                if (p) seen[p] = true;
+                var raw = (d.layout || '').trim();
+                var seg = _dcLayoutSegment(raw);
+                if (!seg) return;
+                if (!seen[seg]) seen[seg] = { label: raw, n: 0 };
+                seen[seg].n++;
             });
-            var values = Object.keys(seen).sort();
+            var keys = Object.keys(seen).sort();
             var keep = sel.value;
-            sel.innerHTML = '<option value="">All pipelines</option>' +
-                values.map(function (v) {
-                    return '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>';
+            sel.innerHTML = '<option value="">All layouts</option>' +
+                keys.map(function (k) {
+                    return '<option value="' + escapeHtml(k) + '">'
+                        + escapeHtml(seen[k].label) + ' (' + _fn(seen[k].n) + ')</option>';
                 }).join('');
-            // A pipeline that no longer exists must not stay silently selected.
-            sel.value = values.indexOf(keep) >= 0 ? keep : '';
-            // No pipeline data at all: hide the control rather than offer an
-            // empty dropdown that looks broken.
-            sel.style.display = values.length ? '' : 'none';
+            // A layout no longer present must not stay silently selected —
+            // otherwise the table and the export would scope to nothing.
+            sel.value = keys.indexOf(keep) >= 0 ? keep : '';
+            sel.style.display = keys.length ? '' : 'none';
+        }
+        // Re-load the tab under the chosen layout. The export reads the same
+        // control, so the workbook always matches what is on screen.
+        function onDcLayoutChange() {
+            loadDealCompliance();
+        }
+        /** The layout the tab + report are currently scoped to ('' = all). */
+        function _dcSelectedLayoutSegment() {
+            var sel = document.getElementById('dcReportLayout');
+            return sel && sel.value ? sel.value : '';
         }
 
         window.exportDealComplianceReport = function () {
-            var seg = document.getElementById('filterSegment')
-                ? document.getElementById('filterSegment').value : 'all';
+            // The Layout dropdown beside the button wins, so the workbook always
+            // matches the table on screen (Sarah 2026-09-03). It falls back to
+            // the global segment chip when set to "All layouts".
+            var seg = _dcSelectedLayoutSegment();
+            if (!seg) {
+                seg = document.getElementById('filterSegment')
+                    ? document.getElementById('filterSegment').value : 'all';
+            }
             var params = new URLSearchParams();
             params.set('segment', seg || 'all');
-            // Pipeline narrowing within the layout. The workbook states the
-            // scope on its "How to read this" sheet either way, so a filtered
-            // copy can never be mistaken for the whole pipeline.
-            var pipe = document.getElementById('dcReportPipeline');
-            if (pipe && pipe.value) params.set('pipeline', pipe.value);
-            _dcFillPipelineOptions(); // keep the list current for the next run
+            // NOTE: no `pipeline` param. Zoho does not return a Pipeline field
+            // on Deals (0 of 146 sampled records carried one), so passing it
+            // filtered every row out and produced an empty workbook. Layout is
+            // the field that actually carries this distinction.
             window.location.href = '/api/duplicates/deal-compliance.xlsx?' + params.toString();
         };
 

@@ -3811,6 +3811,16 @@ export const duplicateRadarRoutes = [
           const rows = deals.map((rec: any) => {
             const d = rec.data || {};
             const stage = d.Stage || "";
+            // Layout is surfaced per row (Sarah 2026-09-03) so the tab can offer
+            // a Layout dropdown built from the data that is actually there —
+            // WalaPlus / Marketplace / WalaOne. The earlier control filtered on
+            // "Pipeline", a field Zoho does not return on Deals at all (0 of 146
+            // sampled records carry it), so it matched nothing and silently
+            // emptied the report. Layout is populated on every deal.
+            const layout =
+              (d.Layout && (d.Layout.name || (typeof d.Layout === "string" ? d.Layout : ""))) ||
+              (d.$layout && d.$layout.name) ||
+              "";
             return {
               id: rec.id,
               name: d.Deal_Name || rec.id,
@@ -3821,6 +3831,7 @@ export const duplicateRadarRoutes = [
                 (typeof d.Account_Name === "object" ? d.Account_Name?.name : d.Account_Name) || null,
               source: d.Lead_Source || "",
               createdTime: d.Created_Time || "",
+              layout: String(layout || ""),
               requiredDocs: requiredDocsForStage(stage).map((x) => ({ key: x.key, label: x.label })),
             };
           });
