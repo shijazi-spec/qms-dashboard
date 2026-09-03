@@ -8248,6 +8248,11 @@
             if (stages.length) _dcParams.set('stages', stages.join(','));
             var _dcLayout = _dcSelectedLayoutSegment();
             if (_dcLayout) _dcParams.set('segment', _dcLayout);
+            var _dcPeriod = _dcSelectedPeriod();
+            if (_dcPeriod.year) {
+                _dcParams.set('period_year', _dcPeriod.year);
+                if (_dcPeriod.quarter) _dcParams.set('period_quarter', _dcPeriod.quarter);
+            }
             var _dcQs = _dcParams.toString();
             var url = '/api/duplicates/deal-compliance' + (_dcQs ? ('?' + _dcQs) : '');
             // Segment chip (Marketplace / WalaPlus / WalaOne) — filter deals by Layout.
@@ -8273,6 +8278,10 @@
             // narrowed to it, so rebuilding from it would leave that one option
             // and strand the operator with no way back to "All layouts".
             if (!_dcSelectedLayoutSegment()) _dcFillLayoutOptions();
+            // Year list is only rebuilt while no year is chosen — the response
+            // is already narrowed to it otherwise, which would leave that single
+            // year and strand the operator with no way back to "All years".
+            if (!_dcSelectedPeriod().year) _dcFillPeriodYears();
             var bs = (data && data.by_stage) || {};
             var setCard = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
             setCard('dcCardScanned', data.scanned != null ? data.scanned : '—');
@@ -9476,6 +9485,47 @@
             var sel = document.getElementById('dcReportLayout');
             return sel && sel.value ? sel.value : '';
         }
+        /** {year, quarter} the tab + report are scoped to; '' means unset. */
+        function _dcSelectedPeriod() {
+            var y = document.getElementById('dcPeriodYear');
+            var q = document.getElementById('dcPeriodQuarter');
+            var year = y && y.value ? y.value : '';
+            // A quarter without a year is meaningless — the server drops it, so
+            // never send one alone.
+            return { year: year, quarter: year && q && q.value ? q.value : '' };
+        }
+        // Years present in the loaded deals, newest first. Built from the data
+        // so a year with no deals is never offered.
+        function _dcFillPeriodYears() {
+            var sel = document.getElementById('dcPeriodYear');
+            if (!sel) return;
+            var seen = {};
+            (window._dcDeals || []).forEach(function (d) {
+                var t = Date.parse(String(d.createdTime || ''));
+                if (isFinite(t)) seen[new Date(t).getUTCFullYear()] = true;
+            });
+            var years = Object.keys(seen).sort().reverse();
+            if (!years.length) return;
+            var keep = sel.value;
+            sel.innerHTML = '<option value="">All years</option>' +
+                years.map(function (y) { return '<option value="' + y + '">' + y + '</option>'; }).join('');
+            sel.value = years.indexOf(keep) >= 0 ? keep : '';
+            _dcSyncQuarterEnabled();
+        }
+        // Quarter is only meaningful inside a year. Disable it otherwise, and
+        // clear any stale quarter so it cannot silently narrow a later choice.
+        function _dcSyncQuarterEnabled() {
+            var y = document.getElementById('dcPeriodYear');
+            var q = document.getElementById('dcPeriodQuarter');
+            if (!y || !q) return;
+            var on = !!y.value;
+            q.disabled = !on;
+            if (!on) q.value = '';
+        }
+        function onDcPeriodChange() {
+            _dcSyncQuarterEnabled();
+            loadDealCompliance();
+        }
 
         // Email the monthly missing-documents report on demand (Sarah
         // 2026-09-03). The cron only fires on day 1, 07:00-09:00 KSA, so a
@@ -9543,6 +9593,13 @@
             }
             var params = new URLSearchParams();
             params.set('segment', seg || 'all');
+            // Same period as the table, so the workbook covers exactly the rows
+            // on screen rather than the whole corpus.
+            var per = _dcSelectedPeriod();
+            if (per.year) {
+                params.set('period_year', per.year);
+                if (per.quarter) params.set('period_quarter', per.quarter);
+            }
             // NOTE: no `pipeline` param. Zoho does not return a Pipeline field
             // on Deals (0 of 146 sampled records carried one), so passing it
             // filtered every row out and produced an empty workbook. Layout is

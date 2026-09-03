@@ -1026,6 +1026,25 @@
                     <option value="marketplace">Marketplace</option>
                     <option value="walaone">WalaOne</option>
                 </select>
+                <!-- PERIOD (Sarah 2026-09-03): year + quarter, on the deal's
+                     Created date — the same date the table's "Created" column
+                     shows. Both scope the table AND the export, like the Layout
+                     dropdown, so the workbook can never cover a different set
+                     than the screen. Years are filled from the loaded deals.
+                     Quarter is disabled until a year is chosen, because a
+                     quarter with no year is meaningless and the server drops
+                     it — better to make that impossible than to ignore it
+                     silently. -->
+                <select id="dcPeriodYear" data-on-change="onDcPeriodChange" aria-label="Year for the Deal Compliance tab and the report" title="Scopes the table and the report to deals CREATED in this year." class="rr-input" data-style="max-width:120px">
+                    <option value="" selected>All years</option>
+                </select>
+                <select id="dcPeriodQuarter" data-on-change="onDcPeriodChange" aria-label="Quarter for the Deal Compliance tab and the report" title="Narrows the chosen year to one quarter. Pick a year first." class="rr-input" data-style="max-width:120px" disabled>
+                    <option value="" selected>All quarters</option>
+                    <option value="1">Q1 (Jan–Mar)</option>
+                    <option value="2">Q2 (Apr–Jun)</option>
+                    <option value="3">Q3 (Jul–Sep)</option>
+                    <option value="4">Q4 (Oct–Dec)</option>
+                </select>
                 <button data-on-click="exportDealComplianceReport" id="dcReportBtn" title="Excel report for the Head of Sales — missing-document rate, a per-owner breakdown, and one sheet per stage (Proposal, Agreement Signed, Paid), scoped to the Layout dropdown beside this button, so the workbook always matches the table on screen. Built from the automatic daily checks, so it downloads instantly." class="rr-btn rr-btn-primary">📄 Report for Head of Sales</button>
                 <button data-on-click="sendMissingDocsReportNow" id="dcSendReportBtn" title="Email the monthly missing-documents report to the configured recipients now. The scheduled job only fires on day 1 of the month, so use this to recover a missed month or to re-send. Shows exactly what will go out, and to how many people, before anything is sent." class="rr-btn rr-btn-ghost">✉️ Send report now</button>
                 <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" title="Optional. Documents are verified automatically in the background every day — use this only to re-check the deals on screen right now. It makes live Zoho calls and takes a while." class="rr-btn rr-btn-ghost">📎 Re-check these now</button>
@@ -2566,7 +2585,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=179"></script>
+    <script src="/js/duplicates-app.js?v=180"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

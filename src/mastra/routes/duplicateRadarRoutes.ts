@@ -3793,6 +3793,28 @@ export const duplicateRadarRoutes = [
           // Segment chip (Sarah 2026-07-15): filter the live Zoho deals to the
           // chosen product by their Layout — Zoho returns Layout as {id,name}.
           // Same classification as buildSegmentPredicate (substring, corporate=walaplus).
+          // PERIOD (Sarah 2026-09-03): year, optionally narrowed to a quarter,
+          // on the deal's CREATED date — the same date the table's "Created"
+          // column shows, so a filtered view is self-explaining. Applied to the
+          // in-memory list rather than the SQL, because the live-from-Zoho path
+          // and the mirror path converge here; one filter covers both and they
+          // can never disagree. A quarter without a year is meaningless and is
+          // ignored, matching how Advanced Filters treats the same pair.
+          const pYear = parseInt(c.req.query("period_year") || "", 10);
+          const pQuarter = parseInt(c.req.query("period_quarter") || "", 10);
+          if (Number.isFinite(pYear) && pYear >= 2000 && pYear <= 2100) {
+            const qOk = Number.isFinite(pQuarter) && pQuarter >= 1 && pQuarter <= 4;
+            const startMonth = qOk ? (pQuarter - 1) * 3 : 0;
+            const endMonth = qOk ? pQuarter * 3 : 12;
+            const from = Date.UTC(pYear, startMonth, 1);
+            const to = Date.UTC(pYear, endMonth, 1);
+            deals = deals.filter((r: any) => {
+              const raw = r?.data?.Created_Time;
+              if (!raw) return false; // no date = cannot be placed in a period
+              const t = Date.parse(String(raw));
+              return Number.isFinite(t) && t >= from && t < to;
+            });
+          }
           const dcSegment = (c.req.query("segment") || "").trim();
           if (dcSegment && dcSegment !== "all") {
             const { classifyLayoutSegment } = await import(
@@ -4266,8 +4288,14 @@ export const duplicateRadarRoutes = [
         // Layout, Standard corporate pipeline"). Substring match — see the note
         // in getDealComplianceReportRows on Zoho's inconsistent spellings.
         const pipeline = (url.searchParams.get("pipeline") || "").trim();
+        // Same period the tab was showing, so the workbook covers exactly the
+        // rows on screen rather than the whole corpus (Sarah 2026-09-03).
+        const xYear = parseInt(url.searchParams.get("period_year") || "", 10);
+        const xQuarter = parseInt(url.searchParams.get("period_quarter") || "", 10);
         const rows = await getDealComplianceReportRows(segment, {
           pipeline: pipeline || undefined,
+          periodYear: Number.isFinite(xYear) ? xYear : undefined,
+          periodQuarter: Number.isFinite(xQuarter) ? xQuarter : undefined,
         });
         const neverChecked = await countNeverChecked();
         const sheets = buildDealComplianceReportSheets(rows, {

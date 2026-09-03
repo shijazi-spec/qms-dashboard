@@ -817,7 +817,7 @@ export interface DealComplianceReportRow {
  */
 export async function getDealComplianceReportRows(
   segment: DuplicateFilters["segment"],
-  opts?: { pipeline?: string },
+  opts?: { pipeline?: string; periodYear?: number; periodQuarter?: number },
 ): Promise<DealComplianceReportRow[]> {
   const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
   const p = buildSegmentPredicate(seg, 1);
@@ -831,6 +831,27 @@ export async function getDealComplianceReportRows(
   const pipeCond = pipeParam
     ? ` AND LOWER(COALESCE(r.pipeline, '')) LIKE '%' || LOWER($${p.params.length + 1}) || '%'`
     : "";
+  // PERIOD (Sarah 2026-09-03) — year, optionally narrowed to a quarter, on the
+  // deal's CREATED date. Same basis and same rules as the tab endpoint, so the
+  // workbook always covers exactly the rows the table showed. A quarter without
+  // a year is meaningless and is ignored. Bound as a half-open range rather
+  // than EXTRACT(YEAR ...) so any index on created_date stays usable.
+  const py = Number(opts?.periodYear);
+  const pq = Number(opts?.periodQuarter);
+  const periodOn = Number.isFinite(py) && py >= 2000 && py <= 2100;
+  const qOk = periodOn && Number.isFinite(pq) && pq >= 1 && pq <= 4;
+  const periodParams: string[] = [];
+  let periodCond = "";
+  if (periodOn) {
+    const startMonth = qOk ? (pq - 1) * 3 : 0;
+    const endMonth = qOk ? pq * 3 : 12;
+    periodParams.push(
+      new Date(Date.UTC(py, startMonth, 1)).toISOString(),
+      new Date(Date.UTC(py, endMonth, 1)).toISOString(),
+    );
+    const base = p.params.length + (pipeParam ? 1 : 0);
+    periodCond = ` AND r.created_date >= $${base + 1} AND r.created_date < $${base + 2}`;
+  }
   const res = await pool.query(
     `SELECT d.zoho_deal_id AS id,
             COALESCE(NULLIF(BTRIM(r.record_name), ''), d.zoho_deal_id) AS name,
@@ -851,9 +872,13 @@ export async function getDealComplianceReportRows(
             COALESCE(NULLIF(BTRIM(r.products), ''), '') AS product
        FROM deal_doc_compliance d
        JOIN duplicate_records r ON r.zoho_record_id = d.zoho_deal_id
-      WHERE r.record_type = 'deal'${segCond}${pipeCond}
+      WHERE r.record_type = 'deal'${segCond}${pipeCond}${periodCond}
       ORDER BY d.compliant ASC, COALESCE(r.deal_value, 0) DESC`,
-    pipeParam ? [...p.params, pipeParam] : [...p.params],
+    [
+      ...p.params,
+      ...(pipeParam ? [pipeParam] : []),
+      ...periodParams,
+    ],
   );
   return (res.rows as any[]).map((x) => ({
     id: String(x.id),
