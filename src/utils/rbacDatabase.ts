@@ -221,6 +221,14 @@ export async function initRbacTables(): Promise<void> {
   logger.info("✅ [RBAC] RBAC tables initialized");
 }
 
+// NOTE: These same 8 columns are declared directly in the canonical
+// `CREATE TABLE IF NOT EXISTS policies` in src/utils/policyDatabase.ts
+// (initPolicyTables). Both lists must be updated together — types must
+// match character-for-character. This ALTER loop must stay: existing
+// databases already have these columns because of it and need it to keep
+// running. Also note: scripts/check-schema-parity.mjs CANNOT see this loop
+// — its static scan can't read SQL built from a template literal in a
+// loop, so it will report "no drift" even if these two lists diverge.
 async function addPolicyDualOwnership(): Promise<void> {
   logger.info("📋 [RBAC] Adding dual ownership fields to policies...");
 

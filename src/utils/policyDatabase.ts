@@ -141,7 +141,19 @@ export async function initPolicyTables(): Promise<void> {
       retention_period VARCHAR(50),
       distribution_list TEXT[],
       supersedes_id INTEGER,
-      tags TEXT[]
+      tags TEXT[],
+      -- The following 8 columns are also applied by the ALTER loop in
+      -- addPolicyDualOwnership() (src/utils/rbacDatabase.ts) for databases
+      -- created before these columns existed. Both lists must be kept in
+      -- step — types must match character-for-character.
+      operational_owner VARCHAR(255),
+      operational_owner_email VARCHAR(255),
+      compliance_owner VARCHAR(255),
+      compliance_owner_email VARCHAR(255),
+      compliance_approved BOOLEAN DEFAULT FALSE,
+      compliance_approved_by VARCHAR(255),
+      compliance_approved_at TIMESTAMP,
+      approval_blocked_reason TEXT
     )
   `);
 
