@@ -1084,6 +1084,10 @@
                     <tbody id="dealComplianceBody"><tr><td colspan="7" class="px-3 py-4 text-gray-500">Open this tab to load deals…</td></tr></tbody>
                 </table>
             </div>
+            <!-- Paged at 100 rows (Sarah 2026-09-03). Painting all 1,282 rows
+                 in one innerHTML is what made the browser stop responding; the
+                 DOM now stays a fixed size no matter how many deals load. -->
+            <div id="dealCompliancePagination" class="mt-3"></div>
         </div>
 
         <!-- ═══ CLUSTERS TAB (C4: paginated 30/page) ═══ -->
@@ -2585,7 +2589,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=180"></script>
+    <script src="/js/duplicates-app.js?v=181"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

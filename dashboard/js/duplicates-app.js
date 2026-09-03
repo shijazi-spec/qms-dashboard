@@ -8204,21 +8204,16 @@
             _dcFilterTableRows();
         }
 
+        // Applying a chart filter re-renders page 1 of the MATCHING deals.
+        //
+        // This used to walk every row in the table and set style.display on each
+        // — 1,282 synchronous style writes per click, each able to force layout,
+        // and it left the pager describing a row count that no longer matched
+        // what was visible. Filtering the data and re-rendering one page is both
+        // cheaper and correct: the pager now counts matches, not all deals.
         function _dcFilterTableRows() {
-            var f = window._dcChartFilter;
-            var results = window._dcResults || {};
-            var rows = Array.prototype.slice.call(document.querySelectorAll('#dealComplianceBody tr[data-deal-id]'));
-            rows.forEach(function (row) {
-                if (!f) { row.style.display = ''; return; }
-                var id = row.getAttribute('data-deal-id');
-                var matchDim = (f.dim === 'owner')
-                    ? row.getAttribute('data-deal-owner') === f.key
-                    : row.getAttribute('data-deal-stage') === f.key;
-                var r = results[String(id)];
-                var rowStatus = !r ? 'unchecked' : (r.compliant ? 'compliant' : 'missing');
-                var matchStatus = rowStatus === f.status;
-                row.style.display = (matchDim && matchStatus) ? '' : 'none';
-            });
+            _dcPage = 0;
+            _dcRenderPage();
         }
 
         // `live` = true only when the operator clicks "Refresh from Zoho (live)".
@@ -8273,6 +8268,13 @@
             window._loadedTabs.add('deal-compliance');
             var deals = (data && data.deals) || [];
             window._dcDeals = deals;
+            // Seed the results map from the FULL dataset, before any paging.
+            // The cards, the charts and the chart filter all count from
+            // _dcResults; it used to be filled as a side effect of building the
+            // rows, which was fine when every row was rendered but would now
+            // leave it holding only the current page — cards reporting 100
+            // deals out of 1,282. Pure data, no DOM.
+            _dcSeedResultsFromData();
             // Rebuild the Layout dropdown from the layouts actually returned.
             // Skipped while a layout is selected: the response is already
             // narrowed to it, so rebuilding from it would leave that one option
@@ -8301,8 +8303,97 @@
                     : '');
             if (!deals.length) {
                 body.innerHTML = '<tr><td colspan="7" class="px-3 py-4 text-gray-500">No deals in the selected stage(s). Tick stages above and click Apply.</td></tr>';
+                _dcRenderPager(0);
                 return;
             }
+            _dcPage = 0;
+            _dcRenderPage();
+        }
+
+        // ── Deal Compliance pagination (Sarah 2026-09-03) ────────────────────
+        //
+        // The table used to paint EVERY row in one innerHTML — 1,282 rows on the
+        // live data, each with a link, badges and a per-document cell. That is
+        // what makes the browser stop responding: the paint itself is long, and
+        // every later whole-table pass (the chart filter writes style.display on
+        // every row) multiplies it. This tab has hit the same wall twice before
+        // — "took 34s to open" (2026-08-26) and "hung the whole device /
+        // crashed the browser" (2026-07-29) — each time fixed by removing one
+        // pass while the row count kept growing. Paging is the structural fix:
+        // the DOM stays a fixed ~100 rows no matter how many deals load.
+        var DC_PAGE_SIZE = 100;
+        var _dcPage = 0;
+
+        // Fill _dcResults for EVERY loaded deal, preferring the server's stored
+        // check (shared, kept current by the background sweep) over this
+        // browser's localStorage copy. Data only — the rendered page updates its
+        // own cells. Everything that counts deals reads this map, so it must
+        // cover the whole dataset, not just the visible page.
+        function _dcSeedResultsFromData() {
+            var deals = window._dcDeals || [];
+            if (!deals.length) return;
+            var store = _dcStoreLoad();
+            window._dcResults = window._dcResults || {};
+            deals.forEach(function (d) {
+                var rec = d.compliance
+                    ? {
+                        compliant: !!d.compliance.compliant,
+                        present: d.compliance.presentDocs || [],
+                        missing: d.compliance.missingDocs || [],
+                        attachmentCount: d.compliance.attachmentCount || 0,
+                        stage: d.stage,
+                        checkedAt: d.compliance.checkedAt,
+                        checkedBy: d.compliance.checkedBy,
+                    }
+                    : store[String(d.id)];
+                if (rec) window._dcResults[String(d.id)] = rec;
+            });
+        }
+
+        // Deals after the chart filter, i.e. what the operator is looking at.
+        // Filtering happens on the DATA, before paging — filtering the rendered
+        // page instead would leave page 1 showing three rows while the rest of
+        // the matches sat unreachable on later pages.
+        function _dcVisibleDeals() {
+            var deals = window._dcDeals || [];
+            var f = window._dcChartFilter;
+            if (!f) return deals;
+            var results = window._dcResults || {};
+            return deals.filter(function (d) {
+                var matchDim = (f.dim === 'owner')
+                    ? String(d.owner || '—') === f.key
+                    : String(d.stage) === f.key;
+                if (!matchDim) return false;
+                var r = results[String(d.id)];
+                var status = !r ? 'unchecked' : (r.compliant ? 'compliant' : 'missing');
+                return status === f.status;
+            });
+        }
+
+        function _dcGotoPage(p) {
+            _dcPage = Math.max(0, Number(p) || 0);
+            _dcRenderPage();
+            var host = document.getElementById('dealComplianceBody');
+            if (host && host.scrollIntoView) host.scrollIntoView({ block: 'nearest' });
+        }
+
+        function _dcRenderPager(total) {
+            var pages = Math.max(1, Math.ceil(total / DC_PAGE_SIZE));
+            renderPagination('dealCompliancePagination', _dcPage, pages, _dcGotoPage, total, 'deals');
+        }
+
+        function _dcRenderPage() {
+            var body = document.getElementById('dealComplianceBody');
+            if (!body) return;
+            var visible = _dcVisibleDeals();
+            var pages = Math.max(1, Math.ceil(visible.length / DC_PAGE_SIZE));
+            if (_dcPage > pages - 1) _dcPage = pages - 1;
+            if (!visible.length) {
+                body.innerHTML = '<tr><td colspan="7" class="px-3 py-4 text-gray-500">No deals match the current filter.</td></tr>';
+                _dcRenderPager(0);
+                return;
+            }
+            var deals = visible.slice(_dcPage * DC_PAGE_SIZE, (_dcPage + 1) * DC_PAGE_SIZE);
             var _dcStore = _dcStoreLoad();
             body.innerHTML = deals.map(function (d) {
                 var reqd = (d.requiredDocs || []).map(function (x) { return x.label; }).join(', ');
@@ -8345,8 +8436,10 @@
                     '</span></td>' +
                     '</tr>';
             }).join('');
+            _dcRenderPager(visible.length);
             // Restore previously-scanned results (persisted) so re-opening the
-            // tab doesn't start from scratch.
+            // tab doesn't start from scratch. Only ever touches the ~100 rows
+            // now in the DOM.
             _dcRehydrateFromStore();
         }
 
