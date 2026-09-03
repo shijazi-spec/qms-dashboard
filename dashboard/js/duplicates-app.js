@@ -7721,6 +7721,130 @@
         // tab is showing plus a per-company summary and a methodology sheet.
         // One row per deal: the recipient filters to their own name and sorts
         // by value, which a grouped export makes impossible.
+        // Ready-to-paste covering email for the Active Deal Conflicts workbook
+        // (Sarah 2026-09-03). Same shape as the Deal Compliance one, and built
+        // from _adcRows — the rows the tab is showing and the workbook exports —
+        // so the email and its attachment cannot disagree.
+        //
+        // The "why this matters" section answers the question the Head of Sales
+        // actually asked back on the last send ("do you think this affected the
+        // win ratio?"). Two open deals on one company do not just look untidy:
+        // when the account closes, one deal is won and its twin is closed lost,
+        // so a single win is recorded as one win AND one loss. The ratio falls
+        // on a deal we won. That is the point worth making.
+        async function copyActiveDealConflictsEmailBody() {
+            var btn = document.getElementById('adcEmailBtn');
+            var restore = btn ? btn.innerHTML : '';
+            try {
+                var rows = _adcRows || [];
+                if (!rows.length) { rrToast('Load the tab first — there is nothing to describe.'); return; }
+                if (btn) { btn.disabled = true; btn.innerHTML = 'Building…'; }
+                var meta = _adcMeta || {};
+                var segLabel = ({ walaplus: 'WalaPlus', marketplace: 'Marketplace', walaone: 'WalaOne' })[meta.segment] || 'all layouts';
+                var _n2 = function (n) { return (n < 10 ? '0' : '') + n; };
+                var t = new Date();
+                var stamp = _n2(t.getDate()) + '.' + _n2(t.getMonth() + 1) + '.' + t.getFullYear();
+                var due = new Date(t.getTime() + 7 * 86400000);
+                var deadline = _n2(due.getDate()) + '/' + _n2(due.getMonth() + 1) + '/' + due.getFullYear();
+
+                var deals = [];
+                rows.forEach(function (r) { (r.deals || []).forEach(function (d) { deals.push(d); }); });
+                // annotateKeepClose tags each deal `suggestion: "keep" | "close"`
+                // (lower case) — the workbook renders it as KEEP / CLOSE.
+                var toClose = deals.filter(function (d) { return String(d.suggestion || '').toLowerCase() === 'close'; });
+                var closeValue = toClose.reduce(function (n, d) { return n + (Number(d.amount) || 0); }, 0);
+                var noAmount = deals.filter(function (d) { return !Number(d.amount); }).length;
+                var multiOwner = meta.accounts_with_multiple_owners || 0;
+                var threePlus = rows.filter(function (r) { return (r.open_deals || 0) >= 3; }).length;
+                // Stage mix of the deals recommended for closing — the evidence
+                // that these are stale rather than live competing bids.
+                var stageCount = {};
+                toClose.forEach(function (d) { var s = d.stage || '—'; stageCount[s] = (stageCount[s] || 0) + 1; });
+                var stageMix = Object.keys(stageCount).sort(function (a, b) { return stageCount[b] - stageCount[a]; })
+                    .slice(0, 4).map(function (s) { return stageCount[s] + ' ' + s; }).join(' · ');
+
+                var lines = [
+                    '⚠️ Active deal conflicts — ' + segLabel + ' · ' + stamp,
+                    '',
+                    'Dear [name],',
+                    '',
+                    'Attached is the active deal conflicts report — every company carrying more than one OPEN deal at the same time.',
+                    'For each account we should have ONE active deal; the rest need closing so one owner owns the conversation.',
+                    '',
+                    '  🏢  Companies affected — ' + _fn(rows.length),
+                    '  📂  Open deals across them — ' + _fn(meta.total_open_deals_in_violation || deals.length),
+                    '  💰  Open value involved — SAR ' + _fn(meta.total_open_value || 0),
+                    '  ✅  Recommended to close — ' + _fn(toClose.length) + ' deals (SAR ' + _fn(Math.round(closeValue)) + ')',
+                ];
+                if (multiOwner) {
+                    lines.push('  👥  Worked by TWO OR MORE owners — ' + _fn(multiOwner) + ' companies');
+                }
+                if (threePlus) {
+                    lines.push('  🔺  Carrying three or more open deals — ' + _fn(threePlus) + ' companies');
+                }
+                if (stageMix) {
+                    lines.push('');
+                    lines.push('Most of what we are asking to close is already dormant: ' + stageMix + '.');
+                }
+                if (noAmount) {
+                    lines.push('');
+                    lines.push('⚠️  ' + _fn(noAmount) + ' of these ' + _fn(deals.length) + ' open deals carry NO Amount (SAR).');
+                    lines.push('    They add SAR 0 to the figure above, so the real exposure is HIGHER than shown,');
+                    lines.push('    and those deals are invisible in pipeline value and forecasting until the Amount is filled in.');
+                }
+                lines = lines.concat([
+                    '',
+                    'Why this matters:',
+                    '',
+                    '  📉  This is measured directly in the win ratio. When the account finally closes, one deal is marked won',
+                    '      and its twin is marked lost — so a single win is recorded as one win AND one loss. The ratio falls on',
+                    '      a deal we actually won, and every duplicate left open today is a loss booked against us tomorrow.',
+                    '',
+                    '  📊  The forecast is counted more than once. SAR ' + _fn(meta.total_open_value || 0) + ' is spread across ' + _fn(deals.length) + ' deals for only',
+                    '      ' + _fn(rows.length) + ' companies, so committed pipeline reads higher than the business can actually deliver.',
+                    '',
+                    '  🤝  The client sees it. Two of our people arriving on the same account — sometimes with different pricing or',
+                    '      a different proposal — reads as disorganised at best, and invites the client to negotiate us against',
+                    '      ourselves at worst. It is the fastest way to lose a deal we were winning.',
+                    '',
+                    '  ⚖️  It creates commission and ownership disputes that land on the Head of Sales to arbitrate after the fact,',
+                    '      when the record no longer shows who did the work.',
+                    '',
+                    '  🔍  In an audit, one customer holding several concurrent open opportunities is a control weakness in the',
+                    '      sales process — a finding against how we manage the pipeline, not against any individual.',
+                    '',
+                    'What we need:',
+                    '  1️⃣  For each company, keep ONE deal and close the others. The workbook marks a suggested KEEP and CLOSE per row.',
+                    '  2️⃣  Confirm ONE owner per account, so only one person is speaking to the client.',
+                    '  3️⃣  KEEP / CLOSE is a RECOMMENDATION, not an instruction — keep whichever deal you want to complete with,',
+                    '      and we can merge two deals if you would rather hold the history in one record.',
+                ]);
+                if (noAmount) {
+                    lines.push('  4️⃣  Fill in the Amount (SAR) on the deals that have none, so they can be forecast and counted.');
+                }
+                lines = lines.concat([
+                    '',
+                    '>> DEADLINE: ' + deadline,
+                    '',
+                    'How to read the attachment:',
+                    '  • Scope: ' + segLabel + ' layout — every company with more than one OPEN deal.',
+                    '  • OPEN deals only. Closed, Lost, Won and Activated stages are excluded, so a company with one live deal and five Closed Lost deals does not appear here.',
+                    '  • Deals are grouped by domain first, then by Zoho Account ID, then by company name — so two duplicate Account records for the same company count as one conflict.',
+                    '  • The ranking behind KEEP is pipeline position, then most recent activity, then whether a value is recorded, then age.',
+                    '  • Where a company shows no domain, Zoho holds no Website/Domain on that Account — those deals were grouped by Account ID instead.',
+                    '  • Nothing in this workbook has been written to the CRM. Sales decides which deal stays.',
+                    '',
+                    '🤖 Checked by Adam — WalaPlus QMS, Duplicate Radar → Active Deal Conflicts.',
+                ]);
+                await navigator.clipboard.writeText(lines.join('\n'));
+                if (btn) { btn.innerHTML = '✓ Copied'; setTimeout(function () { btn.innerHTML = restore; }, 1800); return; }
+            } catch (e) {
+                rrToast('Copy failed: ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) { btn.disabled = false; if (btn.innerHTML === 'Building…') btn.innerHTML = restore; }
+            }
+        }
+
         window.exportActiveDealConflictsXlsx = function () {
             var seg = (document.getElementById('adcSegment') || {}).value || 'walaplus';
             var multiOnly = !!(document.getElementById('adcMultiOwnerOnly') || {}).checked;
