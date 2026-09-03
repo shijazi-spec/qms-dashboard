@@ -84,3 +84,48 @@ describe("resolveMilestoneRegulationIds", () => {
     expect(out).toHaveLength(PLAN.length);
   });
 });
+
+describe("plan relationships", () => {
+  const byKey = (k: string) => PLAN.find((r) => r.milestone_key === k)!;
+
+  it("chains the 7 plan milestones in document order", () => {
+    expect(byKey("PLAN-2026-08-DOCS").depends_on_key).toBeNull();
+    expect(byKey("PLAN-2026-09-APPROVE").depends_on_key).toBe("PLAN-2026-08-DOCS");
+    expect(byKey("PLAN-2026-10-SAQA").depends_on_key).toBe("PLAN-2026-09-APPROVE");
+    expect(byKey("PLAN-2026-11-AUDIT").depends_on_key).toBe("PLAN-2026-10-SAQA");
+    expect(byKey("PLAN-2026-12-MGMTREV").depends_on_key).toBe("PLAN-2026-11-AUDIT");
+    expect(byKey("PLAN-2027-01-PENTEST").depends_on_key).toBe("PLAN-2026-12-MGMTREV");
+    expect(byKey("PLAN-2027-02-SURV").depends_on_key).toBe("PLAN-2027-01-PENTEST");
+  });
+
+  it("every chain link points at a real plan milestone", () => {
+    const keys = new Set(PLAN.filter((r) => r.milestone_type === "plan").map((r) => r.milestone_key));
+    for (const r of PLAN.filter((x) => x.milestone_type === "plan")) {
+      if (r.depends_on_key !== null && r.depends_on_key !== undefined) {
+        expect(keys.has(r.depends_on_key), r.milestone_key).toBe(true);
+      }
+    }
+  });
+
+  it("maps milestones to the frameworks they unlock", () => {
+    expect(byKey("PLAN-2026-09-APPROVE").unlocks_codes).toEqual(["SACS-002"]);
+    expect(byKey("PLAN-2026-10-SAQA").unlocks_codes).toEqual(["PCI-DSS"]);
+    expect(byKey("PLAN-2026-11-AUDIT").unlocks_codes).toEqual(["PDPL"]);
+    expect(byKey("PLAN-2026-12-MGMTREV").unlocks_codes).toEqual(["PDPL"]);
+    expect(byKey("PLAN-2027-02-SURV").unlocks_codes).toEqual(["ISO-27001"]);
+    expect(byKey("PLAN-2026-08-DOCS").unlocks_codes).toEqual([]);
+    expect(byKey("PLAN-2027-01-PENTEST").unlocks_codes).toEqual([]);
+  });
+
+  it("attaches each Technology dependency to the milestone it blocks", () => {
+    expect(byKey("DEP-TECH-ANSWERS").gates_keys).toEqual(["PLAN-2026-10-SAQA"]);
+    expect(byKey("DEP-TECH-EVIDENCE").gates_keys).toEqual(["PLAN-2026-11-AUDIT"]);
+  });
+
+  it("leaves NCA and SOC 2 unreachable — no milestone unlocks them", () => {
+    const unlocked = new Set(PLAN.flatMap((r) => r.unlocks_codes ?? []));
+    expect(unlocked.has("NCA-ECC")).toBe(false);
+    expect(unlocked.has("NCA-DCC")).toBe(false);
+    expect(unlocked.has("SOC2")).toBe(false);
+  });
+});

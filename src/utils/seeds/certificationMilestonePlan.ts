@@ -27,6 +27,12 @@ export interface PlanMilestoneSeed {
   planned_date: string | null;
   owner: string;
   notes: string;
+  /** Predecessor milestone_key — the chain the document says cannot be shortened. */
+  depends_on_key?: string | null;
+  /** regulations.regulation_code values this milestone makes compliant (§2 "what makes it true"). */
+  unlocks_codes?: string[];
+  /** For a dependency row: the milestone_keys it blocks (§5). */
+  gates_keys?: string[];
 }
 
 export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
@@ -40,6 +46,8 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     planned_date: "2026-08-30",
     owner: "GRC",
     notes: "Completion of the document library is not compliance on its own.",
+    depends_on_key: null,
+    unlocks_codes: [],
   },
   {
     milestone_key: "PLAN-2026-09-APPROVE",
@@ -51,6 +59,8 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     planned_date: "2026-09-30",
     owner: "GRC, Alhanouf",
     notes: "Documents must be approved before staff can be trained on them.",
+    depends_on_key: "PLAN-2026-08-DOCS",
+    unlocks_codes: ["SACS-002"],
   },
   {
     milestone_key: "PLAN-2026-10-SAQA",
@@ -62,6 +72,8 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     planned_date: "2026-10-31",
     owner: "GRC, HR, Technology",
     notes: "Training has to land in October so the November audit is worth running.",
+    depends_on_key: "PLAN-2026-09-APPROVE",
+    unlocks_codes: ["PCI-DSS"],
   },
   {
     milestone_key: "PLAN-2026-11-AUDIT",
@@ -73,6 +85,8 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     planned_date: "2026-11-30",
     owner: "GRQ",
     notes: "The audit must happen before the management review.",
+    depends_on_key: "PLAN-2026-10-SAQA",
+    unlocks_codes: ["PDPL"],
   },
   {
     milestone_key: "PLAN-2026-12-MGMTREV",
@@ -84,6 +98,8 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     planned_date: "2026-12-31",
     owner: "Head of GRQ",
     notes: "PDPL position becomes defensible at this point.",
+    depends_on_key: "PLAN-2026-11-AUDIT",
+    unlocks_codes: ["PDPL"],
   },
   {
     milestone_key: "PLAN-2027-01-PENTEST",
@@ -95,6 +111,8 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     planned_date: "2027-01-31",
     owner: "Technology, GRC",
     notes: "",
+    depends_on_key: "PLAN-2026-12-MGMTREV",
+    unlocks_codes: [],
   },
   {
     milestone_key: "PLAN-2027-02-SURV",
@@ -105,6 +123,8 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     planned_date: "2027-02-28",
     owner: "Bureau Veritas",
     notes: "",
+    depends_on_key: "PLAN-2027-01-PENTEST",
+    unlocks_codes: ["ISO-27001"],
   },
 
   // ── §2 When we can say we are compliant ────────────────────────────────
@@ -198,6 +218,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     planned_date: "2026-09-30",
     owner: "Technology",
     notes: "These two answers set the PCI position (SAQ A versus a far larger self-assessment).",
+    gates_keys: ["PLAN-2026-10-SAQA"],
   },
   {
     milestone_key: "DEP-TECH-EVIDENCE",
@@ -210,6 +231,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     owner: "Technology",
     notes:
       "GRC produces documents, not evidence. From October every milestone depends on material other departments hold — the largest risk to these dates.",
+    gates_keys: ["PLAN-2026-11-AUDIT"],
   },
 ];
 
