@@ -43,6 +43,11 @@ describe("orderChain", () => {
     const rows = [row({ milestone_key: "A", depends_on_key: "A" })];
     expect(orderChain(rows)).toHaveLength(1);
   });
+
+  it("keeps both entries when the same row object appears twice", () => {
+    const a = row({ milestone_key: "A", depends_on_key: null, planned_date: "2026-01-01" });
+    expect(orderChain([a, a])).toHaveLength(2);
+  });
 });
 
 describe("milestoneState", () => {

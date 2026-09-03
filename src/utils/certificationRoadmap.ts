@@ -40,72 +40,77 @@ export type MilestoneState =
  * Orders rows by walking `depends_on_key` chains (root -> ... -> leaf),
  * rather than trusting incoming array order.
  *
- * Cycle-safe: each key is only ever emitted once (tracked via `visited`),
+ * Cycle-safe: each row is only ever emitted once (tracked via `visited`),
  * so a cyclic chain cannot loop forever.
  *
  * Never drops rows: any row whose predecessor is missing from the input,
  * or that is otherwise left unvisited after the chain walk (e.g. it sits
  * inside a cycle that was never reached as a chain root), is appended at
- * the end in `planned_date` order. Row count in === row count out, always.
+ * the end in `planned_date` order. Row count in === row count out, always
+ * — driven entirely by ARRAY INDEX, so this holds even when the very same
+ * row object reference appears more than once in the input.
  */
 export function orderChain(rows: RoadmapRow[]): RoadmapRow[] {
+  // Indexed view: every downstream structure below tracks rows by their
+  // position in `rows`, never by object identity or by key string, so two
+  // rows that share a milestone_key — or are literally the same object
+  // reference — are still both emitted exactly once each.
+  const items = rows.map((row, i) => ({ row, i }));
+
   // `byKey` is used only for parent/predecessor lookup — first-wins on a
-  // duplicate key is fine there. Membership/emission below is tracked by
-  // row IDENTITY (array index), never by key string, so two rows that
-  // happen to share a milestone_key are both still emitted exactly once.
+  // duplicate key is fine there, since it only decides which row a child
+  // attaches under, not whether any row gets emitted.
   const byKey = new Map<string, RoadmapRow>();
-  for (const r of rows) {
-    if (!byKey.has(r.milestone_key)) {
-      byKey.set(r.milestone_key, r);
+  for (const { row } of items) {
+    if (!byKey.has(row.milestone_key)) {
+      byKey.set(row.milestone_key, row);
     }
   }
 
-  // Children indexed by the key they depend on.
-  const childrenOf = new Map<string, RoadmapRow[]>();
-  for (const r of rows) {
-    if (r.depends_on_key != null && byKey.has(r.depends_on_key)) {
-      const list = childrenOf.get(r.depends_on_key) ?? [];
-      list.push(r);
-      childrenOf.set(r.depends_on_key, list);
+  // Children indexed by the key they depend on -> list of child indices.
+  const childrenOf = new Map<string, number[]>();
+  for (const { row, i } of items) {
+    if (row.depends_on_key != null && byKey.has(row.depends_on_key)) {
+      const list = childrenOf.get(row.depends_on_key) ?? [];
+      list.push(i);
+      childrenOf.set(row.depends_on_key, list);
     }
   }
 
-  const visited = new Set<number>(); // row indices, not milestone_key strings
-  const indexOf = new Map<RoadmapRow, number>();
-  rows.forEach((r, i) => indexOf.set(r, i));
+  const visited = new Set<number>(); // row indices
   const ordered: RoadmapRow[] = [];
 
-  const visit = (r: RoadmapRow): void => {
-    const idx = indexOf.get(r)!;
-    if (visited.has(idx)) return; // cycle guard
-    visited.add(idx);
-    ordered.push(r);
-    const children = childrenOf.get(r.milestone_key) ?? [];
-    for (const child of children) {
-      visit(child);
+  const visit = (i: number): void => {
+    if (visited.has(i)) return; // cycle guard
+    visited.add(i);
+    ordered.push(rows[i]);
+    const children = childrenOf.get(rows[i].milestone_key) ?? [];
+    for (const childIdx of children) {
+      visit(childIdx);
     }
   };
 
   // Roots: no depends_on_key, or the predecessor isn't present in this set.
-  const roots = rows.filter(
-    (r) => r.depends_on_key == null || !byKey.has(r.depends_on_key),
+  const roots = items.filter(
+    ({ row }) => row.depends_on_key == null || !byKey.has(row.depends_on_key),
   );
-  for (const root of roots) {
-    visit(root);
+  for (const { i } of roots) {
+    visit(i);
   }
 
   // Anything still unvisited (e.g. trapped entirely inside a cycle with no
-  // reachable root, or a duplicate-key row never reached as anyone's child)
-  // is appended in planned_date order, never dropped.
-  const remainder = rows
-    .filter((r) => !visited.has(indexOf.get(r)!))
+  // reachable root, or a duplicate-key/duplicate-reference row never
+  // reached as anyone's child) is appended in planned_date order, never
+  // dropped.
+  const remainder = items
+    .filter(({ i }) => !visited.has(i))
     .sort((a, b) => {
-      const ad = a.planned_date ?? "";
-      const bd = b.planned_date ?? "";
+      const ad = a.row.planned_date ?? "";
+      const bd = b.row.planned_date ?? "";
       return ad < bd ? -1 : ad > bd ? 1 : 0;
     });
-  for (const r of remainder) {
-    ordered.push(r);
+  for (const { row } of remainder) {
+    ordered.push(row);
   }
 
   return ordered;
