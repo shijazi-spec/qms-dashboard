@@ -4099,6 +4099,16 @@ export const duplicateRadarRoutes = [
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
       try {
+        // requireAdminOrKey is NOT a module-level import in this file — every
+        // other one of its 54 call sites pulls it in per-handler via a dynamic
+        // import (see the /api/duplicates/auto-merge handler ~line 2039). This
+        // handler was added referencing the bare name, so `tsc` failed with
+        // "Cannot find name 'requireAdminOrKey'". Matching the established
+        // pattern rather than adding a top-level import keeps the module graph
+        // lazy, which is what the rest of this 13k-line route file relies on.
+        const { requireAdminOrKey } = await import(
+          "../../utils/rbacMiddleware"
+        );
         const sessionUser = await requireAdminOrKey(c);
         if (!sessionUser) return unauthorizedResponse(c);
 
