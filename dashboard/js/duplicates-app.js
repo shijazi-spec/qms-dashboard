@@ -9620,58 +9620,87 @@
             loadDealCompliance();
         }
 
-        // Email the monthly missing-documents report on demand (Sarah
-        // 2026-09-03). The cron only fires on day 1, 07:00-09:00 KSA, so a
-        // missed window loses the month outright — August was lost exactly that
-        // way. Sending mail is irreversible, so this ALWAYS previews first and
-        // states the period, the numbers and the recipient COUNT (never the
-        // addresses — they are server-side only) before asking to confirm.
-        async function sendMissingDocsReportNow() {
-            var btn = document.getElementById('dcSendReportBtn');
+        // Ready-to-paste covering email for the Head of Sales report (Sarah
+        // 2026-09-03: "prepare the email that will be sent by the details of the
+        // excel sheet that will be sent as attachments"). Numbers come from the
+        // SAME endpoint helpers the workbook is built from, so the email and its
+        // attachment cannot disagree. The "How to read this" notes that used to
+        // be a workbook tab now close the email.
+        async function copyDealComplianceEmailBody() {
+            var btn = document.getElementById('dcEmailBtn');
             var restore = btn ? btn.innerHTML : '';
             try {
-                if (btn) { btn.disabled = true; btn.innerHTML = 'Checking…'; }
-                var pv = await fetch('/api/duplicates/missing-docs-report/preview',
+                if (btn) { btn.disabled = true; btn.innerHTML = 'Building…'; }
+                var params = new URLSearchParams();
+                var seg = _dcSelectedLayoutSegment();
+                if (!seg) {
+                    seg = document.getElementById('filterSegment')
+                        ? document.getElementById('filterSegment').value : 'all';
+                }
+                params.set('segment', seg || 'all');
+                // Same period the table and the workbook use, via the shared
+                // helper — so the email describes exactly the attachment.
+                var per = _dcSelectedPeriod();
+                if (per.year) {
+                    params.set('period_year', per.year);
+                    if (per.quarter) params.set('period_quarter', per.quarter);
+                }
+                var d = await fetch('/api/duplicates/deal-compliance/email?' + params.toString(),
                     { credentials: 'same-origin' }).then(function (r) { return r.json(); });
-                if (!pv || pv.error) { rrToast('Could not build the report: ' + ((pv && pv.error) || 'unknown error')); return; }
-                if (!pv.enabled) {
-                    rrToast('The monthly report is switched off. Set MISSING_DOCS_REPORT_ENABLED=true in Replit and republish first.');
-                    return;
-                }
-                if (!pv.recipient_count) { rrToast('No recipients configured — nothing to send.'); return; }
-                var head = String(pv.text || '').split('\n').slice(0, 6).join('\n');
-                var ok = window.confirm(
-                    'Send the ' + pv.period + ' missing-documents report?\n\n'
-                    + 'To: ' + pv.recipient_count + ' recipient(s) (configured server-side)\n'
-                    + 'Subject: ' + (pv.subject || '—') + '\n\n'
-                    + head + '\n\nThis sends real email and cannot be undone.'
-                );
-                if (!ok) return;
-                if (btn) btn.innerHTML = 'Sending…';
-                var res = await fetch('/api/duplicates/missing-docs-report/send', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
+                if (!d || d.error) { rrToast('Could not build the email: ' + ((d && d.error) || 'unknown error')); return; }
+
+                var scopeBits = [];
+                if (per.year) scopeBits.push(per.quarter ? ('Q' + per.quarter + ' ' + per.year) : String(per.year));
+                var segLabel = ({ walaplus: 'WalaPlus', marketplace: 'Marketplace', walaone: 'WalaOne' })[d.segment] || 'all layouts';
+                scopeBits.push(segLabel);
+
+                var pctOf = function (part, whole) { return whole ? Math.round((part / whole) * 100) : 0; };
+                var stageLines = (d.by_stage || []).map(function (s) {
+                    return '  • ' + s.stage + ' — ' + _fn(s.missing) + ' of ' + _fn(s.checked)
+                        + ' missing (' + pctOf(s.missing, s.checked) + '%) — SAR ' + _fn(s.missing_value);
                 });
-                var out = await res.json().catch(function () { return {}; });
-                if (res.status === 409 && out.already_sent) {
-                    // Already claimed for this period — offer a deliberate re-send.
-                    if (!window.confirm(out.message + '\n\nSend it again anyway?')) return;
-                    if (btn) btn.innerHTML = 'Sending…';
-                    res = await fetch('/api/duplicates/missing-docs-report/send', {
-                        method: 'POST', credentials: 'same-origin',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ force: true })
-                    });
-                    out = await res.json().catch(function () { return {}; });
-                }
-                if (!res.ok || out.error) { rrToast('Not sent: ' + (out.error || ('HTTP ' + res.status))); return; }
-                rrToast('✓ ' + out.period + ' report sent to ' + out.recipient_count + ' recipient(s)'
-                    + (out.resent ? ' (re-sent)' : ''));
+                // Top offenders only. The full ranking is in the "By owner" tab;
+                // a 40-name list in an email is not read by anyone.
+                var ownerLines = (d.by_owner || []).slice(0, 8).map(function (o) {
+                    return '  • ' + o.owner + ' — ' + _fn(o.missing) + ' of ' + _fn(o.checked)
+                        + ' missing (' + pctOf(o.missing, o.checked) + '%) — SAR ' + _fn(o.missing_value);
+                });
+                var moreOwners = Math.max(0, (d.by_owner || []).length - ownerLines.length);
+
+                var lines = [
+                    '📄 Deal documents — compliance report · ' + scopeBits.join(' · '),
+                    '',
+                    'Attached is the document-compliance report for deals in the closing stages. It checks the files actually uploaded to Zoho against the Sales SOP.',
+                    '',
+                    '  ⛔  Missing documents — ' + _fn(d.missing) + ' of ' + _fn(d.checked) + ' deals (' + pctOf(d.missing, d.checked) + '%)',
+                    '  ✅  Complete — ' + _fn(d.complete) + ' deals',
+                    '  💰  Value at risk — SAR ' + _fn(d.value_at_risk),
+                    '',
+                    'By stage:',
+                    stageLines.length ? stageLines.join('\n') : '  (no deals in the reported stages)',
+                    '',
+                    'Owners with the most missing:',
+                    ownerLines.length
+                        ? ownerLines.join('\n') + (moreOwners ? '\n  • …and ' + _fn(moreOwners) + ' more — full list in the "By owner" tab.' : '')
+                        : '  (none)',
+                    '',
+                    'What we need:',
+                    '  📎  Upload the missing documents to the deal in Zoho. Each row lists exactly which ones are missing and links straight to the deal.',
+                    '  🗓️  Please action the highest-value deals first — the list is sorted that way.',
+                    '',
+                    'How to read the attachment:',
+                ].concat((d.notes || []).map(function (n) { return '  • ' + n; }))
+                 .concat([
+                    '',
+                    '🤖 Checked by Adam — WalaPlus QMS, Duplicate Radar → Deal Compliance.',
+                ]);
+                var body = lines.join('\n');
+                await navigator.clipboard.writeText(body);
+                if (btn) { btn.innerHTML = '✓ Copied'; setTimeout(function () { btn.innerHTML = restore; }, 1800); return; }
             } catch (e) {
-                rrToast('Send failed: ' + (e && e.message ? e.message : e));
+                rrToast('Copy failed: ' + (e && e.message ? e.message : e));
             } finally {
-                if (btn) { btn.disabled = false; btn.innerHTML = restore; }
+                if (btn) { btn.disabled = false; if (btn.innerHTML === 'Building…') btn.innerHTML = restore; }
             }
         }
 

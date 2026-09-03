@@ -23,8 +23,20 @@
 import type { SheetSpec } from "./excelExport";
 import type { DealComplianceReportRow } from "./duplicateRadarDatabase";
 
-/** Sheet per stage, in pipeline order — the order Sales thinks in. */
-export const REPORT_STAGES = ["Proposal", "Agreement Signed", "Paid"] as const;
+/**
+ * Sheet per stage, in pipeline order — the order Sales thinks in.
+ *
+ * "Paid" was REMOVED on Sarah's instruction (2026-09-03): "skip the paid from
+ * the excel sheet itself, as it will be handled by the CS team." Paid deals are
+ * past the sales motion, so chasing their documents through a Sales report puts
+ * the follow-up on the wrong team. They are still visible on the Deal
+ * Compliance tab — only this report drops them.
+ *
+ * Every sheet, the Summary totals and the email all derive from this list (the
+ * rows are filtered to it in buildDealComplianceReportSheets), so a stage can be
+ * added or removed here without leaving one surface disagreeing with another.
+ */
+export const REPORT_STAGES = ["Proposal", "Agreement Signed"] as const;
 
 /** Below this, a percentage is noise rather than a signal. */
 const MIN_DEALS_FOR_RATE = 5;
@@ -137,9 +149,17 @@ export function sameStage(a: string, b: string): boolean {
 }
 
 export function buildDealComplianceReportSheets(
-  rows: DealComplianceReportRow[],
+  allRows: DealComplianceReportRow[],
   opts: { segment: string; inScope?: number; pipeline?: string },
 ): SheetSpec[] {
+  // Scope EVERY sheet to the reported stages, so the Summary totals, the
+  // per-owner ranking and the per-stage sheets can never disagree. Before this,
+  // dropping a stage from REPORT_STAGES removed its sheet but left its deals
+  // inside "ALL STAGES" and the owner counts — the report would have said one
+  // thing in the summary and another in the tabs.
+  const rows = allRows.filter((r) =>
+    REPORT_STAGES.some((s) => sameStage(s, r.stage)),
+  );
   const missingAll = rows.filter((r) => !r.compliant);
   const stages = stageSummary(rows);
   const owners = ownerBreakdown(rows);
@@ -243,48 +263,38 @@ export function buildDealComplianceReportSheets(
     });
   }
 
-  const coverage =
-    inScope > rows.length
-      ? `${rows.length} of ${inScope} in-scope deals have been checked so far; the rest are queued.`
-      : `All ${rows.length} in-scope deals have been checked.`;
-
-  sheets.push({
-    name: "How to read this",
-    columns: [{ header: "Notes", key: "note", width: 118 }],
-    rows: [
-      {
-        note:
-          `Scope: layout ${opts.segment}` +
-          (opts.pipeline ? ` · pipeline ${opts.pipeline}` : " · all pipelines") +
-          ` · stages ${REPORT_STAGES.join(", ")}.`,
-      },
-      { note: coverage },
-      {
-        note:
-          "Percentages are of deals that have been CHECKED, not of all deals. A deal the " +
-          "automatic check has not reached yet is not counted either way — padding the " +
-          "denominator with unknowns would flatter the numbers.",
-      },
-      {
-        note:
-          "Owners are ranked by the NUMBER of deals missing documents, not by rate. A rep with " +
-          "2 of 3 incomplete is at 67% but is not the problem; a rep with 180 incomplete is, " +
-          "even at 40%. Rates are hidden below " + MIN_DEALS_FOR_RATE + " checked deals.",
-      },
-      {
-        note:
-          "Requirements per Sales SOP 7.5.10 — Proposal needs the financial offer; " +
-          "Agreement Signed and Paid need the proposal, service agreement/contract, " +
-          "quotation/PO/invoice, VAT certificate, commercial registration and national address.",
-      },
-      {
-        note:
-          "This checks the FILES uploaded to Zoho. Field and data-entry compliance is a " +
-          "separate audit on the Quality Dashboard.",
-      },
-      { note: "Nothing in this workbook has been changed in the CRM." },
-    ],
-  });
+  // The "How to read this" sheet was REMOVED (Sarah 2026-09-03): "exclude how
+  // to read this tab to be inside the email template instead". The same notes
+  // now open the email that carries this workbook, where the recipient reads
+  // them once instead of in a tab nobody opens. buildReportNotes() is the
+  // single source for that text, so the scope line and the email cannot drift.
 
   return sheets;
+}
+
+/**
+ * The notes that used to be the workbook's "How to read this" sheet, for the
+ * email that carries the workbook. Kept here, beside the code that produces the
+ * numbers, so a change to the method updates the explanation with it.
+ */
+export function buildReportNotes(opts: {
+  segment: string;
+  checked: number;
+  inScope?: number;
+  pipeline?: string;
+}): string[] {
+  const inScope = opts.inScope ?? opts.checked;
+  return [
+    `Scope: layout ${opts.segment}` +
+      (opts.pipeline ? ` · pipeline ${opts.pipeline}` : " · all pipelines") +
+      ` · stages ${REPORT_STAGES.join(", ")}. Paid deals are excluded — Customer Success handles those.`,
+    inScope > opts.checked
+      ? `${opts.checked} of ${inScope} in-scope deals have been checked so far; the rest are queued.`
+      : `All ${opts.checked} in-scope deals have been checked.`,
+    "Percentages are of deals that have been CHECKED, not of all deals. A deal the automatic check has not reached yet is not counted either way — padding the denominator with unknowns would flatter the numbers.",
+    `Owners are ranked by the NUMBER of deals missing documents, not by rate. A rep with 2 of 3 incomplete is at 67% but is not the problem; a rep with 180 incomplete is, even at 40%. Rates are hidden below ${MIN_DEALS_FOR_RATE} checked deals.`,
+    "Requirements per Sales SOP 7.5.10 — Proposal needs the financial offer; Agreement Signed needs the proposal, service agreement/contract, quotation/PO/invoice, VAT certificate, commercial registration and national address.",
+    "This checks the FILES uploaded to Zoho. Field and data-entry compliance is a separate audit on the Quality Dashboard.",
+    "Nothing in this workbook has been changed in the CRM.",
+  ];
 }

@@ -4100,170 +4100,73 @@ export const duplicateRadarRoutes = [
   },
 
   {
-    // SEND THE MONTHLY REPORT NOW (Sarah 2026-09-03). The cron only fires on
-    // day 1, 07:00-09:00 KSA; miss that two-hour window — instance asleep,
-    // mid-deploy, or the flag switched on later in the month, which is exactly
-    // what happened to August — and the month is silently lost with no way to
-    // recover it. This is that recovery path, and the way to re-send on demand.
-    //
-    // Same guarantees as the scheduled job, deliberately:
-    //   • ADMIN-gated.
-    //   • Recipients come from ENV only (monthlyMissingDocsRecipients) — never
-    //     from the request, so this cannot be used to mail an arbitrary address.
-    //     Only the COUNT is echoed back.
-    //   • Claims the period in scheduled_report_sends, so a double-click or a
-    //     later cron tick cannot send the same month twice. `force: true`
-    //     deliberately re-sends and says so in the response.
-    //   • Honours MISSING_DOCS_REPORT_ENABLED — an operator who has not turned
-    //     the report on does not get a surprise mail-out from a button.
-    // POST /api/duplicates/missing-docs-report/send   { force?: boolean }
-    path: "/api/duplicates/missing-docs-report/send",
-    method: "POST" as const,
+    // Document-compliance report for the Head of Sales: missing-document rate,
+    // which owner it sits with, and one sheet per stage (Proposal / Agreement
+    // Signed / Paid). Reads the STORED checks kept current by the background
+    // sweep, so it makes no Zoho calls and is instant.
+    // GET /api/duplicates/deal-compliance.xlsx?segment=
+    path: "/api/duplicates/deal-compliance/email",
+    method: "GET" as const,
     createHandler: async () => async (c: any) => {
       try {
-        // requireAdminOrKey is NOT a module-level import in this file — every
-        // other one of its 54 call sites pulls it in per-handler via a dynamic
-        // import (see the /api/duplicates/auto-merge handler ~line 2039). This
-        // handler was added referencing the bare name, so `tsc` failed with
-        // "Cannot find name 'requireAdminOrKey'". Matching the established
-        // pattern rather than adding a top-level import keeps the module graph
-        // lazy, which is what the rest of this 13k-line route file relies on.
-        const { requireAdminOrKey } = await import(
-          "../../utils/rbacMiddleware"
-        );
-        const sessionUser = await requireAdminOrKey(c);
-        if (!sessionUser) return unauthorizedResponse(c);
-
-        const body = await c.req.json().catch(() => ({}));
-        const force = body?.force === true;
-
-        const {
-          buildMonthlyMissingDocsEmail,
-          monthlyMissingDocsRecipients,
-          isMonthlyMissingDocsEnabled,
-          periodKey,
-          periodLabel,
-        } = await import("../../utils/missingDocsMonthlyReport");
-
-        if (!isMonthlyMissingDocsEnabled()) {
-          return c.json(
-            {
-              error:
-                "The monthly report is switched off. Set MISSING_DOCS_REPORT_ENABLED=true and republish before sending.",
-            },
-            409,
-          );
-        }
-        const recipients = monthlyMissingDocsRecipients();
-        if (!recipients.length) {
-          return c.json(
-            { error: "No valid recipients configured — nothing was sent." },
-            409,
-          );
-        }
-
-        const { pool, getDealComplianceReportRows } = await import(
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const url = new URL(c.req.url);
+        const segment = (url.searchParams.get("segment") || "all") as any;
+        const pipeline = (url.searchParams.get("pipeline") || "").trim();
+        const eYear = parseInt(url.searchParams.get("period_year") || "", 10);
+        const eQuarter = parseInt(url.searchParams.get("period_quarter") || "", 10);
+        const { getDealComplianceReportRows } = await import(
           "../../utils/duplicateRadarDatabase"
         );
         const { countNeverChecked } = await import(
           "../../utils/dealDocComplianceSweep"
         );
-
-        // The month that just ended — identical to the scheduled job, so a
-        // manual send and an automatic one can never cover different periods.
-        const nowKsa = new Date(Date.now() + 3 * 3600_000);
-        const covered = new Date(
-          Date.UTC(nowKsa.getUTCFullYear(), nowKsa.getUTCMonth() - 1, 1),
+        const { stageSummary, ownerBreakdown, buildReportNotes, REPORT_STAGES } =
+          await import("../../utils/dealComplianceReportExport");
+        // The SAME rows and the SAME helpers the workbook is built from, so the
+        // email's numbers are the attachment's numbers by construction rather
+        // than by a second calculation that could drift.
+        const all = await getDealComplianceReportRows(segment, {
+          pipeline: pipeline || undefined,
+          periodYear: Number.isFinite(eYear) ? eYear : undefined,
+          periodQuarter: Number.isFinite(eQuarter) ? eQuarter : undefined,
+        });
+        const rows = all.filter((r: any) =>
+          (REPORT_STAGES as readonly string[]).some(
+            (s) => (s || "").trim().toLowerCase() === (r.stage || "").trim().toLowerCase(),
+          ),
         );
-        const period = periodKey(covered);
-
-        // Claim first, exactly as the cron does. No claim = already sent.
-        const claim = await pool.query(
-          `INSERT INTO scheduled_report_sends (report_key, period, recipient_count, detail)
-           VALUES ('missing_docs_monthly', $1, $2, $3::jsonb)
-           ON CONFLICT (report_key, period) DO NOTHING
-           RETURNING period`,
-          [
-            period,
-            recipients.length,
-            JSON.stringify({
-              claimed_at: new Date().toISOString(),
-              manual: true,
-              by: sessionUser?.email || sessionUser?.id || "admin",
-            }),
-          ],
-        );
-        if (!claim.rows.length && !force) {
-          return c.json(
-            {
-              already_sent: true,
-              period: periodLabel(covered),
-              message: `The ${periodLabel(covered)} report has already been sent. Re-send it deliberately with force.`,
-            },
-            409,
-          );
-        }
-
-        const rows = await getDealComplianceReportRows("all");
         const neverChecked = await countNeverChecked();
-        const mail = buildMonthlyMissingDocsEmail(rows, {
-          periodLabel: periodLabel(covered),
-          inScope: rows.length + neverChecked,
-          dashboardUrl: process.env.MISSING_DOCS_REPORT_LINK,
-        });
-
-        const { sendResendEmail } = await import("../../utils/resendMail");
-        const sent = await sendResendEmail({
-          to: recipients,
-          subject: mail.subject,
-          html: mail.html,
-          text: mail.text,
-        });
-        logger.info(
-          `[MissingDocsReport] manual send for ${period} by ${sessionUser?.email || "admin"}: ` +
-            `${sent.success ? "sent" : "FAILED"} to ${recipients.length} recipient(s)` +
-            (sent.error ? ` — ${sent.error}` : ""),
-        );
-        // sendResendEmail resolves with {success, error} — it does NOT throw or
-        // return a boolean. A failed send must RELEASE the period claim, or the
-        // month would be permanently marked as delivered and neither this
-        // button nor the cron would ever send it.
-        if (!sent.success) {
-          if (claim.rows.length) {
-            await pool
-              .query(
-                `DELETE FROM scheduled_report_sends WHERE report_key = 'missing_docs_monthly' AND period = $1`,
-                [period],
-              )
-              .catch(() => {});
-          }
-          return c.json(
-            { error: `Email provider rejected the send: ${sent.error || "unknown error"}` },
-            502,
-          );
-        }
+        const missing = rows.filter((r: any) => !r.compliant);
         return c.json({
           success: true,
-          period: periodLabel(covered),
-          recipient_count: recipients.length,
+          segment: String(segment),
+          stages: REPORT_STAGES,
           checked: rows.length,
-          in_scope: rows.length + neverChecked,
-          subject: mail.subject,
-          resent: !claim.rows.length,
+          in_scope: pipeline ? rows.length : rows.length + neverChecked,
+          missing: missing.length,
+          complete: rows.length - missing.length,
+          value_at_risk: Math.round(
+            missing.reduce((n: number, r: any) => n + (r.amount || 0), 0),
+          ),
+          by_stage: stageSummary(rows),
+          by_owner: ownerBreakdown(rows).filter((o: any) => o.missing > 0),
+          notes: buildReportNotes({
+            segment: String(segment),
+            checked: rows.length,
+            inScope: pipeline ? rows.length : rows.length + neverChecked,
+            pipeline: pipeline || undefined,
+          }),
         });
       } catch (e: any) {
-        logger.error("missing-docs-report/send failed", e);
+        logger.error("deal-compliance/email failed", e);
         return c.json({ error: "An internal error occurred" }, 500);
       }
     },
   },
 
   {
-    // Document-compliance report for the Head of Sales: missing-document rate,
-    // which owner it sits with, and one sheet per stage (Proposal / Agreement
-    // Signed / Paid). Reads the STORED checks kept current by the background
-    // sweep, so it makes no Zoho calls and is instant.
-    // GET /api/duplicates/deal-compliance.xlsx?segment=
     path: "/api/duplicates/deal-compliance.xlsx",
     method: "GET" as const,
     createHandler: async () => async (c: any) => {
