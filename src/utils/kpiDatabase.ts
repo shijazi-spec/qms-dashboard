@@ -246,7 +246,7 @@ export async function initKPITables(): Promise<void> {
     DO $$ BEGIN
       ALTER TABLE kpi_definitions DROP CONSTRAINT IF EXISTS kpi_definitions_owner_type_check;
       ALTER TABLE kpi_definitions ADD CONSTRAINT kpi_definitions_owner_type_check
-        CHECK (owner_type IN ('quality_manager', 'grc_manager', 'governance_officer', 'grq_specialist', 'legal_specialist', 'shared', 'sdr_team', 'sales_team'));
+        CHECK (owner_type IN ('quality_manager', 'grc_manager', 'governance_officer', 'grq_specialist', 'legal_specialist', 'shared', 'sdr_team', 'sales_team', 'cs_team'));
     EXCEPTION WHEN others THEN NULL;
     END $$;
   `);

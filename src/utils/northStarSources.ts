@@ -46,6 +46,9 @@ export async function initNorthStarSourceTables(): Promise<void> {
       milestone_key VARCHAR(100),
       plan_version VARCHAR(20),
       source_doc VARCHAR(50),
+      depends_on_key VARCHAR(100),
+      unlocks_codes TEXT[],
+      gates_keys TEXT[],
       owner VARCHAR(255),
       notes TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
@@ -68,6 +71,18 @@ export async function initNorthStarSourceTables(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS source_doc VARCHAR(50)`,
+  );
+  // Roadmap relationships: the chain the plan document says cannot be shortened,
+  // which frameworks each milestone makes compliant, and which milestones a
+  // cross-department dependency blocks.
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS depends_on_key VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS unlocks_codes TEXT[]`,
+  );
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS gates_keys TEXT[]`,
   );
   // Idempotency key for the plan seed.
   await pool.query(
@@ -228,6 +243,36 @@ export async function seedCertificationMilestonePlan(): Promise<{ inserted: numb
   }
   if (repaired > 0) {
     logger.info(`🔗 [NorthStar] Backfilled regulation_id on ${repaired} milestone row(s)`);
+  }
+
+  // Relationship columns are backfilled rather than inserted, because
+  // ON CONFLICT DO NOTHING means a row that already exists would never receive
+  // them. Only NULLs are touched, so an operator edit is never overwritten.
+  let linked = 0;
+  for (const r of rows) {
+    if (
+      r.depends_on_key === undefined &&
+      r.unlocks_codes === undefined &&
+      r.gates_keys === undefined
+    ) continue;
+    const res = await pool.query(
+      `UPDATE certification_milestones
+          SET depends_on_key = COALESCE(depends_on_key, $2),
+              unlocks_codes  = COALESCE(unlocks_codes,  $3),
+              gates_keys     = COALESCE(gates_keys,     $4)
+        WHERE milestone_key = $1
+          AND (depends_on_key IS NULL OR unlocks_codes IS NULL OR gates_keys IS NULL)`,
+      [
+        r.milestone_key,
+        r.depends_on_key ?? null,
+        r.unlocks_codes ?? null,
+        r.gates_keys ?? null,
+      ],
+    );
+    linked += res.rowCount ?? 0;
+  }
+  if (linked > 0) {
+    logger.info(`🔗 [NorthStar] Linked roadmap relationships on ${linked} milestone row(s)`);
   }
 
   logger.info(`✅ [NorthStar] Certification Milestone Plan seeded (${inserted} new rows)`);
