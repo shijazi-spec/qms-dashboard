@@ -344,7 +344,7 @@ export function buildStructuredPushPlan(
   // contact that matches an existing account (Layer 1) links to THAT account
   // even if a colleague on the same (wrong) label is genuinely new. This is why
   // two people under one bad label — one @<REDACTED_HOST> (existing), one
-  // @<REDACTED_HOST> (new) — correctly split: the first links to Riyad Bank
+  // @<REDACTED_HOST> (new) — correctly split: the first links to Example Organization
   // (A1), the second opens a new "New Startup" account (A3).
   const isRowExistingMatch = (r: SPRow) =>
     !!String(r.matched_account_CRMProvider_id || "").trim() ||

@@ -10,8 +10,8 @@ beforeEach(() => query.mockReset());
 describe("getSegmentDealComplianceSummary (expanded)", () => {
   it("fetches per-deal rows and returns the full breakdown", async () => {
     query.mockResolvedValue({ rows: [
-      { stage: "Agreement Signed", compliant: false, amount: 100, owner: "Ali", missing_docs: [{ label: "VAT Certificate" }] },
-      { stage: "Agreement Signed", compliant: true, amount: 50, owner: "Ali", missing_docs: [] },
+      { stage: "Agreement Signed", compliant: false, amount: 100, owner: "Sample User", missing_docs: [{ label: "VAT Certificate" }] },
+      { stage: "Agreement Signed", compliant: true, amount: 50, owner: "Sample User", missing_docs: [] },
     ] });
     const out = await getSegmentDealComplianceSummary("ExampleOrg");
     const sql = String(query.mock.calls[0][0]);

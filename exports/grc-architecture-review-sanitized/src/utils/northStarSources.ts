@@ -5,7 +5,7 @@
  * data source in QMS, so they can auto-calculate and flow to the leadership
  * feed (see leadershipKpiFeed.ts) instead of being entered by hand:
  *
- *   Sara (Quality):
+ *   Sample User (Quality):
  *     - QM-KPI-004  QMS Adoption Rate          → qms_adoption
  *     - QM-KPI-007  Op. Excellence Value Real. → value_realization
  *   Sample User (GRC):

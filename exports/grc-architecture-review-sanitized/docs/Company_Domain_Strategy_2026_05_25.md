@@ -19,7 +19,7 @@ Today, Company_Domain exists in your CRMProvider deals but is used only for one 
 
 | Identifier | Stability | Uniqueness | Machine-readable | Notes |
 |---|---|---|---|---|
-| Company name | ❌ — "Aramco" vs "Example Organization" vs "ارامكو" | ❌ — many subsidiaries share a name | ⚠️ — fuzzy match needed | Translates, gets misspelled |
+| Company name | ❌ — "Example Organization" vs "Example Organization" vs "ارامكو" | ❌ — many subsidiaries share a name | ⚠️ — fuzzy match needed | Translates, gets misspelled |
 | Phone number | ⚠️ — changes when numbers are ported | ❌ — switchboards shared by thousands | ✅ | Many companies use cellular numbers |
 | CRMProvider record ID | ✅ — never changes | ❌ — same company often has 3-5 records (duplicates) | ✅ | Internal-only, no business meaning |
 | **Email domain** | ✅ — companies rarely change | ✅ — one company = one primary domain | ✅ — RFC-defined | The standard for B2B identity |

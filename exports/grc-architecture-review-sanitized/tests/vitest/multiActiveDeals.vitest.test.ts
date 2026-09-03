@@ -71,7 +71,7 @@ describe("only OPEN deals count", () => {
   it("flags Example Organization: two open deals, four Closed Lost ignored", () => {
     // The real record from the CRM on 2026-08-24.
     const v = violations([
-      { stage: "Proposal", owner: "Ali AlRajhi", domain: "<REDACTED_HOST>" },
+      { stage: "Proposal", owner: "Sample User AlRajhi", domain: "<REDACTED_HOST>" },
       { stage: "On Hold", owner: "Sample User", domain: "<REDACTED_HOST>" },
       { stage: "Closed Lost", owner: "Naif AlSaif", domain: "<REDACTED_HOST>" },
       { stage: "Closed Lost", owner: "Abubaker Hashem", domain: "<REDACTED_HOST>" },
@@ -164,7 +164,7 @@ describe("the rule holds within ONE layout", () => {
 describe("owner collision is reported separately", () => {
   it("distinguishes two owners from one owner holding both", () => {
     const collision = violations([
-      { stage: "New Deal", owner: "Ali AlRajhi", domain: "<REDACTED_HOST>" },
+      { stage: "New Deal", owner: "Sample User AlRajhi", domain: "<REDACTED_HOST>" },
       { stage: "New Deal", owner: "Sample User", domain: "<REDACTED_HOST>" },
     ]);
     const housekeeping = violations([
@@ -186,7 +186,7 @@ describe("grouping falls back to the Account id when there is no domain", () => 
   // domain and missed 6 of the 13 accounts Sample User by hand.
   it("groups two open deals on one Account id", () => {
     const v = violations([
-      { stage: "Proposal", owner: "Ali AlRajhi", accountId: "<REDACTED_ID>", account: "Example Organization" },
+      { stage: "Proposal", owner: "Sample User AlRajhi", accountId: "<REDACTED_ID>", account: "Example Organization" },
       { stage: "On Hold", owner: "Sample User", accountId: "<REDACTED_ID>", account: "Example Organization" },
     ]);
     expect(v).toHaveLength(1);
@@ -197,8 +197,8 @@ describe("grouping falls back to the Account id when there is no domain", () => 
     // "Example Organization" and "stcbank" are separate companies with separate Account ids.
     expect(
       violations([
-        { stage: "Proposal", owner: "Ali AlRajhi", accountId: "<REDACTED_ID>", account: "Example Organization" },
-        { stage: "Contacted", owner: "Ali AlRajhi", accountId: "<REDACTED_ID>", account: "stcbank" },
+        { stage: "Proposal", owner: "Sample User AlRajhi", accountId: "<REDACTED_ID>", account: "Example Organization" },
+        { stage: "Contacted", owner: "Sample User AlRajhi", accountId: "<REDACTED_ID>", account: "stcbank" },
       ]),
     ).toHaveLength(0);
   });

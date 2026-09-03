@@ -343,7 +343,7 @@ export async function updatePolicy(
 
   const updateFields: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "title",
@@ -388,9 +388,9 @@ export async function updatePolicy(
 
   for (const [key, value] of Object.entries(policy)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      updateFields.push(`${key} = $${paramCount}`);
+      updateFields.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -401,7 +401,7 @@ export async function updatePolicy(
     `
     UPDATE policies 
     SET ${updateFields.join(", ")}
-    WHERE id = $${paramCount}
+    WHERE id = $${pExample Organizationunt}
     RETURNING *
   `,
     values,
@@ -505,47 +505,47 @@ export async function getAllPolicies(filters?: {
 
   let whereConditions: string[] = [];
   let values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.status) {
-    whereConditions.push(`status = $${paramCount}`);
+    whereConditions.push(`status = $${pExample Organizationunt}`);
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.category) {
-    whereConditions.push(`category = $${paramCount}`);
+    whereConditions.push(`category = $${pExample Organizationunt}`);
     values.push(filters.category);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.document_type) {
-    whereConditions.push(`document_type = $${paramCount}`);
+    whereConditions.push(`document_type = $${pExample Organizationunt}`);
     values.push(filters.document_type);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.document_types && filters.document_types.length > 0) {
-    whereConditions.push(`document_type = ANY($${paramCount}::text[])`);
+    whereConditions.push(`document_type = ANY($${pExample Organizationunt}::text[])`);
     values.push(filters.document_types);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.owner_department) {
-    whereConditions.push(`owner_department = $${paramCount}`);
+    whereConditions.push(`owner_department = $${pExample Organizationunt}`);
     values.push(filters.owner_department);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.search) {
     whereConditions.push(
-      `(title ILIKE $${paramCount} OR policy_number ILIKE $${paramCount} OR document_number ILIKE $${paramCount})`,
+      `(title ILIKE $${pExample Organizationunt} OR policy_number ILIKE $${pExample Organizationunt} OR document_number ILIKE $${pExample Organizationunt})`,
     );
     values.push(`%${filters.search}%`);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (
     filters?.allowedConfidentiality &&
     filters.allowedConfidentiality.length > 0
   ) {
-    whereConditions.push(`confidentiality = ANY($${paramCount}::text[])`);
+    whereConditions.push(`confidentiality = ANY($${pExample Organizationunt}::text[])`);
     values.push(filters.allowedConfidentiality);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   const whereClause =
@@ -566,7 +566,7 @@ export async function getAllPolicies(filters?: {
     SELECT * FROM policies 
     ${whereClause}
     ORDER BY updated_at DESC
-    LIMIT $${paramCount} OFFSET $${paramCount + 1}
+    LIMIT $${pExample Organizationunt} OFFSET $${pExample Organizationunt + 1}
   `,
     values,
   );
@@ -965,7 +965,7 @@ export async function updateReviewCycle(
 ): Promise<PolicyReviewCycle> {
   const setClause: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
   const allowed = [
     "actual_date",
     "reviewer_name",
@@ -976,14 +976,14 @@ export async function updateReviewCycle(
   ];
   for (const [key, value] of Object.entries(updates)) {
     if (allowed.includes(key) && value !== undefined) {
-      setClause.push(`${key} = $${paramCount}`);
+      setClause.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
   values.push(id);
   const result = await pool.query(
-    `UPDATE policy_review_cycles SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE policy_review_cycles SET ${setClause.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0];

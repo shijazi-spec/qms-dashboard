@@ -1,7 +1,7 @@
 /**
  * FINAL canonical GRQ KPI set — source: "GRQ Final KPIs_2.xlsx" (Sample User, 2026-06-16).
  * 5 owner groups: Quality (Sample User), GRC (Sample User), GRQ Specialist
- * (AlHanouf), Legal (Ali Sample User — NEW owner), and GRQ Team roll-ups (Shared).
+ * (AlHanouf), Legal (Sample User Sample User — NEW owner), and GRQ Team roll-ups (Shared).
  *
  * Each entry mirrors the Excel cells: name, description, calculation (formula),
  * target, frequency, owner, data source. Thresholds are derived from the single
@@ -80,7 +80,7 @@ export const FINAL_KPIS: FinalKpi[] = [
   { code: "SPEC-KPI-02", name: "Documentation Lifecycle Compliance", owner_type: "grq_specialist", owner_name: "Sample User", category: "governance", unit: "%", target: 95, weight: 50, direction: "higher_is_better", frequency: "monthly", calc_mode: "manual", description: "Measures the percentage of controlled governance documents reviewed on time according to the approved lifecycle schedule", formula: "Documents Reviewed On Time ÷ Documents Due × 100", data_source: "Document Master List" },
   { code: "SPEC-KPI-06", name: "CAPA Follow-Up SLA Compliance", owner_type: "grq_specialist", owner_name: "Sample User", category: "quality", unit: "%", target: 95, weight: 50, direction: "higher_is_better", frequency: "monthly", calc_mode: "auto", description: "Measures the percentage of due CAPAs that were followed up within the defined SLA and escalated when overdue", formula: "CAPAs Followed Up Within SLA ÷ Total Due CAPAs × 100", data_source: "CAPA Register" },
 
-  // ───────────── Legal — Ali Sample User (5) ─────────────
+  // ───────────── Legal — Sample User Sample User (5) ─────────────
   { code: "LEG-KPI-01", name: "Legal Governance Score", owner_type: "legal_specialist", owner_name: "Sample User", category: "compliance", unit: "%", target: 95, weight: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures overall legal operational performance across contract review timeliness, contract clause compliance, contract archiving discipline, and legal action closure", formula: "Equal-weighted average of achievement % of Legal KPIs #2–#5 (each weighted 1/4)", data_source: "KPI Dashboard" },
   { code: "LEG-KPI-02", name: "Contract Review SLA", owner_type: "legal_specialist", owner_name: "Sample User", category: "compliance", unit: "%", target: 95, weight: 25, direction: "higher_is_better", frequency: "monthly", calc_mode: "manual", description: "Measures the percentage of in-scope contracts reviewed within the defined SLA, while controlling overdue review backlog", formula: "Contracts Reviewed Within SLA ÷ Total Contracts Due for Review × 100", data_source: "Contract Register" },
   { code: "LEG-KPI-06", name: "Contract Compliance Coverage", owner_type: "legal_specialist", owner_name: "Sample User", category: "compliance", unit: "%", target: 100, weight: 25, direction: "higher_is_better", frequency: "quarterly", calc_mode: "manual", description: "Measures the percentage of reviewed contracts containing all mandatory standard legal clauses required by the organization", formula: "Contracts With Required Clauses ÷ Total Contracts Reviewed × 100", data_source: "Contract Register" },

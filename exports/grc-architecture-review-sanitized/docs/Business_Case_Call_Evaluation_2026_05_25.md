@@ -223,7 +223,7 @@ Week of May 4–10, 2026   |   52 calls scored   |   Team avg 71%   |   3 critic
 
 🚨 Critical Issues:
    • 3 new coaching plans pending delivery
-   • 1 call flagged: missing consent line (Mona, May 8)
+   • 1 call flagged: missing consent line (Sample User, May 8)
    • Compliance Rate dropped 8% week-over-week
 
 ═══ Agents (sorted by gap-to-target 75%) ═══
@@ -238,7 +238,7 @@ Sample User    | 10 calls | 62% ↓ | 78% comp. | 0 critical | 1 plan pending
 Sample User     | 11 calls | 73%   | 88% comp.  | 0 critical | 1 plan pending
   ↳ [Deliver Coaching Plan]
 
-Mona      | 8 calls  | 78%   | 87% comp.  | 1 critical (consent line missed) | 1 plan pending
+Sample User      | 8 calls  | 78%   | 87% comp.  | 1 critical (consent line missed) | 1 plan pending
   ↳ [Deliver Coaching Plan]   [Review Critical Fail]
 
 Sample User     | 12 calls | 91% ↑ | 100% comp. | 0 critical | 0 plans
@@ -248,7 +248,7 @@ Sample User     | 12 calls | 91% ↑ | 100% comp. | 0 critical | 0 plans
 
 • Sample User — Objection Handling (4 failed-call evidence) → [Deliver]
 • Sample User — Closing plan (3 failed-call evidence) — awaiting delivery for 5 days → [Nudge]
-• Mona — Discovery plan (3 failed-call evidence) → [Deliver]
+• Sample User — Discovery plan (3 failed-call evidence) → [Deliver]
 
 [ Export full report as CSV ]
 ```

@@ -107,7 +107,7 @@ Sample User    | 12 calls | 62% ↓ | 78% comp. | 1 critical | 1 plan pending
 Sample User     | 9 calls  | 91% ↑ | 100% comp. | 0 critical | 0 plans
   ↳ Top performer this week
 
-Mona      | 8 calls  | 78%   | 92%  comp. | 0 critical | 1 plan pending (Discovery)
+Sample User      | 8 calls  | 78%   | 92%  comp. | 0 critical | 1 plan pending (Discovery)
   ↳ [Deliver Coaching Plan]
 
 ═══ Coaching actions this week ═══════════════════════════════════════════════

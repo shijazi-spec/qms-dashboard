@@ -2491,7 +2491,7 @@
         // Normalize values for cross-row matching:
         //   email → lowercase + trim   ("<REDACTED_EMAIL>" == "<REDACTED_EMAIL>")
         //   phone → digits only        ("<REDACTED_PHONE>" == "<REDACTED_PHONE>")
-        //   name  → lowercase + collapse whitespace ("Ali  AL Mikhdam" == "ali al mikhdam")
+        //   name  → lowercase + collapse whitespace ("Sample User  AL Mikhdam" == "Sample User al mikhdam")
         function _normEmail(s) { return String(s || '').trim().toLowerCase(); }
         // Canonicalize phones the SAME way the backend normalizePhone does, so
         // a Saudi local format (<REDACTED_PHONE> and international (<REDACTED_PHONE>// compare equal: strip non-digits, drop a leading 00 / 966 country code,

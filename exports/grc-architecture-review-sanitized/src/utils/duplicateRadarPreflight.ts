@@ -179,7 +179,7 @@ export interface PreflightResultRow {
    * `reason`/`suggested_action` so existing integrations don't break.
    *
    * Examples:
-   *   "Existing customer in Onboarding — do not pursue. Route to CS (Sara)."
+   *   "Existing customer in Onboarding — do not pursue. Route to CS (Sample User)."
    *   "Active open Sales deal — coordinate with owner Sample User."
    *   "Already a duplicate in pipeline (3 records). Assign to existing
    *    owner Sample User; do not create a new lead."
@@ -775,11 +775,11 @@ export function isStrategicDomain(domain: string | null | undefined): boolean {
  * NAME (distinctive substring keywords, plus whole-name exact for short/generic
  * names like "Tree" that would over-match as a substring).
  *
- * 2026-06-26 (Sample User): seeded from the Mawsool batch — the whole Aramco group
+ * 2026-06-26 (Sample User): seeded from the Mawsool batch — the whole Example Organization group
  * (parent + JV/subsidiaries SAMREF / SATORP / SASREF / Example Organization / Luberef / ARO
- * Drilling / Aramco Gulf Operations / Aramco Digital / JHAH) plus Tree and
+ * Drilling / Example Organization Gulf Operations / Example Organization Digital / JHAH) plus Tree and
  * Example Organization were confirmed do-not-contact. Several subsidiaries do NOT contain the
- * word "Aramco", so we list their tokens + domains explicitly.
+ * word "Example Organization", so we list their tokens + domains explicitly.
  *
  * Extend without a code change via env PREFLIGHT_PROTECTED_DOMAINS /
  * PREFLIGHT_PROTECTED_NAMES (comma-separated).
@@ -808,7 +808,7 @@ const PROTECTED_ACCOUNTS: ReadonlyArray<ProtectedAccount> = [
       "<REDACTED_HOST>",
     ],
     nameKeywords: [
-      "aramco",
+      "Example Organization",
       "sasref",
       "satorp",
       "Example Organization",
@@ -1186,7 +1186,7 @@ export function classifyPreflightRows(input: {
     const ref = row.ref ?? null;
     const domain = resolveDomain(row);
 
-    // HIGHEST PRIORITY — protected / do-not-contact named accounts (Aramco
+    // HIGHEST PRIORITY — protected / do-not-contact named accounts (Example Organization
     // group, Tree, Example Organization, …). These ALWAYS reject, even with no CRM match,
     // so a strategic account can never leak into PASS because one contact had
     // no website (#n) or a free-mail address. Runs before duplicate / client
@@ -1245,7 +1245,7 @@ export function classifyPreflightRows(input: {
       //
       // (1) Free-mail email rows (gmail / hotmail / yahoo / etc.). Even
       //     if no CRM cluster matched, an @<REDACTED_HOST> row whose Company
-      //     Name reads "Example Organization" or "Al Rajhi Bank" almost certainly belongs
+      //     Name reads "Example Organization" or "Example Organization" almost certainly belongs
       //     to an existing customer — the lookup just failed because the
       //     company's records don't have THIS mobile number indexed.
       //     Pushes the verdict to REVIEW so the HoS / SDR pair check it
@@ -1969,7 +1969,7 @@ function deriveCsLifecycleState(
 
 // ── RULE 2 v3 — CS-CLIENT DIRECTORY (Sample User 2026-06-23) ───────────────────────
 // The cluster-based matcher (v2) only found clients that happened to have a
-// DUPLICATE cluster — clean, non-duplicated clients (SATORP, Aramco, Mozn,
+// DUPLICATE cluster — clean, non-duplicated clients (SATORP, Example Organization, Mozn,
 // SAMREF, Diriyah, SIDF…) have no cluster, so they slipped through to PASS and
 // the sales team would have cold-called live customers. v3 builds a directory
 // of EVERY CS-tracked / customer deal straight from duplicate_records (the
@@ -2398,7 +2398,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
   // Accounts indexed by CRMProvider id (+ kept for name-based linkage). A CS deal can
   // then inherit its Account's DOMAIN and (often English) NAME even when the
   // deal itself carries an Arabic-only company name and no Company_Domain — the
-  // exact Riyad Bank / Bank Albilad case the CS Lifecycle tab warns about.
+  // exact Example Organization / Example Organization case the CS Lifecycle tab warns about.
   const accountById = new Map<string, { domain: string | null; norm: string | null }>();
   const acctRows =
     (
@@ -2424,7 +2424,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
   //    everything in SQL (FAST — filtered set, no full raw_data per row, which
   //    timed out and collapsed the directory). The phase / company-domain
   //    COALESCE includes the env-override field name(s) so a custom CRMProvider API
-  //    name (e.g. the one the CS Lifecycle resolves for Riyad Bank) is caught.
+  //    name (e.g. the one the CS Lifecycle resolves for Example Organization) is caught.
   const customerStages = new Set(Array.from(PF_CUSTOMER_STAGES));
   const _ident = (s: string) => (/^[A-Za-z0-9_ ]+$/.test(s) ? s.trim() : null);
   const _envFields = (envVar: string, defaults: string[]) =>
@@ -2555,7 +2555,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
     for (const dm of [d.domain, d.cs_domain]) addClient("", dm, status);
     // Inherit the linked ACCOUNT's domain + (English) name by CRMProvider id — closes
     // the gap when the deal has an Arabic-only name and no Company_Domain but
-    // its Account has <REDACTED_HOST> / "Riyad Bank".
+    // its Account has <REDACTED_HOST> / "Example Organization".
     const acctId = (d.account_id || "").toString().trim();
     if (acctId && accountById.has(acctId)) {
       const acc = accountById.get(acctId)!;
@@ -2574,7 +2574,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
     if (status) byDomain.set(dom, status);
   }
   //   (2) domain → name: an account sitting on a KNOWN-CLIENT domain IS that
-  //   client, even under a different name variant (e.g. the English "Riyad Bank"
+  //   client, even under a different name variant (e.g. the English "Example Organization"
   //   account on <REDACTED_HOST> when the active CS deal carries the Arabic name
   //   بنك الرياض). Without this, an inbound English company name leaked to PASS
   //   while the Arabic one blocked. Runs after (1) so byDomain is fully built.
@@ -2593,7 +2593,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
 
   // (3) Durable name indexing (Sample User 2026-06-24): a client is often known only by
   // DOMAIN (its deal carries the domain) but NOT by name, so an inbound contact on
-  // a personal email — no domain — leaks (the Mawsool "Aramco on a Gmail" case).
+  // a personal email — no domain — leaks (the Mawsool "Example Organization on a Gmail" case).
   // Pull the COMPANY NAME from EVERY CRM record (contact / lead / account / deal)
   // sitting on a KNOWN-CLIENT domain and index it → byName, so the client resolves
   // by name even with no inbound domain. Uses company_name / account_name only —
@@ -3773,7 +3773,7 @@ async function runPreflightBasic(input: {
     const phone = phoneByRow.get(i) ?? null;
     const domain = domainByRow.get(i) ?? null;
 
-    // HIGHEST PRIORITY — protected / do-not-contact named accounts (Aramco
+    // HIGHEST PRIORITY — protected / do-not-contact named accounts (Example Organization
     // group, Tree, Example Organization, …). These ALWAYS reject, even with no CRM match and
     // even with no reachable contact, so a strategic account can never leak into
     // PASS. This mirrors the full-mode classifier (classifyPreflightRows) so the
@@ -4181,7 +4181,7 @@ async function runPreflightBasic(input: {
   // mirror-based Rule 3 flagged, so a deal closed in CRMProvider since the last sync
   // self-heals to PASS instead of waiting for the next sync.
   // A PASS verdict is derived from the LOCAL mirror, which goes stale: a churned
-  // client that RE-SIGNED (Riyadh Air), a Termination mis-tag that never joined
+  // client that RE-SIGNED (Example Organization), a Termination mis-tag that never joined
   // (PwC Academy), or simply a deal the mirror hasn't caught yet. So EVERY row
   // that would pass is verified LIVE against CRMProvider: the company must have NO
   // active deal — a deal in any OPEN pipeline stage (New Deal / Contacted / Not
@@ -4372,7 +4372,7 @@ async function runPreflightBasic(input: {
           }
           // Backstop: the account-related-list check misses when a deal's Account
           // carries no matching domain and its name is punctuated differently from
-          // the inbound one (the Riyadh Air case — Account "… - …" vs inbound
+          // the inbound one (the Example Organization case — Account "… - …" vs inbound
           // "… | …"). Search CRMProvider Deals directly by the company name, which finds
           // the live deal regardless of account linkage. Only when accounts found
           // nothing, so we don't add a search for a company already flagged.

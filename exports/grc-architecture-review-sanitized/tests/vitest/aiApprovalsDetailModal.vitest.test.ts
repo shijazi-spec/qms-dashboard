@@ -65,7 +65,7 @@ const SEED_VIEWERS = [
   {
     user_id: 2,
     user_email: '<REDACTED_EMAIL>',
-    user_name: 'Omar Auditor',
+    user_name: 'Sample User Auditor',
     user_role: 'admin',
     last_viewed_at: '2026-01-02T08:00:00.000Z',
     view_count: 1,

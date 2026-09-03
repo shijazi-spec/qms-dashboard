@@ -66,13 +66,13 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
         violations: [
           {
             record_id: 1, CRMProvider_record_id: 'z1', account_name: 'Example Organization', domain: '<REDACTED_HOST>',
-            current_phase: 'renewal', days_since_modified: 10, cs_owner_name: 'Sara',
+            current_phase: 'renewal', days_since_modified: 10, cs_owner_name: 'Sample User',
             customer_since: '2023-01-01', renewal_date: '2025-01-01', churn_date: '', health: 'green',
             violation: { code: 'renewal_overdue', severity: 'warning', message: 'Renewal overdue' },
           },
           {
             record_id: 2, CRMProvider_record_id: 'z2', account_name: 'Example Organization', domain: '<REDACTED_HOST>',
-            current_phase: 'onboarding', days_since_modified: 3, cs_owner_name: 'Omar',
+            current_phase: 'onboarding', days_since_modified: 3, cs_owner_name: 'Sample User',
             customer_since: '2024-06-01', renewal_date: '', churn_date: '', health: 'red',
             violation: { code: 'missing_owner', severity: 'critical', message: 'No CS owner' },
           },
@@ -89,7 +89,7 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
     expect(lines[0]).toBe('Severity,Account,Domain,Phase,CS Owner,Customer Since,Renewal Date,Churn Date,Health,Days Since Modified,Violations,Messages');
     // critical (Alpha) sorts above warning (Beta)
     expect(lines[1]).toContain('critical,Alpha Inc,<REDACTED_HOST>');
-    expect(lines[1]).toContain('Omar');
+    expect(lines[1]).toContain('Sample User');
     expect(lines[2]).toContain('warning,Beta Corp,<REDACTED_HOST>');
   });
 

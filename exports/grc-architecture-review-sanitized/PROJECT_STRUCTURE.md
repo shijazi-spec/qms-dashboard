@@ -1,6 +1,6 @@
 # Sanitized Repository Structure
 
-This inventory contains architecture-review source only. Binary assets, runtime data, exports, logs, backups, agent metadata, and all environment files except `.env.example` were excluded.
+This inventory contains architecture-review source only. Binary assets, runtime data, exports, logs, backups, live-data inspection utilities, operational customer inventories, agent metadata, and all environment files except `.env.example` were excluded.
 
 ```text
 .env.example
@@ -129,7 +129,6 @@ docs/Pentest_v3_Detailed_Remediation_Report.md
 docs/Preflight_Rejection_Rules_Spec_2026-06-17.md
 docs/QMS_Security_Assessment_Response.md
 docs/SCOPE_OF_WORK.html
-docs/SCOPE_OF_WORK.md
 docs/SDR_PDPL_Consent_Script_2026_05_25.md
 docs/SDR_PIPELINE_HANDOFF_2026_05_22.md
 docs/SDR_Verification_Step_2026_05_25.md
@@ -270,7 +269,6 @@ hosting-platform.nix
 package-lock.json
 package.json
 playwright.config.ts
-scripts/Backup-QMS-Monthly.ps1
 scripts/a11y-check.js
 scripts/add-i18n-keys-task123.cjs
 scripts/apply-i18n.cjs
@@ -312,17 +310,10 @@ scripts/harden-mastra-output-dependencies.mjs
 scripts/i18n-dynamic-baseline.json
 scripts/i18n-unused-baseline.json
 scripts/inngest.sh
-scripts/inspectAiBuckets.ts
-scripts/inspectClientMiss.ts
-scripts/inspectDealLayouts.ts
-scripts/inspectDuplicateRecords.ts
-scripts/inspectMissingClients.ts
-scripts/inspectMissingOwners.ts
 scripts/install-git-hooks.sh
 scripts/lint-dashboard-handlers.sh
 scripts/migrate-documents-to-namespaced-paths.ts
 scripts/new-feature.sh
-scripts/passNames.txt
 scripts/patch-lazystream.mjs
 scripts/patch-mastra-core.mjs
 scripts/patch-mastra-provider-types.mjs
@@ -349,7 +340,6 @@ scripts/streaming-download-trend.cjs
 scripts/traceDirectoryKey.ts
 scripts/verifyCsOwner.ts
 scripts/verifyPostRestoreSweepEmail.ts
-scripts/verifyPreflightDirectory.ts
 src/config/copc-scorecard-checkpoints.json
 src/config/sdr-coaching-map.json
 src/config/sdr-governance-2.1.rules.json

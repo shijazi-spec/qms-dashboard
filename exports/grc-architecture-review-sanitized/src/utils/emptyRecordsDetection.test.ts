@@ -58,7 +58,7 @@ console.log("classifyDeal");
   assert(r.reason === null, "'Request Demo' deal is NOT a test record");
 }
 {
-  const r = classifyDeal({ hasAccount: true, hasContact: false, amount: 100, name: "Aramco Renewal" });
+  const r = classifyDeal({ hasAccount: true, hasContact: false, amount: 100, name: "Example Organization Renewal" });
   assert(r.reason === null && !r.deleteEligible && !r.linkEligible, "normal deal with account → not flagged");
 }
 
@@ -80,7 +80,7 @@ console.log("classifyAccount");
   assert(r.reason === "empty", "'تجربة العميل' is not a test keyword → empty, not test");
 }
 {
-  const r = classifyAccount({ hasDeals: true, hasContacts: false, name: "Riyad Bank" });
+  const r = classifyAccount({ hasDeals: true, hasContacts: false, name: "Example Organization" });
   assert(r.reason === null, "normal account with a deal → not flagged");
 }
 

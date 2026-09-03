@@ -328,7 +328,7 @@ export async function updateAudit(
 ): Promise<Audit> {
   const setClause: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "title",
@@ -352,9 +352,9 @@ export async function updateAudit(
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      setClause.push(`${key} = $${paramCount}`);
+      setClause.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -362,7 +362,7 @@ export async function updateAudit(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE audits SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE audits SET ${setClause.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0];
@@ -380,22 +380,22 @@ export async function getAllAudits(filters?: {
 }): Promise<{ audits: Audit[]; total: number }> {
   let query = "SELECT * FROM audits WHERE 1=1";
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.status) {
-    query += ` AND status = $${paramCount}`;
+    query += ` AND status = $${pExample Organizationunt}`;
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.type) {
-    query += ` AND COALESCE(audit_type, type) = $${paramCount}`;
+    query += ` AND COALESCE(audit_type, type) = $${pExample Organizationunt}`;
     values.push(filters.type);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.year) {
-    query += ` AND EXTRACT(YEAR FROM COALESCE(planned_start_date, scheduled_date, created_at)) = $${paramCount}`;
+    query += ` AND EXTRACT(YEAR FROM COALESCE(planned_start_date, scheduled_date, created_at)) = $${pExample Organizationunt}`;
     values.push(filters.year);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   const countResult = await pool.query(
@@ -457,7 +457,7 @@ export async function updateFinding(
 ): Promise<AuditFinding> {
   const setClause: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "title",
@@ -482,9 +482,9 @@ export async function updateFinding(
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      setClause.push(`${key} = $${paramCount}`);
+      setClause.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -492,7 +492,7 @@ export async function updateFinding(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE grc_audit_findings SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE grc_audit_findings SET ${setClause.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
 
@@ -544,22 +544,22 @@ export async function getAllFindings(filters?: {
   let query =
     "SELECT f.*, a.title as audit_title, a.audit_code FROM grc_audit_findings f LEFT JOIN audits a ON f.audit_id = a.id WHERE 1=1";
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.status) {
-    query += ` AND f.status = $${paramCount}`;
+    query += ` AND f.status = $${pExample Organizationunt}`;
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.severity) {
-    query += ` AND f.severity = $${paramCount}`;
+    query += ` AND f.severity = $${pExample Organizationunt}`;
     values.push(filters.severity);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.audit_id) {
-    query += ` AND f.audit_id = $${paramCount}`;
+    query += ` AND f.audit_id = $${pExample Organizationunt}`;
     values.push(filters.audit_id);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   const countResult = await pool.query(
@@ -610,17 +610,17 @@ export async function getEvidencePacks(filters?: {
 }): Promise<EvidencePack[]> {
   let query = "SELECT * FROM evidence_packs WHERE 1=1";
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.audit_id) {
-    query += ` AND audit_id = $${paramCount}`;
+    query += ` AND audit_id = $${pExample Organizationunt}`;
     values.push(filters.audit_id);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.status) {
-    query += ` AND status = $${paramCount}`;
+    query += ` AND status = $${pExample Organizationunt}`;
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   query += " ORDER BY created_at DESC";
@@ -777,7 +777,7 @@ export async function updateChecklistItem(
 ): Promise<AuditChecklist> {
   const setClause: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "response",
@@ -788,9 +788,9 @@ export async function updateChecklistItem(
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      setClause.push(`${key} = $${paramCount}`);
+      setClause.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -798,7 +798,7 @@ export async function updateChecklistItem(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE audit_checklists SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE audit_checklists SET ${setClause.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0];

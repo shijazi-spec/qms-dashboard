@@ -85,12 +85,12 @@ describe("ownerToConsult", () => {
   test("name + email → 'name <email>'", () => {
     expect(
       ownerToConsult({ owner_name: "Sample User", owner_email: "<REDACTED_EMAIL>" }),
-    ).toBe("Ali <<REDACTED_EMAIL>>");
+    ).toBe("Sample User <<REDACTED_EMAIL>>");
   });
   test("name only → name", () => {
     expect(
       ownerToConsult({ owner_name: "Sample User", owner_email: "" }),
-    ).toBe("Ali");
+    ).toBe("Sample User");
   });
   test("email only → email", () => {
     expect(
@@ -197,7 +197,7 @@ describe("startCluster + rowPlaybook (integration)", () => {
       'Merge into "Example Organization Co — Riyadh Branch"',
     );
     // The duplicate row's own owner is the one to consult — not the primary's.
-    expect(dupPb.owner_to_consult).toBe("Sara <<REDACTED_EMAIL>>");
+    expect(dupPb.owner_to_consult).toBe("Sample User <<REDACTED_EMAIL>>");
     expect(dupPb.due_date).toBe(primaryPb.due_date);
     expect(dupPb.survivorship_rule).toBe(primaryPb.survivorship_rule);
   });

@@ -118,8 +118,8 @@ if (objectiveInserts.length === 1) {
   const p = objectiveInserts[0];
   assert(p[1] === "quality", "Q-O1: team literal preserved verbatim (`quality`)");
   assert(
-    p[3] === "Sara (Quality)",
-    "Q-O1: owner literal preserved verbatim (`Sara (Quality)`)",
+    p[3] === "Sample User (Quality)",
+    "Q-O1: owner literal preserved verbatim (`Sample User (Quality)`)",
   );
   assert(
     typeof p[2] === "string" && (p[2] as string).startsWith("Deploy Internal"),

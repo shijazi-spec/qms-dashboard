@@ -83,10 +83,10 @@ assertEq(normalizeCompanyKey("", "<REDACTED_HOST>") === "<REDACTED_HOST>", "fall
 // grouped by the resolved account id and named by the resolved account NAME
 // (not the row's wrong label).
 {
-  const rows = [mk({ row_index: 1, company: "Whatever Label", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", matched_account_CRMProvider_id: "ACC1", matched_account_name: "Riyad Bank" })];
+  const rows = [mk({ row_index: 1, company: "Whatever Label", domain: "<REDACTED_HOST>", email: "<REDACTED_EMAIL>", matched_account_CRMProvider_id: "ACC1", matched_account_name: "Example Organization" })];
   const p = buildStructuredPushPlan(1, rows, {});
   assertEq(p.companies.length === 1 && p.companies[0].companyKey === "ACC1", "A1 links a matched contact, keyed by account id");
-  assertEq(p.companies[0].companyName === "Riyad Bank", "A1 names the group by the RESOLVED account name, not the label");
+  assertEq(p.companies[0].companyName === "Example Organization", "A1 names the group by the RESOLVED account name, not the label");
 }
 // Two contacts under ONE wrong label but matched to DIFFERENT accounts → two
 // separate A1 links (never merged under the bad label).
@@ -265,7 +265,7 @@ import { normalizeCoreName, significantTokens, domainRootToken } from "./preflig
   assertEq(normalizeCoreName("Example Organization Trading Co.") === "Example Organization trading", "core: strips legal suffix + punctuation");
   assertEq(normalizeCoreName("Example Organization trading") === "Example Organization trading", "core: already normalized");
   assertEq(normalizeCoreName("Shaqra University | جامعة شقراء") === "shaqra university", "core: drops bilingual half");
-  assertEq(normalizeCoreName("Al Rajhi Bank") === "al rajhi bank", "core: keeps distinguishing words (not an article strip)");
+  assertEq(normalizeCoreName("Example Organization") === "Example Organization", "core: keeps distinguishing words (not an article strip)");
   assertEq(significantTokens("Arabian Drilling Co.").join(",") === "arabian,drilling", "tokens: >=4-char core tokens");
   assertEq(domainRootToken("<REDACTED_HOST>") === "arabiandrilling", "domainRoot: .com");
   assertEq(domainRootToken("<REDACTED_HOST>") === "kfshrc", "domainRoot: .<REDACTED_HOST> multi-part TLD");

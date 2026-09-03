@@ -3,7 +3,7 @@
  *
  * Measured on live data 2026-09-02: of 1,077 deals marked non-compliant, 813
  * were missing "National Address", 805 the CR and 795 the VAT certificate —
- * and 513 of those deals DID carry attachments. Riyad Bank was flagged
+ * and 513 of those deals DID carry attachments. Example Organization was flagged
  * non-compliant while holding 18 files including the MSA, the SOW, the PO and
  * the invoice; the only things "missing" were the three company certificates.
  *
@@ -61,7 +61,7 @@ describe("which documents belong to the company", () => {
 });
 
 describe("contracts filed under the abbreviations the business actually uses", () => {
-  // From Riyad Bank's real attachment list, 2026-09-02. Writing the test
+  // From Example Organization's real attachment list, 2026-09-02. Writing the test
   // against the true file names is what exposed these: the matcher knew
   // "agreement" and "contract" but not "MSA" or "SOW", and knew "invoice" but
   // not "INV-26124340".
@@ -96,7 +96,7 @@ describe("contracts filed under the abbreviations the business actually uses", (
 
 describe("company documents may come from the Account", () => {
   it("passes a deal whose certificates live on the Account", () => {
-    // The Riyad Bank shape, reduced: real deal paperwork on the deal, the
+    // The Example Organization shape, reduced: real deal paperwork on the deal, the
     // three certificates filed once on the company.
     const r = evaluateDocCompliance(
       "Agreement Signed",

@@ -160,7 +160,7 @@
                         <option value="quality_manager">Sample User (Quality Manager)</option>
                         <option value="grc_manager">Sample User (GRC Manager)</option>
                         <option value="grq_specialist">AlHanouf (GRQ Specialist)</option>
-                        <option value="legal_specialist">Ali Sample User (Legal Specialist)</option>
+                        <option value="legal_specialist">Sample User Sample User (Legal Specialist)</option>
                         <option value="shared">GRQ Team (Shared)</option>
                     </select>
                     <select id="statusFilter" class="border rounded px-2 py-1 text-sm" data-on-change="loadKPIs" data-testid="select-status-filter">
@@ -211,7 +211,7 @@
                             <option value="quality_manager">Sample User (Quality Manager)</option>
                             <option value="grc_manager">Sample User (GRC Manager)</option>
                             <option value="grq_specialist">AlHanouf (GRQ Specialist)</option>
-                            <option value="legal_specialist">Ali Sample User (Legal Specialist)</option>
+                            <option value="legal_specialist">Sample User Sample User (Legal Specialist)</option>
                             <option value="shared">GRQ Team (Shared)</option>
                         </select>
                     </div>
@@ -391,7 +391,7 @@
                 case 'grc_manager':        return 'Sample User';
                 case 'grq_specialist':     return 'AlHanouf';
                 case 'governance_officer': return 'AlHanouf';
-                case 'legal_specialist':   return 'Ali Sample User';
+                case 'legal_specialist':   return 'Sample User Sample User';
                 case 'sdr_team':           return 'SDR Team';
                 case 'sales_team':         return 'Sales Team';
                 case 'shared':             return 'GRQ Team';
@@ -404,7 +404,7 @@
                 case 'grc_manager':        return 'Sample User (GRC Manager)';
                 case 'grq_specialist':     return 'AlHanouf (GRQ Specialist)';
                 case 'governance_officer': return 'AlHanouf (GRQ Specialist)';
-                case 'legal_specialist':   return 'Ali Sample User (Legal Specialist)';
+                case 'legal_specialist':   return 'Sample User Sample User (Legal Specialist)';
                 case 'sdr_team':           return 'SDR Team';
                 case 'sales_team':         return 'Sales Team';
                 case 'shared':             return 'GRQ Team (Shared)';
@@ -416,7 +416,7 @@
             ['quality_manager', 'Sample User (Quality Manager)'],
             ['grc_manager', 'Sample User (GRC Manager)'],
             ['grq_specialist', 'AlHanouf (GRQ Specialist)'],
-            ['legal_specialist', 'Ali Sample User (Legal Specialist)'],
+            ['legal_specialist', 'Sample User Sample User (Legal Specialist)'],
             ['shared', 'GRQ Team (Shared)'],
         ];
         function _kpiCalcModeBadge(mode) {
@@ -607,7 +607,7 @@
             charts.owner = new Chart(document.getElementById('ownerChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: ['Sample User (Quality)', 'Sample User (GRC)', 'AlHanouf (Specialist)', 'Ali Sample User (Legal)', 'GRQ Team'],
+                    labels: ['Sample User (Quality)', 'Sample User (GRC)', 'AlHanouf (Specialist)', 'Sample User Sample User (Legal)', 'GRQ Team'],
                     datasets: [{
                         data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.grq_specialist || 0, data.byOwner?.legal_specialist || 0, data.byOwner?.shared || 0],
                         backgroundColor: ['#1E3A8A', '#1E293B', '#7C3AED', '#B45309', '#6D28D9']

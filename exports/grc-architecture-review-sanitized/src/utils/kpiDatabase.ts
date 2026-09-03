@@ -305,7 +305,7 @@ export async function initKPITables(): Promise<void> {
 
   await seedDefaultKPIs();
 
-  // Post-seed migration: fold Sample User's KPIs into Sara/Sample User after his
+  // Post-seed migration: fold Sample User's KPIs into Sample User/Sample User after his
   // resignation. Runs on existing DBs too (seedDefaultKPIs early-returns when
   // KPIs already exist, so this must be called independently).
   await reassignMohammedKPIs();
@@ -356,7 +356,7 @@ async function seedDefaultKPIs(): Promise<void> {
   logger.info("🌱 [KPIDB] Seeding default KPI definitions...");
 
   const defaultKPIs: Partial<KPIDefinition>[] = [
-    // Quality Manager (Sara) KPIs
+    // Quality Manager (Sample User) KPIs
     {
       kpi_name: "Governance Coverage",
       kpi_code: "QM-GOV-001",
@@ -1148,7 +1148,7 @@ export const OWNER_NAME_BY_TYPE: Record<string, string> = {
   quality_manager: "Sample User",
   grc_manager: "Sample User",
   grq_specialist: "AlHanouf",
-  legal_specialist: "Ali Sample User",
+  legal_specialist: "Sample User Sample User",
   sdr_team: "SDR Team",
   sales_team: "Sales Team",
   shared: "Shared",
@@ -1282,7 +1282,7 @@ const SUPERSEDED_SCORECARD_KPI_CODES = [
 export async function seedGrqScorecardKPIs(): Promise<void> {
   for (const k of GRQ_SCORECARD_KPIS) {
     // Upsert: existing rows get the canonical name/owner/category/calc_mode/North
-    // Star flag applied (so the Sara→Sample User the Excel reshuffle land on
+    // Star flag applied (so the Sample User→Sample User the Excel reshuffle land on
     // DBs that already seeded the earlier set). Live kpi_values are untouched.
     await pool.query(
       `INSERT INTO kpi_definitions
@@ -2100,7 +2100,7 @@ export async function updateKPIDefinition(
 ): Promise<KPIDefinition | null> {
   const fields: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "kpi_name",
@@ -2128,9 +2128,9 @@ export async function updateKPIDefinition(
 
   for (const field of allowedFields) {
     if (kpi[field as keyof KPIDefinition] !== undefined) {
-      fields.push(`${field} = $${paramCount}`);
+      fields.push(`${field} = $${pExample Organizationunt}`);
       values.push(kpi[field as keyof KPIDefinition]);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -2141,9 +2141,9 @@ export async function updateKPIDefinition(
     kpi.owner_name === undefined &&
     OWNER_NAME_BY_TYPE[kpi.owner_type]
   ) {
-    fields.push(`owner_name = $${paramCount}`);
+    fields.push(`owner_name = $${pExample Organizationunt}`);
     values.push(OWNER_NAME_BY_TYPE[kpi.owner_type]);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   if (fields.length === 0) return null;
@@ -2154,7 +2154,7 @@ export async function updateKPIDefinition(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE kpi_definitions SET ${fields.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE kpi_definitions SET ${fields.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0] || null;
@@ -2462,7 +2462,7 @@ export async function updateExecutiveReport(
 ): Promise<ExecutiveReport | null> {
   const fields: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "overall_health_score",
@@ -2481,13 +2481,13 @@ export async function updateExecutiveReport(
   for (const field of allowedFields) {
     if (updates[field as keyof ExecutiveReport] !== undefined) {
       const value = updates[field as keyof ExecutiveReport];
-      fields.push(`${field} = $${paramCount}`);
+      fields.push(`${field} = $${pExample Organizationunt}`);
       values.push(
         typeof value === "object" && !(value instanceof Date)
           ? JSON.stringify(value)
           : value,
       );
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -2497,7 +2497,7 @@ export async function updateExecutiveReport(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE executive_reports SET ${fields.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE executive_reports SET ${fields.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0] || null;

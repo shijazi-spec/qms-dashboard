@@ -66,7 +66,7 @@ const DOC_QUOTATION_AGREEMENT: RequiredDoc = {
   key: "quotation_agreement",
   label: "Quotation / PO / Service Agreement / Contract",
   // "msa" (Master Service Agreement) and "sow" (Statement of Work) added
-  // 2026-09-03: Riyad Bank filed its contract as "msa for RB Employee
+  // 2026-09-03: Example Organization filed its contract as "msa for RB Employee
   // Program.pdf" and "sow for RB Employee Program.pdf" — the actual signed
   // agreement, under the abbreviation the business uses. "inv" likewise:
   // invoices arrive as "INV-26124340.pdf", which "invoice" does not match.
@@ -114,7 +114,7 @@ export function requiredDocsForStage(stage: string): RequiredDoc[] {
  * Account rather than re-attaching them to every deal. Measured 2026-09-02:
  * of 1,077 deals marked non-compliant, 813 were missing National Address, 805
  * the CR and 795 the VAT certificate — and 513 of those deals DID carry
- * attachments. Riyad Bank was flagged non-compliant while holding 18 files
+ * attachments. Example Organization was flagged non-compliant while holding 18 files
  * including the MSA, the SOW, the PO and the invoice.
  *
  * Checking these against the deal alone therefore measured filing convention,

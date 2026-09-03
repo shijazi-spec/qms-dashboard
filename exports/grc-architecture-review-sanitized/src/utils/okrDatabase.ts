@@ -39,7 +39,7 @@ const SEED: OkrObjective[] = [
     team: "quality",
     objective:
       "Deploy Internal Governance & Process Quality Framework across all BUs",
-    owner: "Sara (Quality)",
+    owner: "Sample User (Quality)",
     key_results: [
       { kr_code: "Q-KR1", kpi_name: "QMS Framework Completion", kpi_code: "QM-KPI-015", definition: "Share of planned BU governance frameworks (process/SOP packages) approved and published in QMS.", calculation: "(# Approved Framework Packages ÷ # Planned Framework Packages) × 100", target_text: "100% by Q4", frequency: "Quarterly", data_source: "QMS Governance Library" },
       { kr_code: "Q-KR2", kpi_name: "Governance Training Coverage", kpi_code: "QM-KPI-005", definition: "Coverage of BU staff trained on the governance documents released for their BU.", calculation: "(# Trained Staff ÷ # Target Staff) × 100", target_text: "≥90% by Q4", frequency: "Quarterly", data_source: "LMS / Training Tracker" },
@@ -50,7 +50,7 @@ const SEED: OkrObjective[] = [
     objective_code: "Q-O2",
     team: "quality",
     objective: "Execute Internal BU Audit Program at Scale (PPG)",
-    owner: "Sara (Quality)",
+    owner: "Sample User (Quality)",
     key_results: [
       { kr_code: "Q-KR1", kpi_name: "Audit Execution Rate", kpi_code: "QM-KPI-002", definition: "Percent of planned audits completed within the quarter.", calculation: "(# Audits Completed ÷ # Audits Planned) × 100", target_text: "≥95% each quarter", frequency: "Quarterly", data_source: "QMS Audit Calendar" },
       { kr_code: "Q-KR2", kpi_name: "BU Coverage Rate", kpi_code: "QM-KPI-008", definition: "Percent of total BUs audited at least once in the year (or by plan).", calculation: "(# BUs Audited ÷ # Total BUs) × 100", target_text: "100% annual coverage", frequency: "Quarterly/Annual", data_source: "QMS Audit Register" },
@@ -61,7 +61,7 @@ const SEED: OkrObjective[] = [
     objective_code: "Q-O3",
     team: "quality",
     objective: "Close Execution Gaps and Prevent Repeat Findings",
-    owner: "Sara (Quality)",
+    owner: "Sample User (Quality)",
     key_results: [
       { kr_code: "Q-KR1", kpi_name: "Gap Closure Rate", kpi_code: "QM-KPI-003", definition: "Percent of audit findings closed within agreed timeline.", calculation: "(# Findings Closed On-Time ÷ # Total Findings) × 100", target_text: "≥90% monthly", frequency: "Monthly", data_source: "QMS Action Tracker" },
       { kr_code: "Q-KR2", kpi_name: "Repeat Findings Rate", kpi_code: null, definition: "Percent of findings that re-occur in subsequent audits (same theme/category).", calculation: "(# Repeat Findings ÷ # Total Findings) × 100", target_text: "≤10% by Q4", frequency: "Quarterly", data_source: "QMS Findings History" },
@@ -72,7 +72,7 @@ const SEED: OkrObjective[] = [
     objective_code: "Q-O4",
     team: "quality",
     objective: "Drive Automation & Waste Reduction via QMS",
-    owner: "Sara (Quality)",
+    owner: "Sample User (Quality)",
     key_results: [
       { kr_code: "Q-KR1", kpi_name: "Automation Coverage (Quality Workflows)", kpi_code: null, definition: "Percent of key quality workflows executed through QMS automation (not email/Excel).", calculation: "(# Automated Quality Workflows ÷ # Key Quality Workflows) × 100", target_text: "≥30% by Q4", frequency: "Quarterly", data_source: "QMS / Automation Logs" },
       { kr_code: "Q-KR2", kpi_name: "Manual Effort Reduction", kpi_code: null, definition: "Reduction in manual effort for audit reporting, tracking, and follow-ups.", calculation: "(Baseline Manual Hours − Current Manual Hours) ÷ Baseline × 100", target_text: "≥30% by Q4", frequency: "Quarterly", data_source: "Time Study / QMS Activity Logs" },

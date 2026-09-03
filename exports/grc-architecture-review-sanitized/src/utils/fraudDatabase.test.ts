@@ -214,13 +214,13 @@ function lastWriteParams(): unknown[] | null {
 }
 
 /** Returns true if any param in the array contains the given string. */
-function anyParamContains(params: unknown[], needle: string): boolean {
+function anyPExample Organizationntains(params: unknown[], needle: string): boolean {
   return params.some((p) => typeof p === "string" && p.includes(needle));
 }
 
 /** Returns true if any param in the array contains the REDACTED sentinel. */
 function anyParamRedacted(params: unknown[]): boolean {
-  return anyParamContains(params, REDACTED_SENTINEL);
+  return anyPExample Organizationntains(params, REDACTED_SENTINEL);
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +246,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS) {
   if (!params) continue;
 
   assert(
-    !anyParamContains(params, value),
+    !anyPExample Organizationntains(params, value),
     `createFraudRule/${label}: raw secret-shaped value is NOT present in INSERT params`,
   );
   assert(
@@ -271,7 +271,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS) {
   assert(params !== null, "createFraudRule/innocuous: pool.query was called");
   if (params) {
     assert(
-      anyParamContains(params, "Regular operational note"),
+      anyPExample Organizationntains(params, "Regular operational note"),
       "createFraudRule/innocuous: ordinary notes value passes through verbatim",
     );
     assert(
@@ -299,7 +299,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS.slice(0, 2)) {
   if (!params) continue;
 
   assert(
-    !anyParamContains(params, value),
+    !anyPExample Organizationntains(params, value),
     `updateFraudRule/${label}: raw secret-shaped value is NOT present in UPDATE params`,
   );
   assert(
@@ -337,7 +337,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS) {
   if (!params) continue;
 
   assert(
-    !anyParamContains(params, value),
+    !anyPExample Organizationntains(params, value),
     `createFraudIncident/${label}: raw secret-shaped value is NOT present in INSERT params`,
   );
   assert(
@@ -364,7 +364,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS) {
   assert(params !== null, "createFraudIncident/innocuous: pool.query was called");
   if (params) {
     assert(
-      anyParamContains(params, "Customer notified"),
+      anyPExample Organizationntains(params, "Customer notified"),
       "createFraudIncident/innocuous: ordinary notes value passes through verbatim",
     );
     assert(
@@ -393,7 +393,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS.slice(0, 2)) {
   if (!params) continue;
 
   assert(
-    !anyParamContains(params, value),
+    !anyPExample Organizationntains(params, value),
     `updateFraudIncident/${label}: raw secret-shaped value is NOT present in UPDATE params`,
   );
   assert(
@@ -420,7 +420,7 @@ console.log("\n=== closeFraudIncident — write-path secret-leak tests ===\n");
   assert(params !== null, `closeFraudIncident/${label}: pool.query was called with UPDATE`);
   if (params) {
     assert(
-      !anyParamContains(params, value),
+      !anyPExample Organizationntains(params, value),
       `closeFraudIncident/${label}: raw secret-shaped value is NOT present in UPDATE params`,
     );
     assert(
@@ -452,7 +452,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS.slice(0, 2)) {
   if (!params) continue;
 
   assert(
-    !anyParamContains(params, value),
+    !anyPExample Organizationntains(params, value),
     `upsertFraudKpi/${label}: raw secret-shaped value is NOT present in INSERT params`,
   );
   assert(
@@ -486,7 +486,7 @@ console.log("\n=== createCountryRisk — write-path secret-leak tests ===\n");
   assert(params !== null, `createCountryRisk/${label}: pool.query was called with INSERT`);
   if (params) {
     assert(
-      !anyParamContains(params, value),
+      !anyPExample Organizationntains(params, value),
       `createCountryRisk/${label}: raw secret-shaped value is NOT present in INSERT params`,
     );
     assert(
@@ -515,7 +515,7 @@ console.log("\n=== updateCountryRisk — write-path secret-leak tests ===\n");
   assert(params !== null, `updateCountryRisk/${label}: pool.query was called with UPDATE`);
   if (params) {
     assert(
-      !anyParamContains(params, value),
+      !anyPExample Organizationntains(params, value),
       `updateCountryRisk/${label}: raw secret-shaped value is NOT present in UPDATE params`,
     );
     assert(
@@ -544,7 +544,7 @@ console.log("\n=== updateEscalationRow — write-path secret-leak tests ===\n");
   assert(params !== null, `updateEscalationRow/${label}: pool.query was called with UPDATE`);
   if (params) {
     assert(
-      !anyParamContains(params, value),
+      !anyPExample Organizationntains(params, value),
       `updateEscalationRow/${label}: raw secret-shaped value is NOT present in UPDATE params`,
     );
     assert(

@@ -9807,7 +9807,7 @@ export const duplicateRadarRoutes = [
     //     "cluster_id": 42 | null,
     //     "lifecycle_state": "adoption" | null,
     //     "sector": "private" | "government" | null,
-    //     "owners": ["Ali Alhumoud"],
+    //     "owners": ["Sample User Alhumoud"],
     //     "arr_exposure": 50000 | null
     //   }
     //

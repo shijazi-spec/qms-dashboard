@@ -1714,8 +1714,8 @@ export async function findActiveDealForAccount(
 /**
  * LIVE verification by COMPANY NAME (Sample User 2026-08-04) — the account-related-list
  * check misses when a deal's Account carries no matching domain and the mirror's
- * name is punctuated differently (e.g. Account "Riyadh Air - طيران الرياض" vs the
- * inbound "Riyadh Air | طيران الرياض"). CRMProvider's global word-search indexes
+ * name is punctuated differently (e.g. Account "Example Organization - طيران الرياض" vs the
+ * inbound "Example Organization | طيران الرياض"). CRMProvider's global word-search indexes
  * Deal_Name AND the Account_Name shown on the deal, so searching the company's
  * distinctive name finds the live deal directly, regardless of account linkage.
  *
@@ -1731,7 +1731,7 @@ export async function findActiveDealByCompany(input: {
 }): Promise<ActiveDealHit | null> {
   const raw = String(input.companyName || "").trim();
   // Use the Latin/leading segment before a separator as the search term
-  // ("Riyadh Air | طيران الرياض" → "Riyadh Air"); fall back to the whole string.
+  // ("Example Organization | طيران الرياض" → "Example Organization"); fall back to the whole string.
   const term = (raw.split(/[|\/]|\s-\s/)[0] || raw).trim();
   const companyCore = _pfNameCore(raw) || _pfNameCore(term);
   if (companyCore.length < 4) return null; // too generic to search by name safely

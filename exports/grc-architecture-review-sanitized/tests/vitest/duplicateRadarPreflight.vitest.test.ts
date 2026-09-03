@@ -502,8 +502,8 @@ describe("matchProtectedAccount — do-not-contact named accounts", () => {
       "Example Organization (group)",
     );
   });
-  test("blocks Aramco subsidiaries that do NOT contain 'Aramco' — by name + domain", () => {
-    // SASREF / ARO Drilling have no 'aramco' token, so name keywords matter
+  test("blocks Example Organization subsidiaries that do NOT contain 'Example Organization' — by name + domain", () => {
+    // SASREF / ARO Drilling have no 'Example Organization' token, so name keywords matter
     expect(matchProtectedAccount(null, "SASREF")?.label).toBe(
       "Example Organization (group)",
     );
@@ -517,7 +517,7 @@ describe("matchProtectedAccount — do-not-contact named accounts", () => {
       "Example Organization (group)",
     );
   });
-  test("blocks Aramco JVs by their full company name", () => {
+  test("blocks Example Organization JVs by their full company name", () => {
     expect(
       matchProtectedAccount(
         "#n",

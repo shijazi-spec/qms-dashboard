@@ -717,22 +717,22 @@ export async function getAllRegulations(filters?: {
                           AND o.status = 'applicable') AS obligation_count
                  FROM regulations r WHERE 1=1`;
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.status) {
-    query += ` AND status = $${paramCount}`;
+    query += ` AND status = $${pExample Organizationunt}`;
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.jurisdiction) {
-    query += ` AND jurisdiction = $${paramCount}`;
+    query += ` AND jurisdiction = $${pExample Organizationunt}`;
     values.push(filters.jurisdiction);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.category) {
-    query += ` AND category = $${paramCount}`;
+    query += ` AND category = $${pExample Organizationunt}`;
     values.push(filters.category);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   query += " ORDER BY name ASC";
@@ -818,27 +818,27 @@ export async function getAllObligations(filters?: {
   let query =
     "SELECT o.*, r.name as regulation_name, r.regulation_code FROM obligations o LEFT JOIN regulations r ON o.regulation_id = r.id WHERE 1=1";
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.status) {
-    query += ` AND o.status = $${paramCount}`;
+    query += ` AND o.status = $${pExample Organizationunt}`;
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.priority) {
-    query += ` AND o.priority = $${paramCount}`;
+    query += ` AND o.priority = $${pExample Organizationunt}`;
     values.push(filters.priority);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.department) {
-    query += ` AND o.responsible_department = $${paramCount}`;
+    query += ` AND o.responsible_department = $${pExample Organizationunt}`;
     values.push(filters.department);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.regulation_id) {
-    query += ` AND o.regulation_id = $${paramCount}`;
+    query += ` AND o.regulation_id = $${pExample Organizationunt}`;
     values.push(filters.regulation_id);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   const countResult = await pool.query(
@@ -881,7 +881,7 @@ export async function updateObligation(
 ): Promise<Obligation> {
   const setClause: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "title",
@@ -906,9 +906,9 @@ export async function updateObligation(
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      setClause.push(`${key} = $${paramCount}`);
+      setClause.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -916,7 +916,7 @@ export async function updateObligation(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE obligations SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE obligations SET ${setClause.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0];
@@ -1083,18 +1083,18 @@ export async function getComplianceCalendar(filters?: {
     WHERE 1=1
   `;
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.month && filters?.year) {
-    query += ` AND EXTRACT(MONTH FROM cc.scheduled_date) = $${paramCount} AND EXTRACT(YEAR FROM cc.scheduled_date) = $${paramCount + 1}`;
+    query += ` AND EXTRACT(MONTH FROM cc.scheduled_date) = $${pExample Organizationunt} AND EXTRACT(YEAR FROM cc.scheduled_date) = $${pExample Organizationunt + 1}`;
     values.push(filters.month, filters.year);
-    paramCount += 2;
+    pExample Organizationunt += 2;
   }
 
   if (filters?.status) {
-    query += ` AND cc.status = $${paramCount}`;
+    query += ` AND cc.status = $${pExample Organizationunt}`;
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   query += " ORDER BY cc.scheduled_date ASC";

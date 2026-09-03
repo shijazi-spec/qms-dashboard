@@ -176,7 +176,7 @@ export const kpiCatalogRoutes = [
           ]);
 
           const groups = [
-            { key: "quality_manager", label: "QM Manager (Sara)", kpis: grqByPrefix("QM-KPI") },
+            { key: "quality_manager", label: "QM Manager (Sample User)", kpis: grqByPrefix("QM-KPI") },
             { key: "grc_manager", label: "GRC Manager (Sample User)", kpis: grqByPrefix("GRC-KPI") },
             { key: "sdr_team", label: "SDR Team", kpis: sdr },
             { key: "sales_team", label: "Sales Team", kpis: [] },

@@ -191,13 +191,13 @@ describe("a deal nobody owns cannot be the keeper", () => {
     expect(
       keeper([
         { stage: "Proposal", owner: "ExampleOrg" },
-        { stage: "New Deal", owner: "Ali AlRajhi" },
+        { stage: "New Deal", owner: "Sample User AlRajhi" },
       ]),
     ).toBe(0);
     expect(
       keeper([
         { stage: "Agreement Sent", owner: "ExampleOrg" },
-        { stage: "Contacted", owner: "Ali AlRajhi" },
+        { stage: "Contacted", owner: "Sample User AlRajhi" },
       ]),
     ).toBe(0);
   });

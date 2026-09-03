@@ -58,7 +58,7 @@ describe("packetDueDate", () => {
 
 describe("packetFilename", () => {
   test("ascii name", () => {
-    expect(packetFilename("Lina Khaled")).toBe(
+    expect(packetFilename("Lina Sample User")).toBe(
       "duplicate-radar-packet-Lina_Khaled.xlsx",
     );
   });

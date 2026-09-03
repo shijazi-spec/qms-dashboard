@@ -63,7 +63,7 @@ x-admin-key: <YOUR_ADMIN_KEY>
   "cluster_id": 42,
   "lifecycle_state": "adoption",
   "sector": "private",
-  "owners": ["Ali Alhumoud"],
+  "owners": ["Sample User Alhumoud"],
   "arr_exposure": 50000
 }
 ```

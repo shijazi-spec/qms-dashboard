@@ -229,7 +229,7 @@ export async function updateVendor(
 ): Promise<Vendor> {
   const setClause: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "name",
@@ -256,9 +256,9 @@ export async function updateVendor(
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      setClause.push(`${key} = $${paramCount}`);
+      setClause.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -266,7 +266,7 @@ export async function updateVendor(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE vendors SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE vendors SET ${setClause.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0];
@@ -285,27 +285,27 @@ export async function getAllVendors(filters?: {
 }): Promise<{ vendors: Vendor[]; total: number }> {
   let query = "SELECT * FROM vendors WHERE 1=1";
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.status) {
-    query += ` AND status = $${paramCount}`;
+    query += ` AND status = $${pExample Organizationunt}`;
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.criticality) {
-    query += ` AND criticality = $${paramCount}`;
+    query += ` AND criticality = $${pExample Organizationunt}`;
     values.push(filters.criticality);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.category) {
-    query += ` AND category = $${paramCount}`;
+    query += ` AND category = $${pExample Organizationunt}`;
     values.push(filters.category);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.search) {
-    query += ` AND (name ILIKE $${paramCount} OR vendor_code ILIKE $${paramCount})`;
+    query += ` AND (name ILIKE $${pExample Organizationunt} OR vendor_code ILIKE $${pExample Organizationunt})`;
     values.push(`%${filters.search}%`);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   const countResult = await pool.query(
@@ -428,7 +428,7 @@ export async function updateRemediation(
 ): Promise<VendorRemediation> {
   const setClause: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "title",
@@ -446,9 +446,9 @@ export async function updateRemediation(
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      setClause.push(`${key} = $${paramCount}`);
+      setClause.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -456,7 +456,7 @@ export async function updateRemediation(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE vendor_remediations SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE vendor_remediations SET ${setClause.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0];
@@ -479,17 +479,17 @@ export async function getAllRemediations(filters?: {
   let query =
     "SELECT r.*, v.name as vendor_name, v.vendor_code FROM vendor_remediations r LEFT JOIN vendors v ON r.vendor_id = v.id WHERE 1=1";
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.status) {
-    query += ` AND r.status = $${paramCount}`;
+    query += ` AND r.status = $${pExample Organizationunt}`;
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.priority) {
-    query += ` AND r.priority = $${paramCount}`;
+    query += ` AND r.priority = $${pExample Organizationunt}`;
     values.push(filters.priority);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   const countResult = await pool.query(

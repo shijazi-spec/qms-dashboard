@@ -574,7 +574,7 @@ export async function updateMigrationJob(
 ): Promise<MigrationJob> {
   const setClause: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "name",
@@ -592,9 +592,9 @@ export async function updateMigrationJob(
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      setClause.push(`${key} = $${paramCount}`);
+      setClause.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -602,7 +602,7 @@ export async function updateMigrationJob(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE migration_jobs SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE migration_jobs SET ${setClause.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0];
@@ -624,17 +624,17 @@ export async function getAllMigrationJobs(filters?: {
 }): Promise<{ jobs: MigrationJob[]; total: number }> {
   let query = "SELECT * FROM migration_jobs WHERE 1=1";
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.status) {
-    query += ` AND status = $${paramCount}`;
+    query += ` AND status = $${pExample Organizationunt}`;
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.target_module) {
-    query += ` AND target_module = $${paramCount}`;
+    query += ` AND target_module = $${pExample Organizationunt}`;
     values.push(filters.target_module);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   const countResult = await pool.query(

@@ -2,10 +2,10 @@ import { describe, it, expect } from "vitest";
 import { shapeDealCompliance } from "../../src/utils/dealComplianceReport";
 
 const rows = [
-  { stage: "Agreement Signed", compliant: false, amount: 100, owner: "Ali", missing_docs: [{ key: "vat", label: "VAT Certificate" }, { key: "cr", label: "Commercial Registration (CR)" }] },
-  { stage: "Agreement Signed", compliant: true, amount: 50, owner: "Ali", missing_docs: [] },
+  { stage: "Agreement Signed", compliant: false, amount: 100, owner: "Sample User", missing_docs: [{ key: "vat", label: "VAT Certificate" }, { key: "cr", label: "Commercial Registration (CR)" }] },
+  { stage: "Agreement Signed", compliant: true, amount: 50, owner: "Sample User", missing_docs: [] },
   { stage: "Proposal", compliant: false, amount: 200, owner: "", missing_docs: [{ key: "financial_offer", label: "Financial offer / proposal" }] },
-  { stage: "Agreement Signed", compliant: false, amount: 300, owner: "Sara", missing_docs: [{ key: "vat", label: "VAT Certificate" }] },
+  { stage: "Agreement Signed", compliant: false, amount: 300, owner: "Sample User", missing_docs: [{ key: "vat", label: "VAT Certificate" }] },
 ];
 
 describe("shapeDealCompliance", () => {
@@ -37,7 +37,7 @@ describe("shapeDealCompliance", () => {
   });
   it("aggregates missing_docs stored as plain label strings (real DB format)", () => {
     const stringRows = [
-      { stage: "Agreement Signed", compliant: false, amount: 10, owner: "Ali", missing_docs: ["VAT Certificate", "VAT Certificate"] },
+      { stage: "Agreement Signed", compliant: false, amount: 10, owner: "Sample User", missing_docs: ["VAT Certificate", "VAT Certificate"] },
     ];
     const out = shapeDealCompliance("ExampleOrg", stringRows);
     expect(out.top_missing_docs[0]).toEqual({ label: "VAT Certificate", count: 2 });

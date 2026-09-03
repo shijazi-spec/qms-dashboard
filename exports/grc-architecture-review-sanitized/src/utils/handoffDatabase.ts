@@ -333,7 +333,7 @@ export async function updateHandoffRule(
 ): Promise<HandoffRule> {
   const setClause: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "name",
@@ -346,9 +346,9 @@ export async function updateHandoffRule(
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      setClause.push(`${key} = $${paramCount}`);
+      setClause.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -356,7 +356,7 @@ export async function updateHandoffRule(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE handoff_rules SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE handoff_rules SET ${setClause.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0];
@@ -368,17 +368,17 @@ export async function getAllHandoffRules(filters?: {
 }): Promise<{ rules: HandoffRule[]; total: number }> {
   let query = "SELECT * FROM handoff_rules WHERE 1=1";
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.source_module) {
-    query += ` AND source_module = $${paramCount}`;
+    query += ` AND source_module = $${pExample Organizationunt}`;
     values.push(filters.source_module);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.is_active !== undefined) {
-    query += ` AND is_active = $${paramCount}`;
+    query += ` AND is_active = $${pExample Organizationunt}`;
     values.push(filters.is_active);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   const countResult = await pool.query(
@@ -431,17 +431,17 @@ export async function getHandoffEvents(filters?: {
   let query =
     "SELECT e.*, r.name as rule_name, r.rule_code FROM handoff_events e LEFT JOIN handoff_rules r ON e.rule_id = r.id WHERE 1=1";
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.status) {
-    query += ` AND e.status = $${paramCount}`;
+    query += ` AND e.status = $${pExample Organizationunt}`;
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.source_module) {
-    query += ` AND e.source_module = $${paramCount}`;
+    query += ` AND e.source_module = $${pExample Organizationunt}`;
     values.push(filters.source_module);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   const countResult = await pool.query(
@@ -472,7 +472,7 @@ export async function updateControlMapping(
 ): Promise<ControlMapping> {
   const setClause: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "control_name",
@@ -491,9 +491,9 @@ export async function updateControlMapping(
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      setClause.push(`${key} = $${paramCount}`);
+      setClause.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -501,7 +501,7 @@ export async function updateControlMapping(
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE control_mappings SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    `UPDATE control_mappings SET ${setClause.join(", ")} WHERE id = $${pExample Organizationunt} RETURNING *`,
     values,
   );
   return result.rows[0];

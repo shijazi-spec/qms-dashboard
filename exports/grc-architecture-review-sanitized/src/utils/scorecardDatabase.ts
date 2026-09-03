@@ -449,7 +449,7 @@ export async function getMohammedScorecard(): Promise<{
           route: "/policies",
           what_to_check: "Look for red/overdue review dates",
           if_result: "Review date passed",
-          then_action: "Contact owner (e.g., Sara) to schedule review",
+          then_action: "Contact owner (e.g., Sample User) to schedule review",
         },
         {
           step: 3,

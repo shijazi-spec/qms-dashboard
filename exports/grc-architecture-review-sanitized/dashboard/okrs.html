@@ -49,7 +49,7 @@
 
   <script>
     const esc = (s) => String(s==null?"":s).replace(/[&<>"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
-    const TEAM = { quality: { name: "Quality — Sara", color: "text-emerald-700" }, grc: { name: "GRC — Sample User", color: "text-indigo-700" } };
+    const TEAM = { quality: { name: "Quality — Sample User", color: "text-emerald-700" }, grc: { name: "GRC — Sample User", color: "text-indigo-700" } };
 
     function stateBadge(kr) {
       if (kr.state === "live") {

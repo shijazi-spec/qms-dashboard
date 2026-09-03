@@ -395,7 +395,7 @@ export async function updateRisk(
 
   const updateFields: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "risk_title",
@@ -431,9 +431,9 @@ export async function updateRisk(
 
   for (const [key, value] of Object.entries(risk)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      updateFields.push(`${key} = $${paramCount}`);
+      updateFields.push(`${key} = $${pExample Organizationunt}`);
       values.push(key === "ai_recommendations" ? JSON.stringify(value) : value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -444,7 +444,7 @@ export async function updateRisk(
     `
     UPDATE enterprise_risks 
     SET ${updateFields.join(", ")}
-    WHERE id = $${paramCount}
+    WHERE id = $${pExample Organizationunt}
     RETURNING *
   `,
     values,
@@ -552,39 +552,39 @@ export async function getAllRisks(filters?: {
 
   let whereConditions: string[] = [];
   let values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   if (filters?.status) {
-    whereConditions.push(`status = $${paramCount}`);
+    whereConditions.push(`status = $${pExample Organizationunt}`);
     values.push(filters.status);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.category) {
-    whereConditions.push(`risk_category = $${paramCount}`);
+    whereConditions.push(`risk_category = $${pExample Organizationunt}`);
     values.push(filters.category);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.risk_level) {
-    whereConditions.push(`risk_level = $${paramCount}`);
+    whereConditions.push(`risk_level = $${pExample Organizationunt}`);
     values.push(filters.risk_level);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.owner_department) {
-    whereConditions.push(`owner_department = $${paramCount}`);
+    whereConditions.push(`owner_department = $${pExample Organizationunt}`);
     values.push(filters.owner_department);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.date_from) {
-    whereConditions.push(`created_at >= $${paramCount}`);
+    whereConditions.push(`created_at >= $${pExample Organizationunt}`);
     values.push(filters.date_from);
-    paramCount++;
+    pExample Organizationunt++;
   }
   if (filters?.date_to) {
     whereConditions.push(
-      `created_at <= $${paramCount}::date + interval '1 day'`,
+      `created_at <= $${pExample Organizationunt}::date + interval '1 day'`,
     );
     values.push(filters.date_to);
-    paramCount++;
+    pExample Organizationunt++;
   }
 
   const whereClause =
@@ -605,7 +605,7 @@ export async function getAllRisks(filters?: {
     SELECT * FROM enterprise_risks 
     ${whereClause}
     ORDER BY risk_score DESC, created_at DESC
-    LIMIT $${paramCount} OFFSET $${paramCount + 1}
+    LIMIT $${pExample Organizationunt} OFFSET $${pExample Organizationunt + 1}
   `,
     values,
   );
@@ -785,7 +785,7 @@ export async function updateTreatmentAction(
 
   const updateFields: string[] = [];
   const values: any[] = [];
-  let paramCount = 1;
+  let pExample Organizationunt = 1;
 
   const allowedFields = [
     "action_title",
@@ -803,9 +803,9 @@ export async function updateTreatmentAction(
 
   for (const [key, value] of Object.entries(action)) {
     if (allowedFields.includes(key) && value !== undefined) {
-      updateFields.push(`${key} = $${paramCount}`);
+      updateFields.push(`${key} = $${pExample Organizationunt}`);
       values.push(value);
-      paramCount++;
+      pExample Organizationunt++;
     }
   }
 
@@ -816,7 +816,7 @@ export async function updateTreatmentAction(
     `
     UPDATE risk_treatment_actions 
     SET ${updateFields.join(", ")}
-    WHERE id = $${paramCount}
+    WHERE id = $${pExample Organizationunt}
     RETURNING *
   `,
     values,

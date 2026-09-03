@@ -309,7 +309,7 @@ async function seedDefaultUsers(): Promise<void> {
     },
     {
       email: "<REDACTED_EMAIL>",
-      name: "Sara Al-Qahtani",
+      name: "Sample User Al-Qahtani",
       role: "quality_manager",
       department: "Quality",
       is_active: true,
