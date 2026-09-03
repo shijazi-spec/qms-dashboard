@@ -549,7 +549,7 @@
             try {
                 var url = '/api/compliance/document-mapping/master-list';
                 if (MASTER.scope) url += '?regulation_id=' + encodeURIComponent(MASTER.scope);
-                var r = await fetch(url, { credentials: 'same-origin' });
+                var r = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 var d = await r.json();
                 if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
                 MASTER.frameworks = d.frameworks || [];
@@ -711,7 +711,7 @@
             results.innerHTML = '<div class="text-sm text-gray-500 text-center py-6">Asking the AI consultant for matching documents…</div>';
             try {
                 const r = await fetch('/api/compliance/obligations/' + obligationId + '/suggest-documents', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: '{}'
                 });
@@ -765,7 +765,7 @@
         async function acceptConsoleSuggestion(obligationId, documentId) {
             try {
                 const r = await fetch('/api/compliance/obligations/' + obligationId + '/documents', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ document_id: documentId })
                 });
@@ -838,7 +838,7 @@
             var rt = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             var prev = btn ? btn.textContent : '';
             try {
-                var est = await fetch('/api/compliance/non-compliance-findings/rejudge', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estimate: true }) });
+                var est = await fetch('/api/compliance/non-compliance-findings/rejudge', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estimate: true }) });
                 var ed = await est.json().catch(function () { return {}; });
                 if (!est.ok) { alert(rt('docmap.rejudge_error', 'Re-judge failed') + (ed.error ? ': ' + ed.error : '')); return; }
                 var before = ed.before;
@@ -847,7 +847,7 @@
                 if (!confirm(rt('docmap.rejudge_confirm', 'Re-run the AI judge on {n} finding(s) so each comment states what to add to the document? Runs in batches.').replace('{n}', remaining))) return;
                 if (btn) btn.disabled = true;
                 for (var guard = 0; guard < 500; guard++) {
-                    var r = await fetch('/api/compliance/non-compliance-findings/rejudge', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ before: before }) });
+                    var r = await fetch('/api/compliance/non-compliance-findings/rejudge', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ before: before }) });
                     var d = await r.json().catch(function () { return {}; });
                     if (!r.ok) { alert(rt('docmap.rejudge_error', 'Re-judge failed') + (d.error ? ': ' + d.error : '')); break; }
                     if (btn) btn.textContent = rt('docmap.rejudge_progress', 'Refreshing… {n} left').replace('{n}', d.remaining || 0);
@@ -952,7 +952,7 @@
             try {
                 // 1) Pre-flight estimate (no tokens spent).
                 var est = await fetch('/api/compliance/document-mapping/map-framework?estimate=true', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ regulation_id: regulationId })
                 });
@@ -973,7 +973,7 @@
                 // 3) Run.
                 if (btn) btn.disabled = true;
                 var r = await fetch('/api/compliance/document-mapping/map-framework', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ regulation_id: regulationId })
                 });
@@ -1045,7 +1045,7 @@
             openRecModal(label, null, undefined, obligationId);
             try {
                 var r = await fetch('/api/compliance/document-mapping/recommend-clause', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ obligation_id: obligationId })
                 });
@@ -1068,7 +1068,7 @@
             if (area) area.innerHTML = '<div class="text-sm text-gray-500 py-4 text-center">' + escAttr(recT('docmap.draft_loading', 'Drafting the document… this can take ~20s.')) + '</div>';
             try {
                 var r = await fetch('/api/compliance/document-mapping/draft-clause', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ obligation_id: _recObligationId })
                 });
@@ -1111,7 +1111,7 @@
             if (!confirm(recT('docmap.draft_save_confirm', 'Save this draft into Integrated QMS as a new Draft document?'))) return;
             try {
                 var r = await fetch('/api/compliance/document-mapping/draft-save', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ obligation_id: _recObligationId })
                 });
@@ -1168,7 +1168,7 @@
             var prev = label ? label.textContent : '';
             try {
                 var est = await fetch('/api/compliance/document-mapping/recommend-gaps?estimate=true', {
-                    method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                    method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: '{}'
                 });
                 var ed = await est.json().catch(function () { return {}; });
                 if (!est.ok) { alert(recT('docmap.rec_error', 'Failed') + (ed.error ? ': ' + ed.error : '')); return; }
@@ -1179,7 +1179,7 @@
                 var generated = 0;
                 for (var guard = 0; guard < 500; guard++) {
                     var r = await fetch('/api/compliance/document-mapping/recommend-gaps', {
-                        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                        method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: '{}'
                     });
                     var d = await r.json().catch(function () { return {}; });
                     if (!r.ok) { alert(recT('docmap.rec_error', 'Failed') + (d.error ? ': ' + d.error : '')); break; }
@@ -1212,16 +1212,16 @@
             try {
                 // Step 1 — project + citation-map all documents.
                 if (label) label.textContent = lt('docmap.link_all_step1', 'Step 1/2 · preparing documents…');
-                var bf = await fetch('/api/compliance/document-mapping/backfill', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                var bf = await fetch('/api/compliance/document-mapping/backfill', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                 if (!bf.ok) { var bd = await bf.json().catch(function () { return {}; }); alert(lt('docmap.link_all_error', 'Linking failed') + (bd.error ? ': ' + bd.error : '')); return; }
                 await loadCoverage();
                 // Step 2 — comprehensive all-framework AI linking (batched loop).
-                var est = await fetch('/api/compliance/document-mapping/map-all?estimate=true', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                var est = await fetch('/api/compliance/document-mapping/map-all?estimate=true', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                 var ed = await est.json().catch(function () { return {}; });
                 var links = 0;
                 if (est.ok && (ed.remaining || 0) > 0) {
                     for (var guard = 0; guard < 3000; guard++) {
-                        var r = await fetch('/api/compliance/document-mapping/map-all', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                        var r = await fetch('/api/compliance/document-mapping/map-all', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                         var d = await r.json().catch(function () { return {}; });
                         if (!r.ok) { alert(lt('docmap.link_all_error', 'Linking failed') + (d.error ? ': ' + d.error : '')); break; }
                         links += (d.links_created || 0);
@@ -1250,7 +1250,7 @@
             var prev = label ? label.textContent : '';
             try {
                 var est = await fetch('/api/compliance/document-mapping/map-all?estimate=true', {
-                    method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                    method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: '{}'
                 });
                 var ed = await est.json().catch(function () { return {}; });
                 if (!est.ok) { alert(recT('docmap.mapall_error', 'Mapping failed') + (ed.error ? ': ' + ed.error : '')); return; }
@@ -1261,7 +1261,7 @@
                 var links = 0;
                 for (var guard = 0; guard < 2000; guard++) {
                     var r = await fetch('/api/compliance/document-mapping/map-all', {
-                        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                        method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: '{}'
                     });
                     var d = await r.json().catch(function () { return {}; });
                     if (!r.ok) { alert(recT('docmap.mapall_error', 'Mapping failed') + (d.error ? ': ' + d.error : '')); break; }
@@ -1285,7 +1285,7 @@
             var el = document.getElementById('embedStatus');
             if (!el) return;
             try {
-                var r = await fetch('/api/compliance/document-mapping/embeddings-status', { credentials: 'same-origin' });
+                var r = await fetch('/api/compliance/document-mapping/embeddings-status', { credentials: '<REDACTED_SECRET>' });
                 if (!r.ok) { el.textContent = ''; return; }
                 var d = await r.json();
                 var lbl = recT('docmap.embed_coverage', '{e}/{t} clauses embedded').replace('{e}', d.embedded || 0).replace('{t}', d.total || 0);
@@ -1302,7 +1302,7 @@
             var label = document.getElementById('buildEmbedLabel');
             var prev = label ? label.textContent : '';
             try {
-                var est = await fetch('/api/compliance/document-mapping/embeddings-backfill', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estimate: true }) });
+                var est = await fetch('/api/compliance/document-mapping/embeddings-backfill', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estimate: true }) });
                 var ed = await est.json().catch(function () { return {}; });
                 if (!est.ok) { alert(recT('docmap.embed_error', 'Building embeddings failed') + (ed.error ? ': ' + ed.error : '')); return; }
                 var remaining = ed.remaining || 0;
@@ -1311,7 +1311,7 @@
                 if (btn) btn.disabled = true;
                 var failed = 0;
                 for (var guard = 0; guard < 2000; guard++) {
-                    var r = await fetch('/api/compliance/document-mapping/embeddings-backfill', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                    var r = await fetch('/api/compliance/document-mapping/embeddings-backfill', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                     var d = await r.json().catch(function () { return {}; });
                     if (!r.ok) { alert(recT('docmap.embed_error', 'Building embeddings failed') + (d.error ? ': ' + d.error : '')); break; }
                     failed += (d.failed || 0);
@@ -1342,7 +1342,7 @@
             if (label) label.textContent = t('docmap.run_mapping_running', 'Mapping…');
             try {
                 const r = await fetch('/api/compliance/document-mapping/backfill', {
-                    method: 'POST', credentials: 'same-origin'
+                    method: 'POST', credentials: '<REDACTED_SECRET>'
                 });
                 const data = await r.json().catch(function () { return {}; });
                 if (!r.ok) {
@@ -1423,7 +1423,7 @@
             var prev = label ? label.textContent : '';
             var rt = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             try {
-                var est = await fetch('/api/compliance/auto-mapped/ai-review?estimate=true', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                var est = await fetch('/api/compliance/auto-mapped/ai-review?estimate=true', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                 var ed = await est.json().catch(function () { return {}; });
                 if (!est.ok) { alert(rt('docmap.review_error', 'Review failed') + (ed.error ? ': ' + ed.error : '')); return; }
                 var remaining = ed.remaining || 0;
@@ -1431,7 +1431,7 @@
                 if (!confirm(rt('docmap.review_confirm', 'AI-review {n} pending link(s)? The AI judges whether each document actually satisfies its clause; runs in batches.').replace('{n}', remaining))) return;
                 if (btn) btn.disabled = true;
                 for (var guard = 0; guard < 500; guard++) {
-                    var r = await fetch('/api/compliance/auto-mapped/ai-review', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                    var r = await fetch('/api/compliance/auto-mapped/ai-review', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                     var d = await r.json().catch(function () { return {}; });
                     if (!r.ok) { alert(rt('docmap.review_error', 'Review failed') + (d.error ? ': ' + d.error : '')); break; }
                     if (label) label.textContent = rt('docmap.review_progress', 'Reviewing… {r} left').replace('{r}', d.remaining || 0);
@@ -1450,7 +1450,7 @@
             var rt = function (k, fb) { return (window.ExampleOrgI18n ? window.ExampleOrgI18n.t(k) : null) || fb; };
             if (!confirm(rt(confirmKey, fallbackMsg))) return;
             try {
-                var r = await fetch('/api/compliance/auto-mapped/bulk-action?action=' + encodeURIComponent(action), { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }) });
+                var r = await fetch('/api/compliance/auto-mapped/bulk-action?action=' + encodeURIComponent(action), { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }) });
                 var d = await r.json().catch(function () { return {}; });
                 if (!r.ok) { alert(rt('docmap.review_error', 'Failed') + (d.error ? ': ' + d.error : '')); return; }
                 alert((d.affected || 0) + ' ' + rt('docmap.bulk_applied', 'link(s) updated.'));
@@ -1463,13 +1463,13 @@
         function bulkRejectReviewed() { bulkReview('reject-missing', 'docmap.bulk_reject_confirm', 'Reject (delete) every pending link the AI rated "Off-topic"?'); }
         function bulkConfirmAll() { bulkReview('confirm-all', 'docmap.bulk_confirm_all_confirm', 'Confirm ALL pending links regardless of the AI verdict (including Off-topic ones)? Not recommended for audit-grade — review the verdicts first.'); }
         async function confirmAutoMap(linkId) {
-            const r = await fetch('/api/compliance/auto-mapped/' + linkId + '/confirm', { method: 'POST', credentials: 'same-origin' });
+            const r = await fetch('/api/compliance/auto-mapped/' + linkId + '/confirm', { method: 'POST', credentials: '<REDACTED_SECRET>' });
             if (r.ok) loadAutoMapped();
             else alert('Failed to confirm.');
         }
         async function rejectAutoMap(linkId) {
             if (!confirm('Remove this auto-created link?')) return;
-            const r = await fetch('/api/compliance/auto-mapped/' + linkId + '/reject', { method: 'POST', credentials: 'same-origin' });
+            const r = await fetch('/api/compliance/auto-mapped/' + linkId + '/reject', { method: 'POST', credentials: '<REDACTED_SECRET>' });
             if (r.ok) loadAutoMapped();
             else alert('Failed to reject.');
         }

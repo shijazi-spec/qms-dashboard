@@ -19,7 +19,7 @@
  */
 
 const TEST_ADMIN_KEY = "test-admin-key-abc123";
-const TEST_SESSION_SECRET = "test-session-secret-xyz789";
+const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
 
 process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
@@ -217,7 +217,7 @@ console.log();
 // ─── Case 4b: empty-string ADMIN_API_KEY env → always false ───
 console.log("Case: ADMIN_API_KEY env is empty string — every request is rejected");
 {
-  process.env.ADMIN_API_KEY = "";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   const c = makeContext({ adminKeyHeader: "" });
   assertEquals(
     hasValidAdminApiKey(c),

@@ -152,7 +152,7 @@
                 btn.textContent = 'Loading…';
                 try {
                     const url = `/api/calls/lead-history?${encodeURIComponent(type)}=${encodeURIComponent(value)}`;
-                    const r = await fetch(url, { credentials: 'include' });
+                    const r = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                     if (r.status === 404) {
                         showError('Lead history view is not enabled. Ask your admin to set LEAD_HISTORY_VIEW=true (or LEAD_HISTORY_VIEW_USERS=your_email for a per-user enable).');
                         return;

@@ -90,7 +90,7 @@ function makeStubClient(initialRows: Row[]): {
 }
 
 const SK_KEY = "<REDACTED_TOKEN>";
-const GHP_TOKEN = "<REDACTED_TOKEN>";
+const GHP_TOKEN = "<REDACTED_SECRET>";
 const JWT =
   "<REDACTED_TOKEN>";
 const SAFE_PROSE = "Updated supplier corrective-action plan after audit";

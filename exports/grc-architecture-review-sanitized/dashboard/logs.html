@@ -812,7 +812,7 @@
             const badge = document.getElementById('sweepStatusBadge');
             const body = document.getElementById('sweepBody');
             try {
-                const response = await fetch('/api/admin/redaction-sweep/status', { credentials: 'same-origin' });
+                const response = await fetch('/api/admin/redaction-sweep/status', { credentials: '<REDACTED_SECRET>' });
                 if (response.status === 401 || response.status === 403) {
                     if (badge) {
                         badge.textContent = 'Admin only';
@@ -1167,7 +1167,7 @@
             try {
                 const response = await fetch(
                     '/api/admin/redaction-sweep/alerts?limit=20',
-                    { credentials: 'same-origin' }
+                    { credentials: '<REDACTED_SECRET>' }
                 );
                 if (response.status === 401 || response.status === 403) {
                     if (badge) {
@@ -1484,7 +1484,7 @@
             try {
                 const response = await fetch(
                     '/api/admin/alert-recipients?channel=' + encodeURIComponent(ALERT_CHANNEL_POST_RESTORE),
-                    { credentials: 'same-origin' }
+                    { credentials: '<REDACTED_SECRET>' }
                 );
                 if (response.status === 401 || response.status === 403) {
                     if (badge) {
@@ -1536,7 +1536,7 @@
                 const response = await fetch('/api/admin/alert-recipients', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ channel: ALERT_CHANNEL_POST_RESTORE, email: email }),
                 });
                 const data = await response.json().catch(function () { return {}; });
@@ -1566,7 +1566,7 @@
                 const response = await fetch('/api/admin/alert-recipients', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ channel: ALERT_CHANNEL_POST_RESTORE, email: email }),
                 });
                 const data = await response.json().catch(function () { return {}; });

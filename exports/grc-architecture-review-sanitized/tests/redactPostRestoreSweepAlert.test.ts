@@ -880,7 +880,7 @@ async function run(): Promise<void> {
     const stub = buildStub({
       ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "<REDACTED_EMAIL>",
-      EmailProviderApiKey: "short",
+      EmailProviderApiKey: "<REDACTED_SECRET>",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({ event_logs_updated: 1 }),

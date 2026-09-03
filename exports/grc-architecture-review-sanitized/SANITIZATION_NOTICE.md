@@ -2,7 +2,7 @@
 
 This package is intended for GRC architecture, security-design, and data-model review only.
 
-- Source files included after allowlisting and high-risk exclusions: 1161
+- Project files included after allowlisting and high-risk exclusions: 1050
 - Binary/non-text files included: 0
 - Environment files included: `.env.example` only, containing variable names and `<REDACTED>` placeholders
 - Excluded: Git history, dependencies, build output, uploads, exports, screenshots, reports, logs, backups, database dumps, agent metadata, and operational evidence

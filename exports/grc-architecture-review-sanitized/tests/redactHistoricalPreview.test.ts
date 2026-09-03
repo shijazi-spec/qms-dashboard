@@ -53,7 +53,7 @@ function buildFakeClient(rows: Record<string, unknown>[]): {
 console.log("\n=== redactAiPendingActions — payload_preview backfill ===\n");
 
 {
-  const GHP_TOKEN = "<REDACTED_TOKEN>";
+  const GHP_TOKEN = "<REDACTED_SECRET>";
   const previewWithLeak = `Approve SourceControlProvider deploy for repo ExampleOrg/api — token=${GHP_TOKEN}`;
 
   const rows = [

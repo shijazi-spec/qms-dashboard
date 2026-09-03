@@ -40,7 +40,7 @@ async function getAuthToken(): Promise<{ authToken: string; hostname: string }> 
     throw new Error("HostingPlatform Identity Token not found for repl/depl");
   }
 
-  return { authToken: `Bearer ${HostingPlatformToken}`, hostname };
+  return { authToken: `<REDACTED_SECRET>`, hostname };
 }
 
 export async function sendEmail(message: SmtpMessage): Promise<{

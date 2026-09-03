@@ -42,7 +42,7 @@ await suite.test("every route exposes path, method and createHandler", async () 
 // instructing the caller to use X-Admin-Key on subsequent requests.
 await suite.test("POST /api/admin/auth — 200 with correct ADMIN_API_KEY (no cookie issued)", async () => {
   const original = process.env.ADMIN_API_KEY;
-  process.env.ADMIN_API_KEY = "integration-test-secret-2026";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/auth", "POST");
     const res = await handler(
@@ -67,7 +67,7 @@ await suite.test("POST /api/admin/auth — 200 with correct ADMIN_API_KEY (no co
 
 await suite.test("POST /api/admin/auth — 401 with wrong key", async () => {
   const original = process.env.ADMIN_API_KEY;
-  process.env.ADMIN_API_KEY = "integration-test-secret-2026";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/auth", "POST");
     const res = await handler(makeContext({ method: "POST", body: { key: "WRONG" } }));
@@ -81,7 +81,7 @@ await suite.test("POST /api/admin/auth — 401 with wrong key", async () => {
 
 await suite.test("POST /api/admin/auth — 401 with no key field in body", async () => {
   const original = process.env.ADMIN_API_KEY;
-  process.env.ADMIN_API_KEY = "integration-test-secret-2026";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/auth", "POST");
     const res = await handler(makeContext({ method: "POST", body: {} }));
@@ -98,7 +98,7 @@ await suite.test("POST /api/admin/auth — 500 with malformed (missing) body", a
   // try/catch surfaces this as 500 ("Authentication failed"). Asserted exactly
   // (deterministic — no env or DB dependency).
   const original = process.env.ADMIN_API_KEY;
-  process.env.ADMIN_API_KEY = "integration-test-secret-2026";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/auth", "POST");
     const res = await handler(makeContext({ method: "POST" /* body omitted */ }));
@@ -132,7 +132,7 @@ await suite.test("POST /api/admin/auth/logout — 200 with cookie cleared", asyn
 
 await suite.test("PUT /api/admin/scorecard/weights — 403 without auth", async () => {
   const original = process.env.ADMIN_API_KEY;
-  process.env.ADMIN_API_KEY = "integration-test-secret-2026";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/scorecard/weights", "PUT");
     const res = await handler(
@@ -148,7 +148,7 @@ await suite.test("PUT /api/admin/scorecard/weights — 403 without auth", async 
 
 await suite.test("GET /api/admin/activities — 403 without auth", async () => {
   const original = process.env.ADMIN_API_KEY;
-  process.env.ADMIN_API_KEY = "integration-test-secret-2026";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/activities", "GET");
     const res = await handler(makeContext({ method: "GET" }));
@@ -162,7 +162,7 @@ await suite.test("GET /api/admin/activities — 403 without auth", async () => {
 
 await suite.test("POST /api/admin/seed-defaults — 403 without auth", async () => {
   const original = process.env.ADMIN_API_KEY;
-  process.env.ADMIN_API_KEY = "integration-test-secret-2026";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/seed-defaults", "POST");
     const res = await handler(makeContext({ method: "POST", body: {} }));
@@ -176,7 +176,7 @@ await suite.test("POST /api/admin/seed-defaults — 403 without auth", async () 
 
 await suite.test("GET /api/admin/rate-limit-stats — 403 without auth", async () => {
   const original = process.env.ADMIN_API_KEY;
-  process.env.ADMIN_API_KEY = "integration-test-secret-2026";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/rate-limit-stats", "GET");
     const res = await handler(makeContext({ method: "GET" }));
@@ -192,7 +192,7 @@ await suite.test("GET /api/admin/documents — 401 (not 403) when no admin key a
   // This handler uses inline auth (not isAdminAuthorized) and returns 401
   // specifically when both checks fail. Important to assert the distinct code.
   const original = process.env.ADMIN_API_KEY;
-  process.env.ADMIN_API_KEY = "integration-test-secret-2026";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/documents", "GET");
     const res = await handler(makeContext({ method: "GET" }));

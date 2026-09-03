@@ -124,9 +124,9 @@ function makeStubClient(
 }
 
 const SK_KEY = '<REDACTED_TOKEN>';
-const GHP_TOKEN = '<REDACTED_TOKEN>';
+const GHP_TOKEN = '<REDACTED_SECRET>';
 const BCRYPT = '<REDACTED_PASSWORD_HASH>';
-const PASSWORD_HASH_LITERAL = '$2b$12$RAW_LEAKED_PASSWORD_HASH_FROM_PRE_FIX_BACKUP';
+const PASSWORD_HASH_LITERAL = '<REDACTED_SECRET>';
 
 async function runForTable(tableName: string): Promise<void> {
   console.log(`\n--- ${tableName} ---\n`);

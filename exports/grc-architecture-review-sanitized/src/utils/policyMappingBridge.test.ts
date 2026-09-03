@@ -43,7 +43,7 @@ const REDACTED_SENTINEL = "***REDACTED***";
 // Credential-shaped secrets (caught by the regex deny-list regardless of the
 // destination column name).
 const SK_KEY = "<REDACTED_TOKEN>";
-const GHP_TOKEN = "<REDACTED_TOKEN>";
+const GHP_TOKEN = "<REDACTED_SECRET>";
 
 // ---------------------------------------------------------------------------
 // Mock pg.Pool.prototype.query BEFORE importing the module under test so the

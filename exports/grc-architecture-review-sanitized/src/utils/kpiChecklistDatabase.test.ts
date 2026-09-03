@@ -78,8 +78,8 @@ const REDACTED_SENTINEL = "***REDACTED***";
 // the regex pass reliably catches them in prose. The key-based deny list is
 // additionally exercised by the JSON-object test in Section 3.
 const SECRETS = {
-  password_hash: "<REDACTED_PASSWORD_HASH>",
-  mfa_secret: "<REDACTED_TOKEN>",
+  password_hash: "<REDACTED_SECRET>",
+  mfa_secret: "<REDACTED_SECRET>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
   api_key: "<REDACTED_SECRET>",

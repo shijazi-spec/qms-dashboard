@@ -1396,8 +1396,8 @@ const PAGES = {
       col_latency: 'Latency',
       col_error: 'Error / Prompt preview',
       col_model: 'Model',
-      col_input_tokens: 'Input / 1k tokens',
-      col_output_tokens: 'Output / 1k tokens',
+      col_input_tokens: '<REDACTED_SECRET>',
+      col_output_tokens: '<REDACTED_SECRET>',
     },
     ar: {
       title: 'عمليات الذكاء الاصطناعي',
@@ -1432,8 +1432,8 @@ const PAGES = {
       col_latency: 'الكمون',
       col_error: 'الخطأ / معاينة الموجّه',
       col_model: 'النموذج',
-      col_input_tokens: 'إدخال / 1k رمز',
-      col_output_tokens: 'إخراج / 1k رمز',
+      col_input_tokens: '<REDACTED_SECRET>',
+      col_output_tokens: '<REDACTED_SECRET>',
     },
   },
   health: {

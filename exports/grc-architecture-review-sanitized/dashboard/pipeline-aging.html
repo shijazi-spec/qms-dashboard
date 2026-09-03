@@ -173,7 +173,7 @@
             if (cursor) qs += '&cursor=' + encodeURIComponent(cursor);
             document.getElementById('status').textContent = 'Loading…';
             try {
-                var res = await fetch('/api/CRMProvider/' + currentModule + '/aging?' + qs, { credentials: 'include' });
+                var res = await fetch('/api/CRMProvider/' + currentModule + '/aging?' + qs, { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 var data = await res.json();
                 currentRows = (data.items || []);

@@ -161,7 +161,7 @@ const SECRETS = {
   awsKey: "<REDACTED_TOKEN>",
 } as const;
 
-const PLAIN_PASSWORD = "<REDACTED_EMAIL>!_BuildPreview_PlainText";
+const PLAIN_PASSWORD = "<REDACTED_SECRET>";
 
 const REGEX_DETECTABLE_SECRETS: ReadonlyArray<string> = Object.values(SECRETS);
 
@@ -185,7 +185,7 @@ const REGEX_DETECTABLE_SECRETS: ReadonlyArray<string> = Object.values(SECRETS);
  * defense before the row hits the database.                          *
  * ------------------------------------------------------------------ */
 
-const HEURISTIC_PASSWORD = "<REDACTED_EMAIL>!_FreeForm_BuildPreview_Y2";
+const HEURISTIC_PASSWORD = "<REDACTED_SECRET>";
 const HEURISTIC_ENTROPY  = "aB3xKp9zQrLm4vN2YwSdEfXyZTwQ";
 
 const HEURISTIC_DETECTABLE_SECRETS: ReadonlyArray<string> = [

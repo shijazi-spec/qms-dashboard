@@ -134,7 +134,7 @@ async function run(): Promise<void> {
 
   const bcryptScrubbed = redactErrorMessageForStorage(`Hash mismatch: stored=${BCRYPT_HASH}`);
   assert(
-    !!bcryptScrubbed && !bcryptScrubbed.includes('$2b$12$') && bcryptScrubbed.includes(REDACTED_SENTINEL),
+    !!bcryptScrubbed && !bcryptScrubbed.includes('<REDACTED_PASSWORD_HASH>') && bcryptScrubbed.includes(REDACTED_SENTINEL),
     'bcrypt hash in error string is replaced with the sentinel',
   );
 
@@ -162,7 +162,7 @@ async function run(): Promise<void> {
     latency_ms: 42,
     success: false,
     error_class: 'ToolReturnedFailure',
-    error_message: `Upstream API rejected key ${SK_KEY}; bearer was ${GH_PAT}`,
+    error_message: `Upstream API rejected key ${SK_KEY}; Bearer <REDACTED_TOKEN> ${GH_PAT}`,
   });
 
   const insertCall = findLast(c =>

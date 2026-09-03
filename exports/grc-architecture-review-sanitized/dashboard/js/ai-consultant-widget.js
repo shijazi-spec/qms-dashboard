@@ -386,7 +386,7 @@
         widgetHistoryInflight = true;
         try {
             var res = await fetch('/api/consultant/history/' + encodeURIComponent(tid), {
-                credentials: 'same-origin'
+                credentials: '<REDACTED_SECRET>'
             });
             if (!res.ok) return;
             var data = await res.json();
@@ -606,7 +606,7 @@
             markDone(cachedRating);
         } else {
             fetch('/api/consultant/feedback/' + encodeURIComponent(messageId), {
-                credentials: 'same-origin'
+                credentials: '<REDACTED_SECRET>'
             }).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
                 if (data && data.rating) {
                     wRatingCacheSet(messageId, data.rating);
@@ -705,7 +705,7 @@
         wFbQueueGet().forEach(function(item) {
             fetch('/api/consultant/feedback', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin', body: JSON.stringify(item)
+                credentials: '<REDACTED_SECRET>', body: JSON.stringify(item)
             }).then(function(r) { if (r.ok) wFbQueueRemove(item.messageId); }).catch(function() {});
         });
     }
@@ -730,7 +730,7 @@
         fetch('/api/consultant/feedback', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
+            credentials: '<REDACTED_SECRET>',
             body: JSON.stringify(payload)
         }).then(function(r) {
             if (r.ok) wFbQueueRemove(messageId);
@@ -744,7 +744,7 @@
                     if (!item) return;
                     fetch('/api/consultant/feedback', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        credentials: 'same-origin', body: JSON.stringify(item)
+                        credentials: '<REDACTED_SECRET>', body: JSON.stringify(item)
                     }).then(function(r) {
                         if (r.ok) wFbQueueRemove(messageId);
                         else if (retries < 4) retry();
@@ -777,7 +777,7 @@
             var response = await fetch('/api/consultant/chat/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
+                credentials: '<REDACTED_SECRET>',
                 body: JSON.stringify({ message: text, threadId: getThreadId() })
             });
 
@@ -853,7 +853,7 @@
                     var fallback = await fetch('/api/consultant/chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: 'same-origin',
+                        credentials: '<REDACTED_SECRET>',
                         body: JSON.stringify({ message: text, threadId: getThreadId() })
                     });
                     var data = await fallback.json();

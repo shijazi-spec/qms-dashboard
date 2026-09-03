@@ -1121,7 +1121,7 @@
         async function loadPulse() {
             hide('error-state');
             try {
-                const res = await fetch('/api/health/pulse', { credentials: 'include' });
+                const res = await fetch('/api/health/pulse', { credentials: '<REDACTED_SECRET>' });
                 if (res.status === 401) {
                     window.location.href = '/login?next=' + encodeURIComponent('/dashboard/health');
                     return;
@@ -1162,7 +1162,7 @@
             btn.textContent = ExampleOrgI18n.t('dyn.health.running');
             btn.classList.add('pulse');
             try {
-                const res = await fetch('/api/health/pulse/run', { method: 'POST', credentials: 'include' });
+                const res = await fetch('/api/health/pulse/run', { method: 'POST', credentials: '<REDACTED_SECRET>' });
                 if (res.status === 429) {
                     alert(ExampleOrgI18n.t('dyn.health.rate_limit_hit'));
                     return;

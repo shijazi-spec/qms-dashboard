@@ -246,7 +246,7 @@ console.log();
 console.log("Case: assertAdminApiKeyStrengthOrThrow accepts a strong rotation value");
 {
   process.env.ADMIN_API_KEY =
-    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    "<REDACTED_SECRET>";
   assertDoesNotThrow(
     () => assertAdminApiKeyStrengthOrThrow(),
     "no throw on a 64-hex key",
@@ -256,7 +256,7 @@ console.log();
 
 console.log("Case: assertAdminApiKeyStrengthOrThrow refuses to start on a too-short key");
 {
-  process.env.ADMIN_API_KEY = "admin123";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   assertThrowsWith(
     () => assertAdminApiKeyStrengthOrThrow(),
     [
@@ -273,7 +273,7 @@ console.log(
 );
 {
   // Length OK, distinct-char count not OK
-  process.env.ADMIN_API_KEY = "a".repeat(64);
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>".repeat(64);
   assertThrowsWith(
     () => assertAdminApiKeyStrengthOrThrow(),
     [
@@ -289,7 +289,7 @@ console.log(
   "Case: assertAdminApiKeyStrengthOrThrow message cites both the length and distinct-char minimums",
 );
 {
-  process.env.ADMIN_API_KEY = "x";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   assertThrowsWith(
     () => assertAdminApiKeyStrengthOrThrow(),
     [String(ADMIN_API_KEY_MIN_LENGTH), String(ADMIN_API_KEY_MIN_DISTINCT_CHARS)],

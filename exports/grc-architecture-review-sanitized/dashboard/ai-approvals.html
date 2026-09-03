@@ -556,7 +556,7 @@
         p.set('status', fltStatus.value);
         if (fltRisk.value) p.set('risk_level', fltRisk.value);
         if (fltMine.checked) p.set('mine', 'true');
-        fetch('/api/ai/approvals/review-status-counts?' + p.toString(), { credentials: 'same-origin' })
+        fetch('/api/ai/approvals/review-status-counts?' + p.toString(), { credentials: '<REDACTED_SECRET>' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {
                 lastReviewCounts.unreviewed_by_me =
@@ -610,7 +610,7 @@
         // We DO NOT send risk_level: the whole point of these counts is
         // to show every bucket regardless of which one is selected.
         if (fltReview.value) p.set('review_filter', fltReview.value);
-        fetch('/api/ai/approvals/risk-level-counts?' + p.toString(), { credentials: 'same-origin' })
+        fetch('/api/ai/approvals/risk-level-counts?' + p.toString(), { credentials: '<REDACTED_SECRET>' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {
                 lastRiskCounts.critical = typeof data.critical === 'number' ? data.critical : 0;
@@ -660,7 +660,7 @@
         if (fltReview.value) p.set('review_filter', fltReview.value);
         // Keep the Status dropdown counts consistent with the Source filter.
         if (fltSource && fltSource.value) p.set('source', fltSource.value);
-        fetch('/api/ai/approvals/status-counts?' + p.toString(), { credentials: 'same-origin' })
+        fetch('/api/ai/approvals/status-counts?' + p.toString(), { credentials: '<REDACTED_SECRET>' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {
                 lastStatusCounts.pending  = typeof data.pending  === 'number' ? data.pending  : 0;
@@ -697,7 +697,7 @@
     // risk/mine. Visibility-scoped server-side: admins / quality_managers
     // see the global count; everyone else sees their own.
     function refreshGlobalCredentialBadge() {
-        fetch('/api/ai/approvals/credential-warning-count', { credentials: 'same-origin' })
+        fetch('/api/ai/approvals/credential-warning-count', { credentials: '<REDACTED_SECRET>' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {
                 applyBadgeCount(typeof data.count === 'number' ? data.count : 0);
@@ -964,7 +964,7 @@
         // ("action not found") from a generic network/server failure
         // and show a friendly toast inside the modal instead of the
         // generic "failed to load" message — Task #545.
-        fetch('/api/ai/approvals/' + encodeURIComponent(code), { credentials: 'same-origin' })
+        fetch('/api/ai/approvals/' + encodeURIComponent(code), { credentials: '<REDACTED_SECRET>' })
             .then(function (r) {
                 if (r.ok) return r.json();
                 var err = new Error('http_' + r.status);
@@ -1355,7 +1355,7 @@
         if (adminKey) headers['x-admin-key'] = adminKey;
         fetch('/api/ai/approvals/' + encodeURIComponent(code) + '/' + act, {
             method: 'POST',
-            credentials: 'same-origin',
+            credentials: '<REDACTED_SECRET>',
             headers: headers,
             body: JSON.stringify(payload)
         })
@@ -1384,7 +1384,7 @@
         if (!silent) {
             listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10">' + _t('dyn.ai_approvals.loading') + '</div>';
         }
-        fetch('/api/ai/approvals?' + buildQuery(), { credentials: 'same-origin' })
+        fetch('/api/ai/approvals?' + buildQuery(), { credentials: '<REDACTED_SECRET>' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {
                 lastRows = (data && Array.isArray(data.rows)) ? data.rows : [];
@@ -1482,7 +1482,7 @@
         var prev = btnClearShadow.textContent;
         btnClearShadow.textContent = 'Clearing…';
         fetch('/api/duplicates/autonomous/clear-shadow-proposals', {
-            method: 'POST', credentials: 'same-origin',
+            method: 'POST', credentials: '<REDACTED_SECRET>',
             headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceGroup: scope.group })
         })
         .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })

@@ -576,8 +576,8 @@ const ExampleOrgNav = {
   pollAlertCount() {
     const updateBadge = () => {
       Promise.all([
-        fetch('/api/consultant/alerts/count', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { count: 0 }),
-        fetch('/api/notifications/count', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { count: 0 })
+        fetch('/api/consultant/alerts/count', { credentials: '<REDACTED_SECRET>' }).then(r => r.ok ? r.json() : { count: 0 }),
+        fetch('/api/notifications/count', { credentials: '<REDACTED_SECRET>' }).then(r => r.ok ? r.json() : { count: 0 })
       ]).then(([alerts, notifs]) => {
         const total = (alerts.count || 0) + (notifs.count || 0);
         const badge = document.getElementById('nav-alert-badge');
@@ -591,7 +591,7 @@ const ExampleOrgNav = {
       }).catch(() => {});
     };
     const loadNotifications = () => {
-      fetch('/api/notifications?limit=10&status=unread', { credentials: 'same-origin' })
+      fetch('/api/notifications?limit=10&status=unread', { credentials: '<REDACTED_SECRET>' })
         .then(r => r.ok ? r.json() : { notifications: [] })
         .then(data => {
           const list = document.getElementById('nav-notifications-list');
@@ -643,14 +643,14 @@ const ExampleOrgNav = {
   },
 
   markRead(id) {
-    fetch(`/api/notifications/${id}/read`, { method: 'POST', credentials: 'same-origin' })
+    fetch(`/api/notifications/${id}/read`, { method: 'POST', credentials: '<REDACTED_SECRET>' })
       .then(() => { this.pollAlertCount(); })
       .catch(() => {});
   },
 
   async signOut() {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+      await fetch('/api/auth/logout', { method: 'POST', credentials: '<REDACTED_SECRET>' });
     } catch (_) {}
     window.location.href = '/api/logout';
   },
@@ -810,7 +810,7 @@ const ExampleOrgNav = {
     // /api/auth/me returns the authenticated user for both OIDC sessions and
     // admin-key callers, so a single round-trip is enough — no separate
     // /api/auth/admin-status fallback is needed.
-    fetch('/api/auth/me', { credentials: 'same-origin' })
+    fetch('/api/auth/me', { credentials: '<REDACTED_SECRET>' })
       .then(r => (r.ok ? r.json() : { authenticated: false }))
       .then(data => {
         // Capture the authenticated user's id + role. The id namespaces

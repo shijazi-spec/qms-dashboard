@@ -128,7 +128,7 @@
       const err = document.getElementById("error");
       err.classList.add("hidden");
       try {
-        const r = await fetch("/api/kpis/leadership-feed/preview", { credentials: "same-origin" });
+        const r = await fetch("/api/kpis/leadership-feed/preview", { credentials: "<REDACTED_SECRET>" });
         if (!r.ok) throw new Error("HTTP " + r.status + (r.status === 403 ? " — needs Quality/GRC/admin role" : ""));
         render(await r.json());
       } catch (e) {

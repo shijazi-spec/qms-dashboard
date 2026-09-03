@@ -75,7 +75,7 @@ curl -X POST "<REDACTED_URL>" \
   "refresh_token": "<REDACTED_SECRET>",
   "scope": "CRMProviderCRM.modules.READ CRMProviderCRM.users.READ ...",
   "api_domain": "<REDACTED_URL>",
-  "token_type": "Bearer",
+  "token_type": "<REDACTED_SECRET>",
   "expires_in": 3600
 }
 ```

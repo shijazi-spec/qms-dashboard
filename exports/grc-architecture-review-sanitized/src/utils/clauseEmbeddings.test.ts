@@ -71,7 +71,7 @@ const mockQuery: MockedPoolQuery = (sql, params = []) => {
 
 // Enable the feature flag + provide a (fake) LLMProvider key so embedText proceeds.
 process.env.DOCUMENT_MAPPING_EMBEDDINGS = "true";
-process.env.LLMProvider_API_KEY = "test-LLMProvider-key-<REDACTED_PHONE>";
+process.env.LLMProvider_API_KEY = "<REDACTED_SECRET>";
 
 // Mock fetch so embedText returns a vector without any network call.
 (globalThis as unknown as { fetch: unknown }).fetch = async () => ({

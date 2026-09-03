@@ -100,9 +100,9 @@ const PAYLOAD_PREVIEW = `Rotate API key for fixture integration (Task 482 e2e ${
 // The chips are keyed off the path text in the DOM, so unique per-run
 // values make the assertions stable across reruns and against ambient
 // production rows.
-const PATH_API_KEY = `payload.fixture_${RUN_ID}.api_key`;
+const PATH_API_KEY = `<REDACTED_SECRET>`;
 const PATH_NOTE = `payload.fixture_${RUN_ID}.note`;
-const PATH_PASSWORD_BLOB = `payload.fixture_${RUN_ID}.password_blob`;
+const PATH_PASSWORD_BLOB = `<REDACTED_SECRET>`;
 
 const SEED_CREDENTIAL_WARNINGS = [
   { path: PATH_API_KEY, kind: "sensitive-key" as const },
@@ -133,7 +133,7 @@ async function seedRow(): Promise<void> {
     [`fixture_${RUN_ID}`]: {
       api_key: "<REDACTED_SECRET>",
       note: "[REDACTED:STRING]",
-      password_blob: "[REDACTED:STRING]",
+      password_blob: "<REDACTED_SECRET>",
     },
   };
   const checksum = crypto

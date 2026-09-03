@@ -835,7 +835,7 @@
         }
         async function loadCurrentUser() {
             try {
-                const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                const res = await fetch('/api/auth/me', { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) { currentUserRole = null; return; }
                 const data = await res.json();
                 currentUserRole = (data && data.user && data.user.role) || null;
@@ -1349,7 +1349,7 @@
                 const r = await fetch('/api/compliance/imports', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ document_id: documentId, regulation_id: regulationId })
                 });
                 const data = await r.json();
@@ -1433,7 +1433,7 @@
                 fd.append('file', file);
                 const res = await fetch(
                     '/api/compliance/regulations/' + encodeURIComponent(regulationId) + '/document',
-                    { method: 'POST', credentials: 'same-origin', body: fd }
+                    { method: 'POST', credentials: '<REDACTED_SECRET>', body: fd }
                 );
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
@@ -1457,7 +1457,7 @@
             try {
                 const res = await fetch(
                     '/api/compliance/regulations/' + encodeURIComponent(regulationId) + '/document',
-                    { method: 'DELETE', credentials: 'same-origin' }
+                    { method: 'DELETE', credentials: '<REDACTED_SECRET>' }
                 );
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
@@ -1613,7 +1613,7 @@
             if (!confirm(_ct('compliance.confirm_unlink', 'Remove this document from this clause? The file remains in the QMS library.'))) return;
             try {
                 const r = await fetch('/api/compliance/obligations/' + obligationId + '/documents/' + docId, {
-                    method: 'DELETE', credentials: 'same-origin'
+                    method: 'DELETE', credentials: '<REDACTED_SECRET>'
                 });
                 if (r.ok) {
                     await loadClauseDocs(obligationId);
@@ -1667,7 +1667,7 @@
                     fd.append('notes', document.getElementById('clauseBulkNotes').value.trim());
                     try {
                         const r = await fetch('/api/compliance/obligations/' + oblId + '/bulk-upload', {
-                            method: 'POST', credentials: 'same-origin', body: fd
+                            method: 'POST', credentials: '<REDACTED_SECRET>', body: fd
                         });
                         const data = await r.json().catch(function () { return {}; });
                         if (!r.ok) {

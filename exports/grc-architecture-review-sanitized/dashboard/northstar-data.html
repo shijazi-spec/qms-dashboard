@@ -129,7 +129,7 @@
     }
 
     async function loadRecent() {
-      const r = await fetch(`/api/northstar/${sel.value}`, { credentials:"same-origin" });
+      const r = await fetch(`/api/northstar/${sel.value}`, { credentials:"<REDACTED_SECRET>" });
       const wrap = document.getElementById("recent");
       if (!r.ok) { wrap.innerHTML = `<span class="text-red-600">Could not load (${r.status})</span>`; return; }
       const { rows } = await r.json();
@@ -148,7 +148,7 @@
       msg.textContent = "Saving…"; msg.className = "ms-3 text-sm text-gray-500";
       try {
         const r = await fetch(`/api/northstar/${sel.value}`, {
-          method:"POST", credentials:"same-origin",
+          method:"POST", credentials:"<REDACTED_SECRET>",
           headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body),
         });
         if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || ("HTTP "+r.status)); }

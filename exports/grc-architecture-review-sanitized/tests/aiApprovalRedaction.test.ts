@@ -118,12 +118,12 @@ aiApprovalPool.query = stubQuery as typeof aiApprovalPool.query;
 async function run(): Promise<void> {
   console.log("\n[aiApprovalDatabase] sensitive-field redaction");
 
-  const SECRET_KEY = "<REDACTED_TOKEN>";
-  const SECRET_TOKEN = "<REDACTED_TOKEN>";
-  const SECRET_PASSWORD = "<REDACTED_EMAIL>!_plaintext";
-  const SECRET_BCRYPT = "<REDACTED_PASSWORD_HASH>";
+  const SECRET_KEY = "<REDACTED_SECRET>";
+  const SECRET_TOKEN = "<REDACTED_SECRET>";
+  const SECRET_PASSWORD = "<REDACTED_SECRET>";
+  const SECRET_BCRYPT = "<REDACTED_SECRET>";
   const SECRET_JWT =
-    "<REDACTED_TOKEN>";
+    "<REDACTED_SECRET>";
   const SAFE_TOOL = "rotate_api_key";
   const SAFE_DESCRIPTION = "Rotate CRMProvider API key for the books integration";
   const PREVIEW_PROSE_PREFIX = "Rotate API key for CRMProvider_books — new key=";
@@ -197,7 +197,7 @@ async function run(): Promise<void> {
     "INSERT payload.note does not contain the sk-… credential (value-level redaction)",
   );
   assert(
-    !insertedPayloadJson.includes(SECRET_BCRYPT) && !insertedPayloadJson.includes("$2b$12$"),
+    !insertedPayloadJson.includes(SECRET_BCRYPT) && !insertedPayloadJson.includes("<REDACTED_PASSWORD_HASH>"),
     "INSERT payload.config_diff does not contain the bcrypt hash (value-level redaction)",
   );
 
@@ -228,7 +228,7 @@ async function run(): Promise<void> {
     "INSERT payload_preview does not contain the ghp_… SourceControlProvider token",
   );
   assert(
-    !insertedPreview.includes(SECRET_BCRYPT) && !insertedPreview.includes("$2b$12$"),
+    !insertedPreview.includes(SECRET_BCRYPT) && !insertedPreview.includes("<REDACTED_PASSWORD_HASH>"),
     "INSERT payload_preview does not contain the bcrypt hash",
   );
   assert(
@@ -274,7 +274,7 @@ async function run(): Promise<void> {
     entityId: "CRMProvider_books",
     data: {
       rotated: true,
-      new_api_key: "<REDACTED_TOKEN>",
+      new_api_key: "<REDACTED_SECRET>",
       access_token: "<REDACTED_SECRET>",
       audit_note: "Rotation completed successfully",
       // Innocuously-named field that still holds a credential value:
@@ -346,7 +346,7 @@ async function run(): Promise<void> {
       notes: `Please rotate — old key was ${INLINE_GHP} and fallback was ${INLINE_SK}`,
       metadata: {
         author: "<REDACTED_EMAIL>",
-        context: `bearer token: Bearer ${INLINE_GHP}`,
+        context: `Bearer <REDACTED_TOKEN>: Bearer ${INLINE_GHP}`,
       },
     },
     payloadPreview: "Update notes for integration record",
@@ -402,8 +402,8 @@ async function run(): Promise<void> {
   console.log("\n[aiApprovalDatabase] heuristic detection of free-form passwords / high-entropy tokens");
 
   captured.length = 0;
-  const FREE_FORM_PASSWORD = "<REDACTED_EMAIL>!_FreeFormInProse_X1";       // password-strength heuristic
-  const ENTROPY_TOKEN      = "aB3xKp9zQrLm4vN2YwSdEfXyZTw";        // 28-char base64-ish
+  const FREE_FORM_PASSWORD = "<REDACTED_SECRET>";       // password-strength heuristic
+  const ENTROPY_TOKEN      = "<REDACTED_SECRET>";        // 28-char base64-ish
   const SLUG_SAFE          = "Test-Project-2026-Final-v3";          // must NOT be redacted
   const UUID_SAFE          = "<REDACTED_PHONE>-4000-8000-<REDACTED_PHONE>"; // must NOT be redacted
 
@@ -490,7 +490,7 @@ async function run(): Promise<void> {
   // returns counts of would-have-redacted tokens grouped by field path.
   // Reviewing those buckets surfaces edge cases the original synthetic
   // fixture set (`Test-Project-2026-Final-v3`, `<REDACTED_EMAIL>!_FreeForm…`,
-  // `aB3xKp9zQrLm4vN2YwSdEfXyZTw`) did not cover. Pin them here so a
+  // `<REDACTED_SECRET>`) did not cover. Pin them here so a
   // future threshold tweak (entropy floor, length window, strong-special
   // set) cannot silently regress these classifications.
   // -----------------------------------------------------------------------
@@ -501,7 +501,7 @@ async function run(): Promise<void> {
   // MUST redact — AWS-secret-style 40-char base64 with `/` separators.
   // No vendor prefix, so the regex layer is blind. Heuristic: high entropy
   // + 3 character classes (U/L/D) → entropy bucket.
-  const AWS_SECRET_SHAPE = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+  const AWS_SECRET_SHAPE = "<REDACTED_SECRET>";
 
   // MUST NOT redact — SHA-256 hex digest. 64 chars but only two character
   // classes (lowercase + digit), so isHighEntropyToken should reject it
@@ -601,7 +601,7 @@ async function run(): Promise<void> {
   console.log("\n[aiApprovalDatabase] credential-shaped strings inside execution_result.error");
 
   captured.length = 0; // reset captures for clean assertion
-  const ERROR_SECRET = "<REDACTED_TOKEN>";
+  const ERROR_SECRET = "<REDACTED_SECRET>";
   const ERROR_JWT =
     "<REDACTED_TOKEN>";
   await recordExecutionResult(enqueued.action_code, {

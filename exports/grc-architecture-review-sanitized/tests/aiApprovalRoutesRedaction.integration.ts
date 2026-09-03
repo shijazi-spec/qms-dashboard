@@ -204,12 +204,12 @@ function assert(condition: boolean, label: string): void {
 /* Secrets — all distinct strings so we can detect leaks precisely    */
 /* ------------------------------------------------------------------ */
 
-const PAYLOAD_API_KEY = '<REDACTED_TOKEN>';
+const PAYLOAD_API_KEY = '<REDACTED_SECRET>';
 const PAYLOAD_REFRESH = 'rt_LEAK_DETECTOR_INT_REFRESH_qwertyuiopas';
 const PAYLOAD_BCRYPT =
   '<REDACTED_PASSWORD_HASH>';
-const RESULT_API_KEY = '<REDACTED_TOKEN>';
-const RESULT_ACCESS_TOKEN = 'eyJhbGciLEAKDETECTORINTACCESS_freshtoken';
+const RESULT_API_KEY = '<REDACTED_SECRET>';
+const RESULT_ACCESS_TOKEN = '<REDACTED_SECRET>';
 
 // POST /approve test secrets — imported from the fixture tools module so
 // this file and the server-side tool definitions stay in sync.

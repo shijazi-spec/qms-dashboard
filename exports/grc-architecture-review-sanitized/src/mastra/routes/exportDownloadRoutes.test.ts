@@ -65,7 +65,7 @@ const mockQuery: MockedPoolQuery = (sql, params = []) => {
 
 (Pool.prototype as unknown as { query: MockedPoolQuery }).query = mockQuery;
 
-const TEST_SESSION_SECRET = "test-session-secret-export-downloads-2026";
+const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 
 // Import AFTER the mock + env are in place.
@@ -95,8 +95,8 @@ const sessionCookie = `${SESSION_COOKIE_NAME}=${encodeURIComponent(
 
 const REDACTED_SENTINEL = "***REDACTED***";
 const SECRETS = {
-  password_hash: "<REDACTED_PASSWORD_HASH>_IJ",
-  mfa_secret: "<REDACTED_MFA_SECRET>",
+  password_hash: "<REDACTED_SECRET>",
+  mfa_secret: "<REDACTED_SECRET>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
   api_key: "<REDACTED_SECRET>",

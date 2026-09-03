@@ -167,7 +167,7 @@
                 reloadBtn.disabled = true;
                 reloadBtn.textContent = 'Loading…';
                 try {
-                    const r = await fetch('/api/calls/health-metrics', { credentials: 'include' });
+                    const r = await fetch('/api/calls/health-metrics', { credentials: '<REDACTED_SECRET>' });
                     if (r.status === 404) {
                         showError('Health dashboard is not enabled. Set CALLS_HEALTH_DASHBOARD=true in HostingPlatform Secrets (or CALLS_HEALTH_DASHBOARD_USERS=your_email).');
                         return;

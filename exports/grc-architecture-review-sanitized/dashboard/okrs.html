@@ -98,7 +98,7 @@
     async function load() {
       const err = document.getElementById("error"); err.classList.add("hidden");
       try {
-        const r = await fetch("/api/okrs", { credentials: "same-origin" });
+        const r = await fetch("/api/okrs", { credentials: "<REDACTED_SECRET>" });
         if (!r.ok) throw new Error("HTTP " + r.status + (r.status===403?" — needs Quality/GRC/admin role":""));
         const { generated_at, objectives } = await r.json();
         document.getElementById("generated").textContent = "Generated " + (generated_at||"");

@@ -227,7 +227,7 @@
 
         async function loadCounts() {
             try {
-                const r = await fetch('/api/qms-docs', { credentials: 'same-origin' });
+                const r = await fetch('/api/qms-docs', { credentials: '<REDACTED_SECRET>' });
                 if (!r.ok) throw new Error('counts failed');
                 const data = await r.json();
                 cachedCounts = data.counts || {};
@@ -254,7 +254,7 @@
             }
             wrap.innerHTML = '<p class="text-gray-500 text-center py-6">Loading…</p>';
             try {
-                const r = await fetch('/api/qms-docs?category=' + encodeURIComponent(selectedCategory), { credentials: 'same-origin' });
+                const r = await fetch('/api/qms-docs?category=' + encodeURIComponent(selectedCategory), { credentials: '<REDACTED_SECRET>' });
                 if (!r.ok) {
                     wrap.innerHTML = '<p class="text-red-500 text-center py-6">Failed to load documents (HTTP ' + r.status + ').</p>';
                     return;
@@ -351,7 +351,7 @@
                 try {
                     const r = await fetch('/api/qms-docs/upload', {
                         method: 'POST',
-                        credentials: 'same-origin',
+                        credentials: '<REDACTED_SECRET>',
                         body: fd
                     });
                     const data = await r.json().catch(() => ({}));
@@ -424,7 +424,7 @@
                     try {
                         const r = await fetch('/api/qms-docs/bulk-upload', {
                             method: 'POST',
-                            credentials: 'same-origin',
+                            credentials: '<REDACTED_SECRET>',
                             body: fd
                         });
                         const data = await r.json().catch(() => ({}));
@@ -454,7 +454,7 @@
         async function deleteDoc(id) {
             if (!confirm('Delete this document? This cannot be undone.')) return;
             try {
-                const r = await fetch('/api/qms-docs/' + id, { method: 'DELETE', credentials: 'same-origin' });
+                const r = await fetch('/api/qms-docs/' + id, { method: 'DELETE', credentials: '<REDACTED_SECRET>' });
                 if (r.ok) {
                     await loadDocuments();
                 } else {
@@ -513,7 +513,7 @@
             try {
                 const res = await fetch('/api/compliance/documents/' + documentId + '/suggest-mappings', {
                     method: 'POST',
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ top_n: 8 }),
                 });
@@ -567,7 +567,7 @@
             try {
                 const res = await fetch('/api/compliance/documents/' + _suggestState.documentId + '/apply-mapping', {
                     method: 'POST',
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ obligation_id: obligationId }),
                 });

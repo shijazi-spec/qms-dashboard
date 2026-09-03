@@ -73,7 +73,7 @@ assert(_sanitiseForTest(true) === true, 'boolean passes through unchanged');
 }
 
 {
-  const result = _sanitiseForTest({ username: 'bob', password_hash: '$2b$12$secret', api_key: '<REDACTED_SECRET>' }) as any;
+  const result = _sanitiseForTest({ username: 'bob', password_hash: '<REDACTED_SECRET>', api_key: '<REDACTED_SECRET>' }) as any;
   assert(result.password_hash === REDACTED_SENTINEL, 'password_hash redacted by key-based rule');
   assert(result.api_key === REDACTED_SENTINEL, 'api_key redacted by key-based rule');
   assert(result.username === 'bob', 'username preserved alongside redacted fields');
@@ -95,7 +95,7 @@ assert(_sanitiseForTest(true) === true, 'boolean passes through unchanged');
 
 {
   const result = _sanitiseForTest({
-    user: { email: '<REDACTED_EMAIL>', password_hash: '$2b$12$hash', mfa_secret: 'TOTP_SECRET' },
+    user: { email: '<REDACTED_EMAIL>', password_hash: '<REDACTED_SECRET>', mfa_secret: '<REDACTED_SECRET>' },
     meta: { module: 'auth' },
   }) as any;
   assert(result.user.password_hash === REDACTED_SENTINEL, 'nested password_hash redacted');
@@ -228,7 +228,7 @@ assert(
 {
   const jwt =
     '<REDACTED_TOKEN>';
-  const msg = `Bearer token issued: ${jwt}`;
+  const msg = `Bearer <REDACTED_TOKEN> issued: ${jwt}`;
   const out = _scrubMessageForTest(msg);
   assert(!out.includes(jwt), 'JWT (eyJ…) interpolated into message string is scrubbed');
   assert(out.includes(REDACTED_SENTINEL), 'REDACTED sentinel present in message with JWT');

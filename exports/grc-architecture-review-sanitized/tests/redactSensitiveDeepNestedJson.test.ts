@@ -6,7 +6,7 @@
  * top-level `JSON.parse` on `{`/`[`-prefixed string params before walking
  * them. The gap this test guards against is the *inner* case:
  *
- *   { description: '{"mfa_secret":"<uuid>"}' }
+ *   { description: '{"mfa_secret":"<REDACTED_SECRET>"}' }
  *
  * The outer object is walked, but the `description` value used to be treated
  * as an opaque string leaf — only the regex/heuristic pass ran on it, which
@@ -46,7 +46,7 @@ console.log(
 // (a) Plain object with a single nested JSON-string value containing a secret
 // ---------------------------------------------------------------------------
 {
-  const mfaSecret = '<REDACTED_PHONE>-4000-8000-<REDACTED_PHONE>';
+  const mfaSecret = '<REDACTED_SECRET>';
   const input = {
     description: JSON.stringify({ mfa_secret: mfaSecret, ok: true }),
     label: 'change-history-row-42',
@@ -85,7 +85,7 @@ console.log(
 // (b) Triple-nested JSON-in-JSON-in-JSON (the recursive case)
 // ---------------------------------------------------------------------------
 {
-  const innerSecret = 'b2c3d4e5-f6a7-8901-2345-6789abcdef01';
+  const innerSecret = '<REDACTED_SECRET>';
   // Three layers of escaping — each layer's value is itself a JSON-encoded
   // string of the next layer down. This is the shape we'd see if a tool
   // logged a tool-call payload that itself contained a logged tool-call

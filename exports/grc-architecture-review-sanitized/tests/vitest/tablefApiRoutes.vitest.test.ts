@@ -21,7 +21,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // (rbacMiddleware.ts L107). Both env vars must be set BEFORE any module that
 // reads them (rbacMiddleware, authRoutes) is imported.
 const TEST_ADMIN_KEY = "vitest-tablef-admin-key-2026";
-const TEST_SESSION_SECRET = "vitest-tablef-session-secret";
+const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
 process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 

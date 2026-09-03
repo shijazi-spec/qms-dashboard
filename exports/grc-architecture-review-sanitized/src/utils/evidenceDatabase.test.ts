@@ -62,8 +62,8 @@ const { addEvidence } = await import("./evidenceDatabase");
 
 const REDACTED_SENTINEL = "***REDACTED***";
 const SECRETS = {
-  password_hash: "<REDACTED_PASSWORD_HASH>_IJ",
-  mfa_secret: "<REDACTED_MFA_SECRET>",
+  password_hash: "<REDACTED_SECRET>",
+  mfa_secret: "<REDACTED_SECRET>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
   api_key: "<REDACTED_SECRET>",

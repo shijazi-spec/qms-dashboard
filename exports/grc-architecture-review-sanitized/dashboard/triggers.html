@@ -111,9 +111,9 @@
         async function loadTriggers() {
             try {
                 const [statsRes, triggersRes, notificationsRes] = await Promise.all([
-                    fetch('/api/triggers/stats', { credentials: 'same-origin' }),
-                    fetch('/api/triggers',       { credentials: 'same-origin' }),
-                    fetch('/api/notifications',  { credentials: 'same-origin' })
+                    fetch('/api/triggers/stats', { credentials: '<REDACTED_SECRET>' }),
+                    fetch('/api/triggers',       { credentials: '<REDACTED_SECRET>' }),
+                    fetch('/api/notifications',  { credentials: '<REDACTED_SECRET>' })
                 ]);
                 const stats = await statsRes.json().catch(() => ({}));
                 const triggersData = await triggersRes.json().catch(() => ({ triggers: [] }));
@@ -186,7 +186,7 @@
                 const res = await fetch('/api/triggers/' + triggerId + '/action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ action: 'acknowledge' })
                 });
                 if (res.ok) loadTriggers();
@@ -205,7 +205,7 @@
                 const res = await fetch('/api/triggers/' + triggerId + '/action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ action: 'dismiss', dismiss_reason: reason.trim() })
                 });
                 if (res.ok) loadTriggers();
@@ -223,7 +223,7 @@
                 const res = await fetch('/api/triggers/' + triggerId + '/action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ action: 'propose_hitl', decision: 'approve_action', notes: notes || null })
                 });
                 if (res.ok) {
@@ -245,7 +245,7 @@
                 const res = await fetch('/api/triggers/' + triggerId + '/action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ action: 'decide', decision: decision, decided_by: decidedBy, notes: notes || null })
                 });
                 if (res.ok) loadTriggers();
@@ -258,7 +258,7 @@
 
         async function markNotificationRead(id) {
             try {
-                await fetch('/api/notifications/' + id + '/read', { method: 'POST', credentials: 'same-origin' });
+                await fetch('/api/notifications/' + id + '/read', { method: 'POST', credentials: '<REDACTED_SECRET>' });
                 loadTriggers();
             } catch (e) {}
         }

@@ -32,7 +32,7 @@ import { Pool, type QueryResult, type QueryResultRow } from "pg";
 // Set SESSION_SECRET BEFORE importing the route so that
 // authRoutes.getSessionFromCookie (which i18nRoutes calls) can verify
 // the forged cookie below.
-const TEST_SESSION_SECRET = "test-session-secret-i18n-route-secret-leak-2026";
+const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 
 const SESSION_COOKIE_NAME = "ExampleOrg_session";
@@ -92,8 +92,8 @@ const { buildHandler, makeContext } = await import(
 );
 
 const SECRETS = {
-  password_hash: "<REDACTED_PASSWORD_HASH>_IJ",
-  mfa_secret: "<REDACTED_MFA_SECRET>",
+  password_hash: "<REDACTED_SECRET>",
+  mfa_secret: "<REDACTED_SECRET>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
   api_key: "<REDACTED_SECRET>",

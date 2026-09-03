@@ -53,7 +53,7 @@
 // `RATE_LIMIT_429_LOG_MAX_PER_MIN` at module init, and the route handlers
 // read `SESSION_SECRET` / `ADMIN_API_KEY` per request.
 const TEST_ADMIN_KEY = "test-admin-key-static-page-signin-gate";
-const TEST_SESSION_SECRET = "test-session-secret-static-page-signin-gate";
+const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
 
 process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;

@@ -102,12 +102,12 @@ function makeStubClient(initialRows: RowState[]): {
 async function run(): Promise<void> {
   console.log("\n[redactHistoricalLogs] ai_call_metrics preview-column backfill sweep");
 
-  const SECRET_KEY = "<REDACTED_TOKEN>";
-  const SECRET_GH = "<REDACTED_TOKEN>";
-  const SECRET_BCRYPT = "<REDACTED_PASSWORD_HASH>";
+  const SECRET_KEY = "<REDACTED_SECRET>";
+  const SECRET_GH = "<REDACTED_SECRET>";
+  const SECRET_BCRYPT = "<REDACTED_SECRET>";
   const SECRET_JWT =
-    "<REDACTED_TOKEN>";
-  const SECRET_AKIA = "<REDACTED_TOKEN>";
+    "<REDACTED_SECRET>";
+  const SECRET_AKIA = "<REDACTED_SECRET>";
   const SAFE_PROMPT = "Summarise the latest non-conformance for tenant Example Organization-corp";
   const SAFE_TOOL_INPUT = '{"action":"list","limit":10}';
   const SAFE_TOOL_OUTPUT = '{"status":"ok","count":3}';
@@ -199,7 +199,7 @@ async function run(): Promise<void> {
   assert(
     row2.tool_output_preview != null &&
       !row2.tool_output_preview.includes(SECRET_BCRYPT) &&
-      !row2.tool_output_preview.includes("$2b$12$") &&
+      !row2.tool_output_preview.includes("<REDACTED_PASSWORD_HASH>") &&
       !row2.tool_output_preview.includes(SECRET_AKIA),
     "row 2 tool_output_preview no longer contains the bcrypt hash or AWS access key id",
   );

@@ -147,7 +147,7 @@ async function run(): Promise<void> {
   const bcryptScrubbed = redactMetadataForStorage({ debug: { stored: BCRYPT_HASH } });
   const bcryptJson = JSON.stringify(bcryptScrubbed);
   assert(
-    !bcryptJson.includes('$2b$12$') && bcryptJson.includes(REDACTED_SENTINEL),
+    !bcryptJson.includes('<REDACTED_PASSWORD_HASH>') && bcryptJson.includes(REDACTED_SENTINEL),
     'bcrypt hash deep inside metadata is replaced with the sentinel',
   );
 
@@ -287,7 +287,7 @@ async function run(): Promise<void> {
     'LLMProviderCallMetric metadata does NOT contain the AWS access key',
   );
   assert(
-    typeof openMetadata === 'string' && !openMetadata.includes('$2b$12$'),
+    typeof openMetadata === 'string' && !openMetadata.includes('<REDACTED_PASSWORD_HASH>'),
     'LLMProviderCallMetric metadata does NOT contain the bcrypt hash prefix',
   );
   assert(

@@ -203,7 +203,7 @@
                 // Segment chip (Marketplace / ExampleOrg / Example Organization) — server-side.
                 const _cmSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
                 const _cmSegQ = (_cmSeg && _cmSeg !== 'all') ? ('&segment=' + encodeURIComponent(_cmSeg)) : '';
-                const res = await fetch('/api/duplicates/cross-module-overlaps?limit=100000&status=' + encodeURIComponent(_cmStatus) + _cmSegQ, { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/cross-module-overlaps?limit=100000&status=' + encodeURIComponent(_cmStatus) + _cmSegQ, { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) {
                     let body = '';
                     try { body = (await res.text()).slice(0, 200); } catch (_) {}
@@ -406,14 +406,14 @@
             const payload = JSON.stringify({ notes: 'Cross-module overlap handled in CRMProvider (convert / link / close) — marked from the Cross-Module tab.' });
             try {
                 let res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-handled', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
                     const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-handled', {
-                        method: 'POST', credentials: 'same-origin',
+                        method: 'POST', credentials: '<REDACTED_SECRET>',
                         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
                     });
                 }
@@ -431,14 +431,14 @@
             if (!confirm('Move this cross-module overlap back to the open queue?\n\nNo CRMProvider changes.')) return;
             try {
                 let res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-unhandle', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' }
                 });
                 if (res.status === 401 || res.status === 403) {
                     const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-unhandle', {
-                        method: 'POST', credentials: 'same-origin',
+                        method: 'POST', credentials: '<REDACTED_SECRET>',
                         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }
                     });
                 }
@@ -784,11 +784,11 @@
             const hdrs = () => Object.assign({ 'Content-Type': 'application/json' }, adminKey ? { 'x-admin-key': adminKey } : {});
             for (const id of ids) {
                 try {
-                    let res = await fetch(urlFor(id), { method: 'POST', credentials: 'same-origin', headers: hdrs(), body });
+                    let res = await fetch(urlFor(id), { method: 'POST', credentials: '<REDACTED_SECRET>', headers: hdrs(), body });
                     if ((res.status === 401 || res.status === 403) && !adminKey) {
                         adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                         if (!adminKey) break;
-                        res = await fetch(urlFor(id), { method: 'POST', credentials: 'same-origin', headers: hdrs(), body });
+                        res = await fetch(urlFor(id), { method: 'POST', credentials: '<REDACTED_SECRET>', headers: hdrs(), body });
                     }
                     const data = await res.json().catch(() => ({}));
                     if (res.ok && data && data.success) ok++; else fail++;
@@ -1004,7 +1004,7 @@
             });
             let data;
             try {
-                const res = await fetch('/api/duplicates/spike-breakdown?weeks=' + weeks + segQ, { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/spike-breakdown?weeks=' + weeks + segQ, { credentials: '<REDACTED_SECRET>' });
                 data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -1298,7 +1298,7 @@
                 const sparkEl = document.getElementById('clustersSparkline');
                 const deltaEl = document.getElementById('clustersDelta');
                 if (!sparkEl || !deltaEl) return;
-                const res = await fetch('/api/dashboard/quality-trend?limit=30', { credentials: 'same-origin' });
+                const res = await fetch('/api/dashboard/quality-trend?limit=30', { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) return;
                 const data = await res.json();
                 const values = (data.duplicates || []).map(d => Number(d.clusters)).filter(v => !isNaN(v));
@@ -1482,7 +1482,7 @@
 
             for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
                 try {
-                    const res = await fetch(url, { credentials: 'same-origin' });
+                    const res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                     if (loadId !== window._clustersLoadId) return;
 
                     if (res.status === 429 && attempt < MAX_RETRIES) {
@@ -2339,7 +2339,7 @@
         async function _bgVerifyRecordTab(type, page, baseUrl, loadId, loadKey) {
             try {
                 const vurl = baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + 'verify=1';
-                const res = await fetch(vurl, { credentials: 'same-origin' });
+                const res = await fetch(vurl, { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) return;
                 if (loadId !== window[loadKey]) return; // a newer load superseded us
                 const data = await res.json();
@@ -2379,7 +2379,7 @@
 
             for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
                 try {
-                    const res = await fetch(url, { credentials: 'same-origin' });
+                    const res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                     if (loadId !== window[loadKey]) return; // superseded
 
                     // Rate-limited by our own limiter (READ_LIMIT=100/min/user).
@@ -3607,7 +3607,7 @@
                 // one specific owner, so a "1 account + N contacts" parent
                 // is exactly the kind of thing they want to see.
                 qs.set('include_hierarchies', 'true');
-                const res = await fetch('/api/duplicates/clusters?' + qs.toString(), { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/clusters?' + qs.toString(), { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) {
                     throw new Error('HTTP ' + res.status);
                 }
@@ -3798,7 +3798,7 @@
             document.getElementById('ooBody').innerHTML = (typeof rrSkeletonRows === 'function') ? rrSkeletonRows(5) : 'Loading…';
             document.getElementById('ooFooter').innerHTML = '';
             try {
-                const res = await fetch('/api/duplicates/owner-deals?owner=' + encodeURIComponent(ownerName), { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/owner-deals?owner=' + encodeURIComponent(ownerName), { credentials: '<REDACTED_SECRET>' });
                 const d = await res.json();
                 if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
                 window._ooData = d;
@@ -3878,7 +3878,7 @@
             if (btn) { btn.disabled = true; btn.textContent = 'Applying…'; }
             try {
                 const res = await fetch('/api/duplicates/owner-deals/bulk-update', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
                 });
@@ -4035,7 +4035,7 @@
             if (!tbody) return;
             let data;
             try {
-                const res = await fetch('/api/duplicates/resolution-activity?limit=100', { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/resolution-activity?limit=100', { credentials: '<REDACTED_SECRET>' });
                 data = await res.json();
             } catch (_) { data = null; }
             renderAgentActivity((data && data.activity) || []);
@@ -4081,7 +4081,7 @@
             if (!confirm('Re-run the autonomous resolution for cluster #' + clusterId + ' now?')) return;
             try {
                 const res = await fetch('/api/duplicates/autonomous/run-cluster/' + clusterId, {
-                    method: 'POST', credentials: 'same-origin'
+                    method: 'POST', credentials: '<REDACTED_SECRET>'
                 });
                 const data = await res.json();
                 const s = (data && data.summary) || {};
@@ -4103,7 +4103,7 @@
                 : '/api/duplicates/merge-actions?limit=100&action_type=' + encodeURIComponent(filter);
             let data;
             try {
-                const res = await fetch(url, { credentials: 'same-origin' });
+                const res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 data = await res.json();
             } catch (_) { data = null; }
             renderManualActions((data && data.actions) || []);
@@ -4159,7 +4159,7 @@
             if (!confirm('Undo the last apply on cluster #' + clusterId + '?\n\nThis removes the Duplicate-Delete tags and reopens the cluster. Gap-filled survivor fields are kept (they only filled blanks).')) return;
             try {
                 const res = await fetch('/api/duplicates/autonomous/undo/' + clusterId, {
-                    method: 'POST', credentials: 'same-origin'
+                    method: 'POST', credentials: '<REDACTED_SECRET>'
                 });
                 const data = await res.json();
                 rrToast((data && data.message) || (data && data.ok ? 'Undone.' : 'Undo failed.'));
@@ -4283,7 +4283,7 @@
                 for (const module of modules) {
                     let counts = {};
                     try {
-                        const res = await fetch('/api/duplicates/clusters/' + clusterId + '/attachments?module=' + encodeURIComponent(module), { credentials: 'same-origin' });
+                        const res = await fetch('/api/duplicates/clusters/' + clusterId + '/attachments?module=' + encodeURIComponent(module), { credentials: '<REDACTED_SECRET>' });
                         if (!res.ok) continue;
                         counts = ((await res.json()) || {}).counts || {};
                     } catch (_) { continue; }
@@ -4822,7 +4822,7 @@
             try {
                 res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/plan', {
                     method: 'POST',
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(reqBody),
                 });
@@ -4874,7 +4874,7 @@
             const callApi = async (confirmFlag, limitOverride) => {
                 const res = await fetch('/api/duplicates/bulk-split-contacts', {
                     method: 'POST',
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ confirm: !!confirmFlag, limit: limitOverride || 500 }),
                 });
@@ -4978,7 +4978,7 @@
             const MAX = 5000;
             while (iter++ < MAX) {
                 const res = await fetch(url, {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, opts.key ? { 'x-admin-key': opts.key } : {}),
                     body: JSON.stringify(Object.assign({ limit: opts.batchLimit }, opts.body || {})),
                 });
@@ -5131,7 +5131,7 @@
                     const headers = { 'Content-Type': 'application/json' };
                     if (adminKey) headers['x-admin-key'] = adminKey;
                     let res = await fetch('/api/duplicates/apply-all-safe', {
-                        method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify({ limit: 15 })
+                        method: 'POST', credentials: '<REDACTED_SECRET>', headers, body: JSON.stringify({ limit: 15 })
                     });
                     if (res.status === 401 || res.status === 403) {
                         adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
@@ -5164,7 +5164,7 @@
             panel.innerHTML = '<div class="text-emerald-700">Finding exact email+phone matches…</div>';
             let preview;
             try {
-                const res = await fetch('/api/duplicates/contacts/exact-match-preview', { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/contacts/exact-match-preview', { credentials: '<REDACTED_SECRET>' });
                 preview = await res.json();
                 if (!res.ok || !preview.success) throw new Error((preview && preview.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -5233,7 +5233,7 @@
             panel.innerHTML = '<div class="text-teal-700">Finding same name + phone matches…</div>';
             let preview;
             try {
-                const res = await fetch('/api/duplicates/contacts/name-phone-preview', { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/contacts/name-phone-preview', { credentials: '<REDACTED_SECRET>' });
                 preview = await res.json();
                 if (!res.ok || !preview.success) throw new Error((preview && preview.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -5302,7 +5302,7 @@
             panel.innerHTML = '<div class="text-indigo-700">Finding colleagues to link to their Account…</div>';
             let preview;
             try {
-                const res = await fetch('/api/duplicates/contacts/link-account-preview', { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/contacts/link-account-preview', { credentials: '<REDACTED_SECRET>' });
                 preview = await res.json();
                 if (!res.ok || !preview.success) throw new Error((preview && preview.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -5365,7 +5365,7 @@
                 const url = amMode === 'domain'
                     ? '/api/duplicates/accounts/domain-only-preview'
                     : '/api/duplicates/accounts/domain-name-preview';
-                const res = await fetch(url, { credentials: 'same-origin' });
+                const res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -5540,7 +5540,7 @@
             if (!window.confirm('Mark these ' + ids.length + ' account(s) as NOT duplicates of each other?\n\nThey will be excluded from this and all FUTURE auto-merges (recorded in the separation ledger). Nothing is written to CRMProvider.')) return;
             try {
                 const res = await fetch('/api/duplicates/accounts/dismiss-merge-group', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ CRMProviderIds: ids }),
                 });
@@ -5625,7 +5625,7 @@
             panel.innerHTML = '<div class="py-2 text-blue-700 text-xs">Re-fetching every record in this cluster from CRMProvider…</div>';
             let res, data;
             try {
-                res = await fetch('/api/duplicates/clusters/' + clusterId + '/recheck', { credentials: 'same-origin' });
+                res = await fetch('/api/duplicates/clusters/' + clusterId + '/recheck', { credentials: '<REDACTED_SECRET>' });
                 data = await res.json().catch(() => null);
             } catch (e) {
                 panel.innerHTML = '<div class="py-2 text-red-600 text-xs">Failed to reach server: ' + escapeHtml(String(e && e.message || e)) + '</div>';
@@ -5691,7 +5691,7 @@
             panel.innerHTML = '<div class="py-2 text-emerald-700 text-xs">Verifying tags in CRMProvider…</div>';
             let res, data;
             try {
-                res = await fetch('/api/duplicates/clusters/' + clusterId + '/verify-tags', { credentials: 'same-origin' });
+                res = await fetch('/api/duplicates/clusters/' + clusterId + '/verify-tags', { credentials: '<REDACTED_SECRET>' });
                 data = await res.json().catch(() => null);
             } catch (e) {
                 panel.innerHTML = '<div class="py-2 text-red-600 text-xs">Failed to reach server: ' + escapeHtml(String(e && e.message || e)) + '</div>';
@@ -5750,7 +5750,7 @@
             const slot = document.getElementById('reparent-preview-' + module);
             if (!slot) return;
             try {
-                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/reparent-preview?module=' + encodeURIComponent(module), { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/reparent-preview?module=' + encodeURIComponent(module), { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) { slot.textContent = '—'; return; }
                 const data = await res.json();
                 const parts = [];
@@ -5774,7 +5774,7 @@
         // as a neutral dash instead of blocking the plan.
         async function loadAccountDealCounts(clusterId) {
             try {
-                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/deal-counts', { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/deal-counts', { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) return;
                 const data = await res.json();
                 const counts = (data && data.counts) || {};
@@ -5805,7 +5805,7 @@
         // agent refuses to auto-merge a duplicate that carries attachments.
         async function loadAttachmentChips(module, clusterId) {
             try {
-                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/attachments?module=' + encodeURIComponent(module), { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/attachments?module=' + encodeURIComponent(module), { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) return;
                 const data = await res.json();
                 const counts = (data && data.counts) || {};
@@ -5866,7 +5866,7 @@
             if (!confirm('Move this ' + noun + ' under "' + (accountName || 'the selected account') + '"?\n\nThis sets the ' + noun + "'s Account_Name in CRMProvider. Nothing is deleted.")) return;
             try {
                 const res = await fetch('/api/duplicates/link-record-to-account', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ module: module, record_CRMProvider_id: String(recordCRMProviderId), account_CRMProvider_id: String(accountCRMProviderId) })
                 });
@@ -5887,7 +5887,7 @@
             if (!panel) return;
             panel.innerHTML = '<div class="text-xs text-gray-500 p-2">Loading deals…</div>';
             try {
-                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/account-deals', { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/account-deals', { credentials: '<REDACTED_SECRET>' });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
                 const accounts = data.accounts || [];
@@ -5929,7 +5929,7 @@
             if (!confirm('Move the ' + dbIds.length + ' ticked record(s) into a NEW cluster?\n\nThey become a separate cluster you can resolve on their own. This changes nothing in CRMProvider.')) return;
             try {
                 const res = await fetch('/api/duplicates/clusters/' + clusterId + '/split', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mode: 'manual', record_ids: dbIds })
                 });
@@ -5949,7 +5949,7 @@
             if (!confirm('Auto-split this cluster by company name?\n\nRecords are grouped by company name; the largest group stays here and each other name becomes its own cluster. Best for name-collision clusters (e.g. "Andalusia Group" vs "Andalusia Hospital").\n\nNo CRMProvider changes.')) return;
             try {
                 const res = await fetch('/api/duplicates/clusters/' + clusterId + '/split', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mode: 'by_name' })
                 });
@@ -6025,7 +6025,7 @@
             try {
                 res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/execute', {
                     method: 'POST',
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body || {}),
                 });
@@ -6085,7 +6085,7 @@
             for (;;) {
                 let j = null;
                 try {
-                    const r = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/merge-job?module=' + encodeURIComponent(module), { credentials: 'same-origin' });
+                    const r = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/merge-job?module=' + encodeURIComponent(module), { credentials: '<REDACTED_SECRET>' });
                     const body = await r.json().catch(() => ({}));
                     j = body && body.job;
                 } catch (_) { /* transient network hiccup — keep polling */ }
@@ -6126,7 +6126,7 @@
             try {
                 const modules = ['Accounts', 'Contacts', 'Deals', 'Leads'];
                 for (const module of modules) {
-                    const r = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/merge-job?module=' + encodeURIComponent(module), { credentials: 'same-origin' });
+                    const r = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/merge-job?module=' + encodeURIComponent(module), { credentials: '<REDACTED_SECRET>' });
                     const body = await r.json().catch(() => ({}));
                     const j = body && body.job;
                     if (j && j.status === 'running' && !j.stale) {
@@ -6436,7 +6436,7 @@
         async function verifyAndResolveCluster(module, clusterId) {
             let res, data;
             try {
-                res = await fetch('/api/duplicates/clusters/' + clusterId + '/verify-tags', { credentials: 'same-origin' });
+                res = await fetch('/api/duplicates/clusters/' + clusterId + '/verify-tags', { credentials: '<REDACTED_SECRET>' });
                 data = await res.json().catch(() => null);
             } catch (e) {
                 rrToast('Could not reach server to verify: ' + (e && e.message || e));
@@ -6464,14 +6464,14 @@
             const payload = JSON.stringify({ action: 'resolve', notes: 'Verified in CRM: all ' + total + ' Duplicate-Delete record(s) confirmed deleted in CRMProvider by the admin.' });
             try {
                 let r2 = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (r2.status === 401 || r2.status === 403) {
                     const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     r2 = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
-                        method: 'POST', credentials: 'same-origin',
+                        method: 'POST', credentials: '<REDACTED_SECRET>',
                         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
                     });
                 }
@@ -6503,14 +6503,14 @@
             const payload = JSON.stringify({ module: mod, maxClusters: 50 });
             try {
                 let res = await fetch('/api/duplicates/verify-resolve-applied', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
                     const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } return; }
                     res = await fetch('/api/duplicates/verify-resolve-applied', {
-                        method: 'POST', credentials: 'same-origin',
+                        method: 'POST', credentials: '<REDACTED_SECRET>',
                         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
                     });
                 }
@@ -6539,7 +6539,7 @@
             const payload = JSON.stringify({ action: 'ignore', notes: 'Dismissed from list — intentional separate accounts (e.g. different layout: Corporate Accounts vs Marketplace).' });
             try {
                 let res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: payload
                 });
@@ -6547,7 +6547,7 @@
                     const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
-                        method: 'POST', credentials: 'same-origin',
+                        method: 'POST', credentials: '<REDACTED_SECRET>',
                         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
                         body: payload
                     });
@@ -6578,14 +6578,14 @@
             const payload = JSON.stringify({ action: 'reopen' });
             try {
                 let res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
                     const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
-                        method: 'POST', credentials: 'same-origin',
+                        method: 'POST', credentials: '<REDACTED_SECRET>',
                         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
                     });
                 }
@@ -6649,14 +6649,14 @@
             const payload = JSON.stringify({ cluster_ids: ids, action: 'reopen' });
             try {
                 let res = await fetch('/api/duplicates/bulk-resolve', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
                     const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/bulk-resolve', {
-                        method: 'POST', credentials: 'same-origin',
+                        method: 'POST', credentials: '<REDACTED_SECRET>',
                         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
                     });
                 }
@@ -6680,14 +6680,14 @@
             const payload = JSON.stringify({ cluster_ids: ids, action: 'ignore' });
             try {
                 let res = await fetch('/api/duplicates/bulk-resolve', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' }, body: payload
                 });
                 if (res.status === 401 || res.status === 403) {
                     const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/bulk-resolve', {
-                        method: 'POST', credentials: 'same-origin',
+                        method: 'POST', credentials: '<REDACTED_SECRET>',
                         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
                     });
                 }
@@ -6843,7 +6843,7 @@
         // load so a new ExampleOrg sub-product can be added via env, no code change.
         // Falls back to the built-in defaults in _accountProduct if unavailable.
         function _loadRadarConfig() {
-            return fetch('/api/duplicates/config', { credentials: 'same-origin' })
+            return fetch('/api/duplicates/config', { credentials: '<REDACTED_SECRET>' })
                 .then(r => r.ok ? r.json() : null)
                 .then(d => { if (d && d.success) window._radarProductConfig = d; })
                 .catch(() => {});
@@ -7559,7 +7559,7 @@
             try {
                 var url = '/api/duplicates/multi-active-deals?segment=' + encodeURIComponent(seg) +
                     '&limit=1000' + (multiOnly ? '&multi_owner=1' : '');
-                var res = await fetch(url, { credentials: 'same-origin' });
+                var res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 data = await res.json();
             } catch (e) {
@@ -8063,7 +8063,7 @@
                 var segEl = document.getElementById('filterSegment');
                 var seg = segEl ? segEl.value : '';
                 var url = '/api/duplicates/inflation-breakdown' + (seg && seg !== 'all' ? ('?segment=' + encodeURIComponent(seg)) : '');
-                var res = await fetch(url, { credentials: 'same-origin' });
+                var res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 var d = await res.json();
                 if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
                 window._lastInflationBreakdown = d;
@@ -8248,7 +8248,7 @@
             if (live === true) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'live=1';
             var data;
             try {
-                var res = await fetch(url, { credentials: 'same-origin' });
+                var res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -8355,7 +8355,7 @@
                     var data = null;
                     try {
                         var res = await fetch('/api/duplicates/deals/doc-compliance-batch', {
-                            method: 'POST', credentials: 'same-origin',
+                            method: 'POST', credentials: '<REDACTED_SECRET>',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ deals: payload }),
                         });
@@ -8409,7 +8409,7 @@
             if (span) span.innerHTML = '<span class="text-xs text-gray-400">checking…</span>';
             var data;
             try {
-                var res = await fetch('/api/duplicates/deals/' + encodeURIComponent(id) + '/doc-compliance?stage=' + encodeURIComponent(stage), { credentials: 'same-origin' });
+                var res = await fetch('/api/duplicates/deals/' + encodeURIComponent(id) + '/doc-compliance?stage=' + encodeURIComponent(stage), { credentials: '<REDACTED_SECRET>' });
                 data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -8490,7 +8490,7 @@
             body.innerHTML = rrSkeletonRows(5);
             let data;
             try {
-                const res = await fetch('/api/duplicates/empty-records/' + kind, { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/empty-records/' + kind, { credentials: '<REDACTED_SECRET>' });
                 data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -8663,7 +8663,7 @@
             let j = null;
             try {
                 const res = await fetch('/api/duplicates/empty-records/check-batch', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ module: module, CRMProviderIds: ids }),
                 });
@@ -8853,7 +8853,7 @@
             if (cell) cell.innerHTML = '<span class="text-xs text-gray-400">checking…</span>';
             let data;
             try {
-                const res = await fetch('/api/duplicates/empty-records/' + module + '/' + encodeURIComponent(id) + '/check-empty', { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/empty-records/' + module + '/' + encodeURIComponent(id) + '/check-empty', { credentials: '<REDACTED_SECRET>' });
                 data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -8909,7 +8909,7 @@
             if (cell) cell.innerHTML = '<span class="text-xs text-gray-400">finding account…</span>';
             let sug = null;
             try {
-                const res = await fetch('/api/duplicates/empty-records/deals/' + encodeURIComponent(id) + '/account-suggestion', { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/empty-records/deals/' + encodeURIComponent(id) + '/account-suggestion', { credentials: '<REDACTED_SECRET>' });
                 const data = await res.json();
                 sug = data && data.suggestion;
             } catch (e) { /* manual still available */ }
@@ -8946,7 +8946,7 @@
             for (let attempt = 0; attempt < 2; attempt++) {
                 const headers = { 'Content-Type': 'application/json' };
                 if (adminKey) headers['x-admin-key'] = adminKey;
-                const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify(body) });
+                const res = await fetch(url, { method: 'POST', credentials: '<REDACTED_SECRET>', headers, body: JSON.stringify(body) });
                 if (res.status === 401 || res.status === 403) {
                     adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return null;
@@ -8964,7 +8964,7 @@
             body.innerHTML = rrSkeletonRows(6);
             let data;
             try {
-                const res = await fetch('/api/duplicates/empty-records/tagged-status', { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/empty-records/tagged-status', { credentials: '<REDACTED_SECRET>' });
                 data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -9017,7 +9017,7 @@
             try {
                 const res = await fetch('/api/duplicates/empty-records/dismiss-tagged', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin', body: JSON.stringify({ CRMProviderId: CRMProviderId }),
+                    credentials: '<REDACTED_SECRET>', body: JSON.stringify({ CRMProviderId: CRMProviderId }),
                 });
                 const j = await res.json();
                 if (!res.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + res.status));
@@ -9080,7 +9080,7 @@
                 // ONE request for the whole selection (this is the 429 fix).
                 const res = await fetch('/api/duplicates/empty-records/dismiss-tagged', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin', body: JSON.stringify({ CRMProviderIds: ids }),
+                    credentials: '<REDACTED_SECRET>', body: JSON.stringify({ CRMProviderIds: ids }),
                 });
                 const j = await res.json();
                 if (!res.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + res.status));
@@ -9731,7 +9731,7 @@
             try {
                 const res = await fetch('/api/duplicates/account-hints/resolve-all-with-ai', {
                     method: 'POST',
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({}),
                 });
@@ -9767,7 +9767,7 @@
             try {
                 const res = await fetch('/api/duplicates/account-hints/' + id + '/resolve-with-ai', {
                     method: 'POST',
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({}),
                 });
@@ -9891,7 +9891,7 @@
                 const params = new URLSearchParams();
                 params.set('view', view);
                 if (_sdSeg && _sdSeg !== 'all') params.set('segment', _sdSeg);
-                const res = await fetch('/api/duplicates/record-hints/stale-deals?' + params.toString(), { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/record-hints/stale-deals?' + params.toString(), { credentials: '<REDACTED_SECRET>' });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
                 const deals = data.deals || [];
@@ -10175,7 +10175,7 @@
             try {
                 const res = await fetch('/api/duplicates/record-hints/' + id + '/resolve-with-ai', {
                     method: 'POST',
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({}),
                 });
@@ -10247,7 +10247,7 @@
                 if (st) st.textContent = 'Applying ' + (i + 1) + '/' + ids.length + '…';
                 try {
                     const d = await _pfWithRateRetry(async function () {
-                        const r = await fetch('/api/duplicates/record-hints/' + _id + '/resolve-with-ai', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                        const r = await fetch('/api/duplicates/record-hints/' + _id + '/resolve-with-ai', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
                         const jj = await r.json().catch(function () { return null; });
                         if (!r.ok) throw new Error((jj && (jj.error || jj.reason)) || ('HTTP ' + r.status));
                         return jj;
@@ -10281,7 +10281,7 @@
             if (btn) { btn.disabled = true; btn.textContent = 'Resolving…'; }
             try {
                 const d = await _pfWithRateRetry(async function () {
-                    const r = await fetch('/api/duplicates/record-hints/resolve-all-with-ai', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: type }) });
+                    const r = await fetch('/api/duplicates/record-hints/resolve-all-with-ai', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: type }) });
                     const jj = await r.json().catch(function () { return null; });
                     if (!r.ok) throw new Error((jj && (jj.error || jj.reason)) || ('HTTP ' + r.status));
                     return jj;
@@ -10364,7 +10364,7 @@
                 // Segment chip (Marketplace / ExampleOrg / Example Organization) — server-side layout filter.
                 const _cmcSeg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
                 const _cmcSegQ = (_cmcSeg && _cmcSeg !== 'all') ? ('&segment=' + encodeURIComponent(_cmcSeg)) : '';
-                const res = await fetch('/api/duplicates/cluster-merge-candidates?limit=200' + _cmcSegQ, { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/cluster-merge-candidates?limit=200' + _cmcSegQ, { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 _cmcData = data;
@@ -10536,7 +10536,7 @@
             )) return;
             try {
                 let res = await fetch('/api/duplicates/clusters/merge-into', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ target_cluster_id: targetId, source_cluster_ids: sourceIds, notes: 'Same-domain cluster merge via Cluster Merge tab.' }),
                 });
@@ -10544,7 +10544,7 @@
                     const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key'));
                     if (!adminKey) return;
                     res = await fetch('/api/duplicates/clusters/merge-into', {
-                        method: 'POST', credentials: 'same-origin',
+                        method: 'POST', credentials: '<REDACTED_SECRET>',
                         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
                         body: JSON.stringify({ target_cluster_id: targetId, source_cluster_ids: sourceIds, notes: 'Same-domain cluster merge via Cluster Merge tab.' }),
                     });
@@ -10906,7 +10906,7 @@
                 const res = await fetch('/api/duplicates/preflight/parse-excel', {
                     method: 'POST',
                     body: fd,
-                    credentials: 'include',
+                    credentials: '<REDACTED_SECRET>',
                 });
                 let body = null;
                 try { body = await res.json(); } catch { body = null; }
@@ -11025,7 +11025,7 @@
             try {
                 const fd = new FormData(); fd.append('file', file);
                 const res = await fetch('/api/duplicates/preflight/reengage-excel', {
-                    method: 'POST', credentials: 'same-origin', body: fd,
+                    method: 'POST', credentials: '<REDACTED_SECRET>', body: fd,
                 });
                 const d = await res.json();
                 if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
@@ -11932,7 +11932,7 @@
             if (seg && seg !== 'all') url += '?segment=' + encodeURIComponent(seg);
             const host = document.getElementById('cpTrend');
             try {
-                const res = await fetch(url, { credentials: 'same-origin' });
+                const res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 renderCleaningProgress(await res.json());
             } catch (e) {
@@ -12386,7 +12386,7 @@
             try {
                 const seg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
                 const q = (seg && seg !== 'all') ? ('?segment=' + encodeURIComponent(seg)) : '';
-                const res = await fetch('/api/duplicates/cs-lifecycle/owners' + q, { credentials: 'same-origin' });
+                const res = await fetch('/api/duplicates/cs-lifecycle/owners' + q, { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) return;
                 payload = await res.json();
             } catch (_) { return; /* keep whatever options are there */ }
@@ -12545,7 +12545,7 @@
             if (btn) { btn.disabled = true; btn.textContent = 'Reconciling…'; }
             try {
                 const fd = new FormData(); fd.append('file', file);
-                const res = await fetch('/api/duplicates/cs-lifecycle/reconcile-ids', { method: 'POST', credentials: 'same-origin', body: fd });
+                const res = await fetch('/api/duplicates/cs-lifecycle/reconcile-ids', { method: 'POST', credentials: '<REDACTED_SECRET>', body: fd });
                 const d = await res.json();
                 if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
                 window._csReconcileData = d;
@@ -12625,7 +12625,7 @@
             if (host) host.innerHTML = '<div class="text-sm text-gray-500">Checking ' + _fn(ids.length) + ' ID(s) live against CRMProvider…</div>';
             try {
                 const res = await fetch('/api/duplicates/cs-lifecycle/verify-missing-ids', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ crmIds: ids })
                 });
@@ -14711,7 +14711,7 @@
         async function _resolvePreflightAuthorName() {
             if (window._preflightAuthorCache !== null) return window._preflightAuthorCache;
             try {
-                const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                const r = await fetch('/api/auth/me', { credentials: '<REDACTED_SECRET>' });
                 if (r.ok) {
                     const j = await r.json();
                     if (j && j.authenticated && j.user) {
@@ -15620,7 +15620,7 @@
             try {
                 const doSync = (force) => fetch('/api/duplicates/scan-CRMProvider', {
                     method: 'POST',
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ force: !!force }),
                 });

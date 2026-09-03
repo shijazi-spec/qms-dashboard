@@ -266,7 +266,7 @@
                 // never block the rest of /grc from rendering.
                 (async function loadExternalAuditsCard() {
                     try {
-                        const res = await fetch('/api/external-audits/summary', { credentials: 'same-origin' });
+                        const res = await fetch('/api/external-audits/summary', { credentials: '<REDACTED_SECRET>' });
                         if (!res.ok) return;
                         const d = await res.json();
                         const titleEl   = document.getElementById('grcNextAudit');

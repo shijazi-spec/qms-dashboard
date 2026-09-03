@@ -73,11 +73,11 @@ function makeStubClient(initialRows: RowState[]): {
 async function run(): Promise<void> {
   console.log("\n[redactHistoricalLogs] ai_pending_actions backfill sweep");
 
-  const SECRET_KEY = "<REDACTED_TOKEN>";
-  const SECRET_GH = "<REDACTED_TOKEN>";
-  const SECRET_BCRYPT = "<REDACTED_PASSWORD_HASH>";
+  const SECRET_KEY = "<REDACTED_SECRET>";
+  const SECRET_GH = "<REDACTED_SECRET>";
+  const SECRET_BCRYPT = "<REDACTED_SECRET>";
   const SECRET_JWT =
-    "<REDACTED_TOKEN>";
+    "<REDACTED_SECRET>";
   const SAFE_PROSE = "Rotate API key for CRMProvider_books integration";
 
   const initial: RowState[] = [
@@ -145,7 +145,7 @@ async function run(): Promise<void> {
   assert(
     !row2.payload_preview.includes(SECRET_JWT) &&
       !row2.payload_preview.includes(SECRET_BCRYPT) &&
-      !row2.payload_preview.includes("$2b$12$"),
+      !row2.payload_preview.includes("<REDACTED_PASSWORD_HASH>"),
     "row 2 preview no longer contains the JWT or bcrypt hash",
   );
 
@@ -307,7 +307,7 @@ async function run(): Promise<void> {
   // additional secret formats Task #102 cared about (ids 40-42 to avoid
   // colliding with the deep-leaf fixture above).
   // -----------------------------------------------------------------------
-  const innocuousSecret = "<REDACTED_TOKEN>";
+  const innocuousSecret = "<REDACTED_SECRET>";
   const innocuousGh = "<REDACTED_TOKEN>";
   const innocuousJwt =
     "<REDACTED_TOKEN>";
@@ -421,7 +421,7 @@ async function run(): Promise<void> {
   // the rejected credential.  The sweep must scrub the `error` string leaf
   // inside the JSONB column exactly as recordExecutionResult() now does.
   // -----------------------------------------------------------------------
-  const errorSecret = "<REDACTED_TOKEN>";
+  const errorSecret = "<REDACTED_SECRET>";
   const errorJwt =
     "<REDACTED_TOKEN>";
 
@@ -432,7 +432,7 @@ async function run(): Promise<void> {
       payload_preview: "Rotate key (failed)",
       execution_result: {
         data: null,
-        error: `Upstream rejected: Bearer token ${errorJwt} for key ${errorSecret}`,
+        error: `Upstream rejected: Bearer <REDACTED_TOKEN> ${errorJwt} for key ${errorSecret}`,
       },
     },
     {

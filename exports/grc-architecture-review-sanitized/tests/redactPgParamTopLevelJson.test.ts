@@ -41,7 +41,7 @@ console.log('redactPgParam — top-level JSON-string param handling (Task #764)'
 //     downstream JSONB column accepts it.
 // ---------------------------------------------------------------------------
 {
-  const mfaSecret = '<REDACTED_PHONE>-4000-8000-<REDACTED_PHONE>';
+  const mfaSecret = '<REDACTED_SECRET>';
   const param = JSON.stringify({ mfa_secret: mfaSecret, ok: true });
 
   const out = redactPgParam(param);
@@ -135,7 +135,7 @@ console.log('redactPgParam — top-level JSON-string param handling (Task #764)'
 {
   const out = redactPgParam({
     user_id: 7,
-    password_hash: '<REDACTED_PASSWORD_HASH>',
+    password_hash: '<REDACTED_SECRET>',
   }) as Record<string, unknown>;
   assert(out.user_id === 7, 'unrelated field preserved on object param');
   assert(out.password_hash === REDACTED_SENTINEL, 'password_hash sentinel on object param');

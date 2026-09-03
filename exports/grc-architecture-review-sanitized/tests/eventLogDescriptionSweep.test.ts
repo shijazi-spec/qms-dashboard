@@ -74,7 +74,7 @@ function makeStubClient(initialRows: RowState[]): {
 }
 
 const SK_KEY = '<REDACTED_TOKEN>';
-const GHP_TOKEN = '<REDACTED_TOKEN>';
+const GHP_TOKEN = '<REDACTED_SECRET>';
 const JWT =
   '<REDACTED_TOKEN>';
 const BCRYPT = '<REDACTED_PASSWORD_HASH>';

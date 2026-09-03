@@ -79,7 +79,7 @@ await suite.test("GET /api/health-index — 403 with no session and no admin key
   const handler = await buildHandler(notificationRoutes, "/api/health-index", "GET");
   // Ensure the env doesn't accidentally grant a match against a missing key.
   const prevAdmin = process.env.ADMIN_API_KEY;
-  process.env.ADMIN_API_KEY = "test-health-index-admin-key-do-not-leak-0001";
+  process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const res = await handler(makeContext({ method: "GET" }));
     suite.expectEqual(res.status, 403, "status");

@@ -379,7 +379,7 @@ export async function redactEventLogs(
       // value that is itself valid JSON and walks the parsed object
       // through both the key-based deny list and the regex pass before
       // re-stringifying. This catches secrets buried in stringified-JSON
-      // descriptions (e.g. `'{"mfa_secret":"…"}'` written via legacy
+      // descriptions (e.g. `'{"mfa_secret":"<REDACTED_SECRET>"}'` written via legacy
       // `description = JSON.stringify(payload)` patterns) that the
       // regex-only pass would miss.
       if (typeof description === "string" && description.length > 0) {
@@ -801,7 +801,7 @@ export async function redactAiPendingActions(
  *
  * Idempotency
  * -----------
- *   - The `WHERE credential_warnings = '[]'::jsonb` filter naturally
+ *   - The `WHERE credential_warnings = '<REDACTED_SECRET>'::jsonb` filter naturally
  *     excludes rows already covered by the live path or by a previous
  *     backfill pass, so re-runs ignore them.
  *   - The UPDATE re-asserts the same `'[]'::jsonb` predicate so a
@@ -836,7 +836,7 @@ export async function backfillAiPendingActionsCredentialWarnings(
       `SELECT id, action_code, payload, payload_preview
          FROM ai_pending_actions
         WHERE id > $1
-          AND credential_warnings = '[]'::jsonb
+          AND credential_warnings = '<REDACTED_SECRET>'::jsonb
         ORDER BY id ASC
         LIMIT $2`,
       [cursor, batchSize],
@@ -863,7 +863,7 @@ export async function backfillAiPendingActionsCredentialWarnings(
           `UPDATE ai_pending_actions
               SET credential_warnings = $1
             WHERE id = $2
-              AND credential_warnings = '[]'::jsonb`,
+              AND credential_warnings = '<REDACTED_SECRET>'::jsonb`,
           [JSON.stringify(warnings), row.id],
         );
         if ((res.rowCount ?? 0) > 0) {

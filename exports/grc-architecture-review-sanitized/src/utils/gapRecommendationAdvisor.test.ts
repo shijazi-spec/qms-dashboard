@@ -32,7 +32,7 @@ import { Pool, type QueryResult, type QueryResultRow } from "pg";
 
 // LLMProviderChatHelper.authHeader() throws if no key is configured; fetch is
 // mocked below so the value is never sent anywhere.
-process.env.LLMProvider_API_KEY = "test-key-not-a-real-secret-<REDACTED_PHONE>";
+process.env.LLMProvider_API_KEY = "<REDACTED_SECRET>";
 process.env.DOCUMENT_MAPPING_WEB_SEARCH = "false";
 
 let passed = 0;
@@ -52,10 +52,10 @@ const REDACTED_SENTINEL = "***REDACTED***";
 
 // Credential-shaped strings proven to be caught by the recursive regex pass
 // (mirrors changeHistoryDatabase.test.ts Section 4b).
-const GHP_TOKEN = "<REDACTED_TOKEN>";
+const GHP_TOKEN = "<REDACTED_SECRET>";
 const SK_KEY = "<REDACTED_TOKEN>";
 const JWT_TOKEN =
-  "<REDACTED_TOKEN>";
+  "<REDACTED_SECRET>";
 
 // ---------------------------------------------------------------------------
 // Mock pg.Pool.prototype.query before the module under test is imported.

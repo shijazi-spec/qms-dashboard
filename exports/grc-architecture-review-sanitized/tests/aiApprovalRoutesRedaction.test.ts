@@ -457,13 +457,13 @@ async function callRoute(
 /* Test                                                                */
 /* ------------------------------------------------------------------ */
 
-const PAYLOAD_API_KEY = '<REDACTED_TOKEN>';
+const PAYLOAD_API_KEY = '<REDACTED_SECRET>';
 const PAYLOAD_REFRESH = 'rt_LEAK_DETECTOR_REFRESH_qwertyuiopas';
 const PAYLOAD_BCRYPT =
   '<REDACTED_PASSWORD_HASH>';
 
-const RESULT_API_KEY = '<REDACTED_TOKEN>';
-const RESULT_ACCESS_TOKEN = 'eyJhbGciLEAKDETECTORACCESS_freshtoken';
+const RESULT_API_KEY = '<REDACTED_SECRET>';
+const RESULT_ACCESS_TOKEN = '<REDACTED_SECRET>';
 
 // Credential-shaped substrings interpolated into the FREE-FORM payload_preview
 // TEXT column. These reach the row through a different code path than the
@@ -472,7 +472,7 @@ const RESULT_ACCESS_TOKEN = 'eyJhbGciLEAKDETECTORACCESS_freshtoken';
 // a distinct regex in SECRET_LIKE_PATTERNS so a regression in any single
 // pattern is caught here.
 const PREVIEW_SK_KEY = '<REDACTED_TOKEN>';
-const PREVIEW_GH_TOKEN = '<REDACTED_TOKEN>';
+const PREVIEW_GH_TOKEN = '<REDACTED_SECRET>';
 const PREVIEW_JWT =
   '<REDACTED_TOKEN>';
 const PREVIEW_BCRYPT =
@@ -508,11 +508,11 @@ function findLeakedSecret(body: unknown, allowed: string[] = []): string | null 
 /* ------------------------------------------------------------------ */
 
 const APPROVE_RESULT_SK_KEY = '<REDACTED_TOKEN>';
-const APPROVE_RESULT_GH_TOKEN = '<REDACTED_TOKEN>';
-// 53 chars after `$2b$12$` so it matches the bcrypt regex exactly.
+const APPROVE_RESULT_GH_TOKEN = '<REDACTED_SECRET>';
+// 53 chars after `<REDACTED_PASSWORD_HASH>` so it matches the bcrypt regex exactly.
 const APPROVE_RESULT_BCRYPT =
   '<REDACTED_PASSWORD_HASH>';
-const APPROVE_RESULT_ACCESS_TOKEN = 'eyJhbGciLEAKDETECTORAPPROVE_freshaccesstoken';
+const APPROVE_RESULT_ACCESS_TOKEN = '<REDACTED_SECRET>';
 const APPROVE_THROW_SK_KEY = '<REDACTED_TOKEN>';
 
 const APPROVE_SECRETS = [

@@ -1308,7 +1308,7 @@
         let qualityTrendChart = null;
         async function loadQualityTrend() {
             try {
-                const resp = await fetch('/api/dashboard/quality-trend?limit=30', { credentials: 'include' });
+                const resp = await fetch('/api/dashboard/quality-trend?limit=30', { credentials: '<REDACTED_SECRET>' });
                 if (!resp.ok) return;
                 const data = await resp.json();
                 const audits = (data.audits || []).filter(a => a.compliance_pct != null);
@@ -1904,7 +1904,7 @@
                     </div>`;
                 }
                 
-                const response = await fetch(url, { credentials: 'include' });
+                const response = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 const result = await response.json();
                 
                 if (result.success && result.agents && result.agents.length > 0) {
@@ -2139,7 +2139,7 @@
                 const params = [`owner=${encodeURIComponent(ownerName)}`];
                 if (filterParams) params.push(filterParams);
                 const url = `/api/agents/performance?${params.join('&')}`;
-                const response = await fetch(url, { credentials: 'include' });
+                const response = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 const result = await response.json();
                 if (myToken !== _ownerIssuesRequestToken) return; // a newer click superseded this one
                 const ownerIssues = (result && result.ownerIssueDetails) || [];
@@ -2205,7 +2205,7 @@
             if (_categoryTrendLoading) return null;
             _categoryTrendLoading = true;
             try {
-                const res = await fetch('/api/dashboard/issues-category-trend?limit=30', { credentials: 'same-origin' });
+                const res = await fetch('/api/dashboard/issues-category-trend?limit=30', { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) return null;
                 const data = await res.json();
                 _categoryTrendCache = data;
@@ -2457,7 +2457,7 @@
                 if (filterParams) {
                     url += `?${filterParams}`;
                 }
-                const response = await fetch(url, { credentials: 'include' });
+                const response = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 if (!response.ok) {
                     return { ok: false, status: response.status, error: `HTTP ${response.status}` };
                 }
@@ -3161,7 +3161,7 @@
             let recs = recommendations || [];
 
             try {
-                const resp = await fetch('/api/audit/recommendations', { credentials: 'include' });
+                const resp = await fetch('/api/audit/recommendations', { credentials: '<REDACTED_SECRET>' });
                 const result = await resp.json();
                 if (result.success && result.recommendations && result.recommendations.length > 0) {
                     recs = result.recommendations;
@@ -3422,7 +3422,7 @@
                 const response = await fetch(`${API_BASE}/audit/trigger`, { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include'
+                    credentials: '<REDACTED_SECRET>'
                 });
                 const result = await response.json();
                 
@@ -3494,7 +3494,7 @@
                 const response = await fetch('/api/audit/trigger', { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ 
                         manualTrigger: true,
                         dateFilters: currentDateFilters

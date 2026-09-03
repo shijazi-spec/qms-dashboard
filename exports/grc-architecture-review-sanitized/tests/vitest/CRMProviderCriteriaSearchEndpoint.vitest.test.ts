@@ -38,7 +38,7 @@ beforeEach(() => {
   });
   warn.mockReset();
   vi.stubGlobal("fetch", fetchMock);
-  process.env.CRMProvider_ACCESS_TOKEN = "test-token";
+  process.env.CRMProvider_ACCESS_TOKEN = "<REDACTED_SECRET>";
   delete process.env.CRMProvider_CLIENT_ID;
   delete process.env.CRMProvider_REFRESH_TOKEN;
 });

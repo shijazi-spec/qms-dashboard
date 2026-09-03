@@ -3,7 +3,7 @@
  *
  * ROOT-CAUSE GUARD (2026-05-29): a junk CRMProvider Lead with Phone="11" was
  * auto-linking to every call whose number merely ended in "11"
- * (e.g. <REDACTED_PHONE>→ Lead "رايد الجحدلي" phone "11"). The matcher now
+ * (e.g. <REDACTED_PHONE>→ Lead "Sample User" phone "11"). The matcher now
  * requires a full 9-digit subscriber-number overlap, and the input
  * validation across every phone-match entry point was raised to the same
  * MIN_PHONE_OVERLAP_DIGITS floor so a too-short query is reported clearly

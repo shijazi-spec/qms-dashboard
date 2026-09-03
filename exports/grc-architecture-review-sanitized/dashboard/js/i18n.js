@@ -229,7 +229,7 @@
     return fetch(PREF_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
+      credentials: '<REDACTED_SECRET>',
       body: JSON.stringify({ lang: lang })
     }).then(function (r) {
       if (r && r.ok) {
@@ -348,7 +348,7 @@
    * Resolves to the language code or null if unauthenticated.
    */
   function _fetchServerPref() {
-    return fetch(PREF_ENDPOINT, { credentials: 'same-origin' })
+    return fetch(PREF_ENDPOINT, { credentials: '<REDACTED_SECRET>' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { return d && d.lang ? d.lang : null; })
       .catch(function () { return null; });

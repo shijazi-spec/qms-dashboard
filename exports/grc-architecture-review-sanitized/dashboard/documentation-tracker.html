@@ -279,7 +279,7 @@
 
         async function dtrackLoadRefs() {
             try {
-                var r = await fetch('/api/documentation-tracker/refs/dangling', { credentials: 'same-origin' });
+                var r = await fetch('/api/documentation-tracker/refs/dangling', { credentials: '<REDACTED_SECRET>' });
                 if (!r.ok) return;
                 var d = await r.json();
                 DTRACK.dangling = d.dangling || [];
@@ -329,7 +329,7 @@
 
         async function dtrackLoadOverview() {
             try {
-                var r = await fetch('/api/documentation-tracker/overview', { credentials: 'same-origin' });
+                var r = await fetch('/api/documentation-tracker/overview', { credentials: '<REDACTED_SECRET>' });
                 if (!r.ok) return;
                 DTRACK.overview = await r.json();
                 DTRACK.lastEventAt = Date.now();
@@ -357,7 +357,7 @@
                 if (link) p.set('link_status', link);
                 if (stale) p.set('stale', 'true');
                 p.set('page_size', '300');
-                var r = await fetch('/api/documentation-tracker/documents?' + p.toString(), { credentials: 'same-origin' });
+                var r = await fetch('/api/documentation-tracker/documents?' + p.toString(), { credentials: '<REDACTED_SECRET>' });
                 var d = await r.json();
                 if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
                 DTRACK.rows = d.rows || [];
@@ -369,7 +369,7 @@
 
         async function dtrackLoadOrphans() {
             try {
-                var r = await fetch('/api/documentation-tracker/orphans', { credentials: 'same-origin' });
+                var r = await fetch('/api/documentation-tracker/orphans', { credentials: '<REDACTED_SECRET>' });
                 if (!r.ok) return;
                 DTRACK.orphans = await r.json();
                 dtrackRenderOrphans();
@@ -543,7 +543,7 @@
             DTRACK.dirty[code + ':review_state'] = Date.now();
             try {
                 var r = await fetch('/api/documentation-tracker/documents/' + encodeURIComponent(code) + '/review', {
-                    method: 'PATCH', credentials: 'same-origin',
+                    method: 'PATCH', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ reviewState: next })
                 });
@@ -561,7 +561,7 @@
         async function dtrackPromote(code) {
             try {
                 var r = await fetch('/api/documentation-tracker/documents/' + encodeURIComponent(code) + '/promote', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' }, body: '{}'
                 });
                 var d = await r.json().catch(function () { return {}; });
@@ -581,7 +581,7 @@
             if (btn) btn.disabled = true;
             try {
                 var r = await fetch('/api/documentation-tracker/promote-bulk', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ registerCodes: codes })
                 });

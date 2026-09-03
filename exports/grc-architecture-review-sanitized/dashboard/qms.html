@@ -807,7 +807,7 @@
 
             async function apiCall(endpoint) {
                 const res = await fetch(endpoint, {
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                 });
                 if (res.status === 401 && !useSessionAuth) {
                     window.location.href = '/login';
@@ -1439,8 +1439,8 @@
                 try {
                     const [capa, history, evidence] = await Promise.all([
                         apiCall(`/api/qms/capa`).then(d => (d.records||[]).find(r => r.id === id)),
-                        fetch(`/api/qms/capa/${id}/history`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : {history:[]}),
-                        fetch(`/api/evidence/capa/${id}`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : {evidence:[]})
+                        fetch(`/api/qms/capa/${id}/history`, {credentials:'<REDACTED_SECRET>'}).then(r => r.ok ? r.json() : {history:[]}),
+                        fetch(`/api/evidence/capa/${id}`, {credentials:'<REDACTED_SECRET>'}).then(r => r.ok ? r.json() : {evidence:[]})
                     ]);
                     if (!capa) { document.getElementById('detailModalContent').innerHTML = '<p class="text-red-500">' + ExampleOrgI18n.t('dyn.qms.record_not_found') + '</p>'; return; }
                     renderCapaDetail(capa, history.history||[], evidence.evidence||[]);
@@ -1531,8 +1531,8 @@
                 try {
                     const [nc, history, evidence] = await Promise.all([
                         apiCall(`/api/qms/nc`).then(d => (d.records||[]).find(r => r.id === id)),
-                        fetch(`/api/qms/nc/${id}/history`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : {history:[]}),
-                        fetch(`/api/evidence/nc/${id}`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : {evidence:[]})
+                        fetch(`/api/qms/nc/${id}/history`, {credentials:'<REDACTED_SECRET>'}).then(r => r.ok ? r.json() : {history:[]}),
+                        fetch(`/api/evidence/nc/${id}`, {credentials:'<REDACTED_SECRET>'}).then(r => r.ok ? r.json() : {evidence:[]})
                     ]);
                     if (!nc) { document.getElementById('detailModalContent').innerHTML = '<p class="text-red-500">' + ExampleOrgI18n.t('dyn.qms.record_not_found') + '</p>'; return; }
                     renderNcDetail(nc, history.history||[], evidence.evidence||[]);
@@ -1604,7 +1604,7 @@
                 if (!approver) { alert(ExampleOrgI18n.t('dyn.qms.enter_name_email')); return; }
                 try {
                     const res = await fetch(`/api/qms/capa/${id}/approve-closure`, {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'<REDACTED_SECRET>',
                         body: JSON.stringify({approved_by: approver})
                     });
                     if (res.ok) { alert(ExampleOrgI18n.t('dyn.qms.closure_approved')); showCapaDetail(id); loadCapa(); }
@@ -1617,7 +1617,7 @@
                 if (!approver) { alert(ExampleOrgI18n.t('dyn.qms.enter_name_email')); return; }
                 try {
                     const res = await fetch(`/api/qms/nc/${id}/approve-closure`, {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'<REDACTED_SECRET>',
                         body: JSON.stringify({approved_by: approver})
                     });
                     if (res.ok) { alert(ExampleOrgI18n.t('dyn.qms.closure_approved')); showNcDetail(id); loadNc(); }
@@ -1632,7 +1632,7 @@
                 if (!reviewer) { alert(ExampleOrgI18n.t('dyn.qms.enter_reviewer')); return; }
                 try {
                     const res = await fetch(`/api/qms/capa/${id}/effectiveness`, {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'<REDACTED_SECRET>',
                         body: JSON.stringify({result, evidence, reviewed_by: reviewer})
                     });
                     if (res.ok) { alert(ExampleOrgI18n.t('dyn.qms.effectiveness_recorded')); showCapaDetail(id); loadCapa(); }
@@ -1646,7 +1646,7 @@
                 if (!filename || !uploader) { alert(ExampleOrgI18n.t('dyn.qms.enter_filename_name')); return; }
                 try {
                     const res = await fetch('/api/evidence', {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'<REDACTED_SECRET>',
                         body: JSON.stringify({entityType, entityId, filename, uploadedBy: uploader, fileType: filename.split('.').pop()||'unknown'})
                     });
                     if (res.ok) {
@@ -1659,7 +1659,7 @@
             async function deleteEvidence(id) {
                 if (!confirm(ExampleOrgI18n.t('dyn.qms.confirm_remove_evidence'))) return;
                 try {
-                    await fetch(`/api/evidence/${id}`, {method:'DELETE', credentials:'same-origin'});
+                    await fetch(`/api/evidence/${id}`, {method:'DELETE', credentials:'<REDACTED_SECRET>'});
                     closeDetailModal();
                 } catch(e) {}
             }
@@ -1691,7 +1691,7 @@
 
             async function exportCSV(type) {
                 try {
-                    const res = await fetch(buildQmsExportUrl(type), {credentials:'same-origin'});
+                    const res = await fetch(buildQmsExportUrl(type), {credentials:'<REDACTED_SECRET>'});
                     if (!res.ok) { alert(ExampleOrgI18n.t('dyn.qms.export_failed')); return; }
                     const blob = await res.blob();
                     const url = URL.createObjectURL(blob);
@@ -1728,7 +1728,7 @@
                 if (!confirm(ExampleOrgI18n.t('dyn.qms.confirm_bulk_update', { count: ids.length, type: type.toUpperCase(), status: newStatus }))) return;
                 try {
                     const res = await fetch(`/api/qms/${type}/bulk-update`, {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'<REDACTED_SECRET>',
                         body: JSON.stringify({ids, updates:{status: newStatus}})
                     });
                     if (res.ok) {

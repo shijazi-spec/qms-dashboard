@@ -398,7 +398,7 @@
             loading.classList.remove('hidden');
             tbody.innerHTML = '';
             try {
-                const res = await fetch('/api/fraud/incidents?limit=200', { credentials: 'include' });
+                const res = await fetch('/api/fraud/incidents?limit=200', { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 allIncidents = Array.isArray(data.incidents) ? data.incidents : [];
@@ -415,7 +415,7 @@
         async function loadEscalationMatrix() {
             const container = document.getElementById('escMatrixContainer');
             try {
-                const res = await fetch('/api/fraud/escalation', { credentials: 'include' });
+                const res = await fetch('/api/fraud/escalation', { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 const rows = Array.isArray(data.matrix) ? data.matrix : [];
@@ -585,7 +585,7 @@
                 const res = await fetch('/api/fraud/incidents', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify(payload),
                 });
                 if (!res.ok) {
@@ -639,7 +639,7 @@
                 const res = await fetch('/api/fraud/incidents/' + encodeURIComponent(idRef) + '/close', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify(payload),
                 });
                 if (!res.ok) {

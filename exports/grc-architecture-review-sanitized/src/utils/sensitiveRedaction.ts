@@ -529,7 +529,7 @@ export function redactSensitiveDeep(payload: any, fieldName?: string): any {
   if (typeof payload === "string") {
     // Detect string values that are themselves JSON (e.g. an audit row's
     // `description` whose author serialised an object into prose like
-    // `{"mfa_secret":"..."}`). Without this branch the string is treated as
+    // `{"mfa_secret":"<REDACTED_SECRET>"}`). Without this branch the string is treated as
     // an opaque leaf and only the regex/heuristic pass runs against it,
     // missing key-name-based deny-list hits like `mfa_secret` whose VALUE is
     // a plain UUID with no distinctive shape (Task #741).

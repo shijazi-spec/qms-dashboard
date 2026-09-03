@@ -144,7 +144,7 @@ async function bodyOf(res: Response): Promise<any> {
     );
     assert(
       typeof inner === 'string' && !inner.includes('Bearer <REDACTED_TOKEN>'),
-      'nested Bearer token is removed from the response body',
+      'nested Bearer <REDACTED_TOKEN> is removed from the response body',
     );
   }
 

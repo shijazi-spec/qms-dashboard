@@ -34,7 +34,7 @@ const ROUTES: Array<[string, string]> = [
 for (const [p, m] of ROUTES) {
   await suite.test(`${m} ${p} — 403 without admin key or admin role`, async () => {
     const original = process.env.ADMIN_API_KEY;
-    process.env.ADMIN_API_KEY = "integration-test-health-pulse-2026";
+    process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
     try {
       const handler = await buildHandler(healthPulseRoutes, p, m);
       const res = await handler(makeContext({ method: m }));

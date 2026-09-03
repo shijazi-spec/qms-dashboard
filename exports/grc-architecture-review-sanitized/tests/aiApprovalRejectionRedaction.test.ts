@@ -280,7 +280,7 @@ async function callRoute(
 // the reviewer's rejection prose. A regression in any single pattern is
 // caught here.
 const REASON_SK_KEY = '<REDACTED_TOKEN>';
-const REASON_GH_TOKEN = '<REDACTED_TOKEN>';
+const REASON_GH_TOKEN = '<REDACTED_SECRET>';
 const REASON_JWT =
   '<REDACTED_TOKEN>';
 const REASON_BCRYPT =
@@ -525,7 +525,7 @@ async function run(): Promise<void> {
 
   // One credential-shaped substring per regex family this guard covers.
   const ERR_SK_KEY = '<REDACTED_TOKEN>';
-  const ERR_GH_TOKEN = '<REDACTED_TOKEN>';
+  const ERR_GH_TOKEN = '<REDACTED_SECRET>';
   const ERR_JWT =
     '<REDACTED_TOKEN>';
   const ERR_BCRYPT =

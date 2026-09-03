@@ -503,7 +503,7 @@
 
         async function initAuth() {
             try {
-                const res = await fetch('/api/auth/me', { credentials: 'include' });
+                const res = await fetch('/api/auth/me', { credentials: '<REDACTED_SECRET>' });
                 const data = await res.json();
                 if (data.authenticated) {
                     useSessionAuth = true;
@@ -1143,7 +1143,7 @@
             try {
                 let currentEmail = null;
                 try {
-                    const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+                    const meRes = await fetch('/api/auth/me', { credentials: '<REDACTED_SECRET>' });
                     if (meRes.ok) {
                         const me = await meRes.json();
                         currentEmail = (me?.user?.email || me?.email || '').toLowerCase() || null;

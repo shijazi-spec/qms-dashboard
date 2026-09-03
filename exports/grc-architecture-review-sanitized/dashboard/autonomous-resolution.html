@@ -311,7 +311,7 @@
         function gradeClass(g) { return 'grade-g' + (g || 1); }
 
         async function getJSON(url) {
-            var r = await fetch(url, { credentials: 'same-origin' });
+            var r = await fetch(url, { credentials: '<REDACTED_SECRET>' });
             if (r.status === 401) { window.location.href = '/login'; return null; }
             return r.json();
         }
@@ -407,7 +407,7 @@
             if (confirmMsg && !confirm(confirmMsg)) { loadStatus(); return; }
             try {
                 var r = await fetch('/api/duplicates/autonomous/mode', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(patch)
                 });
@@ -581,7 +581,7 @@
                 catch (e) { alert('Case signature must be valid JSON, e.g. {"layoutSplit":true}'); return; }
             }
             var r = await fetch('/api/duplicates/autonomous/rules', {
-                method: 'POST', credentials: 'same-origin',
+                method: 'POST', credentials: '<REDACTED_SECRET>',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ module: module, decision: decision, caseSignature: caseSignature })
             });
@@ -596,7 +596,7 @@
 
         async function toggleRule(id, enabled) {
             var r = await fetch('/api/duplicates/autonomous/rules/' + id, {
-                method: 'PATCH', credentials: 'same-origin',
+                method: 'PATCH', credentials: '<REDACTED_SECRET>',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
             });
@@ -610,7 +610,7 @@
             btn.disabled = true; btn.textContent = 'Running…';
             try {
                 var r = await fetch('/api/duplicates/autonomous/run-now', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' }, body: '{}'
                 });
                 var data = await r.json();
@@ -649,7 +649,7 @@
             btn.disabled = true; btn.textContent = 'Sending…';
             try {
                 var r = await fetch('/api/duplicates/autonomous/ChatProvider-test', {
-                    method: 'POST', credentials: 'same-origin'
+                    method: 'POST', credentials: '<REDACTED_SECRET>'
                 });
                 var data = await r.json();
                 if (data && data.ok) {
@@ -672,7 +672,7 @@
             btn.disabled = true; btn.textContent = 'Cleaning…';
             try {
                 var r = await fetch('/api/duplicates/autonomous/cleanup-ChatProvider-pings', {
-                    method: 'POST', credentials: 'same-origin'
+                    method: 'POST', credentials: '<REDACTED_SECRET>'
                 });
                 var data = await r.json();
                 if (data && data.success) {
@@ -732,7 +732,7 @@
             if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
             try {
                 var res = await fetch('/api/duplicates/autonomous/weekly-brief/send', {
-                    method: 'POST', credentials: 'same-origin'
+                    method: 'POST', credentials: '<REDACTED_SECRET>'
                 });
                 var data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
@@ -752,7 +752,7 @@
             if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
             try {
                 var res = await fetch('/api/duplicates/autonomous/digest/send', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sinceHours: 8 })
                 });
@@ -814,7 +814,7 @@
             if (btn) { btn.disabled = true; btn.textContent = 'Clearing…'; }
             try {
                 var res = await fetch('/api/duplicates/autonomous/clear-shadow-proposals', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' }, body: '{}'
                 });
                 var data = await res.json();
@@ -947,7 +947,7 @@
             if (!note || !note.trim()) return;
             try {
                 var r = await fetch('/api/duplicates/hygiene-rules/flag', {
-                    method: 'POST', credentials: 'same-origin',
+                    method: 'POST', credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tab: tab, ruleId: ruleId, note: note.trim() })
                 });

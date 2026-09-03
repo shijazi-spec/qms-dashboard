@@ -690,7 +690,7 @@
                     markSelected(cachedRating);
                 } else {
                     fetch('/api/consultant/feedback/' + encodeURIComponent(messageId), {
-                        credentials: 'same-origin'
+                        credentials: '<REDACTED_SECRET>'
                     }).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
                         if (data && data.rating) {
                             ratingCacheSet(messageId, data.rating);
@@ -772,7 +772,7 @@
                 fetch('/api/consultant/feedback', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify(item)
                 }).then(function(r) {
                     if (r.ok) feedbackQueueRemove(item.messageId);
@@ -806,7 +806,7 @@
             fetch('/api/consultant/feedback', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
+                credentials: '<REDACTED_SECRET>',
                 body: JSON.stringify(payload)
             }).then(function(r) {
                 if (r.ok) feedbackQueueRemove(messageId);
@@ -822,7 +822,7 @@
                         if (!item) return;
                         fetch('/api/consultant/feedback', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            credentials: 'same-origin', body: JSON.stringify(item)
+                            credentials: '<REDACTED_SECRET>', body: JSON.stringify(item)
                         }).then(function(r) {
                             if (r.ok) feedbackQueueRemove(messageId);
                             else if (retries < 4) retry();
@@ -861,7 +861,7 @@
                 var res = await fetch('/api/ai-ops/feedback', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify(payload)
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1077,7 +1077,7 @@
                 var response = await fetch('/api/consultant/chat/stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ message: text, threadId: getThreadId() })
                 });
 
@@ -1167,7 +1167,7 @@
                     try {
                         var fallback = await fetch('/api/consultant/chat', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            credentials: 'same-origin',
+                            credentials: '<REDACTED_SECRET>',
                             body: JSON.stringify({ message: text, threadId: getThreadId() })
                         });
                         // 429 — same per-user limiter that hit the
@@ -1338,7 +1338,7 @@
 
             try {
                 var response = await fetch('/api/consultant/scan', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin'
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: '<REDACTED_SECRET>'
                 });
                 hideTyping();
                 clearInterval(progressTimer);
@@ -1394,7 +1394,7 @@
 
         async function loadAlerts() {
             try {
-                var response = await fetch('/api/consultant/alerts?limit=8&status=open', { credentials: 'same-origin' });
+                var response = await fetch('/api/consultant/alerts?limit=8&status=open', { credentials: '<REDACTED_SECRET>' });
                 if (!response.ok) throw new Error();
                 var data = await response.json();
                 var alerts = data.alerts || data || [];
@@ -1452,7 +1452,7 @@
                 }
                 var res = await fetch('/api/consultant/alerts/' + id + '/' + action, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin', body: JSON.stringify(bodyPayload)
+                    credentials: '<REDACTED_SECRET>', body: JSON.stringify(bodyPayload)
                 });
                 if (res.ok) { loadAlerts(); updateAlertBadge(); }
             } catch(e) {}
@@ -1464,7 +1464,7 @@
 
         async function updateAlertBadge() {
             try {
-                var response = await fetch('/api/consultant/alerts/count', { credentials: 'same-origin' });
+                var response = await fetch('/api/consultant/alerts/count', { credentials: '<REDACTED_SECRET>' });
                 if (!response.ok) return;
                 var data = await response.json();
                 var count = data.count || 0;
@@ -1518,7 +1518,7 @@
                 // follows the user across devices (fire-and-forget).
                 fetch('/api/consultant/threads/' + encodeURIComponent(tid) + '/meta', {
                     method: 'POST',
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title: title, messages: msgs.length })
                 }).catch(function(){});
@@ -1559,7 +1559,7 @@
             // devices/browsers. The browser's localStorage is only an offline
             // fallback + fast cache — the server thread list is the source of
             // truth (Sample User 2026-08-05).
-            fetch('/api/consultant/threads', { credentials: 'same-origin' })
+            fetch('/api/consultant/threads', { credentials: '<REDACTED_SECRET>' })
                 .then(function(r){ return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
                 .then(function(data){
                     var threads = (data && data.threads) || [];
@@ -1600,7 +1600,7 @@
                 // (fire-and-forget; ownership is enforced on the server).
                 fetch('/api/consultant/threads/' + encodeURIComponent(tid), {
                     method: 'DELETE',
-                    credentials: 'same-origin'
+                    credentials: '<REDACTED_SECRET>'
                 }).catch(function(){});
                 // If the deleted chat is the one on screen, reset to a fresh chat
                 // WITHOUT re-saving it (clearChat would re-add it to history).
@@ -1687,7 +1687,7 @@
                 if (resolutionFilter === 'auto' || resolutionFilter === 'manual') {
                     url += '&resolution=' + resolutionFilter;
                 }
-                var res = await fetch(url, { credentials: 'same-origin' });
+                var res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 var data = await res.json();
                 var alerts = data.alerts || [];
 
@@ -1835,7 +1835,7 @@
 
         async function loadWelcomeData() {
             try {
-                var res = await fetch('/api/consultant/alerts/count', { credentials: 'same-origin' });
+                var res = await fetch('/api/consultant/alerts/count', { credentials: '<REDACTED_SECRET>' });
                 var data = await res.json();
                 var el = document.getElementById('welcomeAlertCount');
                 if (el) el.textContent = data.count || 0;
@@ -1862,7 +1862,7 @@
             var el = document.getElementById('adamMemoryContent');
             if (!el) return;
             try {
-                var res = await fetch('/api/consultant/memory', { credentials: 'same-origin' });
+                var res = await fetch('/api/consultant/memory', { credentials: '<REDACTED_SECRET>' });
                 var data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
                 var mem = (data && data.memory ? String(data.memory) : '').trim();
@@ -1877,7 +1877,7 @@
             if (!confirm(msg)) return;
             var el = document.getElementById('adamMemoryContent');
             try {
-                var res = await fetch('/api/consultant/memory/clear', { method: 'POST', credentials: 'same-origin' });
+                var res = await fetch('/api/consultant/memory/clear', { method: 'POST', credentials: '<REDACTED_SECRET>' });
                 var data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
                 if (el) el.textContent = 'Memory cleared.';
@@ -2077,7 +2077,7 @@
             if (!tid) return;
             try {
                 var res = await fetch('/api/consultant/history/' + encodeURIComponent(tid), {
-                    credentials: 'same-origin'
+                    credentials: '<REDACTED_SECRET>'
                 });
                 if (!res.ok) return;
                 var data = await res.json();
@@ -2193,7 +2193,7 @@
     }
 
     function fetchAndRenderApprovalCard(code, container) {
-        fetch('/api/ai/approvals/' + encodeURIComponent(code), { credentials: 'same-origin' })
+        fetch('/api/ai/approvals/' + encodeURIComponent(code), { credentials: '<REDACTED_SECRET>' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) { renderApprovalCard(data, container); })
             .catch(function () {
@@ -2260,7 +2260,7 @@
 
     function silentRefreshApprovalCard(code, container) {
         if (!document.body.contains(container)) return;
-        fetch('/api/ai/approvals/' + encodeURIComponent(code), { credentials: 'same-origin' })
+        fetch('/api/ai/approvals/' + encodeURIComponent(code), { credentials: '<REDACTED_SECRET>' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {
                 if (!data || !data.action || !document.body.contains(container)) return;
@@ -2530,7 +2530,7 @@
         if (adminKey) headers['x-admin-key'] = adminKey;
         fetch('/api/ai/approvals/' + encodeURIComponent(code) + '/' + action, {
             method: 'POST',
-            credentials: 'same-origin',
+            credentials: '<REDACTED_SECRET>',
             headers: headers,
             body: JSON.stringify(payload)
         })

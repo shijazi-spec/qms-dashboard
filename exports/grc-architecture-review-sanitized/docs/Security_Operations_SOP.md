@@ -435,7 +435,7 @@ A second helper, `redactSecretLikeStrings(input)` in `src/utils/eventLogsDatabas
 
 | Pattern | Example match |
 |---------|---------------|
-| `bcrypt` | `$2a$…` / `$2b$…` / `$2y$…` 60-char hash |
+| `bcrypt` | `<REDACTED_PASSWORD_HASH>` / `<REDACTED_PASSWORD_HASH>` / `<REDACTED_PASSWORD_HASH>` 60-char hash |
 | `JWT` | three base64url segments separated by dots, header begins `eyJ` |
 | `sk-key` | LLMProvider / Anthropic / PaymentProvider `sk-…`, `sk_live_…`, `sk-ant-…`, `sk-proj-…` |
 | `PaymentProvider-pk` | PaymentProvider publishable / restricted `pk_live_…`, `pk_test_…`, `rk_live_…` |

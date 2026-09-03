@@ -1883,7 +1883,7 @@
                 const res = await fetch(`/api/calls/${callId}/status`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ status: requested }),
                 });
                 if (res.status === 401 || res.status === 403) {
@@ -1973,7 +1973,7 @@
         async function applyImportChannelStatuses() {
             let catalog;
             try {
-                const res = await fetch('/api/calls/evaluation/import-sources', { credentials: 'same-origin' });
+                const res = await fetch('/api/calls/evaluation/import-sources', { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) {
                     console.warn('[calls] import-sources fetch returned', res.status, '— leaving UI defaults in place');
                     return;
@@ -2384,7 +2384,7 @@
                 if (params.start) qs.set('start', params.start);
                 if (params.end) qs.set('end', params.end);
                 const url = '/api/calls/weekly-report' + (qs.toString() ? '?' + qs.toString() : '');
-                const res = await fetch(url, { credentials: 'same-origin' });
+                const res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) {
                     throw new Error('HTTP ' + res.status);
                 }
@@ -3001,7 +3001,7 @@
                     const url = '/api/calls/weekly-report/agent/'
                         + encodeURIComponent(agentEmail)
                         + (qs.toString() ? '?' + qs.toString() : '');
-                    const res = await fetch(url, { credentials: 'same-origin' });
+                    const res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
                     // Token check before consuming the body — a stale
                     // fetch shouldn't even spend cycles on JSON parse.
                     if (myToken !== _wrDrillFetchToken) return;
@@ -3077,9 +3077,9 @@
                 // bound the existing Coaching tab uses.
                 const [pendingRes, awaitingRes] = await Promise.all([
                     fetch('/api/coaching-plans?status=pending_delivery&limit=200',
-                        { credentials: 'same-origin' }),
+                        { credentials: '<REDACTED_SECRET>' }),
                     fetch('/api/coaching-plans?status=awaiting_verification&limit=200',
-                        { credentials: 'same-origin' }),
+                        { credentials: '<REDACTED_SECRET>' }),
                 ]);
                 if (!pendingRes.ok || !awaitingRes.ok) {
                     throw new Error('HTTP ' + (pendingRes.ok ? awaitingRes.status : pendingRes.status));
@@ -3721,7 +3721,7 @@
                     const res = await fetch('/api/calls/retry-unlinked-auto-link', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: 'same-origin',
+                        credentials: '<REDACTED_SECRET>',
                         body: JSON.stringify({ limit: 50, after_id: cursor }),
                     });
                     if (!res.ok) {
@@ -3801,7 +3801,7 @@
                     const res = await fetch('/api/calls/backfill-via-contact-names', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: 'same-origin',
+                        credentials: '<REDACTED_SECRET>',
                         body: JSON.stringify({ limit: 50, after_id: cursor }),
                     });
                     if (!res.ok) {
@@ -7309,7 +7309,7 @@
                 // join cost of the heavier /api/calls?limit=500 call.
                 // sort=created_at orders by upload time (not call date) so
                 // a back-dated manual upload still surfaces as fresh.
-                const res = await fetch('/api/calls?limit=25&sort=created_at', { credentials: 'same-origin' });
+                const res = await fetch('/api/calls?limit=25&sort=created_at', { credentials: '<REDACTED_SECRET>' });
                 if (loadId !== window._recentUploadsLoadId) return;
 
                 if (res.status === 429) {
@@ -7572,7 +7572,7 @@
         async function ensureEvalReviewerIdentity() {
             if (evalCurrentUserEmail !== null) return;
             try {
-                const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                const res = await fetch('/api/auth/me', { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) { evalCurrentUserEmail = ''; return; }
                 const data = await res.json();
                 evalCurrentUserEmail = String(data?.email || data?.user?.email || '').toLowerCase();
@@ -7913,7 +7913,7 @@
                 const res = await fetch(`/api/calls/${callId}/sdr-evaluation/review`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ review_status: 'approved', review_notes: null }),
                 });
                 if (res.status === 401 || res.status === 403) {
@@ -7995,7 +7995,7 @@
                 try {
                     const evalRes = await fetch(`/api/calls/${callId}/sdr-evaluation`, {
                         cache: 'no-store',
-                        credentials: 'same-origin',
+                        credentials: '<REDACTED_SECRET>',
                     });
                     if (evalRes.ok) {
                         const evalData = await evalRes.json();
@@ -9054,7 +9054,7 @@
                 const res = await fetch('/api/quality-scorecards', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({
                         name: document.getElementById('sc-name').value,
                         description: document.getElementById('sc-description').value,
@@ -9082,7 +9082,7 @@
                 const res = await fetch(`/api/quality-scorecards/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({ is_active: active })
                 });
                 const data = await res.json();

@@ -484,7 +484,7 @@
         try {
             fetch(RECENT_DOWNLOADS_API, {
                 method: 'POST',
-                credentials: 'same-origin',
+                credentials: '<REDACTED_SECRET>',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ entries: entries }),
             }).catch(function () { /* ignore network errors */ });
@@ -496,7 +496,7 @@
         try {
             fetch(RECENT_DOWNLOADS_API, {
                 method: 'DELETE',
-                credentials: 'same-origin',
+                credentials: '<REDACTED_SECRET>',
             }).catch(function () { /* ignore network errors */ });
         } catch (_) { /* ignore */ }
     }
@@ -542,7 +542,7 @@
         try {
             fetch(RECENT_DOWNLOADS_API, {
                 method: 'GET',
-                credentials: 'same-origin',
+                credentials: '<REDACTED_SECRET>',
             }).then(function (res) {
                 if (!res.ok) return null;
                 return res.json();
@@ -2308,7 +2308,7 @@
         var url = estimateUrlFor(exportUrl);
         if (!url) return null;
         try {
-            var init = Object.assign({ credentials: 'same-origin' }, fetchInit || {});
+            var init = Object.assign({ credentials: '<REDACTED_SECRET>' }, fetchInit || {});
             var resp = await fetch(url, init);
             if (!resp.ok) return null;
             // Prefer JSON body; fall back to headers if the server short-circuited.
@@ -2583,7 +2583,7 @@
         options = options || {};
         var button = options.button || null;
         var userOnProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
-        var fetchInit = Object.assign({ credentials: 'same-origin' }, options.fetchInit || {});
+        var fetchInit = Object.assign({ credentials: '<REDACTED_SECRET>' }, options.fetchInit || {});
         var showProgressUI = options.showProgressUI !== false;
         var showToastUI = options.showToast !== false;
         var cancellable = options.cancellable !== false;

@@ -123,13 +123,13 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
 }
 
 {
-  const r = redactSensitiveFields({ id: 1, password_hash: "$2b$12$hashedvalue", email: "<REDACTED_EMAIL>" });
+  const r = redactSensitiveFields({ id: 1, password_hash: "<REDACTED_SECRET>", email: "<REDACTED_EMAIL>" });
   assert(r.password_hash === REDACTED_SENTINEL, "exact: password_hash redacted");
   assert(r.email === "<REDACTED_EMAIL>", "exact: email preserved");
 }
 
 {
-  const r = redactSensitiveFields({ id: 7, mfa_secret: "TOTP_BASE32_SECRET" });
+  const r = redactSensitiveFields({ id: 7, mfa_secret: "<REDACTED_SECRET>" });
   assert(r.mfa_secret === REDACTED_SENTINEL, "exact: mfa_secret redacted");
   assert(r.id === 7, "exact: id preserved");
 }
@@ -138,7 +138,7 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
   const r = redactSensitiveFields({
     access_token: "<REDACTED_SECRET>",
     refresh_token: "<REDACTED_SECRET>",
-    CRMProvider_refresh_token: "CRMProvider_rt_secret",
+    CRMProvider_refresh_token: "<REDACTED_SECRET>",
   });
   assert(r.access_token === REDACTED_SENTINEL, "suffix _token: access_token redacted");
   assert(r.refresh_token === REDACTED_SENTINEL, "suffix _token: refresh_token redacted");
@@ -146,7 +146,7 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
 }
 
 {
-  const r = redactSensitiveFields({ api_key: "<REDACTED_SECRET>", LLMProvider_api_key: "<REDACTED_TOKEN>" });
+  const r = redactSensitiveFields({ api_key: "<REDACTED_SECRET>", LLMProvider_api_key: "<REDACTED_SECRET>" });
   assert(r.api_key === REDACTED_SENTINEL, "suffix _key: api_key redacted");
   assert(r.LLMProvider_api_key === REDACTED_SENTINEL, "suffix _key: LLMProvider_api_key redacted");
 }
@@ -168,7 +168,7 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
 {
   const r = redactSensitiveFields({
     mfa_code: "123456",
-    mfa_token: "otptoken",
+    mfa_token: "<REDACTED_SECRET>",
     mfa_enabled: true,
     role: "user",
   });
@@ -180,7 +180,7 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
 
 {
   const r = redactSensitiveFields({
-    user: { email: "<REDACTED_EMAIL>", password_hash: "$2b$12$xyz", mfa_secret: "secret" },
+    user: { email: "<REDACTED_EMAIL>", password_hash: "<REDACTED_SECRET>", mfa_secret: "<REDACTED_SECRET>" },
     meta: { module: "auth" },
   });
   assert(r.user.password_hash === REDACTED_SENTINEL, "nested: password_hash redacted");
@@ -199,7 +199,7 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
 }
 
 assert(
-  redactSensitiveFields("$2b$12$hashedvalue", "password_hash") === REDACTED_SENTINEL,
+  redactSensitiveFields("<REDACTED_PASSWORD_HASH>", "password_hash") === REDACTED_SENTINEL,
   "fieldName: password_hash plain string redacted",
 );
 assert(
@@ -220,7 +220,7 @@ assert(
 );
 
 {
-  const r = redactSensitiveFields({ PASSWORD: "<REDACTED_SECRET>", Password_Hash: "hash", API_KEY: "<REDACTED_SECRET>" });
+  const r = redactSensitiveFields({ PASSWORD: "<REDACTED_SECRET>", Password_Hash: "<REDACTED_SECRET>", API_KEY: "<REDACTED_SECRET>" });
   assert(r.PASSWORD === REDACTED_SENTINEL, "case: UPPERCASE PASSWORD redacted");
   assert(r.Password_Hash === REDACTED_SENTINEL, "case: MixedCase Password_Hash redacted");
   assert(r.API_KEY === REDACTED_SENTINEL, "case: UPPERCASE API_KEY redacted");
@@ -327,13 +327,13 @@ console.log("\n=== deepRedactSecretLikeStrings — unit tests ===\n");
 console.log("\n=== logEvent — write-path integration test ===\n");
 
 const SECRETS = {
-  password_hash: "<REDACTED_PASSWORD_HASH>_IJ",
-  plain_password: "<REDACTED_EMAIL>!",
-  mfa_secret: "<REDACTED_MFA_SECRET>",
+  password_hash: "<REDACTED_SECRET>",
+  plain_password: "<REDACTED_SECRET>",
+  mfa_secret: "<REDACTED_SECRET>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
   api_key: "<REDACTED_SECRET>",
-  bot_token: "<REDACTED_TOKEN>",
+  bot_token: "<REDACTED_SECRET>",
   client_secret: "<REDACTED_SECRET>",
 } as const;
 
@@ -403,7 +403,7 @@ await runWritePathTest(
       updated_at: "2026-04-24T00:00:00Z",
     },
   },
-  [SECRETS.password_hash, "$2b$12$", SECRETS.plain_password, SECRETS.mfa_secret],
+  [SECRETS.password_hash, "<REDACTED_PASSWORD_HASH>", SECRETS.plain_password, SECRETS.mfa_secret],
 );
 
 await runWritePathTest(

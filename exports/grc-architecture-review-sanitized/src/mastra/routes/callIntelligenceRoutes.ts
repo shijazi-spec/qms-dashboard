@@ -954,7 +954,7 @@ export const callIntelligenceRoutes = [
   //
   // The historical Phone-suffix matcher had no minimum-overlap floor, so
   // a junk Lead with Phone="11" matched every call whose number ended in
-  // "11" (e.g. <REDACTED_PHONE>→ Lead "رايد الجحدلي" phone "11"). The
+  // "11" (e.g. <REDACTED_PHONE>→ Lead "Sample User" phone "11"). The
   // matcher is now fixed (9-digit overlap), but the BAD LINKS it already
   // wrote are still persisted on call_records.lead_id/deal_id — and the
   // auto-linker skips already-linked rows, so they never self-heal.

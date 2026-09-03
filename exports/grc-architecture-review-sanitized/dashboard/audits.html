@@ -789,7 +789,7 @@
         async function loadProgramme() {
             try {
                 const year = new Date().getFullYear();
-                const res = await fetch(`/api/audit-programme?year=${year}`, { credentials: 'same-origin' });
+                const res = await fetch(`/api/audit-programme?year=${year}`, { credentials: '<REDACTED_SECRET>' });
                 const panel = document.getElementById('programmePanel');
                 if (!res.ok) {
                     document.getElementById('programmeSubtitle').textContent =
@@ -861,7 +861,7 @@
             const res = await fetch('/api/audit-programme', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
+                credentials: '<REDACTED_SECRET>',
                 body: JSON.stringify({ programme_year: year, title: title }),
             });
             if (res.ok) {
@@ -877,7 +877,7 @@
             const res = await fetch('/api/audit-programme/' + id + '/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
+                credentials: '<REDACTED_SECRET>',
                 body: JSON.stringify({}),
             });
             if (res.ok) {
@@ -950,7 +950,7 @@
             const fd = new FormData(form);
             const res = await fetch('/api/manual-audit-intake', {
                 method: 'POST',
-                credentials: 'same-origin',
+                credentials: '<REDACTED_SECRET>',
                 body: fd,
             });
             if (!res.ok) {

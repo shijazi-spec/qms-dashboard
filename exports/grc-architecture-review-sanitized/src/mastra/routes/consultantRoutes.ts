@@ -797,7 +797,7 @@ export const consultantRoutes = [
               ? "AI_INTEGRATIONS_LLMProvider_API_KEY"
               : process.env.LLMProvider_API_KEY
                 ? "LLMProvider_API_KEY"
-                : "none";
+                : "<REDACTED_SECRET>";
           const mask = (k?: string) =>
             k ? `${k.slice(0, 3)}…${k.slice(-4)} (len ${k.length})` : "(unset)";
 

@@ -284,7 +284,7 @@ async function run(): Promise<void> {
 
   const row3 = stub1.rows.find((r) => r.id === 3)!;
   assert(
-    !row3.prompt_preview!.includes("$2b$12$"),
+    !row3.prompt_preview!.includes("<REDACTED_PASSWORD_HASH>"),
     "row 3 prompt_preview no longer contains the bcrypt hash prefix",
   );
   assert(
@@ -463,7 +463,7 @@ async function run(): Promise<void> {
     !combinedRow.error_message!.includes(SK_KEY) &&
       !combinedRow.prompt_preview!.includes(GH_PAT) &&
       !combinedRow.tool_input_preview!.includes(JWT) &&
-      !combinedRow.tool_output_preview!.includes("$2b$12$") &&
+      !combinedRow.tool_output_preview!.includes("<REDACTED_PASSWORD_HASH>") &&
       !JSON.stringify(combinedRow.metadata).includes(AWS_KEY),
     "combined-fixture: every leaky column (including metadata) scrubbed in the single UPDATE",
   );

@@ -118,7 +118,7 @@ async function main(): Promise<void> {
   // bcrypt hash as a plain string
   const bcryptStr = redactToolPayloadPreview(BCRYPT_HASH);
   assert(
-    !!bcryptStr && !bcryptStr.includes('$2b$12$'),
+    !!bcryptStr && !bcryptStr.includes('<REDACTED_PASSWORD_HASH>'),
     'bcrypt hash in plain string is redacted',
   );
 
@@ -159,7 +159,7 @@ async function main(): Promise<void> {
     user: { email: '<REDACTED_EMAIL>', password_hash: BCRYPT_HASH },
   });
   assert(
-    !!nestedBcrypt && !nestedBcrypt.includes('$2b$12$'),
+    !!nestedBcrypt && !nestedBcrypt.includes('<REDACTED_PASSWORD_HASH>'),
     'bcrypt hash nested under password_hash field is redacted',
   );
 
@@ -213,7 +213,7 @@ async function main(): Promise<void> {
 
   const bcryptPrompt = redactPromptPreview(`Stored hash is ${BCRYPT_HASH} for the user`);
   assert(
-    !bcryptPrompt.includes('$2b$12$'),
+    !bcryptPrompt.includes('<REDACTED_PASSWORD_HASH>'),
     'bcrypt hash in prompt text is redacted',
   );
 

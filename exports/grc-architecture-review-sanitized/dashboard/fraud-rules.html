@@ -290,7 +290,7 @@
             tbody.innerHTML = '';
 
             try {
-                const res = await fetch('/api/fraud/rules', { credentials: 'include' });
+                const res = await fetch('/api/fraud/rules', { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 allRules = Array.isArray(data.rules) ? data.rules : [];
@@ -455,14 +455,14 @@
                     res = await fetch('/api/fraud/rules/' + encodeURIComponent(editId), {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
+                        credentials: '<REDACTED_SECRET>',
                         body: JSON.stringify(payload),
                     });
                 } else {
                     res = await fetch('/api/fraud/rules', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
+                        credentials: '<REDACTED_SECRET>',
                         body: JSON.stringify(payload),
                     });
                 }
@@ -483,7 +483,7 @@
             try {
                 const res = await fetch('/api/fraud/rules/' + encodeURIComponent(idOrPublic), {
                     method: 'DELETE',
-                    credentials: 'include',
+                    credentials: '<REDACTED_SECRET>',
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 await loadFraudRules();

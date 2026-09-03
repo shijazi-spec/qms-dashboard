@@ -38,7 +38,7 @@ const fakeRow = {
   request_text: "Set up demo env", assignee_name: "Engineer",
   assignee_email: "<REDACTED_EMAIL>", due_date: null, status: "sent",
   response_note: null, responded_at: null, follow_up_at: null,
-  last_reminder_at: null, action_token: "a".repeat(64), created_by: "Sample User",
+  last_reminder_at: null, action_token: "<REDACTED_SECRET>".repeat(64), created_by: "Sample User",
   created_at: new Date(), updated_at: new Date(),
 };
 

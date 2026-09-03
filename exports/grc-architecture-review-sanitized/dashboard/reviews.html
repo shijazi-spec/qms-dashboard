@@ -200,7 +200,7 @@
         if (year) url += `&year=${year}`;
 
         try {
-            const res = await fetch(url, { credentials: 'include' });
+            const res = await fetch(url, { credentials: '<REDACTED_SECRET>' });
             const data = await res.json();
             currentReviews = data.reviews || [];
             renderReviews();
@@ -213,7 +213,7 @@
 
     async function loadActionSummary() {
         try {
-            const res = await fetch(`${API}/api/management-reviews/actions/summary`, { credentials: 'include' });
+            const res = await fetch(`${API}/api/management-reviews/actions/summary`, { credentials: '<REDACTED_SECRET>' });
             const data = await res.json();
             document.getElementById('totalActions').textContent = data.total || 0;
             document.getElementById('openActions').textContent = data.open || 0;
@@ -268,7 +268,7 @@
 
     async function editReview(id) {
         try {
-            const res = await fetch(`${API}/api/management-reviews/${id}`, { credentials: 'include' });
+            const res = await fetch(`${API}/api/management-reviews/${id}`, { credentials: '<REDACTED_SECRET>' });
             const review = await res.json();
             document.getElementById('modalTitle').textContent = ExampleOrgI18n.t('dyn.reviews.edit_review_title');
             document.getElementById('editId').value = id;
@@ -302,7 +302,7 @@
         const url = id ? `${API}/api/management-reviews/${id}` : `${API}/api/management-reviews`;
         const method = id ? 'PUT' : 'POST';
         try {
-            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, credentials: '<REDACTED_SECRET>', body: JSON.stringify(body) });
             if (!res.ok) throw new Error('Save failed');
             hideModal('createModal');
             loadReviews();
@@ -312,7 +312,7 @@
     async function gatherInputs(id) {
         if (!confirm(ExampleOrgI18n.t('dyn.reviews.confirm_gather_inputs'))) return;
         try {
-            const res = await fetch(`${API}/api/management-reviews/${id}/gather-inputs`, { method: 'POST', credentials: 'include' });
+            const res = await fetch(`${API}/api/management-reviews/${id}/gather-inputs`, { method: 'POST', credentials: '<REDACTED_SECRET>' });
             const data = await res.json();
             if (data.success) {
                 alert(ExampleOrgI18n.t('dyn.reviews.inputs_gathered'));
@@ -323,7 +323,7 @@
 
     async function showDetail(id) {
         try {
-            const res = await fetch(`${API}/api/management-reviews/${id}`, { credentials: 'include' });
+            const res = await fetch(`${API}/api/management-reviews/${id}`, { credentials: '<REDACTED_SECRET>' });
             const r = await res.json();
             document.getElementById('detailTitle').textContent = `${r.review_number} — ${r.title}`;
 
@@ -405,7 +405,7 @@
         if (!desc || !assigned || !due) { alert(ExampleOrgI18n.t('dyn.reviews.fill_action_fields')); return; }
         try {
             const res = await fetch(`${API}/api/management-reviews/${reviewId}/actions`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: '<REDACTED_SECRET>',
                 body: JSON.stringify({ description: desc, assigned_to: assigned, due_date: due, priority })
             });
             if (!res.ok) throw new Error();
@@ -417,7 +417,7 @@
     async function completeAction(actionId) {
         try {
             const res = await fetch(`${API}/api/management-reviews/actions/${actionId}`, {
-                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: '<REDACTED_SECRET>',
                 body: JSON.stringify({ status: 'completed', completion_date: new Date().toISOString().split('T')[0] })
             });
             if (!res.ok) throw new Error();

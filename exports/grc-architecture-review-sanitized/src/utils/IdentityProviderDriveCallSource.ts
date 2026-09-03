@@ -11,7 +11,7 @@
 import { createSign } from "node:crypto";
 
 const DRIVE_API_BASE = "<REDACTED_URL>";
-const DRIVE_TOKEN_URL = "<REDACTED_URL>";
+const DRIVE_TOKEN_URL = "<REDACTED_SECRET>";
 const SCOPE_DRIVE_READONLY = "<REDACTED_URL>";
 
 export type DriveAuthMode = "HostingPlatform_connector" | "service_account" | "oauth_refresh" | "none";
@@ -252,7 +252,7 @@ export async function getDriveFileMetadata(file_id: string): Promise<DriveFile |
 }
 
 /**
- * Return a temporary direct-download URL token (the Drive `alt=media` URL plus a bearer token).
+ * Return a temporary direct-download URL token (the Drive `alt=media` URL plus a Bearer <REDACTED_TOKEN>).
  * Caller can pass these to the existing transcription pipeline, or use `downloadDriveFile` to
  * pull the bytes server-side.
  */

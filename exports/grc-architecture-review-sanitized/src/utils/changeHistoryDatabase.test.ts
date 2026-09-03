@@ -70,8 +70,8 @@ const { logNCChange, logCAPAChange } = await import("./changeHistoryDatabase");
 const REDACTED_SENTINEL = "***REDACTED***";
 
 const SECRETS = {
-  password_hash: "<REDACTED_PASSWORD_HASH>_IJ",
-  mfa_secret: "<REDACTED_MFA_SECRET>",
+  password_hash: "<REDACTED_SECRET>",
+  mfa_secret: "<REDACTED_SECRET>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
   api_key: "<REDACTED_SECRET>",
@@ -621,10 +621,10 @@ console.log(
   "\n=== credential-shaped substrings inside non-sensitive nested fields ===\n",
 );
 
-const GHP_TOKEN = "<REDACTED_TOKEN>";
+const GHP_TOKEN = "<REDACTED_SECRET>";
 const SK_KEY = "<REDACTED_TOKEN>";
 const JWT_TOKEN =
-  "<REDACTED_TOKEN>";
+  "<REDACTED_SECRET>";
 
 {
   captured.length = 0;

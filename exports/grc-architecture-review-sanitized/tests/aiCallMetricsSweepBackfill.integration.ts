@@ -58,12 +58,12 @@ function assert(condition: boolean, label: string): void {
 const AGENT_PREFIX = "ai-metrics-sweep-test-";
 
 // One credential per detector family — mirrors the unit-test fixtures.
-const SECRET_KEY    = "<REDACTED_TOKEN>";
-const SECRET_GH     = "<REDACTED_TOKEN>";
-const SECRET_BCRYPT = "<REDACTED_PASSWORD_HASH>";
+const SECRET_KEY    = "<REDACTED_SECRET>";
+const SECRET_GH     = "<REDACTED_SECRET>";
+const SECRET_BCRYPT = "<REDACTED_SECRET>";
 const SECRET_JWT =
-  "<REDACTED_TOKEN>";
-const SECRET_AKIA   = "<REDACTED_TOKEN>";
+  "<REDACTED_SECRET>";
+const SECRET_AKIA   = "<REDACTED_SECRET>";
 
 const SAFE_PROMPT      = "Summarise the latest non-conformance for tenant Example Organization-corp";
 const SAFE_TOOL_INPUT  = '{"action":"list","limit":10}';
@@ -165,7 +165,7 @@ async function main(): Promise<void> {
       id: idGhBcryptAkia,
       label: "ghp_… + bcrypt + AKIA across input/output previews",
       shouldRedact: true,
-      forbiddenSubstrings: [SECRET_GH, SECRET_BCRYPT, "$2b$12$", SECRET_AKIA],
+      forbiddenSubstrings: [SECRET_GH, SECRET_BCRYPT, "<REDACTED_PASSWORD_HASH>", SECRET_AKIA],
       preservedSubstrings: ['"action":"list"'],
     });
 

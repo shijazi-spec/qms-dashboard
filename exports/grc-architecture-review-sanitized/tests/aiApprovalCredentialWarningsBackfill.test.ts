@@ -75,7 +75,7 @@ function makeStubClient(initialRows: RowState[]): {
 
   const query = async (sql: string, params: ReadonlyArray<unknown> = []) => {
     if (/^\s*SELECT/i.test(sql)) {
-      // Honour the `WHERE id > $1 AND credential_warnings = '[]'::jsonb`
+      // Honour the `WHERE id > $1 AND credential_warnings = '<REDACTED_SECRET>'::jsonb`
       // contract so the test exercises the same row-set the production
       // SELECT would.
       const cursor = params[0] as number;
@@ -101,7 +101,7 @@ function makeStubClient(initialRows: RowState[]): {
       updates.push({ sql, params });
       const id = params[1] as number;
       const target = rows.find((r) => r.id === id);
-      // Honour the `AND credential_warnings = '[]'::jsonb` predicate so
+      // Honour the `AND credential_warnings = '<REDACTED_SECRET>'::jsonb` predicate so
       // the test reflects the live optimistic-concurrency guard.
       if (
         target &&
@@ -127,10 +127,10 @@ async function run(): Promise<void> {
   // Token-prefix shapes the redactor would normally catch — used here as
   // *post-redaction residue* the detector should still flag (the sweep
   // exists to surface tell-tale shapes the redactor missed).
-  const SECRET_KEY = "<REDACTED_TOKEN>";
-  const SECRET_GH = "<REDACTED_TOKEN>";
+  const SECRET_KEY = "<REDACTED_SECRET>";
+  const SECRET_GH = "<REDACTED_SECRET>";
   const SECRET_JWT =
-    "<REDACTED_TOKEN>";
+    "<REDACTED_SECRET>";
   const SAFE_PROSE = "Rotate API key for CRMProvider_books integration";
 
   const initial: RowState[] = [

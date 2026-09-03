@@ -64,7 +64,7 @@
 import crypto from "node:crypto";
 
 const TEST_ADMIN_KEY = "test-admin-key-static-page-role-gate";
-const TEST_SESSION_SECRET = "test-session-secret-static-page-role-gate";
+const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
 
 process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;

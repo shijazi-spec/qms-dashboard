@@ -98,7 +98,7 @@ function makeStub<TRow extends { id: number }>(
   return { client: { query }, updates, rows: stored };
 }
 
-const MFA_SECRET_UUID = "<REDACTED_PHONE>-4000-8000-<REDACTED_PHONE>";
+const MFA_SECRET_UUID = "<REDACTED_SECRET>";
 
 // =============================================================================
 // 1. event_logs — description column carrying a stringified-JSON secret

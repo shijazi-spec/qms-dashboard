@@ -338,7 +338,7 @@
 
     async function loadSummary() {
       try {
-        const res = await fetch('/api/external-audits/summary', { credentials: 'same-origin' });
+        const res = await fetch('/api/external-audits/summary', { credentials: '<REDACTED_SECRET>' });
         if (!res.ok) return;
         const d = await res.json();
         document.getElementById('sumUpcoming').textContent      = d.upcoming ?? 0;
@@ -360,7 +360,7 @@
       const tbody = document.getElementById('auditsTbody');
       tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + ExampleOrgI18n.t('dyn.ext_audits.loading') + '</td></tr>';
       try {
-        const res = await fetch('/api/external-audits?' + qs.toString(), { credentials: 'same-origin' });
+        const res = await fetch('/api/external-audits?' + qs.toString(), { credentials: '<REDACTED_SECRET>' });
         const data = await res.json();
         const rows = data.rows || [];
         if (!rows.length) {
@@ -397,7 +397,7 @@
       const tbody = document.getElementById('certsTbody');
       tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">' + ExampleOrgI18n.t('dyn.ext_audits.loading') + '</td></tr>';
       try {
-        const res = await fetch('/api/external-audits/certificates', { credentials: 'same-origin' });
+        const res = await fetch('/api/external-audits/certificates', { credentials: '<REDACTED_SECRET>' });
         const data = await res.json();
         const rows = data.rows || [];
         if (!rows.length) {
@@ -423,7 +423,7 @@
       const sel = document.getElementById('readinessAuditSelector');
       const certSel = document.getElementById('certAuditSelector');
       try {
-        const res = await fetch('/api/external-audits', { credentials: 'same-origin' });
+        const res = await fetch('/api/external-audits', { credentials: '<REDACTED_SECRET>' });
         const data = await res.json();
         const rows = data.rows || [];
         const opts = rows.map(r => `<option value="${r.id}">${esc(r.audit_code)} — ${esc(r.title)}</option>`).join('');
@@ -441,7 +441,7 @@
       }
       body.innerHTML = '<p class="text-center text-gray-400 py-8">' + ExampleOrgI18n.t('dyn.ext_audits.loading_readiness') + '</p>';
       try {
-        const res = await fetch('/api/external-audits/' + id, { credentials: 'same-origin' });
+        const res = await fetch('/api/external-audits/' + id, { credentials: '<REDACTED_SECRET>' });
         const data = await res.json();
         const checklist = data.checklist || [];
         const newItemForm = `
@@ -498,7 +498,7 @@
       const res = await fetch('/api/external-audits/' + auditId + '/checklist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
+        credentials: '<REDACTED_SECRET>',
         body: JSON.stringify({
           requirement: fd.get('requirement'),
           category: fd.get('category'),
@@ -516,7 +516,7 @@
       const res = await fetch('/api/external-audits/checklist/' + itemId, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
+        credentials: '<REDACTED_SECRET>',
         body: JSON.stringify({ status }),
       });
       if (res.ok) {
@@ -538,7 +538,7 @@
       const res = await fetch('/api/external-audits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
+        credentials: '<REDACTED_SECRET>',
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -566,7 +566,7 @@
       const res = await fetch('/api/external-audits/' + auditId + '/certificates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
+        credentials: '<REDACTED_SECRET>',
         body: JSON.stringify(payload),
       });
       if (res.ok) {

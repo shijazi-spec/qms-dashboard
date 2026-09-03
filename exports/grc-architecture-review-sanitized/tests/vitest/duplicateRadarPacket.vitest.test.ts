@@ -76,7 +76,7 @@ describe("packetFilename", () => {
   // streaming-download tray would show a different name than what landed
   // on disk — confusing for the operator.
   test("non-ASCII (Arabic) name produces ASCII slug matching the client", () => {
-    const slug = packetFilename("أحمد امشاه");
+    const slug = packetFilename("Sample User");
     expect(slug).toMatch(/^duplicate-radar-packet-[a-zA-Z0-9_-]+\.xlsx$/);
   });
 });

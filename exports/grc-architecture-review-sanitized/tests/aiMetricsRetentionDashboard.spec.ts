@@ -380,7 +380,7 @@ test.describe('AI metrics retention — admin dashboard flow (Task #551)', () =>
     const putStatus = await page.evaluate(async (path) => {
       const r = await fetch(path, {
         method: 'PUT',
-        credentials: 'same-origin',
+        credentials: '<REDACTED_SECRET>',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ retention_days: 42, note: 'task-551 lock probe' }),
       });

@@ -61,7 +61,7 @@
 import crypto from "node:crypto";
 
 const TEST_ADMIN_KEY = "test-admin-key-static-page-setup-guard";
-const TEST_SESSION_SECRET = "test-session-secret-static-page-setup-guard";
+const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
 
 // SESSION_SECRET is required at module load time by `verifySession` in
 // authRoutes.ts (used via `getSessionFromCookie`). Set it before any

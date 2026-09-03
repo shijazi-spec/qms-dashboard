@@ -253,7 +253,7 @@
             loading.classList.remove('hidden');
             tbody.innerHTML = '';
             try {
-                const res = await fetch('/api/fraud/countries', { credentials: 'include' });
+                const res = await fetch('/api/fraud/countries', { credentials: '<REDACTED_SECRET>' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 allCountries = Array.isArray(data.countries) ? data.countries : [];
@@ -402,14 +402,14 @@
                     res = await fetch('/api/fraud/countries/' + encodeURIComponent(editIso), {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
+                        credentials: '<REDACTED_SECRET>',
                         body: JSON.stringify(payload),
                     });
                 } else {
                     res = await fetch('/api/fraud/countries', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
+                        credentials: '<REDACTED_SECRET>',
                         body: JSON.stringify(payload),
                     });
                 }

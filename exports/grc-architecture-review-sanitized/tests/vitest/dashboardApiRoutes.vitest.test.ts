@@ -413,8 +413,8 @@ describe("GET /api/integrations/status", () => {
     await withEnv(
       {
         CRMProvider_CLIENT_ID: "cid",
-        CRMProvider_CLIENT_SECRET: "csec",
-        CRMProvider_REFRESH_TOKEN: "rtok",
+        CRMProvider_CLIENT_SECRET: "<REDACTED_SECRET>",
+        CRMProvider_REFRESH_TOKEN: "<REDACTED_SECRET>",
         CRMProvider_ACCESS_TOKEN: undefined,
         IdentityProvider_CLIENT_ID: "IdentityProvider-cid",
         IdentityProvider_CLIENT_EMAIL: undefined,

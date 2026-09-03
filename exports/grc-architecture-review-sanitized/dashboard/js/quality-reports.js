@@ -65,7 +65,7 @@
     async function qrLoadHub() {
         var host = document.getElementById('qrHub');
         try {
-            var res = await fetch('/api/quality-reports/bus', { credentials: 'same-origin' });
+            var res = await fetch('/api/quality-reports/bus', { credentials: '<REDACTED_SECRET>' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
             var bus = (data && data.bus) || [];
@@ -88,7 +88,7 @@
             // Lazy hub status line: fetch each card's summary in the background
             // and fill in its status line once it arrives (never blocks the grid render).
             qrCurrentBUs.forEach(function (b) {
-                fetch('/api/quality-reports/bus/' + encodeURIComponent(b.bu_key) + '/summary', { credentials: 'same-origin' })
+                fetch('/api/quality-reports/bus/' + encodeURIComponent(b.bu_key) + '/summary', { credentials: '<REDACTED_SECRET>' })
                     .then(function (r) { return r.ok ? r.json() : null; })
                     .then(function (h) {
                         if (!h) return;
@@ -116,7 +116,7 @@
 
     /** Shows the admin toggle button only for roles that can actually write (server still re-checks on every call). */
     function qrCheckAdminAccess() {
-        fetch('/api/auth/me', { credentials: 'same-origin' })
+        fetch('/api/auth/me', { credentials: '<REDACTED_SECRET>' })
             .then(function (r) { return r.ok ? r.json() : { authenticated: false }; })
             .then(function (data) {
                 var role = (data && data.authenticated && data.user && data.user.role) || null;
@@ -190,7 +190,7 @@
             kpi_bu_name: qrVal('qr-kpi-' + buKey), kpi_owner_name: qrVal('qr-kpiowner-' + buKey)
         };
         try {
-            var res = await fetch('/api/quality-reports/bus', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            var res = await fetch('/api/quality-reports/bus', { method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!res.ok) {
                 var err = await res.json().catch(function () { return {}; });
                 qrStatus('Save failed: ' + (err.error || ('HTTP ' + res.status)));
@@ -207,7 +207,7 @@
         var raw = qrVal('qr-owners-' + buKey) || '';
         var owners = raw.split(/[\s,;]+/).map(function (s) { return s.trim(); }).filter(Boolean);
         try {
-            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buId) + '/owners', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owners: owners }) });
+            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buId) + '/owners', { method: 'PUT', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owners: owners }) });
             if (!res.ok) {
                 var err = await res.json().catch(function () { return {}; });
                 qrStatus('Owners save failed: ' + (err.error || ('HTTP ' + res.status)));
@@ -260,7 +260,7 @@
             if (ctrl) ctrl.abort();
         }, QR_REPORT_TIMEOUT_MS);
         try {
-            var opts = { credentials: 'same-origin' };
+            var opts = { credentials: '<REDACTED_SECRET>' };
             if (ctrl) opts.signal = ctrl.signal;
             var q = qrPeriod ? ('?quarter=' + qrPeriod.quarter + '&year=' + qrPeriod.year) : '';
             var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey) + q, opts);
@@ -305,7 +305,7 @@
         if (!host) { host = document.createElement('div'); host.id = 'qrEmailModal'; document.body.appendChild(host); }
         host.innerHTML = '<div class="rr-modal-backdrop"><div class="rr-modal"><div class="text-sm text-gray-500">Loading preview…</div></div></div>';
         try {
-            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey) + '/email-preview', { credentials: 'same-origin' });
+            var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey) + '/email-preview', { credentials: '<REDACTED_SECRET>' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var d = await res.json();
             var iframe = '<iframe sandbox="" class="qr-email-frame" srcdoc="' + escAttr(d.html) + '"></iframe>';
@@ -334,7 +334,7 @@
     window.qrEmailSend = async function (buKey, mode) {
         try {
             var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey) + '/email', {
-                method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: mode })
+                method: 'POST', credentials: '<REDACTED_SECRET>', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: mode })
             });
             var d = await res.json().catch(function () { return {}; });
             if (res.ok && d.success) {
@@ -830,7 +830,7 @@
         };
         try {
             var res = await fetch('/api/quality-reports/bus/' + encodeURIComponent(buKey) + '/kpis', {
-                method: 'POST', credentials: 'same-origin',
+                method: 'POST', credentials: '<REDACTED_SECRET>',
                 headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
             });
             var d = await res.json().catch(function () { return {}; });

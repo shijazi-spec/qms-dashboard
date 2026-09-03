@@ -333,7 +333,7 @@
             const r = await fetch('/api/compliance/regulations/' + body.regulation_id + '/audit-runs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
+                credentials: '<REDACTED_SECRET>',
                 body: JSON.stringify(body)
             });
             const data = await r.json().catch(function () { return {}; });
@@ -441,7 +441,7 @@
                 await fetch('/api/compliance/audit-runs/' + encodeURIComponent(activeRun.id) + '/items/' + it.id, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
+                    credentials: '<REDACTED_SECRET>',
                     body: JSON.stringify({
                         outcome: it.outcome,
                         evidence_notes: it.evidence_notes,
@@ -457,7 +457,7 @@
             const r = await fetch('/api/compliance/audit-runs/' + encodeURIComponent(activeRun.id) + '/finalize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
+                credentials: '<REDACTED_SECRET>',
                 body: '{}'
             });
             const data = await r.json().catch(function () { return {}; });

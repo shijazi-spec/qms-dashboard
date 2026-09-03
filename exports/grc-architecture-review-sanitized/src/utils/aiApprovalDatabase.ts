@@ -993,12 +993,12 @@ export async function recordExecutionResult(
   //      keys (access_token, api_key, password, …).
   //   2. Regex deny list       — scrubs credential-shaped substrings from
   //      every string leaf regardless of key name (e.g. a `curl_example`
-  //      field containing a Bearer token, or an `error_detail` that echoes
+  //      field containing a Bearer <REDACTED_TOKEN>, or an `error_detail` that echoes
   //      the new secret).
   const safeExecutionResult = JSON.stringify({
     data: redactSensitiveDeep(result.data),
     // `error` is a plain string but can still contain credential-shaped text —
-    // e.g. an upstream runtime error that echoes a bearer token or new key.
+    // e.g. an upstream runtime error that echoes a Bearer <REDACTED_TOKEN> or new key.
     // Apply the same regex deny-list used for payload_preview so the string
     // leaf is scrubbed before it hits the database (Task #102).
     error: result.error != null ? (redactSecretLikeStrings(result.error) as string) : result.error,
