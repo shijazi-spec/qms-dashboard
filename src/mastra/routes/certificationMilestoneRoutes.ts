@@ -405,10 +405,24 @@ async function loadEvidenceCounts(db: typeof pool): Promise<Record<string, Evide
   // quarter-start date is computed once in this impure layer (never inside
   // the pure resolver) and only ever used inside a WHERE filter, never
   // SELECTed back as a bare DATE value.
+  //
+  // 5.2 per spec §3.1: "refreshed" is `last_review_date` within the quarter
+  // OR a `risk_assessment_history` row proving a re-assessment happened —
+  // a risk can be re-assessed (history row written by updateRisk() in
+  // riskDatabase.ts) without last_review_date itself ever being touched.
+  // Same $1 quarterStart reused for the EXISTS check, never a second
+  // quarter-computation method.
   try {
     const r = await db.query(
       `SELECT COUNT(*)::int AS total,
-              COUNT(*) FILTER (WHERE last_review_date >= $1::date)::int AS reviewed_recent,
+              COUNT(*) FILTER (
+                WHERE last_review_date >= $1::date
+                   OR EXISTS (
+                        SELECT 1 FROM risk_assessment_history rah
+                         WHERE rah.risk_id = enterprise_risks.id
+                           AND rah.assessment_date >= $1::date
+                      )
+              )::int AS reviewed_recent,
               COUNT(*) FILTER (WHERE treatment_strategy IS NOT NULL)::int AS treated
          FROM enterprise_risks WHERE status = 'open'`,
       [quarterStart],

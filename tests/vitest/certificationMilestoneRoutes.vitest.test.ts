@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import {
   groupMilestonesByType,
   buildActionsPayload,
   canToggleAction,
+  certificationMilestoneRoutes,
   type CertificationActionRow,
   type EvidenceCounts,
 } from "../../src/mastra/routes/certificationMilestoneRoutes";
@@ -14,6 +15,81 @@ import {
   type RoadmapRow,
 } from "../../src/utils/certificationRoadmap";
 import { getRouteRoleAllowlist, canAccessRoute } from "../../src/utils/rbacMiddleware";
+import { buildHandler, makeContext } from "../_helpers/fakeContext";
+
+// --- Handler-level 409 guard test scaffolding -----------------------------
+//
+// The route module imports `sharedPool` statically (not via a per-request
+// `await import("pg")` like tablefApiRoutes), so the DB is stubbed by
+// mocking `../../src/utils/sharedPool` directly — same pattern already
+// proven in tests/vitest/scheduledTasksSyncOrder.vitest.test.ts. `pg.Pool`
+// is not touched here because certificationMilestoneRoutes never imports it.
+//
+// Auth goes through the real (dynamically-imported) `rbacMiddleware`, which
+// the global `tests/vitest/_setup/rbacAuthShim.ts` setup file already shims
+// to synthesize an admin `SessionUser` from an `X-Admin-Key` header matching
+// `process.env.ADMIN_API_KEY` — no live `platform_users` lookup needed, and
+// no bespoke rbacMiddleware mock in this file (which would blank out the
+// real `getRouteRoleAllowlist`/`canAccessRoute` the RBAC describe block
+// above already exercises unmocked).
+//
+// `eventLogsDatabase` is mocked because its module-load creates a real
+// `pg.Pool`; the toggle handler's `logEvent(...).catch(() => {})` call would
+// otherwise attempt a real (if fast-failing) connection on every write —
+// same reasoning as kpiRoutes.vitest.test.ts / dashboardApiRoutes.vitest.test.ts.
+const { mockClientQuery, mockRelease, mockConnect } = vi.hoisted(() => {
+  const clientQuery = vi.fn();
+  const release = vi.fn();
+  return {
+    mockClientQuery: clientQuery,
+    mockRelease: release,
+    mockConnect: vi.fn(async () => ({ query: clientQuery, release })),
+  };
+});
+
+vi.mock("../../src/utils/sharedPool", () => ({
+  sharedPool: {
+    query: vi.fn(async () => ({ rows: [] })),
+    connect: mockConnect,
+  },
+}));
+
+vi.mock("../../src/utils/eventLogsDatabase", () => ({
+  logEvent: vi.fn(async () => null),
+}));
+
+const TEST_ADMIN_KEY = "vitest-cert-milestone-admin-key-2026";
+process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+const ADMIN_HEADERS = { "X-Admin-Key": TEST_ADMIN_KEY };
+
+/**
+ * Builds the sequenced `client.query` implementation the toggle handler's
+ * transaction drives: BEGIN -> SELECT ... FOR UPDATE -> [UPDATE ...
+ * RETURNING, on the manual path only] -> milestone re-select ->
+ * loadEvidenceCounts()'s many evidence queries -> UPDATE
+ * certification_milestones -> COMMIT/ROLLBACK. Every loadEvidenceCounts
+ * query is safe to answer with `{ rows: [] }` (verified against every
+ * branch in certificationMilestoneRoutes.ts: each defaults to an empty-table
+ * shape when `rows[0]` is undefined), so a single catch-all fallback covers
+ * all of them without enumerating every evidence source here.
+ */
+function toggleQueryImpl(opts: { existingRow: any; updatedRow?: any }) {
+  return async (sql: string) => {
+    const s = String(sql);
+    if (s.includes("FOR UPDATE")) {
+      return { rows: [opts.existingRow] };
+    }
+    if (s.includes("UPDATE certification_actions") && s.includes("RETURNING")) {
+      return { rows: opts.updatedRow ? [opts.updatedRow] : [] };
+    }
+    if (s.includes("FROM certification_actions") && s.includes("WHERE milestone_key")) {
+      return { rows: opts.updatedRow ? [opts.updatedRow] : [] };
+    }
+    // BEGIN / COMMIT / ROLLBACK / UPDATE certification_milestones / every
+    // loadEvidenceCounts() evidence query.
+    return { rows: [] };
+  };
+}
 
 describe("groupMilestonesByType", () => {
   it("buckets rows into the three plan sections", () => {
@@ -304,5 +380,130 @@ describe("RBAC — POST /api/certification-actions/:action_key/toggle is registe
 
   it("denies POST to the whole route tree by default if unmatched (sanity check on deny-by-default)", () => {
     expect(canAccessRoute("admin", "/api/certification-actions", "POST")).toBe(false);
+  });
+});
+
+describe("POST /api/certification-actions/:action_key/toggle — handler-level 409 guard", () => {
+  // `canToggleAction` is unit-tested above in isolation, but nothing there
+  // proves the ROUTE HANDLER actually calls it. If someone deleted the
+  // `if (!canToggleAction(...))` invocation inside the handler (leaving the
+  // pure helper itself untouched and its own tests green), an `auto` action
+  // would become human-assertable through the API — exactly the write-path
+  // hole the evidence model exists to prevent (design spec §4.4). These
+  // tests exercise the real handler via `createHandler()`, mocking only the
+  // DB layer (`sharedPool`) and letting the real dynamically-imported
+  // `rbacMiddleware`/`canToggleAction` run.
+
+  beforeEach(() => {
+    mockClientQuery.mockReset();
+    mockConnect.mockClear();
+    mockRelease.mockClear();
+  });
+
+  it("refuses to toggle an `auto` action with 409, before any write", async () => {
+    mockClientQuery.mockImplementation(
+      toggleQueryImpl({
+        existingRow: {
+          action_key: "ACT-2026-12-RISK-REFRESH",
+          milestone_key: "MS-5",
+          verification_mode: "auto",
+          done_at: null,
+        },
+      }),
+    );
+
+    const handler = await buildHandler(
+      certificationMilestoneRoutes,
+      "/api/certification-actions/:action_key/toggle",
+      "POST",
+    );
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: ADMIN_HEADERS,
+        params: { action_key: "ACT-2026-12-RISK-REFRESH" },
+      }),
+    );
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      error:
+        "This action is verified automatically from evidence and cannot be toggled by hand",
+    });
+
+    // The guard must fire BEFORE the write — no UPDATE ... SET done_at was
+    // ever issued. This is what actually fails if the guard's invocation is
+    // deleted from the handler: the flow would instead reach this UPDATE and
+    // return 200.
+    const wroteDoneAt = mockClientQuery.mock.calls.some(
+      ([sql]) =>
+        String(sql).includes("UPDATE certification_actions") &&
+        String(sql).includes("SET done_at"),
+    );
+    expect(wroteDoneAt).toBe(false);
+
+    // Rolled back, not committed.
+    expect(mockClientQuery.mock.calls.some(([sql]) => String(sql).trim() === "ROLLBACK")).toBe(
+      true,
+    );
+    expect(mockClientQuery.mock.calls.some(([sql]) => String(sql).trim() === "COMMIT")).toBe(
+      false,
+    );
+    expect(mockRelease).toHaveBeenCalled();
+  });
+
+  it("happy path is unaffected: a `manual` action is allowed through to the write", async () => {
+    const updatedRow = {
+      action_key: "ACT-2026-09-SIGNED",
+      milestone_key: "MS-2",
+      sort_order: 2,
+      action_text: "…and signed",
+      owner: "GRC",
+      verification_mode: "manual",
+      evidence_source: null,
+      done_at: "2026-09-03T12:00:00",
+      done_by: "vitest-admin@vitest.local",
+      evidence_policy_id: null,
+      note: null,
+      plan_version: "v3.0",
+      source_doc: "test-doc",
+    };
+    mockClientQuery.mockImplementation(
+      toggleQueryImpl({
+        existingRow: {
+          action_key: "ACT-2026-09-SIGNED",
+          milestone_key: "MS-2",
+          verification_mode: "manual",
+          done_at: null,
+        },
+        updatedRow,
+      }),
+    );
+
+    const handler = await buildHandler(
+      certificationMilestoneRoutes,
+      "/api/certification-actions/:action_key/toggle",
+      "POST",
+    );
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: ADMIN_HEADERS,
+        params: { action_key: "ACT-2026-09-SIGNED" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(updatedRow);
+
+    const wroteDoneAt = mockClientQuery.mock.calls.some(
+      ([sql]) =>
+        String(sql).includes("UPDATE certification_actions") &&
+        String(sql).includes("SET done_at"),
+    );
+    expect(wroteDoneAt).toBe(true);
+    expect(mockClientQuery.mock.calls.some(([sql]) => String(sql).trim() === "COMMIT")).toBe(
+      true,
+    );
   });
 });
