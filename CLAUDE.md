@@ -36,3 +36,16 @@ Allowlisted without prompting:
 
 Deliberately **not** allowlisted (these still prompt): `npm install`, `npm ci`,
 `npm run format` (rewrites sources), `npm run ship`, `npm run new-feature`, `git rm`, `git reset`.
+
+## Writing permission rules for this repo
+
+`Bash(foo:*)` is exactly equivalent to `Bash(foo *)` — it requires a **space** after
+`foo`. It does NOT match `foo:bar`. So `Bash(npm run check:*)` matches `npm run check`
+but *not* `npm run check:all`.
+
+Drop the colon to cover script-name variants: `Bash(npm run check*)` (no space) matches
+`npm run check`, `npm run check:all`, and `npm run check --flag`.
+
+Rules are evaluated **deny -> ask -> allow**, first match wins, and each subcommand of a
+compound command must match independently. Output redirection is checked separately
+against `Edit` rules, so `npm run check > out.txt` needs write permission for `out.txt`.

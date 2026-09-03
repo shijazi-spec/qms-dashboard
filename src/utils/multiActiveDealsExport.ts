@@ -20,10 +20,16 @@
  *   "Summary"           ONE ROW PER COMPANY, for the covering read: how many
  *                       deals, how many owners, who they are, how much is open.
  *
- * KEEP / CLOSE is a RECOMMENDATION, restated in the workbook itself so a
- * forwarded copy cannot be mistaken for an instruction from the CRM.
+ * There is deliberately NO "How to read this" sheet. It existed to carry the
+ * caveats — open-deals-only, how deals are grouped, and that KEEP / CLOSE is a
+ * recommendation rather than an instruction from the CRM. Sarah moved those
+ * notes into the covering email (2026-09-03), where the recipient actually
+ * reads them, so repeating them on a tab nobody opens was noise. The caveats
+ * still have to travel WITH the numbers — if the email stops carrying them,
+ * this sheet needs to come back rather than the caveats being dropped.
  */
 import type { SheetSpec } from "./excelExport";
+import { FMT_SAR } from "./dealComplianceReportExport";
 import type { MultiActiveDealAccount } from "./duplicateRadarDatabase";
 
 /** Deep link to the deal record, so every row can be checked before acting. */
@@ -83,11 +89,21 @@ export function buildMultiActiveDealSheets(
     }
   }
 
-  const scope = opts.multiOwnerOnly
-    ? "companies worked by more than one owner"
-    : "every company with more than one open deal";
-
   return [
+    {
+      name: "Summary",
+      columns: [
+        { header: "Company", key: "company", width: 38 },
+        { header: "Domain", key: "domain", width: 22 },
+        { header: "Account ID", key: "account_id", width: 22 },
+        { header: "Open deals", key: "open_deals", width: 11 },
+        { header: "Owners", key: "owners_count", width: 9 },
+        { header: "Owner names", key: "owners", width: 46 },
+        { header: "Open value (SAR)", key: "open_value", width: 19, numFmt: FMT_SAR },
+        { header: "Action needed", key: "action", width: 24 },
+      ],
+      rows: summaryRows,
+    },
     {
       name: "Duplicated deals",
       columns: [
@@ -98,7 +114,7 @@ export function buildMultiActiveDealSheets(
         { header: "Stage", key: "stage", width: 18 },
         { header: "Deal owner", key: "owner", width: 22 },
         { header: "Layout", key: "layout", width: 14 },
-        { header: "Amount (SAR)", key: "amount", width: 15 },
+        { header: "Amount (SAR)", key: "amount", width: 17, numFmt: FMT_SAR },
         { header: "Created", key: "created", width: 12 },
         { header: "Last activity", key: "last_activity", width: 13 },
         { header: "Why", key: "why", width: 46 },
@@ -106,51 +122,6 @@ export function buildMultiActiveDealSheets(
         { header: "Open in Zoho", key: "zoho_link", width: 58 },
       ],
       rows: dealRows,
-    },
-    {
-      name: "Summary",
-      columns: [
-        { header: "Company", key: "company", width: 38 },
-        { header: "Domain", key: "domain", width: 22 },
-        { header: "Account ID", key: "account_id", width: 22 },
-        { header: "Open deals", key: "open_deals", width: 11 },
-        { header: "Owners", key: "owners_count", width: 9 },
-        { header: "Owner names", key: "owners", width: 46 },
-        { header: "Open value (SAR)", key: "open_value", width: 17 },
-        { header: "Action needed", key: "action", width: 24 },
-      ],
-      rows: summaryRows,
-    },
-    {
-      name: "How to read this",
-      columns: [{ header: "Notes", key: "note", width: 118 }],
-      rows: [
-        { note: `Scope: ${opts.segment} layout — ${scope}.` },
-        {
-          note:
-            "OPEN deals only. Closed, lost, won and activated stages are excluded, so a company " +
-            "with one live deal and five Closed Lost deals does not appear here.",
-        },
-        {
-          note:
-            "Deals are grouped by domain first, then by Zoho Account id, then by company name — " +
-            "so two duplicate Account records for the same company count as one conflict.",
-        },
-        {
-          note:
-            "KEEP / CLOSE is a RECOMMENDATION, not an instruction. It ranks by pipeline position, " +
-            "then most recent activity, then whether a value is recorded, then age.",
-        },
-        {
-          note:
-            "Nothing in this workbook has been written to the CRM. Sales decides which deal stays.",
-        },
-        {
-          note:
-            "Where a company shows no domain, Zoho holds no Website/Domain on that Account — " +
-            "the deals were grouped by Account id instead.",
-        },
-      ],
     },
   ];
 }

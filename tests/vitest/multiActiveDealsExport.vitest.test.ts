@@ -56,21 +56,28 @@ const account = (o: Partial<MultiActiveDealAccount> = {}): MultiActiveDealAccoun
 const build = (accts: MultiActiveDealAccount[] = [account()]) =>
   buildMultiActiveDealSheets(accts, { segment: "walaplus", multiOwnerOnly: true });
 
+/** By NAME, never by index: Sarah reordered the sheets on 2026-09-03 and every
+ *  positional lookup in this file silently pointed at the wrong one. */
+const sheet = (name: string, accts?: MultiActiveDealAccount[]) =>
+  build(accts).find((s) => s.name === name)!;
+const rowsOf = (name: string, accts?: MultiActiveDealAccount[]) =>
+  sheet(name, accts).rows as any[];
+
 describe("the deal sheet is one row per deal", () => {
   it("emits a row per deal, not per company", () => {
-    const rows = build()[0].rows as any[];
+    const rows = rowsOf("Duplicated deals");
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.deal)).toEqual(["Deal A", "Deal B"]);
   });
 
   it("repeats the company on every row so a filtered sheet still reads", () => {
-    const rows = build()[0].rows as any[];
+    const rows = rowsOf("Duplicated deals");
     expect(rows.every((r) => r.company === "Dallah Hospital")).toBe(true);
     expect(rows.every((r) => r.domain === "dallah-hospital.com")).toBe(true);
   });
 
   it("carries owner and amount as their own sortable columns", () => {
-    const rows = build()[0].rows as any[];
+    const rows = rowsOf("Duplicated deals");
     // Amount must be a NUMBER — "SAR 746,605" as text cannot be summed or
     // sorted in Excel, which is the whole point of shipping xlsx over CSV.
     expect(rows[1].amount).toBe(746605);
@@ -79,40 +86,38 @@ describe("the deal sheet is one row per deal", () => {
   });
 
   it("spells the recommendation as KEEP / CLOSE with its reason", () => {
-    const rows = build()[0].rows as any[];
+    const rows = rowsOf("Duplicated deals");
     expect(rows[0].recommendation).toBe("KEEP");
     expect(rows[1].recommendation).toBe("CLOSE");
     expect(rows[1].why).toBe("behind Proposal in the pipeline");
   });
 
   it("gives every deal a link back to the record", () => {
-    const rows = build()[0].rows as any[];
+    const rows = rowsOf("Duplicated deals");
     expect(rows[0].zoho_link).toBe(dealZohoUrl("5146753000077971324"));
     expect(rows[0].zoho_link).toContain("/tab/Deals/");
   });
 
   it("leaves the link blank rather than building a broken one", () => {
-    const rows = build([
-      account({ deals: [deal({ id: "" })] as any }),
-    ])[0].rows as any[];
+    const rows = rowsOf("Duplicated deals", [account({ deals: [deal({ id: "" })] as any })]);
     expect(rows[0].zoho_link).toBe("");
   });
 
   it("writes dates as YYYY-MM-DD so Excel sorts them chronologically", () => {
-    const rows = build()[0].rows as any[];
+    const rows = rowsOf("Duplicated deals");
     expect(rows[0].created).toBe("2026-07-20");
     expect(rows[0].last_activity).toBe("2026-07-28");
   });
 
   it("does not crash on a company with no deals", () => {
-    const rows = build([account({ deals: [] as any })])[0].rows as any[];
+    const rows = rowsOf("Duplicated deals", [account({ deals: [] as any })]);
     expect(rows).toHaveLength(0);
   });
 });
 
 describe("the summary sheet is one row per company", () => {
   it("rolls up counts, owners and value", () => {
-    const rows = build()[1].rows as any[];
+    const rows = rowsOf("Summary");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       company: "Dallah Hospital",
@@ -124,43 +129,40 @@ describe("the summary sheet is one row per company", () => {
   });
 
   it("states the action instead of leaving it to be worked out", () => {
-    expect((build()[1].rows as any[])[0].action).toBe("Keep 1 deal, close 1");
+    expect(rowsOf("Summary")[0].action).toBe("Keep 1 deal, close 1");
     const three = account({ open_deals: 3 });
-    expect((build([three])[1].rows as any[])[0].action).toBe("Keep 1 deal, close 2");
+    expect(rowsOf("Summary", [three])[0].action).toBe("Keep 1 deal, close 2");
   });
 
   it("never suggests closing a negative number of deals", () => {
     const odd = account({ open_deals: 0 });
-    expect((build([odd])[1].rows as any[])[0].action).toBe("Keep 1 deal, close 0");
+    expect(rowsOf("Summary", [odd])[0].action).toBe("Keep 1 deal, close 0");
   });
 });
 
-describe("the workbook explains itself", () => {
-  it("ships a methodology sheet, so a forwarded copy is not mistaken for an order", () => {
-    const sheets = build();
-    expect(sheets.map((s) => s.name)).toEqual([
-      "Duplicated deals",
-      "Summary",
-      "How to read this",
-    ]);
-    const notes = (sheets[2].rows as any[]).map((r) => r.note).join(" ");
-    expect(notes).toContain("RECOMMENDATION, not an instruction");
-    expect(notes).toContain("OPEN deals only");
-    expect(notes).toContain("walaplus layout");
+describe("the workbook carries data, not commentary", () => {
+  // The "How to read this" sheet was removed on 2026-09-03: Sarah moved the
+  // caveats into the covering email, where the recipient reads them, rather
+  // than a tab nobody opens.
+  //
+  // The caveats still have to travel WITH the numbers. If the email ever stops
+  // carrying them, the sheet comes back — dropping them entirely would leave a
+  // forwarded workbook reading as an instruction from the CRM, which it is not.
+  it("ships exactly the two data sheets", () => {
+    // Summary FIRST — the covering read before the per-deal detail.
+    expect(build().map((s) => s.name)).toEqual(["Summary", "Duplicated deals"]);
   });
 
-  it("records the scope that was actually exported", () => {
-    const narrow = (buildMultiActiveDealSheets([account()], {
-      segment: "walaplus",
-      multiOwnerOnly: true,
-    })[2].rows as any[])[0].note;
-    const wide = (buildMultiActiveDealSheets([account()], {
-      segment: "walaone",
-      multiOwnerOnly: false,
-    })[2].rows as any[])[0].note;
-    expect(narrow).toContain("more than one owner");
-    expect(wide).toContain("more than one open deal");
-    expect(wide).toContain("walaone");
+  it("keeps the scope legible from the data itself", () => {
+    // With no notes sheet, the layout has to be readable from the rows — it is,
+    // via the per-deal Layout column — and from the filename.
+    const dealCols = sheet("Duplicated deals").columns.map((c) => c.key);
+    expect(dealCols).toContain("layout");
+    expect(multiActiveDealsFilename("walaplus")).toContain("walaplus");
+  });
+
+  it("still states the action per company, which is the one instruction that belongs here", () => {
+    expect(rowsOf("Summary")[0].action).toBe("Keep 1 deal, close 1");
   });
 });
 
