@@ -9407,6 +9407,31 @@
         // stored checks, so it makes no Zoho calls and downloads immediately.
         // Sheet per stage (Proposal / Agreement Signed / Paid) plus the
         // per-owner breakdown, which is the part Sales acts on.
+        // Populate the pipeline selector from the deals actually loaded, so it
+        // can only ever offer values that exist. Hardcoding "Standard" as an
+        // option — and as the default — produced an empty workbook, because no
+        // deal in the mirror carries that pipeline string (2026-09-03).
+        function _dcFillPipelineOptions() {
+            var sel = document.getElementById('dcReportPipeline');
+            if (!sel) return;
+            var seen = {};
+            (window._dcDeals || []).forEach(function (d) {
+                var p = (d.pipeline || '').trim();
+                if (p) seen[p] = true;
+            });
+            var values = Object.keys(seen).sort();
+            var keep = sel.value;
+            sel.innerHTML = '<option value="">All pipelines</option>' +
+                values.map(function (v) {
+                    return '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>';
+                }).join('');
+            // A pipeline that no longer exists must not stay silently selected.
+            sel.value = values.indexOf(keep) >= 0 ? keep : '';
+            // No pipeline data at all: hide the control rather than offer an
+            // empty dropdown that looks broken.
+            sel.style.display = values.length ? '' : 'none';
+        }
+
         window.exportDealComplianceReport = function () {
             var seg = document.getElementById('filterSegment')
                 ? document.getElementById('filterSegment').value : 'all';
@@ -9417,6 +9442,7 @@
             // copy can never be mistaken for the whole pipeline.
             var pipe = document.getElementById('dcReportPipeline');
             if (pipe && pipe.value) params.set('pipeline', pipe.value);
+            _dcFillPipelineOptions(); // keep the list current for the next run
             window.location.href = '/api/duplicates/deal-compliance.xlsx?' + params.toString();
         };
 

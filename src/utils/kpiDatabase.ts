@@ -330,6 +330,25 @@ export async function initKPITables(): Promise<void> {
   // active KPIs found for CS Team" while three calculators for it sat idle.
   await seedCSKPIs();
 
+  // Repair rows stranded with is_active = NULL.
+  //
+  // NULL is neither true nor false, so `WHERE is_active = true` hides the row
+  // from every read path while `ON CONFLICT (kpi_code)` still refuses to
+  // re-create it — a KPI that exists, cannot be seen, and cannot be re-added.
+  // createKPIDefinition has been fixed to default these to true, but rows
+  // already written this way (every CS KPI, plus anything added through
+  // "+ Add KPI") need bringing back. Idempotent, and touches only NULLs, so a
+  // deliberately deactivated KPI stays deactivated.
+  const revived = await pool.query(
+    `UPDATE kpi_definitions SET is_active = true, updated_at = NOW()
+      WHERE is_active IS NULL`,
+  );
+  if (revived.rowCount && revived.rowCount > 0) {
+    logger.info(
+      `🔧 [KPIDB] Reactivated ${revived.rowCount} KPI(s) stranded with is_active = NULL`,
+    );
+  }
+
   // SDR + Sales KPIs are all process-derived → mark them calc_mode='auto' (the
   // SDR seed pre-dates the calc_mode column so its rows default to 'manual').
   //
@@ -2081,7 +2100,19 @@ export async function createKPIDefinition(
       kpi.threshold_direction,
       kpi.target_value,
       kpi.weight || 1.0,
-      kpi.is_active,
+      // Default to ACTIVE when the caller omits it. The column is declared
+      // `BOOLEAN DEFAULT true`, but a column DEFAULT only applies when the
+      // column is left OUT of the INSERT — this statement names it, so an
+      // undefined here is bound as NULL and the default never fires.
+      //
+      // Every read path filters `is_active = true`, and NULL is not true, so
+      // the row is created successfully and is then invisible everywhere: the
+      // catalog, the BU page, the exports. That is what hid all 33 CS KPIs
+      // (2026-09-03) — they were in the table the whole time, which is why
+      // re-inserting them failed on the unique index while the page reported
+      // "No active KPIs found". Anything created through "+ Add KPI" without
+      // an explicit is_active hit the same trap.
+      kpi.is_active ?? true,
       kpi.is_north_star ?? false,
       kpi.calc_mode ?? "manual",
       // Without this the column is silently dropped: the INSERT names its

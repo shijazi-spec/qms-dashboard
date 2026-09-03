@@ -1003,8 +1003,13 @@
                 <button data-on-click="exportDealCompliance" id="dcExportBtn" title="Download a CSV of the deals shown with their document status." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
                 <button data-on-click="loadDealCompliance" data-args="[true]" id="dcRefreshBtn" title="Re-fetch the deals in the selected stages from Zoho." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
                 <select id="dcReportPipeline" aria-label="Pipeline for the Head of Sales report" title="Narrows the report to one pipeline within the selected layout. The workbook always states the scope it was built with." class="rr-input" data-style="max-width:200px">
-                    <option value="">All pipelines</option>
-                    <option value="Standard" selected>Standard (Corporate)</option>
+                    <!-- Default is ALL PIPELINES, deliberately. "Standard" was
+                         the default on first release and matched nothing, so
+                         the very first export came back an empty workbook with
+                         only its scope line to explain why (2026-09-03). A
+                         filter nobody asked for must never be the default. The
+                         options below are populated from the data on load. -->
+                    <option value="" selected>All pipelines</option>
                 </select>
                 <button data-on-click="exportDealComplianceReport" id="dcReportBtn" title="Excel report for the Head of Sales — missing-document rate, a per-owner breakdown, and one sheet per stage (Proposal, Agreement Signed, Paid), scoped to the layout chip and the pipeline beside this button. Built from the automatic daily checks, so it downloads instantly." class="rr-btn rr-btn-primary">📄 Report for Head of Sales</button>
                 <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" title="Optional. Documents are verified automatically in the background every day — use this only to re-check the deals on screen right now. It makes live Zoho calls and takes a while." class="rr-btn rr-btn-ghost">📎 Re-check these now</button>
@@ -2545,7 +2550,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=174"></script>
+    <script src="/js/duplicates-app.js?v=175"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
