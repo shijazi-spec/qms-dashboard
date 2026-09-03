@@ -53,7 +53,7 @@
       "fraud-country-risk": "مخاطر الدول",
       "fraud-dashboard": "مؤشرات الاحتيال",
       "qms": "تقارير التدقيق",
-      "compliance": "معالم الشهادات",
+      "compliance": "خطة معالم الشهادات",
       "document-mapping": "ربط المستندات",
       "external-audits": "المراجعات الخارجية",
       "vendors": "الموردون",
@@ -2042,8 +2042,8 @@
     "col_owner": "المسؤول"
   },
   "compliance": {
-    "subtitle": "تتبع معايير PDPL وNCA/ECC وISO وإدارة الالتزامات",
-    "title_milestones": "معالم الشهادات",
+    "subtitle": "خطة إجراءات الاعتماد مرحلة بمرحلة مع أدلة حية، إضافة إلى تتبع الأطر والالتزامات أدناه",
+    "title_milestones": "خطة معالم الشهادات",
     "framework_section": "الامتثال للأطر والالتزامات",
     "export_csv": "تصدير CSV",
     "overall_score_label": "الامتثال الإجمالي",

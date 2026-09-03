@@ -77,7 +77,10 @@
         /* ─── Certification plan print/PDF hand-over ─────────────────────── */
         .cert-print-only { display: none; }
         @media print {
-            @page { size: A4 landscape; margin: 12mm; }
+            /* Portrait suits a vertical milestone/action list — the old
+               landscape setting was sized for the horizontal chain diagram
+               that this section no longer renders (Task 7). */
+            @page { size: A4; margin: 12mm; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             html, body { background: #FFFFFF !important; }
             body { padding: 0 !important; margin: 0 !important; }
@@ -112,6 +115,17 @@
                 break-inside: avoid;
                 page-break-inside: avoid;
             }
+            /* A collapsed milestone group must still print with its actions
+               expanded — the whole point of the hand-over PDF is that every
+               action is visible, not only the ones a viewer happened to
+               expand on screen. The collapse toggle (toggleClass, see
+               _certGroupHtml below) adds Tailwind's `hidden` utility class
+               to the group body (#cert-group-body-*); force it back to
+               visible here. Scoped to the cert section so it cannot affect
+               `hidden` usages elsewhere on the page (e.g. #filterChips). */
+            [data-testid="section-cert-milestones"] .hidden {
+                display: block !important;
+            }
         }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
@@ -135,8 +149,8 @@
         <!-- ─── Header ──────────────────────────────────────────────── -->
         <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900" data-i18n="compliance.title_milestones">Certification Milestones</h1>
-                <p class="text-sm text-gray-500 mt-1" data-i18n="compliance.subtitle">PDPL, NCA/ECC, ISO standards tracking and obligation management</p>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="compliance.title_milestones">Certification Milestone Plan</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="compliance.subtitle">Milestone-by-milestone certification action plan with live evidence, plus framework and obligation tracking below</p>
             </div>
             <div class="flex gap-3">
                 <button data-on-click="navigateTo" data-args="[&quot;/api/compliance/export&quot;]" class="px-4 py-2 border border-green-700 text-green-700 rounded-lg hover:bg-green-50 font-medium flex items-center gap-2" data-testid="button-export-csv">

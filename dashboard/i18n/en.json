@@ -53,7 +53,7 @@
       "fraud-country-risk": "Country Risk",
       "fraud-dashboard": "Fraud KPIs",
       "qms": "Audit Reports",
-      "compliance": "Certification Milestone",
+      "compliance": "Certification Milestone Plan",
       "document-mapping": "Document Mapping",
       "external-audits": "External Audits",
       "vendors": "Vendors",
@@ -2042,8 +2042,8 @@
     "col_owner": "Owner"
   },
   "compliance": {
-    "subtitle": "PDPL, NCA/ECC, ISO standards tracking and obligation management",
-    "title_milestones": "Certification Milestones",
+    "subtitle": "Milestone-by-milestone certification action plan with live evidence, plus framework and obligation tracking below",
+    "title_milestones": "Certification Milestone Plan",
     "framework_section": "Framework Compliance & Obligations",
     "export_csv": "Export CSV",
     "overall_score_label": "Overall Compliance",
