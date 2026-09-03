@@ -9655,6 +9655,30 @@
                 scopeBits.push(segLabel);
 
                 var pctOf = function (part, whole) { return whole ? Math.round((part / whole) * 100) : 0; };
+                // Owner display names for the email (Sarah's edits, 2026-09-03:
+                // "keep these edits when you write the email template next
+                // time"). Zoho stores some owners in Arabic and others with
+                // stray double spaces / lower-case surnames, which reads badly
+                // in a message going to the Head of Sales.
+                //   • DC_OWNER_ALIAS is an explicit map — add a line to extend
+                //     it. Deliberately NOT auto-transliteration: guessing a
+                //     colleague's Latin spelling and getting it wrong in a
+                //     report about their performance is worse than leaving the
+                //     Arabic as it is.
+                //   • Everything else just gets whitespace collapsed and each
+                //     word capitalised, which is what turned "Bashayr  ahmad"
+                //     into "Bashayr Ahmad".
+                // The WORKBOOK keeps the raw CRM name, so a row can always be
+                // traced back to the record it came from.
+                var DC_OWNER_ALIAS = {
+                    'فايز الأسمري': 'Fayez',
+                };
+                var ownerName = function (raw) {
+                    var s = String(raw || '').replace(/\s+/g, ' ').trim();
+                    if (DC_OWNER_ALIAS[s]) return DC_OWNER_ALIAS[s];
+                    if (/[؀-ۿ]/.test(s)) return s; // Arabic — leave as stored
+                    return s.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
+                };
                 var stageLines = (d.by_stage || []).map(function (s) {
                     return '  • ' + s.stage + ' — ' + _fn(s.missing) + ' of ' + _fn(s.checked)
                         + ' missing (' + pctOf(s.missing, s.checked) + '%) — SAR ' + _fn(s.missing_value);
@@ -9662,7 +9686,7 @@
                 // Top offenders only. The full ranking is in the "By owner" tab;
                 // a 40-name list in an email is not read by anyone.
                 var ownerLines = (d.by_owner || []).slice(0, 8).map(function (o) {
-                    return '  • ' + o.owner + ' — ' + _fn(o.missing) + ' of ' + _fn(o.checked)
+                    return '  • ' + ownerName(o.owner) + ' — ' + _fn(o.missing) + ' of ' + _fn(o.checked)
                         + ' missing (' + pctOf(o.missing, o.checked) + '%) — SAR ' + _fn(o.missing_value);
                 });
                 var moreOwners = Math.max(0, (d.by_owner || []).length - ownerLines.length);
@@ -9684,9 +9708,19 @@
                 }
 
                 var lines = [
+                    // Sarah's edits kept (2026-09-03): a greeting line, and the
+                    // opening split across two lines so the "what it is" and
+                    // the "what it checks" read separately. "[name]" stays a
+                    // PLACEHOLDER rather than a hard-coded recipient — this
+                    // report will not always go to the same person, and a
+                    // wrong name at the top of a performance report is the one
+                    // mistake that gets noticed before the numbers do.
                     '📄 Deal documents — compliance report · ' + scopeBits.join(' · '),
                     '',
-                    'Attached is the document-compliance report for deals in the closing stages. It checks the files actually uploaded to Zoho against the Sales SOP.',
+                    'Dear [name],',
+                    '',
+                    'Attached is the document compliance report for deals in the closing stages.',
+                    'It checks the files actually uploaded to Zoho against the Sales SOP.',
                     '',
                     '  ⛔  Missing documents — ' + _fn(d.missing) + ' of ' + _fn(d.checked) + ' deals (' + pctOf(d.missing, d.checked) + '%)',
                     '  ✅  Complete — ' + _fn(d.complete) + ' deals',
