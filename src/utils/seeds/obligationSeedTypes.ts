@@ -51,12 +51,21 @@ export interface ObligationDef {
   evidence?: string;
 }
 
+/** Skip only when every code THIS seed defines already exists. Counting all
+ *  rows for the regulation breaks fill/extension seeds: PDPL's 7-code fill
+ *  could never run because the base seed had already inserted 18. */
+export function shouldSkipSeed(existingOfTheseCodes: number, defined: number): boolean {
+  return defined > 0 && existingOfTheseCodes >= defined;
+}
+
 /**
  * Idempotent seed helper used by every framework seed function.
  *
  * - Does nothing if the regulation row does not exist (logs a warn).
- * - Does nothing if any obligation rows for this regulation already exist
- *   (the seed is one-shot per code; later edits stay).
+ * - Does nothing if every code this seed defines already exists for this
+ *   regulation (the seed is one-shot per code; later edits stay). Fill /
+ *   extension seeds that add new codes to an already-seeded regulation
+ *   still run, because only their own codes are counted.
  * - INSERTs every definition with ON CONFLICT (obligation_code) DO NOTHING.
  */
 export async function runFrameworkSeed(
@@ -80,15 +89,18 @@ export async function runFrameworkSeed(
 
   const regId = reg.rows[0].id;
 
-  // Skip if every defined obligation already exists for this regulation
-  // (the seed is one-shot per code; re-runs are no-ops thanks to the
-  // ON CONFLICT below). Counting by regulation_id is reliable across
-  // any obligation_code naming scheme.
+  // Skip only when every code THIS seed defines already exists (the seed
+  // is one-shot per code; re-runs are no-ops thanks to the ON CONFLICT
+  // below). Counting ALL rows for the regulation_id is wrong: it breaks
+  // fill/extension seeds — e.g. PDPL's 7-code fill seed could never run
+  // because the base 18-row PDPL seed had already inserted more rows
+  // than the fill defines. Count only the codes this seed's defs list.
+  const codes = defs.map((d) => d.code);
   const existing = await pool.query(
-    "SELECT COUNT(*) FROM obligations WHERE regulation_id = $1",
-    [regId],
+    "SELECT COUNT(*) FROM obligations WHERE regulation_id = $1 AND obligation_code = ANY($2)",
+    [regId, codes],
   );
-  if (parseInt(existing.rows[0].count, 10) >= defs.length) {
+  if (shouldSkipSeed(parseInt(existing.rows[0].count, 10), defs.length)) {
     return;
   }
 
