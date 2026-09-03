@@ -349,22 +349,28 @@
                     <p class="text-xs text-gray-500" data-i18n="compliance.frameworks_subtitle">Each framework card shows its clauses, % assessed, and % compliant. Click a card to open its clauses & document mapping below.</p>
                 </div>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-4">
-                <div class="lg:col-span-2 space-y-6">
-                    <div class="bg-white rounded-lg shadow">
-                        <div class="p-4 border-b border-gray-200">
-                            <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.regulation_library">Regulation Library</h2>
-                        </div>
-                        <div id="regulationsList" class="divide-y divide-gray-200">
-                            <div class="p-4 text-center text-gray-400">Loading regulations...</div>
-                        </div>
-                        <input type="file" id="regulationDocFileInput" accept="application/pdf,.pdf" class="hidden" data-testid="input-regulation-document-file" />
-                    </div>
-                    <a href="/document-mapping" class="text-xs text-emerald-700 hover:text-emerald-800 font-medium" data-testid="link-document-mapping" data-i18n="compliance.go_doc_mapping">Open Document Mapping →</a>
-                </div>
-                <div id="frameworksGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Framework cards get the FULL width and the Regulation Library
+                 sits beneath them. They were previously squeezed into a third
+                 of the page beside the library, which left each card ~180px
+                 wide: framework names truncated to "ISO 27001:202..." and the
+                 three stat labels collided into "ASSESSEDCOMPLIANT". The cards
+                 are the primary content of this section, so they lead. -->
+            <div class="p-4 space-y-6">
+                <div id="frameworksGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading frameworks…</div>
                 </div>
+
+                <div class="border border-gray-200 rounded-lg">
+                    <div class="p-4 border-b border-gray-200">
+                        <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.regulation_library">Regulation Library</h2>
+                    </div>
+                    <div id="regulationsList" class="divide-y divide-gray-200">
+                        <div class="p-4 text-center text-gray-400">Loading regulations...</div>
+                    </div>
+                    <input type="file" id="regulationDocFileInput" accept="application/pdf,.pdf" class="hidden" data-testid="input-regulation-document-file" />
+                </div>
+
+                <a href="/document-mapping" class="inline-block text-xs text-emerald-700 hover:text-emerald-800 font-medium" data-testid="link-document-mapping" data-i18n="compliance.go_doc_mapping">Open Document Mapping →</a>
             </div>
         </section>
 

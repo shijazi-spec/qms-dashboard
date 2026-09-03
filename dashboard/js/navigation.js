@@ -186,7 +186,7 @@ const WalaPlusNav = {
       items: [
         // ── External Audits sub-group ──
         { type: 'subheader', label: 'External Audits' },
-        { label: 'Certification Milestone', href: '/compliance', icon: 'check-circle', id: 'compliance' },
+        { label: 'Certification Milestones', href: '/compliance', icon: 'check-circle', id: 'compliance' },
         // Compliance v2 — Audit Readiness lives between Compliance and
         // Document Mapping so the GRC user sees the full lifecycle in
         // order: define obligations -> run audits -> link evidence.
