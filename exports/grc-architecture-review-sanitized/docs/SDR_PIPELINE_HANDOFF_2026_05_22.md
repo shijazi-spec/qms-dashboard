@@ -82,7 +82,7 @@
 |---|---|
 | `AI_INTEGRATIONS_LLMProvider_BASE_URL` | **DELETED** (was pointing at modelfarm proxy) |
 | `AI_INTEGRATIONS_LLMProvider_API_KEY` | **DELETED** (was a dummy key) |
-| `LLMProvider_API_KEY` | Untouched — real `sk-proj-…` key, $10 credit loaded |
+| `LLMProvider_API_KEY` | Untouched — real `<REDACTED_TOKEN>` key, $10 credit loaded |
 
 ---
 

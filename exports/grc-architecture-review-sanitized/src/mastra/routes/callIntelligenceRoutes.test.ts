@@ -61,7 +61,7 @@ const mockQuery: MockedPoolQuery = (sql, params = []) => {
 };
 (Pool.prototype as unknown as { query: MockedPoolQuery }).query = mockQuery;
 
-const ADMIN_KEY = "call-intel-secret-leak-test-admin-key-2026-XYZ"; // ≥32, ≥10 distinct
+const ADMIN_KEY = "<REDACTED_SECRET>"; // ≥32, ≥10 distinct
 process.env.ADMIN_API_KEY = ADMIN_KEY;
 
 // Import AFTER mock + env are in place.

@@ -32,7 +32,7 @@ export interface HygieneRuleGroup {
 export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
   // ── Cross-cutting (always shown) ───────────────────────────────────────────
   {
-    key: "general",
+    key: "<REDACTED_SECRET>",
     title: "General (applies to every tab)",
     general: true,
     rules: [
@@ -49,7 +49,7 @@ export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
   },
   // ── Per-module duplicate tabs ──────────────────────────────────────────────
   {
-    key: "accounts",
+    key: "<REDACTED_SECRET>",
     title: "Accounts Duplicates",
     rules: [
       { id: "acc-def", rule: "A duplicate Account = the SAME company — same domain / legal name / close fuzzy name." },
@@ -58,7 +58,7 @@ export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
     ],
   },
   {
-    key: "contacts",
+    key: "<REDACTED_SECRET>",
     title: "Contacts Duplicates",
     rules: [
       { id: "con-def", rule: "A duplicate Contact = the SAME person — only when ≥2 of {email, phone, full name} match. Sharing an Account is NOT duplicate evidence (that's the Account-merge cascade).", ref: "hard rule" },
@@ -67,14 +67,14 @@ export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
     ],
   },
   {
-    key: "leads",
+    key: "<REDACTED_SECRET>",
     title: "Leads Duplicates",
     rules: [
       { id: "lead-def", rule: "Duplicate leads are ACCEPTED. A lead is only flagged when the SAME lead (same phone + email) is submitted AGAIN (a resubmission)." },
     ],
   },
   {
-    key: "deals",
+    key: "<REDACTED_SECRET>",
     title: "Deals Duplicates",
     rules: [
       { id: "deal-def", rule: "The problem is 2 ACTIVE deals for the same thing → tag Duplicate-Delete + merge info. Won / closed / lost deals are NOT duplicates to fix (detection is stage-aware)." },
@@ -82,7 +82,7 @@ export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
   },
   // ── Cross-module & lifecycle tabs ──────────────────────────────────────────
   {
-    key: "cross-module",
+    key: "<REDACTED_SECRET>",
     title: "Cross-Module Overlap",
     rules: [
       { id: "xm-lead", rule: "Lead ↔ anything: CRMProvider can't link a Lead — fix is CLOSE the Lead (convert into the existing Account or close as duplicate). Pure Lead↔Contact / Lead↔Account clusters are hidden here (handled on the Leads tab).", ref: "Sample User 2026-06-16" },
@@ -91,42 +91,42 @@ export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
     ],
   },
   {
-    key: "cs-lifecycle",
+    key: "<REDACTED_SECRET>",
     title: "CS Lifecycle",
     rules: [
       { id: "cs-phases", rule: "CS deals by phase (onboarding / adoption / renewal / termination). Violations: onboarding_overdue (>30d), adoption_premature (trial still open), renewal_overdue (CRITICAL past a quarter / 90d), termination_missing_churn_date, termination_missing_churn_reason, + active-phase missing-field checks." },
     ],
   },
   {
-    key: "cs-overlap",
+    key: "<REDACTED_SECRET>",
     title: "CS Pipeline Overlap",
     rules: [
       { id: "cso-block", rule: "BLOCK when an OPEN Sales Deal + a Paid/Agreement-Signed handoff Deal coexist on the same customer AND the churn cool-off has NOT elapsed (180d Private / 365d Government). WARN if past cool-off in Termination. A lone Paid deal in Adoption is not flagged.", ref: "Sample User 2026-06-11" },
     ],
   },
   {
-    key: "deals-lifecycle",
+    key: "<REDACTED_SECRET>",
     title: "Deals Lifecycle (stage aging)",
     rules: [
       { id: "dl-slas", rule: "Stage SLAs (Sales SOP v1.1): Not Attend Meeting ≤5 business days (§7.2.8); Meeting ≤10 business days (§7.3); On Hold 3–6 months (§7.3.11); Proposal ≤3 months (§7.4.2); Agreement Sent ≤3 months (§7.5.1). WARNING past SLA up to 1.5×; CRITICAL past 1.5×. Terminal stages freeze aging." },
     ],
   },
   {
-    key: "deal-compliance",
+    key: "<REDACTED_SECRET>",
     title: "Deal Compliance (documents)",
     rules: [
       { id: "dc-docs", rule: "Sales SOP 7.5.10, ATTACHMENTS only: Proposal needs the financial offer; Agreement Signed & Paid need proposal + contract/PO + VAT cert + Commercial Registration + National Address. (Field-level data-entry compliance lives on the Quality Dashboard audit.)" },
     ],
   },
   {
-    key: "account-hints",
+    key: "<REDACTED_SECRET>",
     title: "Account Hints",
     rules: [
       { id: "ah-conf", rule: "Smart Account inference for Deals missing Account_Name: confidence = 40 base + evidence (cap 100); AI auto-resolve gate 70%. Dismissed hints are immutable (never resurrected by a re-scan)." },
     ],
   },
   {
-    key: "preflight",
+    key: "<REDACTED_SECRET>",
     title: "Preflight Check",
     rules: [
       { id: "pf-basic", rule: "ACTIVE = BASIC. Rule 1 — contact dup by email/phone → 'duplicate' (reject, route to the existing owner). Rule 2 v2 (only if Rule 1 clears) — EXISTING-CLIENT check: match the inbound company against duplicate_RECORDS (not just clusters — a single-deal client with no duplicate group is still caught) by domain → strict company name → fuzzy company name, aggregate with buildClusterFromRecords and read cs_overlap_verdict: active client (customer-stage deal, no churn) matched by domain/strict-name → 'block' (do not cold-contact, route to Account/CS owner); active client matched by FUZZY name only → 'review' (name resemblance — verify identity first); churned but still inside the sector cool-off (180d Private / 365d Government) → 'review' (CS sign-off before re-engaging); churned past cool-off → 'pass' (Sales may re-engage); not a client → 'pass'. The flagged-rows export (for the Head of Sales) shows the matched client's exact CS Phase (Onboarding / Adoption / Renewal, or Termination within / past cool-off) and, for terminations, the Churn Date — plus the CS owner and Account / deal links.", ref: "Sample User 2026-06-22" },
@@ -135,14 +135,14 @@ export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
     ],
   },
   {
-    key: "owner-accountability",
+    key: "<REDACTED_SECRET>",
     title: "Owner Accountability",
     rules: [
       { id: "oa-rag", rule: "Duplicate-rate RAG (SDR-KPI-09): green ≤2%, amber 2–5%, red >5%. Reps on multiple mailboxes consolidate under their canonical email (OWNER_EMAIL_ALIASES)." },
     ],
   },
   {
-    key: "cluster-merge",
+    key: "<REDACTED_SECRET>",
     title: "Cluster Merge",
     rules: [
       { id: "cm-split", rule: "Finds domains with ≥2 separate clusters (same-domain split from concurrent syncs). Recommended master = the cluster with an Account + highest record count + highest confidence." },

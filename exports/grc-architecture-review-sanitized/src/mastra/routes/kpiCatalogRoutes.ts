@@ -176,12 +176,12 @@ export const kpiCatalogRoutes = [
           ]);
 
           const groups = [
-            { key: "quality_manager", label: "QM Manager (Sample User)", kpis: grqByPrefix("QM-KPI") },
-            { key: "grc_manager", label: "GRC Manager (Sample User)", kpis: grqByPrefix("GRC-KPI") },
-            { key: "sdr_team", label: "SDR Team", kpis: sdr },
-            { key: "sales_team", label: "Sales Team", kpis: [] },
-            { key: "cs_team", label: "CS Team", kpis: [] },
-            { key: "shared", label: "Shared", kpis: shared },
+            { key: "<REDACTED_SECRET>", label: "QM Manager (Sample User)", kpis: grqByPrefix("QM-KPI") },
+            { key: "<REDACTED_SECRET>", label: "GRC Manager (Sample User)", kpis: grqByPrefix("GRC-KPI") },
+            { key: "<REDACTED_SECRET>", label: "SDR Team", kpis: sdr },
+            { key: "<REDACTED_SECRET>", label: "Sales Team", kpis: [] },
+            { key: "<REDACTED_SECRET>", label: "CS Team", kpis: [] },
+            { key: "<REDACTED_SECRET>", label: "Shared", kpis: shared },
           ];
           const visibleGroups = withoutDepartmentGroups(groups, deptKeys);
           c.header("Cache-Control", "no-store");

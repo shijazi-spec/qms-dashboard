@@ -324,8 +324,8 @@ function buildCoverSheet(input: PacketBuildInputs) {
     name: S.sheetCover,
     rightToLeft: input.lang === "ar",
     columns: [
-      { header: S.colField, key: "field", width: 30 },
-      { header: S.colValue, key: "value", width: 60 },
+      { header: S.colField, key: "<REDACTED_SECRET>", width: 30 },
+      { header: S.colValue, key: "<REDACTED_SECRET>", width: 60 },
     ],
     rows: [
       { field: S.fieldOwner, value: owner.owner_name },
@@ -357,13 +357,13 @@ function buildCoverSheet(input: PacketBuildInputs) {
 function buildActionItemsSheet(input: PacketBuildInputs) {
   const S = pickStrings(input.lang);
   const idColumns = [
-    { header: S.colClusterId, key: "cluster_id", width: 12 },
-    { header: S.colCRMProviderId, key: "CRMProvider_record_id", width: 22 },
-    { header: S.colRecordName, key: "record_name", width: 30 },
-    { header: S.colType, key: "record_type", width: 12 },
-    { header: S.colIsPrimary, key: "is_primary_label", width: 12 },
-    { header: S.colDomain, key: "domain", width: 22 },
-    { header: S.colEmail, key: "email", width: 28 },
+    { header: S.colClusterId, key: "<REDACTED_SECRET>", width: 12 },
+    { header: S.colCRMProviderId, key: "<REDACTED_SECRET>", width: 22 },
+    { header: S.colRecordName, key: "<REDACTED_SECRET>", width: 30 },
+    { header: S.colType, key: "<REDACTED_SECRET>", width: 12 },
+    { header: S.colIsPrimary, key: "<REDACTED_SECRET>", width: 12 },
+    { header: S.colDomain, key: "<REDACTED_SECRET>", width: 22 },
+    { header: S.colEmail, key: "<REDACTED_SECRET>", width: 28 },
   ];
 
   const state = emptyPlaybookState();
@@ -402,21 +402,21 @@ function buildRawRecordsSheet(input: PacketBuildInputs) {
     name: S.sheetRawRecords,
     rightToLeft: input.lang === "ar",
     columns: [
-      { header: S.colClusterId, key: "cluster_id", width: 12 },
-      { header: S.colCRMProviderId, key: "CRMProvider_record_id", width: 22 },
-      { header: S.colType, key: "record_type", width: 12 },
-      { header: S.colName, key: "record_name", width: 30 },
-      { header: S.colCompany, key: "company_name", width: 30 },
-      { header: S.colEmail, key: "email", width: 28 },
-      { header: S.colDomain, key: "domain", width: 22 },
-      { header: S.colPhone, key: "phone", width: 18 },
-      { header: S.colOwner, key: "owner_name", width: 22 },
-      { header: S.colStatusStage, key: "status_or_stage", width: 18 },
-      { header: S.colValueAmt, key: "deal_value", width: 14 },
-      { header: S.colSource, key: "source", width: 18 },
-      { header: S.colConfidence, key: "confidence_score", width: 12 },
-      { header: S.colCreated, key: "created_str", width: 14 },
-      { header: S.colIsPrimary, key: "is_primary_label", width: 12 },
+      { header: S.colClusterId, key: "<REDACTED_SECRET>", width: 12 },
+      { header: S.colCRMProviderId, key: "<REDACTED_SECRET>", width: 22 },
+      { header: S.colType, key: "<REDACTED_SECRET>", width: 12 },
+      { header: S.colName, key: "<REDACTED_SECRET>", width: 30 },
+      { header: S.colCompany, key: "<REDACTED_SECRET>", width: 30 },
+      { header: S.colEmail, key: "<REDACTED_SECRET>", width: 28 },
+      { header: S.colDomain, key: "<REDACTED_SECRET>", width: 22 },
+      { header: S.colPhone, key: "<REDACTED_SECRET>", width: 18 },
+      { header: S.colOwner, key: "<REDACTED_SECRET>", width: 22 },
+      { header: S.colStatusStage, key: "<REDACTED_SECRET>", width: 18 },
+      { header: S.colValueAmt, key: "<REDACTED_SECRET>", width: 14 },
+      { header: S.colSource, key: "<REDACTED_SECRET>", width: 18 },
+      { header: S.colConfidence, key: "<REDACTED_SECRET>", width: 12 },
+      { header: S.colCreated, key: "<REDACTED_SECRET>", width: 14 },
+      { header: S.colIsPrimary, key: "<REDACTED_SECRET>", width: 12 },
     ],
     rows: input.records.map((r) => ({
       ...r,
@@ -437,9 +437,9 @@ function buildFaqSheet(input: PacketBuildInputs) {
     name: S.sheetFaq,
     rightToLeft: input.lang === "ar",
     columns: [
-      { header: S.colN, key: "n", width: 4 },
-      { header: S.colQuestion, key: "q", width: 50 },
-      { header: S.colAnswer, key: "a", width: 90 },
+      { header: S.colN, key: "<REDACTED_SECRET>", width: 4 },
+      { header: S.colQuestion, key: "<REDACTED_SECRET>", width: 50 },
+      { header: S.colAnswer, key: "<REDACTED_SECRET>", width: 90 },
     ],
     rows: S.faq.map((e, i) => ({ n: i + 1, ...e })),
   };

@@ -123,7 +123,7 @@ function makeStubClient(
   } as ReturnType<typeof makeStubClient>;
 }
 
-const SK_KEY = '<REDACTED_TOKEN>';
+const SK_KEY = '<REDACTED_SECRET>';
 const GHP_TOKEN = '<REDACTED_SECRET>';
 const BCRYPT = '<REDACTED_PASSWORD_HASH>';
 const PASSWORD_HASH_LITERAL = '<REDACTED_SECRET>';

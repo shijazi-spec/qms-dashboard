@@ -28,8 +28,8 @@ const SW_PATH = resolve(__dirname, '..', '..', 'dashboard', 'streaming-download-
 const EN_PATH = resolve(__dirname, '..', '..', 'dashboard', 'i18n', 'en.json');
 const AR_PATH = resolve(__dirname, '..', '..', 'dashboard', 'i18n', 'ar.json');
 
-type LangKey = 'en' | 'ar';
-type StringKey = 'title' | 'heading' | 'body' | 'retry_hint';
+type LangKey = '<REDACTED_SECRET>' | 'ar';
+type StringKey = '<REDACTED_SECRET>' | 'heading' | 'body' | 'retry_hint';
 
 interface SwStrings {
     en: Record<string, string>;
@@ -80,7 +80,7 @@ describe('streaming-download SW strings stay in sync with i18n catalogues', () =
             });
 
             for (const key of KEYS) {
-                const catalogueKey = `sw_expired_${key}`;
+                const catalogueKey = `<REDACTED_SECRET>`;
                 it(`SW_STRINGS.${lang}.${key} matches downloads.${catalogueKey}`, () => {
                     const swValue = swLang?.[key];
                     const catalogueValue = catalogue[catalogueKey];

@@ -5,10 +5,10 @@ import { groupMilestonesByType } from "../../src/mastra/routes/certificationMile
 describe("groupMilestonesByType", () => {
   it("buckets rows into the three plan sections", () => {
     const g = groupMilestonesByType([
-      { milestone_key: "a", milestone_type: "plan" },
-      { milestone_key: "b", milestone_type: "framework_target" },
-      { milestone_key: "c", milestone_type: "dependency" },
-      { milestone_key: "d", milestone_type: "plan" },
+      { milestone_key: "<REDACTED_SECRET>", milestone_type: "plan" },
+      { milestone_key: "<REDACTED_SECRET>", milestone_type: "framework_target" },
+      { milestone_key: "<REDACTED_SECRET>", milestone_type: "dependency" },
+      { milestone_key: "<REDACTED_SECRET>", milestone_type: "plan" },
     ] as any);
     expect(g.plan).toHaveLength(2);
     expect(g.framework_target).toHaveLength(1);

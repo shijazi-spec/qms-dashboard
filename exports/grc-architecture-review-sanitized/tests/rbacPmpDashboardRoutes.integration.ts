@@ -93,7 +93,7 @@ interface TestUser {
 // (which uses 999100) and rbacReportRoutes.integration.ts (which uses 999000)
 // so concurrent runs don't clobber each other's session payloads.
 const TEST_USERS: TestUser[] = ROLES.map((role, i) => ({
-  email: `rbac-pmp-${role.replace(/_/g, "-")}@rbac-test.invalid`,
+  email: `rbac-pmp-<REDACTED_EMAIL>`,
   role,
   name: `RBAC PmpBatch ${role}`,
   userId: 999200 + i,

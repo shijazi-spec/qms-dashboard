@@ -101,11 +101,11 @@ async function printDiagnostics() {
 const OWNER_LABEL: Record<string, string> = {
   quality_manager: "Sample User (Quality)",
   grc_manager: "Sample User (GRC)",
-  grq_specialist: "AlHanouf (GRQ Specialist)",
+  grq_specialist: "Sample User (GRQ Specialist)",
   sdr_team: "SDR Team",
   sales_team: "Sales Team",
   shared: "Shared",
-  governance_officer: "AlHanouf (GRQ Specialist)",
+  governance_officer: "Sample User (GRQ Specialist)",
 };
 
 async function main() {

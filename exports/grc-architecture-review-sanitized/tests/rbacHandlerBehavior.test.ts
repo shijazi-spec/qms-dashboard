@@ -32,7 +32,7 @@ function assert(cond: boolean, label: string) {
   else { console.error(`  ✗ ${label}`); failed++; }
 }
 
-const TEST_KEY = `rbac-test-key-${Date.now()}`;
+const TEST_KEY = `<REDACTED_SECRET>`;
 process.env.ADMIN_API_KEY = TEST_KEY;
 
 /**
@@ -86,7 +86,7 @@ console.log("2. getSessionUser — X-Admin-Key alone → null (key is not a sess
 
 console.log("3. getSessionUser — wrong admin API key → null");
 {
-  const ctx = makeCtx({ adminKey: "wrong-key" });
+  const ctx = makeCtx({ adminKey: "<REDACTED_SECRET>" });
   const user = getSessionUser(ctx);
   assert(user === null, "getSessionUser returns null for invalid API key");
 }

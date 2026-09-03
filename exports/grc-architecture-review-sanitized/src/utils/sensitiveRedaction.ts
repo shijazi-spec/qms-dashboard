@@ -103,7 +103,7 @@ const SECRET_LIKE_PATTERNS: SecretPattern[] = [
     regex: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_.+/=-]{8,}/g,
   },
   // PaymentProvider / LLMProvider / Anthropic style:  sk-…, sk_live_…, sk_test_…
-  // Also covers `sk-ant-…` (Anthropic) and `sk-proj-…` (LLMProvider project keys).
+  // Also covers `sk-ant-…` (Anthropic) and `<REDACTED_TOKEN>` (LLMProvider project keys).
   {
     name: "sk-key",
     regex: /\bsk[-_](?:live|test|proj|ant)?[-_]?[A-Za-z0-9_-]{20,}\b/g,
@@ -395,7 +395,7 @@ export function detectCredentialLikeFields(
   const seen = new Set<string>();
   const deduped: CredentialWarning[] = [];
   for (const w of collected) {
-    const key = `${w.path}|${w.kind}|${w.patternName ?? ""}`;
+    const key = `<REDACTED_SECRET>`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(w);

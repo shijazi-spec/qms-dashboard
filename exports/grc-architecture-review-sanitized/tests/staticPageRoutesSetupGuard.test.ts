@@ -60,13 +60,13 @@
 
 import crypto from "node:crypto";
 
-const TEST_ADMIN_KEY = "test-admin-key-static-page-setup-guard";
-const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
 
 // SESSION_SECRET is required at module load time by `verifySession` in
 // authRoutes.ts (used via `getSessionFromCookie`). Set it before any
 // dynamic imports so the route module sees a stable secret.
-process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+process.env.SESSION_SECRET = <REDACTED_SECRET>;
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "<REDACTED_DSN>";
 
@@ -179,7 +179,7 @@ for (const name of SUBPAGES) {
   await suite.test(
     `GET /dashboard/${name} — ADMIN_API_KEY SET serves the real dashboard HTML`,
     async () => {
-      process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+      process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
       const res = await callDashboardName(name, {});
       suite.expectEqual(res.status, 200, `${name} status`);
       suite.expect(

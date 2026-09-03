@@ -364,8 +364,8 @@ const ExampleOrgNav = {
   // values the spec calls out; the suffix is appended in `_pinKey()` /
   // `_recentKey()` so a shared browser never lets one account's pinned/
   // recent state leak into another account's session.
-  PIN_KEY_BASE: 'ExampleOrg-nav-pinned',
-  RECENT_KEY_BASE: 'ExampleOrg-nav-recent',
+  PIN_KEY_BASE: '<REDACTED_SECRET>',
+  RECENT_KEY_BASE: '<REDACTED_SECRET>',
   RECENT_MAX: 5,
   _userId: null,
 
@@ -480,7 +480,7 @@ const ExampleOrgNav = {
   // Stored as 'ExampleOrg_theme' = 'light' | 'dark'. Applied to <html> via the
   // `wp-dark` class so CSS overrides in navigation.css can target it. We
   // apply BEFORE render() to avoid a light-to-dark flash on every nav repaint.
-  _themeKey: 'ExampleOrg_theme',
+  _themeKey: '<REDACTED_SECRET>',
   loadTheme() {
     try {
       const v = localStorage.getItem(this._themeKey);

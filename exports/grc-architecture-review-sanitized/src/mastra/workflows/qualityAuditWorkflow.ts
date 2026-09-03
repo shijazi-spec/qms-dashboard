@@ -349,7 +349,7 @@ const auditCRMWithAgentStep = createStep({
         
         const issueTypeCounts: Record<string, { count: number; severity: string; module: string }> = {};
         for (const issue of allIssues) {
-          const key = `${issue.module}-${issue.issueType}`;
+          const key = `<REDACTED_SECRET>`;
           if (!issueTypeCounts[key]) {
             issueTypeCounts[key] = { count: 0, severity: issue.severity, module: issue.module };
           }

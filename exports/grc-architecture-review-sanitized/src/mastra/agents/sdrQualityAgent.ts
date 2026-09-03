@@ -124,7 +124,7 @@ Remember: You are the SDR team's quality guardian. Your audits help the SDR team
  * Surfaced in ai_call_metrics.metadata.prompt_version for A/B comparison.
  */
 export const SDR_QUALITY_PROMPT_VERSION =
-  `sdr-quality@${createHash("sha256").update(SDR_QUALITY_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
+  `<REDACTED_EMAIL>("sha256").update(SDR_QUALITY_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
 
 export const sdrQualityAgent = new Agent({
   name: "ExampleOrg SDR Quality Specialist",

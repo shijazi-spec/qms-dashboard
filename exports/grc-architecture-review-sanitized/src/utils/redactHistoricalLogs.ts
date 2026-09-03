@@ -61,7 +61,7 @@ import { previewBreadcrumbSetFragment } from "./aiCallMetricsPreviewBreadcrumb";
 import { logger as safeLogger } from "./logger";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const REDACT_DATE = new Date().toISOString();
-const BREADCRUMB_KEY = "_redacted_at";
+const BREADCRUMB_KEY = "<REDACTED_SECRET>";
 
 /**
  * Resolve the project-root `audit-evidence/` directory.

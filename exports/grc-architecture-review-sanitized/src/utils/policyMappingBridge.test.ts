@@ -42,7 +42,7 @@ const REDACTED_SENTINEL = "***REDACTED***";
 
 // Credential-shaped secrets (caught by the regex deny-list regardless of the
 // destination column name).
-const SK_KEY = "<REDACTED_TOKEN>";
+const SK_KEY = "<REDACTED_SECRET>";
 const GHP_TOKEN = "<REDACTED_SECRET>";
 
 // ---------------------------------------------------------------------------

@@ -1238,8 +1238,8 @@ export async function calcCertificationMilestones(): Promise<ProcessKpiValue> {
 
 async function ratioKpi(
   sql: string,
-  totalKey = "total",
-  goodKey = "good",
+  totalKey = "<REDACTED_SECRET>",
+  goodKey = "<REDACTED_SECRET>",
 ): Promise<ProcessKpiValue> {
   let res;
   try {

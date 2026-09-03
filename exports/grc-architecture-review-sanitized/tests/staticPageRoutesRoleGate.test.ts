@@ -63,11 +63,11 @@
 
 import crypto from "node:crypto";
 
-const TEST_ADMIN_KEY = "test-admin-key-static-page-role-gate";
-const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
 
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+process.env.SESSION_SECRET = <REDACTED_SECRET>;
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "<REDACTED_DSN>";
 
@@ -302,7 +302,7 @@ for (const { path, allowedRoles } of ROLE_GATED_DASHBOARD_ROUTES) {
 // rather than as a missing-file 404.
 for (const { path } of ROLE_GATED_DASHBOARD_ROUTES) {
   await suite.test(`GET ${path} — valid ADMIN_API_KEY header is admitted by the gate`, async () => {
-    const res = await callRoute(path, { adminKey: TEST_ADMIN_KEY });
+    const res = await callRoute(path, { adminKey: <REDACTED_SECRET> });
     suite.expect(
       typeof res.body === "string" && !res.body.includes("Setup Required"),
       `${path} body should NOT contain "Setup Required" but was: ${String(res.body).slice(0, 120)}`,

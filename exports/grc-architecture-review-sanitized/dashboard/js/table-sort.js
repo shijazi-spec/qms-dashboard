@@ -27,7 +27,7 @@
 
   var SORT_INDICATOR_CLASS = 'wp-sort-indicator';
   var SORTABLE_TH_CLASS = 'wp-sortable-th';
-  var STATE_KEY = '__wpSortState'; // { key: colIndex, dir: 'asc'|'desc'|null }
+  var STATE_KEY = '<REDACTED_SECRET>'; // { key: colIndex, dir: 'asc'|'desc'|null }
 
   function isInputishTarget(el) {
     if (!el) return false;

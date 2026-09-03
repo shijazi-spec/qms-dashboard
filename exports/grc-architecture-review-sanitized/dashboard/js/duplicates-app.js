@@ -898,19 +898,19 @@
         // tab. Loads on first Exec-Summary paint and on the Refresh
         // button in the section header.
         const _RADAR_TAB_META = [
-            { key: 'leadDuplicates',       label: 'Lead Duplicates',       icon: '🟠', tab: 'leads',            desc: 'Duplicate Leads grouped into clusters.' },
-            { key: 'dealDuplicates',       label: 'Deal Duplicates',       icon: '🟣', tab: 'deals',            desc: 'Duplicate Deals grouped into clusters.' },
-            { key: 'contactDuplicates',    label: 'Contact Duplicates',    icon: '⚪', tab: 'contacts',         desc: 'Duplicate Contacts grouped into clusters.' },
-            { key: 'accountDuplicates',    label: 'Account Duplicates',    icon: '🟢', tab: 'accounts',         desc: 'Duplicate Accounts grouped into clusters.' },
-            { key: 'crossModule',          label: 'Cross-Module',          icon: '🔗', tab: 'cross-module',     desc: 'Same company across ≥2 CRMProvider modules.' },
-            { key: 'csOverlap',            label: 'CS Pipeline Overlap',   icon: '🛑', tab: 'cs-overlap',       desc: 'Open Sales Deal + Paid/Agreement-Signed handoff on the same customer.' },
-            { key: 'csLifecycle',          label: 'CS Lifecycle',          icon: '🌱', tab: 'cs-lifecycle',     desc: 'Customer Success deals deviating from GRQ-defined lifecycle rules.' },
-            { key: 'dealsLifecycle',       label: 'Deals Lifecycle',       icon: '📐', tab: 'deal-lifecycle',   desc: 'Sales-pipeline stage aging vs Sales SOP §7.' },
-            { key: 'dealCompliance',       label: 'Deal Compliance',       icon: '📎', tab: 'deal-compliance',  desc: 'Required document attachments on Proposal / Agreement Signed / Paid deals.' },
-            { key: 'accountHints',         label: 'Account Hints',         icon: '💡', tab: 'account-hints',    desc: 'Deals missing Account_Name with inferred-Account verdicts.' },
-            { key: 'cleaningProgress',     label: 'Cleaning Progress',     icon: '🧹', tab: 'cleaning-progress', desc: 'Verified data-cleaning results for Deals & Accounts.' },
-            { key: 'ownerAccountability',  label: 'Owner Accountability',  icon: '👤', tab: 'owners',           desc: 'Per-rep duplicate scorecard. RAG bands per SDR-KPI-09.' },
-            { key: 'logs',                 label: 'Logs',                  icon: '📋', tab: 'logs',             desc: 'Agent Activity + operator Manual Actions audit trail (24h window).' },
+            { key: '<REDACTED_SECRET>',       label: 'Lead Duplicates',       icon: '🟠', tab: 'leads',            desc: 'Duplicate Leads grouped into clusters.' },
+            { key: '<REDACTED_SECRET>',       label: 'Deal Duplicates',       icon: '🟣', tab: 'deals',            desc: 'Duplicate Deals grouped into clusters.' },
+            { key: '<REDACTED_SECRET>',    label: 'Contact Duplicates',    icon: '⚪', tab: 'contacts',         desc: 'Duplicate Contacts grouped into clusters.' },
+            { key: '<REDACTED_SECRET>',    label: 'Account Duplicates',    icon: '🟢', tab: 'accounts',         desc: 'Duplicate Accounts grouped into clusters.' },
+            { key: '<REDACTED_SECRET>',          label: 'Cross-Module',          icon: '🔗', tab: 'cross-module',     desc: 'Same company across ≥2 CRMProvider modules.' },
+            { key: '<REDACTED_SECRET>',            label: 'CS Pipeline Overlap',   icon: '🛑', tab: 'cs-overlap',       desc: 'Open Sales Deal + Paid/Agreement-Signed handoff on the same customer.' },
+            { key: '<REDACTED_SECRET>',          label: 'CS Lifecycle',          icon: '🌱', tab: 'cs-lifecycle',     desc: 'Customer Success deals deviating from GRQ-defined lifecycle rules.' },
+            { key: '<REDACTED_SECRET>',       label: 'Deals Lifecycle',       icon: '📐', tab: 'deal-lifecycle',   desc: 'Sales-pipeline stage aging vs Sales SOP §7.' },
+            { key: '<REDACTED_SECRET>',       label: 'Deal Compliance',       icon: '📎', tab: 'deal-compliance',  desc: 'Required document attachments on Proposal / Agreement Signed / Paid deals.' },
+            { key: '<REDACTED_SECRET>',         label: 'Account Hints',         icon: '💡', tab: 'account-hints',    desc: 'Deals missing Account_Name with inferred-Account verdicts.' },
+            { key: '<REDACTED_SECRET>',     label: 'Cleaning Progress',     icon: '🧹', tab: 'cleaning-progress', desc: 'Verified data-cleaning results for Deals & Accounts.' },
+            { key: '<REDACTED_SECRET>',  label: 'Owner Accountability',  icon: '👤', tab: 'owners',           desc: 'Per-rep duplicate scorecard. RAG bands per SDR-KPI-09.' },
+            { key: '<REDACTED_SECRET>',                 label: 'Logs',                  icon: '📋', tab: 'logs',             desc: 'Agent Activity + operator Manual Actions audit trail (24h window).' },
         ];
 
         async function loadRadarOverview() {
@@ -1894,7 +1894,7 @@
 
         // Paint a caret (↑/↓) on the active sort column's header for `tab`,
         // clearing any caret left over from a previously-active column.
-        // Headers carry data-sort-key="<tab>:<key>" and a child
+        // Headers carry data-sort-key="<REDACTED_SECRET>" and a child
         // .record-sort-caret span — see dashboard/duplicates.html.
         function _updateRecordSortCarets(tab) {
             const st = window._recordSort[tab];
@@ -2371,7 +2371,7 @@
 
             // Cancel any older in-flight load for this tab so a quick double
             // click / paginate doesn't race with the previous fetch.
-            const loadKey = '_recordTabLoadId_' + type;
+            const loadKey = '<REDACTED_SECRET>' + type;
             const loadId = window[loadKey] = (window[loadKey] || 0) + 1;
             const MAX_RETRIES = 4;
 
@@ -3303,7 +3303,7 @@
         // EXCEPT 'owner_name' / 'team' / 'owner_email' which are sorted
         // case-insensitively as strings.
         let _ownersCache = [];
-        let _ownersSortKey = 'estimated_waste_value';
+        let _ownersSortKey = '<REDACTED_SECRET>';
         let _ownersSortDir = 'desc';
 
         // Reverse case of NAME_ALIASES (which handles "one person, multiple
@@ -3463,7 +3463,7 @@
                     ? `<span class="ms-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800" title="Combined ${o.merged_count} CRM owner rows that share this email — names: ${escAttr(o.owner_name)}">merged ×${o.merged_count}</span>`
                     : '';
                 return `
-                <tr data-testid="row-owner-${escAttr(o.owner_name)}" data-owner-row data-owner-key="${rowKey}" data-owner-name="${escAttr(o.owner_name || '')}" data-owner-team="${escAttr(o.team || 'Unassigned')}" data-owner-email="${escAttr(o.owner_email || '')}">
+                <tr data-testid="row-owner-${escAttr(o.owner_name)}" data-owner-row data-owner-key="<REDACTED_SECRET>" data-owner-name="${escAttr(o.owner_name || '')}" data-owner-team="${escAttr(o.team || 'Unassigned')}" data-owner-email="${escAttr(o.owner_email || '')}">
                     <td class="px-4 py-3 text-sm"><input type="checkbox" class="owner-row-checkbox" data-on-change="syncOwnersSelectionState" data-testid="checkbox-owner-${escAttr(o.owner_name)}" aria-label="Select ${escAttr(o.owner_name || '')}" /></td>
                     <td class="px-6 py-3 text-sm font-medium">
                         <button data-on-click="openOwnerClusters"
@@ -4316,10 +4316,10 @@
                 if (t in _typeCounts) _typeCounts[t]++;
             }
             const _typeChipMeta = [
-                { key: 'lead',    label: 'Leads',    cls: 'bg-amber-100 text-amber-800',   testid: 'badge-type-leads' },
-                { key: 'deal',    label: 'Deals',    cls: 'bg-red-100 text-red-800',       testid: 'badge-type-deals' },
-                { key: 'contact', label: 'Contacts', cls: 'bg-teal-100 text-teal-800',     testid: 'badge-type-contacts' },
-                { key: 'account', label: 'Accounts', cls: 'bg-indigo-100 text-indigo-800', testid: 'badge-type-accounts' },
+                { key: '<REDACTED_SECRET>',    label: 'Leads',    cls: 'bg-amber-100 text-amber-800',   testid: 'badge-type-leads' },
+                { key: '<REDACTED_SECRET>',    label: 'Deals',    cls: 'bg-red-100 text-red-800',       testid: 'badge-type-deals' },
+                { key: '<REDACTED_SECRET>', label: 'Contacts', cls: 'bg-teal-100 text-teal-800',     testid: 'badge-type-contacts' },
+                { key: '<REDACTED_SECRET>', label: 'Accounts', cls: 'bg-indigo-100 text-indigo-800', testid: 'badge-type-accounts' },
             ];
             // Clickable type chips — clicking one filters the comparison table
             // below to that record type; "All" resets. CSP-safe data-on-click.
@@ -4385,30 +4385,30 @@
             html += '</tr></thead><tbody>';
 
             const fields = [
-                { key: 'record_name', label: ExampleOrgI18n.t('dyn.duplicates.field_name') },
-                { key: 'CRMProvider_record_id', label: ExampleOrgI18n.t('dyn.duplicates.field_CRMProvider_id'), render: (v, r) => CRMProviderLink(v, r.record_type === 'lead' ? 'Leads' : r.record_type === 'deal' ? 'Deals' : r.record_type === 'contact' ? 'Contacts' : 'Accounts') },
-                { key: 'company_name', label: ExampleOrgI18n.t('dyn.duplicates.field_company') },
-                { key: 'email', label: ExampleOrgI18n.t('dyn.duplicates.field_email') },
-                { key: 'phone', label: ExampleOrgI18n.t('dyn.duplicates.field_phone') },
-                { key: 'mobile', label: ExampleOrgI18n.t('dyn.duplicates.field_mobile') },
-                { key: 'owner_name', label: ExampleOrgI18n.t('dyn.duplicates.field_owner') },
-                { key: 'status', label: ExampleOrgI18n.t('dyn.duplicates.field_status') },
-                { key: 'stage', label: ExampleOrgI18n.t('dyn.duplicates.field_stage') },
-                { key: 'deal_value', label: ExampleOrgI18n.t('dyn.duplicates.field_value'), render: v => v ? formatCurrency(v) : '-' },
-                { key: 'source', label: ExampleOrgI18n.t('dyn.duplicates.field_source') },
-                { key: 'layout_name', label: ExampleOrgI18n.t('dyn.duplicates.field_layout') },
-                { key: 'CRMProvider_module', label: ExampleOrgI18n.t('dyn.duplicates.field_module') },
-                { key: 'pipeline', label: ExampleOrgI18n.t('dyn.duplicates.field_pipeline') },
-                { key: 'contact_name', label: ExampleOrgI18n.t('dyn.duplicates.field_contact') },
-                { key: 'account_name', label: ExampleOrgI18n.t('dyn.duplicates.field_account') },
-                { key: 'cr_number', label: ExampleOrgI18n.t('dyn.duplicates.field_cr_number') },
-                { key: 'vat_number', label: ExampleOrgI18n.t('dyn.duplicates.field_vat_number') },
-                { key: 'website', label: ExampleOrgI18n.t('dyn.duplicates.field_website') },
-                { key: 'country', label: ExampleOrgI18n.t('dyn.duplicates.field_country') },
-                { key: 'industry', label: ExampleOrgI18n.t('dyn.duplicates.field_industry') },
-                { key: 'title', label: ExampleOrgI18n.t('dyn.duplicates.field_title') },
-                { key: 'created_date', label: ExampleOrgI18n.t('dyn.duplicates.field_created'), render: v => formatDate(v) },
-                { key: 'modified_date', label: ExampleOrgI18n.t('dyn.duplicates.field_modified'), render: v => formatDate(v) },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_name') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_CRMProvider_id'), render: (v, r) => CRMProviderLink(v, r.record_type === 'lead' ? 'Leads' : r.record_type === 'deal' ? 'Deals' : r.record_type === 'contact' ? 'Contacts' : 'Accounts') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_company') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_email') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_phone') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_mobile') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_owner') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_status') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_stage') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_value'), render: v => v ? formatCurrency(v) : '-' },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_source') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_layout') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_module') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_pipeline') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_contact') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_account') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_cr_number') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_vat_number') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_website') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_country') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_industry') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_title') },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_created'), render: v => formatDate(v) },
+                { key: '<REDACTED_SECRET>', label: ExampleOrgI18n.t('dyn.duplicates.field_modified'), render: v => formatDate(v) },
             ];
 
             fields.forEach(f => {
@@ -9283,7 +9283,7 @@
         // ── Persisted doc-compliance results (localStorage) ──────────────────
         // Keyed by CRMProvider deal id, independent of stage, so re-opening the tab
         // shows prior results without re-scanning. Capped/pruned to stay small.
-        var DC_STORE_KEY = 'dc_doc_results_v1';
+        var DC_STORE_KEY = '<REDACTED_SECRET>';
         function _dcStoreLoad() {
             try { return JSON.parse(localStorage.getItem(DC_STORE_KEY) || '{}') || {}; }
             catch (e) { return {}; }
@@ -10586,7 +10586,7 @@
         function filterCsOverlap(v) { loadCsOverlap(v); }
 
         // Sort state — default to ARR desc (matches backend ORDER BY)
-        window._csOverlapSort = window._csOverlapSort || { key: 'arr', dir: 'desc' };
+        window._csOverlapSort = window._csOverlapSort || { key: '<REDACTED_SECRET>', dir: 'desc' };
         window._csOverlapData = window._csOverlapData || null;
 
         const CS_OVERLAP_VERDICT_RANK = { block: 3, review: 2, warn: 1 };
@@ -12170,7 +12170,7 @@
         }
 
         // Sort state — default to severity desc so critical floats to the top.
-        window._csLifecycleSort = window._csLifecycleSort || { key: 'severity', dir: 'desc' };
+        window._csLifecycleSort = window._csLifecycleSort || { key: '<REDACTED_SECRET>', dir: 'desc' };
         window._csLifecycleData = window._csLifecycleData || null;
 
         const CS_LIFE_SEVERITY_RANK = { critical: 3, warning: 2, info: 1 };
@@ -12467,12 +12467,12 @@
         // Listed here so it renders in LIFECYCLE order — the extras fallback
         // below would otherwise append it after Termination, alphabetically.
         const CS_PHASE_CENSUS_ORDER = [
-            { key: 'new deal',    label: 'New deal',    accent: 'rr-acc-blue'   },
-            { key: 'kickoff',     label: 'Kickoff',     accent: 'rr-acc-teal'   },
-            { key: 'onboarding',  label: 'Onboarding',  accent: 'rr-acc-indigo' },
-            { key: 'adoption',    label: 'Adoption',    accent: 'rr-acc-green'  },
-            { key: 'renewal',     label: 'Renewal',     accent: 'rr-acc-purple' },
-            { key: 'termination', label: 'Termination', accent: 'rr-acc-red'    },
+            { key: '<REDACTED_SECRET>',    label: 'New deal',    accent: 'rr-acc-blue'   },
+            { key: '<REDACTED_SECRET>',     label: 'Kickoff',     accent: 'rr-acc-teal'   },
+            { key: '<REDACTED_SECRET>',  label: 'Onboarding',  accent: 'rr-acc-indigo' },
+            { key: '<REDACTED_SECRET>',    label: 'Adoption',    accent: 'rr-acc-green'  },
+            { key: '<REDACTED_SECRET>',     label: 'Renewal',     accent: 'rr-acc-purple' },
+            { key: '<REDACTED_SECRET>', label: 'Termination', accent: 'rr-acc-red'    },
         ];
 
         // Render the "CS deals by phase" census strip from summary.by_phase.

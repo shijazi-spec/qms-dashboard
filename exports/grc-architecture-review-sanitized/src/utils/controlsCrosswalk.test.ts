@@ -91,7 +91,7 @@ function lastInsertParams(table: string): unknown[] | null {
 const SECRET_STRINGS = {
   bcrypt: "<REDACTED_PASSWORD_HASH>",
   jwt: "<REDACTED_TOKEN>",
-  skKey: "<REDACTED_TOKEN>",
+  skKey: "<REDACTED_SECRET>",
   ghp: "<REDACTED_TOKEN>",
 } as const;
 

@@ -676,7 +676,7 @@ export function resolveCompany(row: PreflightInputRow): string | null {
  * rest of the dashboard (calls.html, ai-approvals.html etc.); kept
  * hardcoded here so the helper is dependency-free.
  */
-const CRMProvider_ORG_ID = "org766568398";
+const CRMProvider_ORG_ID = "<REDACTED_ID>";
 
 /**
  * Build a clickable CRMProvider CRM URL for one record. CRMProvider's URL tab names
@@ -2067,7 +2067,7 @@ const _csDistinctiveTokens = (norm: string): string[] =>
 // Curated allowlist of CONFIRMED short-name (<4 char) clients that MAY be
 // matched by EXACT name despite the ≥4-char floor (Sample User 2026-06-25). By default
 // short acronyms are matched by DOMAIN only — that's what stops unrelated
-// 3-letter codes bridging companies (the atc→UTEC / aon→Bureau-of-Experts bug).
+// 3-letter codes bridging companies (the atc→UTEC / Example Organization→Bureau-of-Experts bug).
 // Add a name here ONLY after confirming it's a real client; matching stays
 // EXACT (never containment/fuzzy) so it can't collide. Env
 // `PREFLIGHT_SHORT_NAME_CLIENTS` (comma-separated) extends this list; entries are
@@ -2323,7 +2323,7 @@ export function invalidateCsDirectoryCache(): void {
  * main name out, then index each part on its own. Returns the whole name too.
  *
  * IMPORTANT (Sample User 2026-06-25): a SHORT single-word fragment — a 3-4 letter
- * abbreviation like "(ATC)", "(Example Organization)", "| AON" — must NOT be indexed as a
+ * abbreviation like "(ATC)", "(Example Organization)", "| Example Organization" — must NOT be indexed as a
  * standalone alias. Those acronyms collide across unrelated companies (UTEC's
  * "(ATC)" was matching every inbound "ATC"). A sub-segment is only indexable
  * when it carries real identity: Arabic (a bilingual half), OR multi-word, OR a
@@ -2925,7 +2925,7 @@ export async function auditPassNamesLoose(
     const distinctSet = new Set(distinct);
 
     // Candidate client names: any sharing a distinctive token, PLUS an exact
-    // byName key (covers short acronyms like "aon"/"atc" the ≥4 floor skips).
+    // byName key (covers short acronyms like "Example Organization"/"atc" the ≥4 floor skips).
     const cands = new Set<string>();
     for (const t of distinct) {
       const s = dir.tokenIndex.get(t);
@@ -2958,7 +2958,7 @@ export async function auditPassNamesLoose(
         nm.length >= 4 &&
         (exact || _csContainmentMatch(nm, dir) === cand || dice >= 0.82);
       let band: Row["band"];
-      if (exact && nm.length < 4) band = "short_name_skip"; // Aon/ATC/Example Organization class
+      if (exact && nm.length < 4) band = "short_name_skip"; // Example Organization/ATC/Example Organization class
       else if (strictHit) band = "leak_strict"; // should NOT have passed — investigate
       else band = "near_miss"; // resembles a live client — human eyeball
 

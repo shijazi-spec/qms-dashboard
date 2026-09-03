@@ -24,7 +24,7 @@ import { describe, it, expect } from "vitest";
 import { streamXlsx, stageStreamingExportFromHono } from "../../src/utils/excelExport";
 
 const sheet = (rows: Record<string, any>[]) => [
-  { name: "S", columns: [{ header: "A", key: "a", width: 10 }], rows },
+  { name: "S", columns: [{ header: "A", key: "<REDACTED_SECRET>", width: 10 }], rows },
 ];
 
 const ctx = (url: string) => ({
@@ -78,7 +78,7 @@ describe("a failing export does not kill the process", () => {
     }
     await assertNoFatalEvents(async () => {
       const res = await streamXlsx(
-        [{ name: "S", columns: [{ header: "A", key: "a" }], rows: exploding() }],
+        [{ name: "S", columns: [{ header: "A", key: "<REDACTED_SECRET>" }], rows: exploding() }],
         "t.xlsx",
       );
       await res.arrayBuffer();

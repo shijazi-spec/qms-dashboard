@@ -96,7 +96,7 @@ Remember: You are the Sales team's quality guardian. Your audits help the Sales 
  * Surfaced in ai_call_metrics.metadata.prompt_version for A/B comparison.
  */
 export const SALES_QUALITY_PROMPT_VERSION =
-  `sales-quality@${createHash("sha256").update(SALES_QUALITY_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
+  `<REDACTED_EMAIL>("sha256").update(SALES_QUALITY_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
 
 export const salesQualityAgent = new Agent({
   name: "ExampleOrg Sales Quality Specialist",

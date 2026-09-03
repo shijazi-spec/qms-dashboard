@@ -28,7 +28,7 @@ interface CapturedQuery { sql: string; params: unknown[] }
 const captured: CapturedQuery[] = [];
 
 const fakeRow = {
-  id: 1, bu_key: "ci-bu", bu_name: "CI BU", channel: "B2B",
+  id: 1, bu_key: "<REDACTED_SECRET>", bu_name: "CI BU", channel: "B2B",
   segment: "ExampleOrg", fn: "eng", head_email: null, policy_department: null,
   kpi_bu_name: null, kpi_owner_name: null, sort_order: 0, is_active: true,
   created_at: new Date(), updated_at: new Date(),
@@ -61,7 +61,7 @@ console.log("\n=== upsertBU — write-path tests ===\n");
 {
   captured.length = 0;
   const bu = await upsertBU({
-    bu_key: "ci-bu",
+    bu_key: "<REDACTED_SECRET>",
     bu_name: "CI Business Unit",
     channel: "B2B",
     fn: "Engineering",

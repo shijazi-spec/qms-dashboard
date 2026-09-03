@@ -81,7 +81,7 @@ ExampleOrg connects to CRMProvider CRM to perform **read-only data quality audit
 |-------|---------|-------------|
 | **Client ID** | `1000.ABCDEFGHIJKLMNOP` | `CRMProvider_CLIENT_ID` secret |
 | **Client Secret** | `abcdef1234567890abcdef` | `CRMProvider_CLIENT_SECRET` secret |
-| **Refresh Token** | `1000.xxxxxxxxxxxx.yyyyyyyyyyyy` | `CRMProvider_REFRESH_TOKEN` secret |
+| **Refresh Token** | `<REDACTED_SECRET>` | `CRMProvider_REFRESH_TOKEN` secret |
 | **Accounts URL** | `<REDACTED_URL>` (default) | `CRMProvider_ACCOUNTS_URL` secret (optional) |
 | **API Domain** | `<REDACTED_URL>` (default) | `CRMProvider_API_DOMAIN` secret (optional) |
 
@@ -368,8 +368,8 @@ All secrets should be set as environment variables (never hardcoded). Here is th
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `CRMProvider_CLIENT_ID` | Yes | OAuth Client ID from CRMProvider API Console | `1000.ABCDEFGHIJKLMNOP` |
-| `CRMProvider_CLIENT_SECRET` | Yes | OAuth Client Secret | `abcdef1234567890...` |
-| `CRMProvider_REFRESH_TOKEN` | Yes | OAuth Refresh Token (permanent) | `1000.xxxx.yyyy` |
+| `CRMProvider_CLIENT_SECRET` | Yes | OAuth Client Secret | `<REDACTED_SECRET>...` |
+| `CRMProvider_REFRESH_TOKEN` | Yes | OAuth Refresh Token (permanent) | `<REDACTED_SECRET>` |
 | `CRMProvider_ACCOUNTS_URL` | No | CRMProvider accounts URL (defaults to US) | `<REDACTED_URL>` |
 | `CRMProvider_API_DOMAIN` | No | CRMProvider API domain (defaults to US) | `<REDACTED_URL>` |
 

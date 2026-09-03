@@ -41,13 +41,13 @@ export const SESSION_COOKIE_NAME = "ExampleOrg_session";
  * SESSION_SECRET when present so the cookie verifies against the same value
  * the application code reads; otherwise fall back to a fixed test secret.
  */
-export const TEST_SESSION_SECRET =
+export const <REDACTED_SECRET> =
   process.env.SESSION_SECRET || "<REDACTED_SECRET>";
 
 // Ensure authRoutes.signSession()/verifySession() use the same secret we sign
 // with. verifySession() reads process.env.SESSION_SECRET at call time, so
 // setting it here (before any request is dispatched) is sufficient.
-process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+process.env.SESSION_SECRET = <REDACTED_SECRET>;
 
 const platformUsers = new Map<string, { status: string; role: string }>();
 
@@ -106,7 +106,7 @@ function signFakeSession(
 
 /** Deterministic test email for a given role. */
 export function emailForRole(role: string): string {
-  return `${role}@test.example`;
+  return `<REDACTED_EMAIL>`;
 }
 
 /**
@@ -127,7 +127,7 @@ export function makeCookieForRole(
       role,
       exp: Date.now() + 3_600_000,
     },
-    TEST_SESSION_SECRET,
+    <REDACTED_SECRET>,
   );
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`;
 }

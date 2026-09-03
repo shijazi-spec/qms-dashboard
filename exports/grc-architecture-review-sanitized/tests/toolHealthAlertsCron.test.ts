@@ -1437,7 +1437,7 @@ await suite.test(
       dedupeChecks.length > dedupeChecksBefore,
       "third run performed a fresh dedupe lookup",
     );
-    const newKey = `tool_health:reopen_tool:error_rate`;
+    const newKey = `<REDACTED_SECRET>`;
     suite.expect(
       existingDedupeKeys.has(newKey),
       "after run 3 the new alert is once again present in the dedupe set",

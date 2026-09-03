@@ -47,7 +47,7 @@ vi.mock("../../src/utils/callIntelligenceDb", () => ({
   createOrUpdateQAScore: vi.fn(),
 }));
 
-const ADMIN_KEY = "vitest-call-intel-key-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 const AUTH_HEADERS = { "X-Admin-Key": ADMIN_KEY };
 
 let callDb: typeof import("../../src/utils/callIntelligenceDb");

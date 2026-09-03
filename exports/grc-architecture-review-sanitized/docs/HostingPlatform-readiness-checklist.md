@@ -36,7 +36,7 @@
 
 - Move plaintext secrets out of `.HostingPlatform` and rotate them:
   - `ADMIN_API_KEY`
-  - `TEST_ADMIN_KEY`
+  - `<REDACTED_SECRET>`
 - Store runtime secrets in HostingPlatform Secrets only.
 - Confirm no sensitive credentials are committed anywhere else (`.env`, docs, scripts).
 

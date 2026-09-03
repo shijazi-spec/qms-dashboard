@@ -271,7 +271,7 @@ for (const key of REQUIRED_DENY_KEYS) {
   // Place the raw secret inside the account_name and contact email so it
   // flows naturally into the INSERT.
   const pollutedAccountName = `Example Organization ${raw} Holdings`;
-  const pollutedEmail = `ops+${raw}@Example Organization.example`;
+  const pollutedEmail = `ops+<REDACTED_EMAIL> Organization.example`;
 
   handler = (sql) => {
     const s = sql.replace(/\s+/g, " ").trim();

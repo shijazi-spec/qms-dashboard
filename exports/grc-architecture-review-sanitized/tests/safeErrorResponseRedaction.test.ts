@@ -10,7 +10,7 @@
  * when a route's catch block returns
  *   c.json({ error: 'Failed to …', details: error.message }, 500)
  * the raw exception text — which may include the credential echoed back by
- * the upstream SDK (e.g. "Invalid token sk-live-…") — was previously
+ * the upstream SDK (e.g. "Invalid token <REDACTED_TOKEN_PREFIX>-…") — was previously
  * returned to the user-facing API caller and surfaced in client toasts.
  *
  * This test exercises the `redactSecretsInResponse(c)` post-processor to
@@ -70,7 +70,7 @@ async function bodyOf(res: Response): Promise<any> {
 }
 
 (async function main() {
-  // 1. sk-live-… in error.details is redacted ----------------------------------
+  // 1. <REDACTED_TOKEN_PREFIX>-… in error.details is redacted ----------------------------------
   {
     const ctx = makeFakeContext(
       makeJsonResponse(
@@ -85,11 +85,11 @@ async function bodyOf(res: Response): Promise<any> {
     const body = await bodyOf(ctx.res);
     assert(
       typeof body.details === 'string' && body.details.includes(REDACTED_SENTINEL),
-      '500 response with sk-live-… in details has the secret replaced with REDACTED sentinel',
+      '500 response with <REDACTED_TOKEN_PREFIX>-… in details has the secret replaced with REDACTED sentinel',
     );
     assert(
       typeof body.details === 'string' && !body.details.includes('<REDACTED_TOKEN>'),
-      '500 response with sk-live-… does not echo the original secret back',
+      '500 response with <REDACTED_TOKEN_PREFIX>-… does not echo the original secret back',
     );
     assert(body.error === 'Failed to call upstream', 'non-secret error label is preserved verbatim');
     assert(ctx.res.status === 500, 'status code is preserved');
@@ -149,7 +149,7 @@ async function bodyOf(res: Response): Promise<any> {
   }
 
   // 4. Successful 2xx responses are NOT walked --------------------------------
-  // Real entity payloads with the literal substring "sk-live-…" are extremely
+  // Real entity payloads with the literal substring "<REDACTED_TOKEN_PREFIX>-…" are extremely
   // rare, but we still must not pay the cost of walking multi-MB success
   // bodies on every request, AND we must not corrupt entity data that
   // happens to contain a string matching the deny-list.

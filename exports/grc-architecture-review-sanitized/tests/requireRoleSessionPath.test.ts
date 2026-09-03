@@ -33,11 +33,11 @@
  * Run:  npx tsx tests/requireRoleSessionPath.test.ts
  */
 
-const TEST_ADMIN_KEY = "test-admin-key-rrole";
-const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
 
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+process.env.SESSION_SECRET = <REDACTED_SECRET>;
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "<REDACTED_DSN>";
 
@@ -365,7 +365,7 @@ console.log(
 {
   setPlatformRow("<REDACTED_EMAIL>", { status: "active", role: "admin" });
   stub.callCount = 0;
-  const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  const c = makeContext({ adminKeyHeader: <REDACTED_SECRET> });
   const user = await requireRole(c, ["admin"]);
   assertEquals(user, null, "requireRole returns null for key-only callers");
   assertEquals(

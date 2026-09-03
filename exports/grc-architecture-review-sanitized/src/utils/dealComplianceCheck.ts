@@ -46,14 +46,14 @@ const FULL_DOC_STAGES = [
 
 // Financial offer / commercial proposal (العرض المالي).
 const DOC_FINANCIAL_OFFER: RequiredDoc = {
-  key: "financial_offer",
+  key: "<REDACTED_SECRET>",
   label: "Financial offer / proposal (العرض المالي)",
   match: /proposal|offer|quotation|quote|عرض|مالي|عرض\s*مالي/i,
 };
 
 // Full set required once the deal is Paid / Agreement Signed (SOP 7.5.10).
 const DOC_PROPOSAL_SENT: RequiredDoc = {
-  key: "proposal_sent",
+  key: "<REDACTED_SECRET>",
   label: "Proposal sent (latest version)",
   match: /proposal|offer|عرض/i,
 };
@@ -63,7 +63,7 @@ const DOC_PROPOSAL_SENT: RequiredDoc = {
 // 2026-08-03 two-doc split to reflect the governance document exactly
 // (Sample User 2026-08-09). Any ONE of these attachments satisfies the requirement.
 const DOC_QUOTATION_AGREEMENT: RequiredDoc = {
-  key: "quotation_agreement",
+  key: "<REDACTED_SECRET>",
   label: "Quotation / PO / Service Agreement / Contract",
   // "msa" (Master Service Agreement) and "sow" (Statement of Work) added
   // 2026-09-03: Example Organization filed its contract as "msa for RB Employee
@@ -74,17 +74,17 @@ const DOC_QUOTATION_AGREEMENT: RequiredDoc = {
   match: /quotation|quote|\bp\.?o\.?\b|purchase\s*order|invoice|\binv[\s._-]?\d|\bmsa\b|\bsow\b|service\s*agreement|agreement|contract|اتفاقية|عقد|اتفاق|فاتورة|عرض\s*سعر|أمر\s*شراء/i,
 };
 const DOC_VAT: RequiredDoc = {
-  key: "vat",
+  key: "<REDACTED_SECRET>",
   label: "VAT Certificate",
   match: /\bvat\b|tax\s*cert|الضريب|ضريبة|القيمة\s*المضافة/i,
 };
 const DOC_CR: RequiredDoc = {
-  key: "commercial_registration",
+  key: "<REDACTED_SECRET>",
   label: "Commercial Registration (CR)",
   match: /commercial\s*reg|registration\s*cert|\bc\.?r\.?\b|cr[\s_-]*cert|سجل\s*تجاري|السجل\s*التجاري/i,
 };
 const DOC_NATIONAL_ADDRESS: RequiredDoc = {
-  key: "national_address",
+  key: "<REDACTED_SECRET>",
   label: "National Address",
   match: /national\s*address|nat[\s_-]*address|عنوان\s*وطني|العنوان\s*الوطني/i,
 };

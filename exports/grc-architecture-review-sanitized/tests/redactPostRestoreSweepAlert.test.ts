@@ -163,7 +163,7 @@ interface DispatcherStub {
  * like this — kept obviously fake so a leaked test fixture is never
  * mistaken for a credential by the redaction sweep itself.
  */
-const STUB_EmailProvider_KEY = "re_test_aaaaaaaaaaaaaaaaaaaaaa";
+const STUB_EmailProvider_KEY = "<REDACTED_SECRET>";
 
 function buildStub(
   options: {

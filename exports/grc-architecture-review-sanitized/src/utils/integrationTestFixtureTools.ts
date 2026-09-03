@@ -47,7 +47,7 @@ export const INT_TEST_THROW_TOOL_ID =
 /* ------------------------------------------------------------------ */
 
 export const INT_APPROVE_RESULT_SK_KEY =
-  '<REDACTED_TOKEN>';
+  '<REDACTED_SECRET>';
 export const INT_APPROVE_RESULT_GH_TOKEN =
   '<REDACTED_SECRET>';
 export const INT_APPROVE_RESULT_BCRYPT =
@@ -55,7 +55,7 @@ export const INT_APPROVE_RESULT_BCRYPT =
 export const INT_APPROVE_RESULT_ACCESS =
   'eyJhbGciLEAKDETECTORINTAPPROVE_freshaccesstoken9988';
 export const INT_APPROVE_THROW_SK_KEY =
-  '<REDACTED_TOKEN>';
+  '<REDACTED_SECRET>';
 
 /* ------------------------------------------------------------------ */
 /* Conditional registration: development/test only                    */

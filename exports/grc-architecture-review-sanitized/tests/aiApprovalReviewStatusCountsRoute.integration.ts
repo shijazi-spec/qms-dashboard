@@ -269,7 +269,7 @@ async function seedActions(
       riskLevel: shape.riskLevel,
       complianceRefs: ["REVIEW-COUNTS-INT-TEST"],
       requestedByUserId: shape.ownerUserId,
-      requestedByEmail: `req-${shape.ownerUserId}@ExampleOrg-test.invalid`,
+      requestedByEmail: `req-<REDACTED_EMAIL>`,
       requestedByName: `Synthetic Requester ${shape.ownerUserId}`,
       threadId: `thr_review_counts_int_${shape.ownerUserId}`,
     });
@@ -289,7 +289,7 @@ async function seedActions(
     for (const viewerUserId of row.viewerUserIds) {
       await logEvent({
         userId: viewerUserId,
-        userEmail: `viewer-${viewerUserId}@ExampleOrg-test.invalid`,
+        userEmail: `viewer-<REDACTED_EMAIL>`,
         userRole: "quality_manager",
         actionType: "AI_ACTION",
         entityType: "SYSTEM",

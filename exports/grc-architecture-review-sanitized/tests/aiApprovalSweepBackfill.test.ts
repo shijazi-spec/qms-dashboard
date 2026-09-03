@@ -320,7 +320,7 @@ async function run(): Promise<void> {
       // regex redaction can remove the credentials they contain.
       payload: {
         target: "CRMProvider_books",
-        note: `key=sk-live-${innocuousSecret.slice(3)}`,
+        note: `key=<REDACTED_TOKEN_PREFIX>-${innocuousSecret.slice(3)}`,
         message: `rotated to ${innocuousSecret}`,
       },
       payload_preview: innocuousSafe,

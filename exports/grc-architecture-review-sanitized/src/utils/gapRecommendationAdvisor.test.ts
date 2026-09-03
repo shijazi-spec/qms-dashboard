@@ -53,7 +53,7 @@ const REDACTED_SENTINEL = "***REDACTED***";
 // Credential-shaped strings proven to be caught by the recursive regex pass
 // (mirrors changeHistoryDatabase.test.ts Section 4b).
 const GHP_TOKEN = "<REDACTED_SECRET>";
-const SK_KEY = "<REDACTED_TOKEN>";
+const SK_KEY = "<REDACTED_SECRET>";
 const JWT_TOKEN =
   "<REDACTED_SECRET>";
 

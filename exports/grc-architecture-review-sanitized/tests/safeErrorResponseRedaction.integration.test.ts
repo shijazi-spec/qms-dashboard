@@ -32,13 +32,13 @@
  *
  * Routes exercised:
  *   1. `/api/health/json-secret`   — `c.json({ details }, 500)` with a
- *      `sk-live-…` credential in `details`. Direct exercise of the
+ *      `<REDACTED_TOKEN_PREFIX>-…` credential in `details`. Direct exercise of the
  *      post-processor on a route-rendered error body.
- *   2. `/api/health/throw-secret`  — throws `Error("...sk-live-...")`.
+ *   2. `/api/health/throw-secret`  — throws `Error("...<REDACTED_TOKEN_PREFIX>-...")`.
  *      Mastra's onError converts this to a STATIC `"Internal Server Error"`
  *      body — the secret cannot reach the wire even without any rewrap.
  *   3. `/api/health/throw-http-secret` — throws
- *      `new HTTPException(502, { message: "...sk-live-..." })`. Mastra's
+ *      `new HTTPException(502, { message: "...<REDACTED_TOKEN_PREFIX>-..." })`. Mastra's
  *      onError renders `{ error: err.message }` → the credential WOULD be
  *      echoed if the post-processor weren't wired. Asserts the post-
  *      processor scrubbed it out.
@@ -94,7 +94,7 @@ import { z } from "zod";
 import { globalMiddleware } from "../src/mastra/middleware/index";
 import { REDACTED_SENTINEL } from "../src/utils/eventLogsDatabase";
 
-// 40-char hex-shaped credential matching the `sk-live-` deny-list pattern
+// 40-char hex-shaped credential matching the `<REDACTED_TOKEN_PREFIX>-` deny-list pattern
 // in `redactSecretLikeStrings`.
 const SECRET = "<REDACTED_SECRET>";
 const ADMIN_KEY = process.env.ADMIN_API_KEY!;
@@ -227,7 +227,7 @@ function buildApp(): Hono {
     );
     assert(
       typeof body.details === "string" && !body.details.includes(SECRET),
-      "json-secret response does NOT echo the raw sk-live-… credential",
+      "json-secret response does NOT echo the raw <REDACTED_TOKEN_PREFIX>-… credential",
     );
     assert(
       body.error === "Failed to call upstream",
@@ -258,7 +258,7 @@ function buildApp(): Hono {
     );
     assert(
       JSON.stringify(body).indexOf(SECRET) === -1,
-      "throw-secret HTTP response body does NOT carry the raw sk-live-… credential",
+      "throw-secret HTTP response body does NOT carry the raw <REDACTED_TOKEN_PREFIX>-… credential",
     );
   }
 
@@ -286,7 +286,7 @@ function buildApp(): Hono {
     );
     assert(
       typeof body.error === "string" && !body.error.includes(SECRET),
-      "throw-http-secret response does NOT carry the raw sk-live-… credential from HTTPException.message",
+      "throw-http-secret response does NOT carry the raw <REDACTED_TOKEN_PREFIX>-… credential from HTTPException.message",
     );
   }
 
@@ -333,7 +333,7 @@ function buildApp(): Hono {
     );
     assert(
       JSON.stringify(body).indexOf(SECRET) === -1,
-      "throw-mastra-secret HTTP response body does NOT carry the raw sk-live-… credential",
+      "throw-mastra-secret HTTP response body does NOT carry the raw <REDACTED_TOKEN_PREFIX>-… credential",
     );
   }
 
@@ -363,7 +363,7 @@ function buildApp(): Hono {
     );
     assert(
       JSON.stringify(body).indexOf(SECRET) === -1,
-      "throw-zod-secret HTTP response body does NOT carry the raw sk-live-… credential",
+      "throw-zod-secret HTTP response body does NOT carry the raw <REDACTED_TOKEN_PREFIX>-… credential",
     );
   }
 

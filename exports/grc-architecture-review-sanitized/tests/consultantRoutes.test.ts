@@ -31,8 +31,8 @@ const HAS_DB = !!process.env.DATABASE_URL;
 // call requireRole() inside the handler (which now always does a DB lookup).
 // A platform_users row is seeded before the DB-backed tests run and torn down
 // in the cleanup step at the end.
-const TEST_SESSION_SECRET = process.env.SESSION_SECRET ?? "consultant-test-secret-2026";
-if (!process.env.SESSION_SECRET) process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+const <REDACTED_SECRET> = process.env.SESSION_SECRET ?? "<REDACTED_SECRET>";
+if (!process.env.SESSION_SECRET) process.env.SESSION_SECRET = <REDACTED_SECRET>;
 const TEST_AUTH_EMAIL = "<REDACTED_EMAIL>";
 const TEST_AUTH_ROLE = "admin"; // admin role: can access consultant routes and sees isAdmin=true in feedback stats
 
@@ -40,7 +40,7 @@ import crypto from "crypto";
 
 function consultantSignSession(payload: Record<string, any>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = crypto.createHmac("sha256", TEST_SESSION_SECRET).update(data).digest("base64url");
+  const sig = crypto.createHmac("sha256", <REDACTED_SECRET>).update(data).digest("base64url");
   return `${data}.${sig}`;
 }
 

@@ -32,14 +32,14 @@ import { Pool, type QueryResult, type QueryResultRow } from "pg";
 // Set SESSION_SECRET BEFORE importing the route so that
 // authRoutes.getSessionFromCookie (which i18nRoutes calls) can verify
 // the forged cookie below.
-const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
-process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+process.env.SESSION_SECRET = <REDACTED_SECRET>;
 
 const SESSION_COOKIE_NAME = "ExampleOrg_session";
 function signSession(payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = crypto
-    .createHmac("sha256", TEST_SESSION_SECRET)
+    .createHmac("sha256", <REDACTED_SECRET>)
     .update(data)
     .digest("base64url");
   return `${data}.${sig}`;

@@ -412,7 +412,7 @@ describe('AI Approvals — detail modal (Task #297)', () => {
     // Dispatch Escape on the document — the inline script binds the
     // listener at document scope.
     const escapeEvent = new env.win.KeyboardEvent('keydown', {
-      key: 'Escape',
+      key: '<REDACTED_SECRET>',
       bubbles: true,
       cancelable: true,
     });
@@ -482,7 +482,7 @@ describe('AI Approvals — detail modal (Task #297)', () => {
 
     // Close the modal BEFORE the detail fetch resolves.
     doc.dispatchEvent(
-      new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      new win.KeyboardEvent('keydown', { key: '<REDACTED_SECRET>', bubbles: true, cancelable: true }),
     );
     expect(modal.classList.contains('hidden')).toBe(true);
 

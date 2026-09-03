@@ -17,7 +17,7 @@ import {
   type WeeklyDigest,
 } from "../../src/utils/weeklyDigest";
 
-const FLAG_KEY = "WEEKLY_DIGEST";
+const FLAG_KEY = "<REDACTED_SECRET>";
 
 afterEach(() => {
   delete process.env[FLAG_KEY];
@@ -135,7 +135,7 @@ describe("renderDigestChatProviderBlocks", () => {
   });
   test("caps at 10 agents and adds 'and N more' context", () => {
     const manyAgents = Array.from({ length: 15 }, (_, i) => ({
-      agent_email: `a${i}@x`,
+      agent_email: `a<REDACTED_EMAIL>`,
       agent_name: `Agent${i}`,
       call_count: 5,
       evaluated_count: 5,

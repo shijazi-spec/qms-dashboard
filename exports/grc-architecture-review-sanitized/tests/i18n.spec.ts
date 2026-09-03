@@ -16,7 +16,7 @@
  * Run:
  *   npx playwright test tests/i18n.spec.ts --reporter=line
  *
- * For tests that require authentication, set TEST_ADMIN_KEY in the environment.
+ * For tests that require authentication, set <REDACTED_SECRET> in the environment.
  * Authenticated tests are skipped when the key is absent.
  *
  * These tests use the running dev server (<REDACTED_URL>
@@ -55,7 +55,7 @@ async function clearLanguage(page: Page) {
 
 test.describe('Login page — i18n', () => {
   // The Playwright config sets `X-Admin-Key` on every request when
-  // TEST_ADMIN_KEY is exported (see playwright.config.ts). That makes
+  // <REDACTED_SECRET> is exported (see playwright.config.ts). That makes
   // `/api/auth/me` report `authenticated: true`, and the inline script in
   // dashboard/login.html (`if (data.authenticated) window.location.href = '/'`)
   // bounces the browser straight off the login page before the i18n strings
@@ -495,7 +495,7 @@ test.describe('i18n module availability', () => {
 // --- Helper for authenticated tests ---
 
 async function authenticate(page: Page): Promise<boolean> {
-  const adminKey = process.env.TEST_ADMIN_KEY;
+  const adminKey = process.env.<REDACTED_SECRET>;
   if (!adminKey) return false;
   const res = await page.request.post(`${BASE_URL}/api/admin/auth`, {
     <REDACTED_SCHEME> { key: adminKey },
@@ -755,18 +755,18 @@ test.describe('GRC page — Arabic labels', () => {
     }, { timeout: 5000 });
 
     const checks: Array<{ key: string; english: string }> = [
-      { key: 'grc.risk_heat_map', english: 'Risk Heat Map' },
-      { key: 'grc.module_status', english: 'GRC Module Status' },
-      { key: 'grc.compliance_by_framework', english: 'Compliance by Framework' },
-      { key: 'grc.handoff_rules', english: 'Handoff Rules' },
-      { key: 'grc.quality_grc_integration', english: 'Quality-GRC Integration' },
-      { key: 'grc.control_effectiveness', english: 'Control Effectiveness' },
-      { key: 'grc.audit_readiness', english: 'Audit Readiness' },
-      { key: 'grc.recent_handoff_events', english: 'Recent Handoff Events' },
-      { key: 'grc.col_rule', english: 'Rule' },
-      { key: 'grc.col_status', english: 'Status' },
-      { key: 'grc.readiness_score', english: 'Readiness Score' },
-      { key: 'grc.external_audits', english: 'External Audits' },
+      { key: '<REDACTED_SECRET>', english: 'Risk Heat Map' },
+      { key: '<REDACTED_SECRET>', english: 'GRC Module Status' },
+      { key: '<REDACTED_SECRET>', english: 'Compliance by Framework' },
+      { key: '<REDACTED_SECRET>', english: 'Handoff Rules' },
+      { key: '<REDACTED_SECRET>', english: 'Quality-GRC Integration' },
+      { key: '<REDACTED_SECRET>', english: 'Control Effectiveness' },
+      { key: '<REDACTED_SECRET>', english: 'Audit Readiness' },
+      { key: '<REDACTED_SECRET>', english: 'Recent Handoff Events' },
+      { key: '<REDACTED_SECRET>', english: 'Rule' },
+      { key: '<REDACTED_SECRET>', english: 'Status' },
+      { key: '<REDACTED_SECRET>', english: 'Readiness Score' },
+      { key: '<REDACTED_SECRET>', english: 'External Audits' },
     ];
 
     for (const { key, english } of checks) {

@@ -20,7 +20,7 @@ import { promises as fsPromises } from "fs";
 import os from "os";
 import path from "path";
 
-const ENV_KEY = "STREAMING_EXPORT_CACHE_DIR";
+const ENV_KEY = "<REDACTED_SECRET>";
 
 function pickFreshTmpDir(): string {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;

@@ -48,7 +48,7 @@ vi.mock("../../src/utils/notificationHub", () => ({
   initNotificationTables: vi.fn().mockResolvedValue(undefined),
 }));
 
-const ADMIN_KEY = "vitest-admin-key-task-656";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 const AUTH_HEADERS = { "X-Admin-Key": ADMIN_KEY };
 
 beforeEach(() => {

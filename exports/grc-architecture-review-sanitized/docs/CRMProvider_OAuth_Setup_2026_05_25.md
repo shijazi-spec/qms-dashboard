@@ -108,7 +108,7 @@ curl -X POST "<REDACTED_URL>" \
    - `CRMProvider_ACCOUNTS_URL` = `<REDACTED_URL>` (or `.in`, `.sa`, etc.)
    - `CRMProvider_API_DOMAIN` = `<REDACTED_URL>` (or matching region)
 
-   The default is `.com` (US data centre). For `org766568398` the platform is currently configured for `.com` — leave these blank unless you know your org migrated to another region.
+   The default is `.com` (US data centre). For `<REDACTED_ID>` the platform is currently configured for `.com` — leave these blank unless you know your org migrated to another region.
 
 4. **Republish** (top-right button). HostingPlatform reads secrets at deployment time, so a republish is mandatory — restarting the dev server is not enough.
 

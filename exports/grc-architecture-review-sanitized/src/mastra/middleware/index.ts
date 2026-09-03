@@ -513,7 +513,7 @@ async function applyBodySanitization(c: any, urlPath: string, method: string): P
  * (event_logs, change_history, ai_pending_actions) via
  * `redactSecretLikeStrings` / `deepRedactSecretLikeStrings`.  However, when
  * a tool or a downstream SDK fails and echoes the credential back in its
- * exception message (e.g. "Invalid token sk-live-…"), the route's catch
+ * exception message (e.g. "Invalid token <REDACTED_TOKEN_PREFIX>-…"), the route's catch
  * block typically returns `c.json({ error: 'Failed to …', details: error.message }, 500)`
  * — so the secret can still reach the user-facing HTTP response and a
  * client-side toast even though it would be redacted at write time.

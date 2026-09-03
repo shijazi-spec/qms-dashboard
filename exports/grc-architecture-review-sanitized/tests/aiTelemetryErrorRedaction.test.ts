@@ -3,7 +3,7 @@
  * TEXT column.
  *
  * Tool / LLM error strings frequently echo the input that triggered them
- * (e.g. "Connection failed with key sk-live-…"). Without redaction those
+ * (e.g. "Connection failed with key <REDACTED_TOKEN_PREFIX>-…"). Without redaction those
  * substrings would land in the metrics table verbatim — exactly the same
  * class of leak that Task #256 closed for `ai_pending_actions.execution_result.error`.
  *
@@ -96,12 +96,12 @@ async function waitForCondition(
   return predicate();
 }
 
-const SK_KEY = '<REDACTED_TOKEN>';
+const SK_KEY = '<REDACTED_SECRET>';
 const GH_PAT = '<REDACTED_TOKEN>';
 const JWT =
   '<REDACTED_TOKEN>';
 const BCRYPT_HASH = '<REDACTED_PASSWORD_HASH>';
-const AWS_KEY = '<REDACTED_TOKEN>';
+const AWS_KEY = '<REDACTED_SECRET>';
 
 async function run(): Promise<void> {
   // ── 1. Pure helper: redactErrorMessageForStorage ───────────────────────

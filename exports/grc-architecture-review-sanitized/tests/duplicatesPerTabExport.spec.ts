@@ -27,7 +27,7 @@ const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
 // verifies the key (it sets no cookie) and is tightly rate-limited, which would
 // flake the suite when several tests run back-to-back.
 async function authenticate(context: BrowserContext): Promise<boolean> {
-  const adminKey = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
+  const adminKey = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY;
   if (!adminKey) return false;
   await context.setExtraHTTPHeaders({ 'X-Admin-Key': adminKey });
   return true;
@@ -46,9 +46,9 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
     const ok = await authenticate(context);
     if (!ok) {
       if (process.env.CI === 'true') {
-        throw new Error('CI: ADMIN_API_KEY / TEST_ADMIN_KEY missing or rejected by /api/admin/auth');
+        throw new Error('CI: ADMIN_API_KEY / <REDACTED_SECRET> missing or rejected by /api/admin/auth');
       }
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not configured');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not configured');
     }
   });
 
@@ -61,7 +61,7 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
     // (critical). Default sort is severity desc, so Alpha (critical) must come
     // first even though Beta is earlier in the source array.
     await page.evaluate(() => {
-      (window as any)._csLifecycleSort = { key: 'severity', dir: 'desc' };
+      (window as any)._csLifecycleSort = { key: '<REDACTED_SECRET>', dir: 'desc' };
       (window as any)._csLifecycleData = {
         violations: [
           {
@@ -100,7 +100,7 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
 
     // Sort by ARR desc → the 90k cluster must precede the 10k cluster.
     await page.evaluate(() => {
-      (window as any)._csOverlapSort = { key: 'arr', dir: 'desc' };
+      (window as any)._csOverlapSort = { key: '<REDACTED_SECRET>', dir: 'desc' };
       (window as any)._csOverlapData = {
         clusters: [
           { id: 1, cs_overlap_verdict: 'warn', domain: '<REDACTED_HOST>', company_name: 'Example Organization', client_sector: 'private', pipeline_lifecycle_state: 'adoption', arr_exposure: 10000, total_records: 2, updated_at: '2025-05-01T00:00:00Z' },

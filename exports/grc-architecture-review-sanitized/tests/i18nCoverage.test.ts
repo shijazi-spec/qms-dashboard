@@ -172,7 +172,7 @@ try {
 
   // Minimal en.json / ar.json trees — both have the static key our fake
   // page references so Check 5's static branch passes.
-  const minimalTree = { ns: { static_key: "Static" } };
+  const minimalTree = { ns: { static_key: "<REDACTED_SECRET>" } };
   fs.writeFileSync(path.join(tmpI18n, "en.json"), JSON.stringify(minimalTree));
   fs.writeFileSync(path.join(tmpI18n, "ar.json"), JSON.stringify(minimalTree));
 
@@ -208,7 +208,7 @@ try {
   // Mirror the SW dictionary into the JSON trees so Check 4 passes.
   const trees: Record<"en" | "ar", { ns: { static_key: string }; downloads: Record<string, string> }> = {
     en: {
-      ns: { static_key: "Static" },
+      ns: { static_key: "<REDACTED_SECRET>" },
       downloads: {
         sw_expired_title: swStrings.en.title,
         sw_expired_heading: swStrings.en.heading,
@@ -217,7 +217,7 @@ try {
       },
     },
     ar: {
-      ns: { static_key: "Static" },
+      ns: { static_key: "<REDACTED_SECRET>" },
       downloads: {
         sw_expired_title: swStrings.ar.title,
         sw_expired_heading: swStrings.ar.heading,
@@ -342,7 +342,7 @@ try {
 
   // Tree includes a referenced leaf AND a brand-new orphan leaf.
   const tree = {
-    ns: { used_key: "Used", brand_new_orphan: "Orphan" },
+    ns: { used_key: "<REDACTED_SECRET>", brand_new_orphan: "Orphan" },
     downloads: {
       sw_expired_title: "Expired",
       sw_expired_heading: "Expired",
@@ -351,7 +351,7 @@ try {
     },
   };
   const treeAr = {
-    ns: { used_key: "مستخدم", brand_new_orphan: "يتيم" },
+    ns: { used_key: "<REDACTED_SECRET>", brand_new_orphan: "يتيم" },
     downloads: {
       sw_expired_title: "منتهي",
       sw_expired_heading: "منتهي",
@@ -484,8 +484,8 @@ try {
 
   // 4. Removing the orphan from the JSON trees AND running the script under
   //    a baseline that still lists it must pass and surface the cleanup hint.
-  const cleanedTree = { ns: { used_key: "Used" }, downloads: tree.downloads };
-  const cleanedTreeAr = { ns: { used_key: "مستخدم" }, downloads: treeAr.downloads };
+  const cleanedTree = { ns: { used_key: "<REDACTED_SECRET>" }, downloads: tree.downloads };
+  const cleanedTreeAr = { ns: { used_key: "<REDACTED_SECRET>" }, downloads: treeAr.downloads };
   fs.writeFileSync(path.join(tmpI18n, "en.json"), JSON.stringify(cleanedTree));
   fs.writeFileSync(path.join(tmpI18n, "ar.json"), JSON.stringify(cleanedTreeAr));
 
@@ -544,7 +544,7 @@ try {
     ar: { title: "منتهي", heading: "منتهي", body: "نص", retry_hint: "تلميح" },
   } as const;
   const tree = {
-    ns: { static_key: "Static" },
+    ns: { static_key: "<REDACTED_SECRET>" },
     downloads: {
       sw_expired_title: swStrings.en.title,
       sw_expired_heading: swStrings.en.heading,
@@ -553,7 +553,7 @@ try {
     },
   };
   const treeAr = {
-    ns: { static_key: "ثابت" },
+    ns: { static_key: "<REDACTED_SECRET>" },
     downloads: {
       sw_expired_title: swStrings.ar.title,
       sw_expired_heading: swStrings.ar.heading,

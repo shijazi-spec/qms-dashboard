@@ -30,7 +30,7 @@ import { test, expect } from '@playwright/test';
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
 
 function resolveAdminKey(): string | null {
-  const key = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
+  const key = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY;
   return key || null;
 }
 
@@ -76,7 +76,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
 
   test('GET /import-sources with X-Admin-Key only → 401 (key not a session)', async ({ request }) => {
     const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
+    test.skip(!key, 'ADMIN_API_KEY/<REDACTED_SECRET> not set');
 
     const res = await request.get(`${BASE_URL}/api/calls/evaluation/import-sources`, {
       headers: { 'X-Admin-Key': key! },
@@ -86,7 +86,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
 
   test('GET /reconciliation/:id with X-Admin-Key only → 401', async ({ request }) => {
     const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
+    test.skip(!key, 'ADMIN_API_KEY/<REDACTED_SECRET> not set');
 
     const res = await request.get(`${BASE_URL}/api/calls/evaluation/reconciliation/99999999`, {
       headers: { 'X-Admin-Key': key! },
@@ -96,7 +96,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
 
   test('POST /leads/match-phone with X-Admin-Key only → 401', async ({ request }) => {
     const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
+    test.skip(!key, 'ADMIN_API_KEY/<REDACTED_SECRET> not set');
 
     const res = await request.post(`${BASE_URL}/api/calls/evaluation/leads/match-phone`, {
       headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key! },
@@ -107,7 +107,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
 
   test('GET /mcp/scorecard/:id with X-Admin-Key only → 401', async ({ request }) => {
     const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
+    test.skip(!key, 'ADMIN_API_KEY/<REDACTED_SECRET> not set');
 
     const res = await request.get(`${BASE_URL}/api/calls/evaluation/scorecard/abc`, {
       headers: { 'X-Admin-Key': key! },
@@ -117,7 +117,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
 
   test('POST /:id/auto-link-lead with X-Admin-Key only → 401', async ({ request }) => {
     const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
+    test.skip(!key, 'ADMIN_API_KEY/<REDACTED_SECRET> not set');
 
     const res = await request.post(`${BASE_URL}/api/calls/99999999/auto-link-lead`, {
       headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key! },

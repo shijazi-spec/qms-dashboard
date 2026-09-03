@@ -42,7 +42,7 @@
 import { test, expect, request as pwRequest } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.TEST_ADMIN_KEY || '';
+const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.<REDACTED_SECRET> || '';
 const PULSE_PATH = '/api/health/pulse';
 
 function shouldSkip(): boolean {
@@ -188,7 +188,7 @@ test.describe('Health Pulse — copy filtered link (Task #747)', () => {
 
   test('Button is NOT rendered when no filter query params are present', async ({ page }) => {
     if (shouldSkip()) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     await page.goto(`${BASE_URL}/dashboard/health`);
@@ -204,7 +204,7 @@ test.describe('Health Pulse — copy filtered link (Task #747)', () => {
 
   test('Clicking the button copies the current URL (with filter params) to the clipboard', async ({ page }) => {
     if (shouldSkip()) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     await page.goto(`${BASE_URL}/dashboard/health?status=fail`);
@@ -247,7 +247,7 @@ test.describe('Health Pulse — copy filtered link (Task #747)', () => {
 
   test('Toggling a category filter from the chip bar reveals the button', async ({ page }) => {
     if (shouldSkip()) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     // Start without any filter — the button should not be present yet.

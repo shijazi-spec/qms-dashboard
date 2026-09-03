@@ -45,7 +45,7 @@
  * Requirements:
  *   - Dev server running at BASE_URL (default <REDACTED_URL>
  *     same convention as tests/streamingDownload.spec.ts.
- *   - ADMIN_API_KEY (or TEST_ADMIN_KEY) must be set so the test can load
+ *   - ADMIN_API_KEY (or <REDACTED_SECRET>) must be set so the test can load
  *     the gated /risks page; otherwise the suite is skipped locally and
  *     hard-fails in CI (matching streamingDownload.spec.ts behaviour).
  *
@@ -76,7 +76,7 @@ const RISKS_EXPORT_URL = '/api/risks/export';
 const RISKS_EXPORT_ROUTE = /\/api\/risks\/export(?:-xlsx)?(?:\/estimate)?(?:\?.*)?$/;
 
 async function authenticateAsAdmin(context: BrowserContext): Promise<boolean> {
-  const key = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
+  const key = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY;
   if (!key) return false;
   const res = await context.request.post(`${BASE_URL}/api/admin/auth`, {
     <REDACTED_SCHEME> { key },
@@ -100,11 +100,11 @@ test.describe('Downloads tray — end-to-end', () => {
       // simply hasn't exported the key.
       if (process.env.CI === 'true') {
         throw new Error(
-          'CI: ADMIN_API_KEY / TEST_ADMIN_KEY missing or not accepted by ' +
+          'CI: ADMIN_API_KEY / <REDACTED_SECRET> missing or not accepted by ' +
             `${BASE_URL}/api/admin/auth — refusing to skip the tray smoke test.`,
         );
       }
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not configured');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not configured');
     }
 
     // Surface page-side errors in the assertion message so a failure has

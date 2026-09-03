@@ -1098,7 +1098,7 @@
                             <div class="mb-4">
                                 <input type="text" id="eval-search" placeholder="Search by agent or contact..."
                                        class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                       data-on-keyup="searchCallsForEval">
+                                       data-on-keyup="<REDACTED_SECRET>">
                             </div>
                             <div id="eval-calls-list" class="space-y-2 max-h-[36rem] overflow-y-auto">
                                 <p class="text-gray-500 text-sm p-2">Loading calls...</p>
@@ -2990,7 +2990,7 @@
             // Build the same window the leaderboard is currently using so
             // the drill matches the user's mental model of "this week".
             const params = computeWeeklyReportParams();
-            const cacheKey = `${agentEmail}|${params.start || ''}|${params.end || ''}`;
+            const cacheKey = `<REDACTED_SECRET>`;
 
             try {
                 let drill = _wrDrillCache[cacheKey];
@@ -5799,7 +5799,7 @@
                     recordId = String(p.lead_id);
                 }
                 if (!module || !recordId) continue;
-                const key = `${module}|${recordId}`;
+                const key = `<REDACTED_SECRET>`;
                 if (seen.has(key)) continue;
                 seen.add(key);
                 fetchTargets.push({ module, recordId });
@@ -5850,7 +5850,7 @@
                     for (const bucket of ['open', 'closed']) {
                         for (const kind of ['tasks', 'meetings', 'calls']) {
                             for (const item of (r[bucket]?.[kind] || [])) {
-                                const dedupeKey = `${kind}|${item.id}`;
+                                const dedupeKey = `<REDACTED_SECRET>`;
                                 if (seenIds.has(dedupeKey)) continue;
                                 seenIds.add(dedupeKey);
                                 merged[bucket][kind].push(item);

@@ -85,12 +85,12 @@ function findLast(predicate: (c: CapturedQuery) => boolean): CapturedQuery | und
   return undefined;
 }
 
-const SK_KEY = '<REDACTED_TOKEN>';
+const SK_KEY = '<REDACTED_SECRET>';
 const GH_PAT = '<REDACTED_TOKEN>';
 const JWT =
   '<REDACTED_TOKEN>';
 const BCRYPT_HASH = '<REDACTED_PASSWORD_HASH>';
-const AWS_KEY = '<REDACTED_TOKEN>';
+const AWS_KEY = '<REDACTED_SECRET>';
 
 async function run(): Promise<void> {
   // ── 1. Pure helper: redactMetadataForStorage ───────────────────────────

@@ -19,7 +19,7 @@ import { test, expect, type BrowserContext } from '@playwright/test';
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
 
 async function authenticate(context: BrowserContext): Promise<boolean> {
-  const adminKey = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
+  const adminKey = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY;
   if (!adminKey) return false;
   await context.setExtraHTTPHeaders({ 'X-Admin-Key': adminKey });
   return true;
@@ -30,9 +30,9 @@ test.describe('Duplicate Radar — per-tab Advanced Filters', () => {
     const ok = await authenticate(context);
     if (!ok) {
       if (process.env.CI === 'true') {
-        throw new Error('CI: ADMIN_API_KEY / TEST_ADMIN_KEY missing or rejected');
+        throw new Error('CI: ADMIN_API_KEY / <REDACTED_SECRET> missing or rejected');
       }
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not configured');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not configured');
     }
   });
 

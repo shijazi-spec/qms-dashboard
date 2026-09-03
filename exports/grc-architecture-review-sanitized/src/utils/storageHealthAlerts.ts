@@ -34,7 +34,7 @@ import {
 import type { AiMetricsTableStats } from './aiTelemetry';
 
 /** Fixed dedupe key used by every storage_health alert this helper opens. */
-export const STORAGE_HEALTH_DEDUPE_KEY = 'ai_call_metrics' as const;
+export const STORAGE_HEALTH_DEDUPE_KEY = '<REDACTED_SECRET>' as const;
 
 /** Module label written to `ai_alerts.related_module` and notifications. */
 export const STORAGE_HEALTH_MODULE = 'ai_ops' as const;

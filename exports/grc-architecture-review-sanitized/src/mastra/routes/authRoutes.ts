@@ -544,7 +544,7 @@ export const authRoutes = [
         const sessionCookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? "; Secure" : ""}`;
         // Security: admin cookie flags must always carry HttpOnly + Secure + SameSite=Strict —
         // all three flags are unconditional regardless of protocol, to prevent XSS and CSRF.
-        const adminKeyCookieFlags = `HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Strict`;
+        const adminKeyCookieFlags = `<REDACTED_SECRET>`;
         // Clear all auth cookies so the unified /api/auth/me endpoint stops
         // reporting the caller as authenticated regardless of which auth path
         // they used (OIDC session, admin_session token, or legacy admin_key).
@@ -598,7 +598,7 @@ export const authRoutes = [
           const sessionCookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? "; Secure" : ""}`;
           // Security: admin cookie flags must always carry HttpOnly + Secure + SameSite=Strict —
           // all three flags are unconditional regardless of protocol, to prevent XSS and CSRF.
-          const adminKeyCookieFlags = `HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Strict`;
+          const adminKeyCookieFlags = `<REDACTED_SECRET>`;
           // Clear all auth cookies (session + admin_session token + legacy admin_key)
           // so the unified /api/auth/me endpoint won't keep reporting the caller
           // as authenticated after they sign out.

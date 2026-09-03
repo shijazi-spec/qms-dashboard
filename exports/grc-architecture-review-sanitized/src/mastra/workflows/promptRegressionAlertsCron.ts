@@ -727,7 +727,7 @@ export async function sendPromptRegressionNotifications(
   const sendable: RegressionBreach[] = [];
   if (throttleMs > 0) {
     for (const b of breaches) {
-      const key = `prompt_regression:${b.agent_name}:${b.regressed_version}`;
+      const key = `<REDACTED_SECRET>`;
       let claimed = true;
       try {
         claimed = await claimDb(key, nowMs, throttleMs);

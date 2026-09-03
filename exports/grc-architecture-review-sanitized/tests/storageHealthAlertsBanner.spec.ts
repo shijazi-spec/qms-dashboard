@@ -27,7 +27,7 @@
  *
  * Requirements (mirrors tests/aiOpsTabs.spec.ts):
  *   - Dev server at BASE_URL (default <REDACTED_URL>
- *   - ADMIN_API_KEY / TEST_ADMIN_KEY set so admin auth works
+ *   - ADMIN_API_KEY / <REDACTED_SECRET> set so admin auth works
  *   - DATABASE_URL pointing at the same Postgres the server uses
  *
  * Run:
@@ -38,7 +38,7 @@ import { test, expect } from '@playwright/test';
 import { warmupAiOpsTables } from './helpers/warmupAiOpsTables';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || '';
 const DATABASE_URL = process.env.DATABASE_URL || '';
 
 const RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -107,7 +107,7 @@ test.describe('AI Ops — storage-health alerts banner', () => {
 
   test('banner renders the seeded open alert with acknowledge / resolve / dismiss buttons', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     if (!DATABASE_URL) {

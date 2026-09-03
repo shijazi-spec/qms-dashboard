@@ -33,7 +33,7 @@
  */
 
 process.env.SESSION_SECRET =
-  process.env.SESSION_SECRET || "test-secret-ai-approval-int-test-filter";
+  process.env.SESSION_SECRET || "<REDACTED_SECRET>";
 // Point any incidentally-created pg Pool at a port that refuses fast so
 // the bootstrap IIFE inside aiApprovalRoutes errors immediately instead
 // of hanging the test (mirrors aiApprovalRoutesRedaction.test.ts).

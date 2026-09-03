@@ -12,7 +12,7 @@ import {
   syncEvaluationToCRMProviderStructuredFields,
 } from "../../src/utils/CRMProviderStructuredFieldsSync";
 
-const FLAG_KEY = "CRMProvider_STRUCTURED_FIELDS";
+const FLAG_KEY = "<REDACTED_SECRET>";
 
 afterEach(() => {
   delete process.env[FLAG_KEY];

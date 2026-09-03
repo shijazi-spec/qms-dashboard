@@ -41,7 +41,7 @@
  * Requirements:
  *   - Dev server must be running at BASE_URL (default
  *     <REDACTED_URL> — same convention as tests/aiOpsTabs.spec.ts.
- *   - ADMIN_API_KEY must be set on the server AND TEST_ADMIN_KEY (or
+ *   - ADMIN_API_KEY must be set on the server AND <REDACTED_SECRET> (or
  *     ADMIN_API_KEY) must be set in the test process so /api/admin/auth
  *     and X-Admin-Key requests succeed; otherwise the suite is skipped.
  *
@@ -52,7 +52,7 @@
 import { test, expect, request as pwRequest } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || '';
 
 const RETENTION_PATH = '/api/ai-ops/metrics-retention';
 
@@ -136,7 +136,7 @@ test.describe('AI metrics retention — admin dashboard flow (Task #551)', () =>
 
   test('Admin can change retention via UI; audit row renders; effective_days reflects new value', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 
@@ -269,7 +269,7 @@ test.describe('AI metrics retention — admin dashboard flow (Task #551)', () =>
 
   test('Lock-engaged path: dashboard renders the lock banner, hides Save, and surfaces the 409 to the operator', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 

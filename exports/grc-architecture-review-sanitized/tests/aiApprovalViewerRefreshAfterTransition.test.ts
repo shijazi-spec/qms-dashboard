@@ -25,7 +25,7 @@
  */
 
 process.env.SESSION_SECRET =
-  process.env.SESSION_SECRET || 'test-secret-viewer-refresh-after-transition';
+  process.env.SESSION_SECRET || '<REDACTED_SECRET>';
 // Point any incidentally-created pg Pool at a port that refuses fast so the
 // bootstrap IIFE inside aiApprovalRoutes errors immediately instead of
 // hanging the test.
@@ -301,7 +301,7 @@ const eventLogsStubQuery: StubQuery = async <R extends QueryResultRow>(
     );
     const byUser = new Map<string, { e: CapturedEventLog; count: number; last: Date }>();
     for (const e of viewEvents) {
-      const key = `${e.user_id}|${e.user_email}|${e.user_name}|${e.user_role}`;
+      const key = `<REDACTED_SECRET>`;
       const cur = byUser.get(key);
       if (!cur) {
         byUser.set(key, { e, count: 1, last: e.timestamp });
@@ -346,7 +346,7 @@ const eventLogsStubQuery: StubQuery = async <R extends QueryResultRow>(
       );
       const byUser = new Map<string, { e: CapturedEventLog; count: number; last: Date }>();
       for (const e of viewEvents) {
-        const key = `${e.user_id}|${e.user_email}|${e.user_name}|${e.user_role}`;
+        const key = `<REDACTED_SECRET>`;
         const cur = byUser.get(key);
         if (!cur) {
           byUser.set(key, { e, count: 1, last: e.timestamp });

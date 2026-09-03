@@ -47,7 +47,7 @@
  * Requirements:
  *   - The dev server must be running at BASE_URL (default
  *     <REDACTED_URL> — same convention as tests/i18n.spec.ts.
- *   - ADMIN_API_KEY (or TEST_ADMIN_KEY) must be set so /api/admin/auth and
+ *   - ADMIN_API_KEY (or <REDACTED_SECRET>) must be set so /api/admin/auth and
  *     subsequent X-Admin-Key requests succeed; otherwise the suite is
  *     skipped, mirroring the prompt-version spec.
  *   - DATABASE_URL must point at the same Postgres the server uses so the
@@ -62,7 +62,7 @@ import * as pg from 'pg';
 import { warmupAiOpsTables } from './helpers/warmupAiOpsTables';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || '';
 const DATABASE_URL = process.env.DATABASE_URL || '';
 
 // Unique per-run suffix so parallel/repeated runs don't collide and so the
@@ -195,7 +195,7 @@ test.describe('AI Ops — remaining dashboard tabs', () => {
 
   test('Cost Trend tab renders chart and includes seeded agent-level cost', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     if (!DATABASE_URL) {
@@ -268,7 +268,7 @@ test.describe('AI Ops — remaining dashboard tabs', () => {
 
   test('Agent Latency tab renders seeded agent row with correct call_count and error rate', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     if (!DATABASE_URL) {
@@ -314,7 +314,7 @@ test.describe('AI Ops — remaining dashboard tabs', () => {
 
   test('Top Tools tab renders seeded tool row when filtered to our agent', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     if (!DATABASE_URL) {
@@ -371,7 +371,7 @@ test.describe('AI Ops — remaining dashboard tabs', () => {
 
   test('Recent Issues tab renders the seeded failed call', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     if (!DATABASE_URL) {

@@ -25,11 +25,11 @@ import { buildHandler, makeContext, type FakeContext } from "./_helpers/fakeCont
 // hasValidAdminApiKey reads process.env.ADMIN_API_KEY at call time, so
 // setting this here (before any handler invocation) is enough to satisfy the
 // defense-in-depth gate added in task #447.
-const TEST_ADMIN_KEY = "test-admin-key-soproutes-2026";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
 const ORIGINAL_ADMIN_KEY = process.env.ADMIN_API_KEY;
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
 
-const ADMIN_HEADERS = { "X-Admin-Key": TEST_ADMIN_KEY };
+const ADMIN_HEADERS = { "X-Admin-Key": <REDACTED_SECRET> };
 
 const suite = new TestSuite("sopRoutes");
 

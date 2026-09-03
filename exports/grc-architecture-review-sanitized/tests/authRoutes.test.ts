@@ -20,9 +20,9 @@ import { authRoutes } from "../src/mastra/routes/authRoutes";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
 
-const TEST_ADMIN_KEY = "test-admin-key-authroutes-2026";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
 const ORIGINAL_ADMIN_KEY = process.env.ADMIN_API_KEY;
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
 
 const suite = new TestSuite("authRoutes");
 
@@ -52,7 +52,7 @@ await suite.test("GET /api/auth/me — 200 with admin user when X-Admin-Key matc
   const handler = await buildHandler(authRoutes, "/api/auth/me", "GET");
   const res = await handler(makeContext({
     method: "GET",
-    headers: { "X-Admin-Key": TEST_ADMIN_KEY },
+    headers: { "X-Admin-Key": <REDACTED_SECRET> },
   }));
   suite.expectEqual(res.status, 200, "status");
   suite.expectEqual(res.body?.authenticated, true, "body.authenticated");
@@ -68,7 +68,7 @@ await suite.test("GET /api/auth/me — 401 when only admin_key cookie is present
   const handler = await buildHandler(authRoutes, "/api/auth/me", "GET");
   const res = await handler(makeContext({
     method: "GET",
-    headers: { Cookie: `admin_key=${TEST_ADMIN_KEY}` },
+    headers: { Cookie: `admin_key=${<REDACTED_SECRET>}` },
   }));
   suite.expectEqual(res.status, 401, "status");
   suite.expectEqual(res.body?.authenticated, false, "body.authenticated");
@@ -91,7 +91,7 @@ await suite.test("POST /api/auth/logout — 200 clears session AND admin_key coo
   suite.expectEqual(res.body?.success, true, "body.success");
   const cookie = res.headers["Set-Cookie"] ?? "";
   suite.expect(cookie.includes("ExampleOrg_session="), "Set-Cookie clears session");
-  suite.expect(cookie.includes("admin_key="), "Set-Cookie clears admin_key");
+  suite.expect(cookie.includes("admin_key="<REDACTED_SECRET>"Set-Cookie clears admin_key");
   suite.expect(cookie.includes("Max-Age=0"), "Set-Cookie has Max-Age=0");
   // The admin_key clear cookie must always carry HttpOnly + Secure +
   // SameSite=Strict — browsers will only accept the deletion if the flags

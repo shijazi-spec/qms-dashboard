@@ -1,7 +1,7 @@
 /**
  * FINAL canonical GRQ KPI set — source: "GRQ Final KPIs_2.xlsx" (Sample User, 2026-06-16).
  * 5 owner groups: Quality (Sample User), GRC (Sample User), GRQ Specialist
- * (AlHanouf), Legal (Sample User Sample User — NEW owner), and GRQ Team roll-ups (Shared).
+ * (Sample User), Legal (Sample User Sample User — NEW owner), and GRQ Team roll-ups (Shared).
  *
  * Each entry mirrors the Excel cells: name, description, calculation (formula),
  * target, frequency, owner, data source. Thresholds are derived from the single
@@ -75,7 +75,7 @@ export const FINAL_KPIS: FinalKpi[] = [
   { code: "GRC-KPI-010", name: "Risk Register Quality Index", owner_type: "grc_manager", owner_name: "Sample User", category: "risk", unit: "%", target: 95, weight: 10, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", description: "Measures the quality of the risk register across INTERNAL risks (processes / business units) and EXTERNAL risks (vendor / third-party assessments). A record counts only if it is properly owned, scored, review-current (not overdue), and status-valid.", formula: "Average of: (Valid Internal Risk Records ÷ Total Live Internal Risks × 100) and (Valid Assessed Vendors ÷ Total Active Vendors × 100)", data_source: "Risk Register + Vendor Assessments" },
   { code: "GRC-KPI-014", name: "Third-Party Assessment SLA", owner_type: "grc_manager", owner_name: "Sample User", category: "vendor", unit: "%", target: 90, weight: 10, direction: "higher_is_better", frequency: "quarterly", calc_mode: "manual", description: "Measures the percentage of in-scope third-party, client, and partner security/risk assessments completed within the defined SLA", formula: "Assessments Completed Within SLA ÷ Total In-Scope Assessment Requests × 100", data_source: "Third-Party Assessment Log" },
 
-  // ───────────── GRQ Specialist — AlHanouf (3) ─────────────
+  // ───────────── GRQ Specialist — Sample User (3) ─────────────
   { code: "SPEC-KPI-01", name: "Governance Operations Readiness Index", owner_type: "grq_specialist", owner_name: "Sample User", category: "governance", unit: "%", target: 95, weight: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures the overall operational readiness of GRQ support activities across document control, executive reporting, and CAPA follow-up discipline", formula: "Equal-weighted average of achievement % of supporting KPIs #2–#3 in this sheet (each weighted 1/2)", data_source: "KPI Dashboard" },
   { code: "SPEC-KPI-02", name: "Documentation Lifecycle Compliance", owner_type: "grq_specialist", owner_name: "Sample User", category: "governance", unit: "%", target: 95, weight: 50, direction: "higher_is_better", frequency: "monthly", calc_mode: "manual", description: "Measures the percentage of controlled governance documents reviewed on time according to the approved lifecycle schedule", formula: "Documents Reviewed On Time ÷ Documents Due × 100", data_source: "Document Master List" },
   { code: "SPEC-KPI-06", name: "CAPA Follow-Up SLA Compliance", owner_type: "grq_specialist", owner_name: "Sample User", category: "quality", unit: "%", target: 95, weight: 50, direction: "higher_is_better", frequency: "monthly", calc_mode: "auto", description: "Measures the percentage of due CAPAs that were followed up within the defined SLA and escalated when overdue", formula: "CAPAs Followed Up Within SLA ÷ Total Due CAPAs × 100", data_source: "CAPA Register" },

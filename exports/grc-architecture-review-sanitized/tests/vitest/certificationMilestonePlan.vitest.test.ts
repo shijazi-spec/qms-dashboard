@@ -70,8 +70,8 @@ describe("resolveMilestoneRegulationIds", () => {
   it("maps framework codes to ids and leaves unmatched rows null", () => {
     const rows = [
       { ...PLAN[0], regulation_code: null },
-      { ...PLAN[0], milestone_key: "X-ISO", regulation_code: "ISO-27001" },
-      { ...PLAN[0], milestone_key: "X-GONE", regulation_code: "NOT-SEEDED" },
+      { ...PLAN[0], milestone_key: "<REDACTED_SECRET>", regulation_code: "ISO-27001" },
+      { ...PLAN[0], milestone_key: "<REDACTED_SECRET>", regulation_code: "NOT-SEEDED" },
     ];
     const out = resolveMilestoneRegulationIds(rows, { "ISO-27001": 6 });
     expect(out[0].regulation_id).toBeNull();

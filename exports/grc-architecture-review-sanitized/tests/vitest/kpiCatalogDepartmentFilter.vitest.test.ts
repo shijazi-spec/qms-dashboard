@@ -26,8 +26,8 @@ const resolveType = async (name: string) =>
   name === "SDR Team" ? "sdr_team" : name === "Sales Team" ? "sales_team" : "shared";
 
 const GROUPS = [
-  { key: "quality_manager" }, { key: "grc_manager" }, { key: "sdr_team" },
-  { key: "sales_team" }, { key: "cs_team" }, { key: "shared" },
+  { key: "<REDACTED_SECRET>" }, { key: "<REDACTED_SECRET>" }, { key: "<REDACTED_SECRET>" },
+  { key: "<REDACTED_SECRET>" }, { key: "<REDACTED_SECRET>" }, { key: "<REDACTED_SECRET>" },
 ];
 
 describe("departmentGroupKeys", () => {

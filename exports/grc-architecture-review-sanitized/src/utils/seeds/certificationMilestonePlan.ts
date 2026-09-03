@@ -32,7 +32,7 @@ export interface PlanMilestoneSeed {
 export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
   // ── §4 The plan — these drive the KPI ──────────────────────────────────
   {
-    milestone_key: "PLAN-2026-08-DOCS",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "plan",
     certification: "Document Library",
     regulation_code: null,
@@ -42,18 +42,18 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     notes: "Completion of the document library is not compliance on its own.",
   },
   {
-    milestone_key: "PLAN-2026-09-APPROVE",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "plan",
     certification: "Document Library",
     regulation_code: null,
     milestone_name:
       "Library approved and signed; document codes updated; SACS-002 recertification progressed; surveillance audit date confirmed with Bureau Veritas; HyperPay attestation and responsibility matrix obtained",
     planned_date: "2026-09-30",
-    owner: "GRC, Alhanouf",
+    owner: "GRC, Sample User",
     notes: "Documents must be approved before staff can be trained on them.",
   },
   {
-    milestone_key: "PLAN-2026-10-SAQA",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "plan",
     certification: "PCI DSS",
     regulation_code: "PCI-DSS",
@@ -64,7 +64,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     notes: "Training has to land in October so the November audit is worth running.",
   },
   {
-    milestone_key: "PLAN-2026-11-AUDIT",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "plan",
     certification: "ISO 27001 / PDPL",
     regulation_code: "ISO-27001",
@@ -75,7 +75,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     notes: "The audit must happen before the management review.",
   },
   {
-    milestone_key: "PLAN-2026-12-MGMTREV",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "plan",
     certification: "PDPL",
     regulation_code: "PDPL",
@@ -86,7 +86,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     notes: "PDPL position becomes defensible at this point.",
   },
   {
-    milestone_key: "PLAN-2027-01-PENTEST",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "plan",
     certification: "ISO 27001",
     regulation_code: "ISO-27001",
@@ -97,7 +97,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     notes: "",
   },
   {
-    milestone_key: "PLAN-2027-02-SURV",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "plan",
     certification: "ISO 27001",
     regulation_code: "ISO-27001",
@@ -109,7 +109,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
 
   // ── §2 When we can say we are compliant ────────────────────────────────
   {
-    milestone_key: "FT-SACS002",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "framework_target",
     certification: "SACS-002 (Example Organization)",
     regulation_code: "SACS-002",
@@ -119,7 +119,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     notes: "Status now: certificate lapsed 5 Feb 2026.",
   },
   {
-    milestone_key: "FT-PCIDSS",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "framework_target",
     certification: "PCI DSS v4.0.1",
     regulation_code: "PCI-DSS",
@@ -131,7 +131,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
       "Status now: in scope as a merchant, never validated. SAQ A holds only if HyperPay returns a token, not a card number.",
   },
   {
-    milestone_key: "FT-PDPL",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "framework_target",
     certification: "PDPL",
     regulation_code: "PDPL",
@@ -142,7 +142,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     notes: "Status now: documents nearly complete.",
   },
   {
-    milestone_key: "FT-ISO27001",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "framework_target",
     certification: "ISO/IEC 27001:2022",
     regulation_code: "ISO-27001",
@@ -152,7 +152,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     notes: "Status now: certified since Feb 2026.",
   },
   {
-    milestone_key: "FT-NCA-ECC",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "framework_target",
     certification: "NCA Essential Cybersecurity Controls",
     regulation_code: "NCA-ECC",
@@ -164,7 +164,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
       "Status now: mapped, applicability unconfirmed. The plan lists NCA as one line; the platform splits it into ECC and DCC.",
   },
   {
-    milestone_key: "FT-NCA-DCC",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "framework_target",
     certification: "NCA Data Cybersecurity Controls",
     regulation_code: "NCA-DCC",
@@ -176,7 +176,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
       "Status now: mapped, applicability unconfirmed. The plan lists NCA as one line; the platform splits it into ECC and DCC.",
   },
   {
-    milestone_key: "FT-SOC2",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "framework_target",
     certification: "SOC 2",
     regulation_code: "SOC2",
@@ -189,7 +189,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
 
   // ── §5 What we need from other departments ─────────────────────────────
   {
-    milestone_key: "DEP-TECH-ANSWERS",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "dependency",
     certification: "PCI DSS",
     regulation_code: "PCI-DSS",
@@ -200,7 +200,7 @@ export const CERTIFICATION_MILESTONE_PLAN: PlanMilestoneSeed[] = [
     notes: "These two answers set the PCI position (SAQ A versus a far larger self-assessment).",
   },
   {
-    milestone_key: "DEP-TECH-EVIDENCE",
+    milestone_key: "<REDACTED_SECRET>",
     milestone_type: "dependency",
     certification: "ISO 27001 / PDPL",
     regulation_code: "ISO-27001",

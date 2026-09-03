@@ -46,7 +46,7 @@
  *   - Dev server must be running at BASE_URL (default <REDACTED_URL>
  *     — same convention as the other Playwright specs in this repo.
  *   - ADMIN_API_KEY must be set on the server AND in the test process
- *     (via TEST_ADMIN_KEY or ADMIN_API_KEY) so /api/admin/auth and
+ *     (via <REDACTED_SECRET> or ADMIN_API_KEY) so /api/admin/auth and
  *     X-Admin-Key requests succeed; otherwise the suite is skipped.
  *   - DATABASE_URL must be set so the test can seed and clean up its own
  *     fixtures. The same dev DB is used by the running server.
@@ -60,7 +60,7 @@ import pg from 'pg';
 import crypto from 'crypto';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.TEST_ADMIN_KEY || '';
+const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.<REDACTED_SECRET> || '';
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const SESSION_SECRET = process.env.SESSION_SECRET || '';
 

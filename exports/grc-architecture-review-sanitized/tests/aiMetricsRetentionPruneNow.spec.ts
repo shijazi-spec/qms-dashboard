@@ -64,7 +64,7 @@
  *   - Dev server must be running at BASE_URL (default
  *     <REDACTED_URL> — same convention as
  *     tests/aiMetricsRetentionDashboard.spec.ts.
- *   - ADMIN_API_KEY must be set on the server AND TEST_ADMIN_KEY (or
+ *   - ADMIN_API_KEY must be set on the server AND <REDACTED_SECRET> (or
  *     ADMIN_API_KEY) must be set in the test process so /api/admin/auth
  *     and X-Admin-Key requests succeed; otherwise the suite is skipped.
  *
@@ -75,7 +75,7 @@
 import { test, expect, request as pwRequest } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || '';
 
 const RETENTION_PATH = '/api/ai-ops/metrics-retention';
 const PRUNE_NOW_PATH = '/api/ai-ops/metrics-retention/prune-now';
@@ -161,7 +161,7 @@ test.describe('AI metrics retention — Prune now flow (Task #558 / #646)', () =
 
   test('Admin can run "Prune now" via the UI; result banner shows previewed + deleted counts; audit row renders with Manual prune badge', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 
@@ -337,7 +337,7 @@ test.describe('AI metrics retention — Prune now flow (Task #558 / #646)', () =
 
   test('Lock-engaged path: Prune now button is absent when env_locked=true', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 

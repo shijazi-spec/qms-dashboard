@@ -1110,7 +1110,7 @@
                 <button data-on-click="syncNowCRMProviderCRM" title="Re-run the full CRMProvider scan to rebuild duplicate clusters." class="rr-btn rr-btn-primary ms-2">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;leads&quot;]" data-testid="button-open-capa-leads" title="Open a corrective-action record (CAPA) on one of the lead-duplicate groups shown below. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
-            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="leads">
+            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="<REDACTED_SECRET>">
                 <span class="text-xs text-gray-500 me-1">AI status:</span>
                 <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;active&quot;]" id="aiChip-leads-active" class="rr-chip rr-chip-active" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;tagged_pending&quot;]" id="aiChip-leads-tagged_pending" class="rr-chip" title="Apply was run — duplicates tagged in CRMProvider, pending admin delete">🤖 AI-Applied · pending CRMProvider admin delete</button>
@@ -1123,14 +1123,14 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="leads:name" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;name&quot;]" title="Sort the FULL list by lead name (server-side)">Lead<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;name&quot;]" title="Sort the FULL list by lead name (server-side)">Lead<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this lead was flagged. OR rule — any one of these is enough to mark it as a duplicate: 👤 same name · 📧 same email · 📞 same phone · 🆔 same CRMProvider CRM ID">Dup signal</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="leads:email" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;email&quot;]" title="Sort the FULL list by email (server-side)">Email<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;email&quot;]" title="Sort the FULL list by email (server-side)">Email<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="CRMProvider layout this lead belongs to (Standard, Corporate Accounts, Marketplace, ...)">Layout</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="leads:owner" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="leads:created" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;leads&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
                         </tr>
                     </thead>
                     <tbody id="leadsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -1150,7 +1150,7 @@
                 <button data-on-click="syncNowCRMProviderCRM" title="Re-run the full CRMProvider scan to rebuild duplicate clusters." class="rr-btn rr-btn-primary ms-2">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deals" title="Open a corrective-action record (CAPA) on one of the deal-duplicate groups shown below. Routed to the QMS CAPA inbox." class="rr-btn rr-btn-ghost">🚩 Open CAPA</button>
             </div>
-            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="deals">
+            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="<REDACTED_SECRET>">
                 <span class="text-xs text-gray-500 me-1">AI status:</span>
                 <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;active&quot;]" id="aiChip-deals-active" class="rr-chip rr-chip-active" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;tagged_pending&quot;]" id="aiChip-deals-tagged_pending" class="rr-chip" title="Apply was run — duplicates tagged in CRMProvider, pending admin delete">🤖 AI-Applied · pending CRMProvider admin delete</button>
@@ -1163,13 +1163,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="deals:name" data-on-click="recordSortBy" data-args="[&quot;deals&quot;,&quot;name&quot;]" title="Sort the FULL list by deal name (server-side)">Deal<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;deals&quot;,&quot;name&quot;]" title="Sort the FULL list by deal name (server-side)">Deal<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this deal was flagged. OR rule: 👤 same deal name on the same account · 🆔 same CRMProvider CRM ID">Dup signal</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Stage</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Value</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Layout</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="deals:owner" data-on-click="recordSortBy" data-args="[&quot;deals&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="deals:created" data-on-click="recordSortBy" data-args="[&quot;deals&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;deals&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;deals&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
                         </tr>
                     </thead>
                     <tbody id="dealsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -1199,7 +1199,7 @@
             <div id="bulkSplitContactsPanel" class="text-xs mb-2"></div>
             <div id="bulkMergeExactPanel" class="text-xs mb-2"></div>
             <div id="bulkMergeNamePhonePanel" class="text-xs mb-2"></div>
-            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="contacts">
+            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="<REDACTED_SECRET>">
                 <span class="text-xs text-gray-500 me-1">AI status:</span>
                 <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;active&quot;]" id="aiChip-contacts-active" class="rr-chip rr-chip-active" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;tagged_pending&quot;]" id="aiChip-contacts-tagged_pending" class="rr-chip" title="Apply was run — duplicates tagged in CRMProvider, pending admin delete">🤖 AI-Applied · pending CRMProvider admin delete</button>
@@ -1212,13 +1212,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="contacts:name" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;name&quot;]" title="Sort the FULL list by contact name (server-side)">Contact<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;name&quot;]" title="Sort the FULL list by contact name (server-side)">Contact<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this contact was flagged. OR rule: 👤 same name · 📧 same email · 📞 same phone · 🆔 same CRMProvider CRM ID">Dup signal</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="contacts:email" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;email&quot;]" title="Sort the FULL list by email (server-side)">Email<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;email&quot;]" title="Sort the FULL list by email (server-side)">Email<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Sourced from the CRMProvider Contacts → Contact Type field (Customer / Prospect / Vendor / Partner / …) — the Layout column on this tab provided almost no signal because most contacts share the Standard layout.">Contact Type</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="contacts:owner" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="contacts:created" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;contacts&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
                         </tr>
                     </thead>
                     <tbody id="contactsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -1246,7 +1246,7 @@
                  tagged_pending    = already AI-applied, waiting for CRMProvider admin delete
                  resolved          = cluster status='resolved'
                  all               = no status filter -->
-            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="accounts">
+            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="<REDACTED_SECRET>">
                 <span class="text-xs text-gray-500 me-1">AI status:</span>
                 <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;active&quot;]" id="aiChip-accounts-active" class="rr-chip rr-chip-active" title="Untouched active clusters — no Apply has been pressed for them yet">Untouched</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;tagged_pending&quot;]" id="aiChip-accounts-tagged_pending" class="rr-chip" title="Apply was run on these clusters — the duplicates are tagged Duplicate-Delete in CRMProvider but the admin has not physically deleted them yet, so they keep re-appearing on the next scan.">🤖 AI-Applied · pending CRMProvider admin delete</button>
@@ -1259,14 +1259,14 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="accounts:name" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;name&quot;]" title="Sort the FULL list by account name (server-side)">Account<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;name&quot;]" title="Sort the FULL list by account name (server-side)">Account<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this account was flagged. OR rule: 👤 same name · 📧 same email · 📞 same phone · 🌐 same website · 🆔 same CRMProvider CRM ID">Dup signal</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="accounts:email" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;email&quot;]" title="Sort the FULL list by email (server-side)">Email<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;email&quot;]" title="Sort the FULL list by email (server-side)">Email<span class="record-sort-caret"></span></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Website</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Layout</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="accounts:owner" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="accounts:created" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;owner&quot;]" title="Sort the FULL list by owner (server-side)">Owner<span class="record-sort-caret"></span></th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer select-none" data-sort-key="<REDACTED_SECRET>" data-on-click="recordSortBy" data-args="[&quot;accounts&quot;,&quot;created&quot;]" title="Sort the FULL list by created date (server-side)">Created<span class="record-sort-caret"></span></th>
                         </tr>
                     </thead>
                     <tbody id="accountsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -1383,12 +1383,12 @@
                         <tr>
                             <th scope="col" class="rr-num text-center" style="width:2.5rem;" data-csp-note="csp-safe-inline-style: th width"><input type="checkbox" id="cmoSelectAll" data-on-change="toggleCrossModuleSelectAll" aria-label="Select all visible cross-module clusters" /></th>
                             <th scope="col">Pairing</th>
-                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;domain&quot;]" class="cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;company&quot;]" class="cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="company">Company <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;domain&quot;]" class="cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Domain <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;company&quot;]" class="cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Company <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col">Modules present</th>
-                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;records&quot;]" class="rr-num cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="records">Records <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;confidence&quot;]" class="rr-num cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="confidence">Confidence <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;pipeline&quot;]" class="rr-num cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="pipeline">Pipeline value <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;records&quot;]" class="rr-num cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Records <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;confidence&quot;]" class="rr-num cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Confidence <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCrossModuleBy" data-args="[&quot;pipeline&quot;]" class="rr-num cross-module-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Pipeline value <span class="cross-module-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" class="text-center">Track</th>
                         </tr>
                     </thead>
@@ -1471,14 +1471,14 @@
                 <table class="rr-table min-w-full">
                     <thead id="csOverlapTableHead">
                         <tr>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;verdict&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="verdict">Verdict <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;domain&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;company&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="company">Company <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;sector&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="sector">Sector <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;phase&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="phase">CS Phase <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;arr&quot;]" class="rr-num cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="arr">ARR Exposure <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;records&quot;]" class="rr-num cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="records">Records <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;updated&quot;]" class="rr-num cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="updated">Updated <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;verdict&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Verdict <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;domain&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Domain <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;company&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Company <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;sector&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Sector <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;phase&quot;]" class="cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">CS Phase <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;arr&quot;]" class="rr-num cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">ARR Exposure <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;records&quot;]" class="rr-num cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Records <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;updated&quot;]" class="rr-num cs-overlap-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Updated <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody id="csOverlapTable">
@@ -1687,12 +1687,12 @@
                     <table class="rr-table min-w-full">
                         <thead id="accountHintsTableHead">
                             <tr>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;deal&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="deal">Deal <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;current&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="current">Current account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;suggested&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="suggested">Suggested account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;domain&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;evidence&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="evidence">Evidence (contact) <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
-                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;confidence&quot;]" class="rr-num account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="confidence">Confidence <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;deal&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Deal <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;current&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Current account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;suggested&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Suggested account <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;domain&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Domain <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;evidence&quot;]" class="account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Evidence (contact) <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
+                                <th scope="col" data-on-click="sortAccountHintsBy" data-args="[&quot;confidence&quot;]" class="rr-num account-hints-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Confidence <span class="account-hints-sort-indicator opacity-30">⇅</span></th>
                                 <th scope="col" class="rr-num">Actions</th>
                             </tr>
                         </thead>
@@ -1939,14 +1939,14 @@
                 <table class="rr-table min-w-full">
                     <thead id="csLifecycleTableHead">
                         <tr>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;severity&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="severity">Severity <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;account&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="account" title="Account name (top line) and domain (bottom line, mono).">Account / Domain <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;phase&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="phase">Phase <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;severity&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="<REDACTED_SECRET>">Severity <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;account&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>" title="Account name (top line) and domain (bottom line, mono).">Account / Domain <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;phase&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="<REDACTED_SECRET>">Phase <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" class="whitespace-nowrap">CS Owner</th>
                             <th scope="col" title="Three CS lifecycle dates stacked: Since (Customer Since) / Renew (Renewal Date) / Churn (Churn Date).">Lifecycle Dates</th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;lastcontact&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="lastcontact" title="Last Contact Date — when the CS team last touched this customer (from the Customer Success section). Set the CRMProvider API name via the DUPLICATE_RADAR_FIELD_LAST_CONTACT env var if your tenant uses a non-default field name.">Last Contact <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;lastcontact&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="<REDACTED_SECRET>" title="Last Contact Date — when the CS team last touched this customer (from the Customer Success section). Set the CRMProvider API name via the DUPLICATE_RADAR_FIELD_LAST_CONTACT env var if your tenant uses a non-default field name.">Last Contact <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" class="whitespace-nowrap" title="ExtID (Admin) — CRMProvider custom field. Set the API name via the DUPLICATE_RADAR_FIELD_EXT_ID env var if your tenant uses a non-default field name.">ExtID</th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="violation" title="Violation pills (top) and the human-readable explanation message (below). Click to sort by worst violation code.">Violation / Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>" title="Violation pills (top) and the human-readable explanation message (below). Click to sort by worst violation code.">Violation / Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody id="csLifecycleTable">
@@ -2214,11 +2214,11 @@
                 <table class="rr-table min-w-full">
                     <thead id="dealLifecycleTableHead">
                         <tr>
-                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;severity&quot;]" class="deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="severity">Severity <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;deal&quot;]" class="deal-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="deal">Deal / Account <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;stage&quot;]" class="deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="stage">Stage <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;owner&quot;]" class="deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="owner">Owner <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;aging&quot;]" class="rr-num deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="aging" title="Aging in the unit the SOP defines for that stage (business days for Not Attend Meeting / Meeting, calendar days otherwise).">Aging <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;severity&quot;]" class="deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Severity <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;deal&quot;]" class="deal-lifecycle-sort cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Deal / Account <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;stage&quot;]" class="deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Stage <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;owner&quot;]" class="deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>">Owner <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortDealLifecycleBy" data-args="[&quot;aging&quot;]" class="rr-num deal-lifecycle-sort whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none" data-sort-key="<REDACTED_SECRET>" title="Aging in the unit the SOP defines for that stage (business days for Not Attend Meeting / Meeting, calendar days otherwise).">Aging <span class="deal-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" class="whitespace-nowrap">SLA / Clause</th>
                             <th scope="col">Suggested action</th>
                         </tr>

@@ -48,7 +48,7 @@
  * Requirements:
  *   - The dev server must be running at BASE_URL (default
  *     <REDACTED_URL>
- *   - ADMIN_API_KEY (or TEST_ADMIN_KEY) must be set so /api/admin/auth +
+ *   - ADMIN_API_KEY (or <REDACTED_SECRET>) must be set so /api/admin/auth +
  *     subsequent X-Admin-Key requests succeed; otherwise the suite is
  *     skipped, mirroring the prompt-version / ai-ops-tabs specs.
  *   - DATABASE_URL must point at the same Postgres the server uses so the
@@ -68,7 +68,7 @@ import * as crypto from "crypto";
 import * as pg from "pg";
 
 const BASE_URL = process.env.BASE_URL || "<REDACTED_URL>";
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || "";
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || "";
 const DATABASE_URL = process.env.DATABASE_URL || "";
 
 // Per-run uniqueness so concurrent runs / repeated runs don't collide,
@@ -161,7 +161,7 @@ async function seedRow(): Promise<void> {
       JSON.stringify(payload),
       PAYLOAD_PREVIEW,
       checksum,
-      `e2e-task-482-requester-${RUN_ID}@ExampleOrg-test.invalid`,
+      `e2e-task-482-requester-<REDACTED_EMAIL>`,
       `Task 482 e2e Requester ${RUN_ID}`,
       `thr_task_482_e2e_${RUN_ID}`,
       JSON.stringify(SEED_CREDENTIAL_WARNINGS),
@@ -260,7 +260,7 @@ test.describe("AI Approvals — credential-warning banner", () => {
     page,
   }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, "ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment");
+      test.skip(true, "ADMIN_API_KEY / <REDACTED_SECRET> not set in environment");
       return;
     }
     if (!DATABASE_URL) {
@@ -271,7 +271,7 @@ test.describe("AI Approvals — credential-warning banner", () => {
       test.skip(
         true,
         `Server rejected ADMIN_KEY (HTTP ${serverAdminAuthFailed.status}); ` +
-          `set ADMIN_API_KEY on the server to a value matching TEST_ADMIN_KEY ` +
+          `set ADMIN_API_KEY on the server to a value matching <REDACTED_SECRET> ` +
           `(min length 32, ≥10 distinct chars per src/utils/rbacMiddleware.ts).`,
       );
       return;

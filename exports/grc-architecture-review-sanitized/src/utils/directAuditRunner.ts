@@ -86,7 +86,7 @@ function analyzeRecordBatch(
       else if (issue.severity === 'high') high++;
       else if (issue.severity === 'medium') medium++;
       else low++;
-      const key = `${issue.module}-${issue.issueType}`;
+      const key = `<REDACTED_SECRET>`;
       if (!issueTypeCounts[key]) {
         issueTypeCounts[key] = { count: 0, severity: issue.severity, module: issue.module };
       }
@@ -268,7 +268,7 @@ async function runAttachmentAudit(
         else if (bucket === 'medium') medium++;
         else low++;
 
-        const key = `${issue.module}-${issue.issueType}`;
+        const key = `<REDACTED_SECRET>`;
         if (!issueTypeCounts[key]) {
           issueTypeCounts[key] = { count: 0, severity: issue.severity, module: issue.module };
         }

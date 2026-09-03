@@ -72,7 +72,7 @@ async function main() {
   const tail = data.duplicates[data.duplicates.length - 1];
   if (tail) {
     const hasKeys =
-      "clusters" in tail &&
+      "<REDACTED_SECRET>" in tail &&
       "pipeline_inflation_sar" in tail &&
       "date" in tail;
     if (!hasKeys) {

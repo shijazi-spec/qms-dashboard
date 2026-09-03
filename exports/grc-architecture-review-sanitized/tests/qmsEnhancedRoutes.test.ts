@@ -24,7 +24,7 @@ import { buildHandler, makeContext } from "./_helpers/fakeContext";
 
 const suite = new TestSuite("qmsEnhancedRoutes");
 const ADMIN_KEY = "<REDACTED_SECRET>";
-const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
 const SESSION_COOKIE_NAME = "ExampleOrg_session";
 
 console.log("\n=== qmsEnhancedRoutes integration tests ===\n");
@@ -37,8 +37,8 @@ function signFakeSession(payload: Record<string, unknown>, secret: string): stri
 
 function makeCookieForRole(role: string): string {
   const token = signFakeSession(
-    { userId: 99, email: `${role}@test.example`, name: "Test User", role, exp: Date.now() + 3_600_000 },
-    TEST_SESSION_SECRET,
+    { userId: 99, email: `<REDACTED_EMAIL>`, name: "Test User", role, exp: Date.now() + 3_600_000 },
+    <REDACTED_SECRET>,
   );
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`;
 }
@@ -87,7 +87,7 @@ for (const route of qmsGatedRoutes) {
     const origKey = process.env.ADMIN_API_KEY;
     const origSecret = process.env.SESSION_SECRET;
     process.env.ADMIN_API_KEY = ADMIN_KEY;
-    process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+    process.env.SESSION_SECRET = <REDACTED_SECRET>;
     try {
       const handler = await buildHandler(qmsEnhancedRoutes, path, method, { mastra: null });
       const res = await handler(makeContext({
@@ -111,7 +111,7 @@ for (const route of qmsGatedRoutes) {
     const origKey = process.env.ADMIN_API_KEY;
     const origSecret = process.env.SESSION_SECRET;
     process.env.ADMIN_API_KEY = ADMIN_KEY;
-    process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+    process.env.SESSION_SECRET = <REDACTED_SECRET>;
     try {
       const handler = await buildHandler(qmsEnhancedRoutes, path, method, { mastra: null });
       const res = await handler(makeContext({

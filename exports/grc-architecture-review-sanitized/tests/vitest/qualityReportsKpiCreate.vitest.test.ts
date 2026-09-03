@@ -71,7 +71,7 @@ beforeEach(() => {
 
 describe("POST /api/quality-reports/bus/:buKey/kpis", () => {
   it("sets owner_name from the BU, never from the body", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team", is_active: true });
+    getBUByKey.mockResolvedValue({ bu_key: "<REDACTED_SECRET>", kpi_owner_name: "SDR Team", is_active: true });
     await post("sdr_b2b", { ...VALID, owner_name: "Sample User", owner_type: "quality_manager" });
     const arg = createKPIDefinition.mock.calls[0][0];
     expect(arg.owner_name).toBe("SDR Team");
@@ -85,21 +85,21 @@ describe("POST /api/quality-reports/bus/:buKey/kpis", () => {
   });
 
   it("400s when the BU has no KPI owner mapped", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2c", kpi_owner_name: null, is_active: true });
+    getBUByKey.mockResolvedValue({ bu_key: "<REDACTED_SECRET>", kpi_owner_name: null, is_active: true });
     const res: any = await post("sdr_b2c", VALID);
     expect(res.status).toBe(400);
     expect(createKPIDefinition).not.toHaveBeenCalled();
   });
 
   it("400s when a required field is missing", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team", is_active: true });
+    getBUByKey.mockResolvedValue({ bu_key: "<REDACTED_SECRET>", kpi_owner_name: "SDR Team", is_active: true });
     const res: any = await post("sdr_b2b", { ...VALID, kpi_code: "" });
     expect(res.status).toBe(400);
     expect(createKPIDefinition).not.toHaveBeenCalled();
   });
 
   it("409s on a duplicate kpi_code", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team", is_active: true });
+    getBUByKey.mockResolvedValue({ bu_key: "<REDACTED_SECRET>", kpi_owner_name: "SDR Team", is_active: true });
     createKPIDefinition.mockRejectedValue(
       Object.assign(new Error("dup"), { code: "23505" }),
     );
@@ -108,7 +108,7 @@ describe("POST /api/quality-reports/bus/:buKey/kpis", () => {
   });
 
   it("400s when the BU is inactive, even with a KPI owner mapped", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "cs_team_old", kpi_owner_name: "CS Team", is_active: false });
+    getBUByKey.mockResolvedValue({ bu_key: "<REDACTED_SECRET>", kpi_owner_name: "CS Team", is_active: false });
     const res: any = await post("cs_team_old", VALID);
     expect(res.status).toBe(400);
     expect(createKPIDefinition).not.toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe("POST /api/quality-reports/bus/:buKey/kpis", () => {
 
 describe("ad-hoc default", () => {
   it("tags a BU-page creation as ad-hoc so it lands in the Ad-hoc box", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team", is_active: true });
+    getBUByKey.mockResolvedValue({ bu_key: "<REDACTED_SECRET>", kpi_owner_name: "SDR Team", is_active: true });
     await post("sdr_b2b", VALID);
     // This endpoint IS the ad-hoc path — a KPI added from a BU page is the
     // team's own addition, not part of the seeded catalog.
@@ -125,7 +125,7 @@ describe("ad-hoc default", () => {
   });
 
   it("lets the caller opt out explicitly", async () => {
-    getBUByKey.mockResolvedValue({ bu_key: "sdr_b2b", kpi_owner_name: "SDR Team", is_active: true });
+    getBUByKey.mockResolvedValue({ bu_key: "<REDACTED_SECRET>", kpi_owner_name: "SDR Team", is_active: true });
     await post("sdr_b2b", { ...VALID, is_adhoc: false });
     expect(createKPIDefinition.mock.calls[0][0].is_adhoc).toBe(false);
   });

@@ -36,16 +36,16 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
 
 /**
- * Resolve the admin key from env, preferring TEST_ADMIN_KEY.  When unset:
+ * Resolve the admin key from env, preferring <REDACTED_SECRET>.  When unset:
  *   - In CI, throw — refusing to silently skip a security smoke test.
  *   - Locally, return null so the caller can test.skip with a clear message.
  */
 function resolveAdminKey(): string | null {
-  const key = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
+  const key = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY;
   if (key) return key;
   if (process.env.CI === 'true') {
     throw new Error(
-      'CI: ADMIN_API_KEY / TEST_ADMIN_KEY missing — cannot run admin-key ' +
+      'CI: ADMIN_API_KEY / <REDACTED_SECRET> missing — cannot run admin-key ' +
         'rejection smoke test. Refusing to skip.',
     );
   }
@@ -96,7 +96,7 @@ test.describe('Export routes — X-Admin-Key rejected on application routes', ()
     test(`GET ${ec.path} (${ec.label}) with X-Admin-Key only → 401`, async ({ request }) => {
       const adminKey = resolveAdminKey();
       if (!adminKey) {
-        test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not configured — skipping locally');
+        test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not configured — skipping locally');
       }
 
       const res = await getWithKeyOnly(request, ec.path, adminKey as string);

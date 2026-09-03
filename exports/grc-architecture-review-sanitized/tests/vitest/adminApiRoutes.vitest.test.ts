@@ -67,7 +67,7 @@ vi.mock("../../src/utils/database", () => ({
   logAdminActivity: vi.fn((activity: AdminActivity) => Promise.resolve(activity)),
 }));
 
-const ADMIN_KEY = "vitest-admin-key-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 const AUTH_HEADERS = { "X-Admin-Key": ADMIN_KEY };
 
 let db: typeof import("../../src/utils/database");

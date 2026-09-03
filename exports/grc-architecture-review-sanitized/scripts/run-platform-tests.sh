@@ -5,7 +5,7 @@
 
 set -u
 BASE="${BASE:-<REDACTED_URL>"
-KEY="X-Admin-Key: ${ADMIN_API_KEY:-Sample User}"
+KEY="<REDACTED_SECRET>"
 REPORT="ExampleOrg_TEST_REPORT.md"
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 

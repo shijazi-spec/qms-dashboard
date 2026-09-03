@@ -676,8 +676,8 @@
         widgetCloseDownModal();
     };
 
-    var W_FB_QUEUE_KEY = 'ExampleOrg_feedback_queue';
-    var W_RATING_CACHE_KEY = 'ExampleOrg_msg_ratings';
+    var W_FB_QUEUE_KEY = '<REDACTED_SECRET>';
+    var W_RATING_CACHE_KEY = '<REDACTED_SECRET>';
 
     function wRatingCacheGet(messageId) {
         try { var m = JSON.parse(localStorage.getItem(W_RATING_CACHE_KEY) || '{}'); return m[messageId] || null; } catch(e) { return null; }

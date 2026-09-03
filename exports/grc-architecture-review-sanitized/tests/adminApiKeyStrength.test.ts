@@ -23,7 +23,7 @@
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "<REDACTED_DSN>";
-process.env.SESSION_SECRET = process.env.SESSION_SECRET || "test-session-secret";
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || "<REDACTED_SECRET>";
 
 import {
   ADMIN_API_KEY_MIN_DISTINCT_CHARS,
@@ -112,7 +112,7 @@ console.log("\n=== ADMIN_API_KEY strength gate (rbacMiddleware) ===\n");
 console.log("Case: validateAdminApiKeyStrength accepts a 64-hex `openssl rand -hex 32` key");
 {
   // 64 hex chars, 16 distinct → both above minimum
-  const key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  const key = "<REDACTED_SECRET>";
   const result = validateAdminApiKeyStrength(key);
   assertEquals(result.ok, true, "ok=true");
   assertEquals(result.length, 64, "length=64");
@@ -124,7 +124,7 @@ console.log();
 console.log("Case: validateAdminApiKeyStrength accepts a key exactly at the floor");
 {
   // length 32, 11 distinct chars → both at/above minimum
-  const key = "abcdefghijk_abcdefghijk_abcdefghi"; // 33 chars, 12 distinct
+  const key = "<REDACTED_SECRET>"; // 33 chars, 12 distinct
   const result = validateAdminApiKeyStrength(key);
   assert(
     result.length >= ADMIN_API_KEY_MIN_LENGTH,
@@ -142,7 +142,7 @@ console.log();
 console.log("Case: validateAdminApiKeyStrength accepts a base64url-style 43-char key");
 {
   // openssl rand -base64 32 (≈43 base64url chars), high distinct-char count
-  const key = "kJ8x_Yt2qPwNvLmRsHaBcDeFgHiJkLmNoPqRsTuVwXyZ";
+  const key = "<REDACTED_SECRET>";
   const result = validateAdminApiKeyStrength(key);
   assertEquals(result.ok, true, "ok=true");
   assert(
@@ -182,7 +182,7 @@ console.log(
 );
 {
   // 64 'a's — comfortably above the length floor, well below the distinct-char floor
-  const key = "a".repeat(64);
+  const key = "<REDACTED_SECRET>".repeat(64);
   const result = validateAdminApiKeyStrength(key);
   assertEquals(result.ok, false, "ok=false");
   assertEquals(result.distinctChars, 1, "distinctChars=1");

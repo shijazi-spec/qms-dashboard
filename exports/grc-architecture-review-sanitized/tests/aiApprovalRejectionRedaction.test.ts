@@ -14,7 +14,7 @@
  */
 
 process.env.SESSION_SECRET =
-  process.env.SESSION_SECRET || 'test-secret-ai-approval-rejection-redaction';
+  process.env.SESSION_SECRET || '<REDACTED_SECRET>';
 // Point any incidentally-created pg Pool at a port that refuses fast so
 // the bootstrap IIFE inside aiApprovalRoutes errors immediately instead
 // of hanging the test.
@@ -279,7 +279,7 @@ async function callRoute(
 // `redactSecretLikeStrings` is supposed to catch when it appears inline in
 // the reviewer's rejection prose. A regression in any single pattern is
 // caught here.
-const REASON_SK_KEY = '<REDACTED_TOKEN>';
+const REASON_SK_KEY = '<REDACTED_SECRET>';
 const REASON_GH_TOKEN = '<REDACTED_SECRET>';
 const REASON_JWT =
   '<REDACTED_TOKEN>';
@@ -524,7 +524,7 @@ async function run(): Promise<void> {
   console.log('\n--- catch-block details redaction (reject route handler) ---');
 
   // One credential-shaped substring per regex family this guard covers.
-  const ERR_SK_KEY = '<REDACTED_TOKEN>';
+  const ERR_SK_KEY = '<REDACTED_SECRET>';
   const ERR_GH_TOKEN = '<REDACTED_SECRET>';
   const ERR_JWT =
     '<REDACTED_TOKEN>';

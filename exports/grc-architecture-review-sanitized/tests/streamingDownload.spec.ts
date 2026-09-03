@@ -27,7 +27,7 @@
  * before invoking `streamingDownload` and passes `streamToDisk: 'always'`.
  *
  * Authentication: uses `/api/admin/auth` with `ADMIN_API_KEY` (or
- * `TEST_ADMIN_KEY`) to load the gated `/vendors` page, which already loads
+ * `<REDACTED_SECRET>`) to load the gated `/vendors` page, which already loads
  * `streaming-download.js` and the SW. The export URL itself is intercepted
  * via Playwright's `context.route` and replied with a fixed CSV — the test
  * exercises the *frontend* streaming path, not any specific export
@@ -96,7 +96,7 @@ const LATENCY_FAIL_MS = 5_000; // p95 proxy — fail hard
 const TIMING_RESULTS_DIR = 'test-results/streaming-download-timing';
 
 async function authenticate(context: BrowserContext): Promise<boolean> {
-  const adminKey = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
+  const adminKey = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY;
   if (!adminKey) return false;
   const res = await context.request.post(`${BASE_URL}/api/admin/auth`, {
     <REDACTED_SCHEME> { key: adminKey },
@@ -150,11 +150,11 @@ test.describe('streamingDownload — cross-browser smoke', () => {
       // still convenient when the dev simply hasn't exported the key.
       if (process.env.CI === 'true') {
         throw new Error(
-          'CI: ADMIN_API_KEY / TEST_ADMIN_KEY missing or not accepted by ' +
+          'CI: ADMIN_API_KEY / <REDACTED_SECRET> missing or not accepted by ' +
             `${BASE_URL}/api/admin/auth — refusing to skip the smoke test.`,
         );
       }
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not configured');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not configured');
     }
 
     // Capture page console errors so a failed assertion has useful context.
@@ -385,12 +385,12 @@ test.describe('streamingDownload — cross-browser smoke', () => {
       // admin key in CI is a config regression and must hard-fail.
       if (process.env.CI === 'true') {
         throw new Error(
-          'CI: ADMIN_API_KEY / TEST_ADMIN_KEY missing or not accepted by ' +
+          'CI: ADMIN_API_KEY / <REDACTED_SECRET> missing or not accepted by ' +
             `${BASE_URL}/api/admin/auth — refusing to skip the Arabic ` +
             'fallback-advisory smoke test.',
         );
       }
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not configured');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not configured');
     }
 
     // Read the EXACT Arabic strings the test must see in the rendered

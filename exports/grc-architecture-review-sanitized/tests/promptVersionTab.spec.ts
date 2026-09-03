@@ -32,7 +32,7 @@
  * Requirements:
  *   - The dev server must be running at BASE_URL (default
  *     <REDACTED_URL> — same convention as tests/i18n.spec.ts.
- *   - ADMIN_API_KEY (or TEST_ADMIN_KEY) must be set in the environment so
+ *   - ADMIN_API_KEY (or <REDACTED_SECRET>) must be set in the environment so
  *     the test can authenticate; otherwise the suite is skipped.
  *   - DATABASE_URL must point at the same Postgres the server uses so
  *     the seed/cleanup can write directly.
@@ -46,7 +46,7 @@ import * as pg from 'pg';
 import { warmupAiOpsTables } from './helpers/warmupAiOpsTables';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || '';
 const DATABASE_URL = process.env.DATABASE_URL || '';
 
 // Unique per-run suffix so parallel/repeated runs don't collide and so
@@ -164,7 +164,7 @@ test.describe('AI Ops — Prompt Version tab', () => {
 
   test('renders both seeded prompt versions with best ★ badge and regression highlight', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     if (!DATABASE_URL) {

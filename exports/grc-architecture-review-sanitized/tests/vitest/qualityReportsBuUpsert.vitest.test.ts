@@ -23,7 +23,7 @@ vi.mock("../../src/utils/logger", () => ({
 
 import { upsertBU } from "../../src/utils/qualityReportsDepartments";
 
-const BASE = { bu_key: "cs_b2b", bu_name: "Customer Success (B2B)", channel: "B2B" as const, fn: "cs" };
+const BASE = { bu_key: "<REDACTED_SECRET>", bu_name: "Customer Success (B2B)", channel: "B2B" as const, fn: "cs" };
 
 /**
  * The upsert statement, not the seed's.
@@ -41,7 +41,7 @@ function upsertCall() {
 }
 
 beforeEach(() => {
-  query.mockReset().mockResolvedValue({ rows: [{ id: 3, bu_key: "cs_b2b" }] });
+  query.mockReset().mockResolvedValue({ rows: [{ id: 3, bu_key: "<REDACTED_SECRET>" }] });
 });
 
 describe("partial updates leave untouched columns alone", () => {

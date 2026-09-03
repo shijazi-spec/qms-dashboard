@@ -29,11 +29,11 @@
  * Run:  npx tsx tests/gateApiRoute.test.ts
  */
 
-const TEST_ADMIN_KEY = "test-admin-key-gate-xyz";
-const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
 
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+process.env.SESSION_SECRET = <REDACTED_SECRET>;
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "<REDACTED_DSN>";
 
@@ -197,7 +197,7 @@ console.log();
 // are reached through the global middleware's /api/admin/* fast-path.
 console.log("Branch: /api/ path with valid X-Admin-Key but no session → 401 (key is not a session)");
 await (async () => {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   let innerCalled = 0;
   let receivedDeps: any = null;
   const sentinelDeps = { db: { tag: "fake-db" }, logger: () => {} };
@@ -229,7 +229,7 @@ await (async () => {
     "deps object is forwarded to the original createHandler"
   );
 
-  const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  const c = makeContext({ adminKeyHeader: <REDACTED_SECRET> });
   const res = await handler(c);
 
   assertEquals(innerCalled, 0, "inner handler is NOT invoked for key-only callers");
@@ -240,7 +240,7 @@ console.log();
 // ─── Branch 2b: /api/ + valid signed session cookie → inner handler runs ────
 console.log("Branch: /api/ path with valid session cookie (no key) → inner handler runs");
 await (async () => {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   let innerCalled = 0;
   const route = {
     path: "/api/widgets",
@@ -266,7 +266,7 @@ console.log();
 // ─── Branch 3: /api/ + no key + no session → 401, inner NEVER runs ──────────
 console.log("Branch: /api/ path with no key and no session → 401, inner handler never runs");
 await (async () => {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   let innerCalled = 0;
   const route = {
     path: "/api/widgets",
@@ -295,7 +295,7 @@ console.log();
 // ─── Branch 3b: /api/ + wrong admin key → 401, inner NEVER runs ─────────────
 console.log("Branch: /api/ path with WRONG admin key → 401, inner handler never runs");
 await (async () => {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   let innerCalled = 0;
   const route = {
     path: "/api/widgets",
@@ -308,7 +308,7 @@ await (async () => {
   const wrapped = gateApiRoute(route);
   const handler = await (wrapped.createHandler as any)({});
 
-  const c = makeContext({ adminKeyHeader: "definitely-not-the-key" });
+  const c = makeContext({ adminKeyHeader: "<REDACTED_SECRET>" });
   const res = await handler(c);
 
   assertEquals(innerCalled, 0, "inner handler is NOT invoked when key mismatches");
@@ -319,7 +319,7 @@ console.log();
 // ─── Branch 3c: /api/ + tampered session cookie → 401, inner NEVER runs ─────
 console.log("Branch: /api/ path with tampered session cookie → 401, inner handler never runs");
 await (async () => {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   let innerCalled = 0;
   const route = {
     path: "/api/widgets",
@@ -370,7 +370,7 @@ await (async () => {
   const handler = await (wrapped.createHandler as any)({});
 
   // Even with a non-empty header, no env value means no key auth path exists.
-  const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  const c = makeContext({ adminKeyHeader: <REDACTED_SECRET> });
   const res = await handler(c);
 
   assertEquals(
@@ -380,14 +380,14 @@ await (async () => {
   );
   assertEquals(res.status, 401, "response status is 401");
 
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
 })();
 console.log();
 
 // ─── Branch 5: async createHandler is awaited, not double-wrapped ───────────
 console.log("Branch: async createHandler — promise is awaited before request handling");
 await (async () => {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
 
   let innerCalled = 0;
   const route = {

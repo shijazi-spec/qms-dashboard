@@ -99,7 +99,7 @@ import { staticPageRoutes } from "../../src/mastra/routes/staticPageRoutes";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const ADMIN_KEY = "vitest-static-page-admin-key-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 const SESSION_SECRET = "<REDACTED_SECRET>";
 
 // ---------------------------------------------------------------------------

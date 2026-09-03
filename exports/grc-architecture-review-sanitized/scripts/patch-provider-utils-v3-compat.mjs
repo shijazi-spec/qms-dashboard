@@ -8,7 +8,7 @@ import { constants } from 'node:fs';
 import { resolve, sep } from 'node:path';
 
 const PACKAGE_DIR = 'node_modules/@ai-sdk/provider-utils';
-const BOUND_PREFIX = `node_modules${sep}@ai-sdk${sep}provider-utils${sep}`;
+const BOUND_PREFIX = `node_modules<REDACTED_EMAIL>`;
 const SENTINEL = 'patched-by-patch-provider-utils-v3-compat.mjs';
 const NAMES = [
   'asValidator',

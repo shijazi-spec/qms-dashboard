@@ -103,7 +103,7 @@ CRMProvider's workflow editor can fire a Custom Function on `Lead before_create`
 ```javascript
 // CRMProvider Deluge — before-create gate on Leads
 preflight_url = "<REDACTED_URL_SCHEME><your-HostingPlatform-deployment>.<REDACTED_HOST>/api/duplicates/preflight/check";
-admin_key = "CRMProvider_KEY_PLACEHOLDER";
+admin_key = "<REDACTED_SECRET>";
 
 payload = Map();
 payload.put("domain", lead.get("Company_Domain"));

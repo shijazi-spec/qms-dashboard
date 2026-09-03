@@ -2,10 +2,10 @@ import { describe, it, expect } from "vitest";
 import { shapeDealCompliance } from "../../src/utils/dealComplianceReport";
 
 const rows = [
-  { stage: "Agreement Signed", compliant: false, amount: 100, owner: "Sample User", missing_docs: [{ key: "vat", label: "VAT Certificate" }, { key: "cr", label: "Commercial Registration (CR)" }] },
+  { stage: "Agreement Signed", compliant: false, amount: 100, owner: "Sample User", missing_docs: [{ key: "<REDACTED_SECRET>", label: "VAT Certificate" }, { key: "<REDACTED_SECRET>", label: "Commercial Registration (CR)" }] },
   { stage: "Agreement Signed", compliant: true, amount: 50, owner: "Sample User", missing_docs: [] },
-  { stage: "Proposal", compliant: false, amount: 200, owner: "", missing_docs: [{ key: "financial_offer", label: "Financial offer / proposal" }] },
-  { stage: "Agreement Signed", compliant: false, amount: 300, owner: "Sample User", missing_docs: [{ key: "vat", label: "VAT Certificate" }] },
+  { stage: "Proposal", compliant: false, amount: 200, owner: "", missing_docs: [{ key: "<REDACTED_SECRET>", label: "Financial offer / proposal" }] },
+  { stage: "Agreement Signed", compliant: false, amount: 300, owner: "Sample User", missing_docs: [{ key: "<REDACTED_SECRET>", label: "VAT Certificate" }] },
 ];
 
 describe("shapeDealCompliance", () => {
@@ -30,7 +30,7 @@ describe("shapeDealCompliance", () => {
     expect(out.at_risk_sar).toBe(0);
   });
   it("caps by_owner at 10 and reports overflow", () => {
-    const many = Array.from({ length: 13 }, (_, i) => ({ stage: "Agreement Signed", compliant: false, amount: 10, owner: "owner" + i, missing_docs: [{ key: "vat", label: "VAT Certificate" }] }));
+    const many = Array.from({ length: 13 }, (_, i) => ({ stage: "Agreement Signed", compliant: false, amount: 10, owner: "owner" + i, missing_docs: [{ key: "<REDACTED_SECRET>", label: "VAT Certificate" }] }));
     const out = shapeDealCompliance("ExampleOrg", many);
     expect(out.by_owner.length).toBe(10);
     expect(out.owner_overflow).toBe(3);

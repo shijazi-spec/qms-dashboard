@@ -42,7 +42,7 @@ export function assertNoLegacyProviderUtils(lockfile) {
       path.endsWith('node_modules/@ai-sdk/provider-utils') &&
       /^[23]\./.test(String(metadata.version)),
     )
-    .map(([path, metadata]) => `${path}@${metadata.version}`);
+    .map(([path, metadata]) => `<REDACTED_EMAIL>`);
   if (legacy.length > 0) {
     throw new Error(`legacy provider-utils remains in deployment tree: ${legacy.join(', ')}`);
   }
@@ -59,7 +59,7 @@ export function assertEnginesSupportRuntimeNode(lockfile, runtimeNodeVersion = p
       return !semver.satisfies(runtimeNodeVersion, range);
     })
     .map(([path, metadata]) =>
-      `${path.replace(/^.*node_modules\//, '')}@${metadata.version} requires node ${metadata.engines.node}`,
+      `<REDACTED_EMAIL> requires node ${metadata.engines.node}`,
     );
   if (incompatible.length > 0) {
     throw new Error(

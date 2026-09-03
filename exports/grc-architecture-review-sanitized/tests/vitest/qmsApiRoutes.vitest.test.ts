@@ -44,7 +44,7 @@ vi.mock("../../src/utils/eventLogsDatabase", () => ({
   logEvent: vi.fn(async () => undefined),
 }));
 
-const ADMIN_KEY = "vitest-qms-key-2026";
+const ADMIN_KEY = "<REDACTED_SECRET>";
 const AUTH_HEADERS = { "X-Admin-Key": ADMIN_KEY };
 
 let qmsDb: typeof import("../../src/utils/qmsDatabase");

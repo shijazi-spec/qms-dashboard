@@ -20,10 +20,10 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // the admin key present, requireRole() skips the platform-user lookup
 // (rbacMiddleware.ts L107). Both env vars must be set BEFORE any module that
 // reads them (rbacMiddleware, authRoutes) is imported.
-const TEST_ADMIN_KEY = "vitest-tablef-admin-key-2026";
-const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+process.env.SESSION_SECRET = <REDACTED_SECRET>;
 
 import { tablefApiRoutes } from "../../src/mastra/routes/tablefApiRoutes";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
@@ -33,7 +33,7 @@ import { buildHandler, makeContext } from "../_helpers/fakeContext";
 function signSession(payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = crypto
-    .createHmac("sha256", TEST_SESSION_SECRET)
+    .createHmac("sha256", <REDACTED_SECRET>)
     .update(data)
     .digest("base64url");
   return `${data}.${sig}`;
@@ -46,7 +46,7 @@ const ADMIN_SESSION_COOKIE =
   );
 
 const ADMIN_HEADERS = {
-  "X-Admin-Key": TEST_ADMIN_KEY,
+  "X-Admin-Key": <REDACTED_SECRET>,
   Cookie: ADMIN_SESSION_COOKIE,
 };
 

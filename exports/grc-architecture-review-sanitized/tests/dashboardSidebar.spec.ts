@@ -20,7 +20,7 @@
  *     ExampleOrg-nav-pinned:user:admin
  *     ExampleOrg-nav-recent:user:admin
  *
- *   When ADMIN_API_KEY / TEST_ADMIN_KEY is not in the environment, the
+ *   When ADMIN_API_KEY / <REDACTED_SECRET> is not in the environment, the
  *   suite is skipped (mirrors the other auth-gated dashboard specs).
  *
  * Run:
@@ -30,13 +30,13 @@
 import { test, expect, Page } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || '';
 
 // User-scoped storage key suffix. /api/auth/me with X-Admin-Key returns
 // `id: "admin"` (see server/routes/auth*.ts), so the per-user namespace
 // is deterministic for this suite.
-const PIN_KEY = 'ExampleOrg-nav-pinned:user:admin';
-const RECENT_KEY = 'ExampleOrg-nav-recent:user:admin';
+const PIN_KEY = '<REDACTED_SECRET>';
+const RECENT_KEY = '<REDACTED_SECRET>';
 
 // Seed `ExampleOrg_lang` BEFORE any script runs so i18n.js picks it up
 // during init and the rail renders in the requested direction. Also
@@ -103,7 +103,7 @@ test.describe('Dashboard sidebar — pin / recent / search / keyboard', () => {
 
   test.beforeEach(async () => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
     }
   });
 
@@ -247,7 +247,7 @@ test.describe('Dashboard sidebar — pin / recent / search / keyboard', () => {
   });
 
   // ---------------------------------------------------------------------
-  // Keyboard: `/` focuses search, Arrow/Home/End move within the rail
+  // Keyboard: `<REDACTED_SECRET>` focuses search, Arrow/Home/End move within the rail
   // ---------------------------------------------------------------------
   test('"/" focuses the rail search input', async ({ page }) => {
     await bootstrap(page, 'en');

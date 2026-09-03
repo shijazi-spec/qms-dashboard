@@ -567,7 +567,7 @@ function pushParent(
   id: string | undefined,
 ): void {
   if (!id) return;
-  const key = `${module}:${id}`;
+  const key = `<REDACTED_SECRET>`;
   const existing = parents.get(key);
   if (existing) {
     existing.activities += 1;

@@ -10,8 +10,8 @@
  * Run via:  npx vitest run tests/vitest/dashboardApiRoutes.vitest.test.ts
  */
 
-const TEST_ADMIN_KEY = "vitest-dashboard-admin-key-2026";
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -42,12 +42,12 @@ import type {
 } from "../../src/utils/database";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
 
-const ADMIN_HEADERS = { "X-Admin-Key": TEST_ADMIN_KEY };
+const ADMIN_HEADERS = { "X-Admin-Key": <REDACTED_SECRET> };
 
 let db: typeof import("../../src/utils/database");
 
 beforeEach(async () => {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   db = await import("../../src/utils/database");
   vi.clearAllMocks();
 });

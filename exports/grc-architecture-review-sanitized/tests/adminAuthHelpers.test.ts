@@ -18,11 +18,11 @@
  * Run:  npx tsx tests/adminAuthHelpers.test.ts
  */
 
-const TEST_ADMIN_KEY = "test-admin-key-abc123";
-const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
 
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+process.env.SESSION_SECRET = <REDACTED_SECRET>;
 process.env.DATABASE_URL = process.env.DATABASE_URL || "<REDACTED_DSN>";
 
 import crypto from "crypto";
@@ -122,9 +122,9 @@ console.log(
 // ─── Case 1: header-only X-Admin-Key match ───
 console.log("Case: X-Admin-Key header matches ADMIN_API_KEY");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-  const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
-  assertEquals(getAdminKey(c), TEST_ADMIN_KEY, "getAdminKey returns the header value");
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+  const c = makeContext({ adminKeyHeader: <REDACTED_SECRET> });
+  assertEquals(getAdminKey(c), <REDACTED_SECRET>, "getAdminKey returns the header value");
   assertEquals(hasValidAdminApiKey(c), true, "hasValidAdminApiKey is true");
   assertEquals(isAdminAuthorized(c), true, "isAdminAuthorized is true");
 }
@@ -136,8 +136,8 @@ console.log();
 // authenticate. Browser admin access requires OIDC login + admin role.
 console.log("Case: admin_key cookie alone is IGNORED (Task #831 regression guard)");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-  const c = makeContext({ cookies: { admin_key: TEST_ADMIN_KEY } });
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+  const c = makeContext({ cookies: { admin_key: <REDACTED_SECRET> } });
   assertEquals(getAdminKey(c), null, "getAdminKey ignores admin_key cookie");
   assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false (cookie path removed)");
   assertEquals(isAdminAuthorized(c), false, "isAdminAuthorized is false (cookie path removed)");
@@ -147,11 +147,11 @@ console.log();
 // ─── Case 2b: cookie alongside other cookies — still ignored ───
 console.log("Case: admin_key cookie surrounded by other cookies is also ignored");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   const c = makeContext({
     cookies: {
       foo: "bar",
-      admin_key: TEST_ADMIN_KEY,
+      admin_key: <REDACTED_SECRET>,
       baz: "qux",
     },
   });
@@ -163,8 +163,8 @@ console.log();
 // ─── Case 3: mismatched key → false ───
 console.log("Case: header value present but does NOT match ADMIN_API_KEY");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-  const c = makeContext({ adminKeyHeader: "wrong-key" });
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+  const c = makeContext({ adminKeyHeader: "<REDACTED_SECRET>" });
   assertEquals(getAdminKey(c), "wrong-key", "getAdminKey returns the (wrong) value");
   assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false");
   assertEquals(
@@ -177,8 +177,8 @@ console.log();
 
 console.log("Case: wrong-value admin_key cookie is still ignored (no leak path)");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-  const c = makeContext({ cookies: { admin_key: "also-wrong" } });
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+  const c = makeContext({ cookies: { admin_key: "<REDACTED_SECRET>" } });
   assertEquals(getAdminKey(c), null, "getAdminKey ignores cookie regardless of value");
   assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false");
 }
@@ -189,7 +189,7 @@ console.log("Case: ADMIN_API_KEY env is unset — every request is rejected");
 {
   delete process.env.ADMIN_API_KEY;
 
-  const cWithMatchingHeader = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  const cWithMatchingHeader = makeContext({ adminKeyHeader: <REDACTED_SECRET> });
   assertEquals(
     hasValidAdminApiKey(cWithMatchingHeader),
     false,
@@ -197,7 +197,7 @@ console.log("Case: ADMIN_API_KEY env is unset — every request is rejected");
   );
 
   const cWithMatchingCookie = makeContext({
-    cookies: { admin_key: TEST_ADMIN_KEY },
+    cookies: { admin_key: <REDACTED_SECRET> },
   });
   assertEquals(
     hasValidAdminApiKey(cWithMatchingCookie),
@@ -210,7 +210,7 @@ console.log("Case: ADMIN_API_KEY env is unset — every request is rejected");
   assertEquals(isAdminAuthorized(cEmpty), false, "isAdminAuthorized is false on empty request");
 
   // restore for subsequent cases
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
 }
 console.log();
 
@@ -218,20 +218,20 @@ console.log();
 console.log("Case: ADMIN_API_KEY env is empty string — every request is rejected");
 {
   process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
-  const c = makeContext({ adminKeyHeader: "" });
+  const c = makeContext({ adminKeyHeader: "<REDACTED_SECRET>" });
   assertEquals(
     hasValidAdminApiKey(c),
     false,
     "hasValidAdminApiKey is false (empty env must never auth, even matching empty header)"
   );
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
 }
 console.log();
 
 // ─── Case 5: session-only admin (no key) ───
 console.log("Case: signed admin session cookie, no admin key");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   const c = makeContext({
     cookies: { [SESSION_COOKIE_NAME]: adminSessionCookie("admin") },
   });
@@ -252,7 +252,7 @@ console.log();
 // ─── Case 6: non-admin session + no key → both false ───
 console.log("Case: signed non-admin session cookie, no admin key");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   const c = makeContext({
     cookies: {
       [SESSION_COOKIE_NAME]: adminSessionCookie("quality_manager"),
@@ -271,7 +271,7 @@ console.log();
 // ─── Case 6b: no session, no key → both false ───
 console.log("Case: no session, no admin key");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   const c = makeContext();
   assertEquals(getAdminKey(c), null, "getAdminKey returns null");
   assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false");
@@ -282,7 +282,7 @@ console.log();
 // ─── Case 7: forged session cookie (bad signature) is ignored ───
 console.log("Case: tampered session cookie with admin role is rejected");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   const goodToken = signSession({
     userId: 1,
     email: "<REDACTED_EMAIL>",
@@ -327,21 +327,21 @@ console.log("Case: admin_key cookie variants are uniformly ignored");
       `hasValidAdminApiKey is false (${label})`,
     );
   }
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
 }
 console.log();
 
 // ─── Case 9: header takes precedence over cookie when both present ───
 console.log("Case: header wins over cookie when both supply an admin key");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   const c = makeContext({
-    adminKeyHeader: TEST_ADMIN_KEY,
-    cookies: { admin_key: "ignored-cookie-value" },
+    adminKeyHeader: <REDACTED_SECRET>,
+    cookies: { admin_key: "<REDACTED_SECRET>" },
   });
   assertEquals(
     getAdminKey(c),
-    TEST_ADMIN_KEY,
+    <REDACTED_SECRET>,
     "getAdminKey returns the X-Admin-Key header (cookie is ignored)"
   );
   assertEquals(hasValidAdminApiKey(c), true, "hasValidAdminApiKey is true");
@@ -357,8 +357,8 @@ console.log();
 
 console.log("Case: getSessionUser — X-Admin-Key present, no session → null (key is not a session)");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-  const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+  const c = makeContext({ adminKeyHeader: <REDACTED_SECRET> });
   const user = getSessionUser(c);
   assertEquals(user, null, "getSessionUser returns null for admin-key-only requests");
 }
@@ -366,7 +366,7 @@ console.log();
 
 console.log("Case: getSessionUser — valid session cookie, no key → session user");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   const c = makeContext({
     cookies: { [SESSION_COOKIE_NAME]: adminSessionCookie("quality_manager") },
   });
@@ -379,7 +379,7 @@ console.log();
 
 console.log("Case: getSessionUser — no key, no session → null");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   const c = makeContext();
   assertEquals(getSessionUser(c), null, "getSessionUser returns null");
 }
@@ -387,8 +387,8 @@ console.log();
 
 console.log("Case: getSessionUser — wrong key, no session → null");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-  const c = makeContext({ adminKeyHeader: "not-the-right-key" });
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+  const c = makeContext({ adminKeyHeader: "<REDACTED_SECRET>" });
   assertEquals(getSessionUser(c), null, "getSessionUser returns null on key mismatch");
 }
 console.log();
@@ -397,8 +397,8 @@ console.log();
 
 console.log("Case: requireAuthOrKey — valid key, no session → null (key is not a session identity)");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-  const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+  const c = makeContext({ adminKeyHeader: <REDACTED_SECRET> });
   const user = requireAuthOrKey(c);
   assertEquals(user, null, "requireAuthOrKey returns null for key-only callers; use requireAdminOrKey() instead");
 }
@@ -406,7 +406,7 @@ console.log();
 
 console.log("Case: requireAuthOrKey — no key, valid session → session user");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   const c = makeContext({
     cookies: { [SESSION_COOKIE_NAME]: adminSessionCookie("grc_manager") },
   });
@@ -418,7 +418,7 @@ console.log();
 
 console.log("Case: requireAuthOrKey — no key, no session → null");
 {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   const c = makeContext();
   assertEquals(requireAuthOrKey(c), null, "requireAuthOrKey returns null");
 }
@@ -429,8 +429,8 @@ console.log();
 await (async () => {
   console.log("Case: requireAdminOrKey — valid key → synthetic admin");
   {
-    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-    const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+    process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+    const c = makeContext({ adminKeyHeader: <REDACTED_SECRET> });
     const user = await requireAdminOrKey(c);
     assert(user !== null, "requireAdminOrKey returns a non-null user");
     assertEquals(user?.userId, 0, "synthetic user has userId 0");
@@ -441,7 +441,7 @@ await (async () => {
 
   console.log("Case: requireAdminOrKey — no key, no session → null (no DB hit)");
   {
-    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+    process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
     const c = makeContext();
     const user = await requireAdminOrKey(c);
     assertEquals(user, null, "requireAdminOrKey returns null");
@@ -450,8 +450,8 @@ await (async () => {
 
   console.log("Case: requireRoleOrKey — valid key, no session → null (key does not bypass role checks)");
   {
-    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-    const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+    process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+    const c = makeContext({ adminKeyHeader: <REDACTED_SECRET> });
     const user = await requireRoleOrKey(c, ["quality_manager"]);
     assertEquals(user, null, "requireRoleOrKey returns null for key-only callers; use requireAdminOrKey() for admin-only operations");
   }
@@ -459,8 +459,8 @@ await (async () => {
 
   console.log("Case: requireRoleOrKey — valid key, no session → null regardless of allowedRoles");
   {
-    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-    const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+    process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+    const c = makeContext({ adminKeyHeader: <REDACTED_SECRET> });
     const user = await requireRoleOrKey(c, ["admin"]);
     assertEquals(user, null, "requireRoleOrKey returns null even when admin is in allowedRoles; key is not a session");
   }
@@ -468,7 +468,7 @@ await (async () => {
 
   console.log("Case: requireRoleOrKey — no key, no session → null (no DB hit)");
   {
-    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+    process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
     const c = makeContext();
     const user = await requireRoleOrKey(c, ["admin"]);
     assertEquals(user, null, "requireRoleOrKey returns null");

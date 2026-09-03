@@ -47,15 +47,15 @@ export const SEED_BUS: QualityReportBUSeed[] = [
   // BUs must NOT inherit them just because they share the same `fn`. The
   // remaining BUs stay null on purpose so they read "not mapped" rather than
   // a misleading 0; map them from Admin: BU mappings once ownership is agreed.
-  { bu_key: "sdr_b2b", bu_name: "SDR (B2B)", channel: "B2B", fn: "sdr", sort_order: 1, kpi_bu_name: "SDR", kpi_owner_name: "SDR Team" },
-  { bu_key: "sales_b2b", bu_name: "Sales (B2B)", channel: "B2B", fn: "sales", sort_order: 2, kpi_bu_name: "Sales B2B", kpi_owner_name: "Sales Team" },
-  { bu_key: "cs_b2b", bu_name: "Customer Success (B2B)", channel: "B2B", fn: "cs", sort_order: 3, kpi_bu_name: "Customer Success" },
-  { bu_key: "sdr_b2c", bu_name: "SDR (B2C)", channel: "B2C", fn: "sdr", sort_order: 4, kpi_bu_name: "SDR" },
-  { bu_key: "sales_b2c", bu_name: "Sales (B2C)", channel: "B2C", fn: "sales", sort_order: 5, kpi_bu_name: "Sales B2C" },
-  { bu_key: "cs_b2c", bu_name: "Customer Success (B2C)", channel: "B2C", fn: "cs", sort_order: 6, kpi_bu_name: "Customer Success" },
-  { bu_key: "partnership_mp", bu_name: "Partnership (MP)", channel: "MP", fn: "partnership", sort_order: 7, kpi_bu_name: "Marketplace" },
-  { bu_key: "onboarding_mp", bu_name: "Onboarding (MP)", channel: "MP", fn: "onboarding", sort_order: 8, kpi_bu_name: "Marketplace" },
-  { bu_key: "partnersuccess_mp", bu_name: "PartnerSuccess (MP)", channel: "MP", fn: "partnersuccess", sort_order: 9, kpi_bu_name: "Marketplace" },
+  { bu_key: "<REDACTED_SECRET>", bu_name: "SDR (B2B)", channel: "B2B", fn: "sdr", sort_order: 1, kpi_bu_name: "SDR", kpi_owner_name: "SDR Team" },
+  { bu_key: "<REDACTED_SECRET>", bu_name: "Sales (B2B)", channel: "B2B", fn: "sales", sort_order: 2, kpi_bu_name: "Sales B2B", kpi_owner_name: "Sales Team" },
+  { bu_key: "<REDACTED_SECRET>", bu_name: "Customer Success (B2B)", channel: "B2B", fn: "cs", sort_order: 3, kpi_bu_name: "Customer Success" },
+  { bu_key: "<REDACTED_SECRET>", bu_name: "SDR (B2C)", channel: "B2C", fn: "sdr", sort_order: 4, kpi_bu_name: "SDR" },
+  { bu_key: "<REDACTED_SECRET>", bu_name: "Sales (B2C)", channel: "B2C", fn: "sales", sort_order: 5, kpi_bu_name: "Sales B2C" },
+  { bu_key: "<REDACTED_SECRET>", bu_name: "Customer Success (B2C)", channel: "B2C", fn: "cs", sort_order: 6, kpi_bu_name: "Customer Success" },
+  { bu_key: "<REDACTED_SECRET>", bu_name: "Partnership (MP)", channel: "MP", fn: "partnership", sort_order: 7, kpi_bu_name: "Marketplace" },
+  { bu_key: "<REDACTED_SECRET>", bu_name: "Onboarding (MP)", channel: "MP", fn: "onboarding", sort_order: 8, kpi_bu_name: "Marketplace" },
+  { bu_key: "<REDACTED_SECRET>", bu_name: "PartnerSuccess (MP)", channel: "MP", fn: "partnersuccess", sort_order: 9, kpi_bu_name: "Marketplace" },
 ];
 
 let tablesReady = false;

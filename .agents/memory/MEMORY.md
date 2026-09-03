@@ -20,3 +20,4 @@
 - [Postgres EXPLAIN test determinism](postgres-explain-test-determinism.md) — shared-DB planner statistics can make valid index tests flaky; control scan choice transaction-locally when testing index capability
 - [Mastra output openai "latest"](mastra-output-openai-latest.md) — generated manifest pins openai to latest; declare an exact Node-compatible openai version in root deps so the harden script overwrites it
 - [npm direct dependency overrides](npm-direct-dependency-overrides.md) — when overriding a package that is also direct, keep dependency and override specs identical or npm fails with EOVERRIDE
+- [External review ZIP sanitization](external-review-zip-sanitization.md) — build non-runnable review archives from a text allowlist; exclude live-data/roster sources and require fresh isolated audits

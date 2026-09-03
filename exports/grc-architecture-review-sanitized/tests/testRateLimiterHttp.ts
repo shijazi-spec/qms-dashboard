@@ -236,7 +236,7 @@ async function testAdminAuthAuthLimit(): Promise<boolean> {
       'Content-Type': 'application/json',
       'X-Forwarded-For': xff,
     },
-    body: JSON.stringify({ key: 'this-is-not-the-admin-key-rate-limit-test' }),
+    body: JSON.stringify({ key: '<REDACTED_SECRET>' }),
   };
 
   const N = 15;
@@ -354,7 +354,7 @@ async function testAdminAuthWindowReset(): Promise<boolean> {
       'Content-Type': 'application/json',
       'X-Forwarded-For': xff,
     },
-    body: JSON.stringify({ key: 'this-is-not-the-admin-key-rate-limit-reset-test' }),
+    body: JSON.stringify({ key: '<REDACTED_SECRET>' }),
   };
 
   // Phase A: exhaust AUTH_LIMIT.

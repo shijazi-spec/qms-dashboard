@@ -12,7 +12,7 @@ import * as crypto from "crypto";
 const BASE_URL = process.env.BASE_URL || "<REDACTED_URL>";
 // Role gate validates X-Admin-Key against ADMIN_API_KEY exactly
 // (hasValidAdminApiKey in src/utils/rbacMiddleware.ts).
-const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.TEST_ADMIN_KEY || "";
+const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.<REDACTED_SECRET> || "";
 
 const RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -50,7 +50,7 @@ function buildStubResponse(actionCode: string, priorViewers: SeedViewer[]) {
       risk_level: "medium",
       compliance_refs: [],
       requested_by_user_id: null,
-      requested_by_email: `e2e-consultant-${RUN_ID}@ExampleOrg-test.invalid`,
+      requested_by_email: `e2e-consultant-<REDACTED_EMAIL>`,
       requested_by_name: `Task 762 e2e Requester ${RUN_ID}`,
       thread_id: `thr_consultant_e2e_${RUN_ID}`,
       status: "pending" as const,
@@ -116,7 +116,7 @@ test.describe('Consultant chat — "Viewed by" chips on inline approval cards', 
     page,
   }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, "ADMIN_API_KEY / TEST_ADMIN_KEY not set");
+      test.skip(true, "ADMIN_API_KEY / <REDACTED_SECRET> not set");
       return;
     }
 
@@ -125,7 +125,7 @@ test.describe('Consultant chat — "Viewed by" chips on inline approval cards', 
     const seedViewers: SeedViewer[] = [
       {
         user_id: 101,
-        user_email: `lead-auditor-${RUN_ID}@ExampleOrg-test.invalid`,
+        user_email: `lead-auditor-<REDACTED_EMAIL>`,
         user_name: `Lead Auditor ${RUN_ID}`,
         user_role: "quality_manager",
         last_viewed_at: new Date(Date.now() - 60 * 1000).toISOString(),
@@ -133,7 +133,7 @@ test.describe('Consultant chat — "Viewed by" chips on inline approval cards', 
       },
       {
         user_id: 102,
-        user_email: `repeat-reviewer-${RUN_ID}@ExampleOrg-test.invalid`,
+        user_email: `repeat-reviewer-<REDACTED_EMAIL>`,
         user_name: `Repeat Reviewer ${RUN_ID}`,
         user_role: "admin",
         last_viewed_at: new Date(Date.now() - 30 * 1000).toISOString(),
@@ -141,7 +141,7 @@ test.describe('Consultant chat — "Viewed by" chips on inline approval cards', 
       },
       {
         user_id: 103,
-        user_email: `no-role-${RUN_ID}@ExampleOrg-test.invalid`,
+        user_email: `no-role-<REDACTED_EMAIL>`,
         user_name: `Quality Specialist ${RUN_ID}`,
         user_role: null,
         last_viewed_at: new Date(Date.now() - 15 * 1000).toISOString(),
@@ -205,7 +205,7 @@ test.describe('Consultant chat — "Viewed by" chips on inline approval cards', 
     page,
   }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, "ADMIN_API_KEY / TEST_ADMIN_KEY not set");
+      test.skip(true, "ADMIN_API_KEY / <REDACTED_SECRET> not set");
       return;
     }
 

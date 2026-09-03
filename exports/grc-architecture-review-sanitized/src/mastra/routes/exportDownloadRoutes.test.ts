@@ -65,8 +65,8 @@ const mockQuery: MockedPoolQuery = (sql, params = []) => {
 
 (Pool.prototype as unknown as { query: MockedPoolQuery }).query = mockQuery;
 
-const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
-process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+process.env.SESSION_SECRET = <REDACTED_SECRET>;
 
 // Import AFTER the mock + env are in place.
 const { exportDownloadRoutes } = await import("./exportDownloadRoutes");
@@ -78,7 +78,7 @@ const SESSION_COOKIE_NAME = "ExampleOrg_session";
 function signSession(payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = crypto
-    .createHmac("sha256", TEST_SESSION_SECRET)
+    .createHmac("sha256", <REDACTED_SECRET>)
     .update(data)
     .digest("base64url");
   return `${data}.${sig}`;

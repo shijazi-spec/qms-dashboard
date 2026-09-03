@@ -53,7 +53,7 @@
 import { test, expect, request as pwRequest } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || '';
 
 const RETENTION_PATH = '/api/ai-ops/metrics-retention';
 const PREVIEW_PATH = '/api/ai-ops/metrics-retention/preview';
@@ -148,7 +148,7 @@ test.describe('AI metrics retention — inline confirm panel (Task #561 / Task #
 
   test('Tightening save reveals the inline confirm panel; cancel withholds the PUT; confirm fires it', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 
@@ -324,7 +324,7 @@ test.describe('AI metrics retention — inline confirm panel (Task #561 / Task #
 
   test('Widening (>= current effective) saves immediately with no confirm panel', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 

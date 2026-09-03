@@ -89,7 +89,7 @@ function makeStubClient(initialRows: Row[]): {
   return { client: { query }, updates, rows };
 }
 
-const SK_KEY = "<REDACTED_TOKEN>";
+const SK_KEY = "<REDACTED_SECRET>";
 const GHP_TOKEN = "<REDACTED_SECRET>";
 const JWT =
   "<REDACTED_TOKEN>";

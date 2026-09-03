@@ -46,7 +46,7 @@
  *
  * Requirements:
  *   - Dev server must be running at BASE_URL (default <REDACTED_URL>
- *   - ADMIN_API_KEY (or TEST_ADMIN_KEY) must be set; otherwise skipped.
+ *   - ADMIN_API_KEY (or <REDACTED_SECRET>) must be set; otherwise skipped.
  *
  * Run:
  *   npx playwright test tests/toolHealthOverrideBanner.spec.ts --reporter=line
@@ -55,7 +55,7 @@
 import { test, expect, request as pwRequest } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || '';
 
 const TOOL_HEALTH_CONFIG_PATH = '/api/ai-ops/tool-health-config';
 
@@ -133,7 +133,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
 
   test('Neutral banner shows countdown + UTC absolute when expires_at is hours away', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 
@@ -167,7 +167,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
 
   test('Banner deep-links to the Alert Thresholds tab', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 
@@ -198,7 +198,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
 
   test('Dismiss hides the banner and persists per-expiry across reloads; new expiry re-shows', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 
@@ -273,7 +273,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
   for (const { label, menuItemTestid, minutes } of SNOOZE_DURATIONS) {
     test(`Snooze popover: "${label}" hides banner, persists ~${minutes} min, and re-shows after elapse`, async ({ page }) => {
       if (!ADMIN_KEY) {
-        test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+        test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
         return;
       }
 
@@ -369,7 +369,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
 
   test('Snooze popover survives reschedule: rescheduling a new expires_at re-shows the banner', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 
@@ -404,7 +404,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
 
   test('Cross-tab sync: dismiss, snooze, and fresh expires_at propagate to sibling tabs (Task #332)', async ({ browser }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 
@@ -454,7 +454,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
       expect(dismissRecord, 'tab A should have persisted a dismiss record').toBeTruthy();
 
       await tabB.evaluate((raw) => {
-        const KEY = 'wp.toolHealthOverrideBanner.dismissedFor';
+        const KEY = '<REDACTED_SECRET>';
         const oldValue = localStorage.getItem(KEY);
         localStorage.setItem(KEY, raw as string);
         window.dispatchEvent(new StorageEvent('storage', {
@@ -482,7 +482,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
       const reseedStamp = String(Date.now());
       for (const tab of [tabA, tabB]) {
         await tab.evaluate((stamp) => {
-          const KEY = 'wp.toolHealthOverrideBanner.configRevision';
+          const KEY = '<REDACTED_SECRET>';
           const oldValue = localStorage.getItem(KEY);
           localStorage.setItem(KEY, stamp);
           window.dispatchEvent(new StorageEvent('storage', {
@@ -518,7 +518,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
       expect(snoozeRecord, 'tab A should have persisted a snooze record').toBeTruthy();
 
       await tabB.evaluate((raw) => {
-        const KEY = 'wp.toolHealthOverrideBanner.snoozedUntilFor';
+        const KEY = '<REDACTED_SECRET>';
         const oldValue = localStorage.getItem(KEY);
         localStorage.setItem(KEY, raw as string);
         window.dispatchEvent(new StorageEvent('storage', {
@@ -551,7 +551,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
 
       const revStamp = String(Date.now());
       await tabB.evaluate((stamp) => {
-        const KEY = 'wp.toolHealthOverrideBanner.configRevision';
+        const KEY = '<REDACTED_SECRET>';
         const oldValue = localStorage.getItem(KEY);
         localStorage.setItem(KEY, stamp);
         window.dispatchEvent(new StorageEvent('storage', {
@@ -577,7 +577,7 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
 
   test('Banner turns amber when <30 minutes remain', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
 

@@ -54,13 +54,13 @@
 (function (global) {
   'use strict';
 
-  var STORAGE_KEY = 'ExampleOrg_lang';
-  var NUMERALS_KEY = 'ExampleOrg_eastern_numerals';
+  var STORAGE_KEY = '<REDACTED_SECRET>';
+  var NUMERALS_KEY = '<REDACTED_SECRET>';
   // Tracks a language change that has been written to localStorage but has
   // not yet been confirmed-persisted on the server (offline, 5xx, etc.).
   // Shape: { lang: 'en'|'ar', timestamp: <ms epoch> }. Cleared once the
   // server returns a 2xx for the matching lang.
-  var PENDING_KEY = 'ExampleOrg_lang_pending';
+  var PENDING_KEY = '<REDACTED_SECRET>';
   var DEFAULT_LANG = 'en';
   var SUPPORTED = ['en', 'ar'];
   var PREF_ENDPOINT = '/api/user/language-preference';

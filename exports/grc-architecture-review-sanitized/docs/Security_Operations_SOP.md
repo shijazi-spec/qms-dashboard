@@ -437,7 +437,7 @@ A second helper, `redactSecretLikeStrings(input)` in `src/utils/eventLogsDatabas
 |---------|---------------|
 | `bcrypt` | `<REDACTED_PASSWORD_HASH>` / `<REDACTED_PASSWORD_HASH>` / `<REDACTED_PASSWORD_HASH>` 60-char hash |
 | `JWT` | three base64url segments separated by dots, header begins `eyJ` |
-| `sk-key` | LLMProvider / Anthropic / PaymentProvider `sk-…`, `sk_live_…`, `sk-ant-…`, `sk-proj-…` |
+| `sk-key` | LLMProvider / Anthropic / PaymentProvider `sk-…`, `sk_live_…`, `sk-ant-…`, `<REDACTED_TOKEN>` |
 | `PaymentProvider-pk` | PaymentProvider publishable / restricted `pk_live_…`, `pk_test_…`, `rk_live_…` |
 | `SourceControlProvider` | SourceControlProvider `ghp_…`, `gho_…`, `ghu_…`, `ghs_…`, `ghr_…` |
 | `gitlab` | GitLab `glpat-…` |
@@ -658,7 +658,7 @@ When a developer needs to add a genuinely safe inline style (e.g. an HTML email 
 
 #### Inline Event-Handler Guardrail (automated regression check)
 
-A pre-commit / CI guardrail blocks new inline event-handler attributes (`onclick=`, `onsubmit=`, `onload=`, `onerror=`, `onmouseover=`, `onfocus=`, `onchange=`, `onkeydown=`, and all other `on*=` HTML event attributes) from re-entering the dashboard pages or the platform server code, so the strict `script-src` directive above cannot be silently broken by an unrelated edit:
+A pre-commit / CI guardrail blocks new inline event-handler attributes (`onclick=`, `onsubmit=`, `onload=`, `onerror=`, `onmouseover=`, `onfocus=`, `onchange=`, `onkeydown=`<REDACTED_SECRET>`on*=` HTML event attributes) from re-entering the dashboard pages or the platform server code, so the strict `script-src` directive above cannot be silently broken by an unrelated edit:
 
 | Item | Value |
 |------|-------|

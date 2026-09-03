@@ -11,8 +11,8 @@
  * Run via:  npx vitest run tests/vitest/aiApprovalRoutes.vitest.test.ts
  */
 
-const TEST_ADMIN_KEY = "vitest-ai-approval-admin-key-2026";
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -139,7 +139,7 @@ import { aiApprovalRoutes } from "../../src/mastra/routes/aiApprovalRoutes";
 import type { PendingAction } from "../../src/utils/aiApprovalDatabase";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
 
-const ADMIN_HEADERS = { "X-Admin-Key": TEST_ADMIN_KEY };
+const ADMIN_HEADERS = { "X-Admin-Key": <REDACTED_SECRET> };
 
 let approvalDb: typeof import("../../src/utils/aiApprovalDatabase");
 let approvalGate: typeof import("../../src/utils/withApprovalGate");
@@ -180,7 +180,7 @@ function makeAction(overrides: Partial<PendingAction> = {}): PendingAction {
 }
 
 beforeEach(async () => {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   approvalDb = await import("../../src/utils/aiApprovalDatabase");
   approvalGate = await import("../../src/utils/withApprovalGate");
   governance = await import("../../src/utils/aiToolGovernance");

@@ -144,11 +144,11 @@ export const PLAYBOOK_HEADERS = [
 
 /** Mirror for XLSX column key/header definitions. */
 export const PLAYBOOK_XLSX_COLUMNS = [
-  { header: "Recommended Action", key: "recommended_action", width: 40 },
-  { header: "Survivorship Rule", key: "survivorship_rule", width: 50 },
-  { header: "Owner to Consult", key: "owner_to_consult", width: 30 },
-  { header: "Why This Verdict", key: "why_verdict", width: 60 },
-  { header: "Due Date", key: "due_date", width: 14 },
+  { header: "Recommended Action", key: "<REDACTED_SECRET>", width: 40 },
+  { header: "Survivorship Rule", key: "<REDACTED_SECRET>", width: 50 },
+  { header: "Owner to Consult", key: "<REDACTED_SECRET>", width: 30 },
+  { header: "Why This Verdict", key: "<REDACTED_SECRET>", width: 60 },
+  { header: "Due Date", key: "<REDACTED_SECRET>", width: 14 },
 ] as const;
 
 /**

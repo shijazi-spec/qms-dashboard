@@ -102,7 +102,7 @@ async function run(): Promise<void> {
   {
     const TOTAL = 1200;
     const BATCH = 250;
-    const SK_KEY = '<REDACTED_TOKEN>';
+    const SK_KEY = '<REDACTED_SECRET>';
 
     interface ELRow {
       id: number;

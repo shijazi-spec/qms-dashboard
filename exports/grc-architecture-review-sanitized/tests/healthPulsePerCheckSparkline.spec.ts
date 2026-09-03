@@ -19,7 +19,7 @@
 import { test, expect, request as pwRequest } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.TEST_ADMIN_KEY || '';
+const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.<REDACTED_SECRET> || '';
 const PULSE_PATH = '/api/health/pulse';
 
 function shouldSkip(): boolean {
@@ -156,7 +156,7 @@ test.describe('Health Pulse — per-check expanded sparkline (Task #760)', () =>
 
   test('Expanded check row renders an SVG sparkline with one <rect> per historical run', async ({ page }) => {
     if (shouldSkip()) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     await page.goto(`${BASE_URL}/dashboard/health`);
@@ -190,7 +190,7 @@ test.describe('Health Pulse — per-check expanded sparkline (Task #760)', () =>
 
   test('Hovering a sparkline rect reveals the run timestamp + status tooltip', async ({ page }) => {
     if (shouldSkip()) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     await page.goto(`${BASE_URL}/dashboard/health`);

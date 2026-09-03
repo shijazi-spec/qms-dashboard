@@ -180,7 +180,6 @@ scripts/check-rtl-classes.cjs
 scripts/check-schema-parity.mjs
 scripts/check-th-scope.cjs
 scripts/checkEmptyLayouts.ts
-scripts/checkPassDomains.ts
 scripts/checkPassNames.ts
 scripts/checkStagingProcedureInSync.ts
 scripts/check_preflight_batch.bat
@@ -206,7 +205,6 @@ scripts/patch-mastra-core.mjs
 scripts/patch-mastra-provider-types.mjs
 scripts/patch-provider-utils-v3-compat.mjs
 scripts/post-merge.sh
-scripts/probeDirectory.ts
 scripts/quantifyAutoMerge.ts
 scripts/run-ai-approval-redaction-integration.sh
 scripts/run-kpi-autocalc.ts

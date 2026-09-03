@@ -94,12 +94,12 @@ async function main(): Promise<void> {
   // redactSecretLikeStrings layer added to redactToolPayloadPreview().
   console.log('\nredactToolPayloadPreview() — richer secret fixtures:');
 
-  const LLMProvider_KEY = '<REDACTED_TOKEN>';
+  const LLMProvider_KEY = '<REDACTED_SECRET>';
   const GH_PAT = '<REDACTED_TOKEN>';
   const BCRYPT_HASH = '<REDACTED_PASSWORD_HASH>';
   const JWT =
     '<REDACTED_TOKEN>';
-  const AWS_KEY = '<REDACTED_TOKEN>';
+  const AWS_KEY = '<REDACTED_SECRET>';
 
   // LLMProvider key as a plain string
   const LLMProviderStr = redactToolPayloadPreview(LLMProvider_KEY);

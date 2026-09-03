@@ -423,7 +423,7 @@ const SW_KEY_TO_I18N_KEY = {
 
 function parseSwStrings(swSource) {
   // SW_STRINGS = { en: { dir: 'ltr', title: '...', ... }, ar: { ... } }
-  // We extract each lang block and then each `key: '...'` pair. The values
+  // We extract each lang block and then each `key: '<REDACTED_SECRET>'` pair. The values
   // are single-quoted strings without embedded single-quotes in this file —
   // if that ever stops being true, this parser will throw and the guardrail
   // will fail loudly, which is the desired behaviour.
@@ -805,7 +805,7 @@ function checkJsKeyCoverage(pages, publicPages, en, ar) {
   const seen = new Set();
 
   for (const { key, source } of allStatic) {
-    const dedupKey = `${source}::${key}`;
+    const dedupKey = `<REDACTED_SECRET>`;
     if (seen.has(dedupKey)) continue;
     seen.add(dedupKey);
     if (typeof getDeep(en, key) !== 'string') missingEn.push({ source, key });
@@ -1026,7 +1026,7 @@ const JS_DIR = path.join(DASHBOARD_DIR, 'js');
 // more lower-case / underscore segments joined by dots (e.g. `nav.brand`,
 // `login.errors.auth_denied`). The match does not require the string to be
 // the first argument of a t() call — keys are sometimes stored in config maps
-// (e.g. `{ key: 'login.errors.auth_denied', fallback: '...' }`) or passed as
+// (e.g. `{ key: '<REDACTED_SECRET>', fallback: '...' }`) or passed as
 // a second argument (e.g. `showLoginError(msg, 'login.errors.invalid_admin_key', ...)`).
 //
 // Keeping the pattern broad is intentional: false positives (non-i18n dotted

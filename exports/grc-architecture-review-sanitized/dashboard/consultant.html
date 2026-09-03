@@ -734,8 +734,8 @@
             closeFeedbackModal();
         };
 
-        var FEEDBACK_QUEUE_KEY = 'ExampleOrg_feedback_queue';
-        var RATING_CACHE_KEY = 'ExampleOrg_msg_ratings';
+        var FEEDBACK_QUEUE_KEY = '<REDACTED_SECRET>';
+        var RATING_CACHE_KEY = '<REDACTED_SECRET>';
 
         function ratingCacheGet(messageId) {
             try { var m = JSON.parse(localStorage.getItem(RATING_CACHE_KEY) || '{}'); return m[messageId] || null; } catch(e) { return null; }
@@ -2439,7 +2439,7 @@
             // block. Always offered on pending cards, even when normal approve is
             // blocked (e.g. you requested it yourself).
             var adminKeyBtn =
-                '<button data-action="approve-key" class="px-3 py-1.5 bg-emerald-700 text-white rounded hover:bg-emerald-800 text-xs font-medium ms-2">Approve with admin password 🔑</button>';
+                '<REDACTED_SECRET>';
             if (data.can_approve) {
                 actionsHtml =
                     '<button data-action="approve" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">Approve ✓</button>' +

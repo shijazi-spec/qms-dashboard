@@ -97,7 +97,7 @@ await suite.test("GET /api/health-index — X-Admin-Key alone is rejected (key i
   // the key cannot read organisation-wide quality/compliance aggregates.
   const handler = await buildHandler(notificationRoutes, "/api/health-index", "GET");
   const prevAdmin = process.env.ADMIN_API_KEY;
-  const ADMIN_KEY = "test-health-index-admin-key-do-not-leak-0002";
+  const ADMIN_KEY = "<REDACTED_SECRET>";
   process.env.ADMIN_API_KEY = ADMIN_KEY;
   try {
     const res = await handler(

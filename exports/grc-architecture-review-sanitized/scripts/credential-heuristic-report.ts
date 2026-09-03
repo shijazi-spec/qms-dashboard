@@ -380,7 +380,7 @@ function summarise(hits: RawHit[]): BucketSummary[] {
     tokens: <REDACTED_SECRET>
   }>();
   for (const h of hits) {
-    const key = `${h.table}|${h.path}|${h.kind}`;
+    const key = `<REDACTED_SECRET>`;
     let b = map.get(key);
     if (!b) {
       b = {

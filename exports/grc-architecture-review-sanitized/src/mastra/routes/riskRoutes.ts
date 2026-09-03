@@ -230,26 +230,26 @@ export const riskRoutes = [
           const categories = catsR.rows.map((r) => r.cat as string);
 
           const riskColumns = [
-            { header: "ID", key: "id", width: 6 },
-            { header: "Title", key: "risk_title", width: 40 },
-            { header: "Category", key: "risk_category", width: 16 },
-            { header: "Source", key: "risk_source", width: 20 },
-            { header: "Owner", key: "risk_owner", width: 22 },
-            { header: "Department", key: "owner_department", width: 18 },
-            { header: "Identified", key: "identified_str", width: 14 },
-            { header: "Impact", key: "impact_score", width: 8 },
-            { header: "Likelihood", key: "likelihood_score", width: 12 },
-            { header: "Score", key: "risk_score", width: 8 },
-            { header: "Level", key: "risk_level", width: 10 },
-            { header: "Treatment", key: "treatment_strategy", width: 14 },
-            { header: "Treatment Owner", key: "treatment_owner", width: 22 },
+            { header: "ID", key: "<REDACTED_SECRET>", width: 6 },
+            { header: "Title", key: "<REDACTED_SECRET>", width: 40 },
+            { header: "Category", key: "<REDACTED_SECRET>", width: 16 },
+            { header: "Source", key: "<REDACTED_SECRET>", width: 20 },
+            { header: "Owner", key: "<REDACTED_SECRET>", width: 22 },
+            { header: "Department", key: "<REDACTED_SECRET>", width: 18 },
+            { header: "Identified", key: "<REDACTED_SECRET>", width: 14 },
+            { header: "Impact", key: "<REDACTED_SECRET>", width: 8 },
+            { header: "Likelihood", key: "<REDACTED_SECRET>", width: 12 },
+            { header: "Score", key: "<REDACTED_SECRET>", width: 8 },
+            { header: "Level", key: "<REDACTED_SECRET>", width: 10 },
+            { header: "Treatment", key: "<REDACTED_SECRET>", width: 14 },
+            { header: "Treatment Owner", key: "<REDACTED_SECRET>", width: 22 },
             {
               header: "Treatment Deadline",
-              key: "treatment_deadline_str",
+              key: "<REDACTED_SECRET>",
               width: 18,
             },
-            { header: "Residual Score", key: "residual_risk_score", width: 14 },
-            { header: "Description", key: "risk_description", width: 50 },
+            { header: "Residual Score", key: "<REDACTED_SECRET>", width: 14 },
+            { header: "Description", key: "<REDACTED_SECRET>", width: 50 },
           ];
 
           const riskSql = `
@@ -280,8 +280,8 @@ export const riskRoutes = [
             {
               name: "Summary",
               columns: [
-                { header: "Metric", key: "metric", width: 32 },
-                { header: "Value", key: "value", width: 18 },
+                { header: "Metric", key: "<REDACTED_SECRET>", width: 32 },
+                { header: "Value", key: "<REDACTED_SECRET>", width: 18 },
               ],
               rows: [
                 { metric: "Total enterprise risks", value: rTotal },
@@ -338,30 +338,30 @@ export const riskRoutes = [
           sheets.push({
             name: "Treatment Actions",
             columns: [
-              { header: "Risk ID", key: "risk_id", width: 8 },
-              { header: "Risk Title", key: "risk_title", width: 36 },
-              { header: "Action Title", key: "action_title", width: 36 },
-              { header: "Type", key: "action_type", width: 14 },
-              { header: "Assigned To", key: "assigned_to", width: 22 },
-              { header: "Due Date", key: "due_date_str", width: 14 },
-              { header: "Status", key: "status", width: 14 },
-              { header: "% Complete", key: "percent_complete", width: 12 },
+              { header: "Risk ID", key: "<REDACTED_SECRET>", width: 8 },
+              { header: "Risk Title", key: "<REDACTED_SECRET>", width: 36 },
+              { header: "Action Title", key: "<REDACTED_SECRET>", width: 36 },
+              { header: "Type", key: "<REDACTED_SECRET>", width: 14 },
+              { header: "Assigned To", key: "<REDACTED_SECRET>", width: 22 },
+              { header: "Due Date", key: "<REDACTED_SECRET>", width: 14 },
+              { header: "Status", key: "<REDACTED_SECRET>", width: 14 },
+              { header: "% Complete", key: "<REDACTED_SECRET>", width: 12 },
               {
                 header: "Completion Date",
-                key: "completion_date_str",
+                key: "<REDACTED_SECRET>",
                 width: 16,
               },
               {
                 header: "Evidence Required",
-                key: "evidence_required_str",
+                key: "<REDACTED_SECRET>",
                 width: 18,
               },
               {
                 header: "Evidence Attached",
-                key: "evidence_attached_str",
+                key: "<REDACTED_SECRET>",
                 width: 18,
               },
-              { header: "Description", key: "action_description", width: 40 },
+              { header: "Description", key: "<REDACTED_SECRET>", width: 40 },
             ],
             rows: actRows,
           });

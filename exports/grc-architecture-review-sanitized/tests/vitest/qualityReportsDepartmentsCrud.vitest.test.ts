@@ -9,8 +9,8 @@ beforeEach(() => query.mockReset());
 
 describe("upsertBU", () => {
   it("derives segment from channel and never trusts a caller-supplied segment", async () => {
-    query.mockResolvedValue({ rows: [{ id: 1, bu_key: "x", bu_name: "X", channel: "MP", segment: "marketplace", fn: "partnership", sort_order: 0, is_active: true }] });
-    await upsertBU({ bu_key: "x", bu_name: "X", channel: "MP", fn: "partnership" });
+    query.mockResolvedValue({ rows: [{ id: 1, bu_key: "<REDACTED_SECRET>", bu_name: "X", channel: "MP", segment: "marketplace", fn: "partnership", sort_order: 0, is_active: true }] });
+    await upsertBU({ bu_key: "<REDACTED_SECRET>", bu_name: "X", channel: "MP", fn: "partnership" });
     const upsertCall = query.mock.calls.find((c) => String(c[0]).includes("ON CONFLICT (bu_key) DO UPDATE"));
     expect(upsertCall, "upsert INSERT should have run").toBeTruthy();
     const sql = String(upsertCall![0]);

@@ -509,7 +509,7 @@ function summarizeFindingTypes(
       governanceRulesByModule[record.module] || DEFAULT_GOVERNANCE_RULES;
     const issues = analyzeRecordHygiene(record, governanceRules);
     for (const issue of issues) {
-      const key = `${issue.module}::${issue.issueType}`;
+      const key = `<REDACTED_SECRET>`;
       const existing = counts.get(key);
       if (existing) {
         existing.count += 1;

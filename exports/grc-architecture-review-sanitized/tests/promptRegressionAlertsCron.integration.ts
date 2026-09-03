@@ -201,7 +201,7 @@ async function main(): Promise<void> {
     // Round-trip through the real ai_alerts table: the alert the cron
     // wrote must be readable via the same getAIAlerts() query the AI Ops
     // dashboard's alerts feed uses, with the documented dedupe key shape.
-    const expectedKey = `${AGENT}:${VERSION_ARCHIVED}`;
+    const expectedKey = `<REDACTED_SECRET>`;
     const { alerts } = await getAIAlerts({
       alert_type: "prompt_regression",
       status: "open",

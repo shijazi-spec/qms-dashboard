@@ -125,12 +125,12 @@ export function buildDealComplianceReportSheets(
     {
       name: "Summary",
       columns: [
-        { header: "Stage", key: "stage", width: 20 },
-        { header: "Deals checked", key: "checked", width: 14 },
-        { header: "Complete", key: "compliant", width: 12 },
-        { header: "Missing documents", key: "missing", width: 18 },
-        { header: "% missing", key: "missing_pct", width: 11 },
-        { header: "Value at risk (SAR)", key: "missing_value", width: 19 },
+        { header: "Stage", key: "<REDACTED_SECRET>", width: 20 },
+        { header: "Deals checked", key: "<REDACTED_SECRET>", width: 14 },
+        { header: "Complete", key: "<REDACTED_SECRET>", width: 12 },
+        { header: "Missing documents", key: "<REDACTED_SECRET>", width: 18 },
+        { header: "% missing", key: "<REDACTED_SECRET>", width: 11 },
+        { header: "Value at risk (SAR)", key: "<REDACTED_SECRET>", width: 19 },
       ],
       rows: [
         ...stages.map((s) => ({
@@ -152,13 +152,13 @@ export function buildDealComplianceReportSheets(
     {
       name: "By owner",
       columns: [
-        { header: "Deal owner", key: "owner", width: 28 },
-        { header: "Deals checked", key: "checked", width: 14 },
-        { header: "Complete", key: "compliant", width: 12 },
-        { header: "Missing documents", key: "missing", width: 18 },
-        { header: "% missing", key: "missing_pct", width: 11 },
-        { header: "Value at risk (SAR)", key: "missing_value", width: 19 },
-        { header: "Note", key: "note", width: 34 },
+        { header: "Deal owner", key: "<REDACTED_SECRET>", width: 28 },
+        { header: "Deals checked", key: "<REDACTED_SECRET>", width: 14 },
+        { header: "Complete", key: "<REDACTED_SECRET>", width: 12 },
+        { header: "Missing documents", key: "<REDACTED_SECRET>", width: 18 },
+        { header: "% missing", key: "<REDACTED_SECRET>", width: 11 },
+        { header: "Value at risk (SAR)", key: "<REDACTED_SECRET>", width: 19 },
+        { header: "Note", key: "<REDACTED_SECRET>", width: 34 },
       ],
       rows: owners.map((o) => ({
         ...o,
@@ -183,16 +183,16 @@ export function buildDealComplianceReportSheets(
     sheets.push({
       name: stage,
       columns: [
-        { header: "Status", key: "status", width: 12 },
-        { header: "Deal", key: "deal", width: 36 },
-        { header: "Account", key: "account", width: 30 },
-        { header: "Deal owner", key: "owner", width: 24 },
-        { header: "Amount (SAR)", key: "amount", width: 15 },
-        { header: "Created", key: "created", width: 12 },
-        { header: "Missing documents", key: "missing", width: 52 },
-        { header: "Attachments", key: "attachments", width: 12 },
-        { header: "Checked", key: "checked_at", width: 12 },
-        { header: "Open in CRMProvider", key: "link", width: 58 },
+        { header: "Status", key: "<REDACTED_SECRET>", width: 12 },
+        { header: "Deal", key: "<REDACTED_SECRET>", width: 36 },
+        { header: "Account", key: "<REDACTED_SECRET>", width: 30 },
+        { header: "Deal owner", key: "<REDACTED_SECRET>", width: 24 },
+        { header: "Amount (SAR)", key: "<REDACTED_SECRET>", width: 15 },
+        { header: "Created", key: "<REDACTED_SECRET>", width: 12 },
+        { header: "Missing documents", key: "<REDACTED_SECRET>", width: 52 },
+        { header: "Attachments", key: "<REDACTED_SECRET>", width: 12 },
+        { header: "Checked", key: "<REDACTED_SECRET>", width: 12 },
+        { header: "Open in CRMProvider", key: "<REDACTED_SECRET>", width: 58 },
       ],
       rows: inStage.map((r) => ({
         status: r.compliant ? "Complete" : "MISSING",
@@ -216,7 +216,7 @@ export function buildDealComplianceReportSheets(
 
   sheets.push({
     name: "How to read this",
-    columns: [{ header: "Notes", key: "note", width: 118 }],
+    columns: [{ header: "Notes", key: "<REDACTED_SECRET>", width: 118 }],
     rows: [
       { note: `Scope: ${opts.segment} · stages ${REPORT_STAGES.join(", ")}.` },
       { note: coverage },

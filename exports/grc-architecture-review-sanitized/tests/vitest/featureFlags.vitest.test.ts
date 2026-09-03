@@ -15,7 +15,7 @@ import {
 // Using a real one (not a fake) ensures we'd catch a registry typo.
 const FLAG: FlagName = "ContactCenterProvider_real_ingest";
 const ENV_KEY = FLAGS[FLAG]; // "ContactCenterProvider_REAL_INGEST"
-const USERS_KEY = `${ENV_KEY}_USERS`;
+const USERS_KEY = `<REDACTED_SECRET>`;
 
 afterEach(() => {
   delete process.env[ENV_KEY];

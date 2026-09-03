@@ -45,7 +45,7 @@
  * Requirements:
  *   - The dev server must be running at BASE_URL (default
  *     <REDACTED_URL>
- *   - ADMIN_API_KEY (or TEST_ADMIN_KEY) must be set in the environment;
+ *   - ADMIN_API_KEY (or <REDACTED_SECRET>) must be set in the environment;
  *     otherwise the suite is skipped.
  *   - DATABASE_URL must point at the same Postgres the server uses so
  *     the seed/cleanup can write directly.
@@ -58,7 +58,7 @@ import { test, expect, request as pwRequest, type Page } from '@playwright/test'
 import * as pg from 'pg';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || '';
 const DATABASE_URL = process.env.DATABASE_URL || '';
 
 const RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -194,7 +194,7 @@ test.describe('Resolved-alerts feed: open-for line and sort control (Task #417)'
 
   test('Resolved rows render the "Open for: …" line; acknowledged-only rows omit it; the sort control re-orders by open-for descending', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     if (!DATABASE_URL) {

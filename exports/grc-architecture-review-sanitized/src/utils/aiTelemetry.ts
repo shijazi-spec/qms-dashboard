@@ -100,7 +100,7 @@ const PII_PATTERNS: [RegExp, string][] = [
  * Scrub a string destined for the `ai_call_metrics.error_message` TEXT column.
  *
  * Tool / LLM error strings frequently echo the input that triggered them
- * (e.g. "Connection failed with key sk-live-…"), so we route every write
+ * (e.g. "Connection failed with key <REDACTED_TOKEN_PREFIX>-…"), so we route every write
  * path through the regex deny-list in `redactSecretLikeStrings()` BEFORE
  * truncating to the column's 500-char budget. Returns null for empty input
  * so callers can pass the redacted result straight into a SQL parameter.

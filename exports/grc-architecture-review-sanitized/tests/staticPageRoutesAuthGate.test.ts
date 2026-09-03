@@ -46,11 +46,11 @@
 
 import crypto from "node:crypto";
 
-const TEST_ADMIN_KEY = "test-admin-key-static-page-gate";
-const TEST_SESSION_SECRET = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
 
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
+process.env.SESSION_SECRET = <REDACTED_SECRET>;
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "<REDACTED_DSN>";
 
@@ -168,7 +168,7 @@ for (const path of ADMIN_PAGE_ROUTES) {
 // full admin credential.
 for (const path of ADMIN_PAGE_ROUTES) {
   await suite.test(`GET ${path} — valid ADMIN_API_KEY header serves the dashboard`, async () => {
-    const res = await callRoute(path, { adminKey: TEST_ADMIN_KEY });
+    const res = await callRoute(path, { adminKey: <REDACTED_SECRET> });
     suite.expectEqual(res.status, 200, `${path} status`);
     suite.expect(
       typeof res.body === "string" && !res.body.includes("Setup Required"),

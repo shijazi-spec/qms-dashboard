@@ -6199,8 +6199,8 @@ ${transcriptText}
             {
               name: "Summary",
               columns: [
-                { header: "Field", key: "field", width: 32 },
-                { header: "Value", key: "value", width: 70 },
+                { header: "Field", key: "<REDACTED_SECRET>", width: 32 },
+                { header: "Value", key: "<REDACTED_SECRET>", width: 70 },
               ],
               rows: [
                 { field: "Call ID", value: callRecord.call_id || String(callId) },
@@ -6228,13 +6228,13 @@ ${transcriptText}
             {
               name: "Attribute Evaluations",
               columns: [
-                { header: "Attribute", key: "attribute_name", width: 35 },
-                { header: "Dimension", key: "dimension", width: 14 },
-                { header: "Status", key: "status", width: 10 },
-                { header: "Score", key: "score", width: 8 },
-                { header: "Comment", key: "comment", width: 60 },
-                { header: "Evidence Quote", key: "evidence", width: 60 },
-                { header: "Improvement Tip", key: "improvement_tip", width: 50 },
+                { header: "Attribute", key: "<REDACTED_SECRET>", width: 35 },
+                { header: "Dimension", key: "<REDACTED_SECRET>", width: 14 },
+                { header: "Status", key: "<REDACTED_SECRET>", width: 10 },
+                { header: "Score", key: "<REDACTED_SECRET>", width: 8 },
+                { header: "Comment", key: "<REDACTED_SECRET>", width: 60 },
+                { header: "Evidence Quote", key: "<REDACTED_SECRET>", width: 60 },
+                { header: "Improvement Tip", key: "<REDACTED_SECRET>", width: 50 },
               ],
               rows: ((evaluation.attribute_evaluations as any[]) || []).map((a: any) => ({
                 attribute_name: a.attribute_name || "",
@@ -6251,8 +6251,8 @@ ${transcriptText}
             {
               name: "Coaching",
               columns: [
-                { header: "Type", key: "type", width: 22 },
-                { header: "Item", key: "item", width: 90 },
+                { header: "Type", key: "<REDACTED_SECRET>", width: 22 },
+                { header: "Item", key: "<REDACTED_SECRET>", width: 90 },
               ],
               rows: [
                 ...(((evaluation.top_strengths as string[]) || []).map((s: string) => ({ type: "Strength", item: s }))),
@@ -6271,11 +6271,11 @@ ${transcriptText}
             {
               name: "Review History",
               columns: [
-                { header: "Reviewed At", key: "reviewed_at", width: 22 },
-                { header: "Reviewer", key: "reviewer", width: 35 },
-                { header: "Status", key: "status", width: 12 },
-                { header: "Adjusted Overall Score", key: "adjusted_score", width: 18 },
-                { header: "Notes", key: "notes", width: 80 },
+                { header: "Reviewed At", key: "<REDACTED_SECRET>", width: 22 },
+                { header: "Reviewer", key: "<REDACTED_SECRET>", width: 35 },
+                { header: "Status", key: "<REDACTED_SECRET>", width: 12 },
+                { header: "Adjusted Overall Score", key: "<REDACTED_SECRET>", width: 18 },
+                { header: "Notes", key: "<REDACTED_SECRET>", width: 80 },
               ],
               rows: reviews.map((r: any) => ({
                 reviewed_at: fmtDate(r.reviewed_at),

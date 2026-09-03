@@ -150,7 +150,7 @@ console.log("\n=== redactAiPendingActions — payload_preview backfill ===\n");
 // Test 4: multiple rows — only the dirty ones are updated
 // ---------------------------------------------------------------------------
 {
-  const SK_KEY = "<REDACTED_TOKEN>";
+  const SK_KEY = "<REDACTED_SECRET>";
   const GHP2 = "<REDACTED_TOKEN>";
 
   const rows = [

@@ -37,7 +37,7 @@ const HAS_DB = !!process.env.DATABASE_URL;
 // The X-Admin-Key header is intentionally NOT used here: it is scoped to
 // /api/admin/* routes and must NOT bypass gateApiRoute on application routes.
 import crypto from "crypto";
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "dashboard-test-secret-2026";
+const SESSION_SECRET = process.env.SESSION_SECRET ?? "dashboard-<REDACTED_SECRET>";
 if (!process.env.SESSION_SECRET) process.env.SESSION_SECRET = SESSION_SECRET;
 
 function dashboardSignSession(payload: Record<string, any>): string {

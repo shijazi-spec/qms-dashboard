@@ -14,8 +14,8 @@ import {
   recordSpend,
 } from "../../src/utils/aiCostGuard";
 
-const FLAG_KEY = "COST_CIRCUIT_BREAKER";
-const CAP_KEY = "LLMProvider_DAILY_CAP_USD";
+const FLAG_KEY = "<REDACTED_SECRET>";
+const CAP_KEY = "<REDACTED_SECRET>";
 
 beforeEach(() => {
   _resetCostGuardForTests();

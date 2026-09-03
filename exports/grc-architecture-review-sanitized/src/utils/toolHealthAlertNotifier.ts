@@ -671,7 +671,7 @@ export interface ToolHealthConfigChangeNotifierDeps {
  * do not thread because each event is operationally meaningful in its own
  * right.
  */
-export const TOOL_HEALTH_CONFIG_THREAD_KEY = "config_change";
+export const TOOL_HEALTH_CONFIG_THREAD_KEY = "<REDACTED_SECRET>";
 
 /** UTC YYYY-MM-DD for the given epoch ms. Stable for use as a DB day key. */
 function utcDayKey(nowMs: number): string {

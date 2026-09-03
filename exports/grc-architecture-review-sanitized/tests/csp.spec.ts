@@ -16,7 +16,7 @@
  *
  * Authentication:
  *   These tests authenticate via `/api/admin/auth` using the `ADMIN_API_KEY`
- *   environment variable (or `TEST_ADMIN_KEY` if set). All authenticated
+ *   environment variable (or `<REDACTED_SECRET>` if set). All authenticated
  *   tests are skipped when neither is available.
  *
  * Run:
@@ -113,7 +113,7 @@ async function installCspBridge(context: BrowserContext): Promise<void> {
 }
 
 async function authenticate(context: BrowserContext): Promise<boolean> {
-  const adminKey = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
+  const adminKey = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY;
   if (!adminKey) return false;
   const res = await context.request.post(`${BASE_URL}/api/admin/auth`, {
     <REDACTED_SCHEME> { key: adminKey },
@@ -127,7 +127,7 @@ test.describe('CSP — dashboard pages have no inline-style violations', () => {
     test(`${label} (${path}) loads with zero CSP violations`, async ({ page, context }) => {
       const ok = await authenticate(context);
       if (!ok) {
-        test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not configured');
+        test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not configured');
         return;
       }
       await installCspBridge(context);
@@ -185,7 +185,7 @@ test.describe('CSP — AI Consultant widget honors the page nonce', () => {
   }) => {
     const ok = await authenticate(context);
     if (!ok) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not configured');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not configured');
       return;
     }
     await installCspBridge(context);

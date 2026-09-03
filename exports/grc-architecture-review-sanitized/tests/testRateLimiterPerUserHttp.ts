@@ -269,8 +269,8 @@ async function testPerUserIsolation(): Promise<boolean> {
   const pool = new Pool({ connectionString: DATABASE_URL });
   const ts = Date.now();
   // .test TLD is reserved (RFC 2606) — guaranteed to never collide with a real user.
-  const emailA = `ratelimit-perUser-a-${ts}@ExampleOrg.test`;
-  const emailB = `ratelimit-perUser-b-${ts}@ExampleOrg.test`;
+  const emailA = `ratelimit-perUser-a-<REDACTED_EMAIL>`;
+  const emailB = `ratelimit-perUser-b-<REDACTED_EMAIL>`;
 
   let ok = false;
   try {
@@ -370,7 +370,7 @@ async function testPerUserReadWindowReset(): Promise<boolean> {
   // .test TLD is reserved (RFC 2606) — guaranteed to never collide with a real user.
   // Distinct email from the isolation scenario so the two scenarios never share
   // a platform_users row even if their cleanup races.
-  const email = `ratelimit-perUser-reset-${ts}@ExampleOrg.test`;
+  const email = `ratelimit-perUser-reset-<REDACTED_EMAIL>`;
 
   try {
     // 'admin' role so /api/users returns 200 instead of 403 — though the
@@ -474,7 +474,7 @@ async function testPerUserAuthFlowWindowReset(): Promise<boolean> {
   const ts = Date.now();
   // .test TLD is reserved (RFC 2606) — guaranteed to never collide with a real user.
   // Distinct email from the other scenarios so the buckets / cleanup never race.
-  const email = `ratelimit-perUser-authflow-reset-${ts}@ExampleOrg.test`;
+  const email = `ratelimit-perUser-authflow-reset-<REDACTED_EMAIL>`;
 
   try {
     // Role doesn't matter here — /api/auth/me serves any authenticated user

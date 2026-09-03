@@ -9,8 +9,8 @@
  * Run via:  npx vitest run tests/vitest/teamRoutes.vitest.test.ts
  */
 
-const TEST_ADMIN_KEY = "vitest-team-admin-key-2026";
-process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+const <REDACTED_SECRET> = "<REDACTED_SECRET>";
+process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { teamRoutes } from "../../src/mastra/routes/teamRoutes";
@@ -23,7 +23,7 @@ import type {
 } from "../../src/utils/teamDatabase";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
 
-const ADMIN_HEADERS = { "X-Admin-Key": TEST_ADMIN_KEY };
+const ADMIN_HEADERS = { "X-Admin-Key": <REDACTED_SECRET> };
 
 vi.mock("../../src/utils/teamDatabase", () => ({
   initTeamTables: vi.fn(async () => undefined),
@@ -58,7 +58,7 @@ vi.mock("../../src/utils/teamDatabase", () => ({
 let team: typeof import("../../src/utils/teamDatabase");
 
 beforeEach(async () => {
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  process.env.ADMIN_API_KEY = <REDACTED_SECRET>;
   team = await import("../../src/utils/teamDatabase");
   vi.clearAllMocks();
   vi.mocked(team.initTeamTables).mockResolvedValue(undefined);

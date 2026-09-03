@@ -226,7 +226,7 @@ export function extractCanonicalCitations(text: string): CanonicalCitation[] {
 
   const push = (c: CanonicalCitation | null) => {
     if (!c || c.path.length === 0) return;
-    const key = `${c.framework || "*"}|${c.kind}|${c.path.join(".")}`;
+    const key = `<REDACTED_SECRET>`;
     if (seen.has(key)) return;
     seen.add(key);
     out.push(c);

@@ -1147,18 +1147,18 @@ export async function deactivateStaleLegacyKPIs(): Promise<void> {
 export const OWNER_NAME_BY_TYPE: Record<string, string> = {
   quality_manager: "Sample User",
   grc_manager: "Sample User",
-  grq_specialist: "AlHanouf",
+  grq_specialist: "Sample User",
   legal_specialist: "Sample User Sample User",
   sdr_team: "SDR Team",
   sales_team: "Sales Team",
   shared: "Shared",
-  governance_officer: "AlHanouf",
+  governance_officer: "Sample User",
 };
 
 /**
  * Per Sample User (2026-06-15): the leftover pre-Excel KPIs that aren't in the canonical
  * owner list — Sample User's reassigned set (MAM-KPI-01..06) and the 3 Shared KPIs —
- * go to **AlHanouf (GRQ Specialist)** rather than being deactivated. Idempotent
+ * go to **Sample User (GRQ Specialist)** rather than being deactivated. Idempotent
  * (re-running just re-sets the same owner). They stay ACTIVE under the new owner.
  */
 const SPECIALIST_REASSIGN_KPI_CODES = [
@@ -1178,12 +1178,12 @@ export async function assignLeftoverKPIsToSpecialist(): Promise<void> {
     `UPDATE kpi_definitions
         SET owner_type = 'grq_specialist', owner_name = 'Sample User', updated_at = NOW()
       WHERE kpi_code = ANY($1)
-        AND (owner_type <> 'grq_specialist' OR owner_name IS DISTINCT FROM 'AlHanouf')`,
+        AND (owner_type <> 'grq_specialist' OR owner_name IS DISTINCT FROM 'Sample User')`,
     [SPECIALIST_REASSIGN_KPI_CODES],
   );
   if (res.rowCount && res.rowCount > 0) {
     logger.info(
-      `👤 [KPIDB] Assigned ${res.rowCount} leftover KPIs (Sample User's + Shared) to AlHanouf (GRQ Specialist)`,
+      `👤 [KPIDB] Assigned ${res.rowCount} leftover KPIs (Sample User's + Shared) to Sample User (GRQ Specialist)`,
     );
   }
 }

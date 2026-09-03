@@ -19,9 +19,9 @@
 #   The cookie body may be written inline as a single template literal, e.g.
 #       c.header('Set-Cookie', `admin_key=${key}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`);
 #   …or it may interpolate a separately-defined `*Flags` variable, e.g.
-#       const adminKeyCookieFlags = `HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Strict`;
+#       const adminKeyCookieFlags = `<REDACTED_SECRET>`;
 #       c.header('Set-Cookie', `admin_key=; ${adminKeyCookieFlags}`, { append: true });
-#   For each `Set-Cookie ... admin_key=` line we extract any `${varName}`
+#   For each `Set-Cookie ... admin_key=`<REDACTED_SECRET>`${varName}`
 #   interpolations and append the matching `const|let|var varName = ...` lines
 #   from the same file before checking for the required flags.
 #
@@ -86,7 +86,7 @@ while IFS= read -r -d '' file; do
       echo "    Source: $(printf '%s' "$content" | sed 's/^[[:space:]]*//')" >&2
       echo "" >&2
     fi
-  done < <(grep -nE "Set-Cookie.*admin_key=" "$file" 2>/dev/null || true)
+  done < <(grep -nE "Set-Cookie.*admin_key="<REDACTED_SECRET>"$file" 2>/dev/null || true)
 done < <(find "$ROUTES_DIR" -type f -name '*.ts' ! -name '*.d.ts' -print0)
 
 if [ "$checked" -eq 0 ]; then

@@ -10,7 +10,7 @@ import { test, expect, type Page } from '@playwright/test';
 import * as pg from 'pg';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
+const ADMIN_KEY = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY || '';
 const DATABASE_URL = process.env.DATABASE_URL || '';
 
 // Unique per-run suffix so parallel/repeated runs don't collide.
@@ -146,7 +146,7 @@ test.describe('AI Ops — Consultant Feedback prompt × surface cross-tab (Task 
 
   test('Surface badges and prompt × surface cross-tab render with expected cells', async ({ page }) => {
     if (!ADMIN_KEY) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     if (!DATABASE_URL) {

@@ -116,7 +116,7 @@ Remember: You are the digital backbone for quality governance at ExampleOrg. You
  * (see getFeedbackRateByPromptVersion in src/utils/aiTelemetry.ts).
  */
 export const QUALITY_SPECIALIST_PROMPT_VERSION =
-  `quality-specialist@${createHash("sha256").update(QUALITY_SPECIALIST_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
+  `<REDACTED_EMAIL>("sha256").update(QUALITY_SPECIALIST_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
 
 export const qualitySpecialistAgent = new Agent({
   name: "ExampleOrg Quality Specialist",

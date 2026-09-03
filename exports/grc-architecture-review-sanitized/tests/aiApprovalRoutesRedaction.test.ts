@@ -8,7 +8,7 @@
  */
 
 process.env.SESSION_SECRET =
-  process.env.SESSION_SECRET || 'test-secret-ai-approval-redaction';
+  process.env.SESSION_SECRET || '<REDACTED_SECRET>';
 // Point any incidentally-created pg Pool at a port that refuses fast so
 // the bootstrap IIFE inside aiApprovalRoutes errors immediately instead
 // of hanging the test.
@@ -297,7 +297,7 @@ const eventLogsStubQuery: StubQuery = async <R extends QueryResultRow>(
     // Aggregate by (user_id, user_email, user_name, user_role).
     const byUser = new Map<string, CapturedEventLog & { view_count: number }>();
     for (const e of viewEvents) {
-      const key = `${e.user_id}|${e.user_email}|${e.user_role}`;
+      const key = `<REDACTED_SECRET>`;
       if (!byUser.has(key)) {
         byUser.set(key, { ...e, view_count: 1 });
       } else {
@@ -340,7 +340,7 @@ const eventLogsStubQuery: StubQuery = async <R extends QueryResultRow>(
       );
       const byUser = new Map<string, CapturedEventLog & { view_count: number }>();
       for (const e of viewEvents) {
-        const key = `${e.user_id}|${e.user_email}|${e.user_role}`;
+        const key = `<REDACTED_SECRET>`;
         if (!byUser.has(key)) {
           byUser.set(key, { ...e, view_count: 1 });
         } else {
@@ -471,7 +471,7 @@ const RESULT_ACCESS_TOKEN = '<REDACTED_SECRET>';
 // arbitrary strings into the human-readable summary line). Each one targets
 // a distinct regex in SECRET_LIKE_PATTERNS so a regression in any single
 // pattern is caught here.
-const PREVIEW_SK_KEY = '<REDACTED_TOKEN>';
+const PREVIEW_SK_KEY = '<REDACTED_SECRET>';
 const PREVIEW_GH_TOKEN = '<REDACTED_SECRET>';
 const PREVIEW_JWT =
   '<REDACTED_TOKEN>';
@@ -507,13 +507,13 @@ function findLeakedSecret(body: unknown, allowed: string[] = []): string | null 
 /* path tests cannot accidentally satisfy the approve-path assertion. */
 /* ------------------------------------------------------------------ */
 
-const APPROVE_RESULT_SK_KEY = '<REDACTED_TOKEN>';
+const APPROVE_RESULT_SK_KEY = '<REDACTED_SECRET>';
 const APPROVE_RESULT_GH_TOKEN = '<REDACTED_SECRET>';
 // 53 chars after `<REDACTED_PASSWORD_HASH>` so it matches the bcrypt regex exactly.
 const APPROVE_RESULT_BCRYPT =
   '<REDACTED_PASSWORD_HASH>';
 const APPROVE_RESULT_ACCESS_TOKEN = '<REDACTED_SECRET>';
-const APPROVE_THROW_SK_KEY = '<REDACTED_TOKEN>';
+const APPROVE_THROW_SK_KEY = '<REDACTED_SECRET>';
 
 const APPROVE_SECRETS = [
   APPROVE_RESULT_SK_KEY,

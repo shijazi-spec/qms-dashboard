@@ -163,7 +163,7 @@
                 <div class="p-4 border-b border-gray-200 flex flex-wrap items-center gap-3">
                     <h2 class="text-lg font-semibold text-gray-900" data-i18n="policies.doc_register">Document Register</h2>
                     <div class="flex-1"></div>
-                    <input type="text" id="searchInput" data-on-keyup="debounceSearch" placeholder="Search..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-40" data-testid="input-search">
+                    <input type="text" id="searchInput" data-on-keyup="<REDACTED_SECRET>" placeholder="Search..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-40" data-testid="input-search">
                     <select id="filterDocType" aria-label="Filter by document type" data-on-change="applyFilters" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-doctype">
                         <option value="" data-i18n="policies.all_types">All Types</option>
                         <option value="policy" data-i18n="policies.t_policy">Policy</option>
@@ -419,11 +419,11 @@
         // (Processes / Documents / Policies / Forms / Controls)
         // rather than the engineer-level type taxonomy.
         const MASTER_GROUPS = [
-            { key: 'processes',  label: 'Processes',                   sub: 'SOPs · Procedures · Work Instructions', types: ['sop', 'procedure', 'work_instruction'], icon: '⚙️', color: 'blue' },
-            { key: 'documents',  label: 'Documents',                   sub: 'Guidelines · Manuals · Documents',       types: ['document', 'guideline', 'manual'],     icon: '📘', color: 'indigo' },
-            { key: 'policies',   label: 'Policies',                    sub: 'Governance & corporate policies',         types: ['policy'],                              icon: '📜', color: 'purple' },
-            { key: 'forms',      label: 'Forms',                       sub: 'Forms · Templates',                       types: ['form', 'template'],                    icon: '📝', color: 'amber' },
-            { key: 'controls',   label: 'Controls',                    sub: 'Internal controls · Security controls',   types: ['control', 'security_control'],         icon: '🛡️', color: 'red' },
+            { key: '<REDACTED_SECRET>',  label: 'Processes',                   sub: 'SOPs · Procedures · Work Instructions', types: ['sop', 'procedure', 'work_instruction'], icon: '⚙️', color: 'blue' },
+            { key: '<REDACTED_SECRET>',  label: 'Documents',                   sub: 'Guidelines · Manuals · Documents',       types: ['document', 'guideline', 'manual'],     icon: '📘', color: 'indigo' },
+            { key: '<REDACTED_SECRET>',   label: 'Policies',                    sub: 'Governance & corporate policies',         types: ['policy'],                              icon: '📜', color: 'purple' },
+            { key: '<REDACTED_SECRET>',      label: 'Forms',                       sub: 'Forms · Templates',                       types: ['form', 'template'],                    icon: '📝', color: 'amber' },
+            { key: '<REDACTED_SECRET>',   label: 'Controls',                    sub: 'Internal controls · Security controls',   types: ['control', 'security_control'],         icon: '🛡️', color: 'red' },
         ];
         const MASTER_COLORS = {
             blue:   { border: 'border-blue-500',   bg: 'bg-blue-50',   text: 'text-blue-700',   active: 'bg-blue-600 text-white' },

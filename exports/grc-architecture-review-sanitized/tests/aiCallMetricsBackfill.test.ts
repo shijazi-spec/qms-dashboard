@@ -120,12 +120,12 @@ function makeStubClient(initialRows: RowState[]): {
 async function run(): Promise<void> {
   console.log("\n[backfillAiCallMetricsRedaction] ai_call_metrics historical sweep");
 
-  const SK_KEY = "<REDACTED_TOKEN>";
+  const SK_KEY = "<REDACTED_SECRET>";
   const GH_PAT = "<REDACTED_TOKEN>";
   const JWT =
     "<REDACTED_TOKEN>";
   const BCRYPT_HASH = "<REDACTED_PASSWORD_HASH>";
-  const AWS_KEY = "<REDACTED_TOKEN>";
+  const AWS_KEY = "<REDACTED_SECRET>";
   const SAFE_PROSE = "Connection refused after 3 retries";
 
   // -----------------------------------------------------------------------

@@ -622,7 +622,7 @@ console.log(
 );
 
 const GHP_TOKEN = "<REDACTED_SECRET>";
-const SK_KEY = "<REDACTED_TOKEN>";
+const SK_KEY = "<REDACTED_SECRET>";
 const JWT_TOKEN =
   "<REDACTED_SECRET>";
 

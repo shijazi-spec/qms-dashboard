@@ -66,7 +66,7 @@
  * Auth
  * ────
  * Mirrors tests/realExportEndpoint.spec.ts: POST `/api/admin/auth` with
- * `ADMIN_API_KEY` (or `TEST_ADMIN_KEY`) to set the session cookie, AND
+ * `ADMIN_API_KEY` (or `<REDACTED_SECRET>`) to set the session cookie, AND
  * forward the same key as `X-Admin-Key` on every export fetch (required
  * by routes whose `requireRole` helper only recognises the header form).
  *
@@ -155,11 +155,11 @@ const EXPORT_ROUTES: ExportRoute[] = [
 ];
 
 function resolveAdminKey(): string | null {
-  const key = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
+  const key = process.env.<REDACTED_SECRET> || process.env.ADMIN_API_KEY;
   if (key) return key;
   if (process.env.CI === 'true') {
     throw new Error(
-      'CI: ADMIN_API_KEY / TEST_ADMIN_KEY missing — refusing to skip the ' +
+      'CI: ADMIN_API_KEY / <REDACTED_SECRET> missing — refusing to skip the ' +
         'per-route streaming-download client-budget smoke test.',
     );
   }
@@ -242,7 +242,7 @@ test.describe('streamingDownload — per-route client-observed latency budget', 
     if (!adminKey) {
       test.skip(
         true,
-        'ADMIN_API_KEY / TEST_ADMIN_KEY not configured — skipping locally',
+        'ADMIN_API_KEY / <REDACTED_SECRET> not configured — skipping locally',
       );
     }
 

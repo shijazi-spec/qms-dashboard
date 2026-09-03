@@ -77,9 +77,9 @@ async function testStreamXlsxReturnsReadableStream() {
     [{
       name: 'Data',
       columns: [
-        { header: 'ID', key: 'id', width: 8 },
-        { header: 'Name', key: 'name', width: 30 },
-        { header: 'Value', key: 'value', width: 14 },
+        { header: 'ID', key: '<REDACTED_SECRET>', width: 8 },
+        { header: 'Name', key: '<REDACTED_SECRET>', width: 30 },
+        { header: 'Value', key: '<REDACTED_SECRET>', width: 14 },
       ],
       rows,
     }],
@@ -133,7 +133,7 @@ async function testStreamXlsxAcceptsAsyncIterable() {
   const response = await streamXlsx(
     [{
       name: 'Test',
-      columns: [{ header: 'N', key: 'n', width: 8 }, { header: 'Square', key: 'sq', width: 12 }],
+      columns: [{ header: 'N', key: '<REDACTED_SECRET>', width: 8 }, { header: 'Square', key: '<REDACTED_SECRET>', width: 12 }],
       rows: source,
     }],
     'async_test.xlsx'
@@ -446,7 +446,7 @@ async function testStreamXlsxMemoryUnder128MBFor500kRows() {
   // The cold first invocation otherwise dominates the RSS measurement.
   {
     const warm = await streamXlsx(
-      [{ name: 'W', columns: [{ header: 'A', key: 'a', width: 4 }], rows: [{ a: 1 }] }],
+      [{ name: 'W', columns: [{ header: 'A', key: '<REDACTED_SECRET>', width: 4 }], rows: [{ a: 1 }] }],
       'warm.xlsx'
     );
     const wr = warm.body!.getReader();
@@ -464,10 +464,10 @@ async function testStreamXlsxMemoryUnder128MBFor500kRows() {
     [{
       name: 'Data',
       columns: [
-        { header: 'ID',    key: 'id',    width: 10 },
-        { header: 'Name',  key: 'name',  width: 24 },
-        { header: 'Val',   key: 'val',   width: 10 },
-        { header: 'Extra', key: 'extra', width: 30 },
+        { header: 'ID',    key: '<REDACTED_SECRET>',    width: 10 },
+        { header: 'Name',  key: '<REDACTED_SECRET>',  width: 24 },
+        { header: 'Val',   key: '<REDACTED_SECRET>',   width: 10 },
+        { header: 'Extra', key: '<REDACTED_SECRET>', width: 30 },
       ],
       rows: source,
     }],

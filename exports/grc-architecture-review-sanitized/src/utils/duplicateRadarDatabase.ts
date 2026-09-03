@@ -1991,7 +1991,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   // customised these values are not overwritten. To CHANGE a live value:
   //   UPDATE duplicate_radar_packet_settings
   //     SET setting_value='<new>'
-  //     WHERE setting_key='<key>';
+  //     WHERE setting_key='<REDACTED_SECRET>';
   await pool.query(
     `INSERT INTO duplicate_radar_packet_settings (setting_key, setting_value) VALUES
        ('escalation_contact_name',  'Sample User — Operations Quality'),
@@ -3643,8 +3643,8 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
         AND email IS NOT NULL
         AND length(btrim(email)) > 4
         AND position('@' in email) > 1
-        AND lower(email) NOT LIKE 'test@%'
-        AND lower(email) NOT LIKE '%@test%'
+        AND lower(email) NOT LIKE '<REDACTED_EMAIL>'
+        AND lower(email) NOT LIKE '<REDACTED_EMAIL>'
         AND lower(email) NOT LIKE '%example.%'
         AND lower(btrim(email)) NOT IN ('n/a','na','none','null','-')
         AND phone_normalized IS NOT NULL
@@ -3661,7 +3661,7 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
   for (const row of res.rows) {
     if (resolvedContactIds.has(row.CRMProvider_record_id)) continue;
     if (!row.k_email || !row.k_phone) continue;
-    const key = `${row.k_email}|${row.k_phone}`;
+    const key = `<REDACTED_SECRET>`;
     const arr = byKey.get(key) || [];
     arr.push(row);
     byKey.set(key, arr);
@@ -4082,7 +4082,7 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
     // overwhelmingly common case.)
     const phoneKey = (row.phone_normalized || row.mobile_normalized || "").trim();
     if (!phoneKey || phoneKey.length < 7) continue;
-    const key = `${nameKey}|${phoneKey}`;
+    const key = `<REDACTED_SECRET>`;
     const arr = byKey.get(key) || [];
     arr.push(row);
     byKey.set(key, arr);

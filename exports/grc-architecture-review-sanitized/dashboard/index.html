@@ -1097,7 +1097,7 @@
         let trendChart = null;
         let customizeMode = false;
         let sortableInstances = [];
-        const DASHBOARD_FILTERS_STORAGE_KEY = 'dashboardDateFilters';
+        const DASHBOARD_FILTERS_STORAGE_KEY = '<REDACTED_SECRET>';
         function loadPersistedDateFilters() {
             try {
                 const raw = localStorage.getItem(DASHBOARD_FILTERS_STORAGE_KEY);
@@ -2878,7 +2878,7 @@
                     // return that field for Tasks). Fall back to "Standard" so the chart no
                     // longer shows a "(No Layout)" bucket for legacy audit data.
                     let key = ((it.layouts || it.layout || '') + '').trim() || 'Standard Contacts';
-                    if (key === 'Standard') key = 'Standard Contacts';
+                    if (key === 'Standard') key = '<REDACTED_SECRET>';
                     counts[key] = (counts[key] || 0) + 1;
                 }
                 const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);

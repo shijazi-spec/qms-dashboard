@@ -6669,20 +6669,20 @@ export const duplicateRadarRoutes = [
             }
 
             const recordColumns = [
-              { header: "Cluster ID", key: "cluster_id", width: 12 },
-              { header: "CRMProvider ID", key: "CRMProvider_record_id", width: 22 },
-              { header: "Name", key: "record_name", width: 30 },
-              { header: "Company", key: "company_name", width: 30 },
-              { header: "Email", key: "email", width: 28 },
-              { header: "Domain", key: "domain", width: 22 },
-              { header: "Phone", key: "phone", width: 18 },
-              { header: "Owner", key: "owner_name", width: 22 },
-              { header: "Status / Stage", key: "status_or_stage", width: 18 },
-              { header: "Value", key: "deal_value", width: 14 },
-              { header: "Source", key: "source", width: 18 },
-              { header: "Confidence", key: "confidence_score", width: 12 },
-              { header: "Recommendation", key: "ai_recommendation", width: 40 },
-              { header: "Created", key: "created_str", width: 14 },
+              { header: "Cluster ID", key: "<REDACTED_SECRET>", width: 12 },
+              { header: "CRMProvider ID", key: "<REDACTED_SECRET>", width: 22 },
+              { header: "Name", key: "<REDACTED_SECRET>", width: 30 },
+              { header: "Company", key: "<REDACTED_SECRET>", width: 30 },
+              { header: "Email", key: "<REDACTED_SECRET>", width: 28 },
+              { header: "Domain", key: "<REDACTED_SECRET>", width: 22 },
+              { header: "Phone", key: "<REDACTED_SECRET>", width: 18 },
+              { header: "Owner", key: "<REDACTED_SECRET>", width: 22 },
+              { header: "Status / Stage", key: "<REDACTED_SECRET>", width: 18 },
+              { header: "Value", key: "<REDACTED_SECRET>", width: 14 },
+              { header: "Source", key: "<REDACTED_SECRET>", width: 18 },
+              { header: "Confidence", key: "<REDACTED_SECRET>", width: 12 },
+              { header: "Recommendation", key: "<REDACTED_SECRET>", width: 40 },
+              { header: "Created", key: "<REDACTED_SECRET>", width: 14 },
               // R1 (quick wins): remediation playbook columns appended to
               // every type sheet so stakeholders see action / owner / due
               // alongside the raw record data.
@@ -6741,8 +6741,8 @@ export const duplicateRadarRoutes = [
               {
                 name: "Summary",
                 columns: [
-                  { header: "Metric", key: "metric", width: 32 },
-                  { header: "Value", key: "value", width: 18 },
+                  { header: "Metric", key: "<REDACTED_SECRET>", width: 32 },
+                  { header: "Value", key: "<REDACTED_SECRET>", width: 18 },
                 ],
                 rows: [
                   {
@@ -12495,8 +12495,8 @@ export const duplicateRadarRoutes = [
             properties: { tabColor: { argb: "FF4F46E5" } },
           });
           summary.columns = [
-            { header: "Metric", key: "k", width: 50 },
-            { header: "Value", key: "v", width: 28 },
+            { header: "Metric", key: "<REDACTED_SECRET>", width: 50 },
+            { header: "Value", key: "<REDACTED_SECRET>", width: 28 },
           ];
           const headerRow = summary.getRow(1);
           headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -12574,40 +12574,40 @@ export const duplicateRadarRoutes = [
           // verbatim) so the export carries the COMPLETE original record.
           const origColumns = originalHeaders.map((h, idx) => ({
             header: h,
-            key: `orig_${idx}`,
+            key: `<REDACTED_SECRET>`,
             width: 22,
           }));
           findings.columns = [
-            { header: "#", key: "i", width: 6 },
-            { header: "Verdict", key: "verdict", width: 12 },
-            { header: "Severity", key: "sev", width: 10 },
-            { header: "Comment / Reason", key: "exec", width: 60 },
-            { header: "Domain", key: "domain", width: 26 },
-            { header: "Company", key: "company", width: 32 },
+            { header: "#", key: "<REDACTED_SECRET>", width: 6 },
+            { header: "Verdict", key: "<REDACTED_SECRET>", width: 12 },
+            { header: "Severity", key: "<REDACTED_SECRET>", width: 10 },
+            { header: "Comment / Reason", key: "<REDACTED_SECRET>", width: 60 },
+            { header: "Domain", key: "<REDACTED_SECRET>", width: 26 },
+            { header: "Company", key: "<REDACTED_SECRET>", width: 32 },
             ...(contacts
               ? [
-                  { header: "Contact Name", key: "contact_name", width: 24 },
-                  { header: "Email", key: "contact_email", width: 30 },
-                  { header: "Phone", key: "contact_phone", width: 18 },
+                  { header: "Contact Name", key: "<REDACTED_SECRET>", width: 24 },
+                  { header: "Email", key: "<REDACTED_SECRET>", width: 30 },
+                  { header: "Phone", key: "<REDACTED_SECRET>", width: 18 },
                 ]
               : []),
-            { header: "Existing Owner(s)", key: "owners", width: 28 },
-            { header: "CS Owner", key: "cs_owner", width: 22 },
-            { header: "CRM Modules (L·D·C·A)", key: "modules", width: 22 },
-            { header: "CS Phase", key: "phase", width: 16 },
-            { header: "Churn Date", key: "churn_date", width: 14 },
-            { header: "Days Since Churn", key: "churn_days", width: 14 },
+            { header: "Existing Owner(s)", key: "<REDACTED_SECRET>", width: 28 },
+            { header: "CS Owner", key: "<REDACTED_SECRET>", width: 22 },
+            { header: "CRM Modules (L·D·C·A)", key: "<REDACTED_SECRET>", width: 22 },
+            { header: "CS Phase", key: "<REDACTED_SECRET>", width: 16 },
+            { header: "Churn Date", key: "<REDACTED_SECRET>", width: 14 },
+            { header: "Days Since Churn", key: "<REDACTED_SECRET>", width: 14 },
             // Sample User 2026-06-17 — clickable CRMProvider links per rejected row.
             // Operator clicks straight to the existing Lead / Deal /
             // Account to verify the rejection without going back into
             // the dashboard. Empty cell when the cluster has no
             // matching record of that type.
-            { header: "Existing Active Lead",         key: "link_active_lead",  width: 36 },
-            { header: "Existing Active Deal",         key: "link_active_deal",  width: 36 },
-            { header: "Existing Customer Deal (CS)",  key: "link_client_deal",  width: 36 },
-            { header: "Existing Account",             key: "link_account",      width: 36 },
-            { header: "Reason (engineer)", key: "reason", width: 32 },
-            { header: "Matched via", key: "matched_via", width: 16 },
+            { header: "Existing Active Lead",         key: "<REDACTED_SECRET>",  width: 36 },
+            { header: "Existing Active Deal",         key: "<REDACTED_SECRET>",  width: 36 },
+            { header: "Existing Customer Deal (CS)",  key: "<REDACTED_SECRET>",  width: 36 },
+            { header: "Existing Account",             key: "<REDACTED_SECRET>",      width: 36 },
+            { header: "Reason (engineer)", key: "<REDACTED_SECRET>", width: 32 },
+            { header: "Matched via", key: "<REDACTED_SECRET>", width: 16 },
             ...origColumns,
           ];
           const fHdr = findings.getRow(1);

@@ -13,9 +13,9 @@ import { pool } from "../src/utils/duplicateRadarDatabase";
 import { normalizeCompanyName } from "../src/utils/duplicateRadarDatabase";
 
 const PAIRS = [
-  { key: "atc", label: "utec" },
-  { key: "Example Organization", label: "sasref" },
-  { key: "alesayi", label: "yanbu" },
+  { key: "<REDACTED_SECRET>", label: "utec" },
+  { key: "<REDACTED_SECRET>", label: "sasref" },
+  { key: "<REDACTED_SECRET>", label: "yanbu" },
 ];
 
 function wordRe(w: string) {

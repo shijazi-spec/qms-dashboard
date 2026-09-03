@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   // / `redactSensitiveDeep()`. They are placed under innocuously-named keys
   // (`note`, `commitMessage`) so the key-based deny-list cannot match — only
   // the regex / value-based redaction can save us.
-  const RICH_LLMProvider_KEY = '<REDACTED_TOKEN>';
+  const RICH_LLMProvider_KEY = '<REDACTED_SECRET>';
   const RICH_SourceControlProvider_PAT = '<REDACTED_TOKEN>';
 
   try {

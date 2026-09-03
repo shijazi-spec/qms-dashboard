@@ -25,7 +25,7 @@
 import { test, expect, request as pwRequest } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
-const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.TEST_ADMIN_KEY || '';
+const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.<REDACTED_SECRET> || '';
 const PULSE_PATH = '/api/health/pulse';
 
 function shouldSkip(): boolean {
@@ -152,7 +152,7 @@ test.describe('Health Pulse — copy link to this check (Task #766)', () => {
 
   test('Per-row copy-link button is rendered on every check row with proper a11y', async ({ page }) => {
     if (shouldSkip()) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     await page.goto(`${BASE_URL}/dashboard/health`);
@@ -174,7 +174,7 @@ test.describe('Health Pulse — copy link to this check (Task #766)', () => {
 
   test('Clicking the per-row button copies ?check=<id> to clipboard without toggling the row open', async ({ page }) => {
     if (shouldSkip()) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     await page.goto(`${BASE_URL}/dashboard/health`);
@@ -199,7 +199,7 @@ test.describe('Health Pulse — copy link to this check (Task #766)', () => {
 
   test('Per-row link preserves existing ?status filter param', async ({ page }) => {
     if (shouldSkip()) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     await page.goto(`${BASE_URL}/dashboard/health?status=fail`);
@@ -217,7 +217,7 @@ test.describe('Health Pulse — copy link to this check (Task #766)', () => {
 
   test('Loading ?check=<id> auto-expands the matching row and applies highlight class', async ({ page }) => {
     if (shouldSkip()) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     await page.goto(`${BASE_URL}/dashboard/health?check=${FAILING_CHECK_ID}`);
@@ -244,7 +244,7 @@ test.describe('Health Pulse — copy link to this check (Task #766)', () => {
 
   test('Deep-link composes with ?status filter — non-matching check is filtered out, no JS errors', async ({ page }) => {
     if (shouldSkip()) {
-      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      test.skip(true, 'ADMIN_API_KEY / <REDACTED_SECRET> not set in environment');
       return;
     }
     const consoleErrors: string[] = [];

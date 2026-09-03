@@ -82,9 +82,9 @@ async function main(): Promise<void> {
 
   // Use unique keys so we don't collide with live traffic.
   const tag = `stats-test-${Date.now()}`;
-  const keyA = `${tag}:A`;       // recent (inside rolling window) — should appear
-  const keyB = `${tag}:B`;       // recent (inside rolling window) — should appear
-  const keyOld = `${tag}:OLD`;   // older than 61s — should be EXCLUDED
+  const keyA = `<REDACTED_SECRET>`;       // recent (inside rolling window) — should appear
+  const keyB = `<REDACTED_SECRET>`;       // recent (inside rolling window) — should appear
+  const keyOld = `<REDACTED_SECRET>`;   // older than 61s — should be EXCLUDED
 
   // Buckets are second-granularity in production (see rateLimiter.ts:166-168
   // `INSERT ... date_trunc('second', NOW())`), so we use DB-time timestamps

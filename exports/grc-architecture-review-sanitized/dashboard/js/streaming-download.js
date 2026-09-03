@@ -448,10 +448,10 @@
     // see the same per-tab tray they got before. Authenticated callers get a
     // per-user localStorage namespace under HISTORY_STORAGE_KEY_PREFIX so
     // the tray survives a tab close / browser restart / fresh login.
-    var HISTORY_STORAGE_KEY = 'ExampleOrg.recentDownloads.v1';
-    var HISTORY_STORAGE_KEY_PREFIX = 'ExampleOrg.recentDownloads.v2';
-    var TRAY_OPEN_STORAGE_KEY = 'ExampleOrg.recentDownloads.trayOpen';
-    var TRAY_LAST_SEEN_STORAGE_KEY = 'ExampleOrg.recentDownloads.lastSeen.v1';
+    var HISTORY_STORAGE_KEY = '<REDACTED_SECRET>';
+    var HISTORY_STORAGE_KEY_PREFIX = '<REDACTED_SECRET>';
+    var TRAY_OPEN_STORAGE_KEY = '<REDACTED_SECRET>';
+    var TRAY_LAST_SEEN_STORAGE_KEY = '<REDACTED_SECRET>';
     var HISTORY_LIMIT = 5;
     // Default expiry window for stored entries (30 days). Override on the
     // host page with `window.STREAMING_DOWNLOAD_HISTORY_MAX_AGE_MS = …`.
@@ -2414,7 +2414,7 @@
     // buttons on capable-but-not-streaming browsers so users know what to
     // expect (and can upgrade to a modern Chrome/Firefox/Safari).
 
-    var FALLBACK_NOTICE_DISMISS_KEY = 'ExampleOrg.streamingFallbackDismissed';
+    var FALLBACK_NOTICE_DISMISS_KEY = '<REDACTED_SECRET>';
     var FALLBACK_NOTICE_MARKER = 'streaming-download-fallback-notice';
 
     function canStreamToDisk() {

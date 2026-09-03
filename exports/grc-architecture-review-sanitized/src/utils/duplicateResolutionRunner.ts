@@ -366,7 +366,7 @@ async function pingResolutionChatProvider(summary: ResolutionRunSummary): Promis
           .replace(/\s+/g, " ")
           .trim()
           .slice(0, 160);
-        const key = `${it.module}: ${msg}`;
+        const key = `<REDACTED_SECRET>`;
         const g = groups.get(key) || { n: 0, sample: `${it.module} — ${(it.detail || "").toString().slice(0, 200)}` };
         g.n++;
         groups.set(key, g);
@@ -713,13 +713,13 @@ export interface NotificationScheduleEntry {
 }
 // Chronological — mirrors the "daily rhythm" table Sample User.
 export const ADAM_NOTIFICATION_SCHEDULE: NotificationScheduleEntry[] = [
-  { time: "03:00 / 09:00 / 15:00 / 21:00 KSA", cron: "0 */6 * * *", envKey: "DUPLICATE_SCAN_CRON", channel: "— (background)", what: "Every-6h incremental CRM sync — keeps data fresh round the clock", postsToChatProvider: false },
-  { time: "07:00 KSA · daily", cron: "0 4 * * *", envKey: "DUPLICATE_MORNING_SYNC_CRON", channel: "— (background)", what: "Pre-shift incremental sync — radar current before your shift", postsToChatProvider: false },
-  { time: "02:00 KSA · Sat & Tue", cron: "0 23 * * 1,5", envKey: "DUPLICATE_FULL_REBUILD_CRON", channel: "— (background)", what: "Twice-weekly FULL rebuild — clean wipe + re-fetch + re-score off-hours", postsToChatProvider: false },
-  { time: "09:00 & 17:00 KSA · daily", cron: "0 6,14 * * *", envKey: "AUTONOMOUS_RESOLUTION_DIGEST_CRON", channel: "#grq-assistant", what: "Operational apply digest — what the agent applied/queued this shift", postsToChatProvider: true },
-  { time: "Sunday 06:00 KSA · weekly", cron: "0 3 * * 0", envKey: "AUTONOMOUS_EXEC_BRIEF_CRON", channel: "#grq-assistant + #automatic-audits", what: "Weekly leadership brief — cluster counts, dup-rate vs 2%, week-over-week trend, recommendation (NO SAR exposure: leadership sees only the agreed KPIs)", postsToChatProvider: true },
+  { time: "03:00 / 09:00 / 15:00 / 21:00 KSA", cron: "0 */6 * * *", envKey: "<REDACTED_SECRET>", channel: "— (background)", what: "Every-6h incremental CRM sync — keeps data fresh round the clock", postsToChatProvider: false },
+  { time: "07:00 KSA · daily", cron: "0 4 * * *", envKey: "<REDACTED_SECRET>", channel: "— (background)", what: "Pre-shift incremental sync — radar current before your shift", postsToChatProvider: false },
+  { time: "02:00 KSA · Sat & Tue", cron: "0 23 * * 1,5", envKey: "<REDACTED_SECRET>", channel: "— (background)", what: "Twice-weekly FULL rebuild — clean wipe + re-fetch + re-score off-hours", postsToChatProvider: false },
+  { time: "09:00 & 17:00 KSA · daily", cron: "0 6,14 * * *", envKey: "<REDACTED_SECRET>", channel: "#grq-assistant", what: "Operational apply digest — what the agent applied/queued this shift", postsToChatProvider: true },
+  { time: "Sunday 06:00 KSA · weekly", cron: "0 3 * * 0", envKey: "<REDACTED_SECRET>", channel: "#grq-assistant + #automatic-audits", what: "Weekly leadership brief — cluster counts, dup-rate vs 2%, week-over-week trend, recommendation (NO SAR exposure: leadership sees only the agreed KPIs)", postsToChatProvider: true },
   { time: "Every 6h (:30)", cron: "30 */6 * * *", channel: "#grq-assistant", what: "Autonomous resolution tick (shadow) — per-tick summary, quiet when nothing changed", postsToChatProvider: true },
-  { time: "1st of month · 09:00 KSA", cron: "0 6 1 * *", envKey: "AUTONOMOUS_SCHEDULE_REVIEW_CRON", channel: "#grq-assistant", what: "Monthly review of THIS notification schedule — edit timings if needed", postsToChatProvider: true },
+  { time: "1st of month · 09:00 KSA", cron: "0 6 1 * *", envKey: "<REDACTED_SECRET>", channel: "#grq-assistant", what: "Monthly review of THIS notification schedule — edit timings if needed", postsToChatProvider: true },
 ];
 
 /** Render the schedule as a ChatProvider-friendly list. */
@@ -968,7 +968,7 @@ export async function postResolutionDigestOncePerSlot(
        )`,
     );
     const ymd = new Date().toISOString().slice(0, 10); // UTC date
-    const key = `resolution-digest-${slot}-${ymd}`;
+    const key = `<REDACTED_SECRET>`;
     const claim = await pool.query(
       `INSERT INTO digest_post_claims (claim_key) VALUES ($1)
        ON CONFLICT (claim_key) DO NOTHING`,

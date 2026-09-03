@@ -1195,8 +1195,8 @@ export const auditRoutes = [
                   {
                     name: "Summary",
                     columns: [
-                      { header: "Field", key: "field", width: 28 },
-                      { header: "Value", key: "value", width: 60 },
+                      { header: "Field", key: "<REDACTED_SECRET>", width: 28 },
+                      { header: "Value", key: "<REDACTED_SECRET>", width: 60 },
                     ],
                     rows: [
                       {
@@ -1233,32 +1233,32 @@ export const auditRoutes = [
                   {
                     name: "Findings",
                     columns: [
-                      { header: "No.", key: "finding_number", width: 12 },
-                      { header: "Severity", key: "severity", width: 10 },
-                      { header: "Status", key: "status", width: 12 },
-                      { header: "Dimension", key: "dimension", width: 14 },
-                      { header: "Criteria", key: "criteria_name", width: 28 },
-                      { header: "Description", key: "description", width: 50 },
-                      { header: "Evidence", key: "evidence", width: 35 },
+                      { header: "No.", key: "<REDACTED_SECRET>", width: 12 },
+                      { header: "Severity", key: "<REDACTED_SECRET>", width: 10 },
+                      { header: "Status", key: "<REDACTED_SECRET>", width: 12 },
+                      { header: "Dimension", key: "<REDACTED_SECRET>", width: 14 },
+                      { header: "Criteria", key: "<REDACTED_SECRET>", width: 28 },
+                      { header: "Description", key: "<REDACTED_SECRET>", width: 50 },
+                      { header: "Evidence", key: "<REDACTED_SECRET>", width: 35 },
                       {
                         header: "Recommendation",
-                        key: "recommendation",
+                        key: "<REDACTED_SECRET>",
                         width: 40,
                       },
                       {
                         header: "CAPA Required",
-                        key: "capa_required_label",
+                        key: "<REDACTED_SECRET>",
                         width: 14,
                       },
-                      { header: "Owner", key: "owner", width: 22 },
+                      { header: "Owner", key: "<REDACTED_SECRET>", width: 22 },
                       {
                         header: "Target Date",
-                        key: "target_date_str",
+                        key: "<REDACTED_SECRET>",
                         width: 14,
                       },
                       {
                         header: "Resolution Date",
-                        key: "resolution_date_str",
+                        key: "<REDACTED_SECRET>",
                         width: 16,
                       },
                     ],

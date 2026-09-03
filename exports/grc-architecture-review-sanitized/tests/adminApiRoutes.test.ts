@@ -70,7 +70,7 @@ await suite.test("POST /api/admin/auth — 401 with wrong key", async () => {
   process.env.ADMIN_API_KEY = "<REDACTED_SECRET>";
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/auth", "POST");
-    const res = await handler(makeContext({ method: "POST", body: { key: "WRONG" } }));
+    const res = await handler(makeContext({ method: "POST", body: { key: "<REDACTED_SECRET>" } }));
     suite.expectEqual(res.status, 401, "status");
     suite.expectEqual(res.body?.error, "Authentication required", "body.error");
   } finally {
@@ -116,7 +116,7 @@ await suite.test("POST /api/admin/auth/logout — 200 with cookie cleared", asyn
   suite.expectEqual(res.status, 200, "status");
   suite.expectEqual(res.body?.success, true, "body.success");
   const cookie = res.headers["Set-Cookie"] ?? "";
-  suite.expect(cookie.includes("admin_key="), "Set-Cookie clears admin_key");
+  suite.expect(cookie.includes("admin_key="<REDACTED_SECRET>"Set-Cookie clears admin_key");
   suite.expect(cookie.includes("Max-Age=0"), "Set-Cookie has Max-Age=0");
   // The clear-cookie response must mirror the same security flags used when
   // the cookie was originally set — HttpOnly + Secure + SameSite=Strict — so

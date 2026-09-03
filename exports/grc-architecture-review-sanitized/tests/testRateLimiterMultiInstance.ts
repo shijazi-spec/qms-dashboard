@@ -160,7 +160,7 @@ async function testBoundarySpan(): Promise<boolean> {
     // -------- Scenario 1: backdate by 30s --------
     {
       const ip = `boundary-30s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const key = `ip:${ip}:authflow`;
+      const key = `<REDACTED_SECRET>`;
       console.log(`  [1] 30s-backdated quota — key=${key}`);
 
       for (let i = 0; i < AUTH_LIMIT; i++) {
@@ -192,7 +192,7 @@ async function testBoundarySpan(): Promise<boolean> {
     // 59.x seconds old whose sub-bucket-start has just crossed the 60s mark.
     {
       const ip = `boundary-59s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const key = `ip:${ip}:authflow`;
+      const key = `<REDACTED_SECRET>`;
       console.log(`\n  [2] Oldest-bucket edge (~59s) — key=${key}`);
 
       // Seed AUTH_LIMIT prior requests in one sub-bucket aged exactly 59s.
@@ -218,7 +218,7 @@ async function testBoundarySpan(): Promise<boolean> {
     // -------- Scenario 3: fully-aged-out (~62s) — must be allowed --------
     {
       const ip = `boundary-62s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const key = `ip:${ip}:authflow`;
+      const key = `<REDACTED_SECRET>`;
       console.log(`\n  [3] Fully-aged quota (~62s) — key=${key}`);
 
       await pool.query(

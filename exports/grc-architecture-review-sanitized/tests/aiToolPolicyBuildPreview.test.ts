@@ -158,7 +158,7 @@ const SECRETS = {
   // jwt regex requires three base64url segments separated by dots
   jwt: "<REDACTED_TOKEN>",
   // aws-akid regex requires:  AKIA + exactly 16 [0-9A-Z] chars
-  awsKey: "<REDACTED_TOKEN>",
+  awsKey: "<REDACTED_SECRET>",
 } as const;
 
 const PLAIN_PASSWORD = "<REDACTED_SECRET>";

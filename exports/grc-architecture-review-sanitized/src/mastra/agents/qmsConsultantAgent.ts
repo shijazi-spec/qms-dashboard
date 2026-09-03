@@ -392,7 +392,7 @@ Additional capabilities:
  * (see getFeedbackRateByPromptVersion in src/utils/aiTelemetry.ts).
  */
 export const QMS_CONSULTANT_PROMPT_VERSION =
-  `qms-consultant@${createHash("sha256").update(QMS_CONSULTANT_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
+  `<REDACTED_EMAIL>("sha256").update(QMS_CONSULTANT_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
 
 export const qmsConsultantAgent = new Agent({
   name: "ExampleOrg QMS Consultant",

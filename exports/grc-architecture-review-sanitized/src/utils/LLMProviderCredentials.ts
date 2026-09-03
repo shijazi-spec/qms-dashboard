@@ -17,7 +17,7 @@
  * masked the underlying auth issue until that was fixed.
  *
  * Fix: ignore AI_INTEGRATIONS when it's too short to be a real key. Real
- * LLMProvider API keys are 51+ chars (legacy `sk-…`) or 100+ chars (`sk-proj-…`),
+ * LLMProvider API keys are 51+ chars (legacy `sk-…`) or 100+ chars (`<REDACTED_TOKEN>`),
  * so 40 is a conservative floor that rejects any plausible stub or
  * truncation without flagging a real key.
  *

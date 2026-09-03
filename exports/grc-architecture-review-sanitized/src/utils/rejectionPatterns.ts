@@ -41,49 +41,49 @@ interface CategorySpec {
 
 const CATEGORIES: CategorySpec[] = [
   {
-    key: "low_confidence",
+    key: "<REDACTED_SECRET>",
     label: "Confidence below the auto threshold",
     reason: /below the auto threshold/i,
     advice:
       "These clusters scored below the confidence floor. If you're rejecting most of them, raise RESOLUTION_MIN_CONFIDENCE (or have the cluster engine re-segment) rather than reviewing them one by one.",
   },
   {
-    key: "multiple_phones",
+    key: "<REDACTED_SECRET>",
     label: "Multiple distinct phone numbers",
     feature: "mixedPhones",
     suggestedRule: { decision: "never_merge", signature: { mixedPhones: true } },
     advice: "Clusters spanning ≥2 phone numbers are likely different entities.",
   },
   {
-    key: "multiple_domains",
+    key: "<REDACTED_SECRET>",
     label: "Multiple distinct corporate domains",
     feature: "mixedDomains",
     suggestedRule: { decision: "never_merge", signature: { mixedDomains: true } },
     advice: "Clusters spanning ≥2 corporate domains are likely different companies.",
   },
   {
-    key: "layout_split",
+    key: "<REDACTED_SECRET>",
     label: "Different CRMProvider layouts (intentional split)",
     feature: "layoutSplit",
     suggestedRule: { decision: "never_merge", signature: { layoutSplit: true } },
     advice: "Records on different layouts are often a deliberate split (e.g. Corporate vs Partner).",
   },
   {
-    key: "multi_owner",
+    key: "<REDACTED_SECRET>",
     label: "Multiple owners",
     feature: "multiOwner",
     suggestedRule: { decision: "never_merge", signature: { multiOwner: true } },
     advice: "Clusters with ≥2 owners need coordination before a merge.",
   },
   {
-    key: "cross_module",
+    key: "<REDACTED_SECRET>",
     label: "Cross-module cluster",
     feature: "crossModule",
     suggestedRule: { decision: "never_merge", signature: { crossModule: true } },
     advice: "Cross-module clusters are handled by LINK rules, not a same-module merge.",
   },
   {
-    key: "has_pipeline",
+    key: "<REDACTED_SECRET>",
     label: "Carries deal pipeline / ARR value",
     feature: "hasPipeline",
     suggestedRule: { decision: "never_merge", signature: { hasPipeline: true } },
@@ -91,31 +91,31 @@ const CATEGORIES: CategorySpec[] = [
       "Duplicates carrying deal value escalate by design. Raise RESOLUTION_MAX_PIPELINE_VALUE / _ARR_EXPOSURE if you want the agent to auto-merge small-value ones.",
   },
   {
-    key: "active_deal_stage",
+    key: "<REDACTED_SECRET>",
     label: "A duplicate is in an active deal stage",
     reason: /active deal stage/i,
     advice: "Active deals are kept out of auto-merge — review individually.",
   },
   {
-    key: "field_conflicts",
+    key: "<REDACTED_SECRET>",
     label: "Field conflicts needing a human decision",
     reason: /field conflict/i,
     advice: "Conflicting values on the same field — the survivor/value choice needs you.",
   },
   {
-    key: "attachments",
+    key: "<REDACTED_SECRET>",
     label: "Duplicate carries CRMProvider attachments (evidence)",
     reason: /attachment/i,
     advice: "Never auto-merge away a record with files (signed contracts/NDAs) — keep it as survivor.",
   },
   {
-    key: "survivor_incomplete",
+    key: "<REDACTED_SECRET>",
     label: "Survivor record is sparse",
     reason: /complete/i,
     advice: "The chosen survivor is under-filled — pick a more complete master.",
   },
   {
-    key: "recently_modified",
+    key: "<REDACTED_SECRET>",
     label: "A record was edited very recently",
     reason: /modified .* ago/i,
     advice: "A record edited in the last few days may be an in-flight change — wait before merging.",
@@ -205,10 +205,10 @@ interface AcceptCategorySpec {
 }
 
 const ACCEPT_CATEGORIES: AcceptCategorySpec[] = [
-  { key: "ok_layout_split", feature: "layoutSplit", label: "Approved despite different layouts", advice: "You keep merging layout-split clusters — safe to auto-approve that shape." },
-  { key: "ok_multi_owner", feature: "multiOwner", label: "Approved despite multiple owners", advice: "You keep merging multi-owner clusters — safe to auto-approve that shape." },
-  { key: "ok_has_pipeline", feature: "hasPipeline", label: "Approved despite deal value", advice: "You keep merging clusters carrying pipeline — consider auto-approving (or raise the value cap)." },
-  { key: "ok_mixed_phones", feature: "mixedPhones", label: "Approved despite multiple phones", advice: "You keep merging multi-phone clusters — auto-approve that shape if it's reliably the same company." },
+  { key: "<REDACTED_SECRET>", feature: "layoutSplit", label: "Approved despite different layouts", advice: "You keep merging layout-split clusters — safe to auto-approve that shape." },
+  { key: "<REDACTED_SECRET>", feature: "multiOwner", label: "Approved despite multiple owners", advice: "You keep merging multi-owner clusters — safe to auto-approve that shape." },
+  { key: "<REDACTED_SECRET>", feature: "hasPipeline", label: "Approved despite deal value", advice: "You keep merging clusters carrying pipeline — consider auto-approving (or raise the value cap)." },
+  { key: "<REDACTED_SECRET>", feature: "mixedPhones", label: "Approved despite multiple phones", advice: "You keep merging multi-phone clusters — auto-approve that shape if it's reliably the same company." },
 ];
 
 export async function analyzeAcceptancePatterns(opts?: {

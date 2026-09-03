@@ -164,7 +164,7 @@ function check(condition: boolean, label: string): void {
   const serialized = JSON.stringify(scrubbed);
   check(
     !serialized.includes("<REDACTED_TOKEN>"),
-    "(e) redactFeedbackMetadataForStorage still scrubs sk-live tokens (defense-in-depth)",
+    "(e) redactFeedbackMetadataForStorage still scrubs <REDACTED_TOKEN_PREFIX> tokens (defense-in-depth)",
   );
   check(
     serialized.includes("<REDACTED_EMAIL>"),

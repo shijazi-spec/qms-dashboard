@@ -1962,7 +1962,7 @@ if (HAS_DB) {
 
       const RECOVERY_TOOL = `test_recovery_${Date.now()}`;
       const RECOVERY_REASON = "error_rate" as const;
-      const RECOVERY_KEY = `${RECOVERY_TOOL}:${RECOVERY_REASON}`;
+      const RECOVERY_KEY = `<REDACTED_SECRET>`;
       let seededId: number | null = null;
 
       try {
