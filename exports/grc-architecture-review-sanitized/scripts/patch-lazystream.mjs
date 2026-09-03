@@ -46,11 +46,11 @@ const PATCHED  = `require('readable-stream').PassThrough`;
 //            under esbuild and produces "PassThrough is not a constructor".
 //
 // Variant 2: `require('readable-stream/passthrough')` — the *actual* form used
-//            by lazystream@1.0.1 upstream. The subpath `passthrough` only
-//            exists in `readable-stream@2.x`. Locally lazystream ships its
-//            own nested `node_modules/readable-stream@2.3.8` so the require
+//            by <REDACTED_EMAIL> upstream. The subpath `passthrough` only
+//            exists in `<REDACTED_EMAIL>`. Locally lazystream ships its
+//            own nested `node_modules/<REDACTED_EMAIL>` so the require
 //            resolves; the production deploy bundle de-dupes to a single
-//            top-level `readable-stream@3.6.2` (no `passthrough.js` at root)
+//            top-level `<REDACTED_EMAIL>` (no `passthrough.js` at root)
 //            and crash-loops with `ERR_MODULE_NOT_FOUND` on startup.
 //            The public `PassThrough` named export from `readable-stream`'s
 //            main entry is identical on v2 and v3.

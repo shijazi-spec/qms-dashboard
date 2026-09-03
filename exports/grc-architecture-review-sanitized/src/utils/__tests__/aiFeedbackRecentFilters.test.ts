@@ -90,7 +90,7 @@ const { getRecentThumbsDown } = await import("../aiFeedbackDatabase");
 // (2) prompt_version filter → JSONB extractor with a bound parameter.
 {
   const last = await withCapturedCalls(() =>
-    getRecentThumbsDown(20, { promptVersion: "qms@deadbeef" }),
+    getRecentThumbsDown(20, { promptVersion: "<REDACTED_EMAIL>" }),
   );
   check(
     /metadata->>'prompt_version'\s*=\s*\$2/i.test(last.sql),
@@ -99,7 +99,7 @@ const { getRecentThumbsDown } = await import("../aiFeedbackDatabase");
   check(
     Array.isArray(last.params) &&
       last.params.length === 2 &&
-      last.params[1] === "qms@deadbeef",
+      last.params[1] === "<REDACTED_EMAIL>",
     "(2) prompt_version filter passes the trimmed value as $2",
   );
 }
@@ -127,7 +127,7 @@ const { getRecentThumbsDown } = await import("../aiFeedbackDatabase");
 {
   const last = await withCapturedCalls(() =>
     getRecentThumbsDown(50, {
-      promptVersion: "qms@cafef00d",
+      promptVersion: "<REDACTED_EMAIL>",
       featureFlag: "treatment-1",
     }),
   );
@@ -141,7 +141,7 @@ const { getRecentThumbsDown } = await import("../aiFeedbackDatabase");
     Array.isArray(last.params) &&
       last.params.length === 3 &&
       last.params[0] === 50 &&
-      last.params[1] === "qms@cafef00d" &&
+      last.params[1] === "<REDACTED_EMAIL>" &&
       last.params[2] === "treatment-1",
     "(4) both filters bind [limit, promptVersion, featureFlag] in order",
   );
@@ -172,7 +172,7 @@ const { getRecentThumbsDown } = await import("../aiFeedbackDatabase");
 {
   const last = await withCapturedCalls(() =>
     getRecentThumbsDown(50, {
-      promptVersion: "qms@cafef00d",
+      promptVersion: "<REDACTED_EMAIL>",
       featureFlag: "treatment-1",
       clientSurface: "mobile",
     }),
@@ -187,7 +187,7 @@ const { getRecentThumbsDown } = await import("../aiFeedbackDatabase");
     Array.isArray(last.params) &&
       last.params.length === 4 &&
       last.params[0] === 50 &&
-      last.params[1] === "qms@cafef00d" &&
+      last.params[1] === "<REDACTED_EMAIL>" &&
       last.params[2] === "treatment-1" &&
       last.params[3] === "mobile",
     "(4c) all three filters bind [limit, promptVersion, featureFlag, clientSurface] in order",
@@ -219,7 +219,7 @@ const { getRecentThumbsDown } = await import("../aiFeedbackDatabase");
 {
   const last = await withCapturedCalls(() =>
     getRecentThumbsDown(50, {
-      promptVersion: "qms@cafef00d",
+      promptVersion: "<REDACTED_EMAIL>",
       featureFlag: "treatment-1",
       clientSurface: "mobile",
       ratingSource: "comment_modal",
@@ -235,7 +235,7 @@ const { getRecentThumbsDown } = await import("../aiFeedbackDatabase");
     Array.isArray(last.params) &&
       last.params.length === 5 &&
       last.params[0] === 50 &&
-      last.params[1] === "qms@cafef00d" &&
+      last.params[1] === "<REDACTED_EMAIL>" &&
       last.params[2] === "treatment-1" &&
       last.params[3] === "mobile" &&
       last.params[4] === "comment_modal",

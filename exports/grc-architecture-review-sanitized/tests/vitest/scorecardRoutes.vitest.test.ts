@@ -15,7 +15,7 @@ import { buildHandler, makeContext } from "../_helpers/fakeContext";
 import { makeMohammedKPI, makeScorecardSnapshot } from "../_helpers/fixtures";
 import type { MohammedKPI } from "../../src/utils/scorecardDatabase";
 
-const FAKE_USER = { userId: 0, email: "api@system", name: "API Key", role: "admin" as const };
+const FAKE_USER = { userId: 0, email: "<REDACTED_EMAIL>", name: "API Key", role: "admin" as const };
 
 vi.mock("../../src/utils/scorecardDatabase", () => ({
   initScorecardTables: vi.fn(async () => undefined),

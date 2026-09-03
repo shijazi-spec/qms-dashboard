@@ -89,7 +89,7 @@ function lastInsertParams(table: string): unknown[] | null {
 // Credential-shaped strings caught by the regex deny list regardless of the
 // (non-sensitive) column name they are stored under.
 const SECRET_STRINGS = {
-  bcrypt: "$2b$12$abcdefghijklmnopqrstuOCm5RJ7p2sIcQqL7gKwSxmXJ9pYsZyHa",
+  bcrypt: "<REDACTED_PASSWORD_HASH>",
   jwt: "<REDACTED_TOKEN>",
   skKey: "<REDACTED_TOKEN>",
   ghp: "<REDACTED_TOKEN>",

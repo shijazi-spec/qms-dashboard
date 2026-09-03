@@ -1183,7 +1183,7 @@ inngestFunctions.push(aiCostSummaryFunction);
 // Archived prompt-version telemetry purge cron
 //
 // Prompt versions are content-addressed hashes derived from each agent's
-// instruction string (e.g. "qms-consultant@a1b2c3d4"). When a new deploy
+// instruction string (e.g. "<REDACTED_EMAIL>"). When a new deploy
 // changes an agent's prompt the old version becomes "archived" — the UI hides
 // it behind a toggle but the underlying ai_call_metrics rows remain forever.
 //

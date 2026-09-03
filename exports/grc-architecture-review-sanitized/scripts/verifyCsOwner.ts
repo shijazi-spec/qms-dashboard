@@ -6,7 +6,7 @@
  *
  * For a sample of client deals it prints: deal owner_name vs each candidate CS
  * owner field, and the value the directory will now use. Also spotlights the
- * Remat Al-Riyadh deal (<REDACTED_HOST>) which should show CS owner = Zeina Alsoudi.
+ * Remat Al-Riyadh deal (<REDACTED_HOST>) which should show CS owner = Sample User.
  */
 import { pool } from "../src/utils/duplicateRadarDatabase";
 

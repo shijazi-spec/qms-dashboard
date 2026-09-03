@@ -5172,7 +5172,7 @@ ${transcriptText}
           // logic as the analysis step above. Raw-fetch helper bypasses the
           // @ai-sdk/LLMProvider v3 spec regression that took down the bulk
           // analyze path in production (.chat() adapter started emitting
-          // v3 spec, incompatible with ai@5 which requires v2).
+          // v3 spec, incompatible with <REDACTED_EMAIL> which requires v2).
           const { generateChatText: _gctEval } = await import(
             "../../utils/LLMProviderChatHelper"
           );

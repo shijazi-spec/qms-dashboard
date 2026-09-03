@@ -70,8 +70,8 @@ const { logNCChange, logCAPAChange } = await import("./changeHistoryDatabase");
 const REDACTED_SENTINEL = "***REDACTED***";
 
 const SECRETS = {
-  password_hash: "$2b$12$abcdefghij1234567890uvwxyz.ABCDEFGH_IJ",
-  mfa_secret: "JBSWY3DPEHPK3PXP",
+  password_hash: "<REDACTED_PASSWORD_HASH>_IJ",
+  mfa_secret: "<REDACTED_MFA_SECRET>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
   api_key: "<REDACTED_SECRET>",
@@ -468,7 +468,7 @@ console.log("\n=== credential-shaped values under innocuous field names ===\n");
 const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
   {
     label: "bcrypt hash",
-    value: "$2b$12$abcdefghijklmnopqrstuOCm5RJ7p2sIcQqL7gKwSxmXJ9pYsZyHa",
+    value: "<REDACTED_PASSWORD_HASH>",
   },
   {
     label: "JWT",
@@ -492,8 +492,8 @@ const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
     value: "<REDACTED_TOKEN>",
   },
   {
-    label: "Bearer header",
-    value: "Bearer abc123def456ghi789jkl012mno345pqr678",
+    label: "Bearer <REDACTED_TOKEN>",
+    value: "Bearer <REDACTED_TOKEN>",
   },
 ];
 

@@ -15,10 +15,10 @@ jobs:
       NODE_ENV: development
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/<REDACTED_EMAIL>
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/<REDACTED_EMAIL>
         with:
           node-version: "20"
           cache: npm
@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload dev server log on failure
         if: failure() && steps.gate.outputs.run_e2e == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/<REDACTED_EMAIL>
         with:
           name: ai-approval-redaction-dev-server-log
           path: /tmp/dev-server.log

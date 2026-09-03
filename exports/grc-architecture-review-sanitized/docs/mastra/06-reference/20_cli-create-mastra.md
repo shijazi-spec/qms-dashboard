@@ -15,22 +15,22 @@ The `create-mastra` command **creates** a new standalone Mastra project. Use thi
 <Tabs items={["npm", "yarn", "pnpm", "bun"]}>
   <Tab>
     ```bash copy
-    npx create-mastra@latest
+    npx <REDACTED_EMAIL>
     ```
   </Tab>
   <Tab>
     ```bash copy
-    yarn dlx create-mastra@latest
+    yarn dlx <REDACTED_EMAIL>
     ```
   </Tab>
   <Tab>
     ```bash copy
-    pnpm create mastra@latest
+    pnpm create <REDACTED_EMAIL>
     ```
   </Tab>
   <Tab>
     ```bash copy
-    bun create mastra@latest
+    bun create <REDACTED_EMAIL>
     ```
   </Tab>
 </Tabs>
@@ -40,22 +40,22 @@ The `create-mastra` command **creates** a new standalone Mastra project. Use thi
 <Tabs items={["npm", "yarn", "pnpm", "bun"]}>
   <Tab>
     ```bash copy
-    npx create-mastra@latest my-mastra-project -- --template coding-agent
+    npx <REDACTED_EMAIL> my-mastra-project -- --template coding-agent
     ```
   </Tab>
   <Tab>
     ```bash copy
-    yarn dlx create-mastra@latest --template coding-agent
+    yarn dlx <REDACTED_EMAIL> --template coding-agent
     ```
   </Tab>
   <Tab>
     ```bash copy
-    pnpm create mastra@latest --template coding-agent
+    pnpm create <REDACTED_EMAIL> --template coding-agent
     ```
   </Tab>
   <Tab>
     ```bash copy
-    bun create mastra@latest --template coding-agent
+    bun create <REDACTED_EMAIL> --template coding-agent
     ```
   </Tab>
 </Tabs>
@@ -65,7 +65,7 @@ Check out the [full list](<REDACTED_URL> of templates and use the `slug` as inpu
 You can also use any SourceControlProvider repo as a template (it has to be a valid Mastra project):
 
 ```bash
-npx create-mastra@latest my-mastra-project -- --template mastra-ai/template-coding-agent
+npx <REDACTED_EMAIL> my-mastra-project -- --template mastra-ai/template-coding-agent
 ```
 
 ## CLI flags
@@ -174,7 +174,7 @@ MASTRA_TELEMETRY_DISABLED=1
 You can also set this while using other `mastra` commands:
 
 ```bash copy
-MASTRA_TELEMETRY_DISABLED=1 npx create-mastra@latest
+MASTRA_TELEMETRY_DISABLED=1 npx <REDACTED_EMAIL>
 ```
 
 

@@ -58,7 +58,7 @@ function check(condition: boolean, label: string): void {
 // (a) every allow-list key round-trips camelCase → snake_case
 {
   const result = buildAiCallTelemetryMetadata({
-    promptVersion: "qms@deadbeef",
+    promptVersion: "<REDACTED_EMAIL>",
     featureFlag: "new-prompt-A",
     experimentArm: "control",
     agentTemperature: 0.7,
@@ -68,7 +68,7 @@ function check(condition: boolean, label: string): void {
     clientSurface: "ChatProvider",
   });
   assert.deepStrictEqual(result, {
-    prompt_version: "qms@deadbeef",
+    prompt_version: "<REDACTED_EMAIL>",
     feature_flag: "new-prompt-A",
     experiment_arm: "control",
     agent_temperature: 0.7,
@@ -83,9 +83,9 @@ function check(condition: boolean, label: string): void {
 // (b) omitted inputs do not appear in the output
 {
   const result = buildAiCallTelemetryMetadata({
-    promptVersion: "sdr@abc12345",
+    promptVersion: "<REDACTED_EMAIL>",
   });
-  assert.deepStrictEqual(result, { prompt_version: "sdr@abc12345" });
+  assert.deepStrictEqual(result, { prompt_version: "<REDACTED_EMAIL>" });
   check(
     !("feature_flag" in result) && !("workflow" in result),
     "(b) omitted inputs are absent (no undefined leaves)",
@@ -95,18 +95,18 @@ function check(condition: boolean, label: string): void {
 // (b.1) explicit `undefined` is treated as omitted (not written as `null`)
 {
   const result = buildAiCallTelemetryMetadata({
-    promptVersion: "qms@deadbeef",
+    promptVersion: "<REDACTED_EMAIL>",
     workflow: undefined,
     step: undefined,
   });
-  assert.deepStrictEqual(result, { prompt_version: "qms@deadbeef" });
+  assert.deepStrictEqual(result, { prompt_version: "<REDACTED_EMAIL>" });
   check(true, "(b.1) explicit `undefined` inputs are skipped");
 }
 
 // (c) closed interface — `note` triggers a TypeScript compile error
 {
   buildAiCallTelemetryMetadata({
-    promptVersion: "qms@deadbeef",
+    promptVersion: "<REDACTED_EMAIL>",
     // @ts-expect-error — `note` is NOT in the AiCallTelemetryMetadataInput
     // allow-list. The npm `check` (tsc) gate enforces this at CI time so a
     // developer cannot land `{ note: caughtError.message, debug: rawHeaders }`
@@ -129,7 +129,7 @@ function check(condition: boolean, label: string): void {
   };
   try {
     const result = buildAiCallTelemetryMetadata({
-      promptVersion: "qms@deadbeef",
+      promptVersion: "<REDACTED_EMAIL>",
       // Simulate a caller that bypassed the type-system the way an `as any`
       // cast or an untyped JS shim would.
       ...({
@@ -138,7 +138,7 @@ function check(condition: boolean, label: string): void {
       } as Record<string, string>),
     } as Parameters<typeof buildAiCallTelemetryMetadata>[0]);
 
-    assert.deepStrictEqual(result, { prompt_version: "qms@deadbeef" });
+    assert.deepStrictEqual(result, { prompt_version: "<REDACTED_EMAIL>" });
     check(
       warnings.some((w) => w.includes('unexpected key "note"')),
       '(d) unexpected key "note" emits actionable console.warn',
@@ -165,7 +165,7 @@ function check(condition: boolean, label: string): void {
       // it (the field is a free-form string), but the WRITE-path scrubber
       // must still mask it before the row is INSERT-ed.
       featureFlag: "<REDACTED_TOKEN>",
-      promptVersion: "qms@deadbeef",
+      promptVersion: "<REDACTED_EMAIL>",
     }),
   );
   const serialized = JSON.stringify(scrubbed);
@@ -174,7 +174,7 @@ function check(condition: boolean, label: string): void {
     "(e) redactMetadataForStorage still scrubs sk-live tokens (defense-in-depth)",
   );
   check(
-    serialized.includes("qms@deadbeef"),
+    serialized.includes("<REDACTED_EMAIL>"),
     "(e) non-secret values pass through untouched",
   );
 }
@@ -191,7 +191,7 @@ function check(condition: boolean, label: string): void {
 // streaming brand contract DIRECTLY rather than only by inheritance.
 {
   const built: BuiltAiCallTelemetryMetadata = buildAiCallTelemetryMetadata({
-    promptVersion: "qms@deadbeef",
+    promptVersion: "<REDACTED_EMAIL>",
   });
   // Branded value passes — the recommended call shape.
   const okParams: WithAiTelemetryParams = {
@@ -215,7 +215,7 @@ function check(condition: boolean, label: string): void {
     // `{ ... }` literal is missing the phantom brand field, so this stops
     // type-checking entirely. The npm `check` (tsc) gate enforces this
     // in CI for every PR.
-    metadata: { prompt_version: "qms@deadbeef" },
+    metadata: { prompt_version: "<REDACTED_EMAIL>" },
   };
   void _rejectedInlineLiteral;
   check(
@@ -233,7 +233,7 @@ function check(condition: boolean, label: string): void {
     // @ts-expect-error — the brand also blocks the spread-from-catch
     // pattern even though `prompt_version` itself is allow-listed; an
     // inline literal cannot satisfy the brand regardless of its keys.
-    metadata: { prompt_version: "qms@deadbeef", note: "<REDACTED_TOKEN>" },
+    metadata: { prompt_version: "<REDACTED_EMAIL>", note: "<REDACTED_TOKEN>" },
   };
   void _leakShapedSpread;
   check(
@@ -275,7 +275,7 @@ function check(condition: boolean, label: string): void {
     // `{ ... }` literal at the streaming entry point is missing the
     // phantom brand field, so this stops type-checking entirely. The
     // npm `check` (tsc) gate enforces this in CI for every PR.
-    metadata: { prompt_version: "qms@deadbeef" },
+    metadata: { prompt_version: "<REDACTED_EMAIL>" },
   };
   void _rejectedStreamingInlineLiteral;
   check(
@@ -295,7 +295,7 @@ function check(condition: boolean, label: string): void {
     // brand regardless of its keys. This is the line a future streaming
     // caller would have written without the brand:
     // `metadata: { prompt_version: ver, ...debugDump }`.
-    metadata: { prompt_version: "qms@deadbeef", note: "<REDACTED_TOKEN>" },
+    metadata: { prompt_version: "<REDACTED_EMAIL>", note: "<REDACTED_TOKEN>" },
   };
   void _streamingLeakShapedSpread;
   check(

@@ -59,7 +59,7 @@ console.log("incompatible production package fails and is named");
   );
   assert(message !== null, "throws for engines.node '>=22' on Node 20");
   assert(
-    message !== null && message.includes("needs-node-22@1.2.3"),
+    message !== null && message.includes("<REDACTED_EMAIL>"),
     "error message names the offending package and version",
   );
   assert(
@@ -86,7 +86,7 @@ console.log("nested node_modules paths are reported by package name");
     ),
   );
   assert(
-    message !== null && message.includes("@scope/deep-pkg@9.9.9"),
+    message !== null && message.includes("@scope/<REDACTED_EMAIL>"),
     "nested path is stripped down to the package name",
   );
 }
@@ -171,8 +171,8 @@ console.log("only incompatible packages are listed when mixed");
       RUNTIME,
     ),
   );
-  assert(message !== null && message.includes("bad-a@1.0.0"), "lists bad-a");
-  assert(message !== null && message.includes("bad-b@2.0.0"), "lists bad-b");
+  assert(message !== null && message.includes("<REDACTED_EMAIL>"), "lists bad-a");
+  assert(message !== null && message.includes("<REDACTED_EMAIL>"), "lists bad-b");
   assert(message !== null && !message.includes("fine@"), "does not list compatible package");
 }
 

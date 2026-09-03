@@ -235,7 +235,7 @@ assert(
 }
 
 {
-  const bcrypt = '$2b$12$abcdefghijABCDEFGHIJ12./uVwXyZaBcDeFgHiJkLmNoPqRsTuVwXy';
+  const bcrypt = '<REDACTED_PASSWORD_HASH>';
   const msg = `Bcrypt hash logged: ${bcrypt}`;
   const out = _scrubMessageForTest(msg);
   assert(!out.includes(bcrypt), 'bcrypt hash interpolated into message string is scrubbed');

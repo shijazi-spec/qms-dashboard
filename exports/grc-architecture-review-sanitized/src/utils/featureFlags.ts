@@ -11,7 +11,7 @@
  * Env-var contract (per flag, replace <FLAG> with the env-var name):
  *   - <FLAG>=true/1/on/yes/enabled     → globally enabled for everyone
  *   - <FLAG>=false/0/off/no/unset      → globally disabled (default)
- *   - <FLAG>_USERS=alice@x,bob@y,user:7 → enabled only for those identities
+ *   - <FLAG>_USERS=<REDACTED_EMAIL>,<REDACTED_EMAIL>,user:7 → enabled only for those identities
  *     (additive: enabled for those users even when global is off)
  *
  * The identity passed in should match what's in <FLAG>_USERS — typically

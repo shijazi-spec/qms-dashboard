@@ -17,7 +17,7 @@
  *
  * 2. `lazystream/lib/lazystream.js`
  *    Rewrites `require('readable-stream/passthrough')` (a subpath that only
- *    existed in `readable-stream@2.x`) to `require('readable-stream').PassThrough`.
+ *    existed in `<REDACTED_EMAIL>`) to `require('readable-stream').PassThrough`.
  *    Without this, `mastra build`'s deployed bundle crashes on startup with
  *    `ERR_MODULE_NOT_FOUND` because production de-dupes `readable-stream`
  *    to the top-level `@3.x`, which has no `passthrough` file at the root.

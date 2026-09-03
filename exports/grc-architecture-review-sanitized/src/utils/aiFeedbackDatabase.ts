@@ -80,7 +80,7 @@ function safeRedactPreview(
  *   4. Update the test in `src/utils/__tests__/aiFeedbackMetadata.test.ts`.
  */
 export interface AiCallFeedbackMetadata {
-  /** Stable hash of the agent's instruction prompt (e.g. `qms@deadbeef`). */
+  /** Stable hash of the agent's instruction prompt (e.g. `<REDACTED_EMAIL>`). */
   prompt_version?: string;
   /** Identifier for an A/B feature flag bucket. */
   feature_flag?: string;

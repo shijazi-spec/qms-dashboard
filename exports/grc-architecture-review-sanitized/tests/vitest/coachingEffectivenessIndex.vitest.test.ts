@@ -91,9 +91,9 @@ describe("computeSessionCEfx", () => {
 function mkSession(p: Partial<SessionCEfx>): SessionCEfx {
   return {
     session_id: 0,
-    agent_email: "a@x",
+    agent_email: "<REDACTED_EMAIL>",
     agent_name: null,
-    manager_email: "m@x",
+    manager_email: "<REDACTED_EMAIL>",
     manager_name: null,
     delivered_at: "2026-01-01T00:00:00Z",
     calls_before: 5,
@@ -115,13 +115,13 @@ describe("aggregateCEfx", () => {
 
   test("averages deltas per coach", () => {
     const sessions: SessionCEfx[] = [
-      mkSession({ session_id: 1, manager_email: "alice@x", delta: 10 }),
-      mkSession({ session_id: 2, manager_email: "alice@x", delta: 20 }),
-      mkSession({ session_id: 3, manager_email: "bob@x", delta: 5 }),
+      mkSession({ session_id: 1, manager_email: "<REDACTED_EMAIL>", delta: 10 }),
+      mkSession({ session_id: 2, manager_email: "<REDACTED_EMAIL>", delta: 20 }),
+      mkSession({ session_id: 3, manager_email: "<REDACTED_EMAIL>", delta: 5 }),
     ];
     const r = aggregateCEfx(sessions);
-    const alice = r.by_coach.find((c) => c.manager_email === "alice@x");
-    const bob = r.by_coach.find((c) => c.manager_email === "bob@x");
+    const alice = r.by_coach.find((c) => c.manager_email === "<REDACTED_EMAIL>");
+    const bob = r.by_coach.find((c) => c.manager_email === "<REDACTED_EMAIL>");
     expect(alice?.avg_delta).toBe(15);
     expect(alice?.sessions_counted).toBe(2);
     expect(bob?.avg_delta).toBe(5);
@@ -130,8 +130,8 @@ describe("aggregateCEfx", () => {
 
   test("insufficient_data sessions count separately and don't affect avg", () => {
     const sessions: SessionCEfx[] = [
-      mkSession({ session_id: 1, manager_email: "alice@x", delta: 10, status: "ok" }),
-      mkSession({ session_id: 2, manager_email: "alice@x", delta: null, status: "insufficient_data" }),
+      mkSession({ session_id: 1, manager_email: "<REDACTED_EMAIL>", delta: 10, status: "ok" }),
+      mkSession({ session_id: 2, manager_email: "<REDACTED_EMAIL>", delta: null, status: "insufficient_data" }),
     ];
     const r = aggregateCEfx(sessions);
     const alice = r.by_coach[0];
@@ -142,8 +142,8 @@ describe("aggregateCEfx", () => {
 
   test("agent rollup is independent of coach rollup", () => {
     const sessions: SessionCEfx[] = [
-      mkSession({ session_id: 1, agent_email: "sdr1@x", manager_email: "alice@x", delta: 10 }),
-      mkSession({ session_id: 2, agent_email: "sdr1@x", manager_email: "bob@x", delta: 6 }),
+      mkSession({ session_id: 1, agent_email: "<REDACTED_EMAIL>", manager_email: "<REDACTED_EMAIL>", delta: 10 }),
+      mkSession({ session_id: 2, agent_email: "<REDACTED_EMAIL>", manager_email: "<REDACTED_EMAIL>", delta: 6 }),
     ];
     const r = aggregateCEfx(sessions);
     expect(r.by_agent).toHaveLength(1);
@@ -152,21 +152,21 @@ describe("aggregateCEfx", () => {
 
   test("sorts coach + agent leaderboards by avg_delta desc", () => {
     const sessions: SessionCEfx[] = [
-      mkSession({ session_id: 1, manager_email: "low@x", delta: 1 }),
-      mkSession({ session_id: 2, manager_email: "high@x", delta: 20 }),
-      mkSession({ session_id: 3, manager_email: "mid@x", delta: 10 }),
+      mkSession({ session_id: 1, manager_email: "<REDACTED_EMAIL>", delta: 1 }),
+      mkSession({ session_id: 2, manager_email: "<REDACTED_EMAIL>", delta: 20 }),
+      mkSession({ session_id: 3, manager_email: "<REDACTED_EMAIL>", delta: 10 }),
     ];
     const r = aggregateCEfx(sessions);
     expect(r.by_coach.map((c) => c.manager_email)).toEqual([
-      "high@x",
-      "mid@x",
-      "low@x",
+      "<REDACTED_EMAIL>",
+      "<REDACTED_EMAIL>",
+      "<REDACTED_EMAIL>",
     ]);
   });
 
   test("sessions with only insufficient_data → coach has null avg_delta", () => {
     const sessions: SessionCEfx[] = [
-      mkSession({ manager_email: "alice@x", status: "insufficient_data", delta: null }),
+      mkSession({ manager_email: "<REDACTED_EMAIL>", status: "insufficient_data", delta: null }),
     ];
     const r = aggregateCEfx(sessions);
     expect(r.by_coach[0].avg_delta).toBeNull();
@@ -183,8 +183,8 @@ describe("fetchCoachingEffectiveness — query composition", () => {
         return { rows: [] };
       },
     };
-    await fetchCoachingEffectiveness(pool as unknown as import("pg").Pool, { managerEmail: "m@x", limit: 50 });
-    expect(captured.values).toEqual(["m@x", 50]);
+    await fetchCoachingEffectiveness(pool as unknown as import("pg").Pool, { managerEmail: "<REDACTED_EMAIL>", limit: 50 });
+    expect(captured.values).toEqual(["<REDACTED_EMAIL>", 50]);
     expect(captured.sql).toContain("cs.manager_email = $1");
     expect(captured.sql).toContain("cs.status = 'delivered'");
     expect(captured.sql).toContain(`INTERVAL '${WINDOW_DAYS} days'`);
@@ -199,11 +199,11 @@ describe("fetchCoachingEffectiveness — query composition", () => {
       },
     };
     await fetchCoachingEffectiveness(pool as unknown as import("pg").Pool, {
-      managerEmail: "m@x",
-      agentEmail: "a@x",
+      managerEmail: "<REDACTED_EMAIL>",
+      agentEmail: "<REDACTED_EMAIL>",
     });
-    expect(captured.values?.[0]).toBe("m@x");
-    expect(captured.values?.[1]).toBe("a@x");
+    expect(captured.values?.[0]).toBe("<REDACTED_EMAIL>");
+    expect(captured.values?.[1]).toBe("<REDACTED_EMAIL>");
     expect(captured.sql).toContain("cs.manager_email = $1");
     expect(captured.sql).toContain("cs.agent_email = $2");
   });
@@ -214,9 +214,9 @@ describe("fetchCoachingEffectiveness — query composition", () => {
         rows: [
           {
             session_id: 1,
-            agent_email: "sdr@x",
+            agent_email: "<REDACTED_EMAIL>",
             agent_name: "SDR Name",
-            manager_email: "mgr@x",
+            manager_email: "<REDACTED_EMAIL>",
             manager_name: "Mgr Name",
             delivered_at: new Date("2026-01-15T00:00:00Z"),
             calls_before: 5,

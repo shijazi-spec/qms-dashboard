@@ -2282,7 +2282,7 @@ if (HAS_DB) {
   const pgMod = await import("pg");
 
   const TEST_AGENT = `__test_aiops_feedback_pv_${Date.now()}__`;
-  const PROMPT_VERSION = "qms@call-id-test-fbe4";
+  const PROMPT_VERSION = "<REDACTED_EMAIL>";
 
   await suite.test(
     "POST /api/ai-ops/feedback — persists promptVersion into ai_call_metrics.metadata when missing",
@@ -2352,7 +2352,7 @@ if (HAS_DB) {
     "POST /api/ai-ops/feedback — does NOT overwrite an existing prompt_version",
     async () => {
       await ensureAiMetricsTable();
-      const SERVER_VERSION = "qms@server-truth-aaaa";
+      const SERVER_VERSION = "<REDACTED_EMAIL>";
       // Seed a row that already carries the authoritative server-side
       // prompt_version (the consultant span already wrote it). A
       // client-supplied alternative MUST NOT clobber the source of truth.
@@ -2380,7 +2380,7 @@ if (HAS_DB) {
             body: {
               callId,
               rating: "thumbs_down",
-              promptVersion: "qms@malicious-overwrite",
+              promptVersion: "<REDACTED_EMAIL>",
             },
           }),
         );

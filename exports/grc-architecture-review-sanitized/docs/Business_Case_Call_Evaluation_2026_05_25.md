@@ -432,7 +432,7 @@ All committed to `ExampleOrg/docs/`:
 - `SDR_PDPL_Consent_Script_2026_05_25.md` — consent line for SDR opening
 - `SDR_Verification_Step_2026_05_25.md` — 3-point lead verification step
 - `Company_Domain_Strategy_2026_05_25.md` — separate workstream on domain as a CS primitive
-- `Decision_Record_Close_Velents_Gaps_2026_05_25.md` — initial 10-week scoping
+- `Decision_Record_Close_Example Organization_Gaps_2026_05_25.md` — initial 10-week scoping
 - `Decision_Record_Amend_Skip_P0_P15_2026_05_25.md` — 2nd amendment (skip PII redaction + deterministic compliance engine → 8 weeks)
 - `Decision_Record_Amend_Skip_Digest_Merge_Agent_View_2026_05_25.md` — 3rd amendment (skip weekly digest + merge Agent View → 7 weeks)
 - `Decision_Record_Amend_AI_Only_No_QA_Review_2026_05_25.md` — **4th amendment (AI-only, no QA review, Weekly Report core → 5 weeks)**

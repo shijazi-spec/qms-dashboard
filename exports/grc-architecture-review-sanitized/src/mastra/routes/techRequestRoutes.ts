@@ -87,7 +87,7 @@ export const techRequestRoutes = [
           const user = await requireRole(c, [...TR_ROLES]);
           if (!user) return forbiddenResponse(c, "Insufficient permissions");
           const requests = await listRequests();
-          // Never leak the action tokens to the board — they are bearer secrets.
+          // Never leak the action tokens to the board — they are Bearer <REDACTED_TOKEN>
           return c.json({
             requests: requests.map(({ action_token, ...safe }) => safe),
           });

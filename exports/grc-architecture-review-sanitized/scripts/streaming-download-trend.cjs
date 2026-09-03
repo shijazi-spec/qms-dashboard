@@ -154,7 +154,7 @@ function whichGh() {
 function resolveWorkflowFile() {
   if (process.env.SourceControlProvider_WORKFLOW_FILE) return process.env.SourceControlProvider_WORKFLOW_FILE;
   // SourceControlProvider_WORKFLOW_REF looks like:
-  //   owner/repo/.SourceControlProvider/workflows/streaming-download-smoke.yml@refs/heads/main
+  //   owner/repo/.SourceControlProvider/workflows/<REDACTED_EMAIL>/heads/main
   const ref = process.env.SourceControlProvider_WORKFLOW_REF;
   if (ref) {
     const m = ref.match(/\.SourceControlProvider\/workflows\/([^@]+)/);

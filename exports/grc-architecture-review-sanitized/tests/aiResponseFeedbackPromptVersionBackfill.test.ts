@@ -213,7 +213,7 @@ async function run(): Promise<void> {
       // already-backfilled control: SELECT predicate filters this out.
       id: 5,
       call_id: 103,
-      metadata: { prompt_version: "qms@deadbeef" },
+      metadata: { prompt_version: "<REDACTED_EMAIL>" },
     },
     {
       // (g) legacy linkage in metadata — exercised in the second
@@ -226,10 +226,10 @@ async function run(): Promise<void> {
   ];
 
   const metrics: MetricRow[] = [
-    { id: 100, metadata: { prompt_version: "qms@v1" } },
-    { id: 101, metadata: { prompt_version: "qms@v2" } },
+    { id: 100, metadata: { prompt_version: "<REDACTED_EMAIL>" } },
+    { id: 101, metadata: { prompt_version: "<REDACTED_EMAIL>" } },
     { id: 102, metadata: {} },
-    { id: 104, metadata: { prompt_version: "qms@v4" } },
+    { id: 104, metadata: { prompt_version: "<REDACTED_EMAIL>" } },
   ];
 
   const stub1 = makeStubClient(feedback, metrics, { hasCallIdColumn: true });
@@ -263,13 +263,13 @@ async function run(): Promise<void> {
 
   const row1 = stub1.rows.find((r) => r.id === 1)!;
   assert(
-    row1.metadata?.prompt_version === "qms@v1",
+    row1.metadata?.prompt_version === "<REDACTED_EMAIL>",
     "row 1 metadata.prompt_version stamped from metric 100",
   );
 
   const row2 = stub1.rows.find((r) => r.id === 2)!;
   assert(
-    row2.metadata?.prompt_version === "qms@v2" &&
+    row2.metadata?.prompt_version === "<REDACTED_EMAIL>" &&
       row2.metadata?.workflow === "qualityAuditWorkflow" &&
       row2.metadata?.rating_source === "inline_thumbs",
     "row 2 sibling allow-list keys (workflow, rating_source) preserved alongside the new prompt_version",
@@ -290,13 +290,13 @@ async function run(): Promise<void> {
 
   const row5 = stub1.rows.find((r) => r.id === 5)!;
   assert(
-    row5.metadata?.prompt_version === "qms@deadbeef",
+    row5.metadata?.prompt_version === "<REDACTED_EMAIL>",
     "row 5 untouched — already had prompt_version (SELECT predicate excludes it)",
   );
 
   const row6 = stub1.rows.find((r) => r.id === 6)!;
   assert(
-    row6.metadata?.prompt_version === "qms@v4",
+    row6.metadata?.prompt_version === "<REDACTED_EMAIL>",
     "row 6 backfilled via metadata.call_id fallback even when call_id column is null",
   );
 
@@ -316,7 +316,7 @@ async function run(): Promise<void> {
     { id: 11, call_id: null, metadata: {} },
   ];
   const legacyMetrics: MetricRow[] = [
-    { id: 200, metadata: { prompt_version: "qms@legacy" } },
+    { id: 200, metadata: { prompt_version: "<REDACTED_EMAIL>" } },
   ];
 
   const stub2 = makeStubClient(legacyFeedback, legacyMetrics, {
@@ -334,7 +334,7 @@ async function run(): Promise<void> {
   );
   const legacyRow10 = stub2.rows.find((r) => r.id === 10)!;
   assert(
-    legacyRow10.metadata?.prompt_version === "qms@legacy",
+    legacyRow10.metadata?.prompt_version === "<REDACTED_EMAIL>",
     "legacy row 10 backfilled via metadata.call_id linkage",
   );
 
@@ -347,8 +347,8 @@ async function run(): Promise<void> {
     { id: 21, call_id: 301, metadata: {} },
   ];
   const dryMetrics: MetricRow[] = [
-    { id: 300, metadata: { prompt_version: "qms@dry1" } },
-    { id: 301, metadata: { prompt_version: "qms@dry2" } },
+    { id: 300, metadata: { prompt_version: "<REDACTED_EMAIL>" } },
+    { id: 301, metadata: { prompt_version: "<REDACTED_EMAIL>" } },
   ];
   const stub3 = makeStubClient(dryFeedback, dryMetrics, {
     hasCallIdColumn: true,

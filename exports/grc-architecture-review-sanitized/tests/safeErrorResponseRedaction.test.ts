@@ -119,7 +119,7 @@ async function bodyOf(res: Response): Promise<any> {
     );
   }
 
-  // 3. Bearer header echoed in nested error body is redacted -------------------
+  // 3. Bearer <REDACTED_TOKEN> echoed in nested error body is redacted -------------------
   {
     const ctx = makeFakeContext(
       makeJsonResponse(
@@ -128,7 +128,7 @@ async function bodyOf(res: Response): Promise<any> {
           details: {
             upstream: {
               status: 401,
-              body: 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature was rejected',
+              body: 'Authorization: Bearer <REDACTED_TOKEN> was rejected',
             },
           },
         },
@@ -143,7 +143,7 @@ async function bodyOf(res: Response): Promise<any> {
       'nested string leaves are walked and redacted (deep)',
     );
     assert(
-      typeof inner === 'string' && !inner.includes('Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature'),
+      typeof inner === 'string' && !inner.includes('Bearer <REDACTED_TOKEN>'),
       'nested Bearer token is removed from the response body',
     );
   }

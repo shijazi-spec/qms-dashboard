@@ -41,8 +41,8 @@ async function run(): Promise<void> {
     assert(normaliseEmail("<REDACTED_EMAIL>") === "<REDACTED_EMAIL>", "lower-cases input");
     assert(normaliseEmail("  <REDACTED_EMAIL>  ") === "<REDACTED_EMAIL>", "trims whitespace");
     assert(normaliseEmail("not-an-email") === null, "rejects no-@");
-    assert(normaliseEmail("a@b") === null, "rejects no-tld");
-    assert(normaliseEmail("a@b.c") === null, "rejects 1-char tld");
+    assert(normaliseEmail("<REDACTED_EMAIL>") === null, "rejects no-tld");
+    assert(normaliseEmail("<REDACTED_EMAIL>") === null, "rejects 1-char tld");
     assert(normaliseEmail("") === null, "rejects empty");
     assert(normaliseEmail("   ") === null, "rejects whitespace-only");
     assert(normaliseEmail(undefined) === null, "rejects undefined");

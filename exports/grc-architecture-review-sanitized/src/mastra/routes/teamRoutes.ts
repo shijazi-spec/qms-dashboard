@@ -949,7 +949,7 @@ Generate a JSON response with the following structure:
 Respond ONLY with valid JSON, no additional text.`;
 
           // Raw-fetch /chat/completions — `.chat()` adapter now also
-          // emits v3 spec under @ai-sdk/LLMProvider 3.x, breaking ai@5
+          // emits v3 spec under @ai-sdk/LLMProvider 3.x, breaking <REDACTED_EMAIL>
           // (needs v2). Helper avoids the SDK entirely.
           const { generateChatText } = await import(
             "../../utils/LLMProviderChatHelper"

@@ -142,7 +142,7 @@ export async function runCrmComplianceCheck(
   // the logged Call was made BY THE SAME AGENT and ON THE SAME DATE as
   // the recorded call. A Call logged by another rep or with a mismatched
   // date is the exact non-compliance pattern ops flagged (e.g. a call by
-  // r.alsammak whose CRMProvider Call was logged by "هاجر الجبري" on a later day
+  // Sample User whose CRMProvider Call was logged by "Sample User" on a later day
   // with an "Invalid number" result).
   const safeFetchRows = async (
     moduleName: string,

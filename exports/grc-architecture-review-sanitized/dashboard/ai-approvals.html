@@ -1122,7 +1122,7 @@
         var src = (viewer.user_name || viewer.user_email || '?').trim();
         if (!src) return '?';
         // First letter of first two whitespace-separated tokens, uppercased.
-        var parts = src.split(/[\s@._-]+/).filter(Boolean);
+        var parts = src.split(/[\<REDACTED_EMAIL>_-]+/).filter(Boolean);
         var first = parts[0] ? parts[0][0] : '?';
         var second = parts[1] ? parts[1][0] : '';
         return (first + second).toUpperCase().slice(0, 2);

@@ -1004,7 +1004,7 @@ Please generate a complete project charter in JSON format with the following sec
 Ensure all content is practical, actionable, and follows PMP best practices.`;
 
           // Raw-fetch /chat/completions — `@ai-sdk/LLMProvider` 3.x `.chat()`
-          // emits v3 spec, rejected by ai@5 (needs v2). Helper avoids
+          // emits v3 spec, rejected by <REDACTED_EMAIL> (needs v2). Helper avoids
           // the version trap entirely.
           const { generateChatText } = await import(
             "../../utils/LLMProviderChatHelper"

@@ -55,7 +55,7 @@ describe("create-policy body survives the sanitizer", () => {
       status: "published",
       owner_name: "Sample User",
       owner_department: "Customer Success",
-      approver_name: "Saleh Alhamddi; Sample User; Osama Harfoush",
+      approver_name: "Sample User; Sample User; Osama Harfoush",
       effective_date: "2026-08-13",
       review_date: "2026-11-13",
       confidentiality: "confidential",

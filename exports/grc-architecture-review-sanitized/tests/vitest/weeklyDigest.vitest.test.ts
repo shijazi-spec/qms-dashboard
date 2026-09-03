@@ -41,7 +41,7 @@ describe("fetchWeeklyAgentRollup", () => {
       query: async () => ({
         rows: [
           {
-            agent_email: "alice@x",
+            agent_email: "<REDACTED_EMAIL>",
             agent_name: "Alice",
             call_count: 10,
             evaluated_count: 8,
@@ -50,7 +50,7 @@ describe("fetchWeeklyAgentRollup", () => {
             worst_score: 65,
           },
           {
-            agent_email: "bob@x",
+            agent_email: "<REDACTED_EMAIL>",
             agent_name: "Bob",
             call_count: 5,
             evaluated_count: 5,
@@ -74,7 +74,7 @@ describe("fetchWeeklyAgentRollup", () => {
     const pool = {
       query: async () => ({
         rows: [
-          { agent_email: "a@x", agent_name: null, call_count: 3,
+          { agent_email: "<REDACTED_EMAIL>", agent_name: null, call_count: 3,
             evaluated_count: 0, avg_overall_score: null, best_score: null, worst_score: null },
         ],
       }),
@@ -103,9 +103,9 @@ const sampleDigest: WeeklyDigest = {
   agents_active: 2,
   org_avg_score: 77.69,
   agents: [
-    { agent_email: "alice@x", agent_name: "Alice", call_count: 10, evaluated_count: 8,
+    { agent_email: "<REDACTED_EMAIL>", agent_name: "Alice", call_count: 10, evaluated_count: 8,
       avg_overall_score: 82.5, best_score: 95, worst_score: 65 },
-    { agent_email: "bob@x", agent_name: "Bob", call_count: 5, evaluated_count: 5,
+    { agent_email: "<REDACTED_EMAIL>", agent_name: "Bob", call_count: 5, evaluated_count: 5,
       avg_overall_score: 70.0, best_score: 80, worst_score: 60 },
   ],
 };

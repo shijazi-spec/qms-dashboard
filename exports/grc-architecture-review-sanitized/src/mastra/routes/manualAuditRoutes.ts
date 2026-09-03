@@ -155,7 +155,7 @@ async function extractFindingsFromText(text: string): Promise<any[]> {
 
   // Raw-fetch /chat/completions — bypasses the @ai-sdk/LLMProvider v3 spec
   // regression that broke `.chat(...)` in production (the Chat
-  // Completions adapter now also emits v3 spec, incompatible with ai@5
+  // Completions adapter now also emits v3 spec, incompatible with <REDACTED_EMAIL>
   // which requires v2).
   const { generateChatText } = await import("../../utils/LLMProviderChatHelper");
   const { text: raw } = await generateChatText({

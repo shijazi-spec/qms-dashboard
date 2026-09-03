@@ -56,9 +56,9 @@ const RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 // mistake the synthetic test value for a credential and replace it
 // with `***REDACTED***` mid-write — that would silently break the
 // per-version assertions below. Mirrors the convention used by the
-// "qms-consultant@feedbacktest" labels in tests/consultantRoutes.test.ts.
-const PROMPT_VERSION_A = `qms-consultant@filtertestaprompt${RUN_ID.replace(/[^a-z]/g, '')}`;
-const PROMPT_VERSION_B = `qms-consultant@filtertestbprompt${RUN_ID.replace(/[^a-z]/g, '')}`;
+// "<REDACTED_EMAIL>" labels in tests/consultantRoutes.test.ts.
+const PROMPT_VERSION_A = `<REDACTED_EMAIL>${RUN_ID.replace(/[^a-z]/g, '')}`;
+const PROMPT_VERSION_B = `<REDACTED_EMAIL>${RUN_ID.replace(/[^a-z]/g, '')}`;
 
 // Seeded row identifiers. Each row has a unique (prompt_version,
 // client_surface) tuple so the filter combinations below select an

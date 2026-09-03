@@ -122,11 +122,11 @@ function pickOwner(raw: any): { email: string; name?: string } {
   const owner = raw?.Owner;
   if (owner && typeof owner === "object") {
     return {
-      email: String(owner.email || owner.id || "unknown@CRMProvider"),
+      email: String(owner.email || owner.id || "<REDACTED_EMAIL>"),
       name: owner.name ? String(owner.name) : undefined,
     };
   }
-  return { email: "unknown@CRMProvider" };
+  return { email: "<REDACTED_EMAIL>" };
 }
 
 export async function runCRMProviderCallsImport(

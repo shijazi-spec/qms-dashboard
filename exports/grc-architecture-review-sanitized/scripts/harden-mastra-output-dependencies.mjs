@@ -125,7 +125,7 @@ async function main() {
 
 // Only run the full harden pipeline when executed directly (not when the
 // engines-check helper is imported by tests).
-if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href) {
+if (process.argv[1] && import.meta.url === new URL(`<REDACTED_URL>`).href) {
   main().catch(error => {
     console.error('[harden-mastra-output] failed:', error.message);
     process.exit(1);

@@ -43,7 +43,7 @@
 1. **Platform rate limit blocked batch uploads** — 17 of 26 .wav uploads returned `Too many requests`. Cause: middleware enforced `WRITE_LIMIT = 10/min` per IP for ALL `/api/*` writes. Fix: bypass on `/api/calls/upload*` paths for authenticated users (PR #24).
 2. **Generic "Failed to..." errors hid the real cause** — Phase A error surfacing in `/analyze` + `/sdr-evaluate` endpoints now returns `data.error = "<code>: <message>"` from the underlying exception (PRs #24, #25).
 3. **LLMProvider `insufficient_quota`** — pre-paid credit had run out 2026-05-18 (per "Last used" on <REDACTED_HOST>). Sample User $10. Auto-recharge **still off** — recommended to enable.
-4. **AI SDK version mismatch** — `ai@5.0.190` requires v2 model spec but `@ai-sdk/LLMProvider@1.3.24` only provided v1. Every `gpt-4o` call died inside the JS layer with `"Unsupported model version v1 for provider LLMProvider.chat"` before ever reaching LLMProvider. Fix: upgrade `@ai-sdk/LLMProvider 1.3.24 → 3.0.65`.
+4. **AI SDK version mismatch** — `<REDACTED_EMAIL>` requires v2 model spec but `@ai-sdk/<REDACTED_EMAIL>` only provided v1. Every `gpt-4o` call died inside the JS layer with `"Unsupported model version v1 for provider LLMProvider.chat"` before ever reaching LLMProvider. Fix: upgrade `@ai-sdk/LLMProvider 1.3.24 → 3.0.65`.
 5. **HostingPlatform modelfarm proxy hijacking traffic** — `AI_INTEGRATIONS_LLMProvider_BASE_URL=<REDACTED_URL>` + `AI_INTEGRATIONS_LLMProvider_API_KEY=_DUMMY_API_KEY_` routed every "LLMProvider" call through HostingPlatform's internal proxy with a literal dummy key. The proxy was the actual source of the v1/v2 error. Fix: delete both env vars in HostingPlatform Secrets so code falls back to real `LLMProvider_API_KEY` + `<REDACTED_HOST>/v1`.
 
 ---

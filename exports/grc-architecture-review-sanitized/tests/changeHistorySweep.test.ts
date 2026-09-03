@@ -107,7 +107,7 @@ const SK_KEY = '<REDACTED_TOKEN>';
 const GHP_TOKEN = '<REDACTED_TOKEN>';
 const JWT =
   '<REDACTED_TOKEN>';
-const BCRYPT = '$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU';
+const BCRYPT = '<REDACTED_PASSWORD_HASH>';
 
 async function runSweepFor(tableName: 'nc_change_history' | 'capa_change_history'): Promise<void> {
   console.log(`\n[redactChangeHistoryTable] ${tableName} (Task #249)\n`);

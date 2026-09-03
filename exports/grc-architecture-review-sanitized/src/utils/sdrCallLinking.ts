@@ -159,7 +159,7 @@ export async function findCrmRecordByPhone(
   // and compared phones in JavaScript. That worked for small CRMs but
   // SILENTLY missed any matching record sitting beyond the cutoff. The
   // 2026-05-28 root cause investigation found Sample User Attia (Lead phone
-  // <REDACTED_PHONE>, owned by r.alsammak) sitting outside the top-2500 window
+  // <REDACTED_PHONE>, owned by Sample User) sitting outside the top-2500 window
   // for one of the user's Sep 2025 calls — even though the normalized
   // forms (`<REDACTED_PHONE>` ↔ `<REDACTED_PHONE>`) were a perfect match. CRMProvider's CRM
   // had grown past 2,500 leads, the lead hadn't been modified recently,

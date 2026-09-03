@@ -455,7 +455,7 @@ export async function syncPolicyToMapping(
   // Projection row column values. file_* columns are NOT NULL, so synthesise
   // placeholders for content-only policies.
   const projTitle = String(policy.title || policy.policy_number || `Policy ${policyId}`).slice(0, 512);
-  const projFilePath = String(policy.file_path || `integrated-qms://policy/${policyId}`).slice(0, 1024);
+  const projFilePath = String(policy.file_path || `<REDACTED_URL>`).slice(0, 1024);
   const projFileName = String(policy.file_name || policy.policy_number || `policy-${policyId}`).slice(0, 512);
   const projFileSize = Number(policy.file_size) || 0;
   const projMime = String(policy.file_mime_type || "text/plain").slice(0, 128);

@@ -124,7 +124,7 @@ Centralised queue for any audit-cycle action that requires human sign-off. v4.5 
 |---|---|
 | Utils | `auditProgrammeDatabase.ts`, `manualAuditDatabase.ts`, `externalAuditDatabase.ts`, `rbacDatabase.ts`, `rbacMiddleware.ts`, `aiToolGovernance.ts` (new role registered), trigger auto-escalate helper |
 | Routes | `auditProgrammeRoutes.ts`, `manualAuditRoutes.ts`, `externalAuditRoutes.ts`, `triggerRoutes.ts` |
-| Cron | `trigger-auto-escalate` (Inngest, daily 03:00 UTC) — re-activates dismissed triggers when re-eval window elapses; auto-opens `grc_audit_findings` for stale Critical@7d / Minor@30d pending triggers |
+| Cron | `trigger-auto-escalate` (Inngest, daily 03:00 UTC) — re-activates dismissed triggers when re-eval window elapses; auto-opens `grc_audit_findings` for stale <REDACTED_EMAIL> / <REDACTED_EMAIL> pending triggers |
 | RBAC | New role `head_of_operations_quality` registered in `platform_users.role` enum, granted via `rbacDatabase.ts` |
 | HITL registry | Two new action codes: `audit_programme_signoff`, `trigger_decision` |
 
@@ -314,7 +314,7 @@ Run after every deployment. Each step should pass independently.
 | 9 | Same call with reason ≥10 chars | 200, dismiss_reason persisted |
 | 10 | `GET /api/external-audits/summary` | 200, `{next_audit, active_certs, expiring_within_90_days}` |
 | 11 | `GET /grc` page render | 200, External Audits hero card present |
-| 12 | Trigger the cron manually via Inngest dev UI | Cron completes; if any stale Critical@7d trigger exists, a finding is created with bi-directional `escalation_finding_id` |
+| 12 | Trigger the cron manually via Inngest dev UI | Cron completes; if any stale <REDACTED_EMAIL> trigger exists, a finding is created with bi-directional `escalation_finding_id` |
 
 ---
 

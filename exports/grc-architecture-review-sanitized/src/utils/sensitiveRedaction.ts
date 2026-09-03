@@ -134,7 +134,7 @@ const SECRET_LIKE_PATTERNS: SecretPattern[] = [
  * shape (`sk-…`, `ghp_…`, AKIA…, JWT, bcrypt, etc.). They are blind to a
  * secret that looks like ordinary prose — most importantly, a free-form
  * password buried in an innocuously-named field like `assignedTo`,
- * `description`, or `note` (e.g. 'P@ssw0rd!_plaintext'). The key-name
+ * `description`, or `note` (e.g. '<REDACTED_EMAIL>!_plaintext'). The key-name
  * deny-list is also blind to these because the surrounding key name is not
  * on the sensitive list.
  *
@@ -207,7 +207,7 @@ function isHighEntropyToken(token: string): boolean {
  * Scans a string for non-whitespace tokens that match the password-strength
  * or high-entropy heuristic and replaces them with REDACTED_SENTINEL. Trims
  * one run of common surrounding punctuation (quotes, parens, commas) so a
- * credential wrapped in prose-quoting like `"P@ssw0rd!"` is still caught.
+ * credential wrapped in prose-quoting like `"<REDACTED_EMAIL>!"` is still caught.
  *
  * Exported for direct unit testing; production code reaches it indirectly
  * through `redactSecretLikeStrings()`.
@@ -304,7 +304,7 @@ function detectInString(
 
   // 3) Heuristic token scanner — split the string on whitespace and check
   //    each non-trivial token. This catches credentials interpolated into
-  //    prose like `note: "rotated to P@ssw0rd!_PlainText"`. Surrounding
+  //    prose like `note: "rotated to <REDACTED_EMAIL>!_PlainText"`. Surrounding
   //    quoting punctuation is stripped exactly the way the redactor does
   //    so the two stay consistent.
   for (const token of value.split(/\s+/)) {

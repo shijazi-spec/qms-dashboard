@@ -96,7 +96,7 @@ async function main(): Promise<void> {
 
   const LLMProvider_KEY = '<REDACTED_TOKEN>';
   const GH_PAT = '<REDACTED_TOKEN>';
-  const BCRYPT_HASH = '$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU';
+  const BCRYPT_HASH = '<REDACTED_PASSWORD_HASH>';
   const JWT =
     '<REDACTED_TOKEN>';
   const AWS_KEY = '<REDACTED_TOKEN>';

@@ -21,7 +21,7 @@ import {
   makeProjectMilestone,
 } from "../_helpers/fixtures";
 
-const FAKE_USER = { userId: 0, email: "api@system", name: "API", role: "admin" as const };
+const FAKE_USER = { userId: 0, email: "<REDACTED_EMAIL>", name: "API", role: "admin" as const };
 
 vi.mock("../../src/utils/rbacMiddleware", () => ({
   gateApiRoute: <T>(r: T): T => r,

@@ -53,7 +53,7 @@ function check(condition: boolean, label: string): void {
 // (a) every allow-list key round-trips camelCase → snake_case
 {
   const result = buildAiCallFeedbackMetadata({
-    promptVersion: "qms@deadbeef",
+    promptVersion: "<REDACTED_EMAIL>",
     featureFlag: "new-prompt-A",
     experimentArm: "control",
     workflow: "qualityAuditWorkflow",
@@ -62,7 +62,7 @@ function check(condition: boolean, label: string): void {
     clientSurface: "web",
   });
   assert.deepStrictEqual(result, {
-    prompt_version: "qms@deadbeef",
+    prompt_version: "<REDACTED_EMAIL>",
     feature_flag: "new-prompt-A",
     experiment_arm: "control",
     workflow: "qualityAuditWorkflow",
@@ -76,9 +76,9 @@ function check(condition: boolean, label: string): void {
 // (b) omitted inputs do not appear in the output
 {
   const result = buildAiCallFeedbackMetadata({
-    promptVersion: "qms@abc12345",
+    promptVersion: "<REDACTED_EMAIL>",
   });
-  assert.deepStrictEqual(result, { prompt_version: "qms@abc12345" });
+  assert.deepStrictEqual(result, { prompt_version: "<REDACTED_EMAIL>" });
   check(
     !("feature_flag" in result) && !("workflow" in result),
     "(b) omitted inputs are absent (no undefined leaves)",
@@ -88,18 +88,18 @@ function check(condition: boolean, label: string): void {
 // (b.1) explicit `undefined` is treated as omitted (not written as `null`)
 {
   const result = buildAiCallFeedbackMetadata({
-    promptVersion: "qms@deadbeef",
+    promptVersion: "<REDACTED_EMAIL>",
     workflow: undefined,
     step: undefined,
   });
-  assert.deepStrictEqual(result, { prompt_version: "qms@deadbeef" });
+  assert.deepStrictEqual(result, { prompt_version: "<REDACTED_EMAIL>" });
   check(true, "(b.1) explicit `undefined` inputs are skipped");
 }
 
 // (c) closed interface — `note` triggers a TypeScript compile error
 {
   buildAiCallFeedbackMetadata({
-    promptVersion: "qms@deadbeef",
+    promptVersion: "<REDACTED_EMAIL>",
     // @ts-expect-error — `note` is NOT in the AiCallFeedbackMetadataInput
     // allow-list. The npm `check` (tsc) gate enforces this at CI time so a
     // developer cannot land `{ note: caughtError.message, debug: rawHeaders }`
@@ -122,7 +122,7 @@ function check(condition: boolean, label: string): void {
   };
   try {
     const result = buildAiCallFeedbackMetadata({
-      promptVersion: "qms@deadbeef",
+      promptVersion: "<REDACTED_EMAIL>",
       // Simulate a caller that bypassed the type-system the way an `as any`
       // cast or an untyped JS shim would.
       ...({
@@ -131,7 +131,7 @@ function check(condition: boolean, label: string): void {
       } as Record<string, string>),
     } as Parameters<typeof buildAiCallFeedbackMetadata>[0]);
 
-    assert.deepStrictEqual(result, { prompt_version: "qms@deadbeef" });
+    assert.deepStrictEqual(result, { prompt_version: "<REDACTED_EMAIL>" });
     check(
       warnings.some((w) => w.includes('unexpected key "note"')),
       '(d) unexpected key "note" emits actionable logger.warn',
@@ -158,7 +158,7 @@ function check(condition: boolean, label: string): void {
       // it (the field is a free-form string), but the WRITE-path scrubber
       // must still mask it before the row is INSERT-ed.
       featureFlag: "<REDACTED_TOKEN>",
-      promptVersion: "qms@deadbeef",
+      promptVersion: "<REDACTED_EMAIL>",
     }),
   );
   const serialized = JSON.stringify(scrubbed);
@@ -167,7 +167,7 @@ function check(condition: boolean, label: string): void {
     "(e) redactFeedbackMetadataForStorage still scrubs sk-live tokens (defense-in-depth)",
   );
   check(
-    serialized.includes("qms@deadbeef"),
+    serialized.includes("<REDACTED_EMAIL>"),
     "(e) non-secret values pass through untouched",
   );
 }
@@ -202,12 +202,12 @@ function check(condition: boolean, label: string): void {
   );
 
   const provided = computeMetadataJson(
-    buildAiCallFeedbackMetadata({ promptVersion: "qms@deadbeef" }),
+    buildAiCallFeedbackMetadata({ promptVersion: "<REDACTED_EMAIL>" }),
   );
   check(
     typeof provided === "string" &&
       provided !== null &&
-      provided.includes("qms@deadbeef"),
+      provided.includes("<REDACTED_EMAIL>"),
     "(f) provided metadata serializes to a JSON string (DB COALESCE overwrites)",
   );
 

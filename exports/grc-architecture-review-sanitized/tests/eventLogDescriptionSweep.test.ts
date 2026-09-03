@@ -77,7 +77,7 @@ const SK_KEY = '<REDACTED_TOKEN>';
 const GHP_TOKEN = '<REDACTED_TOKEN>';
 const JWT =
   '<REDACTED_TOKEN>';
-const BCRYPT = '$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU';
+const BCRYPT = '<REDACTED_PASSWORD_HASH>';
 const SAFE_PROSE = 'User updated project settings for tenant Example Organization-corp';
 
 async function run(): Promise<void> {

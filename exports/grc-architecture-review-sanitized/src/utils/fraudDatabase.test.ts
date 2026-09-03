@@ -176,7 +176,7 @@ const REDACTED_SENTINEL = "***REDACTED***";
 const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
   {
     label: "bcrypt hash",
-    value: "$2b$12$abcdefghijklmnopqrstuOCm5RJ7p2sIcQqL7gKwSxmXJ9pYsZyHa",
+    value: "<REDACTED_PASSWORD_HASH>",
   },
   {
     label: "JWT",

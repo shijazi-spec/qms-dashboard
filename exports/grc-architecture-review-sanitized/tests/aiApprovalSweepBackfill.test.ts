@@ -75,7 +75,7 @@ async function run(): Promise<void> {
 
   const SECRET_KEY = "<REDACTED_TOKEN>";
   const SECRET_GH = "<REDACTED_TOKEN>";
-  const SECRET_BCRYPT = "$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU";
+  const SECRET_BCRYPT = "<REDACTED_PASSWORD_HASH>";
   const SECRET_JWT =
     "<REDACTED_TOKEN>";
   const SAFE_PROSE = "Rotate API key for CRMProvider_books integration";

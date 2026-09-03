@@ -334,7 +334,7 @@ await (async () => {
 
   const goodToken = signSession({
     userId: 1,
-    email: "x@y.z",
+    email: "<REDACTED_EMAIL>",
     name: "x",
     role: "admin",
     exp: Date.now() + 60_000,

@@ -35,7 +35,7 @@ The amendment in `Decision_Record_Amend_Skip_P0_P15_2026_05_25.md` is honest abo
 
 That is **not** an "internal GRQ tool." It's an operations system that processes hundreds of customer voice recordings, derives behavioral analytics about employees, and feeds a coaching loop that determines what training they get. PDPL Article 18 (data minimisation) and Article 26 (purpose limitation) apply regardless of which ChatProvider workspace the dashboard is in.
 
-The amendment essentially says: "we'll accept the PDPL risk because nobody is auditing us right now." That is operationally true but strategically fragile. Sample User's Nov 26 email to Velents specifically cited "long-term governance direction" as the *reason* for going internal. Going internal *and* then dropping the governance controls is the opposite of that direction.
+The amendment essentially says: "we'll accept the PDPL risk because nobody is auditing us right now." That is operationally true but strategically fragile. Sample User's Nov 26 email to Example Organization specifically cited "long-term governance direction" as the *reason* for going internal. Going internal *and* then dropping the governance controls is the opposite of that direction.
 
 **The strongest version of the compensating-control argument** would be: ship the dashboard, ship a manual SAR-response runbook, and add PII redaction in Phase 2 (immediately after Phase 1) as a hard fast-follow. The current plan has no fast-follow commitment in writing.
 
@@ -63,7 +63,7 @@ The Sample User is the spine of the document. But:
 
 | Fiction | Why it matters |
 |---|---|
-| **Cohen's κ = 0.51 on Objection Handling "moderate, tune rubric"** | κ requires two independent coders. Sample User only reviewer. The κ shown is between AI and Sample User, which is a "model agreement with sole human grader" metric — useful, but not Cohen's κ in the inter-rater sense Velents proposed and not what the rubric tuning literature uses. |
+| **Cohen's κ = 0.51 on Objection Handling "moderate, tune rubric"** | κ requires two independent coders. Sample User only reviewer. The κ shown is between AI and Sample User, which is a "model agreement with sole human grader" metric — useful, but not Cohen's κ in the inter-rater sense Example Organization proposed and not what the rubric tuning literature uses. |
 | **"Calls flagged + plans pending + compliance breach summary" Critical Issues banner** | No code yet exists to populate "calls flagged." The `flagged` boolean is in the Revamp Plan Phase 2 deliverables but the Business Case treats it as Week 2-4. |
 | **The 5-week trend "78% → 75% → 71% → 68% → 62%"** | A 3-month-tenure SDR with 10 calls/week × 5 weeks = 50 calls of history. Most historical SDRs have sparse `key_topics`, no diarization, and many lack `audio_blob`. The trend chart will be missing values for most existing SDRs on day-1. |
 
@@ -102,7 +102,7 @@ When a new SDR joins, what happens? The platform has no onboarding workflow. No 
 
 Business Case says "1-year retention with automatic deletion mechanism — ⚠️ To be configured in Phase 1." There is no scheduled job that deletes `call_records` or `call_transcripts` or `audio_blob` based on age.
 
-This was the Aug 28 CTO question Velents answered with "1-year retention." The internal answer is currently: **we retain forever.**
+This was the Aug 28 CTO question Example Organization answered with "1-year retention." The internal answer is currently: **we retain forever.**
 
 This must be a hard fast-follow within Phase 1. It's a 1-day job:
 - New scheduled job (Inngest cron) running daily
@@ -389,7 +389,7 @@ Don't run the 7-week plan as written. Split into 1a (3-week MVP cockpit) + 1b (5
 2. **What's the budget guardrail on LLMProvider spend?**
 3. **What's the team's actual definition of "1 FTE"?** Is Sample User this 100%, 50%, or evenings/weekends?
 4. **If Phase 1a (3-week MVP) ships, does Phase 1b get funded automatically, or is it a separate approval?**
-5. **The Aug 2025 CTO sign-off was for the Velents-equivalent scope.** Is the 68% delivery against that scope acceptable, and is the explicit framing of "we deferred PII redaction and deterministic compliance because manual spot-check is sufficient" what he'd want in writing?
+5. **The Aug 2025 CTO sign-off was for the Example Organization-equivalent scope.** Is the 68% delivery against that scope acceptable, and is the explicit framing of "we deferred PII redaction and deterministic compliance because manual spot-check is sufficient" what he'd want in writing?
 
 ### 6.4 The single acid-test query to run on real data
 

@@ -37,7 +37,7 @@ vi.mock("../../src/utils/rbacMiddleware", () => {
   const adminFromKey = (c: any) => {
     const key = c?.req?.header?.("X-Admin-Key");
     if (key && key === process.env.ADMIN_API_KEY) {
-      return { userId: 0, email: "admin-key@system", name: "Admin API", role: "admin" };
+      return { userId: 0, email: "<REDACTED_EMAIL>", name: "Admin API", role: "admin" };
     }
     return null;
   };
@@ -439,7 +439,7 @@ describe("POST /api/ai/approvals/:code/approve", () => {
     });
     expect(approvalDb.claimForApproval).toHaveBeenCalledWith(
       "ACT-2026-0001",
-      expect.objectContaining({ userId: 0, email: "admin-key@system" }),
+      expect.objectContaining({ userId: 0, email: "<REDACTED_EMAIL>" }),
     );
     expect(eventLogs.redactSensitiveDeep).toHaveBeenCalledWith({ rotated: true, fingerprint: "abc123" });
   });
@@ -661,7 +661,7 @@ describe("POST /api/ai/approvals/:code/reject", () => {
     expect(res.body).toEqual({ success: true, action: rejected });
     expect(approvalDb.rejectAction).toHaveBeenCalledWith(
       "ACT-2026-0001",
-      expect.objectContaining({ userId: 0, email: "admin-key@system" }),
+      expect.objectContaining({ userId: 0, email: "<REDACTED_EMAIL>" }),
       "Not in policy",
     );
   });

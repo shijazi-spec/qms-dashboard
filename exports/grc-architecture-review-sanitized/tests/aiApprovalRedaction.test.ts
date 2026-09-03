@@ -120,8 +120,8 @@ async function run(): Promise<void> {
 
   const SECRET_KEY = "<REDACTED_TOKEN>";
   const SECRET_TOKEN = "<REDACTED_TOKEN>";
-  const SECRET_PASSWORD = "P@ssw0rd!_plaintext";
-  const SECRET_BCRYPT = "$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU";
+  const SECRET_PASSWORD = "<REDACTED_EMAIL>!_plaintext";
+  const SECRET_BCRYPT = "<REDACTED_PASSWORD_HASH>";
   const SECRET_JWT =
     "<REDACTED_TOKEN>";
   const SAFE_TOOL = "rotate_api_key";
@@ -402,7 +402,7 @@ async function run(): Promise<void> {
   console.log("\n[aiApprovalDatabase] heuristic detection of free-form passwords / high-entropy tokens");
 
   captured.length = 0;
-  const FREE_FORM_PASSWORD = "P@ssw0rd!_FreeFormInProse_X1";       // password-strength heuristic
+  const FREE_FORM_PASSWORD = "<REDACTED_EMAIL>!_FreeFormInProse_X1";       // password-strength heuristic
   const ENTROPY_TOKEN      = "aB3xKp9zQrLm4vN2YwSdEfXyZTw";        // 28-char base64-ish
   const SLUG_SAFE          = "Test-Project-2026-Final-v3";          // must NOT be redacted
   const UUID_SAFE          = "<REDACTED_PHONE>-4000-8000-<REDACTED_PHONE>"; // must NOT be redacted
@@ -489,7 +489,7 @@ async function run(): Promise<void> {
   // ai_pending_actions / event_logs rows in REPORT-ONLY mode and
   // returns counts of would-have-redacted tokens grouped by field path.
   // Reviewing those buckets surfaces edge cases the original synthetic
-  // fixture set (`Test-Project-2026-Final-v3`, `P@ssw0rd!_FreeForm…`,
+  // fixture set (`Test-Project-2026-Final-v3`, `<REDACTED_EMAIL>!_FreeForm…`,
   // `aB3xKp9zQrLm4vN2YwSdEfXyZTw`) did not cover. Pin them here so a
   // future threshold tweak (entropy floor, length window, strong-special
   // set) cannot silently regress these classifications.

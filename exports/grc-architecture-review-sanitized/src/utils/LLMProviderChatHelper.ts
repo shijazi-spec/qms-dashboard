@@ -1,9 +1,9 @@
 // =======================================================================
 // Raw-fetch LLMProvider Chat Completions helper — bypass `@ai-sdk/LLMProvider`.
 //
-// Why this exists: `@ai-sdk/LLMProvider@3.x` returns model objects with
+// Why this exists: `@ai-sdk/<REDACTED_EMAIL>` returns model objects with
 // `specVersion: "v3"` from BOTH `LLMProvider.responses(...)` AND
-// `LLMProvider.chat(...)`. The runtime `generateText` shipped in `ai@5.x`
+// `LLMProvider.chat(...)`. The runtime `generateText` shipped in `<REDACTED_EMAIL>`
 // only accepts `specVersion: "v2"`, so every call dies inside the JS
 // layer with "Unsupported model version v3 for provider LLMProvider.chat
 // and model …" before ever reaching LLMProvider. Prior hotfix (PR #35)

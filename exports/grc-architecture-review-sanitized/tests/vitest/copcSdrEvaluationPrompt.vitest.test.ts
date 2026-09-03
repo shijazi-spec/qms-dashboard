@@ -69,7 +69,7 @@ describe("buildSDREvaluationPrompt — routing", () => {
   test("dispatches to legacy builder when no attribute has section_id", () => {
     const card = {
       id: 1,
-      name: "WalaaPlus Sales Quality v1.5",
+      name: "Example Organization Sales Quality v1.5",
       version: "1.5",
       team_name: undefined,
       attributes: [legacyAttr()],

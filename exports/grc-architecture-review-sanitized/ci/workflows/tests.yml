@@ -74,10 +74,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/<REDACTED_EMAIL>
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/<REDACTED_EMAIL>
         with:
           node-version: "20"
           cache: npm

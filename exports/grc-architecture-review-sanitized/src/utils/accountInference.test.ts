@@ -72,7 +72,7 @@ const REDACTED_SENTINEL = "***REDACTED***";
 //   • refresh_token → 40-char mixed case+digit, high Shannon entropy
 //   • api_key       → `sk-…` matches the sk-key regex
 const SECRETS = {
-  password_hash: "$2b$12$abcdefghij1234567890uvwxyzABCDEFGHIJKLMNOPQRSTUVWXY",
+  password_hash: "<REDACTED_PASSWORD_HASH>",
   mfa_secret: "Jb7SwY3dPeHpK3pXqMnZv5RtUfCgWh2K",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",

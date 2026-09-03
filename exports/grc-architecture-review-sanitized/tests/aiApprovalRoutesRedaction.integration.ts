@@ -207,7 +207,7 @@ function assert(condition: boolean, label: string): void {
 const PAYLOAD_API_KEY = '<REDACTED_TOKEN>';
 const PAYLOAD_REFRESH = 'rt_LEAK_DETECTOR_INT_REFRESH_qwertyuiopas';
 const PAYLOAD_BCRYPT =
-  '$2b$12$abcdefghijklmnopqrstuvLEAKDETECTORINTHASH1234567890ABCDE';
+  '<REDACTED_PASSWORD_HASH>';
 const RESULT_API_KEY = '<REDACTED_TOKEN>';
 const RESULT_ACCESS_TOKEN = 'eyJhbGciLEAKDETECTORINTACCESS_freshtoken';
 

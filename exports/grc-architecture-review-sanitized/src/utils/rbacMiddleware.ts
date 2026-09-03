@@ -380,7 +380,7 @@ export async function requireAdminOrKey(c: any): Promise<SessionUser | null> {
   if (hasValidAdminApiKey(c)) {
     return {
       userId: 0,
-      email: "api-key@system",
+      email: "<REDACTED_EMAIL>",
       name: "API Key Access",
       role: "admin",
     };

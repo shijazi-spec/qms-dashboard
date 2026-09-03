@@ -37,7 +37,7 @@ import { SALES_QUALITY_PROMPT_VERSION } from "./salesQualityAgent";
 export interface ActiveAgentPromptVersion {
   /** User-facing agent name; matches the Mastra `Agent({ name })` value. */
   agent_name: string;
-  /** Content-addressed prompt-version hash (e.g. "qms-consultant@a1b2c3d4"). */
+  /** Content-addressed prompt-version hash (e.g. "<REDACTED_EMAIL>"). */
   prompt_version: string;
 }
 

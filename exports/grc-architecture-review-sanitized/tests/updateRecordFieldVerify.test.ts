@@ -71,8 +71,8 @@ assert.deepStrictEqual(
     { Email: "<REDACTED_EMAIL>" },
   );
   assert.strictEqual(m.length, 1);
-  assert.match(m[0], /Email still shows "test@test\.test\.test"/);
-  assert.match(m[0], /expected "ralsannat@masdr\.sa"/);
+  assert.match(m[0], /Email still shows "<REDACTED_EMAIL>\.test\.test"/);
+  assert.match(m[0], /expected "<REDACTED_EMAIL>\.sa"/);
 }
 
 // Mixed multi-field: one persisted, one did not -> only the failing field is
@@ -83,17 +83,17 @@ assert.deepStrictEqual(
     { Email: "<REDACTED_EMAIL>", Last_Name: "alSannat" },
   );
   assert.strictEqual(m.length, 1);
-  assert.match(m[0], /Email still shows "old@test\.test"/);
+  assert.match(m[0], /Email still shows "<REDACTED_EMAIL>\.test"/);
 }
 
 // Record vanished / not returned on read-back -> treated as a mismatch.
-assert.deepStrictEqual(computeReadBackMismatches({ Email: "x@y.z" }, null), [
+assert.deepStrictEqual(computeReadBackMismatches({ Email: "<REDACTED_EMAIL>" }, null), [
   "record could not be found on read-back",
 ]);
 
 // Empty stored value is surfaced as "(empty)" rather than the literal "".
 {
-  const m = computeReadBackMismatches({ Email: "x@y.z" }, { Email: "" });
+  const m = computeReadBackMismatches({ Email: "<REDACTED_EMAIL>" }, { Email: "" });
   assert.match(m[0], /still shows "\(empty\)"/);
 }
 

@@ -12,7 +12,7 @@ export const CANONICAL_COPC_V2 = {
     "version_date": "2026-05-24",
     "based_on": "ContactCenterProvider_SDR_QA_Scorecard_COPC_Template.xlsx",
     "supersedes": [
-      "WalaaPlus Sales Quality Scorecard v1.5",
+      "Example Organization Sales Quality Scorecard v1.5",
       "Legacy GA 3.x audit checklist",
       "GEN 2.x process compliance flags"
     ],
@@ -259,14 +259,14 @@ export const CANONICAL_COPC_V2 = {
   },
   "_migration_notes": {
     "deprecation_targets": [
-      "scorecards row where name='WalaaPlus Sales Quality Scorecard v1.5' → set is_active=false, status='archived'",
+      "scorecards row where name='Example Organization Sales Quality Scorecard v1.5' → set is_active=false, status='archived'",
       "quality_audits checkpoints in GA 3.x series → mark as superseded; keep historical rows for audit trail",
       "call_intelligence GEN 2.x process compliance → either fold into Section 1 (Activity & Process Adherence) or keep as a separate compliance audit, clearly labelled"
     ],
     "ui_changes_required": [
       "Call Details modal: remove the 'Call quality scorecard' panel (legacy quality_audits) — SDR Evaluation Form becomes the single source",
       "SDR Evaluation Form: render 4 sections + 19 checkpoints with 0/1/2 chips and evidence quotes",
-      "Active Scorecard line should read 'ExampleOrg SDR QA Scorecard — COPC-aligned v2.0' instead of 'WalaaPlus Sales Quality Scorecard v1.5'"
+      "Active Scorecard line should read 'ExampleOrg SDR QA Scorecard — COPC-aligned v2.0' instead of 'Example Organization Sales Quality Scorecard v1.5'"
     ]
   }
 } as const;

@@ -16,8 +16,8 @@ const DATABASE_URL = process.env.DATABASE_URL || '';
 // Unique per-run suffix so parallel/repeated runs don't collide.
 const RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 // Plain alphabetic labels so wrapPoolForRedaction doesn't redact them.
-const PROMPT_VERSION_A = `qms-consultant@xtabaprompt${RUN_ID.replace(/[^a-z]/g, '')}`;
-const PROMPT_VERSION_B = `qms-consultant@xtabbprompt${RUN_ID.replace(/[^a-z]/g, '')}`;
+const PROMPT_VERSION_A = `<REDACTED_EMAIL>${RUN_ID.replace(/[^a-z]/g, '')}`;
+const PROMPT_VERSION_B = `<REDACTED_EMAIL>${RUN_ID.replace(/[^a-z]/g, '')}`;
 
 const ROW_A_MOBILE_DOWN = `e2e-xtab-A-mobile-down-${RUN_ID}`;
 const ROW_A_WEB_UP = `e2e-xtab-A-web-up-${RUN_ID}`;

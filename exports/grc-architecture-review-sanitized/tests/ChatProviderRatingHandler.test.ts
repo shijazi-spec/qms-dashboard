@@ -35,7 +35,7 @@ const { insertAiCallMetric, ensureAiMetricsTable } = await import(
 const pgMod = await import("pg");
 
 const TEST_AGENT = `__test_ChatProvider_rating_${Date.now()}__`;
-const SERVER_VERSION = "qms@ChatProvider-truth-aaaa";
+const SERVER_VERSION = "<REDACTED_EMAIL>";
 
 await suite.test(
   "recordConsultantRatingFromSurface — looks up prompt_version, records rating, backfills client_surface",

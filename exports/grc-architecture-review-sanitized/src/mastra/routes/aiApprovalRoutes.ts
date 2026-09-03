@@ -703,7 +703,7 @@ const _aiApprovalRoutesRaw = [
             ? {
                 ...(sessionUser || {
                   userId: 0,
-                  email: "api-key@system",
+                  email: "<REDACTED_EMAIL>",
                   name: "Admin Key",
                 }),
                 role: "admin" as UserRole,
@@ -865,7 +865,7 @@ const _aiApprovalRoutesRaw = [
             ? {
                 ...(sessionUser || {
                   userId: 0,
-                  email: "api-key@system",
+                  email: "<REDACTED_EMAIL>",
                   name: "Admin Key",
                 }),
                 role: "admin" as UserRole,

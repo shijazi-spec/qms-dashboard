@@ -79,7 +79,7 @@ Respond ONLY with the JSON, no additional text.`;
       });
 
       // Raw-fetch /chat/completions — `.chat()` adapter emits v3 spec
-      // under @ai-sdk/LLMProvider 3.x, incompatible with ai@5 (needs v2).
+      // under @ai-sdk/LLMProvider 3.x, incompatible with <REDACTED_EMAIL> (needs v2).
       const { generateChatText } = await import("../../utils/LLMProviderChatHelper");
       const result = await generateChatText({
         model: "gpt-4o",

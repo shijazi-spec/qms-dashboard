@@ -285,7 +285,7 @@ console.log("Case: tampered session cookie with admin role is rejected");
   process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
   const goodToken = signSession({
     userId: 1,
-    email: "x@y.z",
+    email: "<REDACTED_EMAIL>",
     name: "x",
     role: "admin",
     exp: Date.now() + 60_000,
@@ -435,7 +435,7 @@ await (async () => {
     assert(user !== null, "requireAdminOrKey returns a non-null user");
     assertEquals(user?.userId, 0, "synthetic user has userId 0");
     assertEquals(user?.role, "admin", "synthetic user has role admin");
-    assertEquals(user?.email, "api-key@system", "synthetic user has api-key email");
+    assertEquals(user?.email, "<REDACTED_EMAIL>", "synthetic user has api-key email");
   }
   console.log();
 

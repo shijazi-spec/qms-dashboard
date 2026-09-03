@@ -53,7 +53,7 @@ Close and reopen PowerShell afterwards — environment changes are not picked up
 by existing sessions.
 
 **The key must never be written into a script file or committed to source
-control.** It is a bearer credential: anyone holding it can rewrite the tracker's
+control.** It is a Bearer <REDACTED_TOKEN>: anyone holding it can rewrite the tracker's
 view of the library.
 
 ### 3. Dry run first

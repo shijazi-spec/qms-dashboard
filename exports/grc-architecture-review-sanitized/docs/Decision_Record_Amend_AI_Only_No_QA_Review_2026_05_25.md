@@ -209,6 +209,6 @@ The risk being accepted is: **AI gives a wrong score on an individual call, no o
 
 ## Sign-off
 
-a.amashah (Operations & Quality HOD) — approved 2026-05-25 (fourth same-day amendment, with Lean Six Sigma framing)
+Sample User (Operations & Quality HOD) — approved 2026-05-25 (fourth same-day amendment, with Lean Six Sigma framing)
 
 The business case will be rewritten in the same commit to reflect the lean 5-week scope.

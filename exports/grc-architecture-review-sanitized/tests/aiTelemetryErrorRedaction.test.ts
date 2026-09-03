@@ -100,7 +100,7 @@ const SK_KEY = '<REDACTED_TOKEN>';
 const GH_PAT = '<REDACTED_TOKEN>';
 const JWT =
   '<REDACTED_TOKEN>';
-const BCRYPT_HASH = '$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU';
+const BCRYPT_HASH = '<REDACTED_PASSWORD_HASH>';
 const AWS_KEY = '<REDACTED_TOKEN>';
 
 async function run(): Promise<void> {

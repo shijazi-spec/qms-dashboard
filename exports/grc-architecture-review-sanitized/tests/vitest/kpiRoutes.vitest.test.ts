@@ -22,7 +22,7 @@ import {
   makeExecutiveReport,
 } from "../_helpers/fixtures";
 
-const FAKE_USER = { userId: 0, email: "api@system", name: "API Key", role: "admin" as const };
+const FAKE_USER = { userId: 0, email: "<REDACTED_EMAIL>", name: "API Key", role: "admin" as const };
 
 // GET /api/kpis filters out department-owned KPIs, so the handler now consults
 // the BU registry on every request via a DYNAMIC import.

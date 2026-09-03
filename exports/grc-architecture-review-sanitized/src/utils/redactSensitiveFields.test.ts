@@ -274,13 +274,13 @@ assert(redactSecretLikeStrings("") === "", "regex: empty string returned unchang
 {
   const jwt =
     "<REDACTED_TOKEN>";
-  const out = redactSecretLikeStrings(`Bearer issued: ${jwt}`) as string;
+  const out = redactSecretLikeStrings(`Bearer <REDACTED_TOKEN>: ${jwt}`) as string;
   assert(!out.includes(jwt), "regex: JWT scrubbed (eyJ pattern)");
   assert(out.includes(REDACTED_SENTINEL), "regex: sentinel inserted in place of JWT");
 }
 
 {
-  const bcrypt = "$2b$12$abcdefghijABCDEFGHIJ12./uVwXyZaBcDeFgHiJkLmNoPqRsTuVwXy";
+  const bcrypt = "<REDACTED_PASSWORD_HASH>";
   const out = redactSecretLikeStrings(`hash=${bcrypt}`) as string;
   assert(!out.includes(bcrypt), "regex: bcrypt hash scrubbed");
   assert(out.includes(REDACTED_SENTINEL), "regex: sentinel inserted in place of bcrypt");
@@ -327,9 +327,9 @@ console.log("\n=== deepRedactSecretLikeStrings — unit tests ===\n");
 console.log("\n=== logEvent — write-path integration test ===\n");
 
 const SECRETS = {
-  password_hash: "$2b$12$abcdefghij1234567890uvwxyz.ABCDEFGH_IJ",
-  plain_password: "MyS3cretP@ssword!",
-  mfa_secret: "JBSWY3DPEHPK3PXP",
+  password_hash: "<REDACTED_PASSWORD_HASH>_IJ",
+  plain_password: "<REDACTED_EMAIL>!",
+  mfa_secret: "<REDACTED_MFA_SECRET>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
   api_key: "<REDACTED_SECRET>",
@@ -506,7 +506,7 @@ const TEXT_LEAK_SECRETS = {
   ghp: "<REDACTED_TOKEN>",
   jwt:
     "<REDACTED_TOKEN>",
-  bcrypt: "$2b$12$abcdefghijABCDEFGHIJ12./uVwXyZaBcDeFgHiJkLmNoPqRsTuVwXy",
+  bcrypt: "<REDACTED_PASSWORD_HASH>",
 } as const;
 
 {
@@ -726,7 +726,7 @@ const CH_SECRETS = {
   ghp: "<REDACTED_TOKEN>",
   jwt:
     "<REDACTED_TOKEN>",
-  bcrypt: "$2b$12$abcdefghijABCDEFGHIJ12./uVwXyZaBcDeFgHiJkLmNoPqRsTuVwXy",
+  bcrypt: "<REDACTED_PASSWORD_HASH>",
 } as const;
 
 function findInsertForTable(table: string): unknown[] | null {

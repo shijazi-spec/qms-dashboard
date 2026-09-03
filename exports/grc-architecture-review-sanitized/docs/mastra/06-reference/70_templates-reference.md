@@ -24,7 +24,7 @@ Mastra templates are pre-built project structures that demonstrate specific use 
 Install a template using the `create-mastra` command:
 
 ```bash copy
-npx create-mastra@latest --template template-name
+npx <REDACTED_EMAIL> --template template-name
 ```
 
 This creates a complete project with all necessary code and configuration.

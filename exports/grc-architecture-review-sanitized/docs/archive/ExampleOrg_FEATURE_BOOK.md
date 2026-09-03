@@ -385,8 +385,8 @@ Scenario: Stale Minor trigger auto-opens a finding (30d)
 - T-TRIG-02 Dismiss with reason ≥10 chars → 200, dismiss_reason persisted
 - T-TRIG-03 24h re-evaluation reactivates trigger
 - T-TRIG-04 Critical "Propose via HITL" creates ai_pending_actions row
-- T-TRIG-05 Cron auto-opens finding for stale Critical@7d
-- T-TRIG-06 Cron auto-opens finding for stale Minor@30d
+- T-TRIG-05 Cron auto-opens finding for stale <REDACTED_EMAIL>
+- T-TRIG-06 Cron auto-opens finding for stale <REDACTED_EMAIL>
 - T-TRIG-07 Bi-directional `escalation_finding_id` linkage verified
 
 ---

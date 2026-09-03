@@ -135,7 +135,7 @@ console.log('redactPgParam — top-level JSON-string param handling (Task #764)'
 {
   const out = redactPgParam({
     user_id: 7,
-    password_hash: '$2b$10$abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijab',
+    password_hash: '<REDACTED_PASSWORD_HASH>',
   }) as Record<string, unknown>;
   assert(out.user_id === 7, 'unrelated field preserved on object param');
   assert(out.password_hash === REDACTED_SENTINEL, 'password_hash sentinel on object param');

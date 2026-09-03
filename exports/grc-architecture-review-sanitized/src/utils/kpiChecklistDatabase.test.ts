@@ -78,7 +78,7 @@ const REDACTED_SENTINEL = "***REDACTED***";
 // the regex pass reliably catches them in prose. The key-based deny list is
 // additionally exercised by the JSON-object test in Section 3.
 const SECRETS = {
-  password_hash: "$2b$12$abcdefghijklmnopqrstuOCm5RJ7p2sIcQqL7gKwSxmXJ9pYsZyHa",
+  password_hash: "<REDACTED_PASSWORD_HASH>",
   mfa_secret: "<REDACTED_TOKEN>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
@@ -270,7 +270,7 @@ console.log("\n=== key-based deny list via JSON-serialised value ===\n");
 
 {
   captured.length = 0;
-  const plainMfa = "JBSWY3DPEHPK3PXP";
+  const plainMfa = "<REDACTED_MFA_SECRET>";
   const plainRefresh = "1//0gREFRESHTOKENvalueXYZ";
   const snapshot = JSON.stringify({
     actor: "alice",

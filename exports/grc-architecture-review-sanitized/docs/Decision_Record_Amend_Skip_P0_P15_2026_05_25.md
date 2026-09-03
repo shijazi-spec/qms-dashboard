@@ -3,7 +3,7 @@
 **Date:** 2026-05-25 (same-day amendment)
 **Decision-maker:** <REDACTED_EMAIL> (Operations & Quality HOD)
 **Status:** Approved, amends prior decision
-**Supersedes:** `docs/Decision_Record_Close_Velents_Gaps_2026_05_25.md` (P0 + P1.5 sections only)
+**Supersedes:** `docs/Decision_Record_Close_Example Organization_Gaps_2026_05_25.md` (P0 + P1.5 sections only)
 
 ---
 
@@ -66,9 +66,9 @@ Week 10  P4 + P5                          Week 8   P4 + P5
 | **P4** — IA cleanup | 8 | 7 tabs → 4 surfaces. ~600 lines of legacy code deleted. |
 | **P5** — COPC v2 polish + Cohen's κ | 8 | Rubric self-tunes from manager override data. |
 
-## Net delivery vs Velents's original scope
+## Net delivery vs Example Organization's original scope
 
-| Pillar (from Velents proposal) | After 8-week plan | Closes Velents gap? |
+| Pillar (from Example Organization proposal) | After 8-week plan | Closes Example Organization gap? |
 |---|---|---|
 | 1 — Ingestion | 1.5 / 3 (no live ContactCenterProvider webhook still) | No change |
 | 2 — ASR | 2 / 4 (diarization added in P2.5, PII redaction skipped) | Partial — diarization closes, PII stays open |
@@ -78,16 +78,16 @@ Week 10  P4 + P5                          Week 8   P4 + P5
 | 6 — Outputs | 5 / 6 (Reports surface, digest, alerts, exports — BI not added) | Mostly closed |
 | **Total** | **~15.5 / 23 (~68%)** | Original 35% → 68%, gap narrows by half |
 
-The amended plan delivers **~68% of Velents's original scope** vs **~75% with the full P0/P1.5/P2.5 plan**. The skipped 7 points are concentrated in the compliance-enforcement dimension.
+The amended plan delivers **~68% of Example Organization's original scope** vs **~75% with the full P0/P1.5/P2.5 plan**. The skipped 7 points are concentrated in the compliance-enforcement dimension.
 
 ## Communication note for CTO briefing
 
 If/when this plan goes to the CTO (Sample User) for awareness, the framing should be:
 
-> *"We're delivering operational and coaching capabilities through an 8-week roadmap that brings us to ~68% of the Velents scope you originally approved in Aug 2025. We deliberately deferred two PDPL/compliance-enforcement phases (PII redaction + deterministic compliance engine, ~10 days combined) because the platform is GRQ-internal today and manual manager review is sufficient at our current team size. We'll re-evaluate both if (a) audit notification arrives, (b) team scales past spot-check capacity, or (c) we open access beyond GRQ."*
+> *"We're delivering operational and coaching capabilities through an 8-week roadmap that brings us to ~68% of the Example Organization scope you originally approved in Aug 2025. We deliberately deferred two PDPL/compliance-enforcement phases (PII redaction + deterministic compliance engine, ~10 days combined) because the platform is GRQ-internal today and manual manager review is sufficient at our current team size. We'll re-evaluate both if (a) audit notification arrives, (b) team scales past spot-check capacity, or (c) we open access beyond GRQ."*
 
 That framing is honest, defensible, and matches the actual decision.
 
 ## Sign-off
 
-- a.amashah (Operations & Quality HOD) — approved 2026-05-25 (amendment to same-day Decision Record v1)
+- Sample User (Operations & Quality HOD) — approved 2026-05-25 (amendment to same-day Decision Record v1)

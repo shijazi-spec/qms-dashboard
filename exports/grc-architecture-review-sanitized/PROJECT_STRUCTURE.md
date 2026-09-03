@@ -1,6 +1,6 @@
 # Sanitized Repository Structure
 
-This inventory contains architecture-review source only. Binary assets, runtime data, exports, logs, backups, live-data inspection utilities, operational customer inventories, agent metadata, and all environment files except `.env.example` were excluded.
+This inventory contains architecture-review source only. Binary assets, runtime data, exports, logs, backups, live-data inspection utilities, operational customer inventories, user/team rosters, seeded identity data, agent metadata, and all environment files except `.env.example` were excluded.
 
 ```text
 .env.example
@@ -115,7 +115,6 @@ docs/DMAIC_Post_Republish_Audit_2026_05_25.md
 docs/Decision_Record_Amend_AI_Only_No_QA_Review_2026_05_25.md
 docs/Decision_Record_Amend_Skip_Digest_Merge_Agent_View_2026_05_25.md
 docs/Decision_Record_Amend_Skip_P0_P15_2026_05_25.md
-docs/Decision_Record_Close_Velents_Gaps_2026_05_25.md
 docs/ExampleOrg_Platform_SOP.md
 docs/Expert_Review_Phase_1_2026_05_25.md
 docs/HostingPlatform-readiness-checklist.md
@@ -135,8 +134,6 @@ docs/SDR_Verification_Step_2026_05_25.md
 docs/Security_Operations_SOP.md
 docs/Task470_DashboardRoleGate_VerificationReport.md
 docs/USER_MANUAL.md
-docs/VAPT_Remediation_Report.md
-docs/Velents_vs_Internal_Build_Gap_Analysis_2026_05_25.md
 docs/archive/ExampleOrg_FEATURE_BOOK.md
 docs/archive/ExampleOrg_GAPS_AND_DATA_NEEDS.md
 docs/archive/ExampleOrg_INTERNAL_AUDITS_FEATURE.md
@@ -345,8 +342,6 @@ src/config/sdr-coaching-map.json
 src/config/sdr-governance-2.1.rules.json
 src/data/index.ts
 src/data/scorecardV2CopcCanonical.ts
-src/data/scorecard_v2_copc.json
-src/data/seedUsers.ts
 src/global.d.ts
 src/mastra/agents/duplicateResolutionAgent.ts
 src/mastra/agents/exampleAgent.ts
@@ -585,7 +580,6 @@ src/utils/csContractState.ts
 src/utils/csLifecycleAutoCapa.ts
 src/utils/csLifecycleCompliance.ts
 src/utils/csOverlapAutoCapa.ts
-src/utils/csTeamMembers.ts
 src/utils/dataCleaningProgress.ts
 src/utils/database.ts
 src/utils/dealComplianceCheck.test.ts

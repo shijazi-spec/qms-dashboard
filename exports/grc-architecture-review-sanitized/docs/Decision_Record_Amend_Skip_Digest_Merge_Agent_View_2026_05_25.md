@@ -110,6 +110,6 @@ To make the deferrals explicit (for audit trail):
 
 ## Sign-off
 
-a.amashah (Operations & Quality HOD) — approved 2026-05-25 (third same-day amendment)
+Sample User (Operations & Quality HOD) — approved 2026-05-25 (third same-day amendment)
 
 The business case doc will be rewritten in the same commit to reflect the simpler scope.

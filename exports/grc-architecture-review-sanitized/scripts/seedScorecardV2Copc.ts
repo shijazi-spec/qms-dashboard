@@ -1,6 +1,6 @@
 /**
  * One-shot migration: seed the COPC-aligned scorecard v2 and archive the
- * legacy "WalaaPlus Sales Quality Scorecard v1.5".
+ * legacy "Example Organization Sales Quality Scorecard v1.5".
  *
  * DMAIC Scorecard Consolidation — Improve phase Step 2. See:
  *   D:/2_QMS Platform/Call Evaluation Tab/DMAIC_Scorecard_Consolidation.md

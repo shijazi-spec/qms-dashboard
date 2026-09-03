@@ -4,8 +4,8 @@
 **Prepared by:** Sample User (Operations & Quality HOD)
 **Date:** 2026-05-25
 **Status:** Awaiting CTO approval to proceed
-**Builds on:** CTO approval of the ContactCenterProvider Scorecard initiative dated Aug 31, 2025 (per WalaaPlus<>Velents email thread)
-**Supersedes vendor path:** Velents engagement paused Nov 26, 2025 in favour of an internally-owned solution
+**Builds on:** CTO approval of the ContactCenterProvider Scorecard initiative dated Aug 31, 2025 (per Example Organization<>Example Organization email thread)
+**Supersedes vendor path:** Example Organization engagement paused Nov 26, 2025 in favour of an internally-owned solution
 
 ---
 
@@ -13,9 +13,9 @@
 
 We are requesting approval to **build the next 8-week phase** of the in-house Call Evaluation platform that has been developed inside `<REDACTED_HOST>/calls` over the past months. This phase delivers the **manager-reportable layer** that has been the missing piece since the Aug 17, 2025 business case — converting an existing scoring engine into a tool that the SDR Manager and Quality Lead can actually use to run a weekly review cycle.
 
-This is the **direct internal substitute** for the Velents AI-QA product you approved in Aug 2025 and that the Operations team paused in Nov 2025 in favour of an internally-owned solution. Sample User's Nov 26 closure email cited *"long-term governance direction"* — this business case operationalises that direction.
+This is the **direct internal substitute** for the Example Organization AI-QA product you approved in Aug 2025 and that the Operations team paused in Nov 2025 in favour of an internally-owned solution. Sample User's Nov 26 closure email cited *"long-term governance direction"* — this business case operationalises that direction.
 
-**Ask:** approval for ~8 weeks of focused engineering effort to deliver functional parity with ~68% of the Velents scope. No vendor licensing, no new infrastructure costs, no external data sharing.
+**Ask:** approval for ~8 weeks of focused engineering effort to deliver functional parity with ~68% of the Example Organization scope. No vendor licensing, no new infrastructure costs, no external data sharing.
 
 ---
 
@@ -46,13 +46,13 @@ The existing QA workflow has six structural problems that the Aug 17 business ca
 
 ### 2. Why Build Internally (Re-validating the Nov 26 Decision)
 
-The Nov 26, 2025 decision to pause the Velents engagement was correct. Three reasons it still holds:
+The Nov 26, 2025 decision to pause the Example Organization engagement was correct. Three reasons it still holds:
 
-**a) Governance ownership.** PDPL compliance, COPC certification, and any future audit are easier to defend with a system whose source code, data model, and decision logic are inside our control. With Velents, every audit question would have required vendor cooperation; with the in-house build, every question is answerable from inside the company.
+**a) Governance ownership.** PDPL compliance, COPC certification, and any future audit are easier to defend with a system whose source code, data model, and decision logic are inside our control. With Example Organization, every audit question would have required vendor cooperation; with the in-house build, every question is answerable from inside the company.
 
-**b) Data residency.** Velents hosts on GCP Dammam (per their Aug 29 reply); ExampleOrg already has PDPL-aligned hosting via HostingPlatform Saudi region. Eliminates a cross-vendor data-movement question that auditors typically probe.
+**b) Data residency.** Example Organization hosts on GCP Dammam (per their Aug 29 reply); ExampleOrg already has PDPL-aligned hosting via HostingPlatform Saudi region. Eliminates a cross-vendor data-movement question that auditors typically probe.
 
-**c) Vendor risk.** Velents engagement showed scope-creep and timeline drag (Aug → Nov with no working environment delivered). An in-house team controls its own delivery cadence and feature scope. We have already proven this — the existing platform (`<REDACTED_HOST>/calls`) was built and is being used today, while the equivalent Velents environment never came online.
+**c) Vendor risk.** Example Organization engagement showed scope-creep and timeline drag (Aug → Nov with no working environment delivered). An in-house team controls its own delivery cadence and feature scope. We have already proven this — the existing platform (`<REDACTED_HOST>/calls`) was built and is being used today, while the equivalent Example Organization environment never came online.
 
 ### 3. Proposed Solution — Phase 1, 8-Week Build
 
@@ -86,7 +86,7 @@ Out of scope (deferred with documented re-trigger conditions):
 - **KB/FAQ knowledge checks** — requires a knowledge-base ingestion pipeline that doesn't exist yet
 - **BI exports** (Snowflake/Power BI) — only relevant if ExampleOrg builds a corporate data warehouse
 
-Net coverage: approximately **68% of the Velents proposed scope**, prioritising operational visibility over compliance enforcement. Full gap analysis in `docs/Velents_vs_Internal_Build_Gap_Analysis_2026_05_25.md`.
+Net coverage: approximately **68% of the Example Organization proposed scope**, prioritising operational visibility over compliance enforcement. Full gap analysis in `docs/Example Organization_vs_Internal_Build_Gap_Analysis_2026_05_25.md`.
 
 ### 4. Expected Benefits
 
@@ -133,15 +133,15 @@ The Aug 17 business case promised five benefits. Here is how each will be measur
 | Governance: CRM-tied auditability | Already shipped (auto-link + activity timeline + event_logs). Audit by sampling 10 random calls and tracing each one through the audit log end-to-end. |
 | Scalability: Hundreds of weekly calls | Stress-test in Week 8 with synthetic 500-call upload. Pass if all surfaces render in <3 seconds. |
 
-### 8. Comparison to Velents Proposal
+### 8. Comparison to Example Organization Proposal
 
-| Dimension | Velents (Nov 2025 proposal) | This 8-week internal build | Difference |
+| Dimension | Example Organization (Nov 2025 proposal) | This 8-week internal build | Difference |
 |---|---|---|---|
 | Coverage of Sample User's Aug 17 scope | ~95% | ~68% | -27 percentage points (concentrated in PDPL enforcement, deferred deliberately) |
 | Time to operational | Unknown (no environment delivered in 4 months) | 8 weeks from approval | Internal delivers; vendor did not |
 | Annual cost | TBD (no commercial offer received) | ~$600-1,200/year (Whisper API increase) | Significant savings |
 | Vendor lock-in | High (proprietary platform) | Zero | Internal advantage |
-| Data residency | GCP Dammam (Velents) | HostingPlatform Saudi (existing) | Equivalent |
+| Data residency | GCP Dammam (Example Organization) | HostingPlatform Saudi (existing) | Equivalent |
 | PDPL audit defence | Through vendor | Direct, no intermediary | Internal advantage |
 | Customisability | Limited to vendor's roadmap | Unlimited, in our codebase | Internal advantage |
 
@@ -162,8 +162,8 @@ The Aug 17 business case promised five benefits. Here is how each will be measur
 All committed to `ExampleOrg/docs/`:
 
 - `Call_Evaluation_Revamp_Plan_2026_05_25.md` — the full 1,029-line technical revamp plan
-- `Velents_vs_Internal_Build_Gap_Analysis_2026_05_25.md` — gap analysis vs the rejected vendor scope
-- `Decision_Record_Close_Velents_Gaps_2026_05_25.md` — original phase-funding decision
+- `Example Organization_vs_Internal_Build_Gap_Analysis_2026_05_25.md` — gap analysis vs the rejected vendor scope
+- `Decision_Record_Close_Example Organization_Gaps_2026_05_25.md` — original phase-funding decision
 - `Decision_Record_Amend_Skip_P0_P15_2026_05_25.md` — scope amendment skipping P0 (PII redaction) and P1.5 (deterministic compliance engine)
 - `SDR_PDPL_Consent_Script_2026_05_25.md` — the consent line to add to the SDR opening
 - `SDR_Verification_Step_2026_05_25.md` — the 3-point verification step (name + work email + company)
@@ -189,4 +189,4 @@ Once CTO approval is received, Phase 1.1 (Reports surface) begins Week 2.
 
 This is the operational follow-through on the Nov 26 commitment to *"pursue a solution that can be fully owned and managed internally to align with our long-term governance direction."* The engine already works. This 8-week phase builds the cockpit that makes it usable.
 
-We are not asking for new budget, new vendors, new infrastructure, or external data sharing. We are asking for the time to finish what was started in August — and to deliver, internally, what Velents could not deliver in four months.
+We are not asking for new budget, new vendors, new infrastructure, or external data sharing. We are asking for the time to finish what was started in August — and to deliver, internally, what Example Organization could not deliver in four months.

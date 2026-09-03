@@ -145,7 +145,7 @@ Respond ONLY with the JSON.` : '';
       });
 
       // Raw-fetch /chat/completions — `.chat()` now also returns v3-spec
-      // models under @ai-sdk/LLMProvider 3.x, broken under ai@5 (needs v2).
+      // models under @ai-sdk/LLMProvider 3.x, broken under <REDACTED_EMAIL> (needs v2).
       // Helper drops the SDK dependency for this hot path entirely.
       const { generateChatText } = await import("../../utils/LLMProviderChatHelper");
       const analysisResult = await generateChatText({

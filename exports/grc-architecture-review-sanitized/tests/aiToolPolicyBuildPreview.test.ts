@@ -154,14 +154,14 @@ const SECRETS = {
   // SourceControlProvider regex requires:  gh[porsu]_[A-Za-z0-9]{30,}
   ghPat: "<REDACTED_TOKEN>",
   // bcrypt regex requires:  $2[aby]$NN$ + exactly 53 [./A-Za-z0-9] chars
-  bcrypt: "$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU",
+  bcrypt: "<REDACTED_PASSWORD_HASH>",
   // jwt regex requires three base64url segments separated by dots
   jwt: "<REDACTED_TOKEN>",
   // aws-akid regex requires:  AKIA + exactly 16 [0-9A-Z] chars
   awsKey: "<REDACTED_TOKEN>",
 } as const;
 
-const PLAIN_PASSWORD = "P@ssw0rd!_BuildPreview_PlainText";
+const PLAIN_PASSWORD = "<REDACTED_EMAIL>!_BuildPreview_PlainText";
 
 const REGEX_DETECTABLE_SECRETS: ReadonlyArray<string> = Object.values(SECRETS);
 
@@ -185,7 +185,7 @@ const REGEX_DETECTABLE_SECRETS: ReadonlyArray<string> = Object.values(SECRETS);
  * defense before the row hits the database.                          *
  * ------------------------------------------------------------------ */
 
-const HEURISTIC_PASSWORD = "P@ssw0rd!_FreeForm_BuildPreview_Y2";
+const HEURISTIC_PASSWORD = "<REDACTED_EMAIL>!_FreeForm_BuildPreview_Y2";
 const HEURISTIC_ENTROPY  = "aB3xKp9zQrLm4vN2YwSdEfXyZTwQ";
 
 const HEURISTIC_DETECTABLE_SECRETS: ReadonlyArray<string> = [

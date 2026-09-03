@@ -54,7 +54,7 @@ console.log("legacy 2.x provider-utils fails and is named");
   assert(message !== null, "throws for provider-utils 2.x");
   assert(
     message !== null &&
-      message.includes("node_modules/@ai-sdk/provider-utils@2.2.8"),
+      message.includes("node_modules/@ai-sdk/<REDACTED_EMAIL>"),
     "error message names the offending path and version",
   );
 }
@@ -89,7 +89,7 @@ console.log("nested node_modules copies are caught");
   assert(
     message !== null &&
       message.includes(
-        "node_modules/some-lib/node_modules/@ai-sdk/provider-utils@3.5.0",
+        "node_modules/some-lib/node_modules/@ai-sdk/<REDACTED_EMAIL>",
       ),
     "nested legacy copy is reported with its full path",
   );

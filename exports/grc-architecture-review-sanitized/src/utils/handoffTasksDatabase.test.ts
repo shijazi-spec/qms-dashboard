@@ -49,8 +49,8 @@ const mockQuery = (sql: QS, params: unknown[] = []): Promise<QueryResult<QueryRe
 const { createTask, transitionTask } = await import("./handoffTasksDatabase");
 
 const SECRETS = {
-  password_hash: "$2b$12$abcdefghijklmnopqrstuOCm5RJ7p2sIcQqL7gKwSxmXJ9pYsZyHa",
-  mfa_secret: "JBSWY3DPEHPK3PXP",
+  password_hash: "<REDACTED_PASSWORD_HASH>",
+  mfa_secret: "<REDACTED_MFA_SECRET>",
   access_token: "<REDACTED_SECRET>",
   refresh_token: "<REDACTED_SECRET>",
   api_key: "<REDACTED_SECRET>",

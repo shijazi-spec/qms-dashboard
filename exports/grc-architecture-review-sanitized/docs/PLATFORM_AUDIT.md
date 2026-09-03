@@ -222,7 +222,7 @@ real `ai_call_metrics` row lands.
 ### P2 — Two validation workflows hang on Playwright install
 
 `i18n` and `post-restore-sweep-panel` workflows hang at the interactive
-`playwright@1.59.1` install prompt and never finish. They appear "running"
+`<REDACTED_EMAIL>` install prompt and never finish. They appear "running"
 indefinitely. Pre-existing infra issue, but it means our automated UI test
 suite is not gating commits.
 

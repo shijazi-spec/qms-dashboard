@@ -330,8 +330,8 @@ if (!HAS_DB) {
       );
       // Seed two runs ~10ms apart; the endpoint must surface the second one
       // because it has the larger ran_at timestamp.
-      const liveA = ["agent-x@aaaaaaaa", "agent-y@bbbbbbbb"];
-      const liveB = ["agent-x@cccccccc", "agent-y@dddddddd"];
+      const liveA = ["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"];
+      const liveB = ["<REDACTED_EMAIL>", "<REDACTED_EMAIL>"];
       const firstId = await recordPromptVersionPurgeRun(3, 30, liveA);
       suite.expect(firstId != null, "first purge run inserted");
       await new Promise((r) => setTimeout(r, 15));
@@ -357,8 +357,8 @@ if (!HAS_DB) {
         suite.expect(
           Array.isArray(run.live_versions) &&
             run.live_versions.length === 2 &&
-            run.live_versions.includes("agent-x@cccccccc") &&
-            run.live_versions.includes("agent-y@dddddddd"),
+            run.live_versions.includes("<REDACTED_EMAIL>") &&
+            run.live_versions.includes("<REDACTED_EMAIL>"),
           "echoes most-recent live_versions",
         );
         suite.expect(
@@ -553,11 +553,11 @@ if (!HAS_DB) {
         [TEST_AGENT, ARCHIVED_AGENT],
       );
       // Drop the synthetic purge rows seeded by the last-purge happy-path test
-      // so the AI Ops UI doesn't show "agent-x@cccccccc" to a real operator.
+      // so the AI Ops UI doesn't show "<REDACTED_EMAIL>" to a real operator.
       await pool.query(
         `DELETE FROM prompt_version_purge_runs
-          WHERE 'agent-x@aaaaaaaa' = ANY(live_versions)
-             OR 'agent-x@cccccccc' = ANY(live_versions)`,
+          WHERE '<REDACTED_EMAIL>' = ANY(live_versions)
+             OR '<REDACTED_EMAIL>' = ANY(live_versions)`,
       );
       suite.expect(true, "cleanup query executed without error");
     } finally {

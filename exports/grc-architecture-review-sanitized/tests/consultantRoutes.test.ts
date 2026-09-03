@@ -151,7 +151,7 @@ if (!HAS_DB) {
     async () => {
       const messageId = `consultant-md-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       seededMessageIds.push(messageId);
-      const clientPromptVersion = "qms-consultant@feedbacktest";
+      const clientPromptVersion = "<REDACTED_EMAIL>";
       const clientRatingSource = "detail_modal";
       const clientSurface = "mobile";
 
@@ -296,10 +296,10 @@ if (!HAS_DB) {
       // value for a credential and replace it with `***REDACTED***`
       // mid-write — that would silently break the per-version assertions
       // below. Mirrors the wording used by the upstream
-      // `clientPromptVersion = "qms-consultant@feedbacktest"` happy-path
+      // `clientPromptVersion = "<REDACTED_EMAIL>"` happy-path
       // test that already exercises the same redaction path.
-      const versionA = "qms-consultant@taskaprompt";
-      const versionB = "qms-consultant@taskbprompt";
+      const versionA = "<REDACTED_EMAIL>";
+      const versionB = "<REDACTED_EMAIL>";
       // Idempotency guard: delete any rows from earlier runs that share
       // these hardcoded prompt_version sentinels. Without this, the
       // hardcoded labels survive across runs (the cleanup step only
@@ -389,7 +389,7 @@ if (!HAS_DB) {
       // Plain alphabetic label so the secret-redaction wrapper doesn't
       // mistake it for a high-entropy credential — see the comment in
       // the per-prompt-version breakdown test above.
-      const versionLabel = "qms-consultant@badgepromptlabel";
+      const versionLabel = "<REDACTED_EMAIL>";
       const sourceLabel = "detail_modal";
       const surfaceLabel = "mobile";
       const messageIdRich = `consultant-recent-rich-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -569,8 +569,8 @@ if (!HAS_DB) {
   await suite.test(
     "GET /api/consultant/feedback/stats — returns per-(prompt_version × client_surface) cross-tab including 'unknown' bucket for legacy rows",
     async () => {
-      const versionA = "qms-consultant@xtabaprompt";
-      const versionB = "qms-consultant@xtabbprompt";
+      const versionA = "<REDACTED_EMAIL>";
+      const versionB = "<REDACTED_EMAIL>";
       // Idempotency guard: see the per-prompt-version test above for the
       // rationale. Hardcoded sentinels survive across runs, so wipe
       // any leftovers before seeding to keep cross-tab counts stable.
